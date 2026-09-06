@@ -1477,22 +1477,28 @@ export async function assertArchiveTreeContainsOnlyFilesAndDirectories(rootPath)
     }
 }
 
+function declaredPayloadBundles(config) {
+    const name = config.identity.bundleName;
+    const paths = {
+        VST3: `Library/Audio/Plug-Ins/VST3/${name}.vst3`,
+        AU: `Library/Audio/Plug-Ins/Components/${name}.component`,
+    };
+    const bundles = config.payloadBundles ?? [{ format: "VST3", relativePath: paths.VST3 }];
+    if (!Array.isArray(bundles) || bundles.length === 0 || bundles.length > 2
+        || new Set(bundles.map(bundle => bundle.format)).size !== bundles.length
+        || bundles.some(bundle => !Object.hasOwn(paths, bundle.format)
+            || bundle.relativePath !== paths[bundle.format]))
+        throw new Error("Declare only the product's VST3 and AU payload paths.");
+    return bundles;
+}
+
 function expectedPayloadMode(config, relativePath, entryStat) {
     if (entryStat.isDirectory())
         return 0o755;
 
-    const executablePath = path.posix.join(
-        "Library",
-        "Audio",
-        "Plug-Ins",
-        "VST3",
-        `${config.identity.bundleName}.vst3`,
-        "Contents",
-        "MacOS",
-        config.identity.bundleName,
-    );
-
-    return relativePath === executablePath ? 0o755 : 0o644;
+    const executablePaths = declaredPayloadBundles(config).map(bundle =>
+        `${bundle.relativePath}/Contents/MacOS/${config.identity.bundleName}`);
+    return executablePaths.includes(relativePath) ? 0o755 : 0o644;
 }
 
 async function payloadModeEntries(rootPath) {
@@ -1783,14 +1789,14 @@ export async function deterministicCpioPayload(rootPath, sourceDateEpoch) {
 export function renderPackageInfo(config, payloadEntries, { preinstall = false, packageVersion = config.identity.pluginVersion } = {}) {
     const installKBytes = Math.ceil(payloadEntries.reduce((sum, entry) => sum + entry.size, 0) / 1024);
     const numberOfFiles = payloadEntries.length + 1;
-    const bundleRelativePath = `./Library/Audio/Plug-Ins/VST3/${config.identity.bundleName}.vst3`;
+    const bundles = declaredPayloadBundles(config);
 
     return [
         '<?xml version="1.0" encoding="utf-8"?>',
         `<pkg-info overwrite-permissions="true" relocatable="false" identifier="${xmlEscape(config.identity.installerIdentifier)}" postinstall-action="none" version="${xmlEscape(packageVersion)}" format-version="2" generator-version="cosimo-release-builder-v2" install-location="/" auth="root">`,
         `    <payload numberOfFiles="${numberOfFiles}" installKBytes="${installKBytes}"/>`,
         ...(preinstall ? ['    <scripts><preinstall file="./preinstall"/></scripts>'] : []),
-        `    <bundle path="${xmlEscape(bundleRelativePath)}" id="${xmlEscape(config.identity.patchId)}" CFBundleShortVersionString="${xmlEscape(config.identity.pluginVersion)}" CFBundleVersion="${xmlEscape(config.identity.pluginVersion)}"/>`,
+        ...bundles.map(bundle => `    <bundle path="${xmlEscape(`./${bundle.relativePath}`)}" id="${xmlEscape(config.identity.patchId)}" CFBundleShortVersionString="${xmlEscape(config.identity.pluginVersion)}" CFBundleVersion="${xmlEscape(config.identity.pluginVersion)}"/>`),
         "    <bundle-version>",
         `        <bundle id="${xmlEscape(config.identity.patchId)}"/>`,
         "    </bundle-version>",
@@ -1920,21 +1926,23 @@ export function normalizeUnsignedFlatPackageXar(archive, sourceDateEpoch) {
 }
 
 export function payloadInventoryErrors(config, payloadFiles, { signed }) {
-    const root = `./Library/Audio/Plug-Ins/VST3/${config.identity.bundleName}.vst3`;
-    const relativeRoot = root.slice(2);
+    const bundles = declaredPayloadBundles(config);
     const allowedAncestors = new Set([
         ".",
         "Library",
         "Library/Audio",
         "Library/Audio/Plug-Ins",
-        "Library/Audio/Plug-Ins/VST3",
+        ...bundles.map(bundle => path.posix.dirname(bundle.relativePath)),
     ]);
-    const requiredFiles = [
-        `${root}/Contents/Info.plist`,
-        `${root}/Contents/MacOS/${config.identity.bundleName}`,
-        `${root}/Contents/Resources/moduleinfo.json`,
-        `${root}/Contents/_CodeSignature/CodeResources`,
-    ];
+    const requiredFiles = bundles.flatMap(bundle => {
+        const root = `./${bundle.relativePath}`;
+        return [
+            `${root}/Contents/Info.plist`,
+            `${root}/Contents/MacOS/${config.identity.bundleName}`,
+            ...(bundle.format === "VST3" ? [`${root}/Contents/Resources/moduleinfo.json`] : []),
+            `${root}/Contents/_CodeSignature/CodeResources`,
+        ];
+    });
     const metadataFiles = payloadFiles.filter(
         (file) => /(^|\/)\._[^/]*$/u.test(file) || /(^|\/)\.DS_Store$/u.test(file),
     );
@@ -1955,8 +1963,8 @@ export function payloadInventoryErrors(config, payloadFiles, { signed }) {
             return true;
 
         return !allowedAncestors.has(relativePath)
-            && relativePath !== relativeRoot
-            && !relativePath.startsWith(`${relativeRoot}/`);
+            && !bundles.some(bundle => relativePath === bundle.relativePath
+                || relativePath.startsWith(`${bundle.relativePath}/`));
     });
     const errors = [];
 
@@ -1967,7 +1975,7 @@ export function payloadInventoryErrors(config, payloadFiles, { signed }) {
         errors.push(`payload is missing required files: ${missingFiles.join(", ")}`);
 
     if (unexpectedFiles.length > 0)
-        errors.push(`payload contains paths outside the declared VST3 install root: ${unexpectedFiles.join(", ")}`);
+        errors.push(`payload contains paths outside the declared ${bundles.some(bundle => bundle.format === "AU") ? "plugin install roots" : "VST3 install root"}: ${unexpectedFiles.join(", ")}`);
 
     return errors;
 }

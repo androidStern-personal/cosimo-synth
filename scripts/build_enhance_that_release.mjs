@@ -6,6 +6,8 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { effectPlugins, repoRoot } from "../kit/fx/build-effect.mjs";
 import { inspectVST3Bundle } from "../kit/scripts/install_vst3.mjs";
+import { hashInstalledPayload } from "../kit/scripts/toolchain.mjs";
+import { findChocMarkerViolations } from "../kit/scripts/check_choc_markers.mjs";
 import { enhanceThatNativeDependencies } from "./enhance-that-release-config.mjs";
 import { renderEnhanceThatPreinstall } from "./enhance-that-installer.mjs";
 import {
@@ -28,7 +30,7 @@ const identity = Object.freeze({
 });
 
 export function parseEnhanceThatArgs(args) {
-    const options = { mode: "plan", repeat: false, auDeferred: null, useExistingBuild: false };
+    const options = { mode: "plan", repeat: false, auDeferred: null, includeAU: false, useExistingBuild: false };
     let modeSpecified = false;
     for (let i = 0; i < args.length; i++) {
         const arg = args[i];
@@ -38,6 +40,7 @@ export function parseEnhanceThatArgs(args) {
             modeSpecified = true;
         } else if (arg === "--verify-repeatable-packaging") options.repeat = true;
         else if (arg === "--use-existing-build") options.useExistingBuild = true;
+        else if (arg === "--include-au") options.includeAU = true;
         else if (arg === "--au-deferred") {
             if (options.auDeferred !== null || !args[i + 1] || args[i + 1].startsWith("--"))
                 throw new Error("--au-deferred needs the recorded format decision.");
@@ -46,7 +49,23 @@ export function parseEnhanceThatArgs(args) {
     }
     if (options.repeat && options.mode !== "unsigned")
         throw new Error("Repeatability compares unsigned packaging only.");
+    if (options.includeAU && options.auDeferred !== null)
+        throw new Error("Choose AU inclusion or an explicit deferral, not both.");
     return options;
+}
+
+export function enhanceThatAuIdentityErrors(info, pluginVersion) {
+    const errors = [];
+    if (info?.CFBundleIdentifier !== identity.patchId || info?.CFBundleExecutable !== identity.bundleName)
+        errors.push("AU bundle identity differs from Enhance That.");
+    if (info?.CFBundleVersion !== pluginVersion || info?.CFBundleShortVersionString !== pluginVersion)
+        errors.push("AU bundle version differs from the selected product.");
+    const components = info?.AudioComponents;
+    if (!Array.isArray(components) || components.length !== 1
+        || components[0]?.type !== "aufx" || components[0]?.subtype !== identity.pluginCode
+        || components[0]?.manufacturer !== identity.manufacturerCode)
+        errors.push("AU must contain exactly the Enhance That effect component.");
+    return errors;
 }
 
 export function enhanceThatSourceErrors(plugin, patch) {
@@ -147,37 +166,53 @@ async function staticDspEvidence(config, cmakeExecutable, output) {
             membersByArchitecture[architecture] = members;
         }
     } finally { await rm(memberDirectory, { recursive: true }); }
-    const link = await readFile(path.join(nativeRoot, "_build/plugin/CMakeFiles/EnhanceThat_VST3.dir/link.txt"), "utf8");
-    const archives = link.match(/[^\s"]+\.a\b/gu) ?? [];
-    assert.deepEqual(archives, ["EnhanceThat_artefacts/Release/libEnhanceThat_SharedCode.a"]);
-    const linkedObjects = link.match(/[^\s"]+\.o\b/gu) ?? [];
-    assert.ok(linkedObjects.length > 0 && linkedObjects.every(object =>
-        /^juce_audio_plugin_client_[A-Za-z0-9_]+\.(?:cpp|mm)\.o$/u.test(path.basename(object))),
-    "Unexpected object outside the generated-DSP/JUCE archive");
-    assert.ok(!/llvm|libcmajor|libcmaj|\.dylib\b/iu.test(link), "Unexpected engine or external library in native link recipe");
-    return { generatedCppSha256: hash(cpp), wrapperHeaderSha256: hash(header), linkRecipeSha256: hash(link),
+    const links = {};
+    for (const { format } of config.payloadBundles) {
+        const link = await readFile(path.join(nativeRoot, `_build/plugin/CMakeFiles/EnhanceThat_${format}.dir/link.txt`), "utf8");
+        const archives = link.match(/[^\s"]+\.a\b/gu) ?? [];
+        assert.deepEqual(archives, ["EnhanceThat_artefacts/Release/libEnhanceThat_SharedCode.a"]);
+        const linkedObjects = link.match(/[^\s"]+\.o\b/gu) ?? [];
+        assert.ok(linkedObjects.length > 0 && linkedObjects.every(object =>
+            /^juce_audio_plugin_client_[A-Za-z0-9_]+\.(?:cpp|mm)\.o$/u.test(path.basename(object))),
+        "Unexpected object outside the generated-DSP/JUCE archive");
+        assert.ok(!/llvm|libcmajor|libcmaj|\.dylib\b/iu.test(link), "Unexpected engine or external library in native link recipe");
+        links[format] = { linkRecipeSha256: hash(link), linkedClientObjects: linkedObjects.map(object => path.basename(object)) };
+    }
+    return { generatedCppSha256: hash(cpp), wrapperHeaderSha256: hash(header), ...links.VST3,
+        ...(links.AU ? { audioUnit: links.AU } : {}),
         staticArchiveSha256: await fileHash(shared), staticArchiveMembers: membersByArchitecture,
-        linkedClientObjects: linkedObjects.map(object => path.basename(object)),
         compilerExecutableSha256: await fileHash(cmaj), cmakeExecutableSha256: await fileHash(cmakeExecutable),
         nodeExecutableSha256: await fileHash(process.execPath),
         dspBinding: "GeneratedPlugin / createEngineForGeneratedCppProgram", jitEngineLinked: false };
 }
 
-async function verifyBundle(config, bundle) {
-    const inspection = await inspectVST3Bundle(bundle, { identityProbe: config.identityProbe });
-    if (inspection.status !== "verified") throw new Error(JSON.stringify(inspection));
-    assert.deepEqual(inspection.identity, { bundleIdentifier: identity.patchId,
-        processorClassId: identity.processorClassId, displayName: identity.publicName });
+async function verifyBundle(config, bundle, format = "VST3") {
+    await assertArchiveTreeContainsOnlyFilesAndDirectories(bundle);
     const info = JSON.parse(run("/usr/bin/plutil", ["-convert", "json", "-o", "-", path.join(bundle, "Contents/Info.plist")]));
+    let inspection;
+    if (format === "AU") {
+        assert.deepEqual(enhanceThatAuIdentityErrors(info, config.identity.pluginVersion), []);
+        run("/usr/bin/codesign", ["--verify", "--deep", "--strict", bundle]);
+        const markers = findChocMarkerViolations(await readFile(path.join(bundle, "Contents/MacOS/EnhanceThat")));
+        assert.equal(markers.missing.length + markers.forbidden.length, 0, "AU WebView marker mismatch");
+        inspection = { identity: { bundleIdentifier: info.CFBundleIdentifier,
+            type: "aufx", subtype: identity.pluginCode, manufacturer: identity.manufacturerCode },
+        digest: await hashInstalledPayload(bundle) };
+    } else {
+        inspection = await inspectVST3Bundle(bundle, { identityProbe: config.identityProbe });
+        if (inspection.status !== "verified") throw new Error(JSON.stringify(inspection));
+        assert.deepEqual(inspection.identity, { bundleIdentifier: identity.patchId,
+            processorClassId: identity.processorClassId, displayName: identity.publicName });
+        const moduleInfo = parseJsonWithTrailingCommas(await readFile(path.join(bundle, "Contents/Resources/moduleinfo.json"), "utf8"), "moduleinfo.json");
+        assert.equal(moduleInfo.Name, identity.publicName);
+        assert.equal(moduleInfo.Version, config.identity.pluginVersion);
+        assert.deepEqual(moduleInfo.Classes.map(item => ({ cid: item.CID, name: item.Name, category: item.Category })), [
+            { cid: identity.processorClassId, name: identity.publicName, category: "Audio Module Class" },
+            { cid: identity.controllerClassId, name: identity.publicName, category: "Component Controller Class" },
+        ]);
+    }
     for (const field of ["CFBundleVersion", "CFBundleShortVersionString"]) assert.equal(info[field], config.identity.pluginVersion);
     assert.equal(info.CFBundleExecutable, identity.bundleName);
-    const moduleInfo = parseJsonWithTrailingCommas(await readFile(path.join(bundle, "Contents/Resources/moduleinfo.json"), "utf8"), "moduleinfo.json");
-    assert.equal(moduleInfo.Name, identity.publicName);
-    assert.equal(moduleInfo.Version, config.identity.pluginVersion);
-    assert.deepEqual(moduleInfo.Classes.map(item => ({ cid: item.CID, name: item.Name, category: item.Category })), [
-        { cid: identity.processorClassId, name: identity.publicName, category: "Audio Module Class" },
-        { cid: identity.controllerClassId, name: identity.publicName, category: "Component Controller Class" },
-    ]);
     const executable = path.join(bundle, "Contents/MacOS/EnhanceThat");
     await assertSeqFxDistributableExecutableIsSourceFree(executable);
     const architectures = run("/usr/bin/lipo", ["-archs", executable]).split(/\s+/u).sort();
@@ -194,23 +229,27 @@ async function assemble({ config, output, source, epoch, options, signing, prove
     await mkdir(output, { recursive: true });
     const work = path.join(output, "_work");
     const staging = path.join(work, "payload");
-    const bundle = path.join(staging, "Library/Audio/Plug-Ins/VST3/EnhanceThat.vst3");
-    await mkdir(path.dirname(bundle), { recursive: true });
-    run("/usr/bin/ditto", ["--norsrc", "--noextattr", "--noqtn", config.builtVst3, bundle]);
-    assert.equal((await verifyBundle(config, bundle)).payloadSha256, built.payloadSha256);
-    run("/usr/bin/codesign", ["--remove-signature", bundle]);
-    await writeFile(path.join(bundle, "Contents/Resources/THIRD_PARTY_NOTICES.txt"), await readFile(config.notices));
-    await assertArchiveTreeContainsOnlyFilesAndDirectories(staging);
-    await normalizePayloadModes(config, staging);
-    const pluginSigning = signing ? signStagedVst3(bundle, signing.application)
-        : (run("/usr/bin/codesign", adHocVst3SigningArgs(bundle)), { signatureKind: "ad-hoc", signedWithDeveloperId: false });
-    await normalizePayloadModes(config, staging);
-    await normalizeTreeTimestamps(staging, epoch);
-    await assertPayloadModes(config, staging);
-    const staged = await verifyBundle(config, bundle);
+    const staged = {};
+    const pluginSigning = {};
+    for (const { format, relativePath, builtPath } of config.payloadBundles) {
+        const bundle = path.join(staging, relativePath);
+        await mkdir(path.dirname(bundle), { recursive: true });
+        run("/usr/bin/ditto", ["--norsrc", "--noextattr", "--noqtn", builtPath, bundle]);
+        assert.equal((await verifyBundle(config, bundle, format)).payloadSha256, built[format].payloadSha256);
+        run("/usr/bin/codesign", ["--remove-signature", bundle]);
+        await writeFile(path.join(bundle, "Contents/Resources/THIRD_PARTY_NOTICES.txt"), await readFile(config.notices));
+        await assertArchiveTreeContainsOnlyFilesAndDirectories(staging);
+        await normalizePayloadModes(config, staging);
+        pluginSigning[format] = signing ? signStagedVst3(bundle, signing.application)
+            : (run("/usr/bin/codesign", adHocVst3SigningArgs(bundle)), { signatureKind: "ad-hoc", signedWithDeveloperId: false });
+        await normalizePayloadModes(config, staging);
+        await normalizeTreeTimestamps(staging, epoch);
+        await assertPayloadModes(config, staging);
+        staged[format] = await verifyBundle(config, bundle, format);
+    }
     const scripts = path.join(work, "scripts");
     await mkdir(scripts, { mode: 0o755 });
-    const preinstall = renderEnhanceThatPreinstall({ teamIdentifier: signing?.application.teamIdentifier ?? null });
+    const preinstall = renderEnhanceThatPreinstall({ teamIdentifier: signing?.application.teamIdentifier ?? null, includeAU: options.includeAU });
     await writeFile(path.join(scripts, "preinstall"), preinstall, { mode: 0o755 });
     await chmod(scripts, 0o755);
     await chmod(path.join(scripts, "preinstall"), 0o755);
@@ -231,24 +270,27 @@ async function assemble({ config, output, source, epoch, options, signing, prove
     assert.deepEqual(payloadInventoryErrors(config, payloadFiles, { signed: !!signing }), []);
     const expanded = path.join(work, "expanded");
     run("/usr/sbin/pkgutil", ["--expand-full", packageFile, expanded]);
-    const extracted = path.join(expanded, "Payload/Library/Audio/Plug-Ins/VST3/EnhanceThat.vst3");
-    const extractedEvidence = await verifyBundle(config, extracted);
-    assert.equal(extractedEvidence.payloadSha256, staged.payloadSha256);
+    const extractedEvidence = {};
+    for (const { format, relativePath } of config.payloadBundles) {
+        extractedEvidence[format] = await verifyBundle(config, path.join(expanded, "Payload", relativePath), format);
+        assert.equal(extractedEvidence[format].payloadSha256, staged[format].payloadSha256);
+    }
     assert.equal(await readFile(path.join(expanded, "Scripts/preinstall"), "utf8"), preinstall);
     const manifest = {
         schemaVersion: 1, status: "unpublished candidate; host and customer qualification pending",
         sourceCommit: source.commit, releaseVersion: config.releaseVersion, pluginVersion: config.identity.pluginVersion,
-        formats: { VST3: "included", AU: "deferred" }, auDecision: options.auDeferred,
+        formats: { VST3: "included", AU: options.includeAU ? "included" : "deferred" }, auDecision: options.includeAU ? "included" : options.auDeferred,
         supportedArchitectures: ["arm64"], retainedMacOSMajors: [15, 26],
         dependencies: Object.fromEntries(["cmajor", "choc", "juce"].map(key => [key, { commit: provenance[key].actualRevision, clean: provenance[key].clean }])),
-        native, built, extracted: extractedEvidence, signing: { plugin: pluginSigning, installer: installerSigning }, notarization,
+        native, built: built.VST3, extracted: extractedEvidence.VST3, signing: { plugin: pluginSigning.VST3, installer: installerSigning }, notarization,
+        ...(options.includeAU ? { audioUnit: { built: built.AU, extracted: extractedEvidence.AU, signing: pluginSigning.AU } } : {}),
         noticesSha256: await fileHash(config.notices), preinstallSha256: hash(preinstall),
         packageSha256: await fileHash(packageFile), sourceDateEpoch: epoch,
         qualification: { cleanMacOS15: "pending", cleanMacOS26: "pending", DAW: "pending", listening: "pending", matchingKitAndTools: "pending" },
     };
     await jsonFile(path.join(output, "release-manifest.json"), manifest);
     await writeFile(path.join(output, "THIRD_PARTY_NOTICES.txt"), await readFile(config.notices));
-    await writeFile(path.join(output, "README.txt"), `Enhance That ${config.releaseVersion}\n\nUnpublished ${signing ? "signed/notarized" : "unsigned validation"} candidate. Final host/customer qualification remains pending.\n\nRetained target: Apple Silicon macOS 15 and 26, VST3. AU deferred: ${options.auDeferred}\n\nQuit the DAW and open the pkg. Restart/rescan, then load Enhance That.\nThe installer checks local user and system VST3 folders. If it reports a legacy or user-level copy, retain that exact copy outside all plugin scan folders before retrying. It never deletes those copies or loads their executable as root.\nA matching Developer ID system update retains the previous bundle in /Library/Audio/Plug-Ins/.EnhanceThat.vst3.previous.* before replacement; keep its RECOVERY.txt.\n\nInstalled path: /Library/Audio/Plug-Ins/VST3/EnhanceThat.vst3\nUninstall: quit the host and retain/remove that bundle, then rescan.\n`);
+    await writeFile(path.join(output, "README.txt"), `Enhance That ${config.releaseVersion}\n\nUnpublished ${signing ? "signed/notarized" : "unsigned validation"} candidate. Final host/customer qualification remains pending.\n\nRetained target: Apple Silicon macOS 15 and 26, ${options.includeAU ? "VST3 and AU" : `VST3. AU deferred: ${options.auDeferred}`}\n\nQuit the DAW and open the pkg. Restart/rescan, then load Enhance That.\nThe installer checks local user and system ${options.includeAU ? "VST3 and Components" : "VST3"} folders. If it reports a legacy or user-level copy, retain that exact copy outside all plugin scan folders before retrying. It never deletes those copies or loads their executable as root.\nA matching Developer ID system update retains the previous bundle in /Library/Audio/Plug-Ins/.EnhanceThat.<format>.previous.* before replacement; keep its RECOVERY.txt.\n\nInstalled paths:\n${config.payloadBundles.map(bundle => `/${bundle.relativePath}`).join("\n")}\nUninstall: quit the host and retain/remove the installed bundles, then rescan.\n`);
     const packageItems = [path.basename(packageFile), "release-manifest.json", "README.txt", "THIRD_PARTY_NOTICES.txt"];
     const checksums = await Promise.all(packageItems.map(async item => `${await fileHash(path.join(output, item))}  ${item}`));
     await writeFile(path.join(output, "checksums.txt"), `${checksums.join("\n")}\n`);
@@ -280,6 +322,11 @@ export async function main(args = process.argv.slice(2)) {
         identityProbe: path.join(repoRoot, plugin.juceOut, "_build/identity_probe/kit_vst3_identity_probe"),
         notices: path.join(repoRoot, "legal/enhance-that/THIRD_PARTY_NOTICES.txt"),
     };
+    config.payloadBundles = [
+        { format: "VST3", relativePath: "Library/Audio/Plug-Ins/VST3/EnhanceThat.vst3", builtPath: config.builtVst3 },
+        ...(options.includeAU ? [{ format: "AU", relativePath: "Library/Audio/Plug-Ins/Components/EnhanceThat.component",
+            builtPath: path.join(repoRoot, plugin.juceOut, "_build/plugin/EnhanceThat_artefacts/Release/AU/EnhanceThat.component") }] : []),
+    ];
     const errors = enhanceThatSourceErrors(plugin, patch);
     const source = getReleaseGitState();
     const output = path.join(repoRoot, "release/enhance-that", kit.version, options.mode);
@@ -291,7 +338,8 @@ export async function main(args = process.argv.slice(2)) {
         console.log(JSON.stringify({ mode: "plan", sourceCommit: source.commit, releaseVersion: kit.version,
             nativeCommand: options.useExistingBuild ? null : "FX_DISTRIBUTABLE_RUNTIME=1 npm run fx:prod:build -- enhancer-lite --clean",
             useExistingBuild: options.useExistingBuild,
-            outputParent: path.dirname(output), sourceErrors: errors, auDecision: options.auDeferred ?? "pending",
+            outputParent: path.dirname(output), sourceErrors: errors, auDecision: options.includeAU ? "include; host qualification required" : options.auDeferred ?? "pending",
+            ...(options.includeAU && !options.useExistingBuild ? { additionalNativeTarget: "EnhanceThat_AU" } : {}),
             notices: { file: "legal/enhance-that/THIRD_PARTY_NOTICES.txt", regularFileExists: noticesEntry?.isFile() ?? false },
             execution: "Requires a clean reviewed worktree, tracked notices, and Bob's native/package slot. Never installs or publishes." }, null, 2));
         return;
@@ -302,7 +350,8 @@ export async function main(args = process.argv.slice(2)) {
     await readDeclaredNativeDependencyProvenance(config);
     if (!/^[1-9][0-9]*$/u.test(process.env.COSIMO_CMAKE_JOBS ?? ""))
         throw new Error("Set COSIMO_CMAKE_JOBS to the native job budget allocated for this run.");
-    if (!options.auDeferred?.trim()) throw new Error("Record the explicit AU defer decision; this entrypoint packages VST3 only.");
+    if (!options.includeAU && !options.auDeferred?.trim())
+        throw new Error("Select --include-au after AU qualification, or record an explicit --au-deferred decision.");
     run("/usr/bin/git", ["ls-files", "--error-unmatch", "legal/enhance-that/THIRD_PARTY_NOTICES.txt"]);
     if (!(await lstat(config.notices)).isFile()) throw new Error("Missing regular tracked notices file.");
     const signing = options.mode === "release" ? selectEnhanceThatSigningIdentities(run("/usr/bin/security", ["find-identity", "-v"])) : null;
@@ -314,11 +363,16 @@ export async function main(args = process.argv.slice(2)) {
         run(process.execPath, ["kit/fx/prod-effect.mjs", "build", "enhancer-lite", "--clean"], {
             capture: false, env: { ...process.env, FX_DISTRIBUTABLE_RUNTIME: "1", COSIMO_RELEASE_NODE: process.execPath, COSIMO_RELEASE_CMAKE: cmake },
         });
+        if (options.includeAU)
+            run(cmake, ["--build", path.join(repoRoot, plugin.juceOut, "_build"), "--config", "Release",
+                "--target", "EnhanceThat_AU", "--parallel", process.env.COSIMO_CMAKE_JOBS], { capture: false });
     }
     assertSourceStateUnchanged(source, getReleaseGitState());
     const provenance = await captureActualNativeDependencyProvenance(config);
     const native = await staticDspEvidence(config, cmake, output);
-    const built = await verifyBundle(config, config.builtVst3);
+    const built = {};
+    for (const { format, builtPath } of config.payloadBundles)
+        built[format] = await verifyBundle(config, builtPath, format);
     const inputs = { config, source, epoch, options, signing, provenance, native, built };
     const first = await assemble({ ...inputs, output });
     if (options.repeat) {

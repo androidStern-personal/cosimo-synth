@@ -47,8 +47,18 @@ compiler-path override. Select the macOS-15-capable tool/source through that
 supported build workflow. L3's current compiler checkout and artifacts are
 separate from this documentation cleanup.
 
-For an explicitly VST3-only release, set `au_decision` to the agreed reason and
-use the existing packager:
+After the selected AU passes its host/customer qualification, use
+`--include-au` with the existing packager. This selects the generated
+`EnhanceThat_AU` target alongside VST3 and puts `EnhanceThat.component` in
+`/Library/Audio/Plug-Ins/Components`. It does not establish qualification:
+
+```sh
+node scripts/build_enhance_that_release.mjs --plan --include-au
+COSIMO_CMAKE_JOBS=4 node scripts/build_enhance_that_release.mjs \
+  --unsigned --include-au --use-existing-build
+```
+
+For an explicitly VST3-only release, set `au_decision` to the agreed reason:
 
 ```sh
 COSIMO_CMAKE_JOBS=4 node scripts/build_enhance_that_release.mjs \
@@ -65,7 +75,9 @@ with Developer ID, notarizes/staples and checks the extracted payload. It never
 installs or publishes. Do not rerun it merely to validate an already-built
 candidate. Repeatable unsigned assembly is not a claim of reproducible signed
 bytes or independent native builds. AU needs its explicit include/defer decision;
-this entry point packages VST3 only.
+`--include-au` and `--au-deferred` cannot be combined. The release manifest keeps
+VST3 evidence in its existing fields and adds AU build, signing and extracted
+payload evidence in `audioUnit` when included. Qualification remains separate.
 
 Use `--use-existing-build` when packaging the current checkout's already
 qualified product build. The owner must establish that product inputs still
@@ -136,9 +148,13 @@ outside scan roots, rejects different identities/ambiguous duplicates, and
 reports retained paths on failure. Preserve signed release bytes; do not
 ad-hoc re-sign a finished Developer ID plugin.
 
-The package preinstall refuses legacy/user-level copies and reports their paths
+The package preinstall checks all included formats before creating recovery
+copies. It refuses legacy/user-level copies and reports their paths
 without deleting them or loading their executables as root. A matching system
-update retains its prior bundle and `RECOVERY.txt` outside the scan root.
+update retains its prior bundle and `RECOVERY.txt` outside the scan root, with
+separate `.EnhanceThat.vst3.previous.*` and `.EnhanceThat.component.previous.*`
+directories when both formats are included. AU identity comes from the sealed
+`AudioComponents` type/subtype/manufacturer, not VST3 metadata.
 Package failure uses that manual recovery; do not promise automatic rollback.
 Keep real first-install, same-path/renamed update, interrupted update and recovery
 checks, plus customer preset-bank ownership and safe dirty-work preservation.
