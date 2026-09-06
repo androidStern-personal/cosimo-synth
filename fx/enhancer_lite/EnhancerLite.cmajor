@@ -124,7 +124,10 @@ namespace wt
     )
     {
         let next = current + (target - current) * smoothingAmount;
-        return std::intrinsics::abs (target - next) <= snapEpsilon ? target : next;
+        // Float rounding can stop the ramp outside the snap epsilon. Finish
+        // at the requested value instead of retaining the previous edit path.
+        return next == current || std::intrinsics::abs (target - next) <= snapEpsilon
+            ? target : next;
     }
 
     float32 resolveEnhancerLiteWeight (float32 value)
