@@ -237,6 +237,7 @@ async function assemble({ config, output, source, epoch, options, signing, prove
         run("/usr/bin/ditto", ["--norsrc", "--noextattr", "--noqtn", builtPath, bundle]);
         assert.equal((await verifyBundle(config, bundle, format)).payloadSha256, built[format].payloadSha256);
         run("/usr/bin/codesign", ["--remove-signature", bundle]);
+        await mkdir(path.join(bundle, "Contents/Resources"), { recursive: true });
         await writeFile(path.join(bundle, "Contents/Resources/THIRD_PARTY_NOTICES.txt"), await readFile(config.notices));
         await assertArchiveTreeContainsOnlyFilesAndDirectories(staging);
         await normalizePayloadModes(config, staging);
