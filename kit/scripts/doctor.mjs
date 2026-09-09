@@ -4,7 +4,8 @@
 //
 // Reports the kit version (kit/kit.json) and the config schema versions it
 // supports, the machine against kit/toolchain.json (OS/arch/tool ranges), the
-// pinned cmaj / CmajPlugin.vst3 at their local paths, feed reachability, the
+// selected compiler/Git and installer-owned Node/npm/CMake paths, the pinned
+// cmaj / CmajPlugin.vst3 at their local paths, feed reachability, the
 // plugin registry (fx/ discovery, every <Name>.plugin.json's schemaVersion,
 // legacy two-file configs), product-owner.json, node_modules, and the JUCE
 // acknowledgment. Prints plain-English lines followed by a JSON block; --json
@@ -12,7 +13,7 @@
 // placeholder owner identity) do not. Exits 0 always, unless --strict and a
 // problem was found. Never writes.
 
-import { existsSync, readdirSync, readFileSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync, realpathSync } from "node:fs";
 import { spawnSync } from "node:child_process";
 import os from "node:os";
 import path from "node:path";
@@ -47,16 +48,25 @@ export function parseDoctorArguments(argv) {
     return options;
 }
 
-function commandVersion(command, args = ["--version"]) {
+function commandPath(command) {
+    const result = spawnSync(process.platform === "win32" ? "where" : "which", [command], { encoding: "utf8", timeout: 10000 });
+
+    if (result.error || result.status !== 0)
+        return null;
+
+    return result.stdout.trim().split("\n")[0] || null;
+}
+
+function commandVersion(command, args = ["--version"], executable = command) {
     const result = spawnSync(command, args, { encoding: "utf8", timeout: 10000 });
 
     if (result.error || result.status !== 0)
-        return { present: false, version: null, output: null };
+        return { present: false, version: null, output: null, path: null };
 
     const output = `${result.stdout ?? ""}${result.stderr ?? ""}`.trim();
     const match = output.match(/\d+\.\d+(?:\.\d+)?/);
 
-    return { present: true, version: match ? match[0] : null, output: output.split("\n")[0] };
+    return { present: true, version: match ? match[0] : null, output: output.split("\n")[0], path: commandPath(executable) };
 }
 
 function requirementLabel(range) {
@@ -70,8 +80,10 @@ function checkTool(name, probe, range) {
         name,
         present: probe.present,
         version: probe.version,
+        path: probe.path ?? null,
         required: requirementLabel(range),
         ok: probe.present && satisfied !== false,
+        projectLocal: null,
     };
 }
 
@@ -101,6 +113,31 @@ function xcodeCommandLineTools(platform = process.platform, required) {
         path: present ? result.stdout.trim() : null,
         ok: required !== true || present,
     };
+}
+
+function appleCompiler(platform = process.platform) {
+    if (platform !== "darwin")
+        return { present: false, version: null, output: null, path: null };
+
+    const probe = commandVersion("xcrun", ["clang", "--version"]);
+    const location = spawnSync("xcrun", ["--find", "clang"], { encoding: "utf8", timeout: 10000 });
+
+    if (probe.present && !location.error && location.status === 0)
+        probe.path = location.stdout.trim() || null;
+
+    return probe;
+}
+
+function insideDirectory(directory, candidate) {
+    if (typeof candidate !== "string" || !path.isAbsolute(candidate))
+        return false;
+
+    try {
+        const relative = path.relative(realpathSync(directory), realpathSync(candidate));
+        return relative !== "" && relative !== ".." && !relative.startsWith(`..${path.sep}`) && !path.isAbsolute(relative);
+    } catch {
+        return false;
+    }
 }
 
 async function checkFeed(baseUrl, { offline, fetchImpl = globalThis.fetch }) {
@@ -381,19 +418,33 @@ export async function collectDoctorReport({ root = repoRoot, offline = false, fe
         problems.push(`macOS ${macOS} is older than the required ${requirements.minMacOS}.`);
 
     report.tools.node = checkTool("node", { present: true, version: process.versions.node }, requirements.node);
+    report.tools.node.path = commandPath("node") ?? process.execPath;
+    report.tools.npm = checkTool("npm", commandVersion("npm"), requirements.npm);
     report.tools.cmake = checkTool("cmake", commandVersion("cmake"), requirements.cmake);
     report.tools.git = checkTool("git", commandVersion("git"), requirements.git);
+    report.tools.compiler = checkTool("Apple Clang", appleCompiler(platform), requirements.compiler);
     report.tools.xcodeCommandLineTools = xcodeCommandLineTools(platform, requirements.xcodeCommandLineTools);
 
-    for (const tool of [report.tools.node, report.tools.cmake, report.tools.git]) {
+    for (const tool of [report.tools.node, report.tools.npm, report.tools.cmake, report.tools.git, report.tools.compiler]) {
         if (!tool.present)
-            problems.push(`${tool.name} was not found on PATH (required ${tool.required}).`);
+            problems.push(`${tool.name} was not found (required ${tool.required}). ${["node", "npm", "cmake"].includes(tool.name) ? "From the project root, source .builder-kit-install/env.sh and rerun the supplied installation command." : "Install or repair Apple Command Line Tools, then rerun kit:doctor."}`);
         else if (!tool.ok)
             problems.push(`${tool.name} ${tool.version} does not satisfy ${tool.required}.`);
     }
 
     if (!report.tools.xcodeCommandLineTools.ok)
-        problems.push("Xcode Command Line Tools are required but not installed (xcode-select --install).");
+        problems.push("Xcode Command Line Tools are required. Run xcode-select --install, finish the installation and agreement prompts yourself, then rerun kit:doctor.");
+
+    const installerManaged = existsSync(path.join(root, ".builder-kit-install", "receipt"));
+    const runtimeRoot = path.join(root, ".builder-kit-install", "runtime");
+
+    for (const key of ["node", "npm", "cmake"]) {
+        const tool = report.tools[key];
+        tool.projectLocal = installerManaged ? insideDirectory(runtimeRoot, tool.path) : null;
+
+        if (tool.present && tool.projectLocal === false)
+            problems.push(`${tool.name} resolves outside this project's verified runtime (${tool.path ?? "unknown path"}). From the project root, source .builder-kit-install/env.sh, then rerun kit:doctor.`);
+    }
 
     if (toolchain) {
         for (const key of toolKeys) {
@@ -433,7 +484,7 @@ export async function collectDoctorReport({ root = repoRoot, offline = false, fe
     }
 
     if (!report.nodeModules.present)
-        problems.push("node_modules is missing (run npm install or npm run kit:setup).");
+        problems.push("node_modules is missing. From the project root, source .builder-kit-install/env.sh and run npm run kit:setup.");
 
     const acknowledgment = readJuceAcknowledgment(root);
 
@@ -456,7 +507,9 @@ function toolLine(tool) {
     if (!tool.present)
         return statusLine(false, `${tool.name}: not found (requires ${tool.required})`);
 
-    return statusLine(tool.ok, `${tool.name} ${tool.version ?? "unknown version"} (requires ${tool.required})`);
+    const location = tool.path ? ` at ${tool.path}` : "";
+    const projectLocal = tool.projectLocal === null ? "" : tool.projectLocal ? ", project-local" : ", outside project runtime";
+    return statusLine(tool.ok && tool.projectLocal !== false, `${tool.name} ${tool.version ?? "unknown version"}${location} (requires ${tool.required}${projectLocal})`);
 }
 
 function toolchainLine(inspection) {
@@ -505,7 +558,7 @@ export function formatDoctorReport(report) {
     if (report.contracts.error)
         lines.push(statusLine(false, `contracts: ${report.contracts.error}`));
 
-    for (const key of ["node", "cmake", "git"])
+    for (const key of ["node", "npm", "cmake", "git", "compiler"])
         lines.push(toolLine(report.tools[key]));
 
     const xcode = report.tools.xcodeCommandLineTools;

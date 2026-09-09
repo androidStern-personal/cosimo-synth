@@ -1,6 +1,6 @@
 # One-command customer installation
 
-The delivery line owns the prefilled destination, existing access credential
+The delivery line owns the hosted destination selection, existing access credential
 and explicit JUCE acknowledgment. It does not accept Apple agreements or start
 plugin work. A Bash boundary is necessary because a clean supported Mac may
 not have Node. It reuses the existing release lineage, tool pins, setup and

@@ -4,15 +4,18 @@ The customer receives only an access-key export and the approved public URL
 piped to Bash. This is the complete shape, with a dummy key shown here:
 
 ```sh
-export BUILDER_KIT_ACCESS='DUMMY_KEY'; curl -fsSL https://pub-2bb7a8a7b9b44ed3b975f3f0a6bcc756.r2.dev/install.sh | bash
+export BUILDER_KIT_ACCESS='DUMMY_KEY'; curl -fsSL https://pub-2bb7a8a7b9b44ed3b975f3f0a6bcc756.r2.dev/install.sh | bash -s -- --accept-juce-terms
 ```
 
-Deliver the generated licensing notice beside the populated line. Running it
-after agreeing explicitly acknowledges the JUCE terms; the hosted code records
-the existing acknowledgment. Setup grants no JUCE license and accepts no Apple
-agreement. Apple Command Line Tools must already be installed and accepted.
+Deliver the generated licensing notice beside the populated line. The final
+`--accept-juce-terms` flag explicitly carries the customer's acknowledgment
+through each installer layer; the public entry refuses a line without it. Setup
+grants no JUCE license and accepts no Apple agreement. Apple Command Line Tools
+must already be installed and accepted.
 
-The hosted default is `$HOME/src/builder-kit-0.1.2`. Folder creation, private
+The hosted default is `$HOME/Documents/Builder Kit`. A recognized same-release
+legacy install under `$HOME/src/builder-kit-<version>` is resumed. An unrelated
+canonical folder is preserved and a versioned sibling is selected. Folder creation, private
 installer download verification, setup and final checks happen in hosted code.
 Only successful completion names the folder to open in Codex. No plugin is
 built, installed, copied or edited; no browser or DAW is launched. A linked
@@ -57,7 +60,7 @@ uses the approved HTTPS URL.
 ## Trust and failure boundary
 
 The public script is trusted through its HTTPS origin, not a clipboard checksum.
-The outer `curl -fsSL ... | bash` has ordinary shell pipeline status: a failed
+The outer `curl -fsSL ... | bash -s -- --accept-juce-terms` has ordinary shell pipeline status: a failed
 public HTTP fetch prints curl's error but may leave a zero pipeline status.
 The complete function definition prevents a partial function body from starting
 installation. It cannot detect a transport error reported after a complete

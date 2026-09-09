@@ -118,7 +118,9 @@ async function renderPublicEntry(bootstrap, feedOrigin, publicBootstrapUrl = pub
     const values = {
         FEED_ORIGIN: quote(feed.value), PROTOCOLS: quote(feed.protocols),
         INSTALLER_ARTIFACT: quote(bootstrap.artifact), INSTALLER_SHA256: quote(bootstrap.sha256),
-        DEFAULT_DIRECTORY: `builder-kit-${bootstrap.release.tag.slice(1)}`,
+        LEGACY_DIRECTORY: `builder-kit-${bootstrap.release.tag.slice(1)}`,
+        RELEASE_VERSION: bootstrap.release.tag.slice(1),
+        RELEASE_RECEIPT: quote(`builder-kit-install-v1 ${bootstrap.release.commit}`),
     };
     const script = template.replace(/@@([A-Z0-9_]+)@@/gu, (_, key) => values[key]);
     return { ok: true, value: { script, sha256: createHash("sha256").update(script).digest("hex"), url: url.href } };
@@ -141,18 +143,18 @@ export async function renderInstallation(options) {
     const publicBootstrap = publicEntry.value;
     if ([bootstrap.value.script, publicBootstrap.script, publicBootstrap.url].some(value => value.includes(reveal(capability))))
         return failure("bootstrap-must-not-contain-capability");
-    const command = redact(`export BUILDER_KIT_ACCESS=${quote(reveal(capability))}; curl -fsSL ${publicBootstrap.url} | bash`);
+    const command = redact(`export BUILDER_KIT_ACCESS=${quote(reveal(capability))}; curl -fsSL ${publicBootstrap.url} | bash -s -- --accept-juce-terms`);
     const delivery = redact([
         "Builder Kit installation — macOS 15 or newer, Apple silicon",
         "Apple Command Line Tools must already be installed and their agreements accepted by you.",
         "Node and CMake are downloaded into this project; your shell profiles and system runtimes are unchanged.",
-        `The project folder is ~/src/builder-kit-${bootstrap.value.release.tag.slice(1)}.`,
+        "The usual project folder is ~/Documents/Builder Kit. Existing files are never overwritten; a versioned folder is selected when needed.",
         "", ...juceNoticeLines(), "",
         "If you agree to the notice above, copy the entire line below into Terminal and press Enter.",
-        "Running this command after agreeing explicitly acknowledges the JUCE terms; the hosted installer records that acknowledgment. Setup does not grant a JUCE license.",
+        "The final --accept-juce-terms flag explicitly records your acknowledgment. Setup does not grant a JUCE license.",
         "Keep this personalized command private: it contains your access credential.",
         "", reveal(command), "",
-        "On success, open the printed project folder in Codex. No plugin is built or installed.",
+        "On success, open the exact printed project folder in Codex. No plugin is built or installed.",
     ].join("\n"));
     return { ok: true, value: { ...bootstrap.value, publicBootstrap, command, delivery } };
 }

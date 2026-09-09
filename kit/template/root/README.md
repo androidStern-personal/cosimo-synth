@@ -4,12 +4,18 @@ Install using the personalized one-line command supplied with your delivery;
 read its JUCE notice before running it. When it reports success, open the printed
 project folder in Codex. No plugin has been built or installed yet.
 
-After setup, a good first request for your coding agent is:
+The usual folder is `~/Documents/Builder Kit`. If that folder already contains
+something else, the installer chooses a versioned folder beside it and prints
+the exact path. Repeating the same command resumes only the installation it owns.
 
-> Build and install the included plugin so I can try it in my DAW.
+For a guided first session, ask your coding agent:
 
-Try the included plugin as it is, then choose what you would like to change.
-If you already have another request, start with that instead.
+> Read AGENTS.md, check this existing project without overwriting anything, run
+> setup and the strict doctor from this folder, then ask what I want to build or
+> modify.
+
+The agent will offer to build the included plugin as-is, change its sound or
+interface, or start a new plugin. You can also give it your own request.
 
 When you are ready: [try the Wavefold example](WAVEFOLD.md),
 [update or recover your kit](UPDATING.md), or [get setup help](SUPPORT.md).
