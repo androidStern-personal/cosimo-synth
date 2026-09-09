@@ -1,5 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
 import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
@@ -29,8 +30,25 @@ test("production SDK, tool producer and customer tool contract share the propose
     assert.equal(production.cmajor.revision, proposedCommit);
     assert.equal(tools.cmajor.revision, proposedCommit);
     assert.equal(toolchain.cmaj.forkCommit, proposedCommit);
-    await assert.rejects(readDeclaredNativeDependencyProvenance(seqFxReleaseConfig),
-        /Cmajor production dependency revision drift/u);
+    assert.deepEqual(await readDeclaredNativeDependencyProvenance(seqFxReleaseConfig), production);
+});
+
+test("live product notices match the shared production dependencies", async () => {
+    const enhanceNotices = await readFile(path.join(root, "legal/enhance-that/THIRD_PARTY_NOTICES.txt"), "utf8");
+    const enhanceSources = JSON.parse(await readFile(path.join(root, "legal/enhance-that/NOTICE_SOURCES.json"), "utf8"));
+    const seqFxNotices = await readFile(path.join(root, "legal/seqfx/THIRD_PARTY_NOTICES.txt"), "utf8");
+
+    for (const [dependency, expected] of Object.entries(enhanceThatNativeDependencies)) {
+        if (!expected?.revision) continue;
+        assert.ok(enhanceNotices.includes(expected.revision));
+        assert.ok(seqFxNotices.includes(seqFxReleaseConfig.nativeDependencies[dependency].revision));
+        assert.equal(enhanceSources.components.find(component => component.dependency === dependency)?.revisionOrVersion,
+            expected.revision);
+    }
+    assert.equal(enhanceSources.noticesSha256,
+        createHash("sha256").update(enhanceNotices).digest("hex"));
+    assert.equal(enhanceNotices.includes(oldCommit), false);
+    assert.equal(seqFxNotices.includes(oldCommit), false);
 });
 
 for (const [name, change, error] of [

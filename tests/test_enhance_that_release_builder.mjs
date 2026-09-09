@@ -26,9 +26,9 @@ async function fixture(context) {
         } };
 }
 
-test("release modes cannot accidentally notarize a repeatability run", () => {
+test("release modes always rebuild and cannot accidentally notarize a repeatability run", () => {
     assert.equal(parseEnhanceThatArgs([]).mode, "plan");
-    assert.equal(parseEnhanceThatArgs(["--unsigned", "--use-existing-build"]).useExistingBuild, true);
+    assert.throws(() => parseEnhanceThatArgs(["--unsigned", "--use-existing-build"]), /Unknown/u);
     assert.throws(() => parseEnhanceThatArgs(["--release", "--unsigned"]), /one packaging mode/u);
     assert.throws(() => parseEnhanceThatArgs(["--release", "--verify-repeatable-packaging"]), /unsigned packaging/u);
     assert.throws(() => parseEnhanceThatArgs(["--unsigned", "--au-deferred"]), /recorded format decision/u);

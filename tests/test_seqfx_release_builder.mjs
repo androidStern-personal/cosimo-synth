@@ -172,7 +172,7 @@ function releaseToolchainFixture({ nativeBuildCacheVerified = true } = {}) {
         },
         sourceBuiltTools: {
             cmaj: {
-                cmajorCommit: "7820a453f25e1b6eaf898d0bb2feb7e4ce01c207",
+                cmajorCommit: "2fc4c2dce2a1b625c1578409e10bf312a5ac39b5",
                 chocCommit: "11f7dc63d7cb78f6dbaa559fe09ade8e941c0188",
                 executablePolicy: "absolute-repository-build-output-no-path-fallback",
                 provenance: "repository-pinned-source-build",
@@ -418,7 +418,7 @@ test("release config freezes the existing beta identity and current native outpu
             cpmName: "cosimo_cmajor",
             sourceDirectoryCacheKey: "CPM_PACKAGE_cosimo_cmajor_SOURCE_DIR",
             repository: "https://github.com/androidStern-personal/cmajor.git",
-            revision: "7820a453f25e1b6eaf898d0bb2feb7e4ce01c207",
+            revision: "2fc4c2dce2a1b625c1578409e10bf312a5ac39b5",
         },
         choc: {
             repository: "https://github.com/androidStern-personal/choc.git",
@@ -844,9 +844,10 @@ test("tracked third-party notices cover the embedded runtime and artwork", async
         assert.match(notices, new RegExp(`^${component.replaceAll("+", "\\+")}$`, "mu"));
 
     assert.match(notices, /does not grant distribution\s+rights/u);
-    assert.match(notices, /7820a453f25e1b6eaf898d0bb2feb7e4ce01c207/u);
-    assert.match(notices, /11f7dc63d7cb78f6dbaa559fe09ade8e941c0188/u);
-    assert.match(notices, /501c07674e1ad693085a7e7c398f205c2677f5da/u);
+    for (const dependency of Object.values(seqFxReleaseConfig.nativeDependencies)) {
+        if (dependency?.revision)
+            assert.ok(notices.includes(dependency.revision));
+    }
     assert.match(notices, /320ea19819bf66429fa772d6c04614ae75815895/u);
     assert.match(notices, /Creative Commons Attribution 4\.0 International/u);
     assert.match(notices, /This software is based in part on the work of the Independent JPEG Group\./u);

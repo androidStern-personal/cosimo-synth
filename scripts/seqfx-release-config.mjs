@@ -65,7 +65,7 @@ export const seqFxReleaseConfig = Object.freeze({
             cpmName: "cosimo_cmajor",
             sourceDirectoryCacheKey: "CPM_PACKAGE_cosimo_cmajor_SOURCE_DIR",
             repository: "https://github.com/androidStern-personal/cmajor.git",
-            revision: "7820a453f25e1b6eaf898d0bb2feb7e4ce01c207",
+            revision: "2fc4c2dce2a1b625c1578409e10bf312a5ac39b5",
         }),
         choc: Object.freeze({
             repository: "https://github.com/androidStern-personal/choc.git",
