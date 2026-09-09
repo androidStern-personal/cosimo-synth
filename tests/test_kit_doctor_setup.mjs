@@ -92,9 +92,13 @@ test("doctor_json_report_has_the_documented_shape_for_this_repo", () => {
     assert.equal(report.kit.productOwner.present, true);
     assert.equal(report.kit.productOwner.placeholder, false, "the monorepo owner file is not the template placeholder");
     assert.ok(report.registry.configs.every((config) => config.kind === "plugin" && config.supported === true), JSON.stringify(report.registry.configs));
-    assert.deepEqual(Object.keys(report.tools).sort(), ["cmake", "git", "node", "xcodeCommandLineTools"]);
+    assert.deepEqual(Object.keys(report.tools).sort(), ["cmake", "compiler", "git", "node", "npm", "xcodeCommandLineTools"]);
     assert.equal(report.tools.node.present, true);
     assert.equal(report.tools.node.required, ">=22");
+    assert.equal(report.tools.node.projectLocal, null, "source checkouts do not claim an installer-owned runtime");
+    assert.equal(report.tools.npm.present, true);
+    assert.equal(typeof report.tools.npm.path, "string");
+    assert.equal(report.tools.compiler.present, process.platform === "darwin");
     assert.deepEqual(Object.keys(report.toolchain).sort(), ["cmaj", "cmajPlugin"]);
     assert.ok(["missing", "current", "stale", "unpinned"].includes(report.toolchain.cmaj.status));
     assert.equal(report.toolchain.cmaj.relativePath, "build/kit-tools/cmaj");
@@ -144,6 +148,21 @@ test("doctor_reports_missing_contracts_and_tools_without_throwing", async () => 
         assert.match(broken.contracts.error, /Could not read/u);
         assert.deepEqual(broken.toolchain, {});
         assert.equal(broken.ok, false);
+    });
+});
+
+test("doctor rejects system Node/npm/CMake when an installer-owned runtime should be active", async () => {
+    await withFixtureRoot(async (root) => {
+        await mkdir(path.join(root, ".builder-kit-install"), { recursive: true });
+        await writeFile(path.join(root, ".builder-kit-install/receipt"), `builder-kit-install-v1 ${"a".repeat(40)}\n`);
+
+        const report = await collectDoctorReport({ root, offline: true, platform: "darwin", arch: "arm64" });
+
+        for (const key of ["node", "npm", "cmake"]) {
+            assert.equal(report.tools[key].projectLocal, false);
+            assert.ok(report.problems.some((problem) => problem.includes(`${key} resolves outside this project's verified runtime`)));
+        }
+        assert.match(formatDoctorReport(report), /source \.builder-kit-install\/env\.sh/u);
     });
 });
 

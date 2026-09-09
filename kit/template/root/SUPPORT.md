@@ -12,9 +12,11 @@ each request individually.
 
 | Problem | Next step |
 | --- | --- |
+| Mac is unsupported | Builder Kit requires an Apple silicon Mac with macOS 15 or newer. Use a supported Mac; rerunning cannot change the machine requirement. |
 | Setup was interrupted | Run the same delivery command again. It resumes its own folder and preserves edits. If it reports a stale lock or an altered tool, ask for help before deleting anything. |
-| Destination folder already exists | Use an empty new destination through delivery recovery. Do not remove an unrelated folder to make installation proceed. |
-| Apple tools or agreements are missing | Complete the reported Apple prerequisite yourself, then rerun the same command. The installer does not accept agreements or use administrator privileges. |
+| Destination folder already exists | Use the versioned folder printed by the installer, or select an empty absolute folder with `BUILDER_KIT_PROJECT_DIR` during delivery recovery. Do not remove an unrelated folder to make installation proceed. |
+| Apple tools, compiler, Git, or agreements are missing | Run `xcode-select --install`, finish the installation and any agreement prompts yourself, then rerun the same command. If tools are already installed, repair or select a working Apple toolchain. The installer cannot accept agreements. |
+| Node, npm, or CMake is missing or outside the project | Open the exact project folder, source `.builder-kit-install/env.sh`, and rerun `npm run kit:doctor -- --strict`. The installer keeps these runtimes in the project and does not change shell profiles. |
 | Access denied or download unavailable | Check connectivity, then recover the delivery from your receipt or contact support. Do not paste the private address into a public issue. |
 | Tool checksum or verification fails | Stop. Keep the error and ask for setup help; do not bypass the check or substitute a downloaded tool. |
 | Build command fails | Keep the first failing command and its error. Ask the agent to run the diagnostic below before changing source. |
@@ -26,13 +28,13 @@ each request individually.
 
 Ask your agent:
 
-> Diagnose this setup problem without changing my source or installed plugins. Run kit:doctor, summarize the failing check, and prepare a short report with private addresses and personal paths removed.
+> Diagnose this setup problem without changing my source or installed plugins. Work from this project folder, read AGENTS.md, run the strict kit:doctor, summarize the first failing check and its recovery step, and prepare a short report with private addresses and personal paths removed.
 
 For the agent, from the project root (activate the installer runtime as directed
 in `AGENTS.md`):
 
 ```sh
-npm run kit:doctor -- --json --offline
+npm run kit:doctor -- --json --offline --strict
 git status --short --branch
 git rev-parse HEAD
 ```

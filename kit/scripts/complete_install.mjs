@@ -16,12 +16,14 @@ function doctorFailure(report) {
     const details = [];
     const safeVersion = (text) => typeof text === "string" && /^[0-9><=~^.* |x-]+$/u.test(text) ? text : "the required version";
     if (report.platform.osOk === false || report.platform.archOk === false || report.platform.macOSOk === false) details.push("Requires macOS 15 or newer on Apple silicon.");
-    for (const name of ["node", "cmake", "git"]) {
+    for (const name of ["node", "npm", "cmake", "git", "compiler"]) {
         const tool = report.tools[name];
-        if (!tool.present) details.push(`${name} is missing from the project runtime PATH.`);
-        else if (!tool.ok) details.push(`${name} ${safeVersion(tool.version)} does not satisfy ${safeVersion(tool.required)}.`);
+        const label = name === "compiler" ? "Apple Clang" : name;
+        if (!tool.present) details.push(`${label} is missing. ${["node", "npm", "cmake"].includes(name) ? "Source .builder-kit-install/env.sh from the project root, then retry." : "Install or repair Apple Command Line Tools, then retry."}`);
+        else if (!tool.ok) details.push(`${label} ${safeVersion(tool.version)} does not satisfy ${safeVersion(tool.required)}.`);
+        else if (tool.projectLocal === false) details.push(`${label} is outside the verified project runtime. Source .builder-kit-install/env.sh from the project root, then retry.`);
     }
-    if (!report.tools.xcodeCommandLineTools.ok) details.push("Apple Command Line Tools must be installed and their agreements accepted by you.");
+    if (!report.tools.xcodeCommandLineTools.ok) details.push("Run xcode-select --install, finish the Command Line Tools installation and agreement prompts yourself, then retry.");
     for (const key of ["cmaj", "cmajPlugin"]) {
         const status = report.toolchain[key]?.status;
         if (["missing", "stale", "unpinned"].includes(status)) details.push(`${key} is ${status}; its verified setup artifact is required.`);
@@ -70,7 +72,10 @@ async function writableSetupPathsAreLocal(root) {
 }
 
 /** Run the existing setup/check contracts without trusting a partial node_modules. */
-export async function completeInstallation({ root = repoRoot, log = console.log } = {}) {
+export async function completeInstallation({ root = repoRoot, log = console.log, acceptJuceTerms = false } = {}) {
+    if (!acceptJuceTerms)
+        return failure("juce-acknowledgment-required");
+
     const env = process.env;
     const expectedFeed = redact(env.BUILDER_KIT_EXPECTED_FEED ?? "");
     if (reveal(expectedFeed) === "" || !/^[0-9a-f]{64}$/u.test(env.BUILDER_KIT_EXPECTED_CMAJ_SHA256 ?? "")
@@ -98,7 +103,7 @@ export async function completeInstallation({ root = repoRoot, log = console.log 
             installedDependencies = true;
         };
         stage = "setup";
-        await runSetup({ root, acceptJuceTerms: true, runNpmInstall: installDependencies, log: () => {} });
+        await runSetup({ root, acceptJuceTerms, runNpmInstall: installDependencies, log: () => {} });
         stage = "npm-dependencies";
         const receipt = path.join(root, ".builder-kit-install/npm-ready");
         let previousFingerprint = "";
@@ -136,7 +141,7 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
         console.error("Explicit --accept-juce-terms acknowledgment is required.");
         process.exitCode = 1;
     } else {
-        const result = await completeInstallation();
+        const result = await completeInstallation({ acceptJuceTerms: true });
         if (!result.ok) {
             for (const detail of result.error.details ?? []) console.error(detail);
             console.error(`Builder Kit installation stopped at ${result.error.code}. Your project was preserved; retry the supplied command or ask your coding agent to inspect this stage.`);

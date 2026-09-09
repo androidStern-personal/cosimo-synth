@@ -74,10 +74,11 @@ which kit commits never touch.
 
 Initial delivery is one personalized shell line, accompanied by the JUCE
 licensing notice. The customer copies it into Terminal and presses Enter; the
-access credential, project destination, download address, and explicit
-`--accept-juce-terms` acknowledgment are already populated. Do not send a
-placeholder recipe, ask an agent to choose a folder, or require separate Git,
-setup, doctor, or consent commands.
+access credential, hosted project-destination selection, download address, and
+explicit `--accept-juce-terms` acknowledgment are already populated. The usual
+destination is `~/Documents/Builder Kit`; occupied content is preserved and a
+versioned sibling is selected. Do not send a placeholder recipe, ask an agent
+to choose a folder, or require separate Git, setup, doctor, or consent commands.
 
 The supported prerequisite is macOS 15 or newer on Apple silicon, with Apple
 Command Line Tools already installed and their agreements accepted by the
