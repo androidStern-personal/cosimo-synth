@@ -29,7 +29,7 @@ CHOC `11f7dc63d7cb78f6dbaa559fe09ade8e941c0188` and stock JUCE
 consistent with the selected build. Do not relabel old tools or substitute a
 diagnostic checkout with a different origin. Separate generic JIT behavior
 must be tested before a shared toolchain release; the compiled-product result
-does not settle that behavior. SeqFX's independent expectations are unchanged.
+does not settle that behavior. SeqFX uses the same shared dependency pin.
 
 ## Build, package and sign
 
@@ -55,7 +55,7 @@ After the selected AU passes its host/customer qualification, use
 ```sh
 node scripts/build_enhance_that_release.mjs --plan --include-au
 COSIMO_CMAKE_JOBS=4 node scripts/build_enhance_that_release.mjs \
-  --unsigned --include-au --use-existing-build
+  --unsigned --include-au
 ```
 
 For an explicitly VST3-only release, set `au_decision` to the agreed reason:
@@ -78,12 +78,6 @@ bytes or independent native builds. AU needs its explicit include/defer decision
 `--include-au` and `--au-deferred` cannot be combined. The release manifest keeps
 VST3 evidence in its existing fields and adds AU build, signing and extracted
 payload evidence in `audioUnit` when included. Qualification remains separate.
-
-Use `--use-existing-build` when packaging the current checkout's already
-qualified product build. The owner must establish that product inputs still
-match that build, including after source composition. This skips only rebuilding;
-dependency provenance, generated-DSP/link checks, bundle validation and extracted
-payload verification still run. It does not accept an external bundle path.
 
 Preserve the existing canonical kit export/setup/release machinery. A normal
 `kit:release` publishes; even its dry-run can perform substantial builds.

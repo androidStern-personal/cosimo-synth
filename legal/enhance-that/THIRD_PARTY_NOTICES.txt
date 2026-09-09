@@ -1,8 +1,8 @@
 ENHANCE THAT THIRD-PARTY NOTICES
 ================================
 
-This file accompanies the Enhance That macOS VST3 plugin and preserves notices
-for its generated native wrapper, compiled libraries and bundled React UI.
+This file accompanies the Enhance That macOS VST3 and Audio Unit plugins and
+preserves notices for their generated native wrapper, compiled libraries and bundled React UI.
 The third-party components retain their respective authors' licenses.
 The separate Builder Kit and development tools carry their own notices.
 
@@ -14,7 +14,7 @@ Cmajor
 ------
 License: GPL-3.0-or-later OR commercial
 Source: cmajor/LICENSE.md
-Revision/version: 7820a453f25e1b6eaf898d0bb2feb7e4ce01c207
+Revision/version: 2fc4c2dce2a1b625c1578409e10bf312a5ac39b5
 
 Copyright (C) 2024 Cmajor Software Ltd.
 Upstream: https://cmajor.dev
