@@ -1,12 +1,12 @@
 # Enhance That launch index
 
-[Approved launch handoff](../../ENHANCE_THAT_LAUNCH_HANDOFF.md) remains the product scope authority. Release and native-probe instructions remain with the private product branch until that source is integrated.
+[Current launch handoff](../../ENHANCE_THAT_LAUNCH_HANDOFF.md) records the active scope and coordinator. The complete [Builder Kit roadmap](../../ENHANCER_LITE_BUILDER_KIT_ROADMAP.md) is restored to this source tree. [Release guide](../ENHANCE_THAT_RELEASE.md) contains the build, package, native-probe and customer-check instructions.
 
-First delivery is **recruitment-ready**: current product, presentable page, real screenshots, short honest demo, compact press sheet and tester brief. Final film, final release qualification and actual seven-day beta remain separate milestones under the handoff.
+Current recovery delivers the retained Enhance That product, the approved landing and guest checkout, guided setup and a traceable private customer runthrough. Actual beta participation, listening acceptance and paid public launch remain separate outcomes under the handoff.
 
 ## Ownership
 
-Bob is the sole engineering manager and shared-resource scheduler; Woods owns product/creative decisions and independent customer acceptance. L3 owns native builds, release artifacts, installation and customer qualification. L1 owns the direct state-regression harness. INT integrates the source cleanup already reviewed by Woods under Bob’s coordination.
+The current recovery coordinator is task `01a08549-db5f-7dc1-ad7b-bb91acf0802b`. REC-1–4 owners, worktrees and the single integration queue are at the top of root `TODOS.txt`. Earlier Bob/Woods/L1–L6 records remain historical evidence. The coordinator owns master, release and deployment changes; isolated workers return clean scoped handoffs.
 
 Preserve other owners' checkouts, build outputs, installed plugins and DAW projects. The prior runtime snapshots, owner-ledger snapshot and one-off execution-review/supervisor machinery are retired from the active workflow. External outputs remain historical evidence; do not delete or rerun them as prerequisites. Public launch, real financial tests and sends retain Andrew's approval checkpoints.
 

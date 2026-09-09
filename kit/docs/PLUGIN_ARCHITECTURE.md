@@ -122,6 +122,12 @@ Every other field is optional and falls back to a derivation:
   `_build/generated-project-stage` into durable `juceOut` so unchanged files
   keep their timestamps while removed, changed, or missing outputs converge to
   the current inputs. `--clean` remains the explicit full `juceOut` reset.
+- `previousProductName`: optional former bundle filename stem when renaming a
+  plugin while retaining its identity. It must differ from `productName` and
+  use the same identifier syntax. Installation verifies the actual old binary,
+  migrates within the user scan directory, and preserves a recoverable copy
+  outside it; old/new coexistence or a different identity stops the install.
+  See [native installation](decisions/native-vst3-installation.md).
 - `jitInstallRuntime`: defaults to true when the plugin has a worker bundle.
 
 Config-only fields: `workerSource`/`workerOut` (repo-relative worker entry and
@@ -323,6 +329,11 @@ Details:
   `worker` key is rewritten to that file.
 - The UI bundle is a single-file ES module (`inlineDynamicImports`), unminified,
   with source maps by default.
+- Set `FX_DISTRIBUTABLE_RUNTIME=1` for a distribution build to omit UI and worker
+  source maps. For example, `FX_DISTRIBUTABLE_RUNTIME=1 npm run fx:prod:build -- <alias>`
+  rebuilds the runtime without maps before generating the dedicated plugin.
+  Ordinary builds retain maps for debugging. This switch does not sign, notarize,
+  or qualify a plugin for release.
 
 **The prod devModule strip**: `npm run fx:prod:build` builds runtime folders
 with `stripDevModule`, which removes `view.devModule` from the runtime patch

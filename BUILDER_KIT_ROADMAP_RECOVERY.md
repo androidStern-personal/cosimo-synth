@@ -17,3 +17,9 @@ Recovery created `codex/builder-kit-roadmap-recovered` at the intact planning co
 All 44 ticket IDs used as work-breakdown table rows in the full roadmap are named in the September 6 handoff. The original detailed roadmap remains intact. This confirms ticket-level mapping, not that every criterion was implemented or that every historical change was approved; current completion still requires comparison with execution evidence. The handoff groups the tickets into six packets and explicitly supersedes some older requirements.
 
 The new pre-purchase requirements task lives in the roadmap under September 9 / BK-52 / L4. TODOS.txt points here for its detail. No broader completion reconciliation was performed during this recovery.
+
+## Later recovery completion evidence
+
+The earlier “no broader completion reconciliation” statement above describes the initial recovery only. All 44 ticket IDs have since been reconciled in the restored roadmap. Signed/private 0.1.4 delivery, hosted Documents setup/build, actual-version customer edit/update/recovery and the connected sandbox purchase/download flow passed. The public waitlist and protected checkout share one maintained website source. GitHub review and subsequent maintained-checkout refresh remain pending, with human/DAW/beta acceptance separate.
+
+Use the [current launch handoff](ENHANCE_THAT_LAUNCH_HANDOFF.md) for the maintained source, private preview and exact evidence; use the [roadmap](ENHANCER_LITE_BUILDER_KIT_ROADMAP.md) for remaining product work.

@@ -415,3 +415,43 @@ graph EnhancerLiteAt192000 [[ main ]]
     node probe = EnhancerLiteSampleRateProbe;
     connection { probe.out -> out; }
 }
+
+//==============================================================================
+// A saved control must settle to the same DSP value from either edit direction.
+// Float rounding must not leave an endpoint permanently short of its target.
+
+## testProcessor()
+processor EnhancerLiteControlSettlement [[ main ]]
+{
+    output stream int32 out;
+
+    void main()
+    {
+        let rates = float32[] (44100.0f, 48000.0f, 96000.0f, 192000.0f);
+        let targets = float32[] (651.385498046875f, 0.71f, 0.65f, 0.35f, 1.0f);
+        let lower = float32[] (130.0f, 0.1f, 0.0f, 0.0f, 0.0f);
+        let upper = float32[] (2000.0f, 10.0f, 1.0f, 1.0f, 1.0f);
+
+        for (wrap<4> rate)
+        {
+            let amount = 1.0f - std::intrinsics::exp (
+                -1.0f / (wt::enhancerLiteControlSmoothingMs * 0.001f * rates[rate])
+            );
+            for (wrap<5> control)
+            {
+                var fromBelow = lower[control];
+                var fromAbove = upper[control];
+                let target = targets[control];
+                let epsilon = int32 (control) == 0 ? 0.001f : wt::enhancerLiteCoefficientEpsilon;
+                for (int32 frame = 0; frame < 100000; ++frame)
+                {
+                    fromBelow = wt::smoothEnhancerLiteControl (fromBelow, target, amount, epsilon);
+                    fromAbove = wt::smoothEnhancerLiteControl (fromAbove, target, amount, epsilon);
+                }
+                out <- fromBelow == target && fromAbove == target ? 1 : 0;
+                advance();
+            }
+        }
+        out <- -1;
+    }
+}

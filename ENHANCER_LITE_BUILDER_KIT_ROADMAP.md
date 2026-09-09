@@ -8,10 +8,14 @@ This is the complete Builder Kit roadmap, now restored to the maintained product
 - [x] Preserve unsaved source, landing, customer/filming variants and notes before consolidation. Verified backup: `/Users/winterfell/Documents/Codex/2026-09-09/builder-kit-regroup/preserved-before-consolidation/manifest.json` (118 files, 12 repositories).
 - [x] Commit the existing deployed landing+checkout composition (`ed24e0b`) so it is no longer only an unsaved working copy.
 - [ ] REC-1: review and integrate Enhance That automation, saved-state/smoothing repairs, macOS 15 tools, format packaging and safe replacement; refresh the original checkout without discarding its research notes.
-- [ ] REC-2 / BK-21, BK-21B, BK-40: guided agent install in `~/Documents/Builder Kit`, explicit JUCE acknowledgment, real dependency checks and useful remediation; preserve existing customer projects and updates.
-- [ ] REC-3 / BK-51, BK-52: one maintained website source for public waitlist and protected checkout preview, requirements before purchase, and an honest agent setup handoff after purchase. Verify any app launch capability before exposing it.
-- [ ] REC-4 / BK-23, BK-32–34: record exact reviewed source/export/tool/package delivery, exercise final-candidate update/recovery and the complete private customer journey. Keep automated checks, saved downloads, DAW evidence and Andrew's acceptance distinct.
+- [x] REC-2 / BK-21, BK-21B, BK-40: guided agent install in `~/Documents/Builder Kit`, explicit JUCE acknowledgment, real dependency checks and useful remediation; preserve existing customer projects and updates.
+- [x] REC-3 implementation and deployment (final naming PR review pending) / BK-51, BK-52: one maintained website source for public waitlist and protected checkout preview, requirements before purchase, and an honest agent setup handoff after purchase. Verify any app launch capability before exposing it.
+- [x] REC-4 automated and connected recovery proof (human/DAW acceptance remains open) / BK-23, BK-32–34: record exact reviewed source/export/tool/package delivery, exercise final-candidate update/recovery and the complete private customer journey. Keep automated checks, saved downloads, DAW evidence and Andrew's acceptance distinct.
 - [ ] Later launch work: recruit remaining testers, complete actual frozen beta and fixes, receive Andrew's product/listening acceptance and explicit paid-publication approval. These are future outcomes, not completed by recovery.
+
+### Recovery result
+
+The hosted Documents install/build, signed 0.1.4 package checks, customer-edit update/recovery, sandbox purchase/access/email and actual saved downloads passed. Public waitlist and private checkout now use the same maintained website source. Product PR2 and the website's final naming PR1 await GitHub's required approving review; the maintained primary checkout refresh follows those merges. See the [current launch handoff](ENHANCE_THAT_LAUNCH_HANDOFF.md) for exact source, deployments, evidence and remaining human/DAW acceptance.
 
 ### Reconciliation of the original plan at recovery start
 

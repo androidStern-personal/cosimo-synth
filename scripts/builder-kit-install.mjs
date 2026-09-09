@@ -98,21 +98,29 @@ export async function renderBootstrap({ manifest, feedOrigin, kitOrigin = feedOr
 
 async function renderPublicEntry(bootstrap, feedOrigin, publicBootstrapUrl = publicInstallationUrl) {
     const feed = parseOrigin(feedOrigin);
+    if (!feed) return failure("invalid-origin");
     let url;
     try {
         url = new URL(publicBootstrapUrl);
-        const loopback = url.protocol === "http:" && ["127.0.0.1", "[::1]"].includes(url.hostname);
-        if (!parseOrigin(publicBootstrapUrl) || url.pathname !== "/install.sh"
-            || (publicBootstrapUrl !== publicInstallationUrl && !loopback)) return failure("invalid-public-bootstrap-url");
+        const loopback = url.protocol === "http:" && ["127.0.0.1", "[::1]"].includes(url.hostname)
+            && url.pathname === "/install.sh";
+        const isolatedFeed = url.protocol === "https:"
+            && url.origin === new URL(publicInstallationUrl).origin
+            && publicBootstrapUrl === `${feed.value}/install.sh`
+            && url.href === publicBootstrapUrl;
+        if (!parseOrigin(publicBootstrapUrl)
+            || (publicBootstrapUrl !== publicInstallationUrl && !loopback && !isolatedFeed))
+            return failure("invalid-public-bootstrap-url");
     } catch { return failure("invalid-public-bootstrap-url"); }
-    if (!feed) return failure("invalid-origin");
     let template;
     try { template = await readFile(new URL("./templates/builder-kit-public-install.sh.template", import.meta.url), "utf8"); }
     catch { return failure("public-bootstrap-template-unavailable"); }
     const values = {
         FEED_ORIGIN: quote(feed.value), PROTOCOLS: quote(feed.protocols),
         INSTALLER_ARTIFACT: quote(bootstrap.artifact), INSTALLER_SHA256: quote(bootstrap.sha256),
-        DEFAULT_DIRECTORY: `builder-kit-${bootstrap.release.tag.slice(1)}`,
+        LEGACY_DIRECTORY: `builder-kit-${bootstrap.release.tag.slice(1)}`,
+        RELEASE_VERSION: bootstrap.release.tag.slice(1),
+        RELEASE_RECEIPT: quote(`builder-kit-install-v1 ${bootstrap.release.commit}`),
     };
     const script = template.replace(/@@([A-Z0-9_]+)@@/gu, (_, key) => values[key]);
     return { ok: true, value: { script, sha256: createHash("sha256").update(script).digest("hex"), url: url.href } };
@@ -135,18 +143,18 @@ export async function renderInstallation(options) {
     const publicBootstrap = publicEntry.value;
     if ([bootstrap.value.script, publicBootstrap.script, publicBootstrap.url].some(value => value.includes(reveal(capability))))
         return failure("bootstrap-must-not-contain-capability");
-    const command = redact(`export BUILDER_KIT_ACCESS=${quote(reveal(capability))}; curl -fsSL ${publicBootstrap.url} | bash`);
+    const command = redact(`( set -o pipefail; export BUILDER_KIT_ACCESS=${quote(reveal(capability))}; curl -fsSL ${publicBootstrap.url} | bash -s -- --accept-juce-terms )`);
     const delivery = redact([
         "Builder Kit installation — macOS 15 or newer, Apple silicon",
         "Apple Command Line Tools must already be installed and their agreements accepted by you.",
         "Node and CMake are downloaded into this project; your shell profiles and system runtimes are unchanged.",
-        `The project folder is ~/src/builder-kit-${bootstrap.value.release.tag.slice(1)}.`,
+        "The usual project folder is ~/Documents/Builder Kit. Existing files are never overwritten; a versioned folder is selected when needed.",
         "", ...juceNoticeLines(), "",
         "If you agree to the notice above, copy the entire line below into Terminal and press Enter.",
-        "Running this command after agreeing explicitly acknowledges the JUCE terms; the hosted installer records that acknowledgment. Setup does not grant a JUCE license.",
+        "The final --accept-juce-terms flag explicitly records your acknowledgment. Setup does not grant a JUCE license.",
         "Keep this personalized command private: it contains your access credential.",
         "", reveal(command), "",
-        "On success, open the printed project folder in Codex. No plugin is built or installed.",
+        "On success, open the exact printed project folder in Codex. No plugin is built or installed.",
     ].join("\n"));
     return { ok: true, value: { ...bootstrap.value, publicBootstrap, command, delivery } };
 }

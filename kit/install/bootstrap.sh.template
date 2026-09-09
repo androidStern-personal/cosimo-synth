@@ -9,13 +9,19 @@ unset GIT_CURL_VERBOSE
 fail() { printf '%s\n' "$1" >&2; exit 1; }
 progress() { printf 'Builder Kit: %s\n' "$1"; }
 
-[[ "$#" = 1 && "$1" = --accept-juce-terms ]] || fail 'Explicit --accept-juce-terms acknowledgment is required.'
+[[ "$#" = 1 && "$1" = --accept-juce-terms ]] || fail 'Explicit --accept-juce-terms acknowledgment is required. Read the JUCE notice, then retry the complete personalized command.'
+juce_acknowledgment="$1"
 [[ "${BUILDER_KIT_ACCESS:-}" =~ ^[A-Za-z0-9._~-]+$ ]] || fail 'Builder Kit access credential is missing or invalid.'
-[[ "$(uname -s)" = Darwin && "$(uname -m)" = arm64 ]] || fail 'Builder Kit requires macOS 15 or newer on Apple silicon.'
+[[ "$(uname -s)" = Darwin && "$(uname -m)" = arm64 ]] || fail 'Builder Kit requires an Apple silicon Mac running macOS 15 or newer. No files were changed.'
 os_version=$(sw_vers -productVersion)
-[[ "${os_version%%.*}" -ge 15 ]] || fail 'Builder Kit requires macOS 15 or newer.'
-xcode-select -p >/dev/null 2>&1 && xcrun clang --version >/dev/null 2>&1 && git --version >/dev/null 2>&1 \
-    || fail 'Apple Command Line Tools must be installed and their agreements accepted by you. This installer cannot accept Apple agreements.'
+[[ "${os_version%%.*}" =~ ^[0-9]+$ && "${os_version%%.*}" -ge 15 ]] \
+    || fail "Builder Kit requires macOS 15 or newer; this Mac reports macOS $os_version. No files were changed."
+xcode-select -p >/dev/null 2>&1 \
+    || fail 'Apple Command Line Tools are required. Run xcode-select --install, finish the installation and any agreement prompts yourself, then retry this command.'
+xcrun clang --version >/dev/null 2>&1 \
+    || fail 'Apple Clang is unavailable through the selected Command Line Tools. Repair or select a working Apple toolchain, then retry this command.'
+git --version >/dev/null 2>&1 \
+    || fail 'Git is unavailable. Install or repair Apple Command Line Tools, then retry this command.'
 
 release_tag=@@RELEASE_TAG@@
 release_commit=@@RELEASE_COMMIT@@
@@ -174,9 +180,18 @@ BUILDER_KIT_ENV
 mv -f "$environment_file" "$state/env.sh"
 environment_file=''
 . "$state/env.sh"
+node_command=$(command -v node 2>/dev/null || true)
+npm_command=$(command -v npm 2>/dev/null || true)
+cmake_command=$(command -v cmake 2>/dev/null || true)
+[[ "$node_command" = "$state/runtime/"* && "$(node --version)" = @@NODE_VERSION@@ ]] \
+    || fail 'The verified project-local Node runtime did not activate. Retry the supplied command; if this repeats, ask your coding agent to inspect .builder-kit-install/runtime.'
+[[ "$npm_command" = "$state/runtime/"* ]] && npm --version >/dev/null 2>&1 \
+    || fail 'The verified project-local npm command did not activate. Retry the supplied command; if this repeats, ask your coding agent to inspect .builder-kit-install/runtime.'
+[[ "$cmake_command" = "$state/runtime/"* && "$(cmake --version | head -n 1)" = @@CMAKE_VERSION@@ ]] \
+    || fail 'The verified project-local CMake runtime did not activate. Retry the supplied command; if this repeats, ask your coding agent to inspect .builder-kit-install/runtime.'
 export BUILDER_KIT_EXPECTED_FEED="$feed_origin/$BUILDER_KIT_ACCESS"
 export BUILDER_KIT_EXPECTED_CMAJ_SHA256=@@CMAJ_SHA256@@
 export BUILDER_KIT_EXPECTED_PLUGIN_SHA256=@@PLUGIN_SHA256@@
 progress 'running kit setup and final checks'
-node kit/scripts/complete_install.mjs --accept-juce-terms
-printf '\nBuilder Kit is ready. Open this folder in Codex:\n%s\n' "$project"
+node kit/scripts/complete_install.mjs "$juce_acknowledgment"
+printf '\nBuilder Kit is ready.\nProject folder: %s\nNext: open this exact folder in Codex and ask:\nRead AGENTS.md, check this existing project, run setup and the strict doctor, then ask what I want to build or modify.\n' "$project"

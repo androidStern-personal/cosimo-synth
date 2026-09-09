@@ -1,6 +1,7 @@
 /** Identity-safe, recoverable installation of one already-built macOS VST3. */
 import { execFile } from "node:child_process";
-import { cp, lstat, mkdir, readFile, readdir, realpath, rm } from "node:fs/promises";
+import { randomUUID } from "node:crypto";
+import { cp, lstat, mkdir, readFile, readdir, realpath, rm, rmdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { promisify } from "node:util";
 import { findChocMarkerViolations } from "./check_choc_markers.mjs";
@@ -10,25 +11,32 @@ const executeFile = promisify(execFile);
 
 /** @typedef {{bundleIdentifier: string, processorClassId: string, displayName: string}} VST3Identity */
 /** @typedef {"platform" | "unsafe-path" | "unreadable-identity" | "signature" | "markers" | "identity-conflict" | "candidate-changed" | "installed-changed" | "pending-install" | "recovery-required" | "filesystem" | "tool-failed" | "unexpected-capture" | "move-failed"} InstallFailureCode */
-/** @typedef {{code: InstallFailureCode, message: string, recoveryDirectory?: string}} InstallFailure */
+/** @typedef {{code: InstallFailureCode, message: string, recoveryDirectory?: string, recoveryDirectories?: string[]}} InstallFailure */
+/** @typedef {{code: "previous-lock-retained", path: string}} InstallCleanupWarning */
 /** @typedef {{status: "failed", error: InstallFailure}} FailedInstall */
 /** @typedef {{status: "verified", identity: VST3Identity, digest: string, entry: {dev: number, ino: number}}} VerifiedBundle */
 /** @typedef {{identityProbe: string, codesign?: string, probeTimeoutMs?: number}} BundleTools */
-/** @typedef {FailedInstall | {status: "installed", destination: string, identity: VST3Identity, recoveryDirectory?: string} | {status: "dry-run", destination: string, identity: VST3Identity}} InstallResult */
+/** @typedef {FailedInstall | {status: "installed", destination: string, identity: VST3Identity, recoveryDirectory?: string, cleanupWarning?: InstallCleanupWarning} | {status: "dry-run", destination: string, identity: VST3Identity}} InstallResult */
 
 /**
  * Render an install failure for the CLI, including any retained recovery path.
  * @param {InstallFailure} failure
  */
 export function formatVST3InstallFailure(failure) {
-    return failure.recoveryDirectory
-        ? `${failure.message}\nRetained recovery directory: ${failure.recoveryDirectory}`
-        : failure.message;
+    const directories = failure.recoveryDirectories ?? (failure.recoveryDirectory ? [failure.recoveryDirectory] : []);
+    return [failure.message, ...directories.map(directory => `Retained recovery directory: ${directory}`)].join("\n");
 }
 
-/** @param {InstallFailureCode} code @param {string} message @param {string} [recoveryDirectory] @returns {FailedInstall} */
-function failed(code, message, recoveryDirectory) {
-    return { status: "failed", error: { code, message, ...(recoveryDirectory ? { recoveryDirectory } : {}) } };
+/** @param {InstallCleanupWarning} warning */
+export function formatVST3InstallCleanupWarning(warning) {
+    return `The plugin installation is verified, but the previous filename's lock could not be removed. `
+        + `Inspect the retained lock before another update: ${warning.path}`;
+}
+
+/** @param {InstallFailureCode} code @param {string} message @param {string} [recoveryDirectory] @param {string[]} [recoveryDirectories] @returns {FailedInstall} */
+function failed(code, message, recoveryDirectory, recoveryDirectories) {
+    return { status: "failed", error: { code, message, ...(recoveryDirectory ? { recoveryDirectory } : {}),
+        ...(recoveryDirectories ? { recoveryDirectories } : {}) } };
 }
 
 function describe(error) {
@@ -192,13 +200,18 @@ async function captureMove(source, destination, expected, identityProbe) {
  * Install one already-signed native build. A non-scan transaction directory
  * retains the old bundle through post-promotion verification and doubles as an
  * exclusive lock. An interrupted/failed rollback is never silently discarded.
- * @param {BundleTools & {candidate: string, destination: string, dryRun?: boolean}} options
+ * previousDestination explicitly names one former filename in the same scan
+ * directory. Both filenames are locked, and a successful rename retains the
+ * verified old bundle outside that directory. Cross-root migration is separate.
+ * @param {BundleTools & {candidate: string, destination: string, previousDestination?: string, dryRun?: boolean}} options
  * @returns {Promise<InstallResult>} Includes a recovery directory when needed.
  */
-export async function installVST3Bundle({ candidate, destination, identityProbe, dryRun = false,
+export async function installVST3Bundle({ candidate, destination, previousDestination, identityProbe, dryRun = false,
     codesign = "/usr/bin/codesign", probeTimeoutMs = 15000 }) {
     const tools = { identityProbe, codesign, probeTimeoutMs };
     let transactionDirectory;
+    let previousFilenameLock;
+    let existingDestination = destination;
     let previous;
     let previousInspection;
     let promotedInspection;
@@ -208,6 +221,11 @@ export async function installVST3Bundle({ candidate, destination, identityProbe,
         if (!path.isAbsolute(candidate) || !path.isAbsolute(destination) || !path.isAbsolute(identityProbe)
             || !/^[A-Za-z0-9_][A-Za-z0-9_ .-]*\.vst3$/u.test(path.basename(destination)))
             return failed("unsafe-path", "Install paths and the build-produced identity probe must be absolute, with a VST3 bundle destination.");
+        if (previousDestination !== undefined && (typeof previousDestination !== "string"
+            || !path.isAbsolute(previousDestination) || path.dirname(previousDestination) !== path.dirname(destination)
+            || previousDestination === destination
+            || !/^[A-Za-z0-9_][A-Za-z0-9_ .-]*\.vst3$/u.test(path.basename(previousDestination))))
+            return failed("unsafe-path", "The previous bundle must be a different VST3 filename in the same install directory.");
         const installDirectory = path.dirname(destination);
         const directoryEntry = await maybeEntry(installDirectory);
         if (directoryEntry !== null && (!directoryEntry.isDirectory() || directoryEntry.isSymbolicLink()))
@@ -215,14 +233,18 @@ export async function installVST3Bundle({ candidate, destination, identityProbe,
         const replacement = await inspectVST3Bundle(candidate, tools);
         if (replacement.status === "failed") return replacement;
         const existingEntry = await maybeEntry(destination);
+        const previousEntry = previousDestination === undefined ? null : await maybeEntry(previousDestination);
+        if (existingEntry !== null && previousEntry !== null)
+            return failed("identity-conflict", "Both previous and new plugin filenames already exist. Inspect the duplicate paths before installing; neither was changed.");
+        if (previousEntry !== null) existingDestination = previousDestination;
         let existing = null;
-        if (existingEntry !== null) {
-            if (await realpath(candidate) === await realpath(destination))
+        if (existingEntry !== null || previousEntry !== null) {
+            if (await realpath(candidate) === await realpath(existingDestination))
                 return failed("unsafe-path", "The candidate and installed bundle must be different directories.");
-            existing = await inspectVST3Bundle(destination, { ...tools, purpose: "existing" });
+            existing = await inspectVST3Bundle(existingDestination, { ...tools, purpose: "existing" });
             if (existing.status === "failed") return existing;
             if (!sameIdentity(existing.identity, replacement.identity)) {
-                return failed("identity-conflict", `Refusing to replace ${destination}: existing identity `
+                return failed("identity-conflict", `Refusing to replace ${existingDestination}: existing identity `
                     + `${existing.identity.bundleIdentifier} / ${existing.identity.processorClassId} differs from candidate `
                     + `${replacement.identity.bundleIdentifier} / ${replacement.identity.processorClassId}. The installed plugin was not changed.`);
             }
@@ -231,11 +253,21 @@ export async function installVST3Bundle({ candidate, destination, identityProbe,
 
         await mkdir(installDirectory, { recursive: true });
         if ((await lstat(installDirectory)).isSymbolicLink()) return failed("unsafe-path", "Install directory changed into a symbolic link.");
+        if (previousDestination !== undefined) {
+            const guardPath = path.join(path.dirname(installDirectory), `.${path.basename(previousDestination)}.install`);
+            try { await mkdir(guardPath, { mode: 0o700 }); }
+            catch (error) {
+                if (error !== null && typeof error === "object" && error.code === "EEXIST")
+                    return failed("pending-install", `An installation or recovery is already present at ${guardPath}. It was not changed.`, guardPath);
+                throw error;
+            }
+            previousFilenameLock = guardPath;
+        }
         const transactionPath = path.join(path.dirname(installDirectory), `.${path.basename(destination)}.install`);
         try { await mkdir(transactionPath, { mode: 0o700 }); }
         catch (error) {
             if (error !== null && typeof error === "object" && error.code === "EEXIST")
-                return failed("pending-install", `An installation or recovery is already present at ${transactionPath}. Inspect it before retrying; it was not changed.`, transactionPath);
+                return await abandon(failed("pending-install", `An installation or recovery is already present at ${transactionPath}. Inspect it before retrying; it was not changed.`, transactionPath));
             throw error;
         }
         transactionDirectory = transactionPath;
@@ -248,10 +280,22 @@ export async function installVST3Bundle({ candidate, destination, identityProbe,
         if (!sameIdentity(stagedInspection.identity, replacement.identity) || stagedInspection.digest !== replacement.digest)
             return await abandon(failed("candidate-changed", "The staged replacement does not match the preflighted build. The installed plugin was not changed."));
 
+        if (previousDestination !== undefined && existingDestination !== previousDestination
+            && await maybeEntry(previousDestination) !== null)
+            return await abandon(failed("installed-changed", "A bundle appeared at the previous filename during preflight. Neither install path was changed."));
+        if (existingDestination !== destination && await maybeEntry(destination) !== null)
+            return await abandon(failed("installed-changed", "A bundle appeared at the new filename during preflight. Neither install path was changed."));
+
         if (existing !== null) {
-            if (!await samePayload(destination, existing))
+            if (!await samePayload(existingDestination, existing))
                 return await abandon(failed("installed-changed", "The installed plugin changed during preflight. No replacement was performed."));
-            const captured = await captureMove(destination, backup, existing, identityProbe);
+            if (existingDestination !== destination)
+                await writeFile(path.join(transactionDirectory, "recovery.json"), `${JSON.stringify({
+                    schemaVersion: 1, previousBundleName: path.basename(existingDestination),
+                    destinationBundleName: path.basename(destination), previousIdentity: existing.identity,
+                    previousPayloadSha256: existing.digest,
+                }, null, 2)}\n`, { flag: "wx", mode: 0o600 });
+            const captured = await captureMove(existingDestination, backup, existing, identityProbe);
             if (captured.status === "failed") {
                 if (captured.error.code === "unexpected-capture") return retained(captured.error.message);
                 return await abandon(captured);
@@ -277,12 +321,43 @@ export async function installVST3Bundle({ candidate, destination, identityProbe,
             return await abandon(failed("installed-changed", "The promoted bundle did not preserve the validated replacement."));
         if (previous !== undefined && !await samePayload(previous, previousInspection))
             return retained("The retained prior bundle changed after capture. It was not deleted.");
+        if (previousDestination !== undefined && await maybeEntry(previousDestination) !== null)
+            return await abandon(failed("installed-changed", "A bundle appeared at the previous filename during installation. It was not removed."));
+
+        if (previous !== undefined && existingDestination !== destination) {
+            // Preserve the verified old bytes without leaving a pending-install
+            // lock that would prevent the next update of the new filename.
+            const recoveryDirectory = path.join(path.dirname(transactionDirectory),
+                `.${path.basename(destination)}.previous-${randomUUID()}`);
+            const entry = await lstat(transactionDirectory);
+            const expected = { entry: { dev: entry.dev, ino: entry.ino }, digest: await hashInstalledPayload(transactionDirectory) };
+            const archived = await captureMove(transactionDirectory, recoveryDirectory, expected, identityProbe);
+            if (archived.status === "failed")
+                return await retainArchiveFailure(archived.error.message, recoveryDirectory);
+            transactionDirectory = recoveryDirectory;
+            try { await releasePreviousFilenameLock(); }
+            catch {
+                // The verified new install and archived prior copy are already
+                // complete. A lock cleanup failure must not undo either one.
+                return { status: "installed", destination, identity: installed.identity, recoveryDirectory,
+                    ...(previousFilenameLock === undefined ? {} : {
+                        cleanupWarning: { code: "previous-lock-retained", path: previousFilenameLock },
+                    }) };
+            }
+            return { status: "installed", destination, identity: installed.identity, recoveryDirectory };
+        }
 
         // All install gates passed. Cleanup failure does not undo a successful
         // install or risk a partially removed backup during rollback.
-        try { await rm(transactionDirectory, { recursive: true }); }
+        try {
+            await releasePreviousFilenameLock();
+            await rm(transactionDirectory, { recursive: true });
+        }
         catch {
-            return { status: "installed", destination, identity: installed.identity, recoveryDirectory: transactionDirectory };
+            return { status: "installed", destination, identity: installed.identity, recoveryDirectory: transactionDirectory,
+                ...(previousFilenameLock === undefined ? {} : {
+                    cleanupWarning: { code: "previous-lock-retained", path: previousFilenameLock },
+                }) };
         }
         return { status: "installed", destination, identity: installed.identity };
     } catch (error) {
@@ -290,12 +365,43 @@ export async function installVST3Bundle({ candidate, destination, identityProbe,
     }
 
     function retained(message) {
-        return failed("recovery-required", message, transactionDirectory);
+        const detail = previousFilenameLock === undefined ? message
+            : `${message} The previous filename remains locked at ${previousFilenameLock}.`;
+        return failed("recovery-required", detail, transactionDirectory ?? previousFilenameLock);
+    }
+
+    async function retainArchiveFailure(message, archiveDestination) {
+        // The move may have succeeded even when verification failed. Observe
+        // both locations without treating either as verified or compensating
+        // an uncertain archive move. Keep every observed entry for inspection.
+        const directories = [];
+        const uninspected = [];
+        for (const location of [archiveDestination, transactionDirectory, previousFilenameLock]) {
+            if (location === undefined) continue;
+            try {
+                if (await maybeEntry(location) !== null) directories.push(location);
+            } catch {
+                uninspected.push(location);
+            }
+        }
+        const explanation = `The new plugin is verified, but its prior bundle could not be archived safely. ${message}`
+            + uninspected.map(location => ` Recovery location could not be inspected: ${location}.`).join("");
+        return failed("recovery-required", explanation, directories[0], directories);
+    }
+
+    async function releasePreviousFilenameLock() {
+        if (previousFilenameLock !== undefined) {
+            await rmdir(previousFilenameLock);
+            previousFilenameLock = undefined;
+        }
     }
 
     async function abandon(failure) {
-        if (transactionDirectory === undefined) return failure;
         try {
+            if (transactionDirectory === undefined) {
+                await releasePreviousFilenameLock();
+                return failure;
+            }
             if (phase === "promoted") {
                 if (!await samePayload(destination, promotedInspection))
                     return retained(`${failure.error.message} The destination changed; automatic rollback stopped. Retained files were not deleted.`);
@@ -305,13 +411,14 @@ export async function installVST3Bundle({ candidate, destination, identityProbe,
                 phase = "previous-retained";
             }
             if (previous !== undefined) {
-                const restored = await captureMove(previous, destination, previousInspection, identityProbe);
+                const restored = await captureMove(previous, existingDestination, previousInspection, identityProbe);
                 if (restored.status === "failed")
                     return retained(`${failure.error.message} Rollback did not complete: ${restored.error.message}`);
                 previous = undefined;
             }
             await rm(transactionDirectory, { recursive: true });
             transactionDirectory = undefined;
+            await releasePreviousFilenameLock();
             return failure;
         } catch (error) {
             return retained(`${failure.error.message} Recovery could not finish: ${describe(error)}. Inspect the retained installation directory.`);
