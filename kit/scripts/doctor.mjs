@@ -8,10 +8,10 @@
 // cmaj / CmajPlugin.vst3 at their local paths, feed reachability, the
 // plugin registry (fx/ discovery, every <Name>.plugin.json's schemaVersion,
 // legacy two-file configs), product-owner.json, node_modules, and the JUCE
-// acknowledgment. Prints plain-English lines followed by a JSON block; --json
-// prints only the JSON. Problems flip `ok`; warnings (legacy plugin configs,
-// placeholder owner identity) do not. Exits 0 always, unless --strict and a
-// problem was found. Never writes.
+// acknowledgment. The default is a concise human readiness report; --json
+// prints the full machine-readable report instead. Problems flip `ok`; warnings
+// (legacy plugin configs, placeholder owner identity) do not. Exits 0 always,
+// unless --strict and a problem was found. Never writes.
 
 import { existsSync, readdirSync, readFileSync, realpathSync } from "node:fs";
 import { spawnSync } from "node:child_process";
@@ -503,117 +503,76 @@ function statusLine(ok, text) {
     return `${ok === false ? "[!!]" : ok === null ? "[--]" : "[ok]"} ${text}`;
 }
 
-function toolLine(tool) {
-    if (!tool.present)
-        return statusLine(false, `${tool.name}: not found (requires ${tool.required})`);
-
-    const location = tool.path ? ` at ${tool.path}` : "";
-    const projectLocal = tool.projectLocal === null ? "" : tool.projectLocal ? ", project-local" : ", outside project runtime";
-    return statusLine(tool.ok && tool.projectLocal !== false, `${tool.name} ${tool.version ?? "unknown version"}${location} (requires ${tool.required}${projectLocal})`);
+function toolReady(tool) {
+    return tool?.present === true && tool.ok === true && tool.projectLocal !== false;
 }
 
-function toolchainLine(inspection) {
-    const label = `${inspection.key} at ${inspection.relativePath}`;
+function toolVersion(tool, label = tool?.name ?? "tool") {
+    return `${label} ${tool?.version ?? "unknown"}`;
+}
 
-    switch (inspection.status) {
-        case "current":
-            return statusLine(true, `${label}: present, matches the pin (${inspection.matchedBy})`);
-        case "missing":
-            return statusLine(false, `${label}: missing`);
-        case "stale":
-            return statusLine(false, `${label}: present but does not match pin ${inspection.pin.slice(0, 12)}…`);
-        default:
-            return statusLine(null, `${label}: present, no sha256 pin in kit/toolchain.json to verify against`);
-    }
+function visibleWarnings(report) {
+    const ownerPath = report.kit?.productOwner?.path;
+    return report.warnings.filter((warning) => !ownerPath || !warning.startsWith(`${ownerPath} `));
 }
 
 export function formatDoctorReport(report) {
-    const lines = ["kit:doctor"];
+    const lines = ["Builder Kit doctor"];
     const platform = report.platform;
     const kit = report.kit;
+    const platformReady = ![platform.osOk, platform.archOk, platform.macOSOk].includes(false)
+        && toolReady(report.tools.git) && toolReady(report.tools.compiler)
+        && report.tools.xcodeCommandLineTools.ok === true;
+    const platformNameAndVersion = `${platform.os}${platform.macOSVersion ? ` ${platform.macOSVersion}` : ""}/${platform.arch}`;
+    lines.push(statusLine(platformReady, `Mac: ${platformNameAndVersion}; Apple Clang, Git, and Command Line Tools ${platformReady ? "ready" : "need attention"}.`));
 
-    if (kit.error)
-        lines.push(statusLine(false, `kit: ${kit.error}`));
-    else
-        lines.push(statusLine(true, `kit ${kit.version} (schemas: plugin ${kit.schemaVersions.plugin}, toolchain ${kit.schemaVersions.toolchain}, feed ${kit.schemaVersions.feed})`));
+    const runtimeKeys = ["node", "npm", "cmake"];
+    const runtimeReady = runtimeKeys.every((key) => toolReady(report.tools[key]));
+    const runtimeIsLocal = runtimeKeys.every((key) => report.tools[key]?.projectLocal === true);
+    const runtimeOutsideProject = runtimeKeys.some((key) => report.tools[key]?.projectLocal === false);
+    const runtimeLocation = runtimeIsLocal ? "; project-local" : runtimeOutsideProject ? "; outside project runtime" : "";
+    lines.push(statusLine(runtimeReady, `Runtime: ${toolVersion(report.tools.node, "Node")}, ${toolVersion(report.tools.npm, "npm")}, ${toolVersion(report.tools.cmake, "CMake")}${runtimeLocation}.`));
 
-    const owner = kit.productOwner;
+    const inspections = Object.values(report.toolchain);
+    const pinnedToolsReady = inspections.length === toolKeys.length && inspections.every((inspection) => inspection.status === "current");
+    const pluginProjectReady = kit.error === null && report.contracts.error === null && report.registry.ok
+        && report.nodeModules.present && pinnedToolsReady;
+    const targetCount = report.registry.targets.length;
+    lines.push(statusLine(pluginProjectReady, `Plug-in project: Builder Kit ${kit.version ?? "unknown"}; ${targetCount} target(s); npm dependencies ${report.nodeModules.present ? "ready" : "missing"}; pinned tools ${pinnedToolsReady ? "ready" : "need attention"}.`));
 
-    if (owner.error)
-        lines.push(statusLine(false, `product-owner.json: ${owner.error}`));
-    else if (!owner.present)
-        lines.push(statusLine(null, "product-owner.json: missing (kit:new needs it)"));
-    else if (owner.placeholder)
-        lines.push(statusLine(null, `product-owner.json: template placeholder still in place (${owner.placeholderKeys.join(", ")})`));
-    else
-        lines.push(statusLine(true, `product-owner.json: ${owner.manufacturer}`));
+    if (report.feed.checked)
+        lines.push(statusLine(report.feed.reachable, `Delivery feed: ${report.feed.reachable ? "reachable" : `unavailable (${report.feed.error})`}.`));
 
-    const platformOk = platform.osOk === false || platform.archOk === false || platform.macOSOk === false ? false : platform.osOk === null ? null : true;
-    const platformTarget = platform.requirements.os
-        ? ` (kit targets ${platform.requirements.os}${platform.requirements.minMacOS ? ` ${platform.requirements.minMacOS}+` : ""}/${platform.requirements.arch ?? "any"})`
-        : "";
+    lines.push(statusLine(report.juceTerms.acknowledged ? true : null, `JUCE notice: ${report.juceTerms.acknowledged ? `acknowledged ${report.juceTerms.acknowledgedAt}` : "not yet acknowledged; ask once before running an accepting setup or native build"}.`));
 
-    lines.push(statusLine(platformOk, `platform: ${platform.os}${platform.macOSVersion ? ` ${platform.macOSVersion}` : ""}/${platform.arch}${platformTarget}`));
-
-    if (report.contracts.error)
-        lines.push(statusLine(false, `contracts: ${report.contracts.error}`));
-
-    for (const key of ["node", "npm", "cmake", "git", "compiler"])
-        lines.push(toolLine(report.tools[key]));
-
-    const xcode = report.tools.xcodeCommandLineTools;
-
-    if (xcode.applicable)
-        lines.push(statusLine(xcode.ok, `Xcode Command Line Tools: ${xcode.present ? xcode.path : "not installed"}`));
-    else
-        lines.push(statusLine(null, `Xcode Command Line Tools: not applicable on ${platform.os}`));
-
-    for (const inspection of Object.values(report.toolchain))
-        lines.push(toolchainLine(inspection));
-
-    const feed = report.feed;
-
-    if (!feed.checked)
-        lines.push(statusLine(null, `feed: not checked (${feed.reason})`));
-    else if (feed.reachable)
-        lines.push(statusLine(true, `feed: required object reachable (HTTP ${feed.status})`));
-    else
-        lines.push(statusLine(false, `feed: required object unavailable (${feed.error})`));
-
-    if (report.registry.ok) {
-        lines.push(statusLine(true, `plugin registry: ${report.registry.targets.length} target(s)`));
-
-        for (const target of report.registry.targets)
-            lines.push(`     ${target.alias} -> ${target.patch} (cmake ${target.cmakeTarget}, product ${target.productName})`);
-    } else {
-        lines.push(statusLine(false, `plugin registry: ${report.registry.error}`));
+    if (!report.ok) {
+        lines.push("");
+        lines.push(`${report.problems.length} problem(s):`);
     }
-
-    for (const config of report.registry.configs) {
-        if (config.kind === "plugin") {
-            const ok = config.error || config.schemaVersion === null || config.supported === false ? false : true;
-            const detail = config.error ?? (config.schemaVersion === null ? "no schemaVersion" : `schema ${config.schemaVersion}${config.supported === false ? " (newer than this kit)" : ""}`);
-            lines.push(statusLine(ok, `${config.path}: ${detail}`));
-        } else {
-            lines.push(statusLine(null, `${config.path}: legacy config (fold into <Name>.plugin.json)`));
-        }
-    }
-
-    lines.push(statusLine(report.nodeModules.present, `node_modules: ${report.nodeModules.present ? "present" : "missing"}`));
-    lines.push(statusLine(report.juceTerms.acknowledged ? true : null, `JUCE terms: ${report.juceTerms.acknowledged ? `acknowledged ${report.juceTerms.acknowledgedAt}` : "not yet acknowledged (npm run kit:setup -- --accept-juce-terms)"}`));
-
-    lines.push("");
-    lines.push(report.ok ? "No problems found." : `${report.problems.length} problem(s):`);
 
     for (const problem of report.problems)
         lines.push(`  - ${problem}`);
 
-    if (report.warnings.length > 0) {
-        lines.push(`${report.warnings.length} warning(s):`);
+    const warnings = visibleWarnings(report);
 
-        for (const warning of report.warnings)
+    if (warnings.length > 0) {
+        lines.push("");
+        lines.push(`${warnings.length} warning(s):`);
+
+        for (const warning of warnings)
             lines.push(`  - ${warning}`);
     }
+
+    lines.push("");
+
+    if (report.ok && report.juceTerms.acknowledged)
+        lines.push("Ready to build and install plug-ins.");
+    else if (report.ok)
+        lines.push("Environment checks passed. JUCE acknowledgment is still required before an accepting setup or native build.");
+    else
+        lines.push("Resolve the problems above, then rerun npm run kit:doctor -- --strict. Run setup only when a problem names it.");
+
+    lines.push("Full machine report: npm run kit:doctor -- --json");
 
     return lines.join("\n");
 }
@@ -630,15 +589,10 @@ async function main() {
     }
 
     const report = await collectDoctorReport({ offline: options.offline });
-    const json = JSON.stringify(report, null, 2);
-
     if (options.json) {
-        console.log(json);
+        console.log(JSON.stringify(report, null, 2));
     } else {
         console.log(formatDoctorReport(report));
-        console.log("");
-        console.log("JSON:");
-        console.log(json);
     }
 
     if (options.strict && !report.ok)

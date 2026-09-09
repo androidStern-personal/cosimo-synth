@@ -470,7 +470,10 @@ test("exact emitted line owns download failure, occupied-folder refusal, fresh i
             assert.match(result.output, /setup and strict environment checks passed/u);
             assert.match(result.output, /caller access unset/u);
             assert.match(result.output, new RegExp(`Project folder: ${project.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&")}\\n`));
-            assert.match(result.output, /Next: open this exact folder in Codex/u);
+            assert.match(result.output, /Continue in this exact project folder/u);
+            assert.match(result.output, /run the final strict doctor/u);
+            assert.match(result.output, /ran this command directly in Terminal/u);
+            assert.doesNotMatch(result.output, /open this exact folder in Codex|run setup and the strict doctor/u);
             assert.equal((await fs.readFile(path.join(project, ".builder-kit-install/npm-attempts"), "utf8")).split("\n").filter(Boolean).length, 2);
             assert.equal(git(project, "rev-parse", "HEAD"), f.manifest.kit.commit);
             assert.equal(git(project, "remote"), "");

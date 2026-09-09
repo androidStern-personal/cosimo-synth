@@ -215,10 +215,11 @@ The repository root holds one `product-owner.json`:
 `manufacturer`, `manufacturerCode` (4-char code), and `bundleIdentifierPrefix`
 (reverse-DNS prefix) are required; `supportUrl` and `pluginCodePrefix` (two
 characters) are optional. `kit:new` and the identity derivations above read
-it; nothing else does. The kit template ships the placeholder shown here, and
-`npm run kit:doctor` warns while the placeholder values are still in place.
-A malformed owner file fails discovery; an absent one only matters when a
-derivation needs it.
+it; nothing else does. The kit template ships the placeholder shown here. The
+explicit doctor JSON report identifies those values; the first-use human
+summary defers that configuration until the customer creates or distributes a
+plug-in. A malformed owner file fails discovery; an absent one only matters
+when a derivation needs it.
 
 ## Kit Version And Public Entry
 

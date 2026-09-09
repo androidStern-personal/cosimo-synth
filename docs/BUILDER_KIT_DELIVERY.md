@@ -4,8 +4,12 @@ The customer receives only an access-key export and the approved public URL
 piped to Bash. This is the complete shape, with a dummy key shown here:
 
 ```sh
-export BUILDER_KIT_ACCESS='DUMMY_KEY'; curl -fsSL https://pub-2bb7a8a7b9b44ed3b975f3f0a6bcc756.r2.dev/install.sh | bash -s -- --accept-juce-terms
+( set -o pipefail; export BUILDER_KIT_ACCESS='DUMMY_KEY'; curl -fsSL https://pub-2bb7a8a7b9b44ed3b975f3f0a6bcc756.r2.dev/install.sh | bash -s -- --accept-juce-terms )
 ```
+
+The subshell keeps the access value out of the caller's environment after the
+command returns. `pipefail` also makes a failed public download return a failure
+status instead of the status of an empty downstream shell.
 
 Deliver the generated licensing notice beside the populated line. The final
 `--accept-juce-terms` flag explicitly carries the customer's acknowledgment
@@ -17,10 +21,13 @@ The hosted default is `$HOME/Documents/Builder Kit`. A recognized same-release
 legacy install under `$HOME/src/builder-kit-<version>` is resumed. An unrelated
 canonical folder is preserved and a versioned sibling is selected. Folder creation, private
 installer download verification, setup and final checks happen in hosted code.
-Only successful completion names the folder to open in Codex. No plugin is
-built, installed, copied or edited; no browser or DAW is launched. A linked
-destination or unrelated occupied folder is refused. Existing installer-owned
-projects retain their customer edits on rerun.
+Only successful completion names the exact project folder. An agent that ran
+the installer continues the same task with that exact folder as its working
+directory and follows the root `AGENTS.md`; a customer who ran it directly in
+Terminal opens that folder in their coding agent. No plugin is built, installed,
+copied or edited; no browser or DAW is launched. A linked destination or
+unrelated occupied folder is refused. Existing installer-owned projects retain
+their customer edits on rerun.
 
 ## Maintainer preparation
 
@@ -60,12 +67,12 @@ uses the approved HTTPS URL.
 ## Trust and failure boundary
 
 The public script is trusted through its HTTPS origin, not a clipboard checksum.
-The outer `curl -fsSL ... | bash -s -- --accept-juce-terms` has ordinary shell pipeline status: a failed
-public HTTP fetch prints curl's error but may leave a zero pipeline status.
-The complete function definition prevents a partial function body from starting
-installation. It cannot detect a transport error reported after a complete
-public program was already delivered; the rejected inline trailer protocol is
-not recreated. These are explicit tradeoffs of the approved short command.
+The outer subshell enables `pipefail`, so a failed public HTTP fetch returns a
+failure status. Its complete function definition prevents a partial function
+body from starting installation. It cannot detect a transport error reported
+after a complete public program was already delivered; the rejected inline
+trailer protocol is not recreated. These are explicit tradeoffs of the approved
+short command.
 
 The downstream private download still must complete successfully and match its
 SHA-256 before execution. Existing release commit pins, runtime/tool hashes,

@@ -208,22 +208,28 @@ test("export_produces_a_gated_starter_tree_with_no_private_material", async () =
         JSON.parse(await fs.readFile(path.join(outputRoot, "package.json"), "utf8"));
         const firstUse = await fs.readFile(path.join(outputRoot, "README.md"), "utf8");
         assert.match(firstUse, /^> Read AGENTS\.md, check this existing project without overwriting anything, run$/mu);
-        assert.match(firstUse, /setup and the strict doctor from this folder, then ask what I want to build or\n> modify\./u);
+        assert.match(firstUse, /the strict doctor from this exact folder, use setup only if a reported problem\n> needs it, then ask what I want to build or modify\./u);
         assert.match(firstUse, /offer to build the included plugin as-is, change its sound or\ninterface, or start a new plugin/u);
         assert.match(firstUse, /## If you choose to build the included plugin as-is/u);
-        assert.match(firstUse, /follow this\nsection only when you choose to build the included plugin as-is/u);
-        assert.match(firstUse, /npm run fx:prod:build -- enhancer-lite\nnpm run fx:prod:install -- enhancer-lite/u);
-        assert.match(firstUse, /Use the included `enhancer-lite` target unchanged\. Do not\s+copy or rename it, create a new plugin or test, edit plugin\/test source/u);
-        assert.match(firstUse, /do not change source to complete this\s+build-as-is option/u);
-        assert.match(firstUse, /Build\/install success is not a listening or DAW-acceptance result\./u);
-        assert.match(firstUse, /actual plugin name to find in the\nDAW and the exact installed location/u);
+        assert.match(firstUse, /follow this section only\nwhen you choose to build the included plugin as-is/u);
+        assert.match(firstUse, /Included Enhance That, Unchanged/u);
+        assert.match(firstUse, /authoritative procedure/u);
+        assert.doesNotMatch(firstUse, /npm run fx:prod:build -- enhancer-lite/u, "the README does not duplicate the skill procedure");
+        assert.match(firstUse, /must not copy or rename the included plug-in, create a new plug-in or\ntest, edit plug-in\/test source/u);
+        assert.match(firstUse, /Build\/install success is not a listening or DAW-acceptance result, and\nthe agent does not launch a DAW or begin a tutorial unless you ask for help\./u);
+        assert.match(firstUse, /Enhance That is built and installed/u);
         assert.match(firstUse, /http:\/\/127\.0\.0\.1:5175\/fx\/enhancer_lite\/view\/harness\.html/u);
+
+        const pluginSkill = await fs.readFile(path.join(outputRoot, "kit/skills/cosimo-make-plugin/SKILL.md"), "utf8");
+        assert.match(pluginSkill, /## Included Enhance That, Unchanged/u);
+        assert.match(pluginSkill, /npm run typecheck\nnpm test\nnpm run fx:prod:build -- enhancer-lite\nnpm run fx:prod:install -- enhancer-lite/u);
+        assert.match(pluginSkill, /Enhance That is built and installed\.\nInstalled at: <exact path printed by fx:prod:install>/u);
 
         // A cold reader gets a short conditional index whose exported links resolve.
         const rootGuidance = await fs.readFile(path.join(outputRoot, "AGENTS.md"), "utf8");
         const kitGuidancePath = path.join(outputRoot, "kit/AGENTS.md");
         const kitGuidance = await fs.readFile(kitGuidancePath, "utf8");
-        assert.match(rootGuidance, /follow only the references\nthat match the task/u);
+        assert.match(rootGuidance, /follow only the route that\nmatches the task/u);
         assert.doesNotMatch(rootGuidance, /read `kit\/AGENTS\.md` fully/iu);
         for (const requiredRoute of ["PLUGIN_ARCHITECTURE.md", "RELEASE_VERIFICATION.md", "HOST_COMPATIBILITY.md", "EXPORT.md", "cosimo-make-plugin/SKILL.md"]) {
             assert.equal(kitGuidance.includes(requiredRoute), true, `missing guidance route ${requiredRoute}`);
