@@ -6,7 +6,8 @@ import os from "node:os";
 import path from "node:path";
 import { renderEnhanceThatPreinstall } from "../scripts/enhance-that-installer.mjs";
 import { claimEnhanceThatOutput, enhanceThatSourceErrors, parseEnhanceThatArgs,
-    enhanceThatAuIdentityErrors, selectEnhanceThatSigningIdentities } from "../scripts/build_enhance_that_release.mjs";
+    enhanceThatAuIdentityErrors, selectEnhanceThatSigningIdentities,
+    verifyFreshEnhanceThatBundles } from "../scripts/build_enhance_that_release.mjs";
 import { assertPayloadModes, buildUnsignedFlatPackage, deterministicFlatPackageXarArgs,
     normalizePayloadModes, payloadInventoryErrors, renderPackageInfo } from "../scripts/build_seqfx_beta_release.mjs";
 
@@ -197,6 +198,30 @@ test("AU verification uses the exact component identity and product version", ()
     assert.ok(enhanceThatAuIdentityErrors({ ...auInfo, AudioComponents: [...auInfo.AudioComponents, ...auInfo.AudioComponents] }, "0.1.0").length);
     assert.ok(enhanceThatAuIdentityErrors(auInfo, "0.1.1").length);
     assert.ok(enhanceThatAuIdentityErrors({ ...auInfo, CFBundleIdentifier: "different.plugin" }, "0.1.0").length);
+});
+
+test("fresh AU is ad-hoc sealed before strict built verification", async () => {
+    const vst3 = "/fixture/EnhanceThat.vst3";
+    const au = "/fixture/EnhanceThat.component";
+    const calls = [];
+    const built = await verifyFreshEnhanceThatBundles({ payloadBundles: [
+        { format: "VST3", builtPath: vst3 },
+        { format: "AU", builtPath: au },
+    ] }, {
+        execute: (executable, args) => calls.push({ operation: "sign", executable, args }),
+        verify: async (_config, bundle, format) => {
+            calls.push({ operation: "verify", bundle, format });
+            return { payloadSha256: `${format}-payload` };
+        },
+    });
+    assert.deepEqual(calls, [
+        { operation: "verify", bundle: vst3, format: "VST3" },
+        { operation: "sign", executable: "/usr/bin/codesign",
+            args: ["--force", "--sign", "-", au] },
+        { operation: "verify", bundle: au, format: "AU" },
+    ]);
+    assert.equal(built.VST3.payloadSha256, "VST3-payload");
+    assert.equal(built.AU.payloadSha256, "AU-payload");
 });
 
 for (const location of ["user legacy", "user new", "system legacy"]) {

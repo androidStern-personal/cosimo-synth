@@ -224,6 +224,19 @@ async function verifyBundle(config, bundle, format = "VST3") {
         executableSha256: await fileHash(executable), architectures, dynamicDependencies: [...new Set(dependencies)] };
 }
 
+export async function verifyFreshEnhanceThatBundles(config, {
+    execute = run,
+    verify = verifyBundle,
+} = {}) {
+    const built = {};
+    for (const { format, builtPath } of config.payloadBundles) {
+        if (format === "AU")
+            execute("/usr/bin/codesign", adHocVst3SigningArgs(builtPath));
+        built[format] = await verify(config, builtPath, format);
+    }
+    return built;
+}
+
 async function assemble({ config, output, source, epoch, options, signing, provenance, native, built }) {
     await mkdir(output, { recursive: true });
     const work = path.join(output, "_work");
@@ -367,9 +380,7 @@ export async function main(args = process.argv.slice(2)) {
     assertSourceStateUnchanged(source, getReleaseGitState());
     const provenance = await captureActualNativeDependencyProvenance(config);
     const native = await staticDspEvidence(config, cmake, output);
-    const built = {};
-    for (const { format, builtPath } of config.payloadBundles)
-        built[format] = await verifyBundle(config, builtPath, format);
+    const built = await verifyFreshEnhanceThatBundles(config);
     const inputs = { config, source, epoch, options, signing, provenance, native, built };
     const first = await assemble({ ...inputs, output });
     if (options.repeat) {
