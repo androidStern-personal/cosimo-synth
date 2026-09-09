@@ -8,6 +8,7 @@ import { execFileSync } from "node:child_process";
 import { pathToFileURL } from "node:url";
 
 import {
+    assertPackageLockMatchesPackage,
     canonicalProofCommands,
     exportKit,
     normalizeFeedBaseUrl,
@@ -29,14 +30,23 @@ test("export payload and templates come only from the asserted commit, never ign
         ".gitignore": ".DS_Store\n",
         "package.json": JSON.stringify({ devDependencies: { fixture: "1.0.0" } }),
         "scripts/builder-kit-export-policy.json": JSON.stringify({
-            trees: ["kit"], files: [], requiredOutputs: ["package.json", "kit/fixture.txt"],
+            trees: ["kit"], files: [], requiredOutputs: ["package.json", "package-lock.json", "kit/fixture.txt"],
             forbiddenStrings: [], templateExplicitDevDependencies: {}, templateDevDependencyNames: ["fixture"],
         }),
         "kit/fixture.txt": "committed payload\n",
         "kit/feed.json": '{"baseUrl":""}',
         "kit/cmake/dependency-sources.cmake": 'set(COSIMO_CMAJOR_GIT_URL "https://source.example/cmajor.git")\n',
         "kit/skills/example/SKILL.md": "fixture skill\n",
-        "kit/template/root/package.json.template": '{"devDependencies":"__DEV_DEPENDENCIES__"}',
+        "kit/template/root/package.json.template": '{"name":"fixture-customer","devDependencies":"__DEV_DEPENDENCIES__"}',
+        "kit/template/root/package-lock.json": JSON.stringify({
+            name: "fixture-customer",
+            lockfileVersion: 3,
+            requires: true,
+            packages: {
+                "": { name: "fixture-customer", devDependencies: { fixture: "1.0.0" } },
+                "node_modules/fixture": { version: "1.0.0" },
+            },
+        }),
         "kit/template/root/README.md": "committed template\n",
     };
     const git = (...args) => execFileSync("git", ["-C", sourceRoot, ...args], {
@@ -74,6 +84,28 @@ test("export payload and templates come only from the asserted commit, never ign
     } finally {
         await fs.rm(scratch, { recursive: true, force: true });
     }
+});
+
+test("customer package lock must match every generated direct dependency", () => {
+    const packageManifest = { name: "customer", devDependencies: { fixture: "1.0.0" } };
+    const packageLock = {
+        name: "customer",
+        lockfileVersion: 3,
+        packages: {
+            "": { name: "customer", devDependencies: { fixture: "1.0.0" } },
+            "node_modules/fixture": { version: "1.0.0" },
+        },
+    };
+    assert.doesNotThrow(() => assertPackageLockMatchesPackage(packageManifest, packageLock));
+    assert.throws(
+        () => assertPackageLockMatchesPackage(
+            { ...packageManifest, devDependencies: { fixture: "2.0.0" } },
+            packageLock,
+        ),
+        /does not match/u,
+    );
+    delete packageLock.packages["node_modules/fixture"];
+    assert.throws(() => assertPackageLockMatchesPackage(packageManifest, packageLock), /no resolved entry/u);
 });
 
 async function monorepoSkillNames() {
@@ -183,7 +215,7 @@ test("export_produces_a_gated_starter_tree_with_no_private_material", async () =
         assert.equal(fileCount > 50, true);
         assert.equal(feedConfigured, false);
 
-        for (const required of ["kit/AGENTS.md", "kit/fx/build-effect.mjs", "fx/enhancer_lite/EnhancerLite.cmajorpatch", "package.json", "README.md", "EXPORT_MANIFEST.json"]) {
+        for (const required of ["kit/AGENTS.md", "kit/fx/build-effect.mjs", "fx/enhancer_lite/EnhancerLite.cmajorpatch", "package.json", "package-lock.json", "README.md", "EXPORT_MANIFEST.json"]) {
             assert.equal(existsSync(path.join(outputRoot, required)), true, `missing ${required}`);
         }
         for (const forbidden of ["TODOS.txt", "PROGRESS.txt", "reference_labs", "experiments", "cmajor/WavetableSynth.cmajor", "ui/desktop", "fx/seqfx", "AGENTS.md.orig", "kit/export-allowlist.json", "scripts/builder-kit-export-policy.json"]) {
@@ -205,25 +237,33 @@ test("export_produces_a_gated_starter_tree_with_no_private_material", async () =
             assert.equal(skillLink, `../../kit/skills/${skillName}`);
             assert.equal(existsSync(path.join(outputRoot, ".agents/skills", skillName, "SKILL.md")), true, `${skillName} link is dangling`);
         }
-        JSON.parse(await fs.readFile(path.join(outputRoot, "package.json"), "utf8"));
+        const packageManifest = JSON.parse(await fs.readFile(path.join(outputRoot, "package.json"), "utf8"));
+        const packageLock = JSON.parse(await fs.readFile(path.join(outputRoot, "package-lock.json"), "utf8"));
+        assert.doesNotThrow(() => assertPackageLockMatchesPackage(packageManifest, packageLock));
         const firstUse = await fs.readFile(path.join(outputRoot, "README.md"), "utf8");
         assert.match(firstUse, /^> Read AGENTS\.md, check this existing project without overwriting anything, run$/mu);
-        assert.match(firstUse, /setup and the strict doctor from this folder, then ask what I want to build or\n> modify\./u);
+        assert.match(firstUse, /the strict doctor from this exact folder, use setup only if a reported problem\n> needs it, then ask what I want to build or modify\./u);
         assert.match(firstUse, /offer to build the included plugin as-is, change its sound or\ninterface, or start a new plugin/u);
         assert.match(firstUse, /## If you choose to build the included plugin as-is/u);
-        assert.match(firstUse, /follow this\nsection only when you choose to build the included plugin as-is/u);
-        assert.match(firstUse, /npm run fx:prod:build -- enhancer-lite\nnpm run fx:prod:install -- enhancer-lite/u);
-        assert.match(firstUse, /Use the included `enhancer-lite` target unchanged\. Do not\s+copy or rename it, create a new plugin or test, edit plugin\/test source/u);
-        assert.match(firstUse, /do not change source to complete this\s+build-as-is option/u);
-        assert.match(firstUse, /Build\/install success is not a listening or DAW-acceptance result\./u);
-        assert.match(firstUse, /actual plugin name to find in the\nDAW and the exact installed location/u);
+        assert.match(firstUse, /follow this section only\nwhen you choose to build the included plugin as-is/u);
+        assert.match(firstUse, /Included Enhance That, Unchanged/u);
+        assert.match(firstUse, /authoritative procedure/u);
+        assert.doesNotMatch(firstUse, /npm run fx:prod:build -- enhancer-lite/u, "the README does not duplicate the skill procedure");
+        assert.match(firstUse, /must not copy or rename the included plug-in, create a new plug-in or\ntest, edit plug-in\/test source/u);
+        assert.match(firstUse, /Build\/install success is not a listening or DAW-acceptance result, and\nthe agent does not launch a DAW or begin a tutorial unless you ask for help\./u);
+        assert.match(firstUse, /Enhance That is built and installed/u);
         assert.match(firstUse, /http:\/\/127\.0\.0\.1:5175\/fx\/enhancer_lite\/view\/harness\.html/u);
+
+        const pluginSkill = await fs.readFile(path.join(outputRoot, "kit/skills/cosimo-make-plugin/SKILL.md"), "utf8");
+        assert.match(pluginSkill, /## Included Enhance That, Unchanged/u);
+        assert.match(pluginSkill, /npm run typecheck\nnpm test\nnpm run fx:prod:build -- enhancer-lite\nnpm run fx:prod:install -- enhancer-lite/u);
+        assert.match(pluginSkill, /Enhance That is built and installed\.\nInstalled at: <exact path printed by fx:prod:install>/u);
 
         // A cold reader gets a short conditional index whose exported links resolve.
         const rootGuidance = await fs.readFile(path.join(outputRoot, "AGENTS.md"), "utf8");
         const kitGuidancePath = path.join(outputRoot, "kit/AGENTS.md");
         const kitGuidance = await fs.readFile(kitGuidancePath, "utf8");
-        assert.match(rootGuidance, /follow only the references\nthat match the task/u);
+        assert.match(rootGuidance, /follow only the route that\nmatches the task/u);
         assert.doesNotMatch(rootGuidance, /read `kit\/AGENTS\.md` fully/iu);
         for (const requiredRoute of ["PLUGIN_ARCHITECTURE.md", "RELEASE_VERIFICATION.md", "HOST_COMPATIBILITY.md", "EXPORT.md", "cosimo-make-plugin/SKILL.md"]) {
             assert.equal(kitGuidance.includes(requiredRoute), true, `missing guidance route ${requiredRoute}`);

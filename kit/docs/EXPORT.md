@@ -4,7 +4,8 @@
 produces the customer starter monorepo: the `kit/` tree, the editable Enhancer
 Lite plugin, its tests, the shared analyzer it needs
 (`cmajor/EnhancerLiteSpectrumAnalyzer.cmajor`), and a root generated from `kit/template/root`
-(package.json with pinned tool versions taken from the monorepo, starter
+(package.json with pinned tool versions taken from the monorepo, its matching
+tracked package-lock.json, starter
 AGENTS.md, tsconfig, .gitignore). Every directory under `kit/skills/` gets a
 relative `.agents/skills/<name>` symlink at the root for agent skill discovery.
 
@@ -23,7 +24,8 @@ keeps the gates honest.
 `--prove` additionally runs the exported package's canonical `npm run typecheck`
 and `npm test`, builds Enhancer Lite, and simulates the customer update flow (starter commit →
 local plugin edit → kit-update merge; both must survive). On a customer
-machine `npm install` replaces the proof's node_modules symlink shortcut.
+machine `npm ci` uses the tracked lockfile in place of the proof's node_modules
+symlink shortcut.
 Customer `npm test` discovers `test_*.mjs` under `kit/tests/` and `tests/`
 recursively, excluding `_browser` tests; scaffolded plugin tests participate
 without editing a shared list.
@@ -72,13 +74,15 @@ which kit commits never touch.
 
 ## Customer installation delivery
 
-Initial delivery is one personalized shell line, accompanied by the JUCE
-licensing notice. The customer copies it into Terminal and presses Enter; the
-access credential, hosted project-destination selection, download address, and
-explicit `--accept-juce-terms` acknowledgment are already populated. The usual
-destination is `~/Documents/Builder Kit`; occupied content is preserved and a
-versioned sibling is selected. Do not send a placeholder recipe, ask an agent
-to choose a folder, or require separate Git, setup, doctor, or consent commands.
+Initial delivery is a coding-agent prompt containing one personalized shell
+line and the JUCE licensing notice the customer explicitly acknowledged. The
+agent runs that exact line; copying the same line directly into Terminal is an
+optional route. The access credential, approved public bootstrap address, and
+explicit `--accept-juce-terms` acknowledgment are already populated. The
+hosted installer selects `~/Documents/Builder Kit` by default; occupied content
+is preserved and a versioned sibling is selected. Do not send a placeholder
+recipe, ask an agent to choose a folder, or require separate Git, setup, doctor,
+or consent commands.
 
 The supported prerequisite is macOS 15 or newer on Apple silicon, with Apple
 Command Line Tools already installed and their agreements accepted by the
@@ -94,8 +98,11 @@ SHA-256 before execution, fetches the exact release tag with an ephemeral Git
 remote, checks its commit, and runs the existing archive/payload-verified setup
 and strict environment checks. A completed npm-install receipt distinguishes
 successful dependency installation from a partial `node_modules` directory.
-Success names the exact folder to open in Codex. Installation does not build or
-install a plugin, change the included example, or launch a browser or DAW.
+Success names the exact project folder. An agent that ran the installer
+continues the same task with that exact folder as its working directory and
+follows the root `AGENTS.md`; a customer who ran it directly in Terminal opens
+that folder in their coding agent. Installation does not build or install a
+plugin, change the included example, or launch a browser or DAW.
 
 An unrelated occupied destination is refused. Repeating the same delivery
 command resumes an installer-owned destination, skips completed tools, and
@@ -106,7 +113,7 @@ is reported for inspection, not automatically deleted or overwritten.
 Maintainers prepare delivery from an exact release manifest using:
 
 ```text
-node scripts/prepare_builder_kit_install.mjs --manifest <release manifest> --destination-config <non-secret destination JSON> --project-dir <absolute customer folder> --output-dir <new private output folder>
+node scripts/prepare_builder_kit_install.mjs --manifest <release manifest> --destination-config <non-secret destination JSON> --output-dir <new private output folder> [--public-bootstrap-url <HTTPS or loopback test URL>] [--kit-origin <HTTPS or loopback origin>]
 ```
 
 This uses the existing Keychain capability and release destination parser.
@@ -122,11 +129,14 @@ publication remains a separately authorized release operation. Render delivery
 from the matching release source; mismatched installer/manifest hashes refuse.
 The customer never needs these maintainer files.
 
-For unpublished qualification, `--installer-origin` and `--kit-origin` may
-select an HTTPS or explicit loopback HTTP origin. Other plain HTTP origins are
-rejected. This allows an exact candidate installer and Git mirror to be served
-inside a disposable guest while tool downloads retain the real stamped feed
-and runtime archives retain official URLs. Qualify the composed release with
+For unpublished qualification, `--public-bootstrap-url` selects the exact
+candidate public entry and `--kit-origin` selects its Git mirror. Each accepts
+HTTPS or explicit loopback HTTP; other plain HTTP origins are rejected. This
+allows an exact candidate installer and Git mirror to be served inside a
+disposable guest while tool downloads retain the real stamped feed and runtime
+archives retain official URLs. For owned headless proof, pass a validated
+absolute `BUILDER_KIT_PROJECT_DIR` in the subprocess environment; do not add it
+to the delivered command or replace `HOME`. Qualify the composed release with
 the activation instruction; an older release without it is not a completed
 one-command delivery. Do not confuse fixture proof with a published release or
 DAW acceptance.

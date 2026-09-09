@@ -7,15 +7,26 @@ This is the complete Builder Kit roadmap, now restored to the maintained product
 - [x] Recover the entire original roadmap and map all 44 original ticket IDs to retained work and later decisions.
 - [x] Preserve unsaved source, landing, customer/filming variants and notes before consolidation. Verified backup: `/Users/winterfell/Documents/Codex/2026-09-09/builder-kit-regroup/preserved-before-consolidation/manifest.json` (118 files, 12 repositories).
 - [x] Commit the existing deployed landing+checkout composition (`ed24e0b`) so it is no longer only an unsaved working copy.
-- [ ] REC-1: review and integrate Enhance That automation, saved-state/smoothing repairs, macOS 15 tools, format packaging and safe replacement; refresh the original checkout without discarding its research notes.
+- [x] REC-1: reviewed product PR #2 merged as 59b05ad7; original product master refreshed with all local research preserved. Enhance That automation, saved-state/smoothing repairs, macOS 15 tools, packaging and safe replacement are integrated.
 - [x] REC-2 / BK-21, BK-21B, BK-40: guided agent install in `~/Documents/Builder Kit`, explicit JUCE acknowledgment, real dependency checks and useful remediation; preserve existing customer projects and updates.
-- [x] REC-3 implementation and deployment (final naming PR review pending) / BK-51, BK-52: one maintained website source for public waitlist and protected checkout preview, requirements before purchase, and an honest agent setup handoff after purchase. Verify any app launch capability before exposing it.
+- [x] REC-3 implementation, deployment and integration (website PR #1 merged as c3619fcc) / BK-51, BK-52: one maintained website source for public waitlist and protected checkout preview, requirements before purchase, and an honest agent setup handoff after purchase. Verify any app launch capability before exposing it.
 - [x] REC-4 automated and connected recovery proof (human/DAW acceptance remains open) / BK-23, BK-32–34: record exact reviewed source/export/tool/package delivery, exercise final-candidate update/recovery and the complete private customer journey. Keep automated checks, saved downloads, DAW evidence and Andrew's acceptance distinct.
 - [ ] Later launch work: recruit remaining testers, complete actual frozen beta and fixes, receive Andrew's product/listening acceptance and explicit paid-publication approval. These are future outcomes, not completed by recovery.
 
 ### Recovery result
 
-The hosted Documents install/build, signed 0.1.4 package checks, customer-edit update/recovery, sandbox purchase/access/email and actual saved downloads passed. Public waitlist and private checkout now use the same maintained website source. Product PR2 and the website's final naming PR1 await GitHub's required approving review; the maintained primary checkout refresh follows those merges. See the [current launch handoff](ENHANCE_THAT_LAUNCH_HANDOFF.md) for exact source, deployments, evidence and remaining human/DAW acceptance.
+The hosted Documents install/build, signed 0.1.4 package checks, customer-edit update/recovery, sandbox purchase/access/email and actual saved downloads passed. Public waitlist and private checkout now use the same maintained website source. Product PR #2 and website PR #1 merged after Andrew explicitly approved a one-time owner override for those two PRs. Both maintained checkouts were refreshed; repository review rules were unchanged. See the [current launch handoff](ENHANCE_THAT_LAUNCH_HANDOFF.md) for exact source, deployments, evidence and remaining human/DAW acceptance.
+
+### Customer-runthrough polish — authorized September 9
+
+Andrew approved the full polish plan with "ok do it" after reviewing customer task `01a08713-5658-7b32-9f66-177f452a6381`. Coordinator: `01a08549-db5f-7dc1-ad7b-bb91acf0802b`. The repeated setup was an internal sub-second check, not a customer interruption. Final installation messaging stays brief; no compulsory DAW tutorial.
+
+- [ ] POL-1 / BK-21, BK-40, BK-41: align root/kit instructions, explicit consent, readiness checks, optional browser dependencies, included-plugin build route and concise diagnostics. Owner `/root/onboarding`, `codex/builder-kit-polish-guidance`.
+- [ ] POL-2 / BK-15, BK-23: ship the matching tracked dependency lock and preserve existing0.1.4 installer-generated lockfiles/customer edits during a scoped update. Owner `/root/product_review`, `codex/builder-kit-polish-dependencies`.
+- [ ] POL-3 / BK-51, BK-52: intact fenced copy command, concise prompt and actual clipboard/agent entry verification. Owner `/root/website`, `codex/builder-kit-polish-prompt` in the maintained website repository.
+- [ ] POL-4: coordinator source review, focused/runtime qualification, exact private0.1.5 kit and matching website delivery, reviewed integration and maintained-folder refresh. Integration branch `codex/builder-kit-polish-integration`. Worktree paths and serial queue are recorded in the live `TODOS.txt`.
+
+Plan and evidence: `/Users/winterfell/Documents/Codex/2026-09-09/builder-kit-regroup/ONBOARDING-POLISH-PLAN.md` and sibling `onboarding-polish/`. Public paid launch, clean-Mac/DAW/listening acceptance and beta remain separately tracked.
 
 ### Reconciliation of the original plan at recovery start
 

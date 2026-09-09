@@ -194,4 +194,4 @@ export BUILDER_KIT_EXPECTED_CMAJ_SHA256=@@CMAJ_SHA256@@
 export BUILDER_KIT_EXPECTED_PLUGIN_SHA256=@@PLUGIN_SHA256@@
 progress 'running kit setup and final checks'
 node kit/scripts/complete_install.mjs "$juce_acknowledgment"
-printf '\nBuilder Kit is ready.\nProject folder: %s\nNext: open this exact folder in Codex and ask:\nRead AGENTS.md, check this existing project, run setup and the strict doctor, then ask what I want to build or modify.\n' "$project"
+printf '\nBuilder Kit is ready.\nProject folder: %s\nContinue in this exact project folder. Read AGENTS.md and run the final strict doctor before choosing what to build or change.\nIf you ran this command directly in Terminal, open this project folder in your coding agent first.\n' "$project"

@@ -1,5 +1,9 @@
 # Enhance That — consolidated launch handoff
 
+## September 9 — approved merges and maintained folders updated
+
+Product PR #2 merged as `59b05ad7786b95ae24671fe05530da4679e91f3c`; website PR #1 merged as `c3619fcc89fca7778f3aa1e98507f91d977d1161`. Andrew explicitly approved the one-time owner override for these two PRs. Repository review rules are unchanged. The original product master and maintained website main now match GitHub, and the deployed website source tree matches merged main. The original roadmap and all unrelated local research remain preserved. This completion supersedes the earlier pending-review statements below. See `/Users/winterfell/Documents/Codex/2026-09-09/builder-kit-regroup/FINAL-RECOVERY.md` and `approved-merge-completion.json` for the final state. Andrew's runthrough and clean-Mac/DAW/listening/beta acceptance remain open.
+
 ## September 9 — completed recovery proof and remaining merge gate
 
 - The full roadmap and its 44-ticket reconciliation are preserved. The verified 118-file preservation copy, original worktrees, customer variations and unrelated research remain available.

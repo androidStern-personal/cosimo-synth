@@ -223,6 +223,11 @@ async function fixture() {
         "fs.appendFileSync(state + '/npm-delivery-env-observed', (process.env.BUILDER_KIT_ACCESS === undefined ? 'access=unset' : 'access=set') + ' ' + (process.env.BUILDER_KIT_EXPECTED_FEED === undefined ? 'feed=unset' : 'feed=set') + '\\n');",
         "if (process.env.BUILDER_KIT_FIXTURE_FAIL_NPM === '1' && !fs.existsSync(state + '/npm-failed-once')) { fs.writeFileSync(state + '/npm-failed-once', 'failed'); process.exit(23); }",
     ].join("\n"));
+    execFileSync(npmPath, ["install", "--package-lock-only", "--ignore-scripts", "--no-audit", "--no-fund"], {
+        cwd: lineage,
+        env: { ...process.env, npm_config_cache: path.join(scratch, "fixture-lock-cache") },
+        stdio: ["ignore", "pipe", "pipe"],
+    });
     const toolchain = JSON.parse(await fs.readFile(path.join(lineage, "kit/toolchain.json"), "utf8"));
     toolchain.cmaj = { ...toolchain.cmaj, artifact: "tools/cmaj.tar.gz", sha256: sha256(cmaj) };
     toolchain.cmajPlugin = { ...toolchain.cmajPlugin, artifact: "tools/plugin.tar.gz", sha256: sha256(plugin) };
@@ -470,7 +475,10 @@ test("exact emitted line owns download failure, occupied-folder refusal, fresh i
             assert.match(result.output, /setup and strict environment checks passed/u);
             assert.match(result.output, /caller access unset/u);
             assert.match(result.output, new RegExp(`Project folder: ${project.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&")}\\n`));
-            assert.match(result.output, /Next: open this exact folder in Codex/u);
+            assert.match(result.output, /Continue in this exact project folder/u);
+            assert.match(result.output, /run the final strict doctor/u);
+            assert.match(result.output, /ran this command directly in Terminal/u);
+            assert.doesNotMatch(result.output, /open this exact folder in Codex|run setup and the strict doctor/u);
             assert.equal((await fs.readFile(path.join(project, ".builder-kit-install/npm-attempts"), "utf8")).split("\n").filter(Boolean).length, 2);
             assert.equal(git(project, "rev-parse", "HEAD"), f.manifest.kit.commit);
             assert.equal(git(project, "remote"), "");
@@ -478,6 +486,7 @@ test("exact emitted line owns download failure, occupied-folder refusal, fresh i
             assert.deepEqual((await fs.readFile(path.join(project, ".builder-kit-install/npm-delivery-env-observed"), "utf8")).trim().split("\n"), [
                 "access=unset feed=unset", "access=unset feed=unset",
             ]);
+            assert.equal(git(project, "status", "--porcelain=v1", "--untracked-files=all"), "", "deterministic install must leave the tracked source baseline clean");
         });
         await t.test("rerun preserves dirty source, untracked files, index, HEAD and completed downloads", async () => {
             const source = path.join(project, "fx/example/Example.cmajor");

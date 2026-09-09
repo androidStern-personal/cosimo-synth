@@ -5,7 +5,61 @@ description: Use when creating a new Builder Kit effect plugin or working on an 
 
 # Cosimo Make Plugin
 
-## Core Rule
+## Readiness And Repair
+
+Work from the exact project root named by the installer and follow the root
+`AGENTS.md` plus `kit/AGENTS.md`. Source `.builder-kit-install/env.sh` in every
+new shell when it exists, then run the read-only readiness check:
+
+```bash
+npm run kit:doctor -- --strict
+```
+
+Run `npm run kit:setup` only when the doctor or a specific failure names setup
+as the repair, then rerun the strict doctor. The customer's explicit
+acknowledgment of the shipped JUCE notice or its matching recorded receipt is
+sufficient; do not ask again. If neither exists, show the notice in
+`THIRD_PARTY_NOTICES.md` and ask once. Only after the customer agrees may you
+run the exact accepting setup command printed by the kit. Never install or point
+the build at a different `cmaj`; the pin must match the Cmajor source commit and
+generic `CmajPlugin.vst3`.
+
+## Included Enhance That, Unchanged
+
+When the customer chooses to build the included plug-in as-is, use this short
+route before reading the architecture guide. The included `enhancer-lite`
+target carries its own identity, so template values in `product-owner.json` do
+not block this route.
+
+Do not copy, rename, create, or edit a plug-in or test. Do not make a browser
+preview or source modification a prerequisite. From the ready project root run,
+in order:
+
+```bash
+npm run typecheck
+npm test
+npm run fx:prod:build -- enhancer-lite
+npm run fx:prod:install -- enhancer-lite
+```
+
+Stop on a failed command and explain the relevant recovery step. Do not change
+authored source merely to complete the unchanged build. Read the architecture
+guide only when the failure is relevant to that pipeline.
+
+After success, keep the result brief:
+
+```text
+Enhance That is built and installed.
+Installed at: <exact path printed by fx:prod:install>
+```
+
+You may add one short invitation for the customer's next change. Do not launch
+a DAW, alter a session, start a tutorial, or claim listening/DAW acceptance.
+Provide DAW help only when the customer requests it or reports a problem.
+
+## Create Or Modify A Plugin
+
+### Core Rule
 
 Adding or changing a plugin must touch zero shared files. The registry is
 derived by scanning `fx/*/` for `.cmajorpatch` files; per-plugin settings live
@@ -13,7 +67,7 @@ beside the plugin's own patch. If a change seems to need editing a central
 plugin list, the change is wrong — read
 `kit/docs/PLUGIN_ARCHITECTURE.md` first.
 
-## First Reads
+### First Reads
 
 1. `kit/AGENTS.md` for the plugin-repo conventions and definition of done.
 2. `kit/docs/PLUGIN_ARCHITECTURE.md` for discovery, the loader, runtime
@@ -22,23 +76,10 @@ plugin list, the change is wrong — read
    config, `view/`; and the repository-root `product-owner.json` its identity
    derives from.
 
-## Environment Check
-
-Before the first build on a machine (or when a build fails to find `cmaj`):
-
-```bash
-npm run kit:doctor        # read-only report: tools, feed, registry, node_modules
-npm run kit:setup -- --accept-juce-terms   # pinned cmaj + CmajPlugin.vst3, npm install
-npx playwright install chromium            # once, before npm run test:browser
-```
-
-`kit:doctor` never writes (`--json`, `--strict`, `--offline` available).
-`kit:setup` is idempotent: it downloads the hash-pinned tools named in
-`kit/toolchain.json` from the feed in `kit/feed.json` into `build/kit-tools/`,
-records the JUCE notice acknowledgment once, and runs `npm install` when
-`node_modules` is missing (`--dry-run` plans without writing). Never install
-or point the build at a different `cmaj`; the pin must match the Cmajor
-source commit and the generic `CmajPlugin.vst3`.
+Before scaffolding or distributing a customer-created plug-in, replace the
+template values in the root `product-owner.json` with the customer's real
+identity. This later configuration is not part of the unchanged Enhance That
+route.
 
 ## Create A Plugin
 
@@ -113,7 +154,9 @@ npm run fx:build -- <alias>   # self-contained runtime folder under build/fx/
 - Browser view tests build the runtime first, then drive the packaged view
   with Playwright over the static test server:
   `npm run fx:build -- <alias> && npm run test:browser`. They need
-  `npx playwright install chromium` once per machine.
+  `npx playwright install chromium` once per machine. Install Chromium only
+  when the task needs browser testing; no other Playwright browser is supported
+  by this route.
 - Never weaken a failing assertion; strengthen or repoint it.
 
 ## JIT Install (Iterate Inside A DAW)

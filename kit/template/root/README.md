@@ -1,8 +1,9 @@
 # Builder Kit
 
 Install using the personalized one-line command supplied with your delivery;
-read its JUCE notice before running it. When it reports success, open the printed
-project folder in Codex. No plugin has been built or installed yet.
+read its JUCE notice before running it. When it reports success, continue in the
+printed project folder. If you ran the command directly in Terminal, open that
+folder in your coding agent. No plugin has been built or installed yet.
 
 The usual folder is `~/Documents/Builder Kit`. If that folder already contains
 something else, the installer chooses a versioned folder beside it and prints
@@ -11,8 +12,8 @@ the exact path. Repeating the same command resumes only the installation it owns
 For a guided first session, ask your coding agent:
 
 > Read AGENTS.md, check this existing project without overwriting anything, run
-> setup and the strict doctor from this folder, then ask what I want to build or
-> modify.
+> the strict doctor from this exact folder, use setup only if a reported problem
+> needs it, then ask what I want to build or modify.
 
 The agent will offer to build the included plugin as-is, change its sound or
 interface, or start a new plugin. You can also give it your own request.
@@ -22,29 +23,23 @@ When you are ready: [try the Wavefold example](WAVEFOLD.md),
 
 ## If you choose to build the included plugin as-is
 
-After the first-session setup, strict doctor, and choice above, follow this
-section only when you choose to build the included plugin as-is.
+After the first-session strict doctor and choice above, follow this section only
+when you choose to build the included plugin as-is.
 
-Read `kit/AGENTS.md`. Use the included `enhancer-lite` target unchanged. Do not
-copy or rename it, create a new plugin or test, edit plugin/test source, or make
-a browser preview or modification a prerequisite. Normal generated build files
-are expected.
+Ask your coding agent to follow the **Included Enhance That, Unchanged** route in
+`kit/skills/cosimo-make-plugin/SKILL.md`. That is the authoritative procedure.
+It keeps the included `enhancer-lite` target unchanged, runs the typecheck and
+tests, builds the dedicated native plug-in, and installs it. Product-owner
+placeholder details do not block this unchanged included plug-in.
 
-From this Builder Kit project folder, after setup and the customer's explicit
-JUCE acknowledgment:
+The agent must not copy or rename the included plug-in, create a new plug-in or
+test, edit plug-in/test source, or make a browser preview or modification a
+prerequisite. Normal generated build files are expected.
 
-```sh
-npm run typecheck
-npm test
-npm run fx:prod:build -- enhancer-lite
-npm run fx:prod:install -- enhancer-lite
-```
-
-Stop on a failed command and explain it; do not change source to complete this
-build-as-is option. After success, report the actual plugin name to find in the
-DAW and the exact installed location from the build/install result. Invite the
-customer to try it in their DAW and tell you their chosen first modification.
-Build/install success is not a listening or DAW-acceptance result.
+After success, the agent reports “Enhance That is built and installed,” followed
+by the exact installed path as secondary detail. It may briefly invite your next
+change. Build/install success is not a listening or DAW-acceptance result, and
+the agent does not launch a DAW or begin a tutorial unless you ask for help.
 
 ## Optional browser UI development
 

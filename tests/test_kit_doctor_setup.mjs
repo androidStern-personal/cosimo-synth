@@ -112,16 +112,27 @@ test("doctor_json_report_has_the_documented_shape_for_this_repo", () => {
     assert.equal(report.platform.requirements.os, "macOS");
 });
 
-test("doctor_human_output_ends_with_a_json_block_and_strict_only_changes_the_exit_code", () => {
+test("doctor defaults to human output, reserves the full report for --json, and strict only changes the exit code", () => {
+    const machine = spawnSync(process.execPath, [doctorCli, "--json", "--offline"], { encoding: "utf8", cwd: repoRoot });
+    assert.equal(machine.status, 0, machine.stderr);
+    const report = JSON.parse(machine.stdout);
+
     const plain = spawnSync(process.execPath, [doctorCli, "--offline"], { encoding: "utf8", cwd: repoRoot });
     assert.equal(plain.status, 0, plain.stderr);
-    assert.match(plain.stdout, /^kit:doctor\n\[/u);
-    assert.match(plain.stdout, /\nJSON:\n\{/u);
-    const report = JSON.parse(plain.stdout.slice(plain.stdout.indexOf("\nJSON:\n") + "\nJSON:\n".length));
-    assert.equal(typeof report.ok, "boolean");
+    assert.match(plain.stdout, /^Builder Kit doctor\n\[/u);
+    assert.match(plain.stdout, /Full machine report: npm run kit:doctor -- --json/u);
+    assert.doesNotMatch(plain.stdout, /\nJSON:\n|"kitDoctor"/u);
 
-    const strict = spawnSync(process.execPath, [doctorCli, "--json", "--offline", "--strict"], { encoding: "utf8", cwd: repoRoot });
+    const strict = spawnSync(process.execPath, [doctorCli, "--offline", "--strict"], { encoding: "utf8", cwd: repoRoot });
     assert.equal(strict.status, report.ok ? 0 : 1);
+    assert.doesNotMatch(strict.stdout, /"kitDoctor"/u);
+
+    const ownerPath = "/tmp/builder-kit-customer/product-owner.json";
+    const placeholder = structuredClone(report);
+    placeholder.kit.productOwner = { path: ownerPath, present: true, error: null, manufacturer: "Your Company", placeholder: true, placeholderKeys: ["manufacturer"] };
+    placeholder.warnings.push(`${ownerPath} still carries the template placeholder value(s) for manufacturer; edit it before scaffolding or shipping plugins.`);
+    assert.doesNotMatch(formatDoctorReport(placeholder), /product-owner\.json/u, "first-use output defers owner identity until create/distribute work");
+    assert.match(JSON.stringify(placeholder), /product-owner\.json/u, "the explicit machine report retains owner diagnostics");
 
     assert.throws(() => parseDoctorArguments(["--bogus"]), /Unknown.*argument/u);
 });
@@ -140,7 +151,7 @@ test("doctor_reports_missing_contracts_and_tools_without_throwing", async () => 
         assert.equal(report.ok, false);
 
         const text = formatDoctorReport(report);
-        assert.match(text, /\[!!\] cmaj at build\/kit-tools\/cmaj: missing/u);
+        assert.match(text, /cmaj at build\/kit-tools\/cmaj is missing \(run npm run kit:setup\)/u);
         assert.match(text, /problem\(s\):/u);
 
         await rm(path.join(root, "kit/toolchain.json"));

@@ -1,12 +1,12 @@
 // The post-bootstrap boundary. The Bash installer has already verified the
 // release commit and provisioned its private runtime before invoking this file.
-import { createHash } from "node:crypto";
 import { lstat, readFile, readdir, rename, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { runSetup } from "./setup.mjs";
 import { collectDoctorReport } from "./doctor.mjs";
+import { dependencyFingerprint } from "./preserve_legacy_package_lock.mjs";
 import { readFeedBaseUrl, readToolchain, repoRoot } from "./toolchain.mjs";
 import { redact, reveal } from "./redacted.mjs";
 
@@ -34,16 +34,6 @@ function doctorFailure(report) {
     if (!report.nodeModules.present) details.push("npm dependencies are missing.");
     if (details.length === 0) details.push("A kit configuration check failed; ask your coding agent to inspect kit:doctor.");
     return { ok: false, error: { code: "final-checks", details } };
-}
-
-async function dependencyFingerprint(root) {
-    const hash = createHash("sha256");
-    for (const name of ["package.json", "package-lock.json"]) {
-        hash.update(name);
-        try { hash.update(await readFile(path.join(root, name))); }
-        catch (error) { if (error.code !== "ENOENT") throw error; }
-    }
-    return hash.digest("hex");
 }
 
 async function writableSetupPathsAreLocal(root) {
@@ -103,8 +93,8 @@ export async function completeInstallation({ root = repoRoot, log = console.log,
         let installedDependencies = false;
         const installDependencies = () => {
             log("Builder Kit: installing npm dependencies");
-            const result = npm(["install"]);
-            if (result.error || result.status !== 0) throw new Error("npm-install-failed");
+            const result = npm(["ci", "--no-audit", "--no-fund"]);
+            if (result.error || result.status !== 0) throw new Error("npm-ci-failed");
             installedDependencies = true;
         };
         stage = "setup";

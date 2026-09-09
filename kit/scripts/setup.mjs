@@ -10,7 +10,7 @@
 //    archive sha256 against the pin, extracts to localPath, chmod +x cmaj, and
 //    writes an install receipt beside the tool. Already-current tools are
 //    skipped. Nothing is downloaded without a pinned hash or a feed URL.
-// 3. Runs npm install when node_modules is missing.
+// 3. Runs npm ci against the tracked lockfile when node_modules is missing.
 //
 // --dry-run prints the plan and writes nothing (no acknowledgment either).
 
@@ -136,7 +136,7 @@ export function formatSetupPlan(plan) {
         }
     }
 
-    lines.push(plan.npmInstall ? "npm install: node_modules is missing, will run" : "npm install: skip, node_modules present");
+    lines.push(plan.npmInstall ? "npm ci: node_modules is missing, will run" : "npm ci: skip, node_modules present");
 
     return lines.join("\n");
 }
@@ -275,7 +275,7 @@ export async function runSetup({
     log = console.log,
     platform = process.platform,
     now = () => new Date(),
-    runNpmInstall = (cwd) => runCommand(npmCommand(platform), ["install"], { cwd, stdio: "inherit" }),
+    runNpmInstall = (cwd) => runCommand(npmCommand(platform), ["ci", "--no-audit", "--no-fund"], { cwd, stdio: "inherit" }),
 } = {}) {
     for (const line of juceNoticeLines())
         log(line);
@@ -338,7 +338,7 @@ export async function runSetup({
     }
 
     if (plan.npmInstall) {
-        log("Running npm install...");
+        log("Running npm ci...");
         runNpmInstall(root);
     }
 
