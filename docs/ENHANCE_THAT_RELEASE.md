@@ -1,10 +1,9 @@
 # Enhance That release guide
 
 The [launch handoff](../ENHANCE_THAT_LAUNCH_HANDOFF.md) defines the product and
-customer promises. Bob manages the queue; L3 owns launch source composition,
-compiler/product builds, installation and customer validation. L1 owns the
-remaining focused state/JIT regression work. Use normal commands with bounded
-execution. Historical one-off supervisors, frozen packets and review machinery
+customer promises. The current recovery coordinator and integration queue are
+recorded at the top of `TODOS.txt`; older L1/L3 references below are historical
+evidence. Use normal commands with bounded execution. Historical one-off supervisors, frozen packets and review machinery
 remain inactive evidence, not prerequisites for the next build.
 
 ## Product and dependency identity
