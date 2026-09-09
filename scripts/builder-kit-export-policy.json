@@ -23,6 +23,7 @@
     "fx/enhancer_lite/EnhancerLite.cmajor",
     "cmajor/EnhancerLiteSpectrumAnalyzer.cmajor",
     "package.json",
+    "package-lock.json",
     "README.md",
     "AGENTS.md",
     "LICENSE",

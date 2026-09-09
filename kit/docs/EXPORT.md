@@ -4,7 +4,8 @@
 produces the customer starter monorepo: the `kit/` tree, the editable Enhancer
 Lite plugin, its tests, the shared analyzer it needs
 (`cmajor/EnhancerLiteSpectrumAnalyzer.cmajor`), and a root generated from `kit/template/root`
-(package.json with pinned tool versions taken from the monorepo, starter
+(package.json with pinned tool versions taken from the monorepo, its matching
+tracked package-lock.json, starter
 AGENTS.md, tsconfig, .gitignore). Every directory under `kit/skills/` gets a
 relative `.agents/skills/<name>` symlink at the root for agent skill discovery.
 
@@ -23,7 +24,8 @@ keeps the gates honest.
 `--prove` additionally runs the exported package's canonical `npm run typecheck`
 and `npm test`, builds Enhancer Lite, and simulates the customer update flow (starter commit →
 local plugin edit → kit-update merge; both must survive). On a customer
-machine `npm install` replaces the proof's node_modules symlink shortcut.
+machine `npm ci` uses the tracked lockfile in place of the proof's node_modules
+symlink shortcut.
 Customer `npm test` discovers `test_*.mjs` under `kit/tests/` and `tests/`
 recursively, excluding `_browser` tests; scaffolded plugin tests participate
 without editing a shared list.

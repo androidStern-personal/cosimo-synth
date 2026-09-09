@@ -20,14 +20,34 @@ description: Use when a Builder Kit customer repo should take a newer kit releas
 - Ask the user only when a conflict is genuinely mixed. Everything else is
   mechanical: do it and report it.
 
+### First update from 0.1.4
+
+The 0.1.4 installer generated an untracked `package-lock.json`, while its
+shipped update helper refuses every dirty tree before fetching. The corrected
+helper in a newer release is therefore not automatically reachable from that
+checkout. For this first update, the release operator must give the customer
+the reviewed target release's standalone
+`kit/scripts/preserve_legacy_package_lock.mjs` outside the old checkout. Do not
+recreate the helper, paste an improvised cleanup command, or rerun the original
+installer as an update.
+
+From the exact old project root, invoke the supplied file with
+`node <reviewed-helper-path> --root "$PWD"`. It proceeds only when the generated
+lock is the sole dirty path and exactly matches the completed installer receipt.
+It preserves those bytes under `.builder-kit-install/update-preserved/`, then
+returns the source tree to clean status so the old fetch helper below can run.
+Name the preserved path in the update report. If the reviewed helper was not
+supplied, or it refuses any check, stop with every customer path untouched.
+
 ## 1. Establish A Safe Starting Point
 
 1. `git status --porcelain` and `git branch --show-current`. Refuse to start
    from a detached HEAD or with `.git/MERGE_HEAD` / `.git/REBASE_HEAD` present —
    tell the user to finish or abandon that operation first.
-2. If the tree is dirty, stop. Do not stage, stash, commit, or remove it on the
-   user's behalf. Show the changed paths and ask them to decide what to keep
-   and commit themselves, then rerun the update.
+2. Apart from the explicitly supplied 0.1.4 bridge above, if the tree is dirty,
+   stop. Do not stage, stash, commit, or remove it on the user's behalf. Show
+   the changed paths and ask them to decide what to keep and commit themselves,
+   then rerun the update.
 3. From a clean tree, create `git branch update-checkpoint-<YYYY-MM-DD>` at HEAD (suffix `-<HHMM>` if the
    name exists). This is the return point; name it in the final report.
 
@@ -100,7 +120,9 @@ empty before committing.
 
 Run in order; stop at the first failure.
 
-1. If the merge changed `package.json`, run `npm install`.
+1. If the merge changed `package.json` or `package-lock.json`, run
+   `npm ci --no-audit --no-fund`. A missing or mismatched lock is a release or
+   merge problem; do not generate a replacement during the update.
 2. `npm run kit:doctor -- --strict`. If it reports a toolchain mismatch (new pinned `cmaj`
    or `CmajPlugin.vst3` in `kit/toolchain.json`), run `npm run kit:setup` and
    rerun the strict doctor. Read the reported problem; other failures are not

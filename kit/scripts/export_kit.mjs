@@ -50,6 +50,24 @@ async function listFilesRecursive(root) {
     return results;
 }
 
+function sortedRecord(value) {
+    return Object.fromEntries(Object.entries(value ?? {}).sort(([left], [right]) => left.localeCompare(right)));
+}
+
+export function assertPackageLockMatchesPackage(packageManifest, packageLock) {
+    const lockRoot = packageLock?.packages?.[""];
+    if (packageLock?.lockfileVersion !== 3 || packageLock?.name !== packageManifest?.name
+        || lockRoot?.name !== packageManifest?.name
+        || JSON.stringify(sortedRecord(lockRoot?.dependencies)) !== JSON.stringify(sortedRecord(packageManifest?.dependencies))
+        || JSON.stringify(sortedRecord(lockRoot?.devDependencies)) !== JSON.stringify(sortedRecord(packageManifest?.devDependencies))) {
+        throw new Error("Template package-lock.json does not match the generated customer package.json.");
+    }
+    for (const dependency of Object.keys({ ...packageManifest.dependencies, ...packageManifest.devDependencies })) {
+        if (!packageLock.packages[`node_modules/${dependency}`])
+            throw new Error(`Template package-lock.json has no resolved entry for customer dependency "${dependency}".`);
+    }
+}
+
 export async function scanForForbiddenStrings(outputRoot, allowlist) {
     const binaryExtensions = new Set(allowlist.forbiddenStringBinaryExtensions ?? []);
     const violations = [];
@@ -119,6 +137,10 @@ async function materializeRootTemplate(outputRoot, allowlist, sourceRoot) {
             written.push(entry);
         }
     }
+
+    const renderedPackage = JSON.parse(await fs.readFile(path.join(outputRoot, "package.json"), "utf8"));
+    const renderedLock = JSON.parse(await fs.readFile(path.join(outputRoot, "package-lock.json"), "utf8"));
+    assertPackageLockMatchesPackage(renderedPackage, renderedLock);
 
     // Root skill discovery: one committed-style relative symlink into kit/ for
     // every skill directory the export carries.

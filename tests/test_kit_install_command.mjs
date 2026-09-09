@@ -223,6 +223,11 @@ async function fixture() {
         "fs.appendFileSync(state + '/npm-delivery-env-observed', (process.env.BUILDER_KIT_ACCESS === undefined ? 'access=unset' : 'access=set') + ' ' + (process.env.BUILDER_KIT_EXPECTED_FEED === undefined ? 'feed=unset' : 'feed=set') + '\\n');",
         "if (process.env.BUILDER_KIT_FIXTURE_FAIL_NPM === '1' && !fs.existsSync(state + '/npm-failed-once')) { fs.writeFileSync(state + '/npm-failed-once', 'failed'); process.exit(23); }",
     ].join("\n"));
+    execFileSync(npmPath, ["install", "--package-lock-only", "--ignore-scripts", "--no-audit", "--no-fund"], {
+        cwd: lineage,
+        env: { ...process.env, npm_config_cache: path.join(scratch, "fixture-lock-cache") },
+        stdio: ["ignore", "pipe", "pipe"],
+    });
     const toolchain = JSON.parse(await fs.readFile(path.join(lineage, "kit/toolchain.json"), "utf8"));
     toolchain.cmaj = { ...toolchain.cmaj, artifact: "tools/cmaj.tar.gz", sha256: sha256(cmaj) };
     toolchain.cmajPlugin = { ...toolchain.cmajPlugin, artifact: "tools/plugin.tar.gz", sha256: sha256(plugin) };
@@ -481,6 +486,7 @@ test("exact emitted line owns download failure, occupied-folder refusal, fresh i
             assert.deepEqual((await fs.readFile(path.join(project, ".builder-kit-install/npm-delivery-env-observed"), "utf8")).trim().split("\n"), [
                 "access=unset feed=unset", "access=unset feed=unset",
             ]);
+            assert.equal(git(project, "status", "--porcelain=v1", "--untracked-files=all"), "", "deterministic install must leave the tracked source baseline clean");
         });
         await t.test("rerun preserves dirty source, untracked files, index, HEAD and completed downloads", async () => {
             const source = path.join(project, "fx/example/Example.cmajor");
