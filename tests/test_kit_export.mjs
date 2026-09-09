@@ -213,7 +213,8 @@ test("export_produces_a_gated_starter_tree_with_no_private_material", async () =
         assert.match(firstUse, /## If you choose to build the included plugin as-is/u);
         assert.match(firstUse, /follow this\nsection only when you choose to build the included plugin as-is/u);
         assert.match(firstUse, /npm run fx:prod:build -- enhancer-lite\nnpm run fx:prod:install -- enhancer-lite/u);
-        assert.match(firstUse, /Do not copy or rename it, create a new plugin or test,/u);
+        assert.match(firstUse, /Use the included `enhancer-lite` target unchanged\. Do not\s+copy or rename it, create a new plugin or test, edit plugin\/test source/u);
+        assert.match(firstUse, /do not change source to complete this\s+build-as-is option/u);
         assert.match(firstUse, /Build\/install success is not a listening or DAW-acceptance result\./u);
         assert.match(firstUse, /actual plugin name to find in the\nDAW and the exact installed location/u);
         assert.match(firstUse, /http:\/\/127\.0\.0\.1:5175\/fx\/enhancer_lite\/view\/harness\.html/u);
