@@ -1,3 +1,8 @@
+Builder Kit recovery — qualified private0.1.4 and unified website, September 9
+- Product source585370f3 passed final focused/CI/export, signed-package813-assertion native probe and actual hosted Documents setup/doctor/tests/native-build checks. Actual-version update preserved customer plugin edits; separate failed-update recovery passed.
+- Public waitlist and protected sandbox now share website7939c35; real sandbox purchase returned to0.1.4 access, consent/copy/reload checks and saved downloads passed, receipt delivered. Current roadmap/handoff records exact artifacts and human/DAW limits.
+- Product PR2 and website PR1 await GitHub-required approving review; normal merge refused. No override. Maintained primary master remains239f9e04 until review resolves, with unrelated research preserved.
+
 Enhance That launch — scoped dispatch adoption 2026-09-05
 - Current product scope is ENHANCE_THAT_LAUNCH_HANDOFF.md. docs/enhance-that-launch/README.md links the consolidated release guide and preserved customer/engineering starting-point evidence. Historical roadmap/host records do not add superseded launch gates.
 - Bob remains management-only and allocates shared resources; INT prepares reviewed integrations. This adoption does not authorize master/push/publication or complete a product gate. First milestone is recruitment-ready product/page/screenshots/short demo/press sheet/tester brief; final candidate, macOS 15/26, customer update/recovery, listening and actual beta remain separate.
