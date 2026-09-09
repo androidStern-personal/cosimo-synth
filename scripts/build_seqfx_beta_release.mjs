@@ -1130,7 +1130,7 @@ function binaryArchitectures(config, binaryPath) {
     return observed;
 }
 
-function parseJsonWithTrailingCommas(source, label) {
+export function parseJsonWithTrailingCommas(source, label) {
     let normalized = "";
     let escaped = false;
     let inString = false;
@@ -1477,22 +1477,28 @@ export async function assertArchiveTreeContainsOnlyFilesAndDirectories(rootPath)
     }
 }
 
+function declaredPayloadBundles(config) {
+    const name = config.identity.bundleName;
+    const paths = {
+        VST3: `Library/Audio/Plug-Ins/VST3/${name}.vst3`,
+        AU: `Library/Audio/Plug-Ins/Components/${name}.component`,
+    };
+    const bundles = config.payloadBundles ?? [{ format: "VST3", relativePath: paths.VST3 }];
+    if (!Array.isArray(bundles) || bundles.length === 0 || bundles.length > 2
+        || new Set(bundles.map(bundle => bundle.format)).size !== bundles.length
+        || bundles.some(bundle => !Object.hasOwn(paths, bundle.format)
+            || bundle.relativePath !== paths[bundle.format]))
+        throw new Error("Declare only the product's VST3 and AU payload paths.");
+    return bundles;
+}
+
 function expectedPayloadMode(config, relativePath, entryStat) {
     if (entryStat.isDirectory())
         return 0o755;
 
-    const executablePath = path.posix.join(
-        "Library",
-        "Audio",
-        "Plug-Ins",
-        "VST3",
-        `${config.identity.bundleName}.vst3`,
-        "Contents",
-        "MacOS",
-        config.identity.bundleName,
-    );
-
-    return relativePath === executablePath ? 0o755 : 0o644;
+    const executablePaths = declaredPayloadBundles(config).map(bundle =>
+        `${bundle.relativePath}/Contents/MacOS/${config.identity.bundleName}`);
+    return executablePaths.includes(relativePath) ? 0o755 : 0o644;
 }
 
 async function payloadModeEntries(rootPath) {
@@ -1576,7 +1582,7 @@ export async function normalizePayloadModes(config, rootPath) {
     await assertPayloadModes(config, rootPath);
 }
 
-async function normalizeTreeTimestamps(rootPath, sourceDateEpoch) {
+export async function normalizeTreeTimestamps(rootPath, sourceDateEpoch) {
     const timestamp = new Date(sourceDateEpoch * 1000);
     const entries = [];
 
@@ -1780,16 +1786,17 @@ export async function deterministicCpioPayload(rootPath, sourceDateEpoch) {
     });
 }
 
-export function renderPackageInfo(config, payloadEntries) {
+export function renderPackageInfo(config, payloadEntries, { preinstall = false, packageVersion = config.identity.pluginVersion } = {}) {
     const installKBytes = Math.ceil(payloadEntries.reduce((sum, entry) => sum + entry.size, 0) / 1024);
     const numberOfFiles = payloadEntries.length + 1;
-    const bundleRelativePath = `./Library/Audio/Plug-Ins/VST3/${config.identity.bundleName}.vst3`;
+    const bundles = declaredPayloadBundles(config);
 
     return [
         '<?xml version="1.0" encoding="utf-8"?>',
-        `<pkg-info overwrite-permissions="true" relocatable="false" identifier="${xmlEscape(config.identity.installerIdentifier)}" postinstall-action="none" version="${xmlEscape(config.identity.pluginVersion)}" format-version="2" generator-version="cosimo-release-builder-v2" install-location="/" auth="root">`,
+        `<pkg-info overwrite-permissions="true" relocatable="false" identifier="${xmlEscape(config.identity.installerIdentifier)}" postinstall-action="none" version="${xmlEscape(packageVersion)}" format-version="2" generator-version="cosimo-release-builder-v2" install-location="/" auth="root">`,
         `    <payload numberOfFiles="${numberOfFiles}" installKBytes="${installKBytes}"/>`,
-        `    <bundle path="${xmlEscape(bundleRelativePath)}" id="${xmlEscape(config.identity.patchId)}" CFBundleShortVersionString="${xmlEscape(config.identity.pluginVersion)}" CFBundleVersion="${xmlEscape(config.identity.pluginVersion)}"/>`,
+        ...(preinstall ? ['    <scripts><preinstall file="./preinstall"/></scripts>'] : []),
+        ...bundles.map(bundle => `    <bundle path="${xmlEscape(`./${bundle.relativePath}`)}" id="${xmlEscape(config.identity.patchId)}" CFBundleShortVersionString="${xmlEscape(config.identity.pluginVersion)}" CFBundleVersion="${xmlEscape(config.identity.pluginVersion)}"/>`),
         "    <bundle-version>",
         `        <bundle id="${xmlEscape(config.identity.patchId)}"/>`,
         "    </bundle-version>",
@@ -1805,7 +1812,7 @@ export function renderPackageInfo(config, payloadEntries) {
     ].join("\n");
 }
 
-async function buildUnsignedFlatPackage(config, stagingRoot, packagePath, workRoot, sourceDateEpoch) {
+export async function buildUnsignedFlatPackage(config, stagingRoot, packagePath, workRoot, sourceDateEpoch, { scriptsRoot = null, packageVersion = config.identity.pluginVersion } = {}) {
     const packageRoot = path.join(workRoot, "flat-package");
     const payloadPath = path.join(packageRoot, "Payload");
     const bomPath = path.join(packageRoot, "Bom");
@@ -1814,15 +1821,23 @@ async function buildUnsignedFlatPackage(config, stagingRoot, packagePath, workRo
 
     await rm(packageRoot, { recursive: true, force: true });
     await mkdir(packageRoot, { recursive: true });
-    await writeFile(packageInfoPath, renderPackageInfo(config, payloadEntries), "utf8");
+    await writeFile(packageInfoPath, renderPackageInfo(config, payloadEntries, { preinstall: scriptsRoot !== null, packageVersion }), "utf8");
     await normalizeTreeTimestamps(stagingRoot, sourceDateEpoch);
     await writeFile(payloadPath, await deterministicCpioPayload(stagingRoot, sourceDateEpoch));
+    if (scriptsRoot !== null) {
+        const scriptEntries = await readdir(scriptsRoot);
+        if (scriptEntries.length !== 1 || scriptEntries[0] !== "preinstall"
+            || !(await lstat(path.join(scriptsRoot, "preinstall"))).isFile())
+            throw new Error("Package scripts must contain only the regular preinstall file.");
+        await normalizeTreeTimestamps(scriptsRoot, sourceDateEpoch);
+        await writeFile(path.join(packageRoot, "Scripts"), await deterministicCpioPayload(scriptsRoot, sourceDateEpoch));
+    }
     run("mkbom", [stagingRoot, bomPath], {
         capture: true,
         env: { COPYFILE_DISABLE: "1", SOURCE_DATE_EPOCH: String(sourceDateEpoch) },
     });
     await normalizeTreeTimestamps(packageRoot, sourceDateEpoch);
-    run("xar", deterministicFlatPackageXarArgs(packagePath), {
+    run("xar", deterministicFlatPackageXarArgs(packagePath, { scripts: scriptsRoot !== null }), {
         capture: true,
         cwd: packageRoot,
         env: { COPYFILE_DISABLE: "1", SOURCE_DATE_EPOCH: String(sourceDateEpoch) },
@@ -1834,7 +1849,7 @@ async function buildUnsignedFlatPackage(config, stagingRoot, packagePath, workRo
     run("xar", ["-tf", packagePath], { capture: true });
 }
 
-export function deterministicFlatPackageXarArgs(packagePath) {
+export function deterministicFlatPackageXarArgs(packagePath, { scripts = false } = {}) {
     return [
         "--compression",
         "none",
@@ -1844,6 +1859,7 @@ export function deterministicFlatPackageXarArgs(packagePath) {
         "Bom",
         "Payload",
         "PackageInfo",
+        ...(scripts ? ["Scripts"] : []),
     ];
 }
 
@@ -1910,21 +1926,23 @@ export function normalizeUnsignedFlatPackageXar(archive, sourceDateEpoch) {
 }
 
 export function payloadInventoryErrors(config, payloadFiles, { signed }) {
-    const root = `./Library/Audio/Plug-Ins/VST3/${config.identity.bundleName}.vst3`;
-    const relativeRoot = root.slice(2);
+    const bundles = declaredPayloadBundles(config);
     const allowedAncestors = new Set([
         ".",
         "Library",
         "Library/Audio",
         "Library/Audio/Plug-Ins",
-        "Library/Audio/Plug-Ins/VST3",
+        ...bundles.map(bundle => path.posix.dirname(bundle.relativePath)),
     ]);
-    const requiredFiles = [
-        `${root}/Contents/Info.plist`,
-        `${root}/Contents/MacOS/${config.identity.bundleName}`,
-        `${root}/Contents/Resources/moduleinfo.json`,
-        `${root}/Contents/_CodeSignature/CodeResources`,
-    ];
+    const requiredFiles = bundles.flatMap(bundle => {
+        const root = `./${bundle.relativePath}`;
+        return [
+            `${root}/Contents/Info.plist`,
+            `${root}/Contents/MacOS/${config.identity.bundleName}`,
+            ...(bundle.format === "VST3" ? [`${root}/Contents/Resources/moduleinfo.json`] : []),
+            `${root}/Contents/_CodeSignature/CodeResources`,
+        ];
+    });
     const metadataFiles = payloadFiles.filter(
         (file) => /(^|\/)\._[^/]*$/u.test(file) || /(^|\/)\.DS_Store$/u.test(file),
     );
@@ -1945,8 +1963,8 @@ export function payloadInventoryErrors(config, payloadFiles, { signed }) {
             return true;
 
         return !allowedAncestors.has(relativePath)
-            && relativePath !== relativeRoot
-            && !relativePath.startsWith(`${relativeRoot}/`);
+            && !bundles.some(bundle => relativePath === bundle.relativePath
+                || relativePath.startsWith(`${bundle.relativePath}/`));
     });
     const errors = [];
 
@@ -1957,7 +1975,7 @@ export function payloadInventoryErrors(config, payloadFiles, { signed }) {
         errors.push(`payload is missing required files: ${missingFiles.join(", ")}`);
 
     if (unexpectedFiles.length > 0)
-        errors.push(`payload contains paths outside the declared VST3 install root: ${unexpectedFiles.join(", ")}`);
+        errors.push(`payload contains paths outside the declared ${bundles.some(bundle => bundle.format === "AU") ? "plugin install roots" : "VST3 install root"}: ${unexpectedFiles.join(", ")}`);
 
     return errors;
 }
@@ -1976,7 +1994,7 @@ function verifyPackagePayload(config, packagePath, { signed }) {
     return payloadFiles;
 }
 
-function signStagedVst3(vst3Path, approvedIdentity) {
+export function signStagedVst3(vst3Path, approvedIdentity) {
     run("codesign", [
         "--force",
         "--deep",
@@ -2021,7 +2039,7 @@ function removeLocalBuildSignature(vst3Path) {
     run("codesign", ["--remove-signature", vst3Path], { capture: true });
 }
 
-function signInstaller(unsignedPackagePath, signedPackagePath, approvedIdentity) {
+export function signInstaller(unsignedPackagePath, signedPackagePath, approvedIdentity) {
     run("productsign", [
         "--sign",
         approvedIdentity.sha1Fingerprint,
@@ -2033,7 +2051,7 @@ function signInstaller(unsignedPackagePath, signedPackagePath, approvedIdentity)
     return parseInstallerSigningEvidence(combinedProcessOutput(verification), approvedIdentity);
 }
 
-function notarizeStapleAndAssess(packagePath) {
+export function notarizeStapleAndAssess(packagePath) {
     const profile = process.env.COSIMO_NOTARY_PROFILE;
     const { stdout } = run("xcrun", [
         "notarytool",
@@ -2384,7 +2402,7 @@ async function writeChecksums(checksumsPath, entries) {
     await writeFile(checksumsPath, `${lines.join("\n")}\n`, "utf8");
 }
 
-async function createDeterministicZip(zipRootParent, zipFolderName, zipPath, sourceDateEpoch) {
+export async function createDeterministicZip(zipRootParent, zipFolderName, zipPath, sourceDateEpoch) {
     const zipFolder = path.join(zipRootParent, zipFolderName);
     const filePaths = [];
 

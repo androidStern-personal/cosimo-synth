@@ -27,6 +27,13 @@ From the source checkout matching the immutable release installer:
 node scripts/prepare_builder_kit_install.mjs --manifest <release manifest> --destination-config <non-secret destination JSON> --output-dir <new private output folder>
 ```
 
+For an isolated candidate on the existing feed host, add
+`--public-bootstrap-url <feedOrigin>/install.sh`, where `feedOrigin` is the exact
+HTTPS origin and path prefix in that candidate's destination configuration.
+The default production URL stays unchanged. Other hosts, mismatched prefixes,
+credentials, query strings and fragments are refused. Preparing delivery writes
+local files only; publishing the candidate entry and feed remains a separate step.
+
 The existing Keychain capability and destination parser are reused. The fresh
 mode-700 output directory must be outside Git:
 

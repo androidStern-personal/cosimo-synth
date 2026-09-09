@@ -98,14 +98,20 @@ export async function renderBootstrap({ manifest, feedOrigin, kitOrigin = feedOr
 
 async function renderPublicEntry(bootstrap, feedOrigin, publicBootstrapUrl = publicInstallationUrl) {
     const feed = parseOrigin(feedOrigin);
+    if (!feed) return failure("invalid-origin");
     let url;
     try {
         url = new URL(publicBootstrapUrl);
-        const loopback = url.protocol === "http:" && ["127.0.0.1", "[::1]"].includes(url.hostname);
-        if (!parseOrigin(publicBootstrapUrl) || url.pathname !== "/install.sh"
-            || (publicBootstrapUrl !== publicInstallationUrl && !loopback)) return failure("invalid-public-bootstrap-url");
+        const loopback = url.protocol === "http:" && ["127.0.0.1", "[::1]"].includes(url.hostname)
+            && url.pathname === "/install.sh";
+        const isolatedFeed = url.protocol === "https:"
+            && url.origin === new URL(publicInstallationUrl).origin
+            && publicBootstrapUrl === `${feed.value}/install.sh`
+            && url.href === publicBootstrapUrl;
+        if (!parseOrigin(publicBootstrapUrl)
+            || (publicBootstrapUrl !== publicInstallationUrl && !loopback && !isolatedFeed))
+            return failure("invalid-public-bootstrap-url");
     } catch { return failure("invalid-public-bootstrap-url"); }
-    if (!feed) return failure("invalid-origin");
     let template;
     try { template = await readFile(new URL("./templates/builder-kit-public-install.sh.template", import.meta.url), "utf8"); }
     catch { return failure("public-bootstrap-template-unavailable"); }

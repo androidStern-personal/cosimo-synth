@@ -1,6 +1,17 @@
 cmake_minimum_required(VERSION 3.16)
 
+# Set the supported macOS floor before CMake initializes compiler flags.
+set(CMAKE_OSX_DEPLOYMENT_TARGET "15.0" CACHE STRING
+    "Minimum macOS version for the pinned Cmajor command")
+
 project(CosimoPinnedCmajorCommand LANGUAGES C CXX)
+
+if(APPLE AND (CMAKE_OSX_DEPLOYMENT_TARGET STREQUAL ""
+        OR CMAKE_OSX_DEPLOYMENT_TARGET VERSION_GREATER "15.0"))
+    message(FATAL_ERROR
+        "The pinned Cmajor command must support macOS 15. "
+        "Set -DCMAKE_OSX_DEPLOYMENT_TARGET=15.0 and use a fresh build directory.")
+endif()
 
 get_filename_component(COSIMO_REPO_ROOT "${CMAKE_CURRENT_LIST_DIR}/../.." ABSOLUTE)
 include("${COSIMO_REPO_ROOT}/kit/cmake/CosimoDependencies.cmake")

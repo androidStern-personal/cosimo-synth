@@ -461,6 +461,8 @@ test("plugin config build identifiers and worker paths must be separator-free or
         [{ cmakeTarget: "../Escape" }, /invalid "cmakeTarget" value/],
         [{ productName: "Evil/../../Product" }, /invalid "productName" value/],
         [{ productName: ".." }, /invalid "productName" value/],
+        [{ previousProductName: "../Other" }, /invalid "previousProductName" value/],
+        [{ previousProductName: ["OldName"] }, /invalid "previousProductName" value/],
         [
             { workerSource: "../outside/worker.ts", workerOut: "worker.js" },
             /invalid "workerSource" value/,
@@ -481,6 +483,22 @@ test("plugin config build identifiers and worker paths must be separator-free or
             );
         });
     }
+});
+
+test("explicit former bundle filename reaches the installer config without changing identity", async () => {
+    const { buildModule } = await loadBuildModules();
+    await withFixtureFxRoot(async (fxRoot) => {
+        await writeFixturePlugin(fxRoot, "renamed_tone", "Tone.cmajorpatch", { name: "Tone" }, {
+            productName: "NewTone", previousProductName: "OldTone",
+        });
+        const plugin = buildModule.discoverEffectPlugins({ fxRoot })["renamed-tone"];
+        assert.equal(plugin.productName, "NewTone");
+        assert.equal(plugin.previousProductName, "OldTone");
+        await writeFixturePlugin(fxRoot, "renamed_tone", "Tone.cmajorpatch", { name: "Tone" }, {
+            productName: "NewTone", previousProductName: "NewTone",
+        });
+        assert.throws(() => buildModule.discoverEffectPlugins({ fxRoot }), /previousProductName must differ/);
+    });
 });
 
 test("the product object is read at discovery and derives the manifest-facing identity", async () => {
@@ -782,12 +800,13 @@ test("every shipped plugin uses one <Name>.plugin.json and only enhancer_lite ca
     });
     assert.deepEqual(plugin.identity, {
         ID: "dev.cosimo.enhancer-lite",
-        name: "Cosimo Enhancer Lite",
+        name: "Enhance That",
         manufacturer: "Cosimo",
         version: "0.1.0",
         plugin: { pluginCode: "CsEL", manufacturerCode: "Cosi" },
     });
-    assert.equal(plugin.productName, "CosimoEnhancerLite");
+    assert.equal(plugin.productName, "EnhanceThat");
+    assert.equal(plugin.cmakeTarget, "EnhanceThat");
     assert.equal(plugin.product.wordmark, undefined, "the rejected wordmark no longer ships");
     assert.equal(plugin.product.supportUrl, owner.owner.supportUrl, "the support URL is inherited from product-owner.json");
 
@@ -1146,6 +1165,18 @@ test("SeqFX release runtime source-map suppression is opt-in and leaves local qu
     assert.equal(buildModule.shouldEmitEffectRuntimeSourceMaps("spectral", {
         [environmentKey]: "1",
     }), true);
+});
+
+test("any effect can explicitly omit distribution source maps without changing normal builds", async () => {
+    const { buildModule } = await loadBuildModules();
+    const environmentKey = buildModule.effectDistributableRuntimeEnvironmentKey;
+
+    assert.equal(environmentKey, "FX_DISTRIBUTABLE_RUNTIME");
+    for (const pluginName of ["enhancer-lite", "seqfx", "spectral"]) {
+        assert.equal(buildModule.shouldEmitEffectRuntimeSourceMaps(pluginName, {}), true);
+        assert.equal(buildModule.shouldEmitEffectRuntimeSourceMaps(pluginName, { [environmentKey]: "true" }), true);
+        assert.equal(buildModule.shouldEmitEffectRuntimeSourceMaps(pluginName, { [environmentKey]: "1" }), false);
+    }
 });
 
 test("manifest entries that escape the patch directory are flattened into the runtime directory and rewritten", async () => {

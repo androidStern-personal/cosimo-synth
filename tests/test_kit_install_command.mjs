@@ -38,6 +38,36 @@ test("public entry preserves the existing v0.1.2 private installer render", asyn
     assert.equal(result.value.sha256, "fc7fa69992c85fa0c46ad2755da85ec166267f8ef56ca57fded20d9813fa8f33");
 });
 
+test("isolated HTTPS delivery binds the short entry to its exact feed prefix", async () => {
+    const origin = new URL(publicInstallationUrl).origin;
+    const feedOrigin = `${origin}/candidates/enhance-that-v013-05920ffe`;
+    const options = { manifest: manifestFor(), feedOrigin, capability: redact(fixtureAccess) };
+    const bootstrap = await renderBootstrap(options);
+    assert.equal(bootstrap.ok, true);
+    options.manifest.installation = { artifact: bootstrap.value.artifact, sha256: bootstrap.value.sha256 };
+    const publicBootstrapUrl = `${feedOrigin}/install.sh`;
+    const result = await renderInstallation({ ...options, publicBootstrapUrl });
+    assert.equal(result.ok, true);
+    assert.equal(reveal(result.value.command), `export BUILDER_KIT_ACCESS='${fixtureAccess}'; curl -fsSL ${publicBootstrapUrl} | bash`);
+    assert.ok(result.value.publicBootstrap.script.includes(quoted(feedOrigin)));
+    assert.ok(result.value.publicBootstrap.script.includes(bootstrap.value.sha256));
+    assert.equal(result.value.publicBootstrap.script.includes(fixtureAccess), false);
+    for (const url of [
+        `${origin}/candidates/other/install.sh`,
+        `${feedOrigin}/nested/install.sh`,
+        `${feedOrigin}/nested/../install.sh`,
+        `${feedOrigin}/install.sh?other=1`,
+        `${feedOrigin}/install.sh#other`,
+        publicBootstrapUrl.replace("https:", "http:"),
+        publicBootstrapUrl.replace(new URL(origin).host, "other.example.invalid"),
+        publicBootstrapUrl.replace("https://", "https://user:password@"),
+    ]) {
+        const refused = await renderInstallation({ ...options, publicBootstrapUrl: url });
+        assert.equal(refused.ok, false, url);
+        assert.equal(refused.error.code, "invalid-public-bootstrap-url");
+    }
+});
+
 test("delivery parsing enforces the approved short shape and rejects unpinned or unsafe inputs without revealing credentials", async () => {
     const options = { manifest: manifestFor(), feedOrigin: "https://downloads.example.invalid", capability: redact(fixtureAccess) };
     const bootstrap = await renderBootstrap(options);

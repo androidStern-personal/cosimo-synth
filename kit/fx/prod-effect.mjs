@@ -16,7 +16,7 @@ import {
 import { assertPatchedChocWebViewBinary } from "../scripts/check_choc_markers.mjs";
 import { inspectTool, normalizePin } from "../scripts/toolchain.mjs";
 import { requireCurrentTool } from "../scripts/require_tool.mjs";
-import { formatVST3InstallFailure, installVST3Bundle } from "../scripts/install_vst3.mjs";
+import { formatVST3InstallCleanupWarning, formatVST3InstallFailure, installVST3Bundle } from "../scripts/install_vst3.mjs";
 
 const scriptPath = fileURLToPath(import.meta.url);
 const toolchainManifestPath = path.join(repoRoot, "kit", "toolchain.json");
@@ -538,13 +538,18 @@ async function installVST3(pluginName, plugin, options) {
         throw new Error(`The build-produced VST3 identity probe is missing. Run npm run fx:prod:build -- ${pluginName} before installing.`);
     const result = await installVST3Bundle({
         candidate: builtVST3, destination: installedVST3, identityProbe,
+        ...(plugin.previousProductName === undefined ? {} : {
+            previousDestination: path.join(installDir, `${plugin.previousProductName}.vst3`),
+        }),
         dryRun: options.dryRun, codesign: options.toolPaths.codesign,
     });
     if (result.status === "failed")
         throw new Error(formatVST3InstallFailure(result.error));
     console.log(`${result.status === "dry-run" ? "Would install" : "Installed"} ${result.identity.displayName} VST3: ${installedVST3}`);
     if (result.recoveryDirectory)
-        console.log(`Installation verified; retained cleanup files at: ${result.recoveryDirectory}`);
+        console.log(`Installation verified; retained prior bundle or cleanup files at: ${result.recoveryDirectory}`);
+    if (result.cleanupWarning)
+        console.warn(formatVST3InstallCleanupWarning(result.cleanupWarning));
 }
 
 export function parseArgs(argv) {

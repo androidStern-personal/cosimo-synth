@@ -10,6 +10,7 @@ export const repoRoot = path.resolve(scriptDir, "../..");
 const defaultFxRoot = path.join(repoRoot, "fx");
 export const seqFxCanonicalRuntimePrebuiltEnvironmentKey = "SEQFX_CANONICAL_RUNTIME_PREBUILT";
 export const seqFxDistributableRuntimeEnvironmentKey = "SEQFX_DISTRIBUTABLE_RUNTIME";
+export const effectDistributableRuntimeEnvironmentKey = "FX_DISTRIBUTABLE_RUNTIME";
 
 /**
  * Plugin registry, derived by discovery instead of hand-written lists.
@@ -22,7 +23,7 @@ export const seqFxDistributableRuntimeEnvironmentKey = "SEQFX_DISTRIBUTABLE_RUNT
  *
  *   {
  *     "schemaVersion": 1,             // required; must not exceed kit/kit.json schemaVersions.plugin
- *     "alias", "cmakeTarget", "productName",
+ *     "alias", "cmakeTarget", "productName", "previousProductName",
  *     "product": { ...identity... },  // optional; presence makes identity authoritative
  *     "runtimeOut", "juceOut", "workerSource", "workerOut", "includeInAll",
  *     "jitInstallRuntime", "visualReviewAdapter",
@@ -88,6 +89,7 @@ const sidecarKeyValidators = {
     alias: (value) => typeof value === "string" && /^[a-z0-9][a-z0-9-]*$/.test(value) && value !== "all",
     cmakeTarget: isBuildIdentifier,
     productName: isBuildIdentifier,
+    previousProductName: isBuildIdentifier,
     runtimeOut: isRepoRelativeBuildPath,
     juceOut: isRepoRelativeBuildPath,
     workerSource: isRepoRelativeSourcePath,
@@ -712,6 +714,12 @@ function createDiscoveredPlugin({ patch, manifest, config, directoryName, patchF
     if (!isBuildIdentifier(plugin.cmakeTarget) || !isBuildIdentifier(plugin.productName))
         throw new Error(`Could not derive a build identifier for ${patch}; set cmakeTarget/productName in its ${pluginConfigSuffix} config.`);
 
+    if (build.previousProductName !== undefined) {
+        if (build.previousProductName === plugin.productName)
+            throw new Error(`${patch} previousProductName must differ from its current productName.`);
+        plugin.previousProductName = build.previousProductName;
+    }
+
     if (config.product !== null) {
         const configLabel = path.basename(config.legacyProductPath ?? config.configPath);
         const label = config.legacyProductPath ?? config.configPath;
@@ -942,10 +950,11 @@ export function shouldReuseSeqFxCanonicalRuntime(
         && environment[seqFxCanonicalRuntimePrebuiltEnvironmentKey] === "1";
 }
 
-/** Keep qualification provenance local while removing source maps from SeqFX distribution builds. */
+/** Keep local source maps unless the caller explicitly builds a distributable runtime. */
 export function shouldEmitEffectRuntimeSourceMaps(pluginName, environment = process.env) {
-    return pluginName !== "seqfx"
-        || environment[seqFxDistributableRuntimeEnvironmentKey] !== "1";
+    return environment[effectDistributableRuntimeEnvironmentKey] !== "1"
+        && (pluginName !== "seqfx"
+            || environment[seqFxDistributableRuntimeEnvironmentKey] !== "1");
 }
 
 function asList(value) {

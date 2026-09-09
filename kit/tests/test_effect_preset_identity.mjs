@@ -386,7 +386,7 @@ test("without native files, per-connection stored-state fallback retains the exi
     upgrade.detach();
 });
 
-test("existing original-owner declarations match authoritative manifests, without central kit product rules", async () => {
+test("historical preset owners retain their banks while changed manifest identities stay isolated", async () => {
     const consumers = [
         ["fx/enhancer_lite/view/source.ts", "fx/enhancer_lite/EnhancerLite.cmajorpatch", "enhancer-lite"],
         ["fx/chorus_lab/view/source.js", "fx/chorus_lab/ChorusLab.cmajorpatch", "chorus"],
@@ -400,16 +400,34 @@ test("existing original-owner declarations match authoritative manifests, withou
         const source = await readFile(path.join(repoRoot, sourcePath), "utf8");
         const manifest = JSON.parse(await readFile(path.join(repoRoot, manifestPath), "utf8"));
         const owner = source.match(/legacyFileStorePluginID:\s*"([^"]+)"/);
-        assert.equal(owner?.[1], manifest.ID, sourcePath);
+        assert.ok(owner?.[1], `${sourcePath} declares its historical preset owner`);
         const bytes = JSON.stringify(preset({ bankID }));
         const files = userFiles({ [`${bankID}/${presetID}.json`]: bytes });
         await withFiles(files, async () => {
-            const controller = sharedUI(new PatchConnection({ pluginID: manifest.ID }), { legacyFileStorePluginID: owner[1], bankID });
+            const controller = sharedUI(new PatchConnection({ pluginID: owner[1] }), { legacyFileStorePluginID: owner[1], bankID });
             await settle();
             assert.equal(controller.getState().userPresets[0].label, "Existing", sourcePath);
             assert.equal(files.files.get(`${bankID}/${presetID}.json`), bytes);
             assert.ok(files.calls.every(({ scope, operation }) => scope === bankID && ["list", "read"].includes(operation)));
             controller.detach();
+
+            // Customer edits may deliberately change the current manifest ID.
+            // The old folder owner is historical; changing it to match would
+            // grant the derivative access to the original plugin's presets.
+            const derivativeID = manifest.ID === owner[1]
+                ? `${manifest.ID}.identity-test`
+                : manifest.ID;
+            files.calls.length = 0;
+            const derivative = sharedUI(new PatchConnection({ pluginID: derivativeID }), { legacyFileStorePluginID: owner[1], bankID });
+            await settle();
+            assert.deepEqual(derivative.getState().userPresets, [], sourcePath);
+            assert.equal(derivative.saveCurrentAsNewPreset("Customer version").ok, true);
+            await settle();
+            const derivativePath = `${storageScope(derivativeID, bankID)}/${presetID}.json`;
+            assert.equal(JSON.parse(files.files.get(derivativePath)).label, "Customer version");
+            assert.ok(files.calls.every(({ scope }) => scope === storageScope(derivativeID, bankID)));
+            assert.equal(files.files.get(`${bankID}/${presetID}.json`), bytes);
+            derivative.detach();
         });
     }
 });

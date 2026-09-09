@@ -1,0 +1,301 @@
+{
+  "schemaVersion": 1,
+  "status": "prepared from L1 compiled source inventory; final own build and extracted artifact reconciliation pending",
+  "observedNativeSourceCommit": "954207e4b19c6896e6a9ab1cd4b18a8bd566af06",
+  "noticesSha256": "5c97993771bb5b413fc127c11130ca9a67854e0e1cd84ee322cbfd9d7d4b6e45",
+  "components": [
+    {
+      "component": "Cmajor",
+      "dependency": "cmajor",
+      "revisionOrVersion": "7820a453f25e1b6eaf898d0bb2feb7e4ce01c207",
+      "license": "GPL-3.0-or-later OR commercial",
+      "sourcePath": "LICENSE.md",
+      "sourceSha256": "e1d253cfd3aa590e6c9fe76f3638cbb8dd8d4b19aabe0912d45f5deba06e6607",
+      "selection": "complete file",
+      "noticeTextSha256": "2cf4e93237d9baa837412964677c687c07fd6d59ae2201761bf19e452199407b"
+    },
+    {
+      "component": "JUCE 8.0.12",
+      "dependency": "juce",
+      "revisionOrVersion": "501c07674e1ad693085a7e7c398f205c2677f5da",
+      "license": "AGPL-3.0-only OR commercial",
+      "sourcePath": "LICENSE.md",
+      "sourceSha256": "2633539bb26d244f0966fbc4df59400ea99bdf575fa96291851c1c3ff3456146",
+      "selection": "framework licensing section before the upstream full-module dependency list",
+      "noticeTextSha256": "384278c1dae6be033e45b3afbb06fc36c326a54fc7696bc4a8301d69f4867d3d"
+    },
+    {
+      "component": "CHOC",
+      "dependency": "choc",
+      "revisionOrVersion": "11f7dc63d7cb78f6dbaa559fe09ade8e941c0188",
+      "license": "ISC",
+      "sourcePath": "LICENSE.md",
+      "sourceSha256": "098e8bc855cead3961ece222ca427296808a0c77605a8c24e77224d1ad8a0cae",
+      "selection": "complete file",
+      "noticeTextSha256": "5594e66ac85689df409a2afec17890404c61c9fcc2903d1d0becf5cf18646006"
+    },
+    {
+      "component": "QuickJS embedded through CHOC",
+      "dependency": "choc",
+      "revisionOrVersion": "11f7dc63d7cb78f6dbaa559fe09ade8e941c0188",
+      "license": "MIT",
+      "sourcePath": "choc/javascript/choc_javascript_QuickJS.h",
+      "sourceSha256": "af3f46b644996dbcc6637053616dca10a98191610e7a96cf7013611497b9c336",
+      "selection": "CHOC_REGISTER_OPEN_SOURCE_LICENCE QuickJS block",
+      "noticeTextSha256": "0040bdaf823dfa99e53288338a8058864e2ef99ae6a88d20304f7ff0459f0044"
+    },
+    {
+      "component": "React 19.2.4",
+      "dependency": "react",
+      "revisionOrVersion": "19.2.4",
+      "license": "MIT",
+      "sourcePath": "LICENSE",
+      "sourceSha256": "da6d3703ed11cbe42bd212c725957c98da23cbff1998c05fa4b3d976d1a58e93",
+      "selection": "complete file",
+      "noticeTextSha256": "cf9b17822d1fcd4ff32ccbe14183386fb3adf6f2ff92dc184130823f7fc28173"
+    },
+    {
+      "component": "VST3 SDK",
+      "dependency": "juce",
+      "revisionOrVersion": "501c07674e1ad693085a7e7c398f205c2677f5da",
+      "license": "MIT",
+      "sourcePath": "modules/juce_audio_processors_headless/format_types/VST3_SDK/LICENSE.txt",
+      "sourceSha256": "d6115b263faa1cdf8c7372d70889c833dde1cec95252e7ee93e4f7d599ec96ca",
+      "selection": "complete file",
+      "noticeTextSha256": "d6115b263faa1cdf8c7372d70889c833dde1cec95252e7ee93e4f7d599ec96ca"
+    },
+    {
+      "component": "HarfBuzz 10.1.0",
+      "dependency": "juce",
+      "revisionOrVersion": "501c07674e1ad693085a7e7c398f205c2677f5da",
+      "license": "MIT (Old MIT)",
+      "sourcePath": "modules/juce_graphics/fonts/harfbuzz/COPYING",
+      "sourceSha256": "ba8f810f2455c2f08e2d56bb49b72f37fcf68f1f4fade38977cfd7372050ad64",
+      "selection": "complete file",
+      "noticeTextSha256": "52bbb9bf44598471a23ceb9de91f3b89dc488be649d215cc29a2c92d67639774"
+    },
+    {
+      "component": "HarfBuzz UCD attribution",
+      "dependency": "juce",
+      "revisionOrVersion": "501c07674e1ad693085a7e7c398f205c2677f5da",
+      "license": "ISC",
+      "sourcePath": "modules/juce_graphics/fonts/harfbuzz/hb-ucd.cc",
+      "sourceSha256": "0bb1dc09aee15ca98a2222f7307d1a9d279646c486f8240efd50035c86554420",
+      "selection": "complete comment block containing Grigori Goronzy",
+      "sourceStartLine": 1,
+      "sourceEndLine": 15,
+      "noticeTextSha256": "cb9e465e174d27af52932354c6b1d02fea66afb7b54533d95b95082b98e18549"
+    },
+    {
+      "component": "HarfBuzz embedded sort attribution",
+      "dependency": "juce",
+      "revisionOrVersion": "501c07674e1ad693085a7e7c398f205c2677f5da",
+      "license": "MIT",
+      "sourcePath": "modules/juce_graphics/fonts/harfbuzz/hb-algs.hh",
+      "sourceSha256": "587496a03384dd2d612975b50348545dc64c3af43328ada71bbf6803bc47ee00",
+      "selection": "complete comment block containing Zilong Tan",
+      "sourceStartLine": 261,
+      "sourceEndLine": 284,
+      "noticeTextSha256": "b173bbb34367afe4afa68310da83f299c3f7d87cf558467bfc8e3193113be496"
+    },
+    {
+      "component": "HarfBuzz CoreText font supplemental attribution",
+      "dependency": "juce",
+      "revisionOrVersion": "501c07674e1ad693085a7e7c398f205c2677f5da",
+      "license": "MIT (Old MIT)",
+      "sourcePath": "modules/juce_graphics/fonts/harfbuzz/hb-coretext-font.cc",
+      "sourceSha256": "a58253177b8656917003ca03aed6ab4508ab1e647ede9e7c83efa537eac3961a",
+      "selection": "complete comment block containing Copyright",
+      "sourceStartLine": 1,
+      "sourceEndLine": 25,
+      "noticeTextSha256": "902ad9364e3ac5f70c0e4dbc9c05758f971e6ce0a7fc83e5c98c8739a85a09dc"
+    },
+    {
+      "component": "HarfBuzz CoreText shape supplemental attribution",
+      "dependency": "juce",
+      "revisionOrVersion": "501c07674e1ad693085a7e7c398f205c2677f5da",
+      "license": "MIT (Old MIT)",
+      "sourcePath": "modules/juce_graphics/fonts/harfbuzz/hb-coretext-shape.cc",
+      "sourceSha256": "e50548d824452631953d9378660cc133adc2baaaca88cae0b33483a2a59473d2",
+      "selection": "complete comment block containing Copyright",
+      "sourceStartLine": 1,
+      "sourceEndLine": 27,
+      "noticeTextSha256": "29cef416d16b570c4511fb7db104199233452ae40128694c7e89f98bba7996bb"
+    },
+    {
+      "component": "HarfBuzz OpenType BASE supplemental attribution",
+      "dependency": "juce",
+      "revisionOrVersion": "501c07674e1ad693085a7e7c398f205c2677f5da",
+      "license": "MIT (Old MIT)",
+      "sourcePath": "modules/juce_graphics/fonts/harfbuzz/hb-ot-layout-base-table.hh",
+      "sourceSha256": "f153a1bd595c0b3362bf24b690ec04c1992343ee9b21b34e53081a3c107ffa7e",
+      "selection": "complete comment block containing Copyright",
+      "sourceStartLine": 1,
+      "sourceEndLine": 27,
+      "noticeTextSha256": "381f6c43f42eb459dc78d465f3e214e4006c6b5551b1355742cf09307c8f6f51"
+    },
+    {
+      "component": "HarfBuzz OpenType VARC supplemental attribution",
+      "dependency": "juce",
+      "revisionOrVersion": "501c07674e1ad693085a7e7c398f205c2677f5da",
+      "license": "MIT (Old MIT)",
+      "sourcePath": "modules/juce_graphics/fonts/harfbuzz/hb-ot-var-varc-table.hh",
+      "sourceSha256": "be2e2ce15201b49fe629052e43e2c30d284d00224c3d45f64760d7ad9027dced",
+      "selection": "complete comment block containing Copyright",
+      "sourceStartLine": 1,
+      "sourceEndLine": 25,
+      "noticeTextSha256": "b2fcd634665f62bca21811d18ff8a746e5552ebc4186668e0f7c98e5b7b60b92"
+    },
+    {
+      "component": "HarfBuzz subset instancer IUP supplemental attribution",
+      "dependency": "juce",
+      "revisionOrVersion": "501c07674e1ad693085a7e7c398f205c2677f5da",
+      "license": "MIT (Old MIT)",
+      "sourcePath": "modules/juce_graphics/fonts/harfbuzz/hb-subset-instancer-iup.hh",
+      "sourceSha256": "3d671c4fd7e261670438cdfd4b71ece252c671cb1656b8b5f3103736cb4c4e82",
+      "selection": "complete comment block containing Copyright",
+      "sourceStartLine": 1,
+      "sourceEndLine": 23,
+      "noticeTextSha256": "0b8525c9a4267c2e20cc46af5d39c1ab573d4fc0f2f0a703fcc2a4ae576819f5"
+    },
+    {
+      "component": "HarfBuzz generated Unicode 16 emoji data attribution",
+      "dependency": "juce",
+      "revisionOrVersion": "501c07674e1ad693085a7e7c398f205c2677f5da",
+      "license": "Unicode-3.0",
+      "sourcePath": "modules/juce_graphics/fonts/harfbuzz/hb-unicode-emoji-table.hh",
+      "sourceSha256": "45aea67431700ce25d3f78d42c6f27efc14096b61918bd3d8700f77cabea66d2",
+      "selection": "complete comment block containing \u00a9 2024 Unicode",
+      "sourceStartLine": 2,
+      "sourceEndLine": 19,
+      "noticeTextSha256": "e22c4dead4c547d4eb200ce695dc2aa446e0b2f49785cfc1906181d359249ed5"
+    },
+    {
+      "component": "Unicode data license (including generated Unicode 16 tables)",
+      "dependency": "unicode",
+      "revisionOrVersion": "Unicode License v3, retrieved 2026-09-05; compiled data version 16.0.0",
+      "license": "Unicode-3.0",
+      "sourcePath": "https://www.unicode.org/license.txt",
+      "sourceSha256": "e7a93b009565cfce55919a381437ac4db883e9da2126fa28b91d12732bc53d96",
+      "selection": "complete official license text",
+      "noticeTextSha256": "8fa201617d2c10c64205a88903dfac046417e6b95748e36b492026fbc38c5b94"
+    },
+    {
+      "component": "SheenBidi",
+      "dependency": "juce",
+      "revisionOrVersion": "501c07674e1ad693085a7e7c398f205c2677f5da",
+      "license": "Apache-2.0",
+      "sourcePath": "modules/juce_graphics/unicode/sheenbidi/LICENSE",
+      "sourceSha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30",
+      "selection": "complete file",
+      "noticeTextSha256": "283ea6cc2997a1a70da0049e09adf9317bb60ca1b51279b65196b83a69e1996b"
+    },
+    {
+      "component": "libpng 1.6.37",
+      "dependency": "juce",
+      "revisionOrVersion": "501c07674e1ad693085a7e7c398f205c2677f5da",
+      "license": "libpng license",
+      "sourcePath": "modules/juce_graphics/image_formats/pnglib/LICENSE",
+      "sourceSha256": "bf5e22b9dce8464064ae17a48ea1133c3369ac9e1d80ef9e320e5219aa14ea9b",
+      "selection": "complete file",
+      "noticeTextSha256": "d879f4f13a04660b46554bc592b9bc7a04787d528da5e94e3e428dd67d8f6805"
+    },
+    {
+      "component": "zlib 1.3.1",
+      "dependency": "juce",
+      "revisionOrVersion": "501c07674e1ad693085a7e7c398f205c2677f5da",
+      "license": "Zlib",
+      "sourcePath": "modules/juce_core/zip/zlib/LICENSE",
+      "sourceSha256": "8545e90fe8d2bc6b8b8e9f4caecd2d9215727dbd1c153c7adeedfbaaea51f38b",
+      "selection": "complete file",
+      "noticeTextSha256": "bab356dcdf3b6f668105d78a0aa54e4825efca6c192d5785b2671761a835ccb7"
+    },
+    {
+      "component": "Independent JPEG Group 9f",
+      "dependency": "juce",
+      "revisionOrVersion": "501c07674e1ad693085a7e7c398f205c2677f5da",
+      "license": "Independent JPEG Group license",
+      "sourcePath": "modules/juce_graphics/image_formats/jpglib/README",
+      "sourceSha256": "8802105e93b079f950844e412daab05156b5ef30acc6cbd0a59a287e6cd6cb7d",
+      "selection": "complete LEGAL ISSUES section",
+      "noticeTextSha256": "50733859a9ee4b4b44455463bb19a0383f2dc5d76cbcf6630f30bcc999743d01"
+    },
+    {
+      "component": "FLAC embedded through JUCE",
+      "dependency": "juce",
+      "revisionOrVersion": "501c07674e1ad693085a7e7c398f205c2677f5da",
+      "license": "BSD-3-Clause",
+      "sourcePath": "modules/juce_audio_formats/codecs/flac/Flac Licence.txt",
+      "sourceSha256": "123926094aa97c30e346c23a12a453b7063c56e6c414e342dd5ae0fea13bd77d",
+      "selection": "complete file",
+      "noticeTextSha256": "9f4e13064a6e15cf6a23e64e63d360eab73c7f3a8f2552ad527d46deeba5f606"
+    },
+    {
+      "component": "FLAC embedded through CHOC",
+      "dependency": "choc",
+      "revisionOrVersion": "11f7dc63d7cb78f6dbaa559fe09ade8e941c0188",
+      "license": "BSD-3-Clause",
+      "sourcePath": "choc/audio/choc_AudioFileFormat_FLAC.h",
+      "sourceSha256": "4135fb2876ac4576f0049ecd1e68c3b854b847f83d4544529e94c4b1b79a961b",
+      "selection": "CHOC_REGISTER_OPEN_SOURCE_LICENCE FLAC block",
+      "noticeTextSha256": "3ab2cfffadef03df23cf79cf63eddaf158f4e6179d55fb41cfd9a27ded512de1"
+    },
+    {
+      "component": "Ogg Vorbis embedded through JUCE",
+      "dependency": "juce",
+      "revisionOrVersion": "501c07674e1ad693085a7e7c398f205c2677f5da",
+      "license": "BSD-3-Clause",
+      "sourcePath": "modules/juce_audio_formats/codecs/oggvorbis/Ogg Vorbis Licence.txt",
+      "sourceSha256": "62d5ce5c59484dc99e462ec8f815bfc76f64a2e4759500c14beaf3772a7d1181",
+      "selection": "complete file",
+      "noticeTextSha256": "a9d6307e0fea34b53d6b8f68c6a07f699a3705b06ee0e4a9f5ca663b617e16f4"
+    },
+    {
+      "component": "Ogg Vorbis embedded through CHOC",
+      "dependency": "choc",
+      "revisionOrVersion": "11f7dc63d7cb78f6dbaa559fe09ade8e941c0188",
+      "license": "BSD-3-Clause",
+      "sourcePath": "choc/audio/choc_AudioFileFormat_Ogg.h",
+      "sourceSha256": "f1ce885ee355bbc8d2877659f40621c9782976b734485d77594e55af513b2f4f",
+      "selection": "CHOC_REGISTER_OPEN_SOURCE_LICENCE OggVorbis block",
+      "noticeTextSha256": "700da1029d9f9f9a37f189ec6c9b0d31b5aba3aac5cd3c6502ce4d0ec647d466"
+    },
+    {
+      "component": "Ogg Vorbis preserved LPC attribution (CHOC and JUCE)",
+      "dependency": "choc",
+      "revisionOrVersion": "11f7dc63d7cb78f6dbaa559fe09ade8e941c0188",
+      "license": "preserved permissive notice",
+      "sourcePath": "choc/audio/choc_AudioFileFormat_Ogg.h",
+      "sourceSha256": "f1ce885ee355bbc8d2877659f40621c9782976b734485d77594e55af513b2f4f",
+      "selection": "complete preserved Jutta Degener and Carsten Bormann copyright block",
+      "noticeTextSha256": "c9441666db988c573742c9a42f0a9970cf73728495fc7d6284c6f849c5212bbb"
+    },
+    {
+      "component": "minimp3 embedded through CHOC",
+      "dependency": "choc",
+      "revisionOrVersion": "11f7dc63d7cb78f6dbaa559fe09ade8e941c0188",
+      "license": "CC0-1.0",
+      "sourcePath": "choc/audio/choc_AudioFileFormat_MP3.h",
+      "sourceSha256": "ba102c37f458679a8814f24c0112065e476f60e7fa2236c563f81f110412c0db",
+      "selection": "CHOC_REGISTER_OPEN_SOURCE_LICENCE minimp3 block",
+      "noticeTextSha256": "dce3e540847ac9c489ea1a9821fb6cd99848a29f3c3b68c8b9bc48b512b50b3a"
+    }
+  ],
+  "evidence": {
+    "compilerDependencyRecords": 29,
+    "uiBundledNpmPackages": [
+      "react@19.2.4"
+    ],
+    "nativeFormatsObserved": [
+      "VST3"
+    ],
+    "additionalFormatInventoryRequiredIfAUIncluded": true,
+    "harfBuzzInputScan": {
+      "files": 314,
+      "sourceRevision": "501c07674e1ad693085a7e7c398f205c2677f5da",
+      "receipt": "harfbuzz-notice-closure-correction.json",
+      "receiptSha256": "e959f068cd6663bf79e79df2a745c3b808a6d7ed46bfd02dfe3f994c3f9b8a63",
+      "distinctGrantAndCopyrightCorrectionsIncluded": true
+    }
+  }
+}

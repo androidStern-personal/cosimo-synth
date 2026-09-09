@@ -6,14 +6,14 @@ graph CosimoEnhancerLite [[ main ]]
     output event wt::EnhancerSpectrumFrame inputSpectrum [[ name: "Input Spectrum", hidden: true ]];
     output event wt::EnhancerSpectrumFrame outputSpectrum [[ name: "Output Spectrum", hidden: true ]];
 
-    input value float32 freqHzIn [[ name: "Frequency", group: "Band", min: wt::enhancerLiteFrequencyMinHz, max: wt::enhancerLiteFrequencyMaxHz, init: wt::enhancerLiteFrequencyDefaultHz, unit: "Hz", automatable: false, rampFrames: 0 ]];
-    input value float32 qIn [[ name: "Q", group: "Band", min: wt::enhancerLiteQMin, max: wt::enhancerLiteQMax, init: wt::enhancerLiteQDefault, automatable: false, rampFrames: 0 ]];
-    input value float32 modeIn [[ name: "Routing", group: "Band", min: 0.0f, max: 1.0f, init: float32 (wt::enhancerLiteModeStereo), discrete: true, step: 1.0f, text: "Stereo|Mid/Side", automatable: false, rampFrames: 0 ]];
-    input value float32 midAmountIn [[ name: "Amount / Mid", group: "Band", min: wt::enhancerLiteAmountMin, max: wt::enhancerLiteAmountMax, init: 0.0f, automatable: false, rampFrames: 0 ]];
-    input value float32 sideAmountIn [[ name: "Side", group: "Band", min: wt::enhancerLiteAmountMin, max: wt::enhancerLiteAmountMax, init: 0.0f, automatable: false, rampFrames: 0 ]];
-    input value float32 curveIn [[ name: "Character", group: "Band", min: 0.0f, max: 1.0f, init: float32 (wt::enhancerLiteCurveDefault), discrete: true, step: 1.0f, text: "Tube|Solid", automatable: false, rampFrames: 0 ]];
-    input value float32 saturationModeIn [[ name: "Intensity", group: "Band", min: 0.0f, max: 1.0f, init: float32 (wt::enhancerLiteSaturationModeDefault), discrete: true, step: 1.0f, text: "Subtle|Medium", automatable: false, rampFrames: 0 ]];
-    input value float32 shapeIn [[ name: "Shape", group: "Band", min: 0.0f, max: 2.0f, init: float32 (wt::enhancerLiteShapeDefault), discrete: true, step: 1.0f, text: "Low|Bell|High", automatable: false, rampFrames: 0 ]];
+    input value float32 freqHzIn [[ name: "Frequency", group: "Band", min: wt::enhancerLiteFrequencyMinHz, max: wt::enhancerLiteFrequencyMaxHz, init: wt::enhancerLiteFrequencyDefaultHz, unit: "Hz", automatable: true, rampFrames: 0 ]];
+    input value float32 qIn [[ name: "Q", group: "Band", min: wt::enhancerLiteQMin, max: wt::enhancerLiteQMax, init: wt::enhancerLiteQDefault, automatable: true, rampFrames: 0 ]];
+    input value float32 modeIn [[ name: "Routing", group: "Band", min: 0.0f, max: 1.0f, init: float32 (wt::enhancerLiteModeStereo), discrete: true, step: 1.0f, text: "Stereo|Mid/Side", automatable: true, rampFrames: 0 ]];
+    input value float32 midAmountIn [[ name: "Amount / Mid", group: "Band", min: wt::enhancerLiteAmountMin, max: wt::enhancerLiteAmountMax, init: 0.0f, automatable: true, rampFrames: 0 ]];
+    input value float32 sideAmountIn [[ name: "Side", group: "Band", min: wt::enhancerLiteAmountMin, max: wt::enhancerLiteAmountMax, init: 0.0f, automatable: true, rampFrames: 0 ]];
+    input value float32 curveIn [[ name: "Character", group: "Band", min: 0.0f, max: 1.0f, init: float32 (wt::enhancerLiteCurveDefault), discrete: true, step: 1.0f, text: "Tube|Solid", automatable: true, rampFrames: 0 ]];
+    input value float32 saturationModeIn [[ name: "Intensity", group: "Band", min: 0.0f, max: 1.0f, init: float32 (wt::enhancerLiteSaturationModeDefault), discrete: true, step: 1.0f, text: "Subtle|Medium", automatable: true, rampFrames: 0 ]];
+    input value float32 shapeIn [[ name: "Shape", group: "Band", min: 0.0f, max: 2.0f, init: float32 (wt::enhancerLiteShapeDefault), discrete: true, step: 1.0f, text: "Low|Bell|High", automatable: true, rampFrames: 0 ]];
 
     node enhancer = wt::EnhancerLiteBus;
     node inputAnalyzer = wt::EnhancerSpectrumAnalyzer (0);
