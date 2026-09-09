@@ -143,7 +143,7 @@ export async function renderInstallation(options) {
     const publicBootstrap = publicEntry.value;
     if ([bootstrap.value.script, publicBootstrap.script, publicBootstrap.url].some(value => value.includes(reveal(capability))))
         return failure("bootstrap-must-not-contain-capability");
-    const command = redact(`export BUILDER_KIT_ACCESS=${quote(reveal(capability))}; curl -fsSL ${publicBootstrap.url} | bash -s -- --accept-juce-terms`);
+    const command = redact(`( set -o pipefail; export BUILDER_KIT_ACCESS=${quote(reveal(capability))}; curl -fsSL ${publicBootstrap.url} | bash -s -- --accept-juce-terms )`);
     const delivery = redact([
         "Builder Kit installation — macOS 15 or newer, Apple silicon",
         "Apple Command Line Tools must already be installed and their agreements accepted by you.",

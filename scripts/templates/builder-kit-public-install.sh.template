@@ -28,6 +28,12 @@ builder_kit_install() (
             && -f "$directory/.builder-kit-install/receipt" && ! -L "$directory/.builder-kit-install/receipt" \
             && "$(cat -- "$directory/.builder-kit-install/receipt")" = "$release_receipt" ]]
     }
+    reusable_empty_directory() {
+        local directory="$1" first_entry
+        [[ -d "$directory" && ! -L "$directory" ]] || return 1
+        first_entry=$(find "$directory" -mindepth 1 -maxdepth 1 -print -quit) || return 1
+        [[ -z "$first_entry" ]]
+    }
 
     if [[ "${BUILDER_KIT_PROJECT_DIR+x}" = x ]]; then
         project="$BUILDER_KIT_PROJECT_DIR"
@@ -36,13 +42,15 @@ builder_kit_install() (
     elif recognized_release "$legacy_project"; then
         project="$legacy_project"
         printf 'Builder Kit: resuming the existing project at %s\n' "$project"
+    elif reusable_empty_directory "$canonical_project"; then
+        project="$canonical_project"
     elif [[ ! -e "$canonical_project" && ! -L "$canonical_project" ]]; then
         project="$canonical_project"
     else
         candidate="${HOME}/Documents/Builder Kit @@RELEASE_VERSION@@"
         suffix=1
         while [[ -e "$candidate" || -L "$candidate" ]]; do
-            if recognized_release "$candidate"; then
+            if recognized_release "$candidate" || reusable_empty_directory "$candidate"; then
                 project="$candidate"
                 break
             fi

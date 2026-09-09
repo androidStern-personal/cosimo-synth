@@ -18,6 +18,7 @@ const sourceRoot = path.resolve(import.meta.dirname, "..");
 const fixtureAccess = "fixture-access-not-a-customer-secret";
 const sha256 = (bytes) => createHash("sha256").update(bytes).digest("hex");
 const quoted = (text) => `'${text.replaceAll("'", "'\\''")}'`;
+const withCallerAccessProbe = (line) => `${line}; builder_kit_status=$?; if [[ "\${BUILDER_KIT_ACCESS+x}" = x ]]; then printf 'Builder Kit fixture: caller access leaked\\n'; exit 97; fi; printf 'Builder Kit fixture: caller access unset\\n'; exit "$builder_kit_status"`;
 async function shellProfileHashes() {
     const result = {};
     for (const name of [".zprofile", ".bash_profile"]) {
@@ -55,7 +56,7 @@ test("isolated HTTPS delivery binds the short entry to its exact feed prefix", a
     const publicBootstrapUrl = `${feedOrigin}/install.sh`;
     const result = await renderInstallation({ ...options, publicBootstrapUrl });
     assert.equal(result.ok, true);
-    assert.equal(reveal(result.value.command), `export BUILDER_KIT_ACCESS='${fixtureAccess}'; curl -fsSL ${publicBootstrapUrl} | bash -s -- --accept-juce-terms`);
+    assert.equal(reveal(result.value.command), `( set -o pipefail; export BUILDER_KIT_ACCESS='${fixtureAccess}'; curl -fsSL ${publicBootstrapUrl} | bash -s -- --accept-juce-terms )`);
     assert.ok(result.value.publicBootstrap.script.includes(quoted(feedOrigin)));
     assert.ok(result.value.publicBootstrap.script.includes(bootstrap.value.sha256));
     assert.equal(result.value.publicBootstrap.script.includes(fixtureAccess), false);
@@ -104,9 +105,9 @@ test("delivery parsing enforces the approved short shape and rejects unpinned or
     assert.equal(result.value.script.includes(fixtureAccess), false);
     assert.equal(result.value.publicBootstrap.script.includes(fixtureAccess), false);
     assert.equal(JSON.stringify(result).includes(fixtureAccess), false);
-    assert.equal(reveal(result.value.command), `export BUILDER_KIT_ACCESS='${fixtureAccess}'; curl -fsSL ${publicInstallationUrl} | bash -s -- --accept-juce-terms`);
+    assert.equal(reveal(result.value.command), `( set -o pipefail; export BUILDER_KIT_ACCESS='${fixtureAccess}'; curl -fsSL ${publicInstallationUrl} | bash -s -- --accept-juce-terms )`);
     assert.doesNotMatch(reveal(result.value.command), /bash -c|mktemp|printf|mkdir|sha256|BUILDER_KIT_PROJECT_DIR/u);
-    assert.match(reveal(result.value.command), /\| bash -s -- --accept-juce-terms$/u);
+    assert.match(reveal(result.value.command), /^\( set -o pipefail; export BUILDER_KIT_ACCESS=.*\| bash -s -- --accept-juce-terms \)$/u);
     assert.match(result.value.publicBootstrap.script, /\$#" = 1.*--accept-juce-terms/su);
     assert.ok(result.value.publicBootstrap.script.includes('${HOME}/Documents/Builder Kit'));
     assert.ok(result.value.publicBootstrap.script.includes('${HOME}/src/builder-kit-1.0.0'));
@@ -219,6 +220,7 @@ async function fixture() {
         "const state = '.builder-kit-install';",
         "fs.appendFileSync(state + '/npm-attempts', 'attempt\\n');",
         "fs.appendFileSync(state + '/npm-cache-observed', execFileSync('npm', ['config', 'get', 'cache'], { encoding: 'utf8' }));",
+        "fs.appendFileSync(state + '/npm-delivery-env-observed', (process.env.BUILDER_KIT_ACCESS === undefined ? 'access=unset' : 'access=set') + ' ' + (process.env.BUILDER_KIT_EXPECTED_FEED === undefined ? 'feed=unset' : 'feed=set') + '\\n');",
         "if (process.env.BUILDER_KIT_FIXTURE_FAIL_NPM === '1' && !fs.existsSync(state + '/npm-failed-once')) { fs.writeFileSync(state + '/npm-failed-once', 'failed'); process.exit(23); }",
     ].join("\n"));
     const toolchain = JSON.parse(await fs.readFile(path.join(lineage, "kit/toolchain.json"), "utf8"));
@@ -283,7 +285,7 @@ test("exact emitted line owns download failure, occupied-folder refusal, fresh i
             const first = await f.command(path.join(f.scratch, "first"));
             const other = await f.command(path.join(f.scratch, "different"));
             assert.equal(first.line, other.line);
-            assert.equal(first.line, `export BUILDER_KIT_ACCESS='${fixtureAccess}'; curl -fsSL ${f.publicBootstrapUrl} | bash -s -- --accept-juce-terms`);
+            assert.equal(first.line, `( set -o pipefail; export BUILDER_KIT_ACCESS='${fixtureAccess}'; curl -fsSL ${f.publicBootstrapUrl} | bash -s -- --accept-juce-terms )`);
         });
         await t.test("JUCE acknowledgment must be explicit on the personalized command", async () => {
             const acknowledged = (await f.command(path.join(f.scratch, "acknowledged"))).line;
@@ -308,10 +310,12 @@ test("exact emitted line owns download failure, occupied-folder refusal, fresh i
                 const canonical = path.join(occupiedHome, "Documents/Builder Kit");
                 await fs.mkdir(canonical, { recursive: true });
                 await fs.writeFile(path.join(canonical, "customer-notes.txt"), "preserve");
-                await fs.mkdir(path.join(occupiedHome, "Documents/Builder Kit 1.0.0"));
+                const reusableCandidate = path.join(occupiedHome, "Documents/Builder Kit 1.0.0");
+                await fs.mkdir(reusableCandidate);
                 result = await f.run(command, { HOME: occupiedHome });
                 assert.match(result.output, /the usual folder is occupied/u);
-                assert.match(result.output, /Documents\/Builder Kit 1\.0\.0 \(2\)/u);
+                assert.match(result.output, new RegExp(`project folder: ${reusableCandidate.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&")}`));
+                assert.doesNotMatch(result.output, /Documents\/Builder Kit 1\.0\.0 \(2\)/u);
                 assert.equal(await fs.readFile(path.join(canonical, "customer-notes.txt"), "utf8"), "preserve");
 
                 const legacyHome = path.join(f.scratch, "legacy-home");
@@ -324,17 +328,39 @@ test("exact emitted line owns download failure, occupied-folder refusal, fresh i
                 assert.equal(existsSync(path.join(legacyHome, "Documents/Builder Kit")), false);
             } finally { f.faults.installer = "none"; }
         });
-        await t.test("public HTTP failure is visible under ordinary pipeline status and a truncated body cannot start installation", async () => {
+        await t.test("default CLT failure retries into the exact same empty canonical folder", async () => {
+            const command = (await f.command(path.join(f.scratch, "unused-default-retry-path"))).line;
+            const retryHome = path.join(f.scratch, "default-retry-home");
+            const canonical = path.join(retryHome, "Documents/Builder Kit");
+            const probes = path.join(f.scratch, "default-retry-missing-clt");
+            await fs.mkdir(retryHome); await fs.mkdir(probes);
+            await fs.writeFile(path.join(probes, "xcode-select"), "#!/bin/sh\nexit 1\n", { mode: 0o755 });
+            let result = await f.run(command, { HOME: retryHome, PATH: `${probes}:/usr/bin:/bin:/usr/sbin:/sbin` });
+            assert.notEqual(result.status, 0, result.output);
+            assert.match(result.output, /Apple Command Line Tools are required/u);
+            assert.match(result.output, new RegExp(`project folder: ${canonical.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&")}`));
+            assert.deepEqual(await fs.readdir(canonical), []);
+
+            result = await f.run(withCallerAccessProbe(command), { HOME: retryHome });
+            assert.equal(result.status, 0, result.output);
+            assert.match(result.output, new RegExp(`Project folder: ${canonical.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&")}\n`));
+            assert.match(result.output, /caller access unset/u);
+            assert.equal(existsSync(path.join(canonical, ".git")), true);
+            assert.equal(existsSync(path.join(retryHome, "Documents/Builder Kit 1.0.0")), false);
+        });
+        await t.test("public HTTP failure is nonzero, leaves caller access unset, and a truncated body cannot start installation", async () => {
             for (const fault of ["http", "truncated"]) {
                 f.faults.public = fault;
                 const root = path.join(f.scratch, `public-${fault}`);
                 const before = f.requests.filter(url => url.includes("/installers/")).length;
-                const result = await f.run(await f.command(root));
+                const emitted = await f.command(root);
+                const result = await f.run({ ...emitted, line: withCallerAccessProbe(emitted.line) });
                 assert.doesNotMatch(result.output, /is ready/u);
                 assert.equal(existsSync(root), false);
                 assert.equal(f.requests.filter(url => url.includes("/installers/")).length, before);
-                if (fault === "http") { assert.equal(result.status, 0); assert.match(result.output, /curl: \(22\)/u); }
-                else assert.notEqual(result.status, 0);
+                assert.notEqual(result.status, 0);
+                assert.match(result.output, /caller access unset/u);
+                if (fault === "http") assert.match(result.output, /curl: \(22\)/u);
             }
             f.faults.public = "none";
         });
@@ -432,20 +458,26 @@ test("exact emitted line owns download failure, occupied-folder refusal, fresh i
             f.faults.denyPath = "";
         });
         await t.test("actual npm lifecycle failure leaves a partial install, then retry completes it", async () => {
-            let result = await f.run(line, { BUILDER_KIT_FIXTURE_FAIL_NPM: "1" });
+            const probedLine = { ...line, line: withCallerAccessProbe(line.line) };
+            let result = await f.run(probedLine, { BUILDER_KIT_FIXTURE_FAIL_NPM: "1" });
             assert.notEqual(result.status, 0, result.output);
             assert.doesNotMatch(result.output, /is ready/u);
+            assert.match(result.output, /caller access unset/u);
             assert.equal(existsSync(path.join(project, "node_modules")), true);
             assert.equal(existsSync(path.join(project, ".builder-kit-install/npm-ready")), false);
-            result = await f.run(line, { BUILDER_KIT_FIXTURE_FAIL_NPM: "1" });
+            result = await f.run(probedLine, { BUILDER_KIT_FIXTURE_FAIL_NPM: "1" });
             assert.equal(result.status, 0, result.output);
             assert.match(result.output, /setup and strict environment checks passed/u);
+            assert.match(result.output, /caller access unset/u);
             assert.match(result.output, new RegExp(`Project folder: ${project.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&")}\\n`));
             assert.match(result.output, /Next: open this exact folder in Codex/u);
             assert.equal((await fs.readFile(path.join(project, ".builder-kit-install/npm-attempts"), "utf8")).split("\n").filter(Boolean).length, 2);
             assert.equal(git(project, "rev-parse", "HEAD"), f.manifest.kit.commit);
             assert.equal(git(project, "remote"), "");
             assert.equal((await fs.readFile(path.join(project, ".git/config"), "utf8")).includes(fixtureAccess), false);
+            assert.deepEqual((await fs.readFile(path.join(project, ".builder-kit-install/npm-delivery-env-observed"), "utf8")).trim().split("\n"), [
+                "access=unset feed=unset", "access=unset feed=unset",
+            ]);
         });
         await t.test("rerun preserves dirty source, untracked files, index, HEAD and completed downloads", async () => {
             const source = path.join(project, "fx/example/Example.cmajor");
@@ -491,12 +523,16 @@ test("exact emitted line owns download failure, occupied-folder refusal, fresh i
             // independently exercise complete_install's npm process boundary.
             await fs.unlink(path.join(project, ".builder-kit-install/npm-ready"));
             const result = await f.run(`cd -- ${quoted(project)} && . .builder-kit-install/env.sh && NPM_CONFIG_CACHE=${quoted(f.externalCache)} NpM_cOnFiG_cAcHe=${quoted(f.externalCache)} npm_config_cache=${quoted(f.externalCache)} node kit/scripts/complete_install.mjs --accept-juce-terms`, {
+                BUILDER_KIT_ACCESS: fixtureAccess,
                 BUILDER_KIT_EXPECTED_FEED: `${f.origin}/${fixtureAccess}`,
                 BUILDER_KIT_EXPECTED_CMAJ_SHA256: f.manifest.tools.cmaj.sha256,
                 BUILDER_KIT_EXPECTED_PLUGIN_SHA256: f.manifest.tools.cmajPlugin.sha256,
             });
             assert.equal(result.status, 0, result.output);
             assert.deepEqual((await observed()).trim().split("\n"), [expected, expected, expected]);
+            assert.deepEqual((await fs.readFile(path.join(project, ".builder-kit-install/npm-delivery-env-observed"), "utf8")).trim().split("\n"), [
+                "access=unset feed=unset", "access=unset feed=unset", "access=unset feed=unset",
+            ]);
             assert.deepEqual(await fs.readdir(f.externalCache), ["sentinel.txt"]);
             assert.equal(await fs.readFile(path.join(f.externalCache, "sentinel.txt"), "utf8"), "preserve external cache");
         });

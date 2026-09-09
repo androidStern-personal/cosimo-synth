@@ -90,9 +90,14 @@ export async function completeInstallation({ root = repoRoot, log = console.log,
             ok: false, error: { code: "unsafe-setup-path", details: ["A setup/npm output path is linked or has an unexpected type. It was preserved; inspect the project before retrying."] },
         };
 
-        // Do not let an inherited case variant redirect writes outside the
+        // Keep delivery access out of npm lifecycle children. Also prevent an
+        // inherited cache case variant from redirecting writes outside the
         // cache whose containing directory the installer has admitted.
-        const npmEnv = Object.fromEntries(Object.entries(env).filter(([key]) => key.toLowerCase() !== "npm_config_cache"));
+        const npmEnv = Object.fromEntries(Object.entries(env).filter(([key]) => {
+            const normalized = key.toUpperCase();
+            return key.toLowerCase() !== "npm_config_cache"
+                && normalized !== "BUILDER_KIT_ACCESS" && normalized !== "BUILDER_KIT_EXPECTED_FEED";
+        }));
         npmEnv.npm_config_cache = path.join(root, ".builder-kit-install/npm-cache");
         const npm = (args) => spawnSync("npm", args, { cwd: root, env: npmEnv, stdio: ["ignore", "pipe", "pipe"] });
         let installedDependencies = false;

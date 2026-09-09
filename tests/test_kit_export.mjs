@@ -207,8 +207,11 @@ test("export_produces_a_gated_starter_tree_with_no_private_material", async () =
         }
         JSON.parse(await fs.readFile(path.join(outputRoot, "package.json"), "utf8"));
         const firstUse = await fs.readFile(path.join(outputRoot, "README.md"), "utf8");
-        assert.match(firstUse, /^> Build and install the included plugin so I can try it in my DAW\.$/mu);
-        assert.match(firstUse, /If you already have another request, start with that instead\./u);
+        assert.match(firstUse, /^> Read AGENTS\.md, check this existing project without overwriting anything, run$/mu);
+        assert.match(firstUse, /setup and the strict doctor from this folder, then ask what I want to build or\n> modify\./u);
+        assert.match(firstUse, /offer to build the included plugin as-is, change its sound or\ninterface, or start a new plugin/u);
+        assert.match(firstUse, /## If you choose to build the included plugin as-is/u);
+        assert.match(firstUse, /follow this\nsection only when you choose to build the included plugin as-is/u);
         assert.match(firstUse, /npm run fx:prod:build -- enhancer-lite\nnpm run fx:prod:install -- enhancer-lite/u);
         assert.match(firstUse, /Do not copy or rename it, create a new plugin or test,/u);
         assert.match(firstUse, /Build\/install success is not a listening or DAW-acceptance result\./u);
