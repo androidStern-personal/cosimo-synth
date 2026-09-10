@@ -124,6 +124,79 @@ function dispatchCommand(stateModule, state, command) {
     }
 }
 
+// Independent interval model: decisions use occupied cells, not the production
+// edit/normalization helpers. Numeric edit values clamp; invalid coordinates,
+// absent edit targets, and occupied destinations reject.
+function predictCommand(topology, command, stateModule) {
+    const { patternIndex, lane, startStep, tag } = command;
+    const indices = [
+        [patternIndex, stateModule.SEQFX_PATTERN_COUNT],
+        [lane, stateModule.SEQFX_LANE_COUNT],
+        [startStep, stateModule.SEQFX_STEP_COUNT],
+        ...(tag === "move" || tag === "copy" ? [
+            [command.targetLane, stateModule.SEQFX_LANE_COUNT],
+            [command.targetStartStep, stateModule.SEQFX_STEP_COUNT],
+        ] : []),
+        ...(tag === "param" ? [[command.paramIndex, stateModule.SEQFX_PARAM_COUNT]] : []),
+    ];
+    if (indices.some(([value, limit]) => value < 0 || value >= limit)) {
+        return { rejection: { name: "RangeError", message: /outside the valid range/ } };
+    }
+
+    const source = topology[patternIndex][lane].find((block) => (
+        startStep >= block.startStep && startStep < block.startStep + block.length
+    ));
+    if (!source && tag !== "create" && tag !== "delete") {
+        const missingMessages = {
+            resize: "Cannot resize a missing SeqFX block.",
+            move: "Cannot move a missing SeqFX block.",
+            copy: "Cannot copy a missing SeqFX block.",
+            mix: "Cannot edit mix for a missing SeqFX block.",
+            param: "Cannot edit parameter for a missing SeqFX block.",
+        };
+        return { rejection: { name: "Error", message: missingMessages[tag] } };
+    }
+
+    const nextTopology = structuredClone(topology);
+    if (tag === "delete") {
+        nextTopology[patternIndex][lane] = nextTopology[patternIndex][lane].filter((block) => (
+            !source || block.startStep !== source.startStep
+        ));
+    } else if (tag === "create" || tag === "resize" || tag === "move" || tag === "copy") {
+        const destinationLane = tag === "move" || tag === "copy" ? command.targetLane : lane;
+        const destinationStart = tag === "move" || tag === "copy" ? command.targetStartStep
+            : tag === "resize" ? source.startStep : startStep;
+        const length = tag === "create" || tag === "resize"
+            ? Math.min(stateModule.SEQFX_STEP_COUNT - destinationStart, Math.max(1, command.length))
+            : source.length;
+        if (destinationStart + length > stateModule.SEQFX_STEP_COUNT) {
+            return { rejection: { name: "RangeError", message: "SeqFX block target range is outside the valid step range." } };
+        }
+        const removesSource = tag === "resize" || tag === "move";
+        const occupied = topology[patternIndex][destinationLane].some((block) => (
+            !(removesSource && destinationLane === lane && block === source)
+            && destinationStart < block.startStep + block.length
+            && block.startStep < destinationStart + length
+        ));
+        if (occupied) {
+            return { rejection: { name: "Error", message: "SeqFX blocks cannot overlap in the same lane." } };
+        }
+        if (removesSource) {
+            nextTopology[patternIndex][lane] = nextTopology[patternIndex][lane].filter((block) => (
+                block.startStep !== source.startStep
+            ));
+        }
+        const laneDefaults = ["filter", "crusher", "tapeStop", "stutter"];
+        const effectType = tag === "create"
+            ? stateModule.SEQFX_SELECTABLE_EFFECT_IDS.includes(command.effectType)
+                ? command.effectType : stateModule.SEQFX_EFFECT_TYPES[laneDefaults[lane]]
+            : source.effectType;
+        nextTopology[patternIndex][destinationLane].push({ startStep: destinationStart, length, effectType });
+        nextTopology[patternIndex][destinationLane].sort((left, right) => left.startStep - right.startStep);
+    }
+    return { nextTopology, source };
+}
+
 test("SeqFX block operations preserve values, topology, and caller immutability", async () => {
     const [stateModule, arbitraryModule] = await Promise.all([stateModulePromise, arbitraryModulePromise]);
 
@@ -151,6 +224,14 @@ test("SeqFX block operations preserve values, topology, and caller immutability"
                 paramIndex: scenario.paramIndex,
                 value: scenario.paramValue,
             }));
+            // The generator uses the public parameter limits and integer
+            // contract, so valid requested values must survive exactly.
+            assert.deepEqual(
+                state.patterns[scenario.patternIndex].lanes[scenario.lane].steps
+                    .slice(scenario.startStep, scenario.startStep + scenario.length)
+                    .map((step) => step.params[scenario.paramIndex]),
+                Array.from({ length: scenario.length }, () => scenario.paramValue),
+            );
             state = applyWithoutMutation(state, stateModule, (input) => stateModule.applySeqFxBlockAuxSourceEdit(input, {
                 patternIndex: scenario.patternIndex,
                 lane: scenario.lane,
@@ -283,8 +364,28 @@ test("SeqFX rejects overlapping and out-of-range block edits atomically", async 
     );
 });
 
+test("SeqFX parameter commands apply the requested value to every selected block cell", async () => {
+    const stateModule = await stateModulePromise;
+    const target = { patternIndex: 0, lane: stateModule.SEQFX_LANES.filter, startStep: 4 };
+    const initial = stateModule.createDefaultSeqFxState();
+    const created = applyWithoutMutation(initial, stateModule, (state) => dispatchCommand(stateModule, state, {
+        tag: "create", ...target, length: 3, effectType: stateModule.SEQFX_EFFECT_TYPES.filter,
+    }));
+    const readCutoffs = (state) => state.patterns[0].lanes[target.lane].steps.slice(4, 7).map((step) => step.params[1]);
+    assert.deepEqual(readCutoffs(created), [2_000, 2_000, 2_000]);
+
+    // 330 Hz is an ordinary valid Filter cutoff. Address a continuation cell to
+    // prove the command edits its whole block, not just the addressed cell.
+    const edited = applyWithoutMutation(created, stateModule, (state) => dispatchCommand(stateModule, state, {
+        tag: "param", ...target, startStep: 5, paramIndex: 1, value: 330,
+    }));
+    assert.deepEqual(readCutoffs(edited), [330, 330, 330]);
+    assert.deepEqual(readCutoffs(created), [2_000, 2_000, 2_000]);
+});
+
 test("SeqFX randomized command sequences never produce invalid block layouts", async () => {
     const [stateModule, arbitraryModule] = await Promise.all([stateModulePromise, arbitraryModulePromise]);
+    let successfulCreates = 0;
 
     fc.assert(
         fc.property(
@@ -292,20 +393,33 @@ test("SeqFX randomized command sequences never produce invalid block layouts", a
             (commands) => {
                 deepFreeze(commands);
                 let state = stateModule.createDefaultSeqFxState();
-                assertIndependentTopology(state, stateModule, { validateValues: false });
+                let topology = assertIndependentTopology(state, stateModule, { validateValues: false });
 
                 for (const command of commands) {
                     deepFreeze(state);
-                    let nextState;
-                    try {
-                        nextState = dispatchCommand(stateModule, state, command);
-                    } catch (error) {
-                        assert.notEqual(error, null);
-                        assert.notEqual(error?.name, "TypeError", "command attempted to mutate its frozen input");
+                    const prediction = predictCommand(topology, command, stateModule);
+                    if (prediction.rejection) {
+                        assert.throws(
+                            () => dispatchCommand(stateModule, state, command),
+                            prediction.rejection,
+                            JSON.stringify(command),
+                        );
                         continue;
                     }
 
-                    assertIndependentTopology(nextState, stateModule, { validateValues: false });
+                    // Unexpected errors from predicted-valid commands propagate
+                    // to fast-check and retain its seed and shrinking evidence.
+                    const nextState = dispatchCommand(stateModule, state, command);
+                    topology = assertIndependentTopology(nextState, stateModule, { validateValues: false });
+                    assert.deepEqual(topology, prediction.nextTopology, JSON.stringify(command));
+                    if (command.tag === "create") successfulCreates += 1;
+                    if (command.tag === "mix") {
+                        const expectedMix = Math.min(1, Math.max(0, command.value));
+                        const { startStep, length } = prediction.source;
+                        const steps = nextState.patterns[command.patternIndex].lanes[command.lane].steps;
+                        assert.deepEqual(steps.slice(startStep, startStep + length).map((step) => step.mix),
+                            Array.from({ length }, () => expectedMix));
+                    }
                     state = nextState;
                 }
 
@@ -314,4 +428,5 @@ test("SeqFX randomized command sequences never produce invalid block layouts", a
         ),
         { seed: 0x53e9f705, numRuns: 250 },
     );
+    assert.ok(successfulCreates > 0, "the fixed-seed sequence corpus must exercise successful state changes");
 });

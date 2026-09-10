@@ -70,14 +70,32 @@ class FakePatchConnection {
 }
 
 class AsyncEchoPatchConnection extends FakePatchConnection {
+    pendingEchoes = [];
+    deliveredEchoes = [];
+
     sendStoredStateValue(key, value) {
         this.storedState[key] = value;
         this.storedWrites.push({ key, value });
-        queueMicrotask(() => {
+        this.pendingEchoes.push({ key, value });
+    }
+
+    async drainEchoes() {
+        // A host may return earlier writes after a newer authoritative recall.
+        // Reverse delivery also exercises two outstanding writes of one value.
+        for (const message of this.pendingEchoes.splice(0).reverse()) {
+            await Promise.resolve();
+            this.deliveredEchoes.push(message);
             for (const listener of this.storedStateListeners) {
-                listener({ key, value });
+                listener(message);
             }
-        });
+        }
+    }
+
+    emitExternalState(value) {
+        this.storedState[MODULATION_STATE_KEY] = value;
+        for (const listener of this.storedStateListeners) {
+            listener({ key: MODULATION_STATE_KEY, value });
+        }
     }
 }
 
@@ -496,19 +514,69 @@ test("replacing routes preserves signed amounts and compiles only active mapping
 });
 
 test("async stored-state echoes do not retrigger modulation uploads", async () => {
-    const patchConnection = new AsyncEchoPatchConnection();
+    const initialState = createDefaultModulationState();
+    initialState.routes = [{
+        id: "async-echo-route", enabled: true, sourceKind: "mseg", sourceSlot: 1,
+        polarity: "unipolar", targetKind: "oscA.warpAmount", amount: 0, reducer: "max",
+    }];
+    const patchConnection = new AsyncEchoPatchConnection({
+        [MODULATION_STATE_KEY]: serializeModulationState(initialState),
+    });
     const bridge = new ModulationRuntimeBridge(patchConnection);
-
     bridge.attach();
     bridge.requestBootState();
+    const stateNotifications = [];
+    const amountNotifications = [];
+    const listener = (state) => stateNotifications.push(state.routes[0].amount);
+    bridge.subscribe(listener);
+    const unsubscribeAmount = bridge.subscribeRouteAmount("async-echo-route", (amount) => amountNotifications.push(amount));
+
+    for (const amount of [0.2, 0.6, 0.2, 0.4]) {
+        assert.equal(bridge.setRouteAmountById("async-echo-route", amount), true);
+    }
+    assert.equal(patchConnection.storedWrites.length, 4);
+    assert.equal(patchConnection.pendingEchoes.length, 4);
+    assert.deepEqual(amountNotifications, [0.2, 0.6, 0.2, 0.4]);
+    assert.deepEqual(stateNotifications, [0.2, 0.6, 0.2, 0.4]);
+    assert.equal(bridge.getRouteAmount("async-echo-route"), 0.4);
+
+    const recalledState = parseModulationState(patchConnection.storedWrites.at(-1).value);
+    assert.equal(recalledState._tag, "ok");
+    recalledState.value.routes[0].amount = 0.8;
+    patchConnection.emitExternalState(serializeModulationState(recalledState.value));
+    const authoritativeState = bridge.getState();
+    assert.equal(bridge.getRouteAmount("async-echo-route"), 0.8);
 
     const uploadCountBeforeEchoes = patchConnection.events.length;
-    await flushMicrotasks();
+    await patchConnection.drainEchoes();
     const uploadCountAfterEchoes = patchConnection.events.length;
     await flushMicrotasks();
 
     assert.equal(uploadCountAfterEchoes, uploadCountBeforeEchoes);
     assert.equal(patchConnection.events.length, uploadCountBeforeEchoes);
+    assert.equal(patchConnection.deliveredEchoes.length, 4);
+    assert.deepEqual(patchConnection.deliveredEchoes, [...patchConnection.storedWrites].reverse());
+    assert.deepEqual(patchConnection.deliveredEchoes.map(({ value }) => {
+        const parsed = parseModulationState(value);
+        assert.equal(parsed._tag, "ok");
+        return parsed.value.routes[0].amount;
+    }), [0.4, 0.2, 0.6, 0.2]);
+    assert.deepEqual(patchConnection.pendingEchoes, []);
+    assert.strictEqual(bridge.getState(), authoritativeState);
+    assert.deepEqual(amountNotifications, [0.2, 0.6, 0.2, 0.4, 0.8]);
+    assert.deepEqual(stateNotifications, [0.2, 0.6, 0.2, 0.4, 0.8]);
+    assert.equal(patchConnection.storedWrites.length, 4);
+
+    // All matching self echoes were consumed: a later host recall with exactly
+    // the same serialized value must now be accepted, not suppressed forever.
+    patchConnection.emitExternalState(patchConnection.storedWrites[0].value);
+    assert.equal(bridge.getRouteAmount("async-echo-route"), 0.2);
+    assert.deepEqual(amountNotifications, [0.2, 0.6, 0.2, 0.4, 0.8, 0.2]);
+    assert.deepEqual(stateNotifications, [0.2, 0.6, 0.2, 0.4, 0.8, 0.2]);
+    assert.equal(patchConnection.storedWrites.length, 4);
+    bridge.unsubscribe(listener);
+    unsubscribeAmount();
+    bridge.detach();
 });
 
 test("route amount subscriptions notify only the changed stable route identity", () => {

@@ -15,7 +15,7 @@ const patchViewLayoutContractName = "desktop and shared effect dev entries load 
 
 const testGroups = Object.freeze({
     crossSurfaceNode: Object.freeze([
-        "tests/test_effect_snapshot_bank.mjs",
+        "kit/tests/test_effect_snapshot_bank.mjs",
     ]),
     patchViewLayoutContract: Object.freeze([
         "tests/test_patch_view_layout.mjs",

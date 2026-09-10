@@ -6,14 +6,21 @@ import {
     RuntimeInstallLane,
 } from "../patch_gui/runtime-install-channel.js";
 
-function withDeadline(promise, milliseconds = 1_000) {
-    return Promise.race([
-        promise,
-        new Promise((_, reject) => setTimeout(
-            () => reject(new Error(`Timed out after ${milliseconds}ms`)),
-            milliseconds,
-        )),
-    ]);
+async function withDeadline(promise, milliseconds = 1_000) {
+    let timer;
+    try {
+        return await Promise.race([
+            promise,
+            new Promise((_, reject) => {
+                timer = setTimeout(
+                    () => reject(new Error(`Timed out after ${milliseconds}ms`)),
+                    milliseconds,
+                );
+            }),
+        ]);
+    } finally {
+        clearTimeout(timer);
+    }
 }
 
 class RuntimeInstallTestConnection {

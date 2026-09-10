@@ -1,6 +1,6 @@
 # Plugin state implementation
 
-Status: audit and test planning. Production implementation has not started.
+Status: audit fixes and module test matrix reviewed; beginning vertical module slices.
 
 Branch: `codex/plugin-state-system`, starting at `44f179fdb9c35b27456bedfdf389ec563f5c9a85`.
 
@@ -53,3 +53,31 @@ Test integrity is a release gate. No skipped, deleted, narrowed, or relaxed test
 may disguise a defect. Audit-stage replacements require equal-or-stronger behavior
 coverage and independent review before removal. Prefer retaining an existing test
 when its value is uncertain. Baseline failures are recorded, not normalized away.
+
+## Audit checkpoint
+
+- Independent audit: `TEST-AUDIT.md`; independent matrix/review:
+  `TEST-MATRIX-REVIEW.md`; actual platform seams: `NATIVE-TEST-SEAMS.md`.
+- Six new mirror lifetime regressions run through the existing public connection
+  and delivery interfaces. The first three were added separately, observed red,
+  then repaired. The three old-outcome cases characterize the repaired ownership.
+  All 17 pre-existing mirror tests are unchanged. This fixes bookkeeping and late
+  callbacks; the legacy transport cannot cancel a send already in progress.
+- Repaired vacuous asynchronous echo test and swallowed-error property. Independent
+  review additionally required exact parameter outcomes and genuinely reordered
+  echoes; both repairs are included. Existing seeds and run counts are unchanged.
+- Runtime install test timeout cleanup reduced the unchanged 18-case file from
+  1,129 ms to 121 ms on this machine. Fixed a nonexistent snapshot-bank runner path;
+  its real qualification phase now runs all 16 tests successfully.
+- Default `npm test` retains all 127 previous unique test paths and adds the new
+  lifetime file. It runs a duplicated build-argument file once. The two pure
+  property files move to a two-process step with the same cases and seeds.
+- `npm run test:state`: 102/102 passed in 4.55 s. Reviewed audit subset: 60/60.
+  Typecheck baseline passed. These are Node/public-module results, not native or
+  browser composition proof. No complete `npm test` result claimed yet.
+- Jotai 3.0.0 is pinned for the forthcoming implementation. Earlier library
+  experiments do not qualify the new modules or native bridge.
+
+Integration target: SeqFX's structured state, based on the audit's existing public
+Undo/preset/worker and property coverage. Scalar host binding remains separately
+qualified. The plugin refactor has not started and remains gated on module tests.
