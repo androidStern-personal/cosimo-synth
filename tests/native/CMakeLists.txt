@@ -87,6 +87,14 @@ add_executable(PatchWorkerLifetimeProbe
 cosimo_configure_cmajor_probe(PatchWorkerLifetimeProbe)
 target_compile_options(PatchWorkerLifetimeProbe PRIVATE -O1 -g0)
 
+add_executable(PluginStateChannelProbe PluginStateChannelProbe.cpp)
+cosimo_configure_cmajor_probe(PluginStateChannelProbe)
+target_compile_options(PluginStateChannelProbe PRIVATE -O1 -g0)
+
+add_executable(PluginStateSystemProbe PluginStateSystemProbe.cpp)
+cosimo_configure_cmajor_probe(PluginStateSystemProbe)
+target_compile_options(PluginStateSystemProbe PRIVATE -O1 -g0)
+
 add_executable(ModulationRestoreProbe
     "${COSIMO_REPO_ROOT}/tests/native_quickjs/ModulationRestoreProbe.cpp"
     ${COSIMO_RENDERER_SOURCES}

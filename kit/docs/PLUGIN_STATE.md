@@ -121,11 +121,14 @@ invented proof of a particular GUI write.
   do not add entries. History retains the latest 100 completed entries.
 - An active gesture protects that field from another GUI or agent writer.
   Other fields remain editable. Host automation retains host authority.
-- GUI and agent edits share Undo history. Automation updates the current value
-  without making Undo entries or echoing another write to the host.
+- GUI edits and edits from another framework client share Undo history. An agent
+  integration can use that same client protocol; this module does not itself
+  install an MCP server. Automation updates the current value without making
+  Undo entries or echoing another write to the host.
 - Undo and Redo are unavailable while any gesture is active.
-- Closing a client ends only its gestures. A full project restore replaces the
-  document, clears history and rejects old commands and delivery completions.
+- Control/window removal through the view wrapper, or native client detachment,
+  ends that client's gestures. A full project restore replaces the document,
+  clears history and rejects old commands and delivery completions.
 - A lost connection never automatically replays an edit whose acceptance is
   unknown. Callers receive that uncertainty rather than a fabricated rejection.
 

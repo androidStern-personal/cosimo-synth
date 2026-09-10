@@ -1,0 +1,65 @@
+<!doctype html>
+<button id="start">Start actual worklet</button>
+<script type="module">
+import { AudioWorkletPatchConnection } from "/cmaj_api/cmaj-audio-worklet-helper.js";
+import CmajorClass from "/generated.js";
+import * as worker from "/worker.js";
+window.fixtureError = null;
+document.querySelector ("#start").onclick = async () =>
+{
+    try
+    {
+        const context = new AudioContext ({ sampleRate: 48000 });
+        const connection = new AudioWorkletPatchConnection ({
+            CmajorVersion: 1, ID: "dev.cmajor.test.browser-state-channel", name: "State channel probe", worker: "worker.js"
+        });
+        const startupMessages = [];
+        connection.addEventListener ("kit_state", body => startupMessages.push (body));
+        connection.sendMessageToServer ({ type: "kit_state", message: { kind: "attach", request: 70 } });
+        connection.sendStoredStateValue ("curve", { points: [0, 1] });
+        const sparse = new URL (location.href).searchParams.has ("sparse");
+        const PatchClass = sparse ? (await import ("/sparse.js")).default : CmajorClass;
+        window.startingFixture = { connection, context, worker };
+        await connection.initialise ({ CmajorClass: PatchClass, audioContext: context, workletName: "plugin-state-probe",
+            hostDescription: "Browser state channel test", initialValueOverrides: sparse ? {} : { gain: 2.5 }, rootResourcePath: location.origin });
+        if (new URL (location.href).searchParams.has ("restoreDuringOpen"))
+            connection.sendFullStoredState ({ parameters: [{ name: "gain", value: -3 }], values: { curve: { points: [0.1, 0.9] } } });
+        await context.resume();
+        const readOutput = async () =>
+        {
+            const capture = context.createScriptProcessor (256, 1, 1);
+            const silent = context.createGain();
+            silent.gain.value = 0;
+            connection.audioNode.connect (capture);
+            capture.connect (silent);
+            silent.connect (context.destination);
+            let timeout;
+            try
+            {
+                return await new Promise ((resolve, reject) =>
+                {
+                    let frames = 0;
+                    timeout = setTimeout (() => reject (new Error ("Actual worklet output did not render")), 5000);
+                    capture.onaudioprocess = event =>
+                    {
+                        const output = event.inputBuffer.getChannelData (0);
+                        frames += output.length;
+                        if (frames >= 4096)
+                            resolve ({ min: Math.min (...output), max: Math.max (...output) });
+                    };
+                });
+            }
+            finally
+            {
+                clearTimeout (timeout);
+                capture.onaudioprocess = null;
+                connection.audioNode.disconnect (capture);
+                capture.disconnect();
+                silent.disconnect();
+            }
+        };
+        window.fixture = { context, connection, worker, readOutput, startupMessages };
+    }
+    catch (error) { window.fixtureError = String (error?.stack ?? error); }
+};
+</script>

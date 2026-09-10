@@ -1,0 +1,54 @@
+<!doctype html>
+<button id="start">Start production state patch</button><main id="mount"></main>
+<script type="module">
+import { AudioWorkletPatchConnection } from "/cmaj_api/cmaj-audio-worklet-helper.js";
+import CmajorClass from "/generated.js";
+import createView, { createAgent, outcomes, defects } from "/view.js";
+window.fixtureError = null;
+document.querySelector("#start").onclick = async () => {
+    try {
+        const context = new AudioContext({ sampleRate: 48000 });
+        const manifest = await (await fetch("/manifest.json")).json();
+        const connection = new AudioWorkletPatchConnection(manifest);
+        connection.sendStoredStateValue("curve", { points: [0, 0.25, 1] });
+        await connection.initialise({ CmajorClass, audioContext: context, workletName: "plugin-state-system",
+            hostDescription: "Production browser state probe", initialValueOverrides: { gain: 2.5 }, rootResourcePath: location.origin + "/runtime" });
+        await context.resume();
+        let guiConnection, element, agentConnection, agent;
+        const agentMessages = [];
+        const openViews = () => {
+            guiConnection = connection.createViewConnection();
+            element = createView(guiConnection);
+            document.querySelector("#mount").append(element);
+            agentConnection = connection.createViewConnection();
+            agentConnection.addEventListener("kit_state", body => agentMessages.push(structuredClone(body)));
+            agent = createAgent(agentConnection);
+        };
+        const closeViews = () => { element.remove(); guiConnection.dispose(); agent.stop(); agentConnection.dispose(); };
+        openViews();
+        const readOutput = async () => {
+            const capture = context.createScriptProcessor(256, 1, 1);
+            const silent = context.createGain(); silent.gain.value = 0;
+            connection.audioNode.connect(capture); capture.connect(silent); silent.connect(context.destination);
+            let timeout;
+            try {
+                return await new Promise((resolve, reject) => {
+                    let frames = 0;
+                    timeout = setTimeout(() => reject(new Error("Actual DSP did not render")), 5000);
+                    capture.onaudioprocess = event => {
+                        const samples = event.inputBuffer.getChannelData(0);
+                        frames += samples.length;
+                        if (frames >= 4096) resolve({ min: Math.min(...samples), max: Math.max(...samples) });
+                    };
+                });
+            } finally {
+                clearTimeout(timeout); capture.onaudioprocess = null;
+                connection.audioNode.disconnect(capture); capture.disconnect(); silent.disconnect();
+            }
+        };
+        window.fixture = { connection, context, outcomes, defects, agentMessages, readOutput, openViews, closeViews,
+            get agent() { return agent; }, get element() { return element; },
+            async dispose() { closeViews(); try { await connection.dispose(); } finally { await context.close(); } } };
+    } catch (error) { window.fixtureError = String(error?.stack ?? error); }
+};
+</script>
