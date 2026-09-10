@@ -1,8 +1,10 @@
 # Plugin state implementation
 
-Status: reviewed core, Cmajor adapters, generated worker and React view implemented;
-actual native composition passes. Browser composition and plugin selection review
-are in progress. No existing plugin has been migrated yet.
+Status: implementation resumed after the author's architecture review. The core,
+Cmajor channel, generated worker and React view exist; three Cosimo Voice controls
+use them. Modulation is not migrated. Stock complex-data receiving/storage and the
+automatic custom-delivery author seam remain unfinished. Earlier checkpoint test
+results below describe their exact candidates, not the current dirty candidate.
 
 Branch: `codex/plugin-state-system`, starting at `44f179fdb9c35b27456bedfdf389ec563f5c9a85`.
 
@@ -322,3 +324,111 @@ access. Tests caught a real equal-primitive recovery bug: readiness becoming rea
 must start engine preparation even when the retained display value is unchanged.
 The five new recovery tests cover that repair, concurrent guards, retained history,
 wire parsing, drafts and replacement. Existing assertions were not modified.
+
+## Custom engine protocol composition
+
+The Cmajor adapter accepts static custom binding factories in addition to ordinary
+eventValue declarations. Factories receive only a captured-scope event/host-effect
+publisher, target status reporting and terminal defect reporting. The session
+retains all accepted-state/history ownership. One adapter request counter and map
+correlate native completions for both kinds of binding.
+
+Tests exposed and repaired rejected old replacement cancelling current work,
+prototype lifecycle methods lost by object spread, factory failure reopening a
+closed service, caller scope mutation breaking receipt correlation, and unknown
+effect kinds being coerced into host effects. Configuration preflight precedes
+factory allocation; shutdown waits for every returned port, including a port
+returned after synchronous construction failure.
+
+The actual existing RuntimeInstallLane is exercised with the actual service and
+an external ACK schedule. A thrown first send remains uncertain and the lane
+proves a drop before replaying the exact serial/payload. This is an assembled
+module test, not actual DSP evidence. Native host-effect routing is being
+qualified separately before the Cosimo modulation owner changes.
+
+## Resumed objective — approved engine-data contract
+
+The author authorized resuming on 2026-09-10 after reviewing the following target.
+This extends the original state/history objective; it does not declare the existing
+custom binding experiment complete or authorize installing/releasing a plugin.
+
+- Preserve a small author declaration: preparedState({ schema, initial, prepare,
+  engine }) alongside parameter state. Automatic framework startup owns the worker;
+  authors do not compose worker services to select either stock or custom delivery.
+- TypeScript preparation converts editable values into the required representation
+  outside audio processing. A TypeScript callback is not a native/Cmajor receiver.
+  Framework engine storage/receiving and the component's DSP reader are separate.
+- The stock complex-data module owns bounded transfer, completeness, correlation,
+  replacement and storage lifetime. Formats and receivers have explicit extension
+  seams; supported cases do not require a product-specific transport.
+- A replacement is private until complete. Published data is immutable. Related
+  metadata/arrays are one engine value when they must become visible together.
+- Ordering is per input. Obsolete completions cannot replace a newer applied value;
+  independent inputs do not share a global schedule. Intermediate targets may be
+  superseded. Capacity, cancellation, shutdown and uncertain delivery have explicit
+  outcomes; lost acknowledgement is not proof that installation failed.
+- Current readers follow completed replacements. Held readers retain their chosen
+  version until released/replaced. Neither active nor held storage can be reused.
+  Preserve Cosimo's current behavior: wavetable oscillators follow replacement;
+  playing bounce notes retain their original bank. Do not add per-note wavetable
+  retention or change oscillator phase/reset semantics.
+- Allocation, preparation, I/O and reclamation stay outside audio processing.
+  Audio-side work is bounded. Memory and outstanding work are bounded. Overload
+  refuses safely instead of overwriting retained data or growing without limit.
+- GUI closure does not end plugin ownership. Reset fences old work and coordinates
+  readiness before dependent DSP reads. Teardown does not require another render.
+- Shared Undo retains editable values and required source assets. Engine storage
+  retains playback data; it is not an unlimited archive of historical buffers.
+- Existing per-field gesture ownership and whole-value editing remain the accepted
+  scope. Do not add multi-field transactions or selective Undo during this work.
+
+### Implementation and test order
+
+1. Preserve stopped diffs and independently review their tests; retain all existing
+   assertions. Record the genuine gaps in automatic author setup and engine access.
+2. Establish the first new tracer through actual compiled Cmajor: complete A is
+   read by DSP; partial B cannot replace A; completed B becomes current while a held
+   reader still reads A; exhausted capacity refuses a further load without damage.
+   Use a production receiver/storage seam. A fake ACK list or standalone pointer
+   class does not establish Cmajor integration.
+3. Extend one red/green behavior at a time for stale/duplicate transfers, uncertain
+   ACKs, capacity recovery, reader release, reset, suspension and destruction.
+   Qualify actual backend differences; do not infer Wasm behavior from native tests.
+4. Connect stock delivery and the custom extension to the public declaration and
+   generated worker. Exercise author declaration -> actual worker -> DSP output,
+   including Undo and closed-GUI restoration, before touching modulation ownership.
+5. Independent reviewers gate new tests and source. Only after module/runtime gates
+   pass, migrate Cosimo through the approved seam and run unchanged regressions.
+
+The app goal was still reported paused at resumption. Available goal tools cannot
+resume or rewrite an unfinished objective; this document records the clarified
+scope while implementation continues in the current task. No goal completion is
+claimed.
+
+### First resumed repair
+
+Independent stopped-diff review found native failed-publication cleanup could end
+a new gesture created by a reentrant restore. The new real Patch/WorkerContext
+probe reproduces the exact old-begin -> restore/end -> new-begin -> old-failure
+schedule, for both callback refusal and throw. It checks the actual host gesture
+trace, unchanged parameter, and the new owner's later explicit gesture end.
+
+- RED: `build/native_plugin_state/resume-gesture-red.log` fails because old cleanup
+  ends the restored document's new gesture. The initial test compile typo was
+  corrected before recording this behavioral failure.
+- GREEN: `build/native_plugin_state/resume-gesture-green.log` passes the new case
+  and every existing native channel probe after per-iteration document guarding.
+- Independent test/source review approved the regression and guard. Assertions
+  run outside the throwing callback; no private native API or fabricated scope.
+- Isolated Cmajor commit: `85f6f8a` (native host effects plus this correction).
+  Not pushed or pinned into a release. Remaining browser diff is still separate.
+- Current existing module suite: 144 pass, zero failures/skips, 566 ms in
+  `build/native_plugin_state/resume-modules.log`. This is not managed-data proof.
+
+Selected first data-storage mechanism: a parameterized, product-neutral Cmajor
+module with preallocated word storage and readers. This gives actual compiled
+Cmajor access without inventing JavaScript writes into native arrays. Transfer
+copies have a shared bounded budget; activation and module reset change metadata,
+not full buffers. Full performer reset, backend and bulk-size timing still require
+qualification. The first new tracer checks every sample of current/held reads
+through actual compiled Cmajor before adding capacity/failure cases.

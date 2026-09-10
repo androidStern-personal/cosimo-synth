@@ -931,6 +931,184 @@ void testExternalStoredReplacement (Fixture& f)
     std::cout << "PASS: external owned stored writes fence old effects, preserve parameters, and exclude own/no-op/full-restore writes\n";
 }
 
+void testHostEffects (Fixture& f)
+{
+    f.sendWorker (choc::json::parse (R"({"kind":"open","request":300,"parameters":["gain"],"storedKeys":["curve"],"eventEndpoints":["curveBuffer"],"hostEffects":["trigger-config","trigger-config"]})"));
+    f.waitFor ([&] { return f.worker->last ("open-failed")["request"].getWithDefault<int64_t> (0) == 300; }, "invalid host-effect declaration was not answered");
+    f.onLoop ([&]
+    {
+        require (f.worker->last ("open-failed")["reason"].toString() == "invalid-declaration", "duplicate host-effect declaration opened");
+    });
+    f.sendWorker (choc::json::parse (R"({"kind":"open","request":301,"parameters":["gain"],"storedKeys":["curve"],"eventEndpoints":["curveBuffer"],"hostEffects":["trigger-config"]})"));
+    f.waitFor ([&] { return f.worker->count ("opened") == 1; }, "host-effect fixture did not open");
+    f.onLoop ([&]
+    {
+        f.scope = f.worker->last ("opened")["scope"];
+        auto publication = choc::json::parse (R"({"kind":"publish","request":301,"operations":[{"kind":"host-effect","name":"trigger-config","value":{"slot":7}}]})");
+        publication.addMember ("scope", f.scope);
+        f.worker->send (publication);
+    });
+    f.waitFor ([&] { return f.worker->last ("published")["request"].getWithDefault<int64_t> (0) == 301; }, "missing host-effect callback was not answered");
+    f.onLoop ([&]
+    {
+        require (f.worker->last ("published")["result"]["reason"].toString() == "unsupported-host-effect",
+                 "declared host effect without a native callback was not reported as unsupported");
+        require (f.patch->findParameter (gainID())->currentValue == 2.5f,
+                 "unsupported host effect changed a host parameter");
+        require (f.worker->count ("closed") == 0, "unsupported host effect closed the state owner");
+    });
+
+    const auto calls = std::make_shared<std::vector<Value>>();
+    const auto gestureCount = f.onLoop ([&] { return f.gestures.size(); });
+    f.onLoop ([&]
+    {
+        const auto gain = f.patch->findParameter (gainID());
+        gain->gestureStart = [&] { f.gestures.push_back ("begin"); };
+        gain->gestureEnd = [&] { f.gestures.push_back ("end"); };
+        f.patch->handleStateHostEffect = [&, calls] (std::string_view name, const View& value)
+        {
+            require (name == "trigger-config", "undeclared host-effect name reached its callback");
+            calls->emplace_back (value);
+            const auto mode = value["mode"].toString();
+            if (mode == "reject") return false;
+            if (mode == "throw") throw std::runtime_error ("host callback defect");
+            if (mode == "restore")
+                f.patch->setStoredStateValue ("curve", choc::json::parse (R"({"points":[0.25,0.75]})"));
+            return true;
+        };
+    });
+    const auto publish = [&] (int64_t request, const char* operations, const Value& scope)
+    {
+        f.sendWorker (choc::json::create ("kind", "publish", "request", request, "scope", scope,
+                                        "operations", choc::json::parse (operations)));
+        f.waitFor ([&] { return f.worker->last ("published")["request"].getWithDefault<int64_t> (0) == request; }, "host-effect publication did not settle");
+        return f.onLoop ([&] { return Value (f.worker->last ("published")["result"]); });
+    };
+    require (publish (302, R"([{"kind":"parameter","endpoint":"gain","value":3},{"kind":"event","endpoint":"curveBuffer","value":0.5},{"kind":"host-effect","name":"trigger-config","value":{"slot":7}}])", f.scope)["kind"].toString() == "observed",
+             "supported synchronous host callback was not accepted");
+    f.onLoop ([&]
+    {
+        require (calls->size() == 1 && calls->back()["slot"].getWithDefault<int> (-1) == 7, "host callback lost its structured value");
+        auto forged = choc::json::parse (R"({"kind":"publish","request":399,"operations":[{"kind":"host-effect","name":"trigger-config","value":{"slot":99}}]})");
+        forged.addMember ("scope", f.scope);
+        require (! f.patch->handleClientMessage (*f.a, envelope (forged)), "ordinary GUI forged host-effect publication authority");
+    });
+    require (publish (303, R"([{"kind":"host-effect","name":"trigger-config","value":{"slot":8}},{"kind":"host-effect","name":"undeclared","value":0}])", f.scope)["reason"].toString() == "invalid-publication",
+             "undeclared host effect did not reject the complete publication");
+    f.onLoop ([&] { require (calls->size() == 1, "valid prefix ran before host-effect declaration validation completed"); });
+    require (publish (304, R"([{"kind":"gesture-start","endpoint":"gain"},{"kind":"host-effect","name":"trigger-config","value":{"mode":"reject"}},{"kind":"parameter","endpoint":"gain","value":10},{"kind":"gesture-end","endpoint":"gain"}])", f.scope)["reason"].toString() == "host-effect-rejected",
+             "host callback rejection was reported as successful delivery");
+    f.onLoop ([&]
+    {
+        require (f.gestures.size() == gestureCount + 2 && f.gestures.back() == "end",
+                 "host callback refusal leaked a gesture started by its publication");
+    });
+    require (publish (305, R"([{"kind":"gesture-start","endpoint":"gain"},{"kind":"host-effect","name":"trigger-config","value":{"mode":"throw"}},{"kind":"parameter","endpoint":"gain","value":10},{"kind":"gesture-end","endpoint":"gain"}])", f.scope)["reason"].toString() == "host-effect-failed",
+             "host callback throw escaped or was reported as successful delivery");
+    f.onLoop ([&]
+    {
+        require (f.patch->findParameter (gainID())->currentValue == 3, "failed host callback did not stop publication remainder");
+        require (f.gestures.size() == gestureCount + 4 && f.gestures.back() == "end", "throwing host callback leaked its publication gesture");
+        require (f.worker->count ("closed") == 0, "host callback failure closed editable state");
+    });
+
+    const Value originalScope (f.scope);
+    require (publish (306, R"([{"kind":"host-effect","name":"trigger-config","value":{"mode":"restore"}},{"kind":"host-effect","name":"trigger-config","value":{"slot":99}},{"kind":"event","endpoint":"curveBuffer","value":20}])", originalScope)["reason"].toString() == "stale-scope",
+             "restore inside host callback did not fence later host/DSP effects");
+    f.waitFor ([&] { return f.worker->count ("replaced") == 1; }, "host callback restore did not reach owner");
+    f.onLoop ([&]
+    {
+        require (calls->size() == 4, "later host callback crossed a reentrant raw replacement");
+        f.scope = f.worker->last ("replaced")["scope"];
+    });
+    require (publish (307, R"([{"kind":"host-effect","name":"trigger-config","value":{"slot":99}}])", originalScope)["reason"].toString() == "stale-scope",
+             "held old host callback crossed raw replacement");
+    f.onLoop ([&]
+    {
+        std::array<float, 128> output {};
+        float* channels[] { output.data() };
+        for (int i = 0; i < 32; ++i)
+            f.patch->process (channels, 128, [] (uint32_t, choc::midi::MessageView) {});
+        require (std::abs (output.back() - 3.5f) < 0.001f, "stale host publication delivered a DSP remainder before current replacement");
+    });
+    require (publish (308, R"([{"kind":"host-effect","name":"trigger-config","value":{"slot":8}},{"kind":"event","endpoint":"curveBuffer","value":0.75}])", f.scope)["kind"].toString() == "observed",
+             "new document could not deliver its host callback and DSP event");
+    f.onLoop ([&]
+    {
+        require (calls->size() == 5 && calls->back()["slot"].getWithDefault<int> (-1) == 8, "new document host callback did not run exactly once");
+        std::array<float, 128> output {};
+        float* channels[] { output.data() };
+        for (int i = 0; i < 32; ++i)
+            f.patch->process (channels, 128, [] (uint32_t, choc::midi::MessageView) {});
+        require (std::abs (output.back() - 3.75f) < 0.001f, "host-effect fencing lost current DSP delivery or accepted stale remainder");
+        f.patch->handleStateHostEffect = {};
+    });
+    std::cout << "PASS: declared synchronous host effects retain failures, fence reentrant/late callbacks, and allow current DSP delivery\n";
+}
+
+void testFailedOldPublicationPreservesRestoredGesture (Fixture& f)
+{
+    f.sendWorker (choc::json::parse (R"({"kind":"open","request":401,"parameters":["gain"],"storedKeys":["curve"],"eventEndpoints":[],"hostEffects":["restore-and-fail"]})"));
+    f.waitFor ([&] { return f.worker->count ("opened") == 1; }, "reentrant failure fixture did not open");
+    f.onLoop ([&]
+    {
+        f.scope = f.worker->last ("opened")["scope"];
+        require (f.patch->handleClientMessage (*f.a, envelope (choc::json::create ("kind", "attach", "request", 402))),
+                 "reentrant failure view could not attach");
+        const auto gain = f.patch->findParameter (gainID());
+        gain->gestureStart = [&] { f.gestures.push_back ("begin"); };
+        gain->gestureEnd = [&] { f.gestures.push_back ("end"); };
+    });
+    for (const auto throws : { false, true })
+    {
+        const auto request = throws ? 420 : 410;
+        const auto before = f.onLoop ([&]
+        {
+            f.patch->handleStateHostEffect = [&, throws, request] (std::string_view, const View&)
+            {
+                // A real restore closes the old document's gesture. The real
+                // worker connection may synchronously publish for the new one.
+                f.patch->setStoredStateValue ("curve", choc::json::parse (throws
+                    ? R"({"points":[0.75,1]})" : R"({"points":[0.25,1]})"));
+                f.scope = f.a->last ("reset")["scope"];
+                f.worker->send (choc::json::create ("kind", "publish", "request", request + 1, "scope", f.scope,
+                    "operations", choc::json::parse (R"([{"kind":"gesture-start","endpoint":"gain"}])")));
+                if (throws) throw std::runtime_error ("callback failed after restore");
+                return false;
+            };
+            return f.gestures.size();
+        });
+        const auto oldScope = f.scope;
+        f.sendWorker (choc::json::create ("kind", "publish", "request", request, "scope", oldScope,
+            "operations", choc::json::parse (R"([{"kind":"gesture-start","endpoint":"gain"},{"kind":"host-effect","name":"restore-and-fail","value":{}},{"kind":"parameter","endpoint":"gain","value":10}])")));
+        f.waitFor ([&] { return f.worker->last ("published")["request"].getWithDefault<int64_t> (0) == request; },
+                   "reentrant failed publication did not settle");
+        f.onLoop ([&]
+        {
+            require (f.scope["document"].getWithDefault<int64_t> (-1) == oldScope["document"].getWithDefault<int64_t> (-1) + 1,
+                     "host callback did not enter a fresh document");
+            require (f.gestures.size() == before + 3 && f.gestures[before] == "begin"
+                     && f.gestures[before + 1] == "end" && f.gestures.back() == "begin",
+                     "failed old publication ended the restored document's new gesture");
+            require (f.patch->findParameter (gainID())->currentValue == 2.5f,
+                     "failed old publication changed the restored parameter");
+            require (f.worker->last ("published")["result"]["kind"].toString() == "failed",
+                     "failed old publication was reported as applied");
+        });
+        f.sendWorker (choc::json::create ("kind", "publish", "request", request + 2, "scope", f.scope,
+            "operations", choc::json::parse (R"([{"kind":"gesture-end","endpoint":"gain"}])")));
+        f.waitFor ([&] { return f.worker->last ("published")["request"].getWithDefault<int64_t> (0) == request + 2; },
+                   "new document gesture end did not settle");
+        f.onLoop ([&]
+        {
+            require (f.gestures.size() == before + 4 && f.gestures.back() == "end",
+                     "new document lost ownership of its actual host gesture");
+        });
+    }
+    f.onLoop ([&] { f.patch->handleStateHostEffect = {}; });
+    std::cout << "PASS: failed old host publication cannot end a gesture started after reentrant restore\n";
+}
+
 }
 
 int main (int argc, char** argv)
@@ -969,6 +1147,12 @@ int main (int argc, char** argv)
             fixture.close();
             fixture.load (argv[2]);
             testExternalStoredReplacement (fixture);
+            fixture.close();
+            fixture.load (argv[2]);
+            testHostEffects (fixture);
+            fixture.close();
+            fixture.load (argv[2]);
+            testFailedOldPublicationPreservesRestoredGesture (fixture);
             result = 0;
         }
         catch (const std::exception& error) { std::cerr << "FAIL: " << error.what() << '\n'; }
