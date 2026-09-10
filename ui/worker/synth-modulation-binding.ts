@@ -9,7 +9,7 @@ import { ModulationArticulationWorkerService } from "./modulation-articulation-w
 export function createSynthModulationBinding(connection: PatchConnectionLike): CmajorStateBindingFactory {
     return {
         key: MODULATION_STATE_KEY,
-        eventEndpoints: ["modulationMsegBuffer", "modulationMsegPlayback", "modulationProgram", "articulationSnapshot", "runtimeSyncRequest"],
+        eventEndpoints: ["modulationMsegBuffer", "modulationMsegPlayback", "modulationProgram", "modulationAmount", "articulationSnapshot", "runtimeSyncRequest"],
         hostEffects: ["cosimo.articulation-trigger-config"],
         create(context) {
             let stopped = false;

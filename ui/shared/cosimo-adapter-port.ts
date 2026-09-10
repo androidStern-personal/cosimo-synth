@@ -7,9 +7,8 @@
  * the engine bridge over PatchConnectionLike — and they expose the identical
  * surface at every commit (hard-cut policy: no per-adapter capabilities).
  * A shared behavioral contract suite runs against both; the bridge must pass
- * it unchanged. Reads are useSyncExternalStore-compatible; commands mutate
- * the authoritative model synchronously — persistence and engine upload are
- * adapter business, invisible here.
+ * it unchanged. Reads are useSyncExternalStore-compatible. Structured edits
+ * complete asynchronously after acceptance; engine delivery remains separate.
  *
  * Unknown-id inputs to commands are DEFECTS (the UI only passes ids read from
  * the snapshot), not expected failures; commands with genuine failure policy
@@ -17,6 +16,7 @@
  */
 
 import { type ArticulationRange } from "./articulation-image";
+import type { PluginStateClientResult } from "../../kit/ui/plugin-state-client";
 import {
     type ArticulationId,
     type MappingId,
@@ -146,6 +146,17 @@ export class TargetNotModulatable extends Error {
     }
 }
 
+/** The operation could not finish. Its receipt preserves any known bank acceptance. */
+export class StateEditRefused extends Error {
+    readonly _tag = "StateEditRefused" as const;
+
+    constructor(readonly result: PluginStateClientResult) {
+        super(result.kind === "accepted"
+            ? "The edit was accepted, but this view can no longer finish the operation."
+            : `State edit did not complete: ${result.reason}.`);
+    }
+}
+
 /** Every slot for the requested source type is occupied. */
 export class SourceSlotsExhausted extends Error {
     readonly _tag = "SourceSlotsExhausted" as const;
@@ -188,8 +199,8 @@ export type ArticulationLayerBackup = {
 export type MsegSlotIndex = 0 | 1 | 2;
 
 /**
- * The full command surface. Synchronous; each call is one user-meaningful
- * mutation of the instrument.
+ * The full command surface. Composite edits await the shared bank's receipt
+ * before applying dependent parameter, articulation or presentation changes.
  */
 export type CosimoCommands = {
     // ── Parameters ────────────────────────────────────────────────────────
@@ -202,20 +213,20 @@ export type CosimoCommands = {
         amount?: number;
         polarity?: MappingPolarity;
         reducer?: MappingReducer;
-    }): Result<MappingId, MappingAlreadyExists | TargetNotModulatable>;
-    removeMapping(mappingId: MappingId): void;
+    }): Promise<Result<MappingId, MappingAlreadyExists | TargetNotModulatable | StateEditRefused>>;
+    removeMapping(mappingId: MappingId): Promise<Result<void, StateEditRefused>>;
     setMappingAmount(mappingId: MappingId, amount: number, layer: EditLayer): void;
     setMappingEnabled(mappingId: MappingId, enabled: boolean): void;
     setMappingPolarity(mappingId: MappingId, polarity: MappingPolarity): void;
     setMappingReducer(mappingId: MappingId, reducer: MappingReducer): void;
 
     // ── Sources ───────────────────────────────────────────────────────────
-    createSource(type: Exclude<SourceType, "fixed">): Result<SourceId, SourceSlotsExhausted>;
-    deleteSource(sourceId: SourceId): void;
-    undoDeleteSource(): void;
+    createSource(type: Exclude<SourceType, "fixed">): Promise<Result<SourceId, SourceSlotsExhausted | StateEditRefused>>;
+    deleteSource(sourceId: SourceId): Promise<Result<void, StateEditRefused>>;
+    undoDeleteSource(): Promise<Result<void, StateEditRefused>>;
     setMacroValue(sourceId: SourceId, value: NormalizedValue): void;
     renameMacro(sourceId: SourceId, name: string): void;
-    setEnvelope(sourceId: SourceId, envelope: ModulationEnvelope): void;
+    setEnvelope(sourceId: SourceId, envelope: ModulationEnvelope): Promise<Result<void, StateEditRefused>>;
 
     // ── MSEG (backs MsegEditorControllerLike) ─────────────────────────────
     setMsegShape(input: { sourceId: SourceId; shapeIndex: 0 | 1; shape: MsegShape }): void;
@@ -254,10 +265,10 @@ export type CosimoCommands = {
     endTrigger(): void;
     cancelTrigger(): void;
     /** Commit the retrospective capture; null when no candidate exists (normal). */
-    captureMotion(): SourceId | null;
+    captureMotion(): Promise<Result<SourceId | null, MappingAlreadyExists | TargetNotModulatable | StateEditRefused>>;
 
     // ── Session ───────────────────────────────────────────────────────────
-    reset(): void;
+    reset(): Promise<Result<void, StateEditRefused>>;
 };
 
 /** The port: reads via external-store contract, writes via commands. */

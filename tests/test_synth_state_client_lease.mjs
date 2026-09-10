@@ -93,3 +93,87 @@ test("late releases from a closed client cannot delete or stop the replacement c
         assert.deepEqual(f.defects, []);
     } finally { a.release(); b.release(); replacement?.release(); other?.release(); await f.connection.stop(); }
 });
+
+test("last lease release detaches and seals accepted modulation when its final end request is lost", async () => {
+    const [{ PluginStateChannel }, { createCmajorPluginStateService }, { synthPluginState }] = await Promise.all([
+        import(pathToFileURL(path.join(runtime, "cmaj-plugin-state-channel.js")).href),
+        loadUIModule(root, "kit/ui/plugin-state-cmajor.ts"),
+        loadUIModule(root, "ui/shared/synth-plugin-state.ts"),
+    ]);
+    const key = "modulation.v6";
+    const views = new Set(), stored = new Map(), writes = [], defects = [], workerMessages = [], refusedEnvelopes = [];
+    let channel;
+    // These ports only forward the actual browser channel's envelopes. The
+    // production owner creates all receipts, groups and Undo transitions.
+    const port = (worker = false) => {
+        const listeners = new Set(), sent = [];
+        const result = {
+            listeners, sent, dropEnd: false,
+            addEventListener(_type, listener) { listeners.add(listener); },
+            removeEventListener(_type, listener) { listeners.delete(listener); },
+            deliverMessageFromServer(envelope) {
+                if (worker) workerMessages.push(structuredClone(envelope.message));
+                for (const listener of [...listeners]) listener(envelope.message);
+            },
+            sendMessageToServer(envelope) {
+                sent.push(structuredClone(envelope.message));
+                if (result.dropEnd && envelope.message.kind === "command" && envelope.message.command.kind === "end") return;
+                if (!channel.receive(result, envelope.message)) refusedEnvelopes.push(structuredClone(envelope.message));
+            },
+        };
+        if (!worker) views.add(result);
+        return result;
+    };
+    const worker = port(true), first = port(), second = port();
+    channel = new PluginStateChannel(worker, async request => {
+        if (request.kind === "open") return { parameters: request.parameters.map(endpoint => ({
+            endpoint, value: 0, min: endpoint === "globalTune" ? -24 : 0,
+            max: endpoint === "globalTune" ? 24 : 2, step: endpoint === "playMode" ? 1 : 0, defaultValue: 0,
+        })) };
+        if (request.kind === "close") return {};
+        throw new Error(`Unexpected native request ${request.kind}`);
+    }, keys => Object.fromEntries(keys.filter(key => stored.has(key)).map(key => [key, stored.get(key)])),
+    (key, value) => { stored.set(key, value); writes.push({ key, value }); }, () => views);
+    const service = createCmajorPluginStateService(synthPluginState, worker, { onDefect: error => defects.push(error) });
+    let a, b;
+    try {
+        await service.start();
+        a = acquireSynthViewState(first);
+        b = acquireSynthViewState(second);
+        await until(() => a.client.getSnapshot().kind === "ready" && b.client.getSnapshot().kind === "ready");
+        const baseline = structuredClone(a.modulation.getState());
+        const scope = a.client.getSnapshot().state.scope;
+        const client = a.client.getSnapshot().client;
+        assert.equal((await a.modulation.beginGesture()).kind, "accepted");
+        const shape = { ...baseline.msegSlots[0].shapeA,
+            points: baseline.msegSlots[0].shapeA.points.map(point => ({ ...point, y: 0.37 })) };
+        assert.equal((await a.modulation.setMsegSlotShape(0, 0, shape)).changed, true);
+        await until(() => writes.length === 1);
+        assert.deepEqual(b.modulation.getState().msegSlots[0].shapeA, shape);
+        assert.ok(b.client.getSnapshot().state.fields[key].gesture, "the real owner still has the accepted group open");
+        assert.equal(b.client.getSnapshot().state.history.canUndo, false);
+        const acceptedPrefix = first.sent.at(-1).sequence;
+        const beforeRelease = first.sent.length;
+        first.dropEnd = true;
+        a.release();
+        assert.equal(a.client.getSnapshot().kind, "closed", "release cannot wait for the dropped end response");
+        assert.equal(first.listeners.size, 0);
+        assert.deepEqual(await a.modulation.stop(), { kind: "interrupted", reason: "closed", acceptance: "unknown" });
+        assert.deepEqual(first.sent.slice(beforeRelease).map(message => message.kind === "command" ? message.command.kind : message.kind), ["end", "detach"]);
+        assert.deepEqual(workerMessages.filter(message => message.kind === "detach"), [
+            { kind: "detach", scope, client, routedThrough: acceptedPrefix },
+        ], "native detach reports only the accepted prefix; the end never reached it");
+        await until(() => b.client.getSnapshot().state.history.canUndo);
+        assert.equal(b.client.getSnapshot().state.fields[key].gesture, undefined);
+        assert.deepEqual(b.client.getSnapshot().state.scope, scope);
+        assert.equal(second.sent.filter(message => message.kind === "attach").length, 1, "no reattachment can mask missing final detach");
+        assert.equal((await b.client.dispatch({ kind: "undo" })).kind, "accepted");
+        assert.deepEqual(b.modulation.getState(), baseline);
+        await until(() => writes.length === 2);
+        assert.equal(writes[1].value, JSON.stringify(baseline));
+        a.release();
+        assert.equal(first.sent.filter(message => message.kind === "detach").length, 1);
+        assert.deepEqual(refusedEnvelopes, [], "the real channel handled every forwarded envelope");
+        assert.deepEqual(defects, []);
+    } finally { a?.release(); b?.release(); await service.stop(); channel.close(); }
+});

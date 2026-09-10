@@ -5,6 +5,7 @@ import path from "node:path";
 import fc from "fast-check";
 
 import { loadUIModule } from "./helpers/load_ui_module.mjs";
+import { loadChannel, waitForModulation } from "./helpers/modulation_state_fixture.mjs";
 
 if (typeof globalThis.HTMLElement === "undefined") {
     globalThis.HTMLElement = class HTMLElementStub {
@@ -80,11 +81,7 @@ function articulationState(slots = []) {
 }
 
 async function waitForHydration(adapter) {
-    for (let attempt = 0; attempt < 30; attempt += 1) {
-        if (adapter.getSnapshot().connection._tag !== "connecting") return;
-        await Promise.resolve();
-    }
-    assert.fail("adapter did not finish hydration");
+    await waitForModulation(() => adapter.getSnapshot().connection._tag !== "connecting");
 }
 
 async function flushMicrotasks(turns = 16) {
@@ -98,7 +95,7 @@ async function createHarness({ storedState = {}, parameterValues = {} } = {}) {
     const connection = new loaded.mock.MockPatchConnection({
         name: "Cosimo bridge protocol test",
         version: 1,
-    });
+    }, { loadStateChannel: loadChannel });
     for (const [endpointID, value] of Object.entries(parameterValues)) {
         connection.setParameterValue(endpointID, value);
     }
@@ -251,7 +248,7 @@ test("mapping commands project product source ids and target-unit amount scaling
     const harness = await createHarness();
     t.after(() => harness.adapter.dispose());
 
-    const cutoffMappingId = expectOk(harness.adapter.commands.addMapping({
+    const cutoffMappingId = expectOk(await harness.adapter.commands.addMapping({
         targetId: "voice-filter.cutoff",
         sourceId: "envelope-1",
     }), "add cutoff mapping");
@@ -266,14 +263,16 @@ test("mapping commands project product source ids and target-unit amount scaling
     );
 
     harness.adapter.commands.setMappingAmount(cutoffMappingId, 3, { _tag: "patchBase" });
+    await new Promise(resolve => setImmediate(resolve));
     route = storedModulationState(harness).routes.find((candidate) => candidate.id === cutoffMappingId);
     assert.equal(route.amount, 3);
 
-    const percentMappingId = expectOk(harness.adapter.commands.addMapping({
+    const percentMappingId = expectOk(await harness.adapter.commands.addMapping({
         targetId: "oscA.warpAmount",
         sourceId: "velocity",
     }), "add percent mapping");
     harness.adapter.commands.setMappingAmount(percentMappingId, 50, { _tag: "patchBase" });
+    await new Promise(resolve => setImmediate(resolve));
     route = storedModulationState(harness).routes.find((candidate) => candidate.id === percentMappingId);
     assert.equal(route.amount, 0.5, "percent target amount must divide by 100");
 });
@@ -285,7 +284,7 @@ test("mapping amount conversion roundtrips for every modulatable target", async 
         .filter((descriptor) => descriptor.modulationTargetKind !== null);
 
     for (const descriptor of descriptors) {
-        const mappingId = expectOk(harness.adapter.commands.addMapping({
+        const mappingId = expectOk(await harness.adapter.commands.addMapping({
             targetId: descriptor.targetId,
             sourceId: "velocity",
         }), `add ${descriptor.targetId} mapping`);
@@ -297,6 +296,7 @@ test("mapping amount conversion roundtrips for every modulatable target", async 
             descriptor.modAmount.min,
             { _tag: "patchBase" },
         );
+        await new Promise(resolve => setImmediate(resolve));
         let storedRoute = storedModulationState(harness).routes
             .find((route) => route.id === mappingId);
         assert.equal(
@@ -309,6 +309,7 @@ test("mapping amount conversion roundtrips for every modulatable target", async 
             descriptor.modAmount.max,
             { _tag: "patchBase" },
         );
+        await new Promise(resolve => setImmediate(resolve));
         storedRoute = storedModulationState(harness).routes
             .find((route) => route.id === mappingId);
         assert.equal(
@@ -316,15 +317,15 @@ test("mapping amount conversion roundtrips for every modulatable target", async 
             routeBounds.max,
             `${descriptor.targetId}: positive spec edge must reach the positive route edge`,
         );
-        fc.assert(
-            fc.property(
+        await fc.assert(
+            fc.asyncProperty(
                 fc.double({
                     min: descriptor.modAmount.min,
                     max: descriptor.modAmount.max,
                     noNaN: true,
                     noDefaultInfinity: true,
                 }),
-                (amount) => {
+                async (amount) => {
                     harness.adapter.commands.setMappingAmount(mappingId, amount, { _tag: "patchBase" });
                     const projected = harness.adapter.getSnapshot().patch.mappings
                         .find((mapping) => mapping.id === mappingId);
@@ -333,11 +334,12 @@ test("mapping amount conversion roundtrips for every modulatable target", async 
                         Math.abs(projected.amount - amount) <= 1e-9,
                         `${descriptor.targetId}: ${amount} roundtripped as ${projected.amount}`,
                     );
+                    await new Promise(resolve => setImmediate(resolve));
                 },
             ),
             { numRuns: 50 },
         );
-        harness.adapter.commands.removeMapping(mappingId);
+        await harness.adapter.commands.removeMapping(mappingId);
     }
 });
 
@@ -353,6 +355,7 @@ test("macro value events and macro-name persistence use their engine protocols",
     );
 
     harness.adapter.commands.renameMacro("macro-1", "Shimmer");
+    await new Promise(resolve => setImmediate(resolve));
     assert.equal(storedModulationState(harness).macroNames[0], "Shimmer");
 });
 
@@ -482,13 +485,17 @@ test("full state roundtrip: a second bridge over the first one's stored state is
         targetId: "voice-filter.resonance", value: 0.61,
         layer: { _tag: "articulationOverride", articulationId: a1.value },
     });
-    const m = first.adapter.commands.addMapping({ targetId: "voice-filter.cutoff", sourceId: "envelope-1" });
+    const m = await first.adapter.commands.addMapping({ targetId: "voice-filter.cutoff", sourceId: "envelope-1" });
     assert.equal(m._tag, "ok");
     first.adapter.commands.setMappingAmount(m.value, 3, { _tag: "patchBase" });
-    const rack = first.adapter.commands.addMapping({ targetId: "phaser.phaserDepth", sourceId: "macro-1" });
+    const rack = await first.adapter.commands.addMapping({ targetId: "phaser.phaserDepth", sourceId: "macro-1" });
     assert.equal(rack._tag, "ok");
     first.adapter.commands.setEffectEnabled("delay", false);
     first.adapter.commands.renameMacro("macro-1", "Shimmer");
+
+    // Void live editors expose their immediate projection. Native saved state
+    // is read only after the real service's queued publications have run.
+    await new Promise(resolve => setImmediate(resolve));
 
     const firstDebug = first.connection.getDebugSnapshot();
     const storedState = { ...firstDebug.storedState };

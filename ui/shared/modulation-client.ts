@@ -3,7 +3,7 @@ import type { PluginStateStored } from "../../kit/ui/plugin-state-definition";
 import { captureUserEditReporter } from "./user-edit-bus";
 import {
     MODULATION_MSEG_SLOT_COUNT, MODULATION_STATE_KEY, clampModulationRouteAmount,
-    normalizeRoute, normalizeRoutes, normalizeEnvelopeSlot, createDefaultRoute, createAvailableGeneratedRouteId,
+    normalizeRoute, normalizeRoutes, normalizeEnvelopeSlot, createDefaultRoute, createAvailableGeneratedRouteId, createDefaultModulationState,
     type ModulationState, type ModulationStateChangeKind, type GeneratedModulationRouteInput,
 } from "./modulation";
 import {
@@ -34,7 +34,11 @@ export function createModulationStateClient(client: StateClient) {
     };
     const getState = (): ModulationState | null => {
         const current = field();
-        return current && "value" in current ? current.value : null;
+        if (current && "value" in current) return current.value;
+        // Preserve the existing cold-invalid display without inventing an
+        // accepted value. Readiness and all edit eligibility still use the client.
+        return current?.readiness.kind === "failed" && current.readiness.reason === "invalid-state"
+            ? createDefaultModulationState() : null;
     };
     const isReady = () => !stopped && field()?.readiness.kind === "ready";
     const emit = (kind: ModulationStateChangeKind) => { for (const listener of listeners) listener(getState(), kind); };
@@ -154,16 +158,31 @@ export function createModulationStateClient(client: StateClient) {
         const { rate: _parameterOwnedRate, ...playback } = normalizeMsegPlayback(value);
         return setState({ ...bank, msegSlots: bank.msegSlots.map((slot, currentIndex) => currentIndex === index ? { ...slot, playback } : slot) });
     };
-    const beginGesture = (): Promise<PluginStateClientResult> => {
-        if (!isReady()) return unavailable();
-        if (gesture !== undefined) return Promise.resolve({ kind: "rejected", reason: "busy" });
+    /** Await ready before editing; end is idempotent and can close only this interaction. */
+    const startGesture = () => {
+        if (!isReady() || gesture !== undefined) return {
+            ready: !isReady() ? unavailable() : Promise.resolve<PluginStateClientResult>({ kind: "rejected", reason: "busy" }),
+            end: (): Promise<PluginStateClientResult | undefined> => Promise.resolve(undefined),
+        };
         const active = ++nextGesture;
         gesture = active;
-        return client.dispatch({ kind: "begin", key: MODULATION_STATE_KEY, gesture: active }).then(result => {
+        const ready = client.dispatch({ kind: "begin", key: MODULATION_STATE_KEY, gesture: active }).then(result => {
             if (result.kind !== "accepted" && gesture === active) gesture = undefined;
             return result;
         });
+        let ended: Promise<PluginStateClientResult | undefined> | undefined;
+        return { ready, end(): Promise<PluginStateClientResult | undefined> {
+            if (!ended) {
+                if (gesture !== active) ended = Promise.resolve(undefined);
+                else {
+                    gesture = undefined;
+                    ended = client.dispatch({ kind: "end", key: MODULATION_STATE_KEY, gesture: active });
+                }
+            }
+            return ended;
+        } };
     };
+    const beginGesture = (): Promise<PluginStateClientResult> => startGesture().ready;
     const endGesture = (): Promise<PluginStateClientResult | undefined> => {
         const active = gesture;
         gesture = undefined;
@@ -199,7 +218,7 @@ export function createModulationStateClient(client: StateClient) {
         setSegmentCurvePower(segmentIndex: number, power: number) { const state = this.getState(); return state ? this.setShape(setMsegSegmentCurvePower(state.shape, segmentIndex, power)) : unavailable(); },
     }));
     return {
-        getState, isReady, setState, setMsegSlotShape, setMsegSlotPlayback, beginGesture, endGesture, getRouteAmount, setRouteAmountById,
+        getState, isReady, setState, setMsegSlotShape, setMsegSlotPlayback, beginGesture, endGesture, startGesture, getRouteAmount, setRouteAmountById,
         replaceRoutes, setRoute, addRoute, addGeneratedRoute, removeRoute, setRouteAmount, setEnvelope,
         subscribe(listener: (state: ModulationState | null, kind: ModulationStateChangeKind) => void) { listeners.add(listener); },
         unsubscribe(listener: (state: ModulationState | null, kind: ModulationStateChangeKind) => void) { listeners.delete(listener); },

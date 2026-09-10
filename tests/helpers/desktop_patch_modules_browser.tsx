@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
+import { createModulationEditorFixture, createModulationProjectionHost } from "./modulation_editor_state";
 import { createRoot, type Root } from "react-dom/client";
 
 import desktopCssText from "../../ui/desktop/styles.css?inline";
@@ -1489,34 +1490,14 @@ export async function installModulationRouteAmountBindingHarness(target: HTMLEle
         ...createDefaultModulationState(),
         routes: [initialRoute],
     };
-    const storedStateListeners = new Set<(message: unknown) => void>();
-    const sentStoredStates: string[] = [];
     const bindingRenderLog: number[] = [];
     const parentRenderLog: Array<number | null> = [];
     let setAmount: ((nextAmount: number) => boolean) | null = null;
     let bindingValue = 0;
     let parentAmount: number | null = null;
 
-    const patchConnection: PatchConnectionLike = {
-        addStoredStateValueListener(listener) {
-            storedStateListeners.add(listener);
-        },
-        removeStoredStateValueListener(listener) {
-            storedStateListeners.delete(listener);
-        },
-        requestFullStoredState(callback) {
-            callback({
-                values: {
-                    [MODULATION_STATE_KEY]: serializeModulationState(initialState),
-                },
-            });
-        },
-        sendStoredStateValue(key, value) {
-            if (key === MODULATION_STATE_KEY && typeof value === "string") {
-                sentStoredStates.push(value);
-            }
-        },
-    };
+    const native = await createModulationProjectionHost({ [MODULATION_STATE_KEY]: serializeModulationState(initialState) });
+    const patchConnection = native.connection;
     const mounted = mountHarness(target, (root) => {
         function Reader() {
             const { state } = useModulationState();
@@ -1556,10 +1537,7 @@ export async function installModulationRouteAmountBindingHarness(target: HTMLEle
                 ...initialState,
                 routes: [{ ...initialRoute, amount: nextAmount }],
             });
-            storedStateListeners.forEach((listener) => listener({
-                key: MODULATION_STATE_KEY,
-                value: serializedState,
-            }));
+            native.replace(MODULATION_STATE_KEY, serializedState);
             await waitForMicrotask();
         },
         getSnapshot() {
@@ -1568,14 +1546,13 @@ export async function installModulationRouteAmountBindingHarness(target: HTMLEle
                 parentAmount,
                 bindingRenderLog: [...bindingRenderLog],
                 parentRenderLog: [...parentRenderLog],
-                sentStoredAmounts: sentStoredStates.map((serializedState) => (
-                    JSON.parse(serializedState).routes[0]?.amount ?? null
-                )),
-                storedStateListenerCount: storedStateListeners.size,
+                sentStoredAmounts: native.writes.filter(write => write.key === MODULATION_STATE_KEY).map(write => JSON.parse(String(write.value)).routes[0]?.amount ?? null),
+                stateListenerCount: native.counts.listeners,
             };
         },
         async unmount() {
             mounted.unmount();
+            await native.stop();
             await waitForMicrotask();
         },
     };
@@ -2167,37 +2144,40 @@ export async function installArticulationReconnectHydrationHarness(target: HTMLE
 }
 
 export async function installArticulationKeyHydrationHarness(target: HTMLElement) {
-    class DeferredKeyStatePatchConnection extends MockPatchConnection {
+    class DeferredKeyStatePatchConnection {
         private pendingArticulationRequests = 0;
+        private readonly native: MockPatchConnection;
+        readonly gui: PatchConnectionLike;
 
-        constructor(
-            label: string,
-            private readonly articulationResponse: unknown,
-        ) {
-            super({ name: label });
-            // The production adapter contract allows either full-state or
-            // request-by-key hydration. Shadow the mock's full-state method so
-            // this harness exercises the declared fallback, not the preferred path.
-            Object.defineProperty(this, "requestFullStoredState", {
-                configurable: true,
-                value: undefined,
+        constructor(label: string, private readonly articulationResponse: unknown) {
+            this.native = new MockPatchConnection({ name: label });
+            const methods = new Map<PropertyKey, unknown>();
+            // The real owner reads through the native connection. Only the GUI
+            // connection lacks full-state reads and defers its key response.
+            this.gui = new Proxy(this.native, {
+                get: (native, key) => {
+                    if (key === "requestFullStoredState") return undefined;
+                    if (key === "requestStoredStateValue") return this.requestStoredStateValue;
+                    const value = Reflect.get(native, key, native);
+                    if (typeof value !== "function") return value;
+                    if (!methods.has(key)) methods.set(key, value.bind(native));
+                    return methods.get(key);
+                },
             });
         }
 
-        override requestStoredStateValue(key: string) {
+        private requestStoredStateValue = (key: string) => {
             if (key !== ARTICULATIONS_V4_STATE_KEY) {
-                super.requestStoredStateValue(key);
+                this.native.requestStoredStateValue(key);
                 return;
             }
             this.pendingArticulationRequests += 1;
-        }
+        };
 
         releaseArticulationState() {
-            if (this.pendingArticulationRequests <= 0) {
-                return;
-            }
+            if (this.pendingArticulationRequests <= 0) return;
             this.pendingArticulationRequests -= 1;
-            this.setStoredStateValue(ARTICULATIONS_V4_STATE_KEY, cloneValue(this.articulationResponse));
+            this.native.setStoredStateValue(ARTICULATIONS_V4_STATE_KEY, cloneValue(this.articulationResponse));
         }
 
         get pendingArticulationRequestCount() {
@@ -2252,8 +2232,8 @@ export async function installArticulationKeyHydrationHarness(target: HTMLElement
             const [connectionID, setConnectionID] = useState<ConnectionID>("undefined");
             selectConnection = setConnectionID;
             return (
-                <PatchConnectionProvider patchConnection={connections[connectionID]}>
-                    <SynthStateProvider patchConnection={connections[connectionID]}>
+                <PatchConnectionProvider patchConnection={connections[connectionID].gui}>
+                    <SynthStateProvider patchConnection={connections[connectionID].gui}>
                         <Reader />
                     </SynthStateProvider>
                 </PatchConnectionProvider>
@@ -2368,12 +2348,7 @@ export async function installPrecisionOptimisticEchoHarness(target: HTMLElement)
 }
 
 export async function installMsegStateHookHarness(target: HTMLElement) {
-    const storedStateListeners = new Set<(message: unknown) => void>();
-    const sentEvents: Array<{ endpointID: string; value: unknown }> = [];
     const renderLog: Array<MsegState | null> = [];
-    let requestFullStoredStateCount = 0;
-    let addStoredStateValueListenerCount = 0;
-    let removeStoredStateValueListenerCount = 0;
 
     const bootModulationState = createDefaultModulationState();
     const { rate: _parameterOwnedRate, ...bootPlayback } = createDefaultMsegPlayback();
@@ -2394,24 +2369,8 @@ export async function installMsegStateHookHarness(target: HTMLElement) {
     const bootState = {
         [MODULATION_STATE_KEY]: serializeModulationState(bootModulationState),
     };
-    const patchConnection: PatchConnectionLike = {
-        addStoredStateValueListener(listener) {
-            addStoredStateValueListenerCount += 1;
-            storedStateListeners.add(listener);
-        },
-        removeStoredStateValueListener(listener) {
-            removeStoredStateValueListenerCount += 1;
-            storedStateListeners.delete(listener);
-        },
-        requestFullStoredState(callback) {
-            requestFullStoredStateCount += 1;
-            queueMicrotask(() => callback(bootState));
-        },
-        sendEventOrValue(endpointID, value) {
-            sentEvents.push({ endpointID, value });
-        },
-        sendStoredStateValue() {},
-    };
+    const native = await createModulationProjectionHost(bootState);
+    const patchConnection = native.connection;
     const mounted = mountHarness(target, (root) => {
         function Reader() {
             const { state } = useMsegState();
@@ -2433,18 +2392,19 @@ export async function installMsegStateHookHarness(target: HTMLElement) {
     window.__COSIMO_DESKTOP_MODULE_HARNESS__ = {
         getSnapshot() {
             return {
-                requestFullStoredStateCount,
-                addStoredStateValueListenerCount,
-                removeStoredStateValueListenerCount,
-                storedStateListenerCount: storedStateListeners.size,
+                requestStateAttachCount: native.counts.attached,
+                addStateListenerCount: native.counts.added,
+                removeStateListenerCount: native.counts.removed,
+                stateListenerCount: native.counts.listeners,
                 bootState: cloneValue(bootState),
-                sentEvents: cloneValue(sentEvents),
+                sentEvents: cloneValue(native.events),
                 renderLog: cloneValue(renderLog),
                 lastRender: cloneValue(renderLog.at(-1) ?? null),
             };
         },
         async unmount() {
             mounted.unmount();
+            await native.stop();
             await waitForMicrotask();
         },
     };
@@ -2555,9 +2515,15 @@ export async function installMsegEditorInteractionsHookHarness(target: HTMLEleme
         depth: 0.4,
     };
 
+    const owner = await createModulationEditorFixture(currentMsegState.shape);
+    const controller = owner.modulation.getMsegSlotController(0);
     const mounted = mountHarness(target, (root) => {
         function Harness() {
-            const [msegState, setMsegState] = useState<MsegState>(currentMsegState);
+            useSyncExternalStore(owner.client.subscribe, owner.client.getSnapshot, owner.client.getSnapshot);
+            const msegState: MsegState = { ...currentMsegState, ...controller.getState()! };
+            const setMsegState = (update: (previous: MsegState) => MsegState) => {
+                void controller.setShape(update({ ...msegState, ...controller.getState()! }).shape);
+            };
             const [orientation, setOrientation] = useState<"horizontal" | "vertical">("horizontal");
             const [curveEditMode, setCurveEditMode] = useState<"immediate" | "hold-or-drag">("immediate");
             const [curveEditHoldDelayMs, setCurveEditHoldDelayMs] = useState(350);
@@ -2572,40 +2538,17 @@ export async function installMsegEditorInteractionsHookHarness(target: HTMLEleme
             currentCurveEditMode = curveEditMode;
             const surfaceRef = useRef<SVGSVGElement | null>(null);
             const controllerRef = useRef({
-                addPoint(x: number, y: number) {
-                    actionLog.push({ type: "add", x, y });
-                    setMsegState((previousState) => ({
-                        ...previousState,
-                        shape: addMsegPoint(previousState.shape, x, y),
-                    }));
-                },
-                movePoint(pointIndex: number, x: number, y: number) {
-                    actionLog.push({ type: "move", pointIndex, x, y });
-                    setMsegState((previousState) => ({
-                        ...previousState,
-                        shape: moveMsegPoint(previousState.shape, pointIndex, x, y),
-                    }));
-                },
-                deletePoint(pointIndex: number) {
-                    actionLog.push({ type: "delete", pointIndex });
-                    setMsegState((previousState) => ({
-                        ...previousState,
-                        shape: deleteMsegPoint(previousState.shape, pointIndex),
-                    }));
-                },
+                ...controller,
+                addPoint(x: number, y: number) { actionLog.push({ type: "add", x, y }); return controller.addPoint(x, y); },
+                movePoint(pointIndex: number, x: number, y: number) { actionLog.push({ type: "move", pointIndex, x, y }); return controller.movePoint(pointIndex, x, y); },
+                deletePoint(pointIndex: number) { actionLog.push({ type: "delete", pointIndex }); return controller.deletePoint(pointIndex); },
                 setSegmentCurvePower(segmentIndex: number, curvePower: number) {
-                    actionLog.push({ type: "curve", segmentIndex, curvePower });
-                    setMsegState((previousState) => ({
-                        ...previousState,
-                        shape: setMsegSegmentCurvePower(previousState.shape, segmentIndex, curvePower),
-                    }));
-                },
-                getState() {
-                    return currentStateRef.current;
+                    actionLog.push({ type: "curve", segmentIndex, curvePower }); return controller.setSegmentCurvePower(segmentIndex, curvePower);
                 },
             });
             const {
                 isOpen,
+                canUndo, undoLastEdit, beginEditorSession,
                 selectedPointIndex,
                 hoveredSegmentIndex,
                 activeSegmentIndex,
@@ -2617,6 +2560,7 @@ export async function installMsegEditorInteractionsHookHarness(target: HTMLEleme
                 handlePointerUp,
             } = useMsegEditorInteractions({
                 msegState,
+                owner,
                 msegController: controllerRef,
                 surfaceRef,
                 orientation,
@@ -2642,6 +2586,8 @@ export async function installMsegEditorInteractionsHookHarness(target: HTMLEleme
 
             return (
                 <div>
+                    <button id="undo-editor" disabled={!canUndo} onClick={undoLastEdit}>Undo</button>
+                    <button id="new-editor-session" onClick={beginEditorSession}>New session</button>
                     <button id="open-editor" type="button" onClick={openEditor}>Open</button>
                     <button id="close-editor" type="button" onClick={closeEditor}>Close</button>
                     <div
@@ -2673,6 +2619,27 @@ export async function installMsegEditorInteractionsHookHarness(target: HTMLEleme
     });
 
     window.__COSIMO_DESKTOP_MODULE_HARNESS__ = {
+        holdNextEnd() { owner.holdNextEnd(); },
+        holdNextBegin() { owner.holdNextBegin(); },
+        holdNextUndo() { owner.holdNextUndo(); },
+        async switchSide(side: number) { return owner.modulation.setMsegSlotEditShapeIndex(0, side); },
+        async releaseEndReplies() { owner.releaseReplies(); await owner.drain(); await new Promise(requestAnimationFrame); },
+        async newEditorSession() { (document.getElementById("new-editor-session") as HTMLButtonElement).click(); await owner.drain(); },
+        async holdFacadeGesture() { return owner.modulation.beginGesture(); },
+        async endFacadeGesture() { return owner.modulation.endGesture(); },
+        async peerGesture(begin: boolean) { return owner.other.dispatch({ kind: begin ? "begin" : "end", key: "modulation.v6", gesture: 90 }); },
+        async peerRenameShape(name: string) {
+            const bank = owner.modulation.getState();
+            if (!bank) throw new Error("Modulation owner is not ready.");
+            return owner.other.dispatch({ kind: "edit", key: "modulation.v6", value: {
+                ...bank, msegSlots: bank.msegSlots.map((slot, index) => index === 0
+                    ? { ...slot, shapeA: { ...slot.shapeA, name } } : slot),
+            } });
+        },
+        async blurEditor() { window.dispatchEvent(new Event("blur")); await owner.drain(); },
+        async scalarEdit(value: number) { return owner.other.dispatch({ kind: "edit", key: "globalTune", value }); },
+        async sharedUndo() { return owner.other.dispatch({ kind: "undo" }); },
+        async editorUndo() { (document.getElementById("undo-editor") as HTMLButtonElement).click(); await owner.drain(); },
         async openEditor() {
             (document.getElementById("open-editor") as HTMLButtonElement | null)?.click();
             await waitForMicrotask();
@@ -2749,6 +2716,9 @@ export async function installMsegEditorInteractionsHookHarness(target: HTMLEleme
 
             return {
                 isOpen,
+                canUndo: !(document.getElementById("undo-editor") as HTMLButtonElement)?.disabled,
+                ownerState: owner.session.getSnapshot(),
+                editShapeIndex: owner.modulation.getMsegSlotEditShapeIndex(0),
                 selectedPointIndex,
                 hoveredSegmentIndex,
                 activeSegmentIndex,

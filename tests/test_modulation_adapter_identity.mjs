@@ -3,8 +3,10 @@ import assert from "node:assert/strict";
 import path from "node:path";
 
 import { loadUIModule } from "./helpers/load_ui_module.mjs";
+import { loadChannel, waitForModulation } from "./helpers/modulation_state_fixture.mjs";
 
 const repoRoot = path.resolve(import.meta.dirname, "..");
+const hostModulePromise = loadUIModule(repoRoot, "ui/shared/mock-plugin-state-host.ts");
 const adapterModulePromise = loadUIModule(repoRoot, "ui/shared/cosimo-bridge-adapter.ts");
 const modulationModulePromise = loadUIModule(repoRoot, "ui/shared/modulation.ts");
 const targetsModulePromise = loadUIModule(repoRoot, "ui/shared/modulation-targets.ts");
@@ -18,6 +20,25 @@ class FakePatchConnection {
         this.storedListeners = new Set();
         this.endpointListeners = new Map();
     }
+
+    async start(t) {
+        const { createMockPluginStateHost } = await hostModulePromise;
+        const defects = [];
+        this.host = createMockPluginStateHost({
+            loadChannel,
+            readParameter: async endpoint => ({ endpoint, value: 0, min: endpoint === "globalTune" ? -24 : 0,
+                max: endpoint === "globalTune" ? 24 : 2, step: endpoint === "playMode" ? 1 : 0, defaultValue: 0 }),
+            writeParameter() { assert.fail("identity hydration must not change native parameters"); },
+            storedValues: { read: key => this.storedState[key], write: (key, value) => this.sendStoredStateValue(key, value) },
+            beginGesture() {}, endGesture() {}, onDefect: error => defects.push(error),
+        });
+        t.after(async () => { await this.host.stop(); assert.deepEqual(defects, []); });
+        await this.host.ready;
+    }
+
+    addEventListener(type, listener) { this.host.addEventListener(type, listener); }
+    removeEventListener(type, listener) { this.host.removeEventListener(type, listener); }
+    sendMessageToServer(message) { this.host.sendMessageToServer(message); }
 
     addStoredStateValueListener(listener) {
         this.storedListeners.add(listener);
@@ -49,7 +70,10 @@ class FakePatchConnection {
     sendEventOrValue() {}
 
     emitStoredStateValue(key, value) {
-        for (const listener of this.storedListeners) listener({ key, value });
+        assert.equal(this.host.replaceStoredValue(key, () => {
+            this.storedState[key] = value;
+            for (const listener of this.storedListeners) listener({ key, value });
+        }), true);
     }
 }
 
@@ -89,7 +113,7 @@ function bridgeSourceId(source) {
     return source.sourceKind === "env" ? `envelope-${source.sourceSlot}` : source.id;
 }
 
-test("bridge hydration preserves distinct canonical A/B/C cells from the same source", async () => {
+test("bridge hydration preserves distinct canonical A/B/C cells from the same source", async (t) => {
     const [adapterModule, modulation, targets, runtime, descriptors] = await Promise.all([
         adapterModulePromise,
         modulationModulePromise,
@@ -104,7 +128,10 @@ test("bridge hydration preserves distinct canonical A/B/C cells from the same so
     const connection = new FakePatchConnection({
         [modulation.MODULATION_STATE_KEY]: modulation.serializeModulationState(current),
     });
+    await connection.start(t);
     const adapter = adapterModule.createCosimoBridgeAdapter({ connection });
+    t.after(() => adapter.dispose());
+    await waitForModulation(() => adapter.getSnapshot().connection._tag !== "connecting");
 
     assert.equal(adapter.getSnapshot().connection._tag, "ready");
     assert.deepEqual(mappingSummary(adapter.getSnapshot()), [
@@ -140,7 +167,7 @@ test("bridge hydration preserves distinct canonical A/B/C cells from the same so
     adapter.dispose();
 });
 
-test("bridge hydration accepts all 1484 canonical cells without identity collisions", async () => {
+test("bridge hydration accepts all 1484 canonical cells without identity collisions", async (t) => {
     const [adapterModule, modulation, targets, descriptors] = await Promise.all([
         adapterModulePromise,
         modulationModulePromise,
@@ -168,7 +195,10 @@ test("bridge hydration accepts all 1484 canonical cells without identity collisi
     const connection = new FakePatchConnection({
         [modulation.MODULATION_STATE_KEY]: modulation.serializeModulationState(current),
     });
+    await connection.start(t);
     const adapter = adapterModule.createCosimoBridgeAdapter({ connection });
+    t.after(() => adapter.dispose());
+    await waitForModulation(() => adapter.getSnapshot().connection._tag !== "connecting");
     const mappings = mappingSummary(adapter.getSnapshot());
 
     assert.equal(adapter.getSnapshot().connection._tag, "ready");
@@ -179,14 +209,17 @@ test("bridge hydration accepts all 1484 canonical cells without identity collisi
     adapter.dispose();
 });
 
-test("bridge hydration rejects a route whose target kind conflicts with its display descriptor", async () => {
+test("bridge hydration rejects a route whose target kind conflicts with its display descriptor", async (t) => {
     const [adapterModule, modulation] = await Promise.all([adapterModulePromise, modulationModulePromise]);
     const mismatch = mismatchState(modulation);
     assert.equal(modulation.parseModulationState(mismatch)._tag, "ok");
     const connection = new FakePatchConnection({
         [modulation.MODULATION_STATE_KEY]: modulation.serializeModulationState(mismatch),
     });
+    await connection.start(t);
     const adapter = adapterModule.createCosimoBridgeAdapter({ connection });
+    t.after(() => adapter.dispose());
+    await waitForModulation(() => adapter.getSnapshot().connection._tag !== "connecting");
 
     assert.deepEqual(adapter.getSnapshot().connection, {
         _tag: "detached",
@@ -197,7 +230,7 @@ test("bridge hydration rejects a route whose target kind conflicts with its disp
     adapter.dispose();
 });
 
-test("a live descriptor mismatch detaches while retaining the last accepted A/B/C mappings", async () => {
+test("a live descriptor mismatch detaches while retaining the last accepted A/B/C mappings", async (t) => {
     const [adapterModule, modulation] = await Promise.all([adapterModulePromise, modulationModulePromise]);
     const current = {
         ...modulation.createDefaultModulationState(),
@@ -206,7 +239,10 @@ test("a live descriptor mismatch detaches while retaining the last accepted A/B/
     const connection = new FakePatchConnection({
         [modulation.MODULATION_STATE_KEY]: modulation.serializeModulationState(current),
     });
+    await connection.start(t);
     const adapter = adapterModule.createCosimoBridgeAdapter({ connection });
+    t.after(() => adapter.dispose());
+    await waitForModulation(() => adapter.getSnapshot().connection._tag !== "connecting");
     const acceptedMappings = mappingSummary(adapter.getSnapshot());
 
     connection.emitStoredStateValue(
@@ -214,6 +250,7 @@ test("a live descriptor mismatch detaches while retaining the last accepted A/B/
         modulation.serializeModulationState(mismatchState(modulation)),
     );
 
+    await waitForModulation(() => adapter.getSnapshot().connection._tag === "detached");
     assert.equal(adapter.getSnapshot().connection._tag, "detached");
     assert.deepEqual(mappingSummary(adapter.getSnapshot()), acceptedMappings);
     assert.deepEqual(connection.storedWrites, []);

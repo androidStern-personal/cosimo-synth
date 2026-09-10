@@ -1,10 +1,13 @@
 # Plugin state implementation
 
-Status: the automatic prepared-state declaration, stock complex-data delivery,
-compiled receiver/storage, and cleaned public hook surface pass their module and
-native integration gates. Three Cosimo Voice controls use the framework;
-structured plugin migration is next. Modulation is not migrated. Earlier
-checkpoint results below describe their exact candidates, not later changes.
+Status: framework module gates passed; the Cosimo modulation migration is an
+implementation checkpoint on this branch. The old modulation owner is removed;
+the shared owner, GUI and adapter composition pass the default regression suite
+and focused browser tests. The existing curve-only Undo behavior conflicts with
+the selected global LIFO policy; its protected test remains unchanged, pending
+the user's decision. Native qualification and its exact source identity are
+recorded below. Earlier checkpoints describe their exact candidates, not later
+changes. This is not a completed migration or a release candidate.
 
 Branch: `codex/plugin-state-system`, starting at `44f179fdb9c35b27456bedfdf389ec563f5c9a85`.
 
@@ -524,3 +527,163 @@ tested before activation. Production state declarations, entrypoints and MSEG
 Undo remain unchanged at this stage. The new lease tests use the actual Cmajor
 channel and state service, with external native parameter storage substituted;
 they do not claim actual host delivery.
+
+### Modulation migration in progress after the module gate
+
+All 182 focused module cases and the full TypeScript check passed before activation
+(`resume-modules-before-migration.log`, `resume-pre-migration-typecheck.log` under
+`build/native_plugin_state`). Independent review reran 56 binding/lane regressions.
+The real desktop wrapper was separately exercised for native articulation effects
+and repeated identical-byte parameter restore. Checkpoints through `c89a4a2d`
+contain these module/build changes; subsequent activation is still under review.
+
+The working tree now declares modulation.v6 beside the three Voice parameters,
+shares a single client/facade across consumers, registers the scoped legacy synth
+delivery binding once, and removes the 500-line old GUI modulation owner. The
+existing DSP storage/readers remain in place. GUI facade/adapter methods submit
+actual owner commands; accepted receipts gate dependent cleanup and success UI.
+
+New tests exposed the following integration defects, rather than merely verifying
+library APIs:
+
+- A busy source deletion could hide its source and change related data despite
+  the bank edit being refused. The adapter test records a real owner's busy
+  receipt and preserves bank/history/parameter/articulation/visibility state.
+- A held gesture-start or Undo reply could finish a newer gesture or erase its
+  editor marker. The private facade now supplies a gesture handle tied to its
+  own interaction; no second history ledger was added.
+- The private synth binding omitted the modulationAmount endpoint. The actual
+  service/channel test accepted the editable value but failed its delivery as
+  undeclared. Adding the existing endpoint repairs the amount-only path.
+- The development host had separate saved storage and threw on an ignored old
+  channel update during raw restore. It now shares the same storage and matches
+  the actual AudioWorklet connection's ignored-message behavior.
+- The production worker library build retained Jotai's process.env.NODE_ENV
+  checks. The real native QuickJS test failed at boot because process is absent.
+  The worker build now substitutes that constant. The native composition reached
+  edit/Undo/audio success, but an independent rerun exposed an intermittent
+  wavetable upload stall. Native qualification remains open; a passing rerun
+  cannot erase that failure.
+
+Final view release is tested with the last end request dropped entirely. The real
+native channel's authenticated detach seals only the routed prefix; another
+already-open client can Undo before any reattach. The abandoned end settles as
+interrupted/unknown, with no invented acknowledgement.
+
+Existing bridge/v6 tests now run through the actual channel/service/client with
+only native storage substituted. Their data/order/no-write oracles remain. Cold
+invalid state still displays defaults, but the owner stays failed and valueless;
+partial edits cannot save those display defaults. The obsolete private echo-cache
+size assertion is replaced by 120 edits followed by actual raw recall and no extra
+write. Nullable reset notifications are explicitly observed and value comparisons
+run while ready. The old raw-key fallback test now observes the owner's actual
+read of only the declared current key.
+
+Current qualification must explicitly select the local Cmajor fork. Use
+COSIMO_PLUGIN_STATE_CMAJOR_SOURCE for Node/native tests and
+CPM_cosimo_cmajor_SOURCE for CMake/browser staging. The published dependency pin
+is still 9ed4f96; the qualified fork's 228dc9d is local and unpushed. No dependency
+cache, installed plugin or master branch was modified to hide that difference.
+
+Open gates:
+- Resolve existing T71 curve-only Undo behavior versus global LIFO without
+  weakening its assertions or adding a compensating shape-history implementation.
+- Land the separately owned Cmajor fork changes and update the normal dependency
+  pin through the integration coordinator. Local qualification explicitly selects
+  that fork; it does not make the published dependency contain these changes.
+- Installed-plugin/DAW and listening acceptance remain separate from native
+  process measurements and have not been performed for this candidate.
+
+A separate pre-existing source-inspection failure is retained: the untouched
+note-path case in test_modulation_runtime_program.mjs searches for `let gain`,
+while commit 7dcd41966 changed it to `var gain` for voice-steal fade. Its ordering
+assertion fails before this migration; neither it nor the DSP was changed here.
+
+### Activation regression checkpoint (not completion)
+
+- The full default command passed: 1,395 passed, zero failed, one existing skip;
+  reported phase durations total 193.49 seconds. Its focused plugin-state step
+  passed all 193 cases in 1.12 seconds. Log:
+  `build/native_plugin_state/resume-migration-full-suite-final.log`.
+- All 50 shared-hook browser tests pass (40 original cases plus ten new
+  lifecycle/history cases). Independent read review confirmed that the fixture
+  supplies scheduling/storage, while real session/client/facade modules supply
+  acceptance, gestures and history. Four nonconflicting mobile/T71 cases pass;
+  this does not include the unresolved curve-only Undo case.
+- Full TypeScript checking and a production desktop UI build passed. The build
+  goes to `build/plugin_state_synth_ui_qualification/desktop`, without replacing
+  the normal bundles or installed plugin.
+- The native test uses the authored worker, actual Patch/QuickJS and compiled
+  Cosimo DSP. A native client fixture sends edit and Undo; this is not the React
+  UI or a DAW. Successful runs measure a greater-than-fourfold audio difference,
+  exact DSP serial increments, saved values and history. The retained independent
+  failure stalls wavetable loading before this scenario. Diagnostic continuation
+  keeps rendering after the deadline and still fails, so this has not been
+  classified as merely a short timeout. Evidence lives under
+  `build/plugin_state_synth_qualification`, including `failure-root-review`.
+- The prototype interaction suite has 14 failures from the old
+  `phaser.frequency` startup reference; that startup error also reproduces with
+  unchanged prototype source at c89a4a2d. The modified test callers await async
+  commands and preserve their assertions. This suite is not claimed green.
+
+Final review identified a second await boundary in composite adapter edits:
+a reset could occur after the helper checked acceptance but before its caller
+performed dependent work. A real receipt followed by a queued reset reproduced
+the stale native parameter write. The seven composite callers now check the
+captured document immediately before their synchronous side effects. All 90 old
+adapter/bridge/identity tests and eight focused acceptance cases pass after the
+repair; root independently reviewed the exact test and guards. The subsequent
+full default run passed: 1,396 passed, zero failed, one existing skip, with 191.55
+seconds of reported phase durations. Its focused state step is 194/194 in 1.13
+seconds. Logs: `resume-migration-reviewed-suite.log` and
+`resume-migration-reviewed-typecheck.log` under `build/native_plugin_state`.
+
+Native startup failure diagnosis is concrete: wavetableMipFrame is 24,604 payload
+bytes and modulationProgram is 44,040, exceeding the shared 65,536-byte input FIFO
+when both are queued before audio drains it. Patch.handleXrun observes the refused
+enqueue at the overlap. The old raw wavetable sender can log a send despite this
+refusal; the new scoped publication instead reports send-failed. Diagnostic runs
+also observed successful startup, so repeated green runs are not qualification.
+The native repair uses existing non-audio enqueue waiting, with one 100ms deadline
+shared by a state publication. Ordinary GUI sends and explicit zero-wait requests
+stay nonblocking. Worker sends with an absent/void timeout get the same bounded
+opportunity for the audio consumer to drain the queue. Saturation still reports
+failure; the test checks actual DSP values after partial delivery.
+
+Continued qualification found a second mechanism: the FIFO requires contiguous
+packets. An empty 64KB queue can retain its cursor after a 24KB message such that
+a 44KB message fits in neither contiguous free region. Waiting cannot repair this.
+A neutral 28KB-then-40KB actual Patch/DSP regression remained red despite 60 audio
+blocks, with two xruns and the old output value. CHOC's documented capacity
+contract requires extra space for this reason; its implementation was not changed.
+AudioMIDIPerformer now sizes only its input queue to the larger of the requested
+capacity and twice the largest declared input packet plus a strict gap, including
+all wire/FIFO headers and overflow checks. Cosimo's resulting queue is 88,108
+bytes (22,572 bytes extra per renderer). Output queue sizing is unchanged. The
+complete native channel suite passes, including the new empty-cursor regression,
+capacity-independent saturation tests, bounded waiting and exact partial delivery.
+The native probe's audio pump also now runs independently of synchronous GUI
+queries; checked shutdown joins it before reporting success.
+
+### Final native checkpoint
+
+The exact final native headers pass the complete channel probe, the actual synth
+test, and six consecutive runs of the same synth binary. Every synth run has zero
+failed enqueues, exact DSP serials 10/11/12 for boot/edit/Undo, rack parameter
+serial 8, rack mask 1, and an edited RMS over four times both the initial and
+undone RMS. The test checks the actual saved bank values and shared history too.
+This proves an amount-only modulation edit and Undo through the production
+worker, native host effects and compiled synth; it does not prove a full migration
+to the stock data receiver, React-in-native operation, DAW behavior or listening
+acceptance.
+
+Evidence: `build/native_plugin_state/queue-final-exact.log` and
+`build/plugin_state_synth_qualification/{final-exact.tap,final-exact-repeat-1.log..final-exact-repeat-6.log,final-evidence.json}`.
+The evidence records the runtime, worker, probe, DSP and native-header hashes.
+Qualification ran before commit 228dc9d, with parent 708bf31 and the two changed
+headers recorded explicitly; their hashes are unchanged by the commit.
+The performer dylib is the explicitly selected existing compatible binary; the
+native host probe was rebuilt with the final headers. Independent read review
+covered the pressure oracles, continued audio processing, shutdown, sizing and
+overflow guards. No passing rerun was used to dismiss an unexplained failure:
+both enqueue failure mechanisms have their own preserved failing regressions.

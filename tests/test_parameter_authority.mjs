@@ -3,11 +3,13 @@ import assert from "node:assert/strict";
 import path from "node:path";
 
 import { loadUIModule } from "./helpers/load_ui_module.mjs";
+import { loadChannel, waitForModulation } from "./helpers/modulation_state_fixture.mjs";
 
 const repoRoot = path.resolve(import.meta.dirname, "..");
 const modulesPromise = Promise.all([
     loadUIModule(repoRoot, "ui/shared/cosimo-bridge-adapter.ts"),
     loadUIModule(repoRoot, "ui/shared/target-descriptor.ts"),
+    loadUIModule(repoRoot, "ui/shared/mock-plugin-state-host.ts"),
 ]);
 
 class FakePatchConnection {
@@ -65,20 +67,38 @@ class FakePatchConnection {
     }
 }
 
-test("Cmajor parameters are the sole ordinary knob-value authority", async () => {
-    const [adapterModule, descriptors] = await modulesPromise;
+test("Cmajor parameters are the sole ordinary knob-value authority", async (t) => {
+    const [adapterModule, descriptors, { createMockPluginStateHost }] = await modulesPromise;
     const targetID = "voice-filter.cutoff";
     const descriptor = descriptors.getTargetDescriptor(targetID);
     assert.equal(descriptor.binding._tag, "endpoint");
     const endpointID = descriptor.binding.endpointId;
     const connection = new FakePatchConnection({
         [endpointID]: descriptor.binding.toEngine(0.21),
+        playMode: 0, glideTime: 0, globalTune: 0,
     }, {
         "uiPatchValues.v1": JSON.stringify({ [targetID]: 0.91 }),
         "uiPatchValues.v2": JSON.stringify({ [targetID]: 0.84 }),
     });
-
+    const defects = [];
+    // The new adapter requires the actual shared state channel even though this
+    // test's cutoff continues through the normal parameter connection.
+    const host = createMockPluginStateHost({
+        loadChannel,
+        readParameter: async endpoint => ({ endpoint, value: connection.parameterValues.get(endpoint),
+            min: endpoint === "globalTune" ? -24 : 0, max: endpoint === "globalTune" ? 24 : 2,
+            step: endpoint === "playMode" ? 1 : 0, defaultValue: 0 }),
+        writeParameter: (endpoint, value) => connection.sendEventOrValue(endpoint, value),
+        storedValues: { read: key => connection.storedState[key], write: (key, value) => connection.sendStoredStateValue(key, value) },
+        beginGesture() {}, endGesture() {}, onDefect: error => defects.push(String(error)),
+    });
+    connection.addEventListener = host.addEventListener;
+    connection.removeEventListener = host.removeEventListener;
+    connection.sendMessageToServer = host.sendMessageToServer;
     const adapter = adapterModule.createCosimoBridgeAdapter({ connection });
+    t.after(async () => { adapter.dispose(); await host.stop(); assert.deepEqual(defects, []); });
+    await host.ready;
+    await waitForModulation(() => adapter.getSnapshot().connection._tag === "ready");
     assert.equal(adapter.getSnapshot().connection._tag, "ready");
     assert.equal(adapter.getSnapshot().patch.parameterValues[targetID], 0.21);
     assert.equal(connection.sentEvents.some((event) => event.endpointID === endpointID), false);

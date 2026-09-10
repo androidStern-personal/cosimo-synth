@@ -1,3 +1,5 @@
+import { acquireSynthViewState } from "./synth-state-client";
+import type { createModulationStateClient } from "./modulation-client";
 import {
     useCallback,
     useMemo,
@@ -14,10 +16,7 @@ import {
 import { parseLaneModulationTargetKind } from "./lane-modulation-targets";
 import { useLaneOrHostParameterBinding } from "./lane-param-bindings";
 import {
-    acquireModulationRuntimeBridge,
-    releaseModulationRuntimeBridge,
     type ModulationRoute,
-    type ModulationRuntimeBridge,
     type ModulationTargetKind,
 } from "./modulation";
 
@@ -88,7 +87,7 @@ export function useModulationRouteAmountBinding(
     route: Readonly<Pick<ModulationRoute, "id" | "amount">> | null,
 ): OptionalModulationRouteAmountBinding {
     const patchConnection = usePatchConnection();
-    const bridgeRef = useRef<ModulationRuntimeBridge | null>(null);
+    const bridgeRef = useRef<ReturnType<typeof createModulationStateClient> | null>(null);
     const routeId = route?.id ?? null;
     const fallbackAmount = route?.amount ?? null;
 
@@ -96,7 +95,8 @@ export function useModulationRouteAmountBinding(
         if (routeId === null) {
             return () => {};
         }
-        const bridge = acquireModulationRuntimeBridge(patchConnection);
+        const lease = acquireSynthViewState(patchConnection);
+        const bridge = lease.modulation;
         bridgeRef.current = bridge;
         const unsubscribe = bridge.subscribeRouteAmount(routeId, notify);
 
@@ -105,7 +105,7 @@ export function useModulationRouteAmountBinding(
             if (bridgeRef.current === bridge) {
                 bridgeRef.current = null;
             }
-            releaseModulationRuntimeBridge(patchConnection);
+            lease.release();
         };
     }, [patchConnection, routeId]);
 
@@ -123,7 +123,11 @@ export function useModulationRouteAmountBinding(
         if (bridge === null || routeId === null) {
             return false;
         }
-        return bridge.setRouteAmountById(routeId, nextAmount);
+        if (!bridge.isReady() || bridge.getRouteAmount(routeId) === null) return false;
+        // Existing boolean callers receive submission eligibility, never an
+        // acceptance claim; the real client rolls back an owner refusal.
+        void bridge.setRouteAmountById(routeId, nextAmount).catch(error => console.error("Modulation amount edit failed", error));
+        return true;
     }, [routeId]);
 
     return useMemo(() => ({ value, setValue }), [setValue, value]);

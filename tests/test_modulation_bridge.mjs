@@ -4,15 +4,13 @@ import path from "node:path";
 
 import { loadUIModule } from "./helpers/load_ui_module.mjs";
 
-import {
-    createDefaultMsegShape,
-    renderMsegShape,
-} from "../patch_gui/mseg.js";
-import {
+const repoRoot = path.resolve(import.meta.dirname, "..");
+const { createDefaultMsegShape, renderMsegShape } = await loadUIModule(repoRoot, "ui/shared/mseg.ts");
+import { createModulationFixture, waitForModulation } from "./helpers/modulation_state_fixture.mjs";
+const {
     MODULATION_MSEG_BUFFER_ENDPOINT_ID,
     MODULATION_MSEG_PLAYBACK_ENDPOINT_ID,
     MODULATION_STATE_KEY,
-    ModulationRuntimeBridge,
     buildModulationRuntimeEvents,
     composeModulationAmount,
     createDefaultModulationState,
@@ -22,10 +20,9 @@ import {
     normalizeModulationState,
     parseModulationState,
     serializeModulationState,
-} from "../patch_gui/modulation.js";
-import { MODULATION_PROGRAM_ENDPOINT_ID, getModulationRuntimeCell } from "../patch_gui/modulation-runtime-program.js";
+} = await loadUIModule(repoRoot, "ui/shared/modulation.ts");
+const { MODULATION_PROGRAM_ENDPOINT_ID, getModulationRuntimeCell } = await loadUIModule(repoRoot, "ui/shared/modulation-runtime-program.ts");
 
-const repoRoot = path.resolve(import.meta.dirname, "..");
 const parameterEntriesPromise = loadUIModule(repoRoot, "ui/shared/parameter-value-entry.ts");
 
 class FakePatchConnection {
@@ -120,12 +117,10 @@ async function flushMicrotasks(turns = 4) {
     }
 }
 
-test("boot_without_saved_modulation_state_reads_defaults_without_runtime_uploading", () => {
+test("boot_without_saved_modulation_state_reads_defaults_without_runtime_uploading", async (t) => {
     const patchConnection = new FakePatchConnection();
-    const bridge = new ModulationRuntimeBridge(patchConnection);
+    const { bridge, restore, client } = await createModulationFixture(t, patchConnection);
 
-    bridge.attach();
-    bridge.requestBootState();
 
     const state = bridge.getState();
     assert.equal(state.msegSlots.length, 3);
@@ -217,7 +212,7 @@ test("rack modulation compiles into the sparse voice-rack path with its reducer"
     assert.equal(program.voiceRackRouteAmounts[33], 0.35);
 });
 
-test("boot_with_saved_modulation_state_restores_ui_state_without_runtime_uploading", () => {
+test("boot_with_saved_modulation_state_restores_ui_state_without_runtime_uploading", async (t) => {
     const customState = createDefaultModulationState();
     customState.msegSlots[1].shapeA = {
         ...createDefaultMsegShape("MSEG 2"),
@@ -249,10 +244,8 @@ test("boot_with_saved_modulation_state_restores_ui_state_without_runtime_uploadi
     const patchConnection = new FakePatchConnection({
         [MODULATION_STATE_KEY]: serializeModulationState(customState),
     });
-    const bridge = new ModulationRuntimeBridge(patchConnection);
+    const { bridge, restore, client } = await createModulationFixture(t, patchConnection);
 
-    bridge.attach();
-    bridge.requestBootState();
 
     const state = bridge.getState();
     assert.equal(state.msegSlots[1].shapeA.points.length, 3);
@@ -263,7 +256,7 @@ test("boot_with_saved_modulation_state_restores_ui_state_without_runtime_uploadi
     assert.deepEqual(patchConnection.events, []);
 });
 
-test("boot rejects a duplicate mapping document as a whole", () => {
+test("boot rejects a duplicate mapping document as a whole", async (t) => {
     const invalidState = createDefaultModulationState();
     const firstRoute = {
         id: "first",
@@ -286,16 +279,17 @@ test("boot rejects a duplicate mapping document as a whole", () => {
     const patchConnection = new FakePatchConnection({
         [MODULATION_STATE_KEY]: JSON.stringify(invalidState),
     });
-    const bridge = new ModulationRuntimeBridge(patchConnection);
+    const { bridge, restore, client } = await createModulationFixture(t, patchConnection);
 
-    bridge.attach();
-    bridge.requestBootState();
 
     assert.deepEqual(bridge.getState(), createDefaultModulationState());
+    assert.equal(bridge.isReady(), false);
+    assert.deepEqual(client.getSnapshot().state.fields[MODULATION_STATE_KEY].readiness, { kind: "failed", reason: "invalid-state" });
+    assert.equal(Object.hasOwn(client.getSnapshot().state.fields[MODULATION_STATE_KEY], "value"), false, "display defaults are not accepted editable state");
     assert.equal(patchConnection.storedWrites.length, 0);
 });
 
-test("live writes use the boot parser and retain the last valid state after whole-document rejection", () => {
+test("live writes use the boot parser and retain the last valid state after whole-document rejection", async (t) => {
     const validState = createDefaultModulationState();
     validState.routes = [{
         id: "valid-route",
@@ -310,9 +304,7 @@ test("live writes use the boot parser and retain the last valid state after whol
     const patchConnection = new FakePatchConnection({
         [MODULATION_STATE_KEY]: serializeModulationState(validState),
     });
-    const bridge = new ModulationRuntimeBridge(patchConnection);
-    bridge.attach();
-    bridge.requestBootState();
+    const { bridge, restore, client } = await createModulationFixture(t, patchConnection);
 
     const invalidState = {
         ...validState,
@@ -325,20 +317,20 @@ test("live writes use the boot parser and retain the last valid state after whol
             },
         ],
     };
-    patchConnection.sendStoredStateValue(MODULATION_STATE_KEY, JSON.stringify(invalidState));
+    await restore(MODULATION_STATE_KEY, JSON.stringify(invalidState));
 
     assert.deepEqual(bridge.getState(), validState);
 });
 
-test("direct live state replacement rejects malformed documents without wiping or persisting", () => {
+test("direct live state replacement rejects malformed documents without wiping or persisting", async (t) => {
     const patchConnection = new FakePatchConnection();
-    const bridge = new ModulationRuntimeBridge(patchConnection);
+    const { bridge, restore, client } = await createModulationFixture(t, patchConnection);
     const validState = createDefaultModulationState();
 
-    bridge.setState(validState);
+    await bridge.setState(validState);
     const writesBeforeRejection = patchConnection.storedWrites.length;
 
-    assert.equal(bridge.setState({ format: "legacy", routes: "broken" }), false);
+    assert.equal((await bridge.setState({ format: "legacy", routes: "broken" })).kind, "rejected");
     assert.deepEqual(bridge.getState(), validState);
     assert.equal(patchConnection.storedWrites.length, writesBeforeRejection);
 });
@@ -392,16 +384,14 @@ test("modulation runtime event builder converts saved state into MSEG and route 
     assert.equal(program.voiceRouteAmounts[bootCell.cellIndex], 4);
 });
 
-test("editing one MSEG slot persists modulation.v6 without runtime uploading", () => {
+test("editing one MSEG slot persists modulation.v6 without runtime uploading", async (t) => {
     const patchConnection = new FakePatchConnection();
-    const bridge = new ModulationRuntimeBridge(patchConnection);
+    const { bridge, restore, client } = await createModulationFixture(t, patchConnection);
 
-    bridge.attach();
-    bridge.requestBootState();
     patchConnection.events = [];
     patchConnection.storedWrites = [];
 
-    bridge.setMsegSlotShape(0, 0, {
+    await bridge.setMsegSlotShape(0, 0, {
         ...createDefaultMsegShape(),
         points: [
             { x: 0.0, y: 0.15, curvePower: 0.0 },
@@ -418,12 +408,10 @@ test("editing one MSEG slot persists modulation.v6 without runtime uploading", (
     assert.deepEqual(patchConnection.events, []);
 });
 
-test("editing shape B only changes shape B and edit focus does not persist a morph", () => {
+test("editing shape B only changes shape B and edit focus does not persist a morph", async (t) => {
     const patchConnection = new FakePatchConnection();
-    const bridge = new ModulationRuntimeBridge(patchConnection);
+    const { bridge, restore, client } = await createModulationFixture(t, patchConnection);
 
-    bridge.attach();
-    bridge.requestBootState();
     patchConnection.events = [];
     patchConnection.storedWrites = [];
 
@@ -433,7 +421,7 @@ test("editing shape B only changes shape B and edit focus does not persist a mor
     assert.equal(Object.hasOwn(bridge.getState().msegSlots[0], "morph"), false);
     assert.equal(patchConnection.storedWrites.length, 0);
 
-    controller.setShape({
+    await controller.setShape({
         ...createDefaultMsegShape("MSEG 1 B"),
         points: [
             { x: 0.0, y: 0.95, curvePower: 0.0 },
@@ -448,15 +436,13 @@ test("editing shape B only changes shape B and edit focus does not persist a mor
     assert.deepEqual(patchConnection.events, []);
 });
 
-test("replacing routes preserves signed amounts and compiles only active mappings", () => {
+test("replacing routes preserves signed amounts and compiles only active mappings", async (t) => {
     const patchConnection = new FakePatchConnection();
-    const bridge = new ModulationRuntimeBridge(patchConnection);
+    const { bridge, restore, client } = await createModulationFixture(t, patchConnection);
 
-    bridge.attach();
-    bridge.requestBootState();
     patchConnection.events = [];
 
-    bridge.replaceRoutes([
+    await bridge.replaceRoutes([
         {
             id: "route-a",
             enabled: true,
@@ -513,7 +499,7 @@ test("replacing routes preserves signed amounts and compiles only active mapping
     assert.equal(program.voiceRouteAmounts[replacedCells[1].cellIndex], 0.5);
 });
 
-test("async stored-state echoes do not retrigger modulation uploads", async () => {
+test("async stored-state echoes do not retrigger modulation uploads", async (t) => {
     const initialState = createDefaultModulationState();
     initialState.routes = [{
         id: "async-echo-route", enabled: true, sourceKind: "mseg", sourceSlot: 1,
@@ -522,18 +508,23 @@ test("async stored-state echoes do not retrigger modulation uploads", async () =
     const patchConnection = new AsyncEchoPatchConnection({
         [MODULATION_STATE_KEY]: serializeModulationState(initialState),
     });
-    const bridge = new ModulationRuntimeBridge(patchConnection);
-    bridge.attach();
-    bridge.requestBootState();
+    const { bridge, restore, client } = await createModulationFixture(t, patchConnection);
     const stateNotifications = [];
     const amountNotifications = [];
-    const listener = (state) => stateNotifications.push(state.routes[0].amount);
+    const readiness = [];
+    const listener = (state) => {
+        readiness.push(bridge.isReady());
+        if (bridge.isReady()) stateNotifications.push(state.routes[0].amount);
+    };
     bridge.subscribe(listener);
-    const unsubscribeAmount = bridge.subscribeRouteAmount("async-echo-route", (amount) => amountNotifications.push(amount));
+    const unsubscribeAmount = bridge.subscribeRouteAmount("async-echo-route", (amount) => {
+        if (bridge.isReady()) amountNotifications.push(amount);
+    });
 
     for (const amount of [0.2, 0.6, 0.2, 0.4]) {
-        assert.equal(bridge.setRouteAmountById("async-echo-route", amount), true);
+        assert.equal((await bridge.setRouteAmountById("async-echo-route", amount)).kind, "accepted");
     }
+    await waitForModulation(() => patchConnection.storedWrites.length === 4);
     assert.equal(patchConnection.storedWrites.length, 4);
     assert.equal(patchConnection.pendingEchoes.length, 4);
     assert.deepEqual(amountNotifications, [0.2, 0.6, 0.2, 0.4]);
@@ -543,7 +534,8 @@ test("async stored-state echoes do not retrigger modulation uploads", async () =
     const recalledState = parseModulationState(patchConnection.storedWrites.at(-1).value);
     assert.equal(recalledState._tag, "ok");
     recalledState.value.routes[0].amount = 0.8;
-    patchConnection.emitExternalState(serializeModulationState(recalledState.value));
+    await restore(MODULATION_STATE_KEY, serializeModulationState(recalledState.value));
+    assert.deepEqual(readiness.slice(-2), [false, true], "the nullable view API exposes the actual restore interval");
     const authoritativeState = bridge.getState();
     assert.equal(bridge.getRouteAmount("async-echo-route"), 0.8);
 
@@ -567,21 +559,20 @@ test("async stored-state echoes do not retrigger modulation uploads", async () =
     assert.deepEqual(stateNotifications, [0.2, 0.6, 0.2, 0.4, 0.8]);
     assert.equal(patchConnection.storedWrites.length, 4);
 
-    // All matching self echoes were consumed: a later host recall with exactly
-    // the same serialized value must now be accepted, not suppressed forever.
-    patchConnection.emitExternalState(patchConnection.storedWrites[0].value);
+    // A later native recall with exactly the same serialized value must still
+    // be accepted; stale raw echo notifications cannot suppress it forever.
+    await restore(MODULATION_STATE_KEY, patchConnection.storedWrites[0].value);
     assert.equal(bridge.getRouteAmount("async-echo-route"), 0.2);
     assert.deepEqual(amountNotifications, [0.2, 0.6, 0.2, 0.4, 0.8, 0.2]);
     assert.deepEqual(stateNotifications, [0.2, 0.6, 0.2, 0.4, 0.8, 0.2]);
     assert.equal(patchConnection.storedWrites.length, 4);
     bridge.unsubscribe(listener);
     unsubscribeAmount();
-    bridge.detach();
 });
 
-test("route amount subscriptions notify only the changed stable route identity", () => {
+test("route amount subscriptions notify only the changed stable route identity", async (t) => {
     const patchConnection = new FakePatchConnection();
-    const bridge = new ModulationRuntimeBridge(patchConnection);
+    const { bridge, restore, client } = await createModulationFixture(t, patchConnection);
     const routeA = {
         id: "fine-grained-route-a",
         enabled: true,
@@ -604,34 +595,32 @@ test("route amount subscriptions notify only the changed stable route identity",
     };
     const notifications = { routeA: [], routeB: [] };
 
-    bridge.replaceRoutes([routeA, routeB]);
+    await bridge.replaceRoutes([routeA, routeB]);
     const unsubscribeRouteA = bridge.subscribeRouteAmount(routeA.id, (amount) => notifications.routeA.push(amount));
     const unsubscribeRouteB = bridge.subscribeRouteAmount(routeB.id, (amount) => notifications.routeB.push(amount));
 
-    assert.equal(bridge.setRouteAmountById(routeA.id, 0.75), true);
+    assert.equal((await bridge.setRouteAmountById(routeA.id, 0.75)).kind, "accepted");
     assert.deepEqual(notifications, { routeA: [0.75], routeB: [] });
     assert.equal(bridge.getRouteAmount(routeA.id), 0.75);
     assert.equal(bridge.getRouteAmount(routeB.id), 0.2);
-    assert.equal(bridge.setRouteAmountById(routeA.id, 0.75), true);
+    assert.equal((await bridge.setRouteAmountById(routeA.id, 0.75)).kind, "accepted");
     assert.deepEqual(notifications, { routeA: [0.75], routeB: [] });
 
-    bridge.replaceRoutes([{ ...routeB, amount: 0.6 }]);
+    await bridge.replaceRoutes([{ ...routeB, amount: 0.6 }]);
     assert.deepEqual(notifications, { routeA: [0.75, null], routeB: [0.6] });
     assert.equal(bridge.getRouteAmount(routeA.id), null);
     assert.equal(bridge.getRouteAmount(routeB.id), 0.6);
-    assert.equal(bridge.setRouteAmountById(routeA.id, 0.1), false);
+    assert.equal((await bridge.setRouteAmountById(routeA.id, 0.1)).kind, "rejected");
 
     unsubscribeRouteA();
     unsubscribeRouteB();
 });
 
-test("synchronous stored-state echoes consume their suppression tokens", () => {
+test("synchronous stored-state echoes leave identical later recalls available after many edits", async (t) => {
     const patchConnection = new FakePatchConnection();
-    const bridge = new ModulationRuntimeBridge(patchConnection);
+    const { bridge, restore, client } = await createModulationFixture(t, patchConnection);
 
-    bridge.attach();
-    bridge.requestBootState();
-    bridge.replaceRoutes([{
+    await bridge.replaceRoutes([{
         id: "editable-route",
         enabled: true,
         sourceKind: "mseg",
@@ -642,10 +631,17 @@ test("synchronous stored-state echoes consume their suppression tokens", () => {
         reducer: "max",
     }]);
     for (let editIndex = 0; editIndex < 120; editIndex += 1) {
-        assert.equal(bridge.setRouteAmount(0, (editIndex % 100) / 100), true);
+        assert.equal((await bridge.setRouteAmount(0, (editIndex % 100) / 100)).kind, "accepted");
     }
 
-    assert.equal(bridge.pendingStoredStateEchoes.size, 0);
+    // The old private echo-token map no longer exists. Verify its user-visible
+    // protection through the real native restore API after the same 120 edits.
+    const writesBeforeRecall = patchConnection.storedWrites.length;
+    const recalled = patchConnection.storedWrites[0].value;
+    await restore(MODULATION_STATE_KEY, recalled);
+    assert.deepEqual(bridge.getState(), deserializeModulationState(recalled));
+    assert.equal(patchConnection.storedWrites.length, writesBeforeRecall);
+    assert.equal(client.getSnapshot().state.history.canUndo, false);
 });
 
 test("zero-centered route amount mapping keeps zero at the midpoint and uses side-specific depth", () => {

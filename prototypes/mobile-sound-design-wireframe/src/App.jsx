@@ -147,8 +147,8 @@ export function CosimoMobileExperience({ adapter, initialSession }) {
       latch={state.audition.latch}
       note={state.audition.note}
       onArticulationChange={actions.setArticulation}
-      onCapture={() => {
-        const sourceId = actions.captureMotion();
+      onCapture={async () => {
+        const sourceId = await actions.captureMotion();
         triggerHaptic(sourceId ? "success" : "error");
       }}
       onDefaultArticulation={() => actions.setArticulation("Default")}

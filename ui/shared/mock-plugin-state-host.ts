@@ -1,4 +1,4 @@
-import { createCmajorPluginStateService, type CmajorStateConnection } from "../../kit/ui/plugin-state-cmajor";
+import { createCmajorPluginStateService, type CmajorStateBindingFactory, type CmajorStateConnection } from "../../kit/ui/plugin-state-cmajor";
 import type { PluginStateNativeParameter, PluginStateScope } from "../../kit/ui/plugin-state-session";
 import { synthPluginState } from "./synth-plugin-state";
 
@@ -7,12 +7,16 @@ type Envelope = { readonly type: "kit_state"; readonly message: unknown };
 type Port = CmajorStateConnection & { deliverMessageFromServer(envelope: Envelope): void };
 type NativeRequest =
     | { readonly kind: "open"; readonly scope: PluginStateScope; readonly parameters: readonly string[] }
+    | { readonly kind: "restore"; readonly scope: PluginStateScope }
     | { readonly kind: "read"; readonly scope: PluginStateScope; readonly endpoint: string }
-    | { readonly kind: "effect"; readonly scope: PluginStateScope; readonly operation: { readonly kind: string; readonly endpoint: string; readonly value: number } }
+    | { readonly kind: "effect"; readonly scope: PluginStateScope; readonly operation:
+        | { readonly kind: "parameter"; readonly endpoint: string; readonly value: number }
+        | { readonly kind: "event"; readonly endpoint: string; readonly value: unknown } }
     | { readonly kind: "close" };
 interface Channel {
     receive(source: Port, body: unknown): boolean;
     observeParameter(scope: PluginStateScope, endpoint: string): void;
+    replaceStoredValue(key: string, write: () => void): boolean;
     close(): void;
 }
 export interface MockPluginStateChannelModule {
@@ -20,6 +24,7 @@ export interface MockPluginStateChannelModule {
         worker: Port, native: (request: NativeRequest) => Promise<unknown>,
         values: (keys: readonly string[]) => Record<string, unknown>,
         writeStored: (key: string, value: unknown) => void, views: () => Set<Port>,
+        handleHostEffect?: (name: string, value: unknown) => boolean,
     ) => Channel;
 }
 
@@ -27,6 +32,13 @@ export interface MockPluginStateChannelModule {
 export function createMockPluginStateHost(options: {
     readonly readParameter: (endpoint: string, signal: AbortSignal) => Promise<PluginStateNativeParameter>;
     readonly writeParameter: (endpoint: string, value: number) => void;
+    /** The same saved values exposed by the development patch connection. */
+    readonly storedValues?: { read(key: string): unknown; write(key: string, value: unknown): void };
+    readonly engine?: {
+        readonly bindings: readonly CmajorStateBindingFactory[];
+        sendEvent(endpoint: string, value: unknown): void;
+        handleHostEffect(name: string, value: unknown): boolean;
+    };
     /** Record outgoing service gesture requests, not proof of DAW delivery. */
     readonly beginGesture: (endpoint: string) => void;
     readonly endGesture: (endpoint: string) => void;
@@ -41,12 +53,17 @@ export function createMockPluginStateHost(options: {
     const pending: Envelope[] = [];
     const gestures = new Set<string>();
     const stored = new Map<string, unknown>();
+    const storedValues = options.storedValues ?? { read: (key: string) => stored.get(key), write: (key: string, value: unknown) => { stored.set(key, value); } };
+    let parameterEndpoints: readonly string[] = [];
     const reads = new AbortController();
     const finishGestures = () => {
         for (const endpoint of gestures) { gestures.delete(endpoint); options.endGesture(endpoint); }
     };
     const send = (port: Port, envelope: Envelope) => {
-        if (!channel?.receive(port, envelope.message)) throw new Error("Mock native state channel rejected a message.");
+        if (!channel) throw new Error("Mock native state channel is not initialized.");
+        // Match AudioWorkletPatchConnection: false means the channel ignored
+        // an obsolete/unhandled envelope, not that the physical send threw.
+        return channel.receive(port, envelope.message);
     };
     const makePort = (worker: boolean): Port => {
         const listeners = new Set<Listener>();
@@ -79,7 +96,7 @@ export function createMockPluginStateHost(options: {
     };
     const worker = makePort(true);
     const view = makePort(false);
-    const service = createCmajorPluginStateService(synthPluginState, worker, { onDefect: options.onDefect });
+    const service = createCmajorPluginStateService(synthPluginState, worker, { onDefect: options.onDefect, bindings: options.engine?.bindings });
     let settleStopped = () => {};
     const stoppedReady = new Promise<void>(resolve => { settleStopped = resolve; });
     const initialization = (async () => {
@@ -91,17 +108,30 @@ export function createMockPluginStateHost(options: {
             switch (request.kind) {
                 case "open":
                     scope = request.scope;
+                    parameterEndpoints = request.parameters;
                     return { parameters: await Promise.all(request.parameters.map(endpoint => options.readParameter(endpoint, reads.signal))) };
+                case "restore":
+                    scope = request.scope;
+                    finishGestures();
+                    return { parameters: await Promise.all(parameterEndpoints.map(endpoint => options.readParameter(endpoint, reads.signal))) };
                 case "read": return { value: (await options.readParameter(request.endpoint, reads.signal)).value };
                 case "effect":
-                    if (request.operation.kind !== "parameter") throw new Error("Synth mock received an undeclared engine event.");
+                    if (request.operation.kind === "event") {
+                        if (!options.engine) return { error: "Development engine event receiver is missing." };
+                        options.engine.sendEvent(request.operation.endpoint, request.operation.value);
+                        return {};
+                    }
                     options.writeParameter(request.operation.endpoint, request.operation.value);
                     channel?.observeParameter(request.scope, request.operation.endpoint);
                     return {};
                 case "close": finishGestures(); return {};
             }
-        }, (keys: readonly string[]) => Object.fromEntries(keys.filter(key => stored.has(key)).map(key => [key, stored.get(key)])),
-        (key: string, value: unknown) => { stored.set(key, value); }, () => new Set([view]));
+        }, (keys: readonly string[]) => Object.fromEntries(keys.flatMap(key => {
+            const value = storedValues.read(key);
+            return value === undefined ? [] : [[key, value]];
+        })),
+        (key: string, value: unknown) => storedValues.write(key, value), () => new Set([view]),
+        options.engine?.handleHostEffect);
         await service.start();
         if (stopped) return;
         initialized = true;
@@ -134,6 +164,7 @@ export function createMockPluginStateHost(options: {
         sendMessageToServer: view.sendMessageToServer,
         ready,
         observeParameter(endpoint: string) { if (scope && !stopped) channel?.observeParameter(scope, endpoint); },
+        replaceStoredValue(key: string, write: () => void) { return !stopped && (channel?.replaceStoredValue(key, write) ?? false); },
         stop: () => stop("owner-removed"),
     };
 }

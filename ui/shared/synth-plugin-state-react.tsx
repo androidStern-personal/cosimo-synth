@@ -6,6 +6,7 @@ import {
 } from "../../kit/ui/plugin-state-cmajor";
 import { PluginStateProvider, usePluginState } from "../../kit/ui/plugin-state-react";
 import type { PluginStateEditResult } from "../../kit/index";
+import type { PluginStateParameter } from "../../kit/ui/plugin-state-definition";
 import type { PatchConnectionLike } from "./cmajor-react";
 import type { PatchControlBinding } from "./patch-controls";
 import { synthPluginState } from "./synth-plugin-state";
@@ -16,6 +17,7 @@ import {
 } from "./user-edit-bus";
 
 type SynthStateClient = ReturnType<typeof createCmajorPluginStateClient<typeof synthPluginState>>;
+type SynthParameterKey = { [Key in keyof typeof synthPluginState]: typeof synthPluginState[Key] extends PluginStateParameter ? Key : never }[keyof typeof synthPluginState];
 type ViewConnection =
     | { readonly kind: "connected"; readonly patchConnection: PatchConnectionLike; readonly client: SynthStateClient }
     | { readonly kind: "failed"; readonly patchConnection: PatchConnectionLike };
@@ -59,7 +61,7 @@ export function SynthStateProvider({ patchConnection, children }: {
 }
 
 /** Translate the state hook to the synth's established control interface. */
-export function useSynthPluginParameterBinding(key: keyof typeof synthPluginState, options: {
+export function useSynthPluginParameterBinding(key: SynthParameterKey, options: {
     readonly initialValue: number;
     readonly coerce: (rawValue: unknown) => number;
 }): PatchControlBinding<number> {

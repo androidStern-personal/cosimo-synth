@@ -10,6 +10,10 @@ import {
 } from "react";
 import { useLaneParameterBinding } from "./lane-param-bindings";
 import { getRackParameterDescriptor } from "./rack-parameter-descriptors";
+import type { PluginStateClientResult } from "../../kit/ui/plugin-state-client";
+import { acquireSynthViewState } from "./synth-state-client";
+import type { createModulationStateClient } from "./modulation-client";
+import { useMsegEditorHistory, type MsegStateOwner } from "./mseg-editor-history";
 import { usePluginHistory } from "../../kit/ui/plugin-state-react";
 import { useSynthPluginParameterBinding } from "./synth-plugin-state-react";
 
@@ -46,22 +50,21 @@ import {
     findMsegSegmentHitIndex,
     msegEditorCoordinatesToPoint,
     type MsegSurfaceOrientation,
-    type MsegShape,
     type MsegState,
 } from "./mseg";
 import {
     MODULATION_STATE_KEY,
     MODULATION_STATE_VERSION,
     MODULATION_TARGET_OPTIONS,
-    acquireModulationRuntimeBridge,
     buildDisplayedMsegState,
     clampModulationRouteAmount,
     createDefaultModulationState,
+    createDefaultRoute,
+    createAvailableGeneratedRouteId,
     createDefaultEnvelope,
     createFirstAvailableModulationRoute,
     normalizeModulationState,
     parseModulationState,
-    releaseModulationRuntimeBridge,
     serializeModulationState,
     type ModulationEnvelope,
     type GeneratedModulationRouteInput,
@@ -983,13 +986,22 @@ export function useObservedUnisonState({
 
 const modulationAmountRenderIdleMilliseconds = 50;
 
+function submitModulationEdit(result: Promise<PluginStateClientResult | undefined> | undefined): void {
+    void result?.catch(error => console.error("Modulation edit failed", error));
+}
+
 export function useModulationState() {
     const patchConnection = usePatchConnection();
-    const [state, setState] = useState<ModulationState | null>(null);
-    const bridgeRef = useRef<ReturnType<typeof acquireModulationRuntimeBridge> | null>(null);
+    const [projection, setProjection] = useState<{ state: ModulationState | null }>({ state: null });
+    // Selection is presentation state and can notify without changing bank identity.
+    const setState = (state: ModulationState | null) => setProjection({ state });
+    const [owner, setOwner] = useState<MsegStateOwner | null>(null);
+    const bridgeRef = useRef<ReturnType<typeof createModulationStateClient> | null>(null);
 
     useEffect(() => {
-        const bridge = acquireModulationRuntimeBridge(patchConnection);
+        const lease = acquireSynthViewState(patchConnection);
+        const bridge = lease.modulation;
+        setOwner(lease);
         let pendingAmountState: ModulationState | null = null;
         let pendingAmountTimer: ReturnType<typeof setTimeout> | null = null;
         const clearPendingAmountState = () => {
@@ -1000,7 +1012,7 @@ export function useModulationState() {
             pendingAmountState = null;
         };
         const handleStateChange = (
-            nextState: ModulationState,
+            nextState: ModulationState | null,
             changeKind: ModulationStateChangeKind,
         ) => {
             if (changeKind === "routeAmount") {
@@ -1029,13 +1041,14 @@ export function useModulationState() {
         return () => {
             clearPendingAmountState();
             bridge.unsubscribe(handleStateChange);
-            releaseModulationRuntimeBridge(patchConnection);
+            lease.release();
             bridgeRef.current = null;
         };
     }, [patchConnection]);
 
     return {
-        state,
+        state: projection.state,
+        owner,
         bridge: bridgeRef,
     };
 }
@@ -1389,7 +1402,7 @@ function articulationStatesEqual(left: ArticulationsState, right: ArticulationsS
 }
 
 function useStoredArticulationEditorState(
-    modulationBridge: RefObject<ReturnType<typeof acquireModulationRuntimeBridge> | null>,
+    modulationBridge: RefObject<ReturnType<typeof createModulationStateClient> | null>,
     modulationState: ModulationState | null,
     getBaseSnapshot: () => ArticulationSnapshot | null,
     oscillatorID: OscillatorID,
@@ -1436,7 +1449,7 @@ function useStoredArticulationEditorState(
             return;
         }
 
-        const routes = modulationBridge.current?.getState().routes ?? modulationStateRef.current?.routes ?? [];
+        const routes = modulationBridge.current?.getState()?.routes ?? modulationStateRef.current?.routes ?? [];
         const nextBank = projectCurrentArticulationsToEditorBank(
             nextState,
             baseSnapshot,
@@ -1513,7 +1526,7 @@ function useStoredArticulationEditorState(
                 if (!isCurrentConnection()) return;
                 const parsedSnapshot = parseArticulationStateFromFullStoredState(
                     storedState,
-                    modulationBridge.current?.getState().routes ?? modulationStateRef.current?.routes ?? [],
+                    modulationBridge.current?.getState()?.routes ?? modulationStateRef.current?.routes ?? [],
                 );
                 acceptedRouteIdsRef.current = parsedSnapshot.acceptedRouteIds;
                 if (parsedSnapshot.parsedState === null) {
@@ -1823,7 +1836,7 @@ function useSynthPresetStoredStateAdapters({
                 const nextState = parseStrictModulationPresetState(value);
 
                 if (modulationBridge.current) {
-                    modulationBridge.current.setState(nextState);
+                    submitModulationEdit(modulationBridge.current.setState(nextState));
                     return;
                 }
 
@@ -2037,6 +2050,7 @@ export function useStagePositionDrag({
 
 export function useMsegEditorInteractions({
     msegState,
+    owner,
     msegController,
     surfaceRef,
     orientation = "horizontal",
@@ -2045,6 +2059,7 @@ export function useMsegEditorInteractions({
     onCurveEditHoldActivated = null,
 }: {
     msegState: MsegState | null;
+    owner: MsegStateOwner | null;
     msegController: RefObject<MsegEditorControllerLike | null>;
     surfaceRef: RefObject<SVGSVGElement | null>;
     orientation?: MsegSurfaceOrientation;
@@ -2056,24 +2071,8 @@ export function useMsegEditorInteractions({
     const [selectedPointIndex, setSelectedPointIndex] = useState(0);
     const [hoveredSegmentIndex, setHoveredSegmentIndex] = useState(-1);
     const [activeSegmentIndex, setActiveSegmentIndex] = useState(-1);
-    const [undoShape, setUndoShape] = useState<MsegShape | null>(null);
+    const history = useMsegEditorHistory(owner, msegState?.editShapeIndex ?? 0);
     const activePointerRef = useRef<ActiveMsegPointerState | null>(null);
-    const activeGestureUndoCapturedRef = useRef(false);
-
-    const captureUndoShape = useCallback(() => {
-        if (activeGestureUndoCapturedRef.current) {
-            return;
-        }
-        const shape = msegController.current?.getState().shape ?? msegState?.shape;
-        if (!shape) {
-            return;
-        }
-        setUndoShape({
-            ...shape,
-            points: shape.points.map((point) => ({ ...point })),
-        });
-        activeGestureUndoCapturedRef.current = true;
-    }, [msegController, msegState?.shape]);
 
     const clearPendingSegmentTimer = useCallback((pointerState: ActiveMsegPointerState | null) => {
         if (pointerState?.kind === "pending-segment" && pointerState.holdTimeoutId !== null) {
@@ -2089,8 +2088,8 @@ export function useMsegEditorInteractions({
         }
 
         activePointerRef.current = null;
-        activeGestureUndoCapturedRef.current = false;
         clearPendingSegmentTimer(activePointer);
+        void history.finishGesture(true);
         try {
             if (surfaceRef.current?.hasPointerCapture(activePointer.pointerId)) {
                 surfaceRef.current.releasePointerCapture(activePointer.pointerId);
@@ -2100,7 +2099,7 @@ export function useMsegEditorInteractions({
         }
         setHoveredSegmentIndex(-1);
         setActiveSegmentIndex(-1);
-    }, [clearPendingSegmentTimer, surfaceRef]);
+    }, [clearPendingSegmentTimer, surfaceRef, history.finishGesture]);
 
     useEffect(() => {
         if (!msegState) {
@@ -2122,7 +2121,7 @@ export function useMsegEditorInteractions({
         const bounds = surfaceRef.current.getBoundingClientRect();
         const localX = clientX - bounds.left;
         const localY = clientY - bounds.top;
-        const currentShape = msegController.current?.getState().shape ?? msegState.shape;
+        const currentShape = msegController.current?.getState()?.shape ?? msegState.shape;
         const pointIndex = findMsegPointHitIndex(
             currentShape,
             localX,
@@ -2160,14 +2159,10 @@ export function useMsegEditorInteractions({
     }, [resolvePointerLocation]);
 
     useEffect(() => {
-        if (!isOpen) {
-            cancelActivePointer();
-            return;
-        }
-
         const handleEscapeKey = (event: KeyboardEvent) => {
             if (event.key === "Escape") {
                 setIsOpen(false);
+                cancelActivePointer();
             }
         };
         const handleBlur = () => cancelActivePointer();
@@ -2189,10 +2184,9 @@ export function useMsegEditorInteractions({
     }, [cancelActivePointer, isOpen]);
 
     const beginEditorSession = useCallback(() => {
-        setUndoShape(null);
-        activeGestureUndoCapturedRef.current = false;
+        history.beginSession();
         cancelActivePointer();
-    }, [cancelActivePointer]);
+    }, [cancelActivePointer, history.beginSession]);
 
     const openEditor = useCallback(() => {
         beginEditorSession();
@@ -2210,26 +2204,14 @@ export function useMsegEditorInteractions({
         cancelActivePointer();
     }, [cancelActivePointer]);
 
-    const undoLastEdit = useCallback(() => {
-        if (!undoShape || !msegController.current) {
-            return;
-        }
-        msegController.current.setShape(undoShape);
-        setSelectedPointIndex((previousIndex) => clamp(
-            previousIndex,
-            0,
-            Math.max(0, undoShape.points.length - 1),
-        ));
-        setUndoShape(null);
-        activeGestureUndoCapturedRef.current = false;
-    }, [msegController, undoShape]);
+    const undoLastEdit = history.undo;
 
     const applyCurveEditFromClientCoordinates = useCallback((segmentIndex: number, clientX: number, clientY: number) => {
         if (!surfaceRef.current || !msegController.current) {
             return;
         }
 
-        const currentShape = msegController.current.getState().shape ?? msegState?.shape;
+        const currentShape = msegController.current.getState()?.shape ?? msegState?.shape;
         if (!currentShape) {
             return;
         }
@@ -2243,9 +2225,21 @@ export function useMsegEditorInteractions({
             { orientation },
         );
         const curvePower = deriveMsegSegmentCurvePower(currentShape, segmentIndex, point.x, point.y);
-        captureUndoShape();
-        msegController.current.setSegmentCurvePower(segmentIndex, curvePower);
-    }, [captureUndoShape, msegController, msegState?.shape, orientation, surfaceRef]);
+        const controller = msegController.current;
+        history.edit(() => controller?.setSegmentCurvePower(segmentIndex, curvePower), true);
+    }, [history.edit, msegController, msegState?.shape, orientation, surfaceRef]);
+
+    const addPoint = useCallback((x: number, y: number) => {
+        const controller = msegController.current;
+        if (!controller) return;
+        history.edit(() => {
+            const result = controller.addPoint(x, y);
+            const points = controller.getState()?.shape.points ?? [];
+            const index = points.findIndex(point => Math.abs(point.x - x) <= 1e-6 && Math.abs(point.y - y) <= 1e-6);
+            if (index >= 0) setSelectedPointIndex(index);
+            return result;
+        });
+    }, [history.edit, msegController]);
 
     const handlePointerDown = useCallback((event: ReactPointerEvent<SVGSVGElement>) => {
         if (event.button !== 0 || !msegState || !surfaceRef.current) {
@@ -2258,7 +2252,6 @@ export function useMsegEditorInteractions({
         }
 
         if (pointerLocation.pointIndex >= 0) {
-            activeGestureUndoCapturedRef.current = false;
             setSelectedPointIndex(pointerLocation.pointIndex);
             setActiveSegmentIndex(-1);
             activePointerRef.current = {
@@ -2282,8 +2275,7 @@ export function useMsegEditorInteractions({
         }
 
         if (pointerLocation.segmentIndex >= 0) {
-            activeGestureUndoCapturedRef.current = false;
-            setActiveSegmentIndex(pointerLocation.segmentIndex);
+                setActiveSegmentIndex(pointerLocation.segmentIndex);
             setHoveredSegmentIndex(pointerLocation.segmentIndex);
             if (curveEditActivationMode === "immediate") {
                 activePointerRef.current = {
@@ -2338,26 +2330,15 @@ export function useMsegEditorInteractions({
             pointerLocation.bounds.height,
             { orientation },
         );
-        activeGestureUndoCapturedRef.current = false;
-        captureUndoShape();
-        msegController.current?.addPoint(point.x, point.y);
-        const points = msegController.current?.getState().shape.points ?? [];
-        const nextPointIndex = points.findIndex(
-            (nextPoint: { x: number; y: number }) =>
-                Math.abs(nextPoint.x - point.x) <= 1e-6 &&
-                Math.abs(nextPoint.y - point.y) <= 1e-6,
-        );
-
-            if (nextPointIndex >= 0) {
-            setSelectedPointIndex(nextPointIndex);
-        }
+        addPoint(point.x, point.y);
 
         setActiveSegmentIndex(-1);
         event.preventDefault();
     }, [
+        addPoint,
         curveEditActivationMode,
+        history.edit,
         curveEditHoldDelayMs,
-        captureUndoShape,
         msegController,
         msegState,
         onCurveEditHoldActivated,
@@ -2422,20 +2403,20 @@ export function useMsegEditorInteractions({
             { orientation },
         );
         if (!activePointer.moved) {
-            captureUndoShape();
             activePointerRef.current = {
                 ...activePointer,
                 moved: true,
             };
         }
-        msegController.current?.movePoint(activePointer.pointIndex, point.x, point.y);
+        const controller = msegController.current;
+        history.edit(() => controller?.movePoint(activePointer.pointIndex, point.x, point.y), true);
         setSelectedPointIndex(activePointer.pointIndex);
         setHoveredSegmentIndex(-1);
         setActiveSegmentIndex(-1);
         event.preventDefault();
     }, [
         applyCurveEditFromClientCoordinates,
-        captureUndoShape,
+        history.edit,
         clearPendingSegmentTimer,
         msegController,
         orientation,
@@ -2463,6 +2444,7 @@ export function useMsegEditorInteractions({
             return;
         }
 
+        void history.finishGesture();
         const pointerState = activePointer;
         activePointerRef.current = null;
         setActiveSegmentIndex(-1);
@@ -2485,18 +2467,7 @@ export function useMsegEditorInteractions({
                     bounds.height,
                     { orientation },
                 );
-                captureUndoShape();
-                msegController.current?.addPoint(point.x, point.y);
-                const points = msegController.current?.getState().shape.points ?? [];
-                const nextPointIndex = points.findIndex(
-                    (nextPoint: { x: number; y: number }) =>
-                        Math.abs(nextPoint.x - point.x) <= 1e-6 &&
-                        Math.abs(nextPoint.y - point.y) <= 1e-6,
-                );
-
-                if (nextPointIndex >= 0) {
-                    setSelectedPointIndex(nextPointIndex);
-                }
+                addPoint(point.x, point.y);
             }
             event.preventDefault();
             setHoveredSegmentIndex(resolvePointerLocation(event.clientX, event.clientY)?.segmentIndex ?? -1);
@@ -2510,17 +2481,22 @@ export function useMsegEditorInteractions({
         }
 
         if (!pointerState.moved && pointerState.deleteOnRelease && msegController.current) {
-            captureUndoShape();
-            msegController.current.deletePoint(pointerState.pointIndex);
-            const pointCount = msegController.current.getState().shape.points.length;
-            setSelectedPointIndex(clamp(pointerState.pointIndex - 1, 0, Math.max(0, pointCount - 1)));
+            const controller = msegController.current;
+            history.edit(() => {
+                const result = controller.deletePoint(pointerState.pointIndex);
+                const pointCount = controller.getState()?.shape.points.length ?? 0;
+                setSelectedPointIndex(clamp(pointerState.pointIndex - 1, 0, Math.max(0, pointCount - 1)));
+                return result;
+            });
         }
 
         setHoveredSegmentIndex(resolvePointerLocation(event.clientX, event.clientY)?.segmentIndex ?? -1);
         event.preventDefault();
     }, [
+        addPoint,
         cancelActivePointer,
-        captureUndoShape,
+        history.edit,
+        history.finishGesture,
         clearPendingSegmentTimer,
         msegController,
         orientation,
@@ -2533,12 +2509,14 @@ export function useMsegEditorInteractions({
         selectedPointIndex,
         hoveredSegmentIndex,
         activeSegmentIndex,
-        canUndo: undoShape !== null,
+        canUndo: history.canUndo,
         beginEditorSession,
         openEditor,
         resumeEditorSession,
         closeEditor,
         undoLastEdit,
+        cancelGesture: cancelActivePointer,
+        finishGesture: history.finishGesture,
         handlePointerDown,
         handlePointerMove,
         handlePointerLeave,
@@ -3100,7 +3078,7 @@ export function useSynthPatchViewModel({
         VOICE_ARTICULATION_START_ENDPOINT_ID,
         null,
     );
-    const { state: modulationState, bridge: modulationBridge } = useModulationState();
+    const { state: modulationState, bridge: modulationBridge, owner: modulationOwner } = useModulationState();
     const articulationPatchBaseRef = useRef<Partial<Record<OscillatorID, ArticulationSnapshot>>>({});
     const articulationPatchBaseConnectionRef = useRef(patchConnection);
     const [articulationPatchBaseRevision, setArticulationPatchBaseRevision] = useState(0);
@@ -3213,11 +3191,13 @@ export function useSynthPatchViewModel({
     const displayedMsegControllerRef = useRef<MsegEditorControllerLike | null>(null);
     displayedMsegControllerRef.current = modulationBridge.current?.getMsegSlotController(selectedMsegSlot) ?? null;
     const routes = useMemo(() => modulationState?.routes ?? [], [modulationState?.routes]);
+    const selectedMsegShape = modulationBridge.current?.getMsegSlotEditShapeIndex(selectedMsegSlot);
     const msegState = useMemo(() => {
         if (!modulationState || !modulationBridge.current) {
             return null;
         }
         const state = buildDisplayedMsegState(modulationBridge.current, selectedMsegSlot);
+        if (!state) return null;
         return {
             ...state,
             playback: {
@@ -3225,7 +3205,7 @@ export function useSynthPatchViewModel({
                 rate: { kind: "seconds" as const, seconds: selectedMsegRate.value },
             },
         };
-    }, [modulationBridge, modulationState, selectedMsegRate.value, selectedMsegSlot]);
+    }, [modulationBridge, modulationState, selectedMsegRate.value, selectedMsegSlot, selectedMsegShape]);
     const observedMsegPlayhead = useMemo(() => {
         return resolveMsegPreviewPlayheadState({
             observedState: observedMsegState,
@@ -3276,6 +3256,7 @@ export function useSynthPatchViewModel({
     });
     const msegEditor = useMsegEditorInteractions({
         msegState,
+        owner: modulationOwner,
         msegController: displayedMsegControllerRef,
         surfaceRef: msegEditorSurfaceRef,
         orientation: msegSurfaceOrientation,
@@ -3347,12 +3328,18 @@ export function useSynthPatchViewModel({
     }, [oscillator.oscillatorIndex, retryDesiredTableLoad]);
 
     const handleSelectMsegSlot = useCallback((slotIndex: number) => {
-        setSelectedMsegSlot(clamp(Math.round(slotIndex), 0, 2));
-    }, []);
+        const next = clamp(Math.round(slotIndex), 0, 2);
+        if (next === selectedMsegSlot) return;
+        msegEditor.beginEditorSession();
+        setSelectedMsegSlot(next);
+    }, [msegEditor.beginEditorSession, selectedMsegSlot]);
 
     const handleSelectMsegShape = useCallback((shapeIndex: number) => {
-        displayedMsegControllerRef.current?.setEditShapeIndex?.(shapeIndex);
-    }, []);
+        if ((Math.round(shapeIndex) === 1 ? 1 : 0) === selectedMsegShape) return;
+        msegEditor.cancelGesture();
+        void msegEditor.finishGesture(true);
+        submitModulationEdit(modulationBridge.current?.setMsegSlotEditShapeIndex(selectedMsegSlot, shapeIndex));
+    }, [msegEditor.cancelGesture, msegEditor.finishGesture, modulationBridge, selectedMsegSlot, selectedMsegShape]);
 
     const handleSelectEnvelopeSlot = useCallback((slotIndex: number) => {
         setSelectedEnvelopeSlot(clamp(Math.round(slotIndex), 0, 3));
@@ -3378,12 +3365,12 @@ export function useSynthPatchViewModel({
             return;
         }
 
-        displayedMsegControllerRef.current?.setPlayback({
+        submitModulationEdit(modulationBridge.current?.setMsegSlotPlayback(selectedMsegSlot, {
             ...msegState.playback,
             loop: msegState.playback.loop ? null : { startX: 0, endX: 1 },
             noteOffPolicy: "finish_loop",
-        });
-    }, [msegState]);
+        }));
+    }, [modulationBridge, msegState, selectedMsegSlot]);
 
     const handleMsegMorphChange = useCallback((nextValue: number) => {
         const nextMorph = clamp(Number(nextValue) || 0, 0, 1);
@@ -3413,8 +3400,8 @@ export function useSynthPatchViewModel({
             : MODULATION_TARGET_OPTIONS.filter((option) => (
                 !isOscillatorModulationTargetKind(option.value)
             ));
-        const route = createFirstAvailableModulationRoute(bridge.getState().routes, targetOptions);
-        if (route) bridge.addRoute(route);
+        const route = createFirstAvailableModulationRoute(bridge.getState()?.routes ?? [], targetOptions);
+        if (route) submitModulationEdit(bridge.addRoute(route));
     }, [modulationBridge, oscillatorTargetsActive]);
 
     const handleAddRouteWithOverrides = useCallback((overrides: GeneratedModulationRouteInput) => {
@@ -3422,22 +3409,28 @@ export function useSynthPatchViewModel({
             return false;
         }
         const bridge = modulationBridge.current;
-        return bridge !== null && bridge.addGeneratedRoute(overrides) !== null;
+        const bank = bridge?.getState();
+        if (!bridge?.isReady() || !bank) return false;
+        const route = createDefaultRoute({ ...overrides, id: createAvailableGeneratedRouteId(bank.routes) });
+        if (parseModulationState({ ...bank, routes: [...bank.routes, route] })._tag === "err") return false;
+        // This legacy boolean means validated submission; acceptance belongs to the owner.
+        submitModulationEdit(bridge.addRoute(route));
+        return true;
     }, [modulationBridge, oscillatorTargetsActive]);
 
     const handleRemoveRoute = useCallback((routeIndex: number) => {
-        modulationBridge.current?.removeRoute(routeIndex);
+        submitModulationEdit(modulationBridge.current?.removeRoute(routeIndex));
     }, [modulationBridge]);
 
     const handleRouteChange = useCallback((routeIndex: number, update: ModulationRouteUpdate) => {
         const bridge = modulationBridge.current;
-        const currentRoute = bridge?.getState().routes[routeIndex];
+        const currentRoute = bridge?.getState()?.routes[routeIndex];
 
         if (!bridge || !currentRoute) {
             return;
         }
 
-        bridge.setRoute(routeIndex, { ...currentRoute, ...update });
+        submitModulationEdit(bridge.setRoute(routeIndex, { ...currentRoute, ...update }));
     }, [modulationBridge]);
 
     const captureCurrentArticulationSnapshot = useCallback((): ArticulationSnapshot => {
@@ -3751,7 +3744,7 @@ export function useSynthPatchViewModel({
             });
         });
 
-        const currentRoutes = bridge?.getState().routes ?? modulationState?.routes ?? [];
+        const currentRoutes = bridge?.getState()?.routes ?? modulationState?.routes ?? [];
         const routeAmountById = new Map(snapshot.modRouteAmounts.map((routeAmount) => [
             routeAmount.routeId,
             routeAmount.amount,
@@ -3776,7 +3769,7 @@ export function useSynthPatchViewModel({
         });
 
         if (hasRouteAmountChange) {
-            bridge?.replaceRoutes(nextRoutes);
+            submitModulationEdit(bridge?.replaceRoutes(nextRoutes));
         }
     }, [
         filterCutoff,
@@ -3868,7 +3861,7 @@ export function useSynthPatchViewModel({
         }
 
         articulationPatchBaseRef.current[oscillatorID] = baseSnapshot;
-        const routes = modulationBridge.current?.getState().routes ?? modulationState?.routes ?? [];
+        const routes = modulationBridge.current?.getState()?.routes ?? modulationState?.routes ?? [];
         isApplyingArticulationRef.current = true;
         setSelectedArticulationIsDirty(false);
         applyArticulationSnapshot(resolveVisibleArticulationSnapshotV4(slot, baseSnapshot, routes, oscillatorID));
@@ -3906,7 +3899,7 @@ export function useSynthPatchViewModel({
         if (baseSnapshot === null) {
             return;
         }
-        const routes = modulationBridge.current?.getState().routes ?? modulationState?.routes ?? [];
+        const routes = modulationBridge.current?.getState()?.routes ?? modulationState?.routes ?? [];
         articulationBankState.setAndPersistState((previousState) => replaceVisibleArticulationSnapshotV4(
             previousState,
             slotId,
@@ -3950,7 +3943,7 @@ export function useSynthPatchViewModel({
 
         isApplyingArticulationRef.current = true;
         setSelectedArticulationIsDirty(false);
-        const routes = modulationBridge.current?.getState().routes ?? modulationState?.routes ?? [];
+        const routes = modulationBridge.current?.getState()?.routes ?? modulationState?.routes ?? [];
         applyArticulationSnapshot(resolveVisibleArticulationSnapshotV4(slot, baseSnapshot, routes, oscillatorID));
         setTimeout(() => {
             isApplyingArticulationRef.current = false;
@@ -4071,7 +4064,7 @@ export function useSynthPatchViewModel({
         articulationBankState.setAndPersistState(assignedState);
 
         if (nextSlot) {
-            const routes = modulationBridge.current?.getState().routes ?? modulationState?.routes ?? [];
+            const routes = modulationBridge.current?.getState()?.routes ?? modulationState?.routes ?? [];
             isApplyingArticulationRef.current = true;
             setSelectedArticulationIsDirty(false);
             applyArticulationSnapshot(resolveVisibleArticulationSnapshotV4(nextSlot, baseSnapshot, routes, oscillatorID));
@@ -4145,7 +4138,7 @@ export function useSynthPatchViewModel({
         if (baseSnapshot === null) {
             return;
         }
-        const routes = modulationBridge.current?.getState().routes ?? modulationState?.routes ?? [];
+        const routes = modulationBridge.current?.getState()?.routes ?? modulationState?.routes ?? [];
         articulationBankState.setAndPersistState((previousState) => replaceVisibleArticulationSnapshotV4(
             previousState,
             slotId,
@@ -4179,7 +4172,7 @@ export function useSynthPatchViewModel({
         articulationBankState.setAndPersistState(nextState);
 
         if (nextSlot) {
-            const routes = modulationBridge.current?.getState().routes ?? modulationState?.routes ?? [];
+            const routes = modulationBridge.current?.getState()?.routes ?? modulationState?.routes ?? [];
             isApplyingArticulationRef.current = true;
             setSelectedArticulationIsDirty(false);
             applyArticulationSnapshot(resolveVisibleArticulationSnapshotV4(nextSlot, baseSnapshot, routes, oscillatorID));
@@ -4211,7 +4204,7 @@ export function useSynthPatchViewModel({
         articulationBankState.setAndPersistState(nextState);
 
         if (selectedChanged && nextSlot) {
-            const routes = modulationBridge.current?.getState().routes ?? modulationState?.routes ?? [];
+            const routes = modulationBridge.current?.getState()?.routes ?? modulationState?.routes ?? [];
             isApplyingArticulationRef.current = true;
             setSelectedArticulationIsDirty(false);
             applyArticulationSnapshot(resolveVisibleArticulationSnapshotV4(nextSlot, baseSnapshot, routes, oscillatorID));

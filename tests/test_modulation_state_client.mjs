@@ -72,6 +72,27 @@ async function fixture(routes = []) {
         async stop() { for (const client of clients) client.stop(); await Promise.all(jobs); await session.stop(); assert.deepEqual(defects, []); } };
 }
 
+test("a facade gesture handle ends only its original interaction after a public side switch", async () => {
+    const f = await fixture();
+    const bridge = api.createModulationStateClient(f.client);
+    try {
+        const first = bridge.startGesture();
+        assert.equal((await first.ready).kind, "accepted");
+        assert.equal((await bridge.setMsegSlotEditShapeIndex(0, 1)).kind, "accepted");
+        const second = bridge.startGesture();
+        assert.equal((await second.ready).kind, "accepted");
+        const active = f.session.getSnapshot().fields[key].gesture;
+        assert.ok(active);
+        assert.equal(await first.end(), undefined);
+        assert.deepEqual(f.session.getSnapshot().fields[key].gesture, active);
+        const ended = second.end();
+        assert.strictEqual(second.end(), ended);
+        assert.equal((await ended).kind, "accepted");
+        assert.equal(f.session.getSnapshot().fields[key].gesture, undefined);
+        assert.equal(f.session.getSnapshot().history.canUndo, false);
+    } finally { await bridge.stop(); await f.stop(); }
+});
+
 test("MSEG B drafts and grouped edits use the actual client and share Undo with an interleaved Voice scalar", async () => {
     const f = await fixture();
     const bridge = api.createModulationStateClient(f.client);

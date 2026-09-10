@@ -9,6 +9,7 @@ const root = path.resolve(import.meta.dirname, "..");
 const { createMockPluginStateHost } = await loadUIModule(root, "ui/shared/mock-plugin-state-host.ts");
 const { createCmajorPluginStateClient } = await loadUIModule(root, "kit/ui/plugin-state-cmajor.ts");
 const { synthPluginState } = await loadUIModule(root, "ui/shared/synth-plugin-state.ts");
+const { createDefaultModulationState, MODULATION_STATE_KEY } = await loadUIModule(root, "ui/shared/modulation.ts");
 const runtime = process.env.COSIMO_PLUGIN_STATE_CMAJOR_SOURCE
     ? path.join(process.env.COSIMO_PLUGIN_STATE_CMAJOR_SOURCE, "javascript/cmaj_api")
     : stageCmajorWebRuntime(root, { buildDirectory: path.join(root, "build/cmajor_web_runtime-mock-state-tests"), instanceId: String(process.pid) });
@@ -136,5 +137,60 @@ test("a failed channel import closes startup and rejects future envelopes instea
         assert.equal(client.getSnapshot().kind, "closed");
         assert.throws(() => host.sendMessageToServer({ type: "kit_state", message: { kind: "attach", request: 99 } }), /stopped/);
         assert.deepEqual(defects, [problem]);
+    } finally { client.stop(); await host.stop(); }
+});
+
+test("dev host shares native modulation storage with the real owner and fences raw restores without erasing unrelated history", async () => {
+    const initial = createDefaultModulationState();
+    initial.msegSlots[0].shapeB.points[0].y = 0.34;
+    const stored = new Map([[MODULATION_STATE_KEY, JSON.stringify(initial)], ["unowned", "retained"]]);
+    const parameters = new Map([["playMode", 1], ["glideTime", 0.15], ["globalTune", -7.5]]);
+    const writes = [], defects = [];
+    const host = createMockPluginStateHost({
+        loadChannel,
+        readParameter: async endpoint => ({ endpoint, value: parameters.get(endpoint), min: endpoint === "globalTune" ? -24 : 0,
+            max: endpoint === "globalTune" ? 24 : 2, step: endpoint === "playMode" ? 1 : 0, defaultValue: 0 }),
+        writeParameter(endpoint, value) { parameters.set(endpoint, value); },
+        storedValues: {
+            read: key => stored.get(key),
+            write(key, value) { writes.push([key, value]); stored.set(key, value); },
+        },
+        beginGesture() {}, endGesture() {}, onDefect: error => defects.push(error),
+    });
+    const client = createCmajorPluginStateClient(synthPluginState, host, { onDefect: error => defects.push(error) });
+    try {
+        await host.ready;
+        await until(() => client.getSnapshot().kind === "ready");
+        assert.deepEqual(client.getSnapshot().state.fields[MODULATION_STATE_KEY].value, initial);
+        const scope = client.getSnapshot().state.scope;
+        const edited = structuredClone(initial);
+        edited.msegSlots[0].shapeB.points[0].y = 0.76;
+        assert.equal((await client.dispatch({ kind: "edit", key: MODULATION_STATE_KEY, value: edited })).kind, "accepted");
+        await until(() => stored.get(MODULATION_STATE_KEY) === JSON.stringify(edited));
+        assert.deepEqual(writes, [[MODULATION_STATE_KEY, JSON.stringify(edited)]], "owner publication goes straight to the same native storage, without recursively restoring");
+        assert.deepEqual(client.getSnapshot().state.scope, scope);
+        assert.equal(client.getSnapshot().state.history.canUndo, true);
+        let unrelatedWrite = false;
+        assert.equal(host.replaceStoredValue("unowned", () => { unrelatedWrite = true; }), false);
+        assert.equal(unrelatedWrite, false, "caller owns writing keys not declared by the state owner");
+        assert.deepEqual(client.getSnapshot().state.scope, scope);
+        assert.equal(client.getSnapshot().state.history.canUndo, true);
+        const restored = structuredClone(initial);
+        restored.msegSlots[1].shapeA.points[0].y = 0.58;
+        assert.equal(host.replaceStoredValue(MODULATION_STATE_KEY, () => stored.set(MODULATION_STATE_KEY, JSON.stringify(restored))), true);
+        assert.equal(stored.get(MODULATION_STATE_KEY), JSON.stringify(restored), "native raw setters remain synchronous");
+        await until(() => client.getSnapshot().kind === "ready" && client.getSnapshot().state.scope.document > scope.document);
+        assert.equal(client.getSnapshot().state.scope.owner, scope.owner);
+        assert.deepEqual(client.getSnapshot().state.fields[MODULATION_STATE_KEY].value, restored);
+        assert.equal(client.getSnapshot().state.history.canUndo, false, "old edits cannot restore across a raw document replacement");
+        assert.equal(client.getSnapshot().state.fields.globalTune.value, -7.5);
+        assert.equal(stored.get("unowned"), "retained");
+        assert.equal(writes.length, 1, "raw restore must not echo back a second write");
+        assert.equal((await client.dispatch({ kind: "edit", key: "globalTune", value: 2 })).kind, "accepted");
+        await until(() => parameters.get("globalTune") === 2);
+        parameters.set("globalTune", 3);
+        host.observeParameter("globalTune");
+        await until(() => client.getSnapshot().state.fields.globalTune.value === 3);
+        assert.deepEqual(defects, []);
     } finally { client.stop(); await host.stop(); }
 });

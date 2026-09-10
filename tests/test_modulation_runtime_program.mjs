@@ -5,6 +5,7 @@ import { fileURLToPath } from "node:url";
 import test from "node:test";
 
 import { loadUIModule } from "./helpers/load_ui_module.mjs";
+import { createModulationFixture, waitForModulation } from "./helpers/modulation_state_fixture.mjs";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const programModulePromise = loadUIModule(repoRoot, "ui/shared/modulation-runtime-program.ts");
@@ -721,10 +722,11 @@ test("generic Add chooses an unused source-target pair", async () => {
     assert.equal(next?.targetKind, "oscA.pitchSemitones");
 });
 
-test("explicit Add rejects a route ID collision without changing state", async () => {
+test("explicit Add rejects a route ID collision without changing state", async (t) => {
     const modulation = await modulationModulePromise;
     const storedWrites = [];
-    const bridge = new modulation.ModulationRuntimeBridge({
+    const { bridge } = await createModulationFixture(t, {
+        storedState: {},
         sendStoredStateValue(key, value) {
             storedWrites.push({ key, value });
         },
@@ -733,21 +735,22 @@ test("explicit Add rejects a route ID collision without changing state", async (
         id: "collision",
         targetKind: "oscA.wavetablePosition",
     });
-    assert.notEqual(bridge.addRoute(existingRoute), null);
+    assert.equal((await bridge.addRoute(existingRoute)).kind, "accepted");
+    await waitForModulation(() => storedWrites.length === 1);
     storedWrites.length = 0;
 
-    const added = bridge.addRoute(modulation.createDefaultRoute({
+    const added = await bridge.addRoute(modulation.createDefaultRoute({
         id: existingRoute.id,
         targetKind: "oscA.pan",
     }));
 
     const routes = bridge.getState().routes;
-    assert.equal(added, null);
+    assert.equal(added.kind, "rejected");
     assert.deepEqual(routes, [existingRoute]);
     assert.equal(storedWrites.length, 0);
 });
 
-test("generated Add skips route IDs restored from storage", async () => {
+test("generated Add skips route IDs restored from storage", async (t) => {
     const modulation = await modulationModulePromise;
     const restoredState = modulation.normalizeModulationState({
         routes: [modulation.createDefaultRoute({
@@ -758,31 +761,28 @@ test("generated Add skips route IDs restored from storage", async () => {
         })],
     });
     const storedWrites = [];
-    const bridge = new modulation.ModulationRuntimeBridge({
-        requestFullStoredState(callback) {
-            callback({
-                [modulation.MODULATION_STATE_KEY]: modulation.serializeModulationState(restoredState),
-            });
-        },
+    const { bridge } = await createModulationFixture(t, {
+        storedState: { [modulation.MODULATION_STATE_KEY]: modulation.serializeModulationState(restoredState) },
         sendStoredStateValue(key, value) {
             storedWrites.push({ key, value });
         },
     });
-    bridge.requestBootState();
 
-    const added = bridge.addGeneratedRoute({
+    const added = await bridge.addGeneratedRoute({
         sourceKind: "mseg",
         sourceSlot: 1,
         targetKind: "oscA.pitchSemitones",
     });
 
-    assert.notEqual(added, null);
-    assert.notEqual(added.id, "mod-route-auto-1");
+    assert.equal(added.kind, "accepted");
+    assert.notEqual(added.routeId, "mod-route-auto-1");
+    const route = bridge.getState().routes.find(candidate => candidate.id === added.routeId);
+    assert.ok(route);
     assert.deepEqual(
         {
-            sourceKind: added.sourceKind,
-            sourceSlot: added.sourceSlot,
-            targetKind: added.targetKind,
+            sourceKind: route.sourceKind,
+            sourceSlot: route.sourceSlot,
+            targetKind: route.targetKind,
         },
         {
             sourceKind: "mseg",
@@ -792,6 +792,7 @@ test("generated Add skips route IDs restored from storage", async () => {
     );
     assert.equal(bridge.getState().routes.length, 2);
     assert.equal(new Set(bridge.getState().routes.map((route) => route.id)).size, 2);
+    await waitForModulation(() => storedWrites.length === 1);
     assert.equal(storedWrites.length, 1);
     assert.deepEqual(
         modulation.deserializeModulationState(storedWrites[0].value).routes,
@@ -799,10 +800,11 @@ test("generated Add skips route IDs restored from storage", async () => {
     );
 });
 
-test("generated Add rejects an existing source-target pair without persisting", async () => {
+test("generated Add rejects an existing source-target pair without persisting", async (t) => {
     const modulation = await modulationModulePromise;
     const storedWrites = [];
-    const bridge = new modulation.ModulationRuntimeBridge({
+    const { bridge } = await createModulationFixture(t, {
+        storedState: {},
         sendStoredStateValue(key, value) {
             storedWrites.push({ key, value });
         },
@@ -813,16 +815,17 @@ test("generated Add rejects an existing source-target pair without persisting", 
         sourceSlot: 1,
         targetKind: "oscA.pitchSemitones",
     });
-    assert.notEqual(bridge.addRoute(existingRoute), null);
+    assert.equal((await bridge.addRoute(existingRoute)).kind, "accepted");
+    await waitForModulation(() => storedWrites.length === 1);
     storedWrites.length = 0;
 
-    const added = bridge.addGeneratedRoute({
+    const added = await bridge.addGeneratedRoute({
         sourceKind: "mseg",
         sourceSlot: 1,
         targetKind: "oscA.pitchSemitones",
     });
 
-    assert.equal(added, null);
+    assert.equal(added.kind, "rejected");
     assert.deepEqual(bridge.getState().routes, [existingRoute]);
     assert.equal(storedWrites.length, 0);
 });

@@ -1,5 +1,5 @@
 import type { PatchConnectionLike } from "./cmajor-react";
-import { createMockPluginStateHost } from "./mock-plugin-state-host";
+import { createMockPluginStateHost, type MockPluginStateChannelModule } from "./mock-plugin-state-host";
 import type { PluginStateNativeParameter } from "../../kit/ui/plugin-state-session";
 import {
     EFFECT_ID_TO_LANE_TYPE,
@@ -12,7 +12,7 @@ import {
 } from "./lane-state-v2";
 import { getLaneSlotId, getLaneSlotParamIndex } from "./lane-slot-params";
 import { getRackParameterDescriptor } from "./rack-parameter-descriptors";
-import { createModulationArticulationWorkerService } from "../worker/modulation-articulation-worker-service";
+import { createSynthModulationBinding } from "../worker/synth-modulation-binding";
 import { allTargetDescriptors } from "./target-descriptor";
 import {
     OSCILLATOR_BINDING_CONTRACTS,
@@ -861,21 +861,35 @@ export class MockPatchConnection implements PatchConnectionLike {
         changes: Array<{ endpointID: string; before: unknown; after: unknown }>;
     }> = [];
     private status: ReturnType<typeof buildHarnessStatus>;
-    private readonly modulationArticulationWorkerService;
     private readonly pluginStateHost;
+    // The browser harness records this native-only effect. It does not emulate
+    // the C++ MIDI processor or claim that this changes real incoming notes.
+    private nativeHostEffects: Array<{ name: string; value: string }> = [];
 
-    constructor(manifest: unknown) {
+    constructor(manifest: unknown, options: { loadStateChannel?: () => Promise<MockPluginStateChannelModule> } = {}) {
         this.manifest = manifest;
         this.status = buildHarnessStatus(manifest);
         this.pluginStateHost = createMockPluginStateHost({
+            loadChannel: options.loadStateChannel,
             readParameter: (endpoint, signal) => this.readStateParameter(endpoint, signal),
             writeParameter: (endpoint, value) => this.sendEventOrValue(endpoint, value),
+            storedValues: {
+                read: key => this.storedState.get(key),
+                write: (key, value) => this.applyStoredValue(key, value),
+            },
+            engine: {
+                bindings: [createSynthModulationBinding(this)],
+                sendEvent: (endpoint, value) => this.sendEventOrValue(endpoint, value),
+                handleHostEffect: (name, value) => {
+                    if (name !== "cosimo.articulation-trigger-config" || typeof value !== "string") return false;
+                    this.nativeHostEffects.push({ name, value });
+                    return true;
+                },
+            },
             beginGesture: endpoint => this.sendParameterGestureStart(endpoint),
             endGesture: endpoint => this.sendParameterGestureEnd(endpoint),
             onDefect: error => console.error("Mock plugin state host failed", error),
         });
-        this.modulationArticulationWorkerService = createModulationArticulationWorkerService(this);
-        this.modulationArticulationWorkerService.start();
         queueMicrotask(() => this.emitEndpoint(runtimeStateEndpointID, this.runtimeState));
     }
 
@@ -1230,6 +1244,10 @@ export class MockPatchConnection implements PatchConnectionLike {
     }
 
     sendStoredStateValue(key: string, value: unknown) {
+        if (!this.pluginStateHost.replaceStoredValue(key, () => this.applyStoredValue(key, value))) this.applyStoredValue(key, value);
+    }
+
+    private applyStoredValue(key: string, value: unknown) {
         this.storedState.set(key, value);
         const message = { key, value };
         this.storedStateListeners.forEach((listener) => listener(message));
@@ -1242,6 +1260,7 @@ export class MockPatchConnection implements PatchConnectionLike {
         this.endpointMessages = [];
         this.midiInputEvents = [];
         this.parameterTransactions = [];
+        this.nativeHostEffects = [];
     }
 
     getDebugSnapshot() {
@@ -1264,6 +1283,7 @@ export class MockPatchConnection implements PatchConnectionLike {
             laneParams,
             runtimeState: { ...this.runtimeState },
             storedState: Object.fromEntries(this.storedState.entries()),
+            nativeHostEffects: this.nativeHostEffects.map(effect => ({ ...effect })),
             sentMessages: this.sentMessages.map((message) => ({
                 endpointID: message.endpointID,
                 value: message.value,
@@ -1587,9 +1607,7 @@ export class MockPatchConnection implements PatchConnectionLike {
     }
 
     setStoredStateValue(key: string, value: unknown) {
-        this.storedState.set(key, value);
-        const message = { key, value };
-        this.storedStateListeners.forEach((listener) => listener(message));
+        this.sendStoredStateValue(key, value);
     }
 }
 

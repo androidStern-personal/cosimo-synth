@@ -4,8 +4,13 @@ processor PluginStateChannel
     // Neutral second host parameter exercises independent gesture cleanup.
     input value float resetPeer [[ name: "Reset peer", min: -12, max: 12, step: 0.5, init: 1 ]];
     input event float curveBuffer;
+    // Large packets exercise real queue pressure and contiguous storage sizing.
+    input event float[10000] pressureBuffer;
+    input event float[7000] pressurePadding;
     output stream float out;
     float curve = 0;
     event curveBuffer (float value) { curve = value; }
+    event pressureBuffer (float[10000] value) { curve = value[0] + value[9999]; }
+    event pressurePadding (float[7000] value) { curve = value[0] + value[6999]; }
     void main() { loop { out <- gain + curve; advance(); } }
 }

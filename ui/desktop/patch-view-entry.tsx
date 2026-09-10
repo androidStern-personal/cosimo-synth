@@ -10,10 +10,7 @@ import {
     type ResourceClient,
 } from "../shared/resource-client";
 import type { SynthKeyboardInputMode } from "../shared/synth-input-router";
-import {
-    acquireModulationRuntimeBridge,
-    releaseModulationRuntimeBridge,
-} from "../shared/modulation";
+import { acquireSynthViewState } from "../shared/synth-state-client";
 
 // Dev-only inspector; it fetches external fonts and phones home, so automated
 // browsers (navigator.webdriver) skip it to keep test pages hermetic.
@@ -93,6 +90,7 @@ class CosimoDesktopReactViewElement extends HTMLElement {
     private root: Root | null = null;
     private mountPoint: HTMLDivElement | null = null;
     private modulationRuntimePatchConnection: PatchConnectionLike | null = null;
+    private stateLease: ReturnType<typeof acquireSynthViewState> | null = null;
 
     setPatchConnection(
         patchConnection: PatchConnectionLike,
@@ -100,7 +98,8 @@ class CosimoDesktopReactViewElement extends HTMLElement {
         keyboardInputMode: SynthKeyboardInputMode = "hosted",
     ) {
         if (this.modulationRuntimePatchConnection && this.modulationRuntimePatchConnection !== patchConnection) {
-            releaseModulationRuntimeBridge(this.modulationRuntimePatchConnection);
+            this.stateLease?.release();
+            this.stateLease = null;
             this.modulationRuntimePatchConnection = null;
         }
 
@@ -108,13 +107,17 @@ class CosimoDesktopReactViewElement extends HTMLElement {
         this.resourceClient = resourceClient ?? null;
         this.keyboardInputMode = keyboardInputMode;
         if (!this.modulationRuntimePatchConnection) {
-            acquireModulationRuntimeBridge(patchConnection);
+            this.stateLease = acquireSynthViewState(patchConnection);
             this.modulationRuntimePatchConnection = patchConnection;
         }
         this.renderApp();
     }
 
     connectedCallback() {
+        if (this.patchConnection && !this.stateLease) {
+            this.stateLease = acquireSynthViewState(this.patchConnection);
+            this.modulationRuntimePatchConnection = this.patchConnection;
+        }
         if (import.meta.env.DEV) {
             this.ensureLightDomStyles();
 
@@ -155,7 +158,8 @@ class CosimoDesktopReactViewElement extends HTMLElement {
         this.root = null;
 
         if (this.modulationRuntimePatchConnection) {
-            releaseModulationRuntimeBridge(this.modulationRuntimePatchConnection);
+            this.stateLease?.release();
+            this.stateLease = null;
             this.modulationRuntimePatchConnection = null;
         }
     }

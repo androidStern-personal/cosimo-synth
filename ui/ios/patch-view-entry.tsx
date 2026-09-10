@@ -8,10 +8,7 @@ import {
     createIOSResourceClient,
     type ResourceClient,
 } from "../shared/resource-client";
-import {
-    acquireModulationRuntimeBridge,
-    releaseModulationRuntimeBridge,
-} from "../shared/modulation";
+import { acquireSynthViewState } from "../shared/synth-state-client";
 
 type ErrorBoundaryState = {
     errorMessage: string | null;
@@ -83,23 +80,29 @@ class CosimoIOSReactViewElement extends HTMLElement {
     private root: Root | null = null;
     private mountPoint: HTMLDivElement | null = null;
     private modulationRuntimePatchConnection: PatchConnectionLike | null = null;
+    private stateLease: ReturnType<typeof acquireSynthViewState> | null = null;
 
     setPatchConnection(patchConnection: PatchConnectionLike, resourceClient?: ResourceClient) {
         if (this.modulationRuntimePatchConnection && this.modulationRuntimePatchConnection !== patchConnection) {
-            releaseModulationRuntimeBridge(this.modulationRuntimePatchConnection);
+            this.stateLease?.release();
+            this.stateLease = null;
             this.modulationRuntimePatchConnection = null;
         }
 
         this.patchConnection = patchConnection;
         this.resourceClient = resourceClient ?? null;
         if (!this.modulationRuntimePatchConnection) {
-            acquireModulationRuntimeBridge(patchConnection);
+            this.stateLease = acquireSynthViewState(patchConnection);
             this.modulationRuntimePatchConnection = patchConnection;
         }
         this.renderApp();
     }
 
     connectedCallback() {
+        if (this.patchConnection && !this.stateLease) {
+            this.stateLease = acquireSynthViewState(this.patchConnection);
+            this.modulationRuntimePatchConnection = this.patchConnection;
+        }
         if (!this.shadowRoot) {
             this.attachShadow({ mode: "open" });
         }
@@ -127,7 +130,8 @@ class CosimoIOSReactViewElement extends HTMLElement {
         this.root = null;
 
         if (this.modulationRuntimePatchConnection) {
-            releaseModulationRuntimeBridge(this.modulationRuntimePatchConnection);
+            this.stateLease?.release();
+            this.stateLease = null;
             this.modulationRuntimePatchConnection = null;
         }
     }

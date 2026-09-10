@@ -22,7 +22,7 @@ import {
     type ResourceClientInput,
 } from "../shared/resource-client";
 import { startPatchWorkerServices } from "../shared/patch-worker-services";
-import { createModulationArticulationWorkerService } from "./modulation-articulation-worker-service";
+import { createSynthModulationBinding } from "./synth-modulation-binding";
 import { createRackStateWorkerService } from "./rack-state-worker-service";
 
 const runtimeSyncRequestEndpointID = "runtimeSyncRequest";
@@ -1614,11 +1614,11 @@ export function createWavetableWorkerController(connection: PatchConnectionLike,
 
 export default async function runWavetableWorker(connection: PatchConnectionLike & CmajorStateConnection, options: WavetableWorkerOptions = {}) {
     return startPatchWorkerServices(connection, [
-        createModulationArticulationWorkerService,
         createRackStateWorkerService,
         () => createWavetableWorkerController(connection, options),
         () => createCmajorPluginStateService(synthPluginState, connection, {
-            onDefect: error => console.error("Cosimo Voice state failed", describeErrorDetail(error)),
+            bindings: [createSynthModulationBinding(connection)],
+            onDefect: error => console.error("Cosimo state failed", describeErrorDetail(error)),
         }),
     ]);
 }

@@ -1324,6 +1324,199 @@ void testFailedResetCleanupDoesNotCloseReplacementOwner (Fixture& f, const char*
     std::cout << "PASS: reset failure cleanup does not close participants of a replacement owner\n";
 }
 
+
+Value pressurePayload (float marker)
+{
+    return choc::value::createArray (10000, [=] (uint32_t) { return marker; });
+}
+
+float renderPressure (Fixture& f)
+{
+    std::array<float, 128> output {};
+    float* channels[] { output.data() };
+    f.patch->process (channels, 128, [] (uint32_t, choc::midi::MessageView) {});
+    return output.back();
+}
+
+int fillPressureQueue (Fixture& f)
+{
+    const auto payload = pressurePayload (1);
+    for (int count = 0; count < 16; ++count)
+        if (! f.patch->sendEventOrValueToPatch (cmaj::EndpointID::create (std::string ("pressureBuffer")), payload, -1, 0))
+        {
+            require (count > 0, "no pressure packet fit the native input queue");
+            return count;
+        }
+    throw std::runtime_error ("pressure fixture failed to reach bounded native queue capacity");
+}
+
+// Cleanup must preserve an assertion/host exception even if it occurs before
+// the sender wakes its audio thread or before the test clears its callback.
+struct PressureCleanup
+{
+    Fixture& fixture;
+    std::promise<void>& entering;
+    std::thread& audio;
+    ~PressureCleanup()
+    {
+        try { entering.set_value(); } catch (...) {}
+        if (audio.joinable()) audio.join();
+        try { fixture.onLoop ([&] { fixture.patch->handleXrun = {}; }); } catch (...) {}
+    }
+};
+
+void testWorkerQueuePressure (Fixture& f, bool drain, bool explicitZero, bool gui, bool undefinedTimeout = false)
+{
+    int xruns = 0;
+    auto second = pressurePayload (2);
+    std::promise<void> entering;
+    auto entered = entering.get_future();
+    float drained = 0;
+    std::thread audio;
+    PressureCleanup cleanup { f, entering, audio };
+    f.onLoop ([&]
+    {
+        renderPressure (f); // Drain boot parameters before filling the real input FIFO.
+        fillPressureQueue (f);
+        f.patch->handleXrun = [&] { ++xruns; };
+    });
+    if (drain)
+        audio = std::thread ([&]
+        {
+            entered.wait();
+            std::this_thread::sleep_for (std::chrono::milliseconds (50));
+            drained = renderPressure (f);
+        });
+    const auto elapsed = f.onLoop ([&]
+    {
+        auto raw = choc::json::create ("type", "send_value", "id", "pressureBuffer", "value", second);
+        if (explicitZero) raw.addMember ("timeout", 0);
+        else if (undefinedTimeout)
+        {
+            raw.addMember ("timeout", Value());
+            require (raw.hasObjectMember ("timeout") && raw["timeout"].isVoid(), "optional QuickJS timeout fixture must retain its void member");
+        }
+        const auto start = std::chrono::steady_clock::now();
+        entering.set_value();
+        if (gui) f.patch->handleClientMessage (*f.a, raw);
+        else f.worker->sendToHost (raw); // The callback is installed by the actual PatchWorker.
+        return std::chrono::duration<double, std::milli> (std::chrono::steady_clock::now() - start).count();
+    });
+    if (audio.joinable()) audio.join();
+    f.onLoop ([&]
+    {
+        const auto output = renderPressure (f);
+        if (drain && ! explicitZero && ! gui)
+        {
+            require (std::abs (drained - 4.5f) < 0.001f, "audio did not consume original queued packet");
+            require (xruns == 0 && std::abs (output - 6.5f) < 0.001f, "worker omitted timeout lost the packet despite an audio drain");
+        }
+        else
+        {
+            require (xruns > 0 && std::abs (output - 4.5f) < 0.001f, "refused packet changed actual DSP or lacked enqueue failure reporting");
+            if (explicitZero || gui)
+                require (elapsed < 50, "explicit timeout zero or GUI default unexpectedly waited");
+            else
+                require (elapsed >= 80 && elapsed < 500, "worker default did not use a bounded wait with audio paused");
+        }
+        f.patch->handleXrun = {};
+    });
+    std::cout << "PASS: native raw queue pressure drain=" << drain << " zero=" << explicitZero << " gui=" << gui << " elapsedMs=" << elapsed << '\n';
+}
+
+void testEmptyFragmentedQueue (Fixture& f)
+{
+    int xruns = 0;
+    int blocks = 0;
+    std::promise<void> entering;
+    auto entered = entering.get_future();
+    std::thread audio;
+    PressureCleanup cleanup { f, entering, audio };
+    f.onLoop ([&]
+    {
+        renderPressure (f);
+        const auto padding = choc::value::createArray (7000, [] (uint32_t) { return 1.0f; });
+        require (f.patch->sendEventOrValueToPatch (cmaj::EndpointID::create (std::string ("pressurePadding")), padding, -1, 0), "28KB cursor-positioning event failed");
+        require (std::abs (renderPressure (f) - 4.5f) < 0.001f, "cursor-positioning event did not reach actual DSP");
+        f.patch->handleXrun = [&] { ++xruns; };
+    });
+    audio = std::thread ([&]
+    {
+        entered.wait();
+        for (; blocks < 60; ++blocks)
+        {
+            renderPressure (f);
+            std::this_thread::sleep_for (std::chrono::milliseconds (2));
+        }
+    });
+    f.onLoop ([&]
+    {
+        entering.set_value();
+        f.worker->sendToHost (choc::json::create ("type", "send_value", "id", "pressureBuffer", "value", pressurePayload (2)));
+    });
+    audio.join();
+    f.onLoop ([&]
+    {
+        const auto output = renderPressure (f);
+        std::cout << "TRACE: empty fragmented queue audioBlocks=" << blocks << " xruns=" << xruns << " output=" << output << '\n';
+        require (blocks == 60, "independent audio did not continue throughout the worker wait");
+        require (xruns == 0 && std::abs (output - 6.5f) < 0.001f,
+                 "empty FIFO cursor stranded a valid large worker event despite continuous actual audio drains");
+    });
+    std::cout << "PASS: empty fragmented native FIFO can accept a valid large event after audio advances\n";
+}
+
+void testPublicationQueueDeadline (Fixture& f)
+{
+    f.sendWorker (choc::json::parse (R"({"kind":"open","request":601,"parameters":[],"storedKeys":[],"eventEndpoints":["pressureBuffer"]})"));
+    f.waitFor ([&] { return f.worker->last ("opened")["request"].getWithDefault<int> (0) == 601; }, "pressure owner did not open");
+    Value body;
+    int filled = 0;
+    int xruns = 0;
+    std::promise<void> entering;
+    auto entered = entering.get_future();
+    float drained = 0;
+    std::chrono::steady_clock::time_point drainFinished;
+    std::thread audio;
+    PressureCleanup cleanup { f, entering, audio };
+    f.onLoop ([&]
+    {
+        renderPressure (f);
+        filled = fillPressureQueue (f);
+        f.patch->handleXrun = [&] { ++xruns; };
+        auto operations = choc::value::createArray (static_cast<uint32_t> (filled + 1), [] (uint32_t i)
+        { return choc::json::create ("kind", "event", "endpoint", "pressureBuffer", "value", pressurePayload (float (i + 2))); });
+        body = choc::json::create ("kind", "publish", "request", 602, "scope", f.worker->last ("opened")["scope"], "operations", operations);
+    });
+    audio = std::thread ([&]
+    {
+        entered.wait();
+        std::this_thread::sleep_for (std::chrono::milliseconds (50));
+        drained = renderPressure (f);
+        drainFinished = std::chrono::steady_clock::now();
+    });
+    const auto finished = f.onLoop ([&]
+    {
+        entering.set_value();
+        f.worker->send (body);
+        return std::chrono::steady_clock::now();
+    });
+    audio.join();
+    f.waitFor ([&] { return f.worker->last ("published")["request"].getWithDefault<int> (0) == 602; }, "paused publication did not settle");
+    f.onLoop ([&]
+    {
+        require (std::abs (drained - 4.5f) < 0.001f, "publication drain did not consume filler");
+        require (f.worker->last ("published")["result"]["reason"].toString() == "send-failed" && xruns > 0,
+                 "paused second effect did not report honest partial failure");
+        require (std::abs (renderPressure (f) - (2.5f + 2.0f * float (filled + 1))) < 0.001f,
+                 "accepted publication prefix was lost, or refused final effect reached DSP");
+        const auto remaining = std::chrono::duration<double, std::milli> (finished - drainFinished).count();
+        require (remaining >= 20 && remaining < 85, "publication did not share its one enqueue deadline across effects");
+        f.patch->handleXrun = {};
+        std::cout << "PASS: publication partial delivery shares one deadline; afterDrainMs=" << remaining << '\n';
+    });
+}
+
 }
 
 int main (int argc, char** argv)
@@ -1351,6 +1544,13 @@ int main (int argc, char** argv)
                 else if (mode == "--reset-unload") testUnloadInsideResetCallback (fixture);
                 else if (mode == "--reset-all-gestures") testResetFailureClosesEveryOriginalGesture (fixture);
                 else if (mode == "--reset-new-owner") testFailedResetCleanupDoesNotCloseReplacementOwner (fixture, argv[2]);
+                else if (mode == "--queue-worker-drain") testWorkerQueuePressure (fixture, true, false, false);
+                else if (mode == "--queue-worker-undefined") testWorkerQueuePressure (fixture, true, false, false, true);
+                else if (mode == "--queue-worker-paused") testWorkerQueuePressure (fixture, false, false, false);
+                else if (mode == "--queue-worker-zero") testWorkerQueuePressure (fixture, false, true, false);
+                else if (mode == "--queue-gui-zero") testWorkerQueuePressure (fixture, false, false, true);
+                else if (mode == "--queue-empty-fragment") testEmptyFragmentedQueue (fixture);
+                else if (mode == "--queue-publication") testPublicationQueueDeadline (fixture);
                 else throw std::runtime_error ("Unknown channel probe mode");
             }
             else
@@ -1395,6 +1595,20 @@ int main (int argc, char** argv)
             fixture.close();
             fixture.load (argv[2]);
             testFailedResetCleanupDoesNotCloseReplacementOwner (fixture, argv[2]);
+            fixture.close(); fixture.load (argv[2]);
+            testWorkerQueuePressure (fixture, true, false, false);
+            fixture.close(); fixture.load (argv[2]);
+            testWorkerQueuePressure (fixture, false, false, false);
+            fixture.close(); fixture.load (argv[2]);
+            testWorkerQueuePressure (fixture, true, false, false, true);
+            fixture.close(); fixture.load (argv[2]);
+            testWorkerQueuePressure (fixture, false, true, false);
+            fixture.close(); fixture.load (argv[2]);
+            testWorkerQueuePressure (fixture, false, false, true);
+            fixture.close(); fixture.load (argv[2]);
+            testPublicationQueueDeadline (fixture);
+            fixture.close(); fixture.load (argv[2]);
+            testEmptyFragmentedQueue (fixture);
             }
             result = 0;
         }

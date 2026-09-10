@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import path from "node:path";
 
 import { loadUIModule } from "./helpers/load_ui_module.mjs";
+import { loadChannel, waitForModulation } from "./helpers/modulation_state_fixture.mjs";
 
 // patch-connection-mock's module graph registers a custom element at import
 // time; a minimal stub keeps the bridge factory loadable under plain node.
@@ -41,7 +42,7 @@ function expectOkValue(result, label) {
  * product-initial "new patch" both adapters boot into. Fixture parity across
  * mock and bridge holds by construction — the same commands run on both.
  */
-function seedDemoPatch(adapter) {
+async function seedDemoPatch(adapter) {
     const { commands } = adapter;
     const a = expectOkValue(commands.addArticulation(), "seed articulation a");
     const b = expectOkValue(commands.addArticulation(), "seed articulation b");
@@ -56,10 +57,10 @@ function seedDemoPatch(adapter) {
     commands.setArticulationRange(b, "chain", "min", 42);
     commands.setArticulationRange(c, "chain", "min", 90);
     commands.setArticulationRange(b, "chain", "max", 89);
-    expectOkValue(commands.addMapping({ targetId: "oscA.warpAmount", sourceId: "envelope-1" }), "seed warp mapping");
+    expectOkValue(await commands.addMapping({ targetId: "oscA.warpAmount", sourceId: "envelope-1" }), "seed warp mapping");
     commands.setMappingAmount("oscA.warpAmount::envelope-1", 40, { _tag: "patchBase" });
-    expectOkValue(commands.addMapping({ targetId: "oscA.pitchSemitones", sourceId: "mseg-1" }), "seed tune mapping");
-    expectOkValue(commands.addMapping({ targetId: "phaser.phaserDepth", sourceId: "macro-1" }), "seed rack mapping");
+    expectOkValue(await commands.addMapping({ targetId: "oscA.pitchSemitones", sourceId: "mseg-1" }), "seed tune mapping");
+    expectOkValue(await commands.addMapping({ targetId: "phaser.phaserDepth", sourceId: "macro-1" }), "seed rack mapping");
     return { articulationIds: [a, b, c] };
 }
 
@@ -70,13 +71,13 @@ function seedDemoPatch(adapter) {
 function contractSuite(adapterName, makeAdapter) {
     const t = (title, fn) => test(`[${adapterName}] ${title}`, async () => {
         const adapter = await makeAdapter();
-        seedDemoPatch(adapter);
+        await seedDemoPatch(adapter);
         return fn(adapter);
     });
 
     // ── Snapshot & subscription mechanics ─────────────────────────────────
 
-    t("snapshot reference is stable until a command changes state", (adapter) => {
+    t("snapshot reference is stable until a command changes state", async (adapter) => {
         const first = adapter.getSnapshot();
         assert.equal(adapter.getSnapshot(), first);
         adapter.commands.setRepeatEnabled(true);
@@ -85,7 +86,7 @@ function contractSuite(adapterName, makeAdapter) {
         assert.equal(adapter.getSnapshot(), second);
     });
 
-    t("subscribers fire once per change and stop after unsubscribe", (adapter) => {
+    t("subscribers fire once per change and stop after unsubscribe", async (adapter) => {
         let calls = 0;
         const unsubscribe = adapter.subscribe(() => { calls += 1; });
         adapter.commands.setLatchEnabled(true);
@@ -97,7 +98,7 @@ function contractSuite(adapterName, makeAdapter) {
         assert.equal(calls, 2);
     });
 
-    t("port reads survive detachment from the adapter object", (adapter) => {
+    t("port reads survive detachment from the adapter object", async (adapter) => {
         // useSyncExternalStore passes getSnapshot/subscribe by value — an
         // implementation relying on `this` via property access breaks only
         // in React, so the contract pins it here.
@@ -108,11 +109,11 @@ function contractSuite(adapterName, makeAdapter) {
         assert.equal(getSnapshot(), before);
     });
 
-    t("the connection reports ready", (adapter) => {
+    t("the connection reports ready", async (adapter) => {
         assert.deepEqual(adapter.getSnapshot().connection, { _tag: "ready" });
     });
 
-    t("every parameter value is on the normalized 0..1 scale", (adapter) => {
+    t("every parameter value is on the normalized 0..1 scale", async (adapter) => {
         for (const [targetId, value] of Object.entries(adapter.getSnapshot().patch.parameterValues)) {
             assert.equal(value >= 0 && value <= 1, true, `${targetId} = ${value}`);
         }
@@ -120,7 +121,7 @@ function contractSuite(adapterName, makeAdapter) {
 
     // ── Parameters & edit layers ──────────────────────────────────────────
 
-    t("patch-base edits land in parameterValues and only there", (adapter) => {
+    t("patch-base edits land in parameterValues and only there", async (adapter) => {
         adapter.commands.setParameter({ targetId: "oscA.warpAmount", value: 0.9, layer: { _tag: "patchBase" } });
         const { patch } = adapter.getSnapshot();
         assert.equal(patch.parameterValues["oscA.warpAmount"], 0.9);
@@ -129,7 +130,7 @@ function contractSuite(adapterName, makeAdapter) {
         }
     });
 
-    t("articulation-layer edits write the override and never move the base", (adapter) => {
+    t("articulation-layer edits write the override and never move the base", async (adapter) => {
         const articulationId = adapter.getSnapshot().patch.articulations[0].id;
         const baseBefore = adapter.getSnapshot().patch.parameterValues["voice-filter.cutoff"];
         adapter.commands.setParameter({
@@ -144,8 +145,8 @@ function contractSuite(adapterName, makeAdapter) {
 
     // ── Mappings ──────────────────────────────────────────────────────────
 
-    t("addMapping creates one enabled unipolar mapping with the default amount", (adapter) => {
-        const result = adapter.commands.addMapping({ targetId: "phaser.phaserDepth", sourceId: "velocity" });
+    t("addMapping creates one enabled unipolar mapping with the default amount", async (adapter) => {
+        const result = await adapter.commands.addMapping({ targetId: "phaser.phaserDepth", sourceId: "velocity" });
         assert.equal(result._tag, "ok");
         const mapping = adapter.getSnapshot().patch.mappings.find((m) => m.id === result.value);
         assert.equal(mapping.targetId, "phaser.phaserDepth");
@@ -155,17 +156,17 @@ function contractSuite(adapterName, makeAdapter) {
         assert.equal(mapping.amount, 0.25, "default = 25% of the parameter span");
     });
 
-    t("a second mapping for the same pair is MappingAlreadyExists", (adapter) => {
-        const first = adapter.commands.addMapping({ targetId: "phaser.phaserDepth", sourceId: "velocity" });
+    t("a second mapping for the same pair is MappingAlreadyExists", async (adapter) => {
+        const first = await adapter.commands.addMapping({ targetId: "phaser.phaserDepth", sourceId: "velocity" });
         assert.equal(first._tag, "ok");
-        const second = adapter.commands.addMapping({ targetId: "phaser.phaserDepth", sourceId: "velocity" });
+        const second = await adapter.commands.addMapping({ targetId: "phaser.phaserDepth", sourceId: "velocity" });
         assert.equal(second._tag, "err");
         assert.equal(second.error._tag, "MappingAlreadyExists");
     });
 
-    t("controls without an engine modulation target cannot create mappings", (adapter) => {
+    t("controls without an engine modulation target cannot create mappings", async (adapter) => {
         const before = adapter.getSnapshot().patch.mappings;
-        const result = adapter.commands.addMapping({
+        const result = await adapter.commands.addMapping({
             targetId: "filter.globalFilterMode",
             sourceId: "mseg-1",
         });
@@ -187,7 +188,7 @@ function contractSuite(adapterName, makeAdapter) {
         let added = 0;
         outer: for (const targetId of targets) {
             for (const sourceId of sources) {
-                const result = adapter.commands.addMapping({ targetId, sourceId });
+                const result = await adapter.commands.addMapping({ targetId, sourceId });
                 if (result._tag === "ok") {
                     added += 1;
                     if (added === 101) {
@@ -203,7 +204,7 @@ function contractSuite(adapterName, makeAdapter) {
     t("the complete 1484-pair product domain is reachable", async (adapter) => {
         const { allTargetDescriptors } = await targetDescriptorPromise;
         for (const sourceType of ["mseg", "envelope", "macro"]) {
-            while (adapter.commands.createSource(sourceType)._tag === "ok") {
+            while ((await adapter.commands.createSource(sourceType))._tag === "ok") {
                 // Fill every declared source slot.
             }
         }
@@ -217,7 +218,7 @@ function contractSuite(adapterName, makeAdapter) {
 
         for (const targetId of targets) {
             for (const sourceId of sources) {
-                const result = adapter.commands.addMapping({ targetId, sourceId });
+                const result = await adapter.commands.addMapping({ targetId, sourceId });
                 if (result._tag === "err") {
                     assert.equal(result.error._tag, "MappingAlreadyExists");
                 }
@@ -227,7 +228,7 @@ function contractSuite(adapterName, makeAdapter) {
         assert.equal(adapter.getSnapshot().patch.mappings.length, 1484);
     });
 
-    t("mapping setters are reflected verbatim", (adapter) => {
+    t("mapping setters are reflected verbatim", async (adapter) => {
         const mappingId = adapter.getSnapshot().patch.mappings[0].id;
         adapter.commands.setMappingEnabled(mappingId, false);
         adapter.commands.setMappingPolarity(mappingId, "Bipolar");
@@ -236,7 +237,7 @@ function contractSuite(adapterName, makeAdapter) {
         assert.equal(mapping.polarity, "Bipolar");
     });
 
-    t("setMappingAmount respects the edit layer", (adapter) => {
+    t("setMappingAmount respects the edit layer", async (adapter) => {
         const mappingId = adapter.getSnapshot().patch.mappings[0].id;
         const articulationId = adapter.getSnapshot().patch.articulations[0].id;
         adapter.commands.setMappingAmount(mappingId, 40, { _tag: "patchBase" });
@@ -247,7 +248,7 @@ function contractSuite(adapterName, makeAdapter) {
         assert.equal(patch.articulationMappingAmounts[articulationId][mappingId], 80);
     });
 
-    t("global rack mappings never create inaudible per-note amount overrides", (adapter) => {
+    t("global rack mappings never create inaudible per-note amount overrides", async (adapter) => {
         const mapping = adapter.getSnapshot().patch.mappings.find((candidate) => (
             candidate.targetId === "phaser.phaserDepth" && candidate.sourceId === "macro-1"
         ));
@@ -268,11 +269,11 @@ function contractSuite(adapterName, makeAdapter) {
         );
     });
 
-    t("removeMapping prunes the mapping and every articulation amount override for it", (adapter) => {
+    t("removeMapping prunes the mapping and every articulation amount override for it", async (adapter) => {
         const mappingId = adapter.getSnapshot().patch.mappings[0].id;
         const articulationId = adapter.getSnapshot().patch.articulations[0].id;
         adapter.commands.setMappingAmount(mappingId, 66, { _tag: "articulationOverride", articulationId });
-        adapter.commands.removeMapping(mappingId);
+        await adapter.commands.removeMapping(mappingId);
         const { patch } = adapter.getSnapshot();
         assert.equal(patch.mappings.some((m) => m.id === mappingId), false);
         for (const amounts of Object.values(patch.articulationMappingAmounts)) {
@@ -282,10 +283,10 @@ function contractSuite(adapterName, makeAdapter) {
 
     // ── Sources ───────────────────────────────────────────────────────────
 
-    t("createSource fills the lowest free slot per type and exhausts at the limit", (adapter) => {
+    t("createSource fills the lowest free slot per type and exhausts at the limit", async (adapter) => {
         const created = [];
         for (;;) {
-            const result = adapter.commands.createSource("envelope");
+            const result = await adapter.commands.createSource("envelope");
             if (result._tag === "err") {
                 assert.equal(result.error._tag, "SourceSlotsExhausted");
                 assert.equal(result.error.sourceType, "envelope");
@@ -301,19 +302,19 @@ function contractSuite(adapterName, makeAdapter) {
         assert.equal(created.length, 2, "new patch starts with envelope-1 only");
     });
 
-    t("deleteSource removes its mappings; undoDeleteSource restores both", (adapter) => {
+    t("deleteSource removes its mappings; undoDeleteSource restores both", async (adapter) => {
         const sourceId = "envelope-1";
-        adapter.commands.setEnvelope(sourceId, {
+        await adapter.commands.setEnvelope(sourceId, {
             name: "Undo Env", attackSeconds: 0.47, decaySeconds: 0.36, sustain: 0.73, releaseSeconds: 1.2,
         });
         const before = adapter.getSnapshot();
         const mappingsBefore = before.patch.mappings.filter((m) => m.sourceId === sourceId);
         assert.equal(mappingsBefore.length > 0, true, "fixture must map envelope-1 somewhere");
-        adapter.commands.deleteSource(sourceId);
+        await adapter.commands.deleteSource(sourceId);
         const afterDelete = adapter.getSnapshot().patch;
         assert.equal(afterDelete.sources.some((source) => source.id === sourceId), false);
         assert.equal(afterDelete.mappings.some((m) => m.sourceId === sourceId), false);
-        adapter.commands.undoDeleteSource();
+        await adapter.commands.undoDeleteSource();
         const afterUndo = adapter.getSnapshot().patch;
         assert.equal(afterUndo.sources.some((source) => source.id === sourceId), true);
         assert.deepEqual(
@@ -332,7 +333,7 @@ function contractSuite(adapterName, makeAdapter) {
         }
     });
 
-    t("macro value and name commands are reflected in the source state", (adapter) => {
+    t("macro value and name commands are reflected in the source state", async (adapter) => {
         adapter.commands.setMacroValue("macro-1", 0.31);
         adapter.commands.renameMacro("macro-1", "Shimmer");
         const macro = adapter.getSnapshot().patch.sources.find((source) => source.id === "macro-1");
@@ -341,13 +342,13 @@ function contractSuite(adapterName, makeAdapter) {
         assert.equal(macro.state.name, "Shimmer");
     });
 
-    t("fixed performance sources and Amp Envelope are permanent", (adapter) => {
+    t("fixed performance sources and Amp Envelope are permanent", async (adapter) => {
         const { sources } = adapter.getSnapshot().patch;
         for (const id of ["velocity", "pressure", "slide"]) {
             const fixed = sources.find((source) => source.id === id);
             assert.equal(fixed.type, "fixed");
             assert.equal(fixed.state._tag, "fixed");
-            adapter.commands.deleteSource(id);
+            await adapter.commands.deleteSource(id);
             assert.equal(
                 adapter.getSnapshot().patch.sources.some((source) => source.id === id),
                 true,
@@ -362,12 +363,12 @@ function contractSuite(adapterName, makeAdapter) {
             false,
             "the permanent amplitude job must not consume a user mapping row",
         );
-        const mappingResult = adapter.commands.addMapping({
+        const mappingResult = await adapter.commands.addMapping({
             targetId: "voice-filter.cutoff",
             sourceId: "amp-envelope",
         });
         assert.equal(mappingResult._tag, "ok");
-        adapter.commands.setEnvelope("amp-envelope", {
+        await adapter.commands.setEnvelope("amp-envelope", {
             name: "Ignored Rename",
             attackSeconds: 0.43,
             decaySeconds: 0.67,
@@ -383,7 +384,7 @@ function contractSuite(adapterName, makeAdapter) {
             sustain: 0.38,
             releaseSeconds: 2.4,
         });
-        adapter.commands.setEnvelope("amp-envelope", {
+        await adapter.commands.setEnvelope("amp-envelope", {
             ...editedAmpEnvelope,
             releaseSeconds: 0.001,
         });
@@ -393,7 +394,7 @@ function contractSuite(adapterName, makeAdapter) {
             0.005,
             "Amp Release keeps its established public minimum",
         );
-        adapter.commands.deleteSource("amp-envelope");
+        await adapter.commands.deleteSource("amp-envelope");
         assert.equal(
             adapter.getSnapshot().patch.sources.some((source) => source.id === "amp-envelope"),
             true,
@@ -406,11 +407,11 @@ function contractSuite(adapterName, makeAdapter) {
         );
     });
 
-    t("envelope and mseg source state uses real units and accepts writes", (adapter) => {
+    t("envelope and mseg source state uses real units and accepts writes", async (adapter) => {
         const envelope = adapter.getSnapshot().patch.sources.find((s) => s.id === "envelope-1");
         assert.equal(envelope.state._tag, "envelope");
         assert.equal(envelope.state.envelope.attackSeconds > 0, true);
-        adapter.commands.setEnvelope("envelope-1", {
+        await adapter.commands.setEnvelope("envelope-1", {
             name: "Env 1", attackSeconds: 0.5, decaySeconds: 0.2, sustain: 0.8, releaseSeconds: 1.5,
         });
         const updated = adapter.getSnapshot().patch.sources.find((s) => s.id === "envelope-1");
@@ -427,7 +428,7 @@ function contractSuite(adapterName, makeAdapter) {
 
     // ── Articulations ─────────────────────────────────────────────────────
 
-    t("addArticulation mints a unique id and the lowest free selector", (adapter) => {
+    t("addArticulation mints a unique id and the lowest free selector", async (adapter) => {
         const before = adapter.getSnapshot().patch.articulations;
         const result = adapter.commands.addArticulation();
         assert.equal(result._tag, "ok");
@@ -438,7 +439,7 @@ function contractSuite(adapterName, makeAdapter) {
         assert.equal(before.some((a) => a.selector === added.selector), false);
     });
 
-    t("duplicateArticulation copies overrides and route amounts to the new slot", (adapter) => {
+    t("duplicateArticulation copies overrides and route amounts to the new slot", async (adapter) => {
         const sourceArticulation = adapter.getSnapshot().patch.articulations[0].id;
         const mappingId = adapter.getSnapshot().patch.mappings[0].id;
         adapter.commands.setParameter({
@@ -453,7 +454,7 @@ function contractSuite(adapterName, makeAdapter) {
         assert.equal(patch.articulationMappingAmounts[result.value][mappingId], 71);
     });
 
-    t("deleteArticulation prunes its layers and audition falls back", (adapter) => {
+    t("deleteArticulation prunes its layers and audition falls back", async (adapter) => {
         const articulationId = adapter.getSnapshot().patch.articulations[0].id;
         adapter.commands.setAuditionArticulation(articulationId);
         adapter.commands.setParameter({
@@ -468,7 +469,7 @@ function contractSuite(adapterName, makeAdapter) {
         assert.notEqual(snapshot.audition.articulation, articulationId);
     });
 
-    t("keyswitch walking stops flush against a neighbor and reports the contact", (adapter) => {
+    t("keyswitch walking stops flush against a neighbor and reports the contact", async (adapter) => {
         const [first, second] = adapter.getSnapshot().patch.articulations;
         assert.equal(first.key, 30, "seeded default keys");
         assert.equal(second.key, 31);
@@ -479,7 +480,7 @@ function contractSuite(adapterName, makeAdapter) {
         assert.equal(adapter.getSnapshot().patch.articulations.find((a) => a.id === first.id).key, walk.key);
     });
 
-    t("range bounds clamp flush at the neighboring range's edge", (adapter) => {
+    t("range bounds clamp flush at the neighboring range's edge", async (adapter) => {
         const articulations = adapter.getSnapshot().patch.articulations;
         const [first, second] = [...articulations].sort((a, b) => a.velRange.min - b.velRange.min);
         const clamp = adapter.commands.setArticulationRange(second.id, "vel", "min", first.velRange.min);
@@ -488,9 +489,9 @@ function contractSuite(adapterName, makeAdapter) {
         assert.equal(clamp.value, first.velRange.max + 1, "stops flush above the neighbor");
     });
 
-    t("clearArticulationOverride removes the base override and the target's route amounts", (adapter) => {
+    t("clearArticulationOverride removes the base override and the target's route amounts", async (adapter) => {
         const articulationId = adapter.getSnapshot().patch.articulations[0].id;
-        const mappingId = expectOkValue(adapter.commands.addMapping({
+        const mappingId = expectOkValue(await adapter.commands.addMapping({
             targetId: "voice-filter.cutoff",
             sourceId: "velocity",
         }), "add articulable filter mapping");
@@ -506,7 +507,7 @@ function contractSuite(adapterName, makeAdapter) {
         assert.equal(Object.hasOwn(patch.articulationMappingAmounts[articulationId] ?? {}, mapping.id), false);
     });
 
-    t("restoreArticulationLayer is a faithful transactional restore", (adapter) => {
+    t("restoreArticulationLayer is a faithful transactional restore", async (adapter) => {
         const articulationId = adapter.getSnapshot().patch.articulations[0].id;
         const mappingId = adapter.getSnapshot().patch.mappings[0].id;
         const backup = {
@@ -525,7 +526,7 @@ function contractSuite(adapterName, makeAdapter) {
 
     // ── Effects rack ──────────────────────────────────────────────────────
 
-    t("reorderEffect moves identity, restoreEffectOrder restores wholesale", (adapter) => {
+    t("reorderEffect moves identity, restoreEffectOrder restores wholesale", async (adapter) => {
         const originalOrder = [...adapter.getSnapshot().patch.effectOrder];
         adapter.commands.reorderEffect(originalOrder[0], originalOrder[2]);
         const moved = adapter.getSnapshot().patch.effectOrder;
@@ -535,7 +536,7 @@ function contractSuite(adapterName, makeAdapter) {
         assert.deepEqual(adapter.getSnapshot().patch.effectOrder, originalOrder);
     });
 
-    t("setEffectEnabled toggles bypass state only", (adapter) => {
+    t("setEffectEnabled toggles bypass state only", async (adapter) => {
         // Commands address the DOCUMENT's devices (a fresh bridge doc is the
         // starter trio), so the probe effect comes from the projection.
         const order = [...adapter.getSnapshot().patch.effectOrder];
@@ -548,7 +549,7 @@ function contractSuite(adapterName, makeAdapter) {
 
     // ── Audition & session ────────────────────────────────────────────────
 
-    t("audition state follows its commands", (adapter) => {
+    t("audition state follows its commands", async (adapter) => {
         const articulationId = adapter.getSnapshot().patch.articulations[0].id;
         adapter.commands.setAuditionArticulation(articulationId);
         adapter.commands.setAuditionNote("C2");
@@ -562,14 +563,14 @@ function contractSuite(adapterName, makeAdapter) {
         assert.equal(audition.triggerActive, false);
     });
 
-    t("captureMotion without a candidate is null, with one it mints a mapped mseg", (adapter) => {
-        assert.equal(adapter.commands.captureMotion(), null);
+    t("captureMotion without a candidate is null, with one it mints a mapped mseg", async (adapter) => {
+        assert.equal(expectOkValue(await adapter.commands.captureMotion(), "empty capture"), null);
         adapter.commands.beginTrigger();
         // A log-scale target the STARTER TRIO document owns (delay#1); its
         // full-spec amount is the same ±6 oct every log rack target gets.
         adapter.commands.setParameter({ targetId: "delay.delayFilter", value: 0.8, layer: { _tag: "patchBase" } });
         adapter.commands.endTrigger();
-        const captured = adapter.commands.captureMotion();
+        const captured = expectOkValue(await adapter.commands.captureMotion(), "capture");
         assert.notEqual(captured, null);
         const { patch } = adapter.getSnapshot();
         const source = patch.sources.find((s) => s.id === captured);
@@ -585,7 +586,7 @@ function contractSuite(adapterName, makeAdapter) {
         const blank = (await makeAdapter()).getSnapshot();
         adapter.commands.setParameter({ targetId: "oscA.warpAmount", value: 0.9, layer: { _tag: "patchBase" } });
         adapter.commands.setRepeatEnabled(true);
-        adapter.commands.reset();
+        await adapter.commands.reset();
         assert.deepEqual(adapter.getSnapshot().patch, blank.patch);
         assert.deepEqual(adapter.getSnapshot().audition, blank.audition);
     });
@@ -633,7 +634,7 @@ contractSuite("mock", async () => {
 contractSuite("bridge", async () => {
     const { createCosimoBridgeAdapter } = await bridgeFactoryPromise;
     const { MockPatchConnection } = await mockConnectionPromise;
-    const connection = new MockPatchConnection({ name: "Adapter contract", version: 1 });
+    const connection = new MockPatchConnection({ name: "Adapter contract", version: 1 }, { loadStateChannel: loadChannel });
     const adapter = createCosimoBridgeAdapter({ connection });
     await waitForReady(adapter);
     return adapter;
@@ -642,7 +643,7 @@ contractSuite("bridge", async () => {
 test("bridge rack commands preserve desired state across an older effective readback", async () => {
     const { createCosimoBridgeAdapter } = await bridgeFactoryPromise;
     const { MockPatchConnection } = await mockConnectionPromise;
-    const connection = new MockPatchConnection({ name: "Rack intent regression", version: 1 });
+    const connection = new MockPatchConnection({ name: "Rack intent regression", version: 1 }, { loadStateChannel: loadChannel });
     const adapter = createCosimoBridgeAdapter({ connection });
     await waitForReady(adapter);
 
@@ -682,7 +683,7 @@ test("bridge hydration rejects old or incomplete T78 lane state before runtime w
     delete missingTrim.devices["delay#1"].params.delayOutputTrimDb;
 
     for (const invalidLane of [oldVersion, missingTrim]) {
-        const connection = new MockPatchConnection({ name: "T78 lane rejection", version: 1 });
+        const connection = new MockPatchConnection({ name: "T78 lane rejection", version: 1 }, { loadStateChannel: loadChannel });
         connection.setStoredStateValue("lane.v1", JSON.stringify(invalidLane));
         connection.clearDebugLog();
         const adapter = createCosimoBridgeAdapter({ connection });
@@ -701,7 +702,7 @@ test("bridge rejects a duplicate mapping document without migration", async () =
     const { createCosimoBridgeAdapter } = await bridgeFactoryPromise;
     const { MockPatchConnection } = await mockConnectionPromise;
     const { MODULATION_STATE_KEY, createDefaultModulationState } = await modulationPromise;
-    const connection = new MockPatchConnection({ name: "Duplicate pair regression", version: 1 });
+    const connection = new MockPatchConnection({ name: "Duplicate pair regression", version: 1 }, { loadStateChannel: loadChannel });
     const modulationState = createDefaultModulationState();
     const storedModulation = JSON.stringify({
         ...modulationState,
@@ -757,7 +758,7 @@ test("bridge rejects a hydration document containing a non-articulable rack mapp
     const { createCosimoBridgeAdapter } = await bridgeFactoryPromise;
     const { MockPatchConnection } = await mockConnectionPromise;
     const { MODULATION_STATE_KEY, createDefaultModulationState } = await modulationPromise;
-    const connection = new MockPatchConnection({ name: "Strict rack articulation rejection", version: 1 });
+    const connection = new MockPatchConnection({ name: "Strict rack articulation rejection", version: 1 }, { loadStateChannel: loadChannel });
     connection.setStoredStateValue(MODULATION_STATE_KEY, JSON.stringify({
         ...createDefaultModulationState(),
         routes: [
@@ -811,7 +812,7 @@ test("bridge rejects a hydration document containing a non-articulable rack mapp
 test("live articulation writes use the same strict route-reference parser as hydration", async () => {
     const { createCosimoBridgeAdapter } = await bridgeFactoryPromise;
     const { MockPatchConnection } = await mockConnectionPromise;
-    const connection = new MockPatchConnection({ name: "Strict current articulation write", version: 1 });
+    const connection = new MockPatchConnection({ name: "Strict current articulation write", version: 1 }, { loadStateChannel: loadChannel });
     const adapter = createCosimoBridgeAdapter({ connection });
     await waitForReady(adapter);
 
@@ -839,7 +840,7 @@ test("live articulation writes use the same strict route-reference parser as hyd
 test("bridge rejects a non-finite phantom articulation amount without sanitizing it", async () => {
     const { createCosimoBridgeAdapter } = await bridgeFactoryPromise;
     const { MockPatchConnection } = await mockConnectionPromise;
-    const connection = new MockPatchConnection({ name: "Non-finite legacy articulation", version: 1 });
+    const connection = new MockPatchConnection({ name: "Non-finite legacy articulation", version: 1 }, { loadStateChannel: loadChannel });
     connection.setStoredStateValue("articulations.v4", {
         format: "cosimo.articulations",
         version: 4,
@@ -864,7 +865,7 @@ test("bridge rejects a non-finite phantom articulation amount without sanitizing
 
 test("mock DSP session changes reset both acknowledged install frontiers", async () => {
     const { MockPatchConnection } = await mockConnectionPromise;
-    const connection = new MockPatchConnection({ name: "Runtime frontier reset", version: 1 });
+    const connection = new MockPatchConnection({ name: "Runtime frontier reset", version: 1 }, { loadStateChannel: loadChannel });
 
     await new Promise((resolve) => setTimeout(resolve, 20));
     connection.setRuntimeState({ dspSessionId: 2 });
@@ -888,11 +889,11 @@ test("mock DSP session changes reset both acknowledged install frontiers", async
 test("bridge never persists a mapping for a control without an engine modulation target", async () => {
     const { createCosimoBridgeAdapter } = await bridgeFactoryPromise;
     const { MockPatchConnection } = await mockConnectionPromise;
-    const connection = new MockPatchConnection({ name: "UI mapping articulation guard", version: 1 });
+    const connection = new MockPatchConnection({ name: "UI mapping articulation guard", version: 1 }, { loadStateChannel: loadChannel });
     const adapter = createCosimoBridgeAdapter({ connection });
     await waitForReady(adapter);
 
-    const result = adapter.commands.addMapping({
+    const result = await adapter.commands.addMapping({
         targetId: "filter.globalFilterMode",
         sourceId: "mseg-1",
     });
