@@ -9,6 +9,7 @@ import type { PluginStateEditResult } from "../../kit/index";
 import type { PatchConnectionLike } from "./cmajor-react";
 import type { PatchControlBinding } from "./patch-controls";
 import { synthPluginState } from "./synth-plugin-state";
+import { acquireSynthViewState } from "./synth-state-client";
 import {
     captureUserEditReporter,
     type UserEditReporter,
@@ -41,11 +42,9 @@ export function SynthStateProvider({ patchConnection, children }: {
             setViewConnection({ kind: "failed", patchConnection });
             return;
         }
-        const client = createCmajorPluginStateClient(synthPluginState, patchConnection, {
-            onDefect: reportStateDefect,
-        });
-        setViewConnection({ kind: "connected", patchConnection, client });
-        return () => client.stop();
+        const lease = acquireSynthViewState(patchConnection);
+        setViewConnection({ kind: "connected", patchConnection, client: lease.client });
+        return lease.release;
     }, [patchConnection]);
 
     if (viewConnection?.patchConnection !== patchConnection) {
