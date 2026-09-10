@@ -560,6 +560,16 @@ export class RuntimeInstallLane {
             return;
         }
 
+        // Both frontiers are monotonic within a confirmed DSP session. Late
+        // output from an earlier owner must not allocate an already-used serial.
+        // A new correlated baseline is allowed to establish reset frontiers.
+        if (this.#baselineDspSessionId === ack.dspSessionId
+            && this.#latestAck?.dspSessionId === ack.dspSessionId
+            && (ack.acceptedModulationSerial < this.#latestAck.acceptedModulationSerial
+                || ack.acceptedArticulationSerial > this.#latestAck.acceptedArticulationSerial)) {
+            return;
+        }
+
         if (this.#pendingBaselineSyncSerials.has(ack.syncSerial)) {
             this.#baselineDspSessionId = ack.dspSessionId;
         }

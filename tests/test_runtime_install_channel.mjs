@@ -1,10 +1,13 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import {
+import { loadUIModule } from "./helpers/load_ui_module.mjs";
+import path from "node:path";
+
+const {
     RUNTIME_INSTALL_SEND_TIMEOUT_MS,
     RuntimeInstallLane,
-} from "../patch_gui/runtime-install-channel.js";
+} = await loadUIModule(path.resolve(import.meta.dirname, ".."), "ui/shared/runtime-install-channel.ts");
 
 async function withDeadline(promise, milliseconds = 1_000) {
     let timer;
@@ -114,6 +117,33 @@ function startLane(connection, laneKind = "modulation", options = {}) {
     lane.start();
     lane.observeRuntime(connection.sessionId);
     return lane;
+}
+
+for (const laneKind of ["modulation", "articulation"]) {
+    test(`${laneKind} ignores a backward same-session ACK after baseline but permits a fresh correlated reset baseline`, async () => {
+        const connection = new RuntimeInstallTestConnection();
+        connection.acceptedModulationSerial = 10;
+        connection.acceptedArticulationSerial = -10;
+        const lane = startLane(connection, laneKind);
+        const endpointID = laneKind === "modulation" ? "modulationProgram" : "articulationSnapshot";
+        const sign = laneKind === "modulation" ? 1 : -1;
+        try {
+            assert.deepEqual(await withDeadline(lane.sendBatch([{ endpointID, value: { index: 1 } }])), { _tag: "accepted" });
+            assert.equal(lane.getAcceptedFrontier(), sign * 11);
+            connection.emitAck({ acceptedModulationSerial: 2, acceptedArticulationSerial: -2 });
+            assert.equal(lane.getAcceptedFrontier(), sign * 11, "old output cannot rewind the proven frontier");
+            assert.deepEqual(await withDeadline(lane.sendBatch([{ endpointID, value: { index: 2 } }])), { _tag: "accepted" });
+            assert.equal(connection.sends.filter(send => send.endpointID === endpointID).at(-1).value.deliverySerial, sign * 12);
+
+            lane.stop();
+            connection.acceptedModulationSerial = 0;
+            connection.acceptedArticulationSerial = 0;
+            lane.start();
+            connection.emitAck({ acceptedModulationSerial: 90, acceptedArticulationSerial: -90 });
+            assert.deepEqual(await withDeadline(lane.sendBatch([{ endpointID, value: { index: 3 } }])), { _tag: "accepted" });
+            assert.equal(connection.sends.filter(send => send.endpointID === endpointID).at(-1).value.deliverySerial, sign);
+        } finally { lane.stop(); }
+    });
 }
 
 test("runtime install lane sends only one addressed payload at a time with nonblocking FIFO writes", async () => {
