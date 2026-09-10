@@ -58,3 +58,21 @@ test("bounded event conversion accepts shared subgraphs while rejecting a back e
     const cyclic = { shared }; cyclic.back = cyclic;
     assert.equal(encodeEventPayload(cyclic).kind, "invalid");
 });
+
+test("accepted edit evidence retains booleans and refuses malformed changed flags", () => {
+    const definition = definePluginState({});
+    const address = { owner: "owner", document: 0, client: 3, sequence: 1 };
+    for (const changed of [true, false]) {
+        const input = { kind: "receipt", address, result: { kind: "accepted", revision: 2, version: 1, changed } };
+        const parsed = parseClientMessage(definition, input);
+        assert.equal(parsed.kind, "ok");
+        assert.deepEqual(parsed.value, input);
+    }
+    for (const changed of [null, 1, "true", {}, []]) {
+        assert.equal(parseClientMessage(definition, { kind: "receipt", address,
+            result: { kind: "accepted", revision: 2, version: 1, changed },
+        }).kind, "invalid");
+    }
+    const nonEdit = { kind: "receipt", address, result: { kind: "accepted", revision: 2 } };
+    assert.deepEqual(parseClientMessage(definition, nonEdit), { kind: "ok", value: nonEdit });
+});

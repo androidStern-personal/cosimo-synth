@@ -2,9 +2,11 @@ import { createRoot } from "react-dom/client";
 import { flushSync } from "react-dom";
 import { SynthStateProvider, useSynthPluginParameterBinding } from "../../../../ui/shared/synth-plugin-state-react";
 import { synthPluginState } from "../../../../ui/shared/synth-plugin-state";
-import { createCmajorPluginStateService } from "../../../../kit/ui/plugin-state-cmajor";
+import { createCmajorPluginStateClient, createCmajorPluginStateService } from "../../../../kit/ui/plugin-state-cmajor";
+import type { PluginStateCommand } from "../../../../kit/ui/plugin-state-session";
 import { usePluginHistory } from "../../../../kit/index";
 import { createPluginStateTestPlatform } from "../../../helpers/plugin_state_test_platform.mjs";
+import { runProgrammaticWrites, subscribeToUserEdits } from "../../../../ui/shared/user-edit-bus";
 
 const coerce = (value: unknown) => Number(value);
 function Controls() {
@@ -18,10 +20,14 @@ function Controls() {
         <output data-testid="globalTune">{JSON.stringify(globalTune)}</output>
         <output data-testid="history">{JSON.stringify({ canUndo: history.canUndo, canRedo: history.canRedo })}</output>
         <button onClick={() => globalTune.commitValue(5)}>Tune five</button>
+        <button onClick={() => playMode.commitValue(2)}>Play two</button>
+        <button onClick={() => glideTime.commitValue(0.5)}>Glide half</button>
+        <button onClick={() => runProgrammaticWrites(() => glideTime.commitValue(0.5))}>Programmatic glide</button>
         <button onClick={() => globalTune.beginGesture()}>Begin tune</button>
         <button onClick={() => globalTune.setValue(5)}>Drag five</button>
         <button onClick={() => globalTune.setValue(7)}>Drag seven</button>
         <button onClick={() => globalTune.endGesture()}>End tune</button>
+        <button onClick={() => { globalTune.beginGesture(); globalTune.setValue(7); globalTune.endGesture(); }}>Complete tune</button>
         <button disabled={!history.canUndo} onClick={() => history.undo()}>Undo</button>
         <button disabled={!history.canRedo} onClick={() => history.redo()}>Redo</button>
     </>;
@@ -35,17 +41,49 @@ export async function mount(element: HTMLElement, Channel: unknown) {
         { endpoint: "globalTune", value: -7.5, min: -24, max: 24, step: 0.01, defaultValue: 0 },
     ] });
     const defects: string[] = [];
+    const edits: unknown[] = [];
+    const stopEdits = subscribeToUserEdits({
+        onGestureStart: () => edits.push({ kind: "begin" }),
+        onGestureEnd: () => edits.push({ kind: "end" }),
+        onParameterEdit: edit => edits.push({ kind: "edit", ...edit }),
+    });
     const owner = createCmajorPluginStateService(synthPluginState, platform.worker, { onDefect: error => defects.push(String(error)) });
     const starting = owner.start();
     const view = platform.createView();
-    const root = createRoot(element);
-    flushSync(() => root.render(<SynthStateProvider patchConnection={view}><Controls /></SynthStateProvider>));
+    let root: ReturnType<typeof createRoot> | undefined;
+    let observer: ReturnType<typeof createCmajorPluginStateClient<typeof synthPluginState>> | undefined;
+    let observerView: ReturnType<typeof platform.createView> | undefined;
+    const render = () => {
+        root = createRoot(element);
+        flushSync(() => root?.render(<SynthStateProvider patchConnection={view}><Controls /></SynthStateProvider>));
+    };
+    render();
     return {
         async releaseBoot() { platform.releaseOpen(); await starting; },
         publications: platform.publications,
         messages: view.messages,
+        holdReplies: view.holdIncoming,
+        releaseReplies: view.releaseIncoming,
+        queuedReplies: view.queuedMessages,
         parameter: platform.parameter,
+        automate: platform.automate,
+        edits: () => [...edits],
+        openObserver() {
+            observerView = platform.createView();
+            observer = createCmajorPluginStateClient(synthPluginState, observerView, { onDefect: error => defects.push(String(error)) });
+        },
+        observerState: () => observer?.getSnapshot(),
+        observerCommand(command: PluginStateCommand) {
+            if (!observer) throw new Error("Open the independent client before dispatching");
+            return observer.dispatch(command);
+        },
+        unmountView() { root?.unmount(); root = undefined; },
+        remountView: render,
         defects: () => [...defects],
-        async dispose() { root.unmount(); platform.removeView(view); platform.releaseOpen(); await starting; await owner.stop(); },
+        async dispose() {
+            root?.unmount(); observer?.stop();
+            if (observerView) platform.removeView(observerView);
+            stopEdits(); platform.removeView(view); platform.releaseOpen(); await starting; await owner.stop();
+        },
     };
 }

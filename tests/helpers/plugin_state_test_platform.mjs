@@ -17,6 +17,8 @@ export function createPluginStateTestPlatform(PluginStateChannel, { parameters, 
     function connection() {
         const listeners = new Set();
         const received = [];
+        const queued = [];
+        let held = false;
         const port = {
             addEventListener(type, listener) { if (type === "kit_state") listeners.add(listener); },
             removeEventListener(type, listener) { if (type === "kit_state") listeners.delete(listener); },
@@ -26,10 +28,19 @@ export function createPluginStateTestPlatform(PluginStateChannel, { parameters, 
                 if (!channel.receive(port, envelope.message)) throw new Error("Production channel refused fixture message");
             },
             deliverMessageFromServer(envelope) {
+                if (held) { queued.push(structuredClone(envelope)); return; }
                 received.push(structuredClone(envelope.message));
                 for (const listener of [...listeners]) listener(envelope.message);
             },
             messages: () => structuredClone(received),
+            holdIncoming() { held = true; },
+            releaseIncoming(reverse = false) {
+                held = false;
+                const envelopes = queued.splice(0);
+                if (reverse) envelopes.reverse();
+                for (const envelope of envelopes) port.deliverMessageFromServer(envelope);
+            },
+            queuedMessages: () => queued.length,
         };
         return port;
     }

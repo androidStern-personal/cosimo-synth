@@ -132,7 +132,7 @@ test("native boot hydrates host gain and absent curve, then publishes one cohere
         command: { kind: "edit", key: "curve", value: proposedCurve },
     });
     const edited = session.getSnapshot();
-    assert.deepEqual(result, { kind: "accepted", revision: edited.revision, version: 1 });
+    assert.deepEqual(result, { kind: "accepted", revision: edited.revision, version: 1, changed: true });
     assert.equal(edited.revision, boot.revision + 1);
     assert.deepEqual(edited.fields.curve.value, { points: [0, 0.5, 1] });
     assert.equal(edited.fields.curve.version, 1);
@@ -181,7 +181,7 @@ test("shared Undo and Redo restore accepted curve values while no-op and rejecte
     assert.deepEqual(await command({ kind: "edit", key: "curve", value: firstCurve, expectedVersion: 2 }, 2),
         { kind: "rejected", reason: "stale-version" });
     assert.deepEqual(await command({ kind: "edit", key: "curve", value: firstCurve }),
-        { kind: "accepted", revision: undone.revision, version: 3 });
+        { kind: "accepted", revision: undone.revision, version: 3, changed: false });
     assert.strictEqual(session.getSnapshot(), undone);
     assert.equal(native.publications.length, writeCount);
 
@@ -361,6 +361,7 @@ test("a throwing subscriber preserves known acceptance, closes readiness, and se
     const result = await session.dispatch({ kind: "command", address: { ...scope, client: 1, sequence: 1 },
         command: { kind: "edit", key: "curve", value: { points: [0, 0.4, 1] } } });
     assert.equal(result.kind, "accepted", "the observer ran after the accepted value was committed");
+    assert.equal(result.changed, true, "closing after commit preserves the accepted edit's change evidence");
     assert.equal(result.version, 1);
     assert.deepEqual(await queued, { kind: "rejected", reason: "service-closed" });
     assert.deepEqual(session.getSnapshot().fields.curve.value.points, [0, 0.4, 1]);
@@ -371,6 +372,7 @@ test("a throwing subscriber preserves known acceptance, closes readiness, and se
         "the original diagnostic error must remain available");
     assert.equal(native.publications.length, 0, "terminal closure forbids a later effect from the failed transition");
     assert.equal(native.updates.at(-1).receipt.result.kind, "accepted");
+    assert.equal(native.updates.at(-1).receipt.result.changed, true);
     assert.equal(native.updates.at(-1).receipt.address.client, 1);
     assert.deepEqual(native.updates.at(-1).snapshot.fields.curve.readiness, { kind: "failed", reason: "service-closed" });
     const updates = native.updates.length;
@@ -840,7 +842,7 @@ test("unknown command keys including object prototype names reject without chang
     assert.strictEqual(session.getSnapshot(), before);
     assert.equal(native.publications.length, 0);
     assert.deepEqual(await command({ kind: "edit", key: "curve", value: { points: [0, 0.5, 1] } }),
-        { kind: "accepted", revision: before.revision + 1, version: 1 });
+        { kind: "accepted", revision: before.revision + 1, version: 1, changed: true });
     await session.stop();
 });
 

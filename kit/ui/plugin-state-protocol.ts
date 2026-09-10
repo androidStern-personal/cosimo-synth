@@ -272,8 +272,11 @@ function stateSnapshot<Fields extends PluginStateFields>(definition: Fields, inp
 
 function result(input: unknown): PluginStateResult | undefined {
     if (!isRecord(input)) return undefined;
-    if (input.kind === "accepted" && counter(input.revision, false) && (input.version === undefined || counter(input.version, false)))
-        return { kind: "accepted", revision: input.revision, ...(input.version !== undefined ? { version: input.version } : {}) };
+    if (input.kind === "accepted" && counter(input.revision, false) && (input.version === undefined || counter(input.version, false))
+        && (input.changed === undefined || typeof input.changed === "boolean"))
+        return { kind: "accepted", revision: input.revision, ...(input.version !== undefined ? { version: input.version } : {}),
+            ...(input.changed !== undefined ? { changed: input.changed } : {}),
+        };
     if (input.kind !== "rejected") return undefined;
     const reason = input.reason;
     if (reason === "closed" || reason === "closed-client") return { kind: "rejected", reason: "service-closed" };

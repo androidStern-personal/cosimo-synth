@@ -100,7 +100,13 @@ export type PluginStateCommand = {
 
 /** Known acceptance is independent of subsequent native publication success. */
 export type PluginStateResult =
-    | { readonly kind: "accepted"; readonly revision: number; readonly version?: number }
+    | {
+        readonly kind: "accepted";
+        readonly revision: number;
+        readonly version?: number;
+        /** Edit commands report actual domain value change, independently of engine delivery. */
+        readonly changed?: boolean;
+    }
     | { readonly kind: "rejected"; readonly reason: "not-ready" | "invalid-command" | "invalid-value" | "stale-version" | "stale-scope" | "busy" | "service-closed" | "sequence" };
 
 /** Exact addressed result routed back to the originating client. */
@@ -280,7 +286,7 @@ export function createPluginStateSession<const Fields extends PluginStateFields>
         return equal ? past : [...past, { key, before: gesture.before, after: gesture.after, order: gesture.order }]
             .sort((left, right) => left.order - right.order);
     };
-    const applyValue = (model: Model, key: string, value: unknown, past: readonly HistoryEntry[], future: readonly HistoryEntry[]): PluginStateResult => {
+    const applyValue = (model: Model, key: string, value: unknown, past: readonly HistoryEntry[], future: readonly HistoryEntry[], cause: "edit" | "history"): PluginStateResult => {
         const field = definition[key];
         const previous = model.snapshot.fields[key];
         if (!field || !previous || !("value" in previous) || !model.snapshot.scope) {
@@ -299,11 +305,14 @@ export function createPluginStateSession<const Fields extends PluginStateFields>
         const request = ++nextPublication;
         const publications = new Map(model.publications).set(request, { key, version });
         const next = publishSnapshot(model, { ...model.snapshot.fields, [key]: readyField(value, { kind: field.kind === "parameter" ? "host-managed" : "pending" }, version, previous.metadata, previous.gesture, field.kind === "parameter" ? { kind: "pending" } : undefined) }, past, future);
-        accepted = { kind: "accepted", revision: next.snapshot.revision, version };
+        const result: PluginStateResult = { kind: "accepted", revision: next.snapshot.revision, version,
+            ...(cause === "edit" ? { changed: true } : {}),
+        };
+        accepted = result;
         commit({ ...next, publications });
-        if (stopped) return accepted;
+        if (stopped) return result;
         ports.native.publish({ request, scope: model.snapshot.scope, operations });
-        return { kind: "accepted", revision: next.snapshot.revision, version };
+        return result;
     };
     const apply = (event: PluginStateEvent): PluginStateResult => {
         const model = store.get(state);
@@ -342,7 +351,7 @@ export function createPluginStateSession<const Fields extends PluginStateFields>
                 if (!entry) return { kind: "accepted", revision: model.snapshot.revision };
                 return applyValue(model, entry.key, undo ? entry.before : entry.after,
                     undo ? model.past.slice(0, -1) : [...model.past, entry],
-                    undo ? [...model.future, entry] : model.future.slice(0, -1));
+                    undo ? [...model.future, entry] : model.future.slice(0, -1), "history");
             }
             const { key } = event.command;
             if (!Object.hasOwn(definition, key)) return { kind: "rejected", reason: "invalid-command" };
@@ -395,21 +404,21 @@ export function createPluginStateSession<const Fields extends PluginStateFields>
                 nextValue = metadata.step > 0
                     ? Math.min(metadata.max, Math.max(metadata.min, metadata.min + Math.round((clamped - metadata.min) / metadata.step) * metadata.step))
                     : clamped;
-                if (Object.is(previous.value, nextValue)) return { kind: "accepted", revision: model.snapshot.revision, version: previous.version };
+                if (Object.is(previous.value, nextValue)) return { kind: "accepted", revision: model.snapshot.revision, version: previous.version, changed: false };
             } else {
                 const parsed = field.codec.parse(value);
                 if (parsed.kind === "error") return { kind: "rejected", reason: "invalid-value" };
                 nextValue = parsed.value;
-                if (field.codec.equals(previous.value, nextValue)) return { kind: "accepted", revision: model.snapshot.revision, version: previous.version };
+                if (field.codec.equals(previous.value, nextValue)) return { kind: "accepted", revision: model.snapshot.revision, version: previous.version, changed: false };
             }
             const editOrder = model.editOrder + 1;
             if (activeGesture) {
                 const gestures = new Map(model.gestures).set(key, { ...activeGesture, after: nextValue, order: editOrder });
-                return applyValue({ ...model, gestures, editOrder }, key, nextValue, model.past, []);
+                return applyValue({ ...model, gestures, editOrder }, key, nextValue, model.past, [], "edit");
             }
             return applyValue({ ...model, editOrder }, key, nextValue, [
                 ...model.past, { key, before: previous.value, after: nextValue, order: editOrder },
-            ], []);
+            ], [], "edit");
         } else if (event.kind === "engine") {
             const field = model.snapshot.fields[event.target.key];
             if (!field?.target || !sameScope(field.target.scope, event.target.scope)

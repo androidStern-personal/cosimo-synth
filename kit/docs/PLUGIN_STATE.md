@@ -108,6 +108,10 @@ Acceptance does not mean audio has necessarily changed. `state.pending` means
 this view still has edits awaiting acceptance. `state.application` separately
 reports preparation, delivery or failure.
 
+An accepted `setValue` result includes `changed`: whether the accepted value
+actually changed after validation and parameter rounding. A valid no-op returns
+`false`. This describes the edit, independently of engine delivery.
+
 The built-in event binding reports `sent` with
 `proof: "native-publication-processed"`. That means the native channel processed
 the publication, not that the DSP sent an acknowledgement. An adapter may report
