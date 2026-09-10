@@ -423,10 +423,15 @@ test("private worker facade preserves actual legacy parameter and stored-state r
             const { connection } = window.fixture;
             const received = [];
             connection.addEventListener("kit_state", body => received.push(body));
-            connection.sendMessageToServer({ type: "kit_state", message: { kind: "attach", request: 101 } });
-            const attached = received.find(body => body.kind === "attached");
+            window.legacyReadMessages = received;
             connection.sendEventOrValue("gain", 3);
             connection.sendStoredStateValue("curve", { points: [0.3, 0.7] });
+        });
+        await legacyPage.waitForFunction(() => window.fixture.worker.messages.some(body => body.kind === "replaced"));
+        await legacyPage.evaluate(() => {
+            const { connection } = window.fixture;
+            connection.sendMessageToServer({ type: "kit_state", message: { kind: "attach", request: 101 } });
+            const attached = window.legacyReadMessages.find(body => body.kind === "attached");
             connection.sendMessageToServer({ type: "kit_state", message: { kind: "command", scope: attached.scope,
                 client: attached.client, sequence: 1, command: { kind: "probe-legacy" } }});
         });
@@ -569,5 +574,161 @@ test("scoped client detach removes only its surviving browser view registration 
     } finally {
         await detachPage.evaluate(async () => { try { await window.fixture?.connection.dispose(); } finally { await window.fixture?.context.close(); } });
         await detachPage.close();
+    }
+});
+
+test("raw owned stored replacements fence actual worklet effects while preserving synchronous successive writes", { timeout: 15_000 }, async () => {
+    const rawPage = await browser.newPage();
+    const rawErrors = [];
+    rawPage.on("pageerror", error => rawErrors.push(String(error)));
+    try {
+        await rawPage.goto(`http://127.0.0.1:${server.address().port}/?twoStoredKeys=1`);
+        await rawPage.click("#start");
+        await rawPage.waitForFunction(() => window.fixture?.worker.messages.some(body => body.kind === "opened"));
+        await rawPage.evaluate(() => {
+            const { connection } = window.fixture;
+            window.rawMessages = [];
+            connection.addEventListener("kit_state", body => window.rawMessages.push(body));
+            connection.sendMessageToServer({ type: "kit_state", message: { kind: "attach", request: 201 } });
+            connection.sendEventOrValue("gain", 5.5);
+        });
+        await rawPage.waitForFunction(() => window.fixture.worker.messages.some(body => body.kind === "parameter" && body.value === 5.5));
+        const immediate = await rawPage.evaluate(async () => {
+            const { connection } = window.fixture;
+            const attached = window.rawMessages.find(body => body.kind === "attached");
+            connection.sendStoredStateValue("unowned", "ordinary");
+            connection.sendStoredStateValue("curve", connection.cachedState.curve);
+            const exclusions = window.rawMessages.filter(body => body.kind === "reset").length;
+            connection.sendMessageToServer({ type: "kit_state", message: {
+                kind: "command", scope: attached.scope, client: attached.client, sequence: 1,
+                command: { kind: "probe-late-after-replace", request: 202, operations: [
+                    { kind: "stored", key: "curve", value: { points: [99] } },
+                    { kind: "parameter", endpoint: "gain", value: 9 },
+                    { kind: "event", endpoint: "curveBuffer", value: 20 },
+                ] },
+            }});
+            connection.sendMessageToServer({ type: "kit_state", message: {
+                kind: "command", scope: attached.scope, client: attached.client, sequence: 2,
+                command: { kind: "probe-publish", request: 205, operations: [
+                    { kind: "parameter", endpoint: "gain", value: 6 },
+                    { kind: "event", endpoint: "curveBuffer", value: 20 },
+                ] },
+            }});
+            // The first actual worklet handoff precedes the fence. It may
+            // apply; the remaining event must not cross the raw replacement.
+            await Promise.resolve();
+            connection.sendStoredStateValue("curve", { points: [0.2, 0.8] });
+            return { exclusions, oldScope: attached.scope, reset: window.rawMessages.find(body => body.kind === "reset"),
+                curve: structuredClone(connection.cachedState.curve) };
+        });
+        assert.equal(immediate.exclusions, 0);
+        assert.equal(immediate.reset?.scope.document, immediate.oldScope.document + 1,
+            "raw owned stored write must revoke the old document synchronously");
+        assert.deepEqual(immediate.curve, { points: [0.2, 0.8] }, "raw setter must retain synchronous cache visibility");
+        await rawPage.waitForFunction(() => [202, 205].every(request => window.fixture.worker.messages.some(body => body.kind === "published" && body.request === request)));
+        const replaced = await rawPage.evaluate(async () => ({
+            replacement: window.fixture.worker.messages.find(body => body.kind === "replaced"),
+            result: window.fixture.worker.messages.find(body => body.kind === "published" && body.request === 202).result,
+            queuedResult: window.fixture.worker.messages.find(body => body.kind === "published" && body.request === 205).result,
+            output: await window.fixture.readOutput(),
+        }));
+        assert.equal(replaced.replacement.changedStoredKey, "curve");
+        assert.equal(replaced.replacement.native.parameters[0].value, 6, "raw replacement must preserve the first actual accepted handoff");
+        assert.deepEqual(replaced.replacement.native.values.curve, { points: [0.2, 0.8] });
+        assert.deepEqual(replaced.result, { kind: "failed", reason: "stale-scope" });
+        assert.deepEqual(replaced.queuedResult, { kind: "failed", reason: "stale-scope" });
+        assert.ok(Math.abs(replaced.output.min - 6) < 0.001 && Math.abs(replaced.output.max - 6) < 0.001);
+
+        await rawPage.evaluate(() => {
+            const { connection } = window.fixture;
+            connection.sendMessageToServer({ type: "kit_state", message: { kind: "attach", request: 206 } });
+            const attached = window.rawMessages.find(body => body.kind === "attached" && body.request === 206);
+            connection.sendMessageToServer({ type: "kit_state", message: {
+                kind: "command", scope: attached.scope, client: attached.client, sequence: 1,
+                command: { kind: "probe-publish", request: 206, operations: [
+                    { kind: "event", endpoint: "curveBuffer", value: 0.25 },
+                ] },
+            }});
+        });
+        await rawPage.waitForFunction(() => window.fixture.worker.messages.some(body => body.kind === "published" && body.request === 206));
+        const currentPublication = await rawPage.evaluate(async () => ({
+            publication: window.fixture.worker.messages.find(body => body.kind === "published" && body.request === 206),
+            output: await window.fixture.readOutput(),
+        }));
+        assert.deepEqual(currentPublication.publication.result, { kind: "observed" });
+        assert.equal(currentPublication.publication.scope.document, 1);
+        assert.ok(Math.abs(currentPublication.output.min - 6.25) < 0.001 && Math.abs(currentPublication.output.max - 6.25) < 0.001,
+            "actual worklet must accept the current document after its raw-write barrier");
+
+        const successive = await rawPage.evaluate(() => {
+            const { connection } = window.fixture;
+            connection.sendStoredStateValue("curve", { points: [0.3, 0.7] });
+            connection.sendStoredStateValue("shape", { points: [0.4, 0.6] });
+            return { cache: structuredClone(connection.cachedState), resets: window.rawMessages.filter(body => body.kind === "reset") };
+        });
+        assert.deepEqual(successive.cache.curve, { points: [0.3, 0.7] });
+        assert.deepEqual(successive.cache.shape, { points: [0.4, 0.6] });
+        assert.deepEqual(successive.resets.map(body => body.scope.document), [1, 2, 3]);
+        await rawPage.waitForFunction(() => window.fixture.worker.messages.some(body => body.kind === "replaced" && body.scope.document === 3));
+        const afterSuccessive = await rawPage.evaluate(() => ({
+            replacement: window.fixture.worker.messages.find(body => body.kind === "replaced" && body.scope.document === 3),
+            cache: window.fixture.connection.cachedState,
+        }));
+        assert.equal(afterSuccessive.replacement.changedStoredKey, "shape");
+        assert.equal(afterSuccessive.replacement.native.parameters[0].value, 6);
+        assert.deepEqual(afterSuccessive.replacement.native.values.curve, { points: [0.3, 0.7] });
+        assert.deepEqual(afterSuccessive.replacement.native.values.shape, { points: [0.4, 0.6] });
+        assert.deepEqual(afterSuccessive.cache, successive.cache, "superseded native completion must not drop an earlier different-key write");
+
+        await rawPage.evaluate(() => {
+            const { connection } = window.fixture;
+            connection.sendFullStoredState({ parameters: [{ name: "gain", value: 4 }], values: {
+                curve: { points: [1, 0] }, shape: { points: [0, 1] },
+            } });
+        });
+        await rawPage.waitForFunction(() => window.fixture.worker.messages.some(body => body.kind === "replaced" && body.scope.document === 4));
+        const full = await rawPage.evaluate(() => ({
+            resetCount: window.rawMessages.filter(body => body.kind === "reset").length,
+            replacement: window.fixture.worker.messages.find(body => body.kind === "replaced" && body.scope.document === 4),
+        }));
+        assert.equal(full.resetCount, 4, "full restore must not repeat its barrier for each owned key");
+        assert.equal(Object.hasOwn(full.replacement, "changedStoredKey"), false);
+
+        await rawPage.evaluate(() => {
+            const { connection } = window.fixture;
+            connection.sendMessageToServer({ type: "kit_state", message: { kind: "attach", request: 203 } });
+            const attached = window.rawMessages.find(body => body.kind === "attached" && body.request === 203);
+            let wrote = false;
+            connection.addStoredStateValueListener(body => {
+                if (!wrote && body.key === "curve") {
+                    wrote = true;
+                    connection.sendStoredStateValue("shape", { points: [0.6, 0.4] });
+                }
+            });
+            connection.sendMessageToServer({ type: "kit_state", message: {
+                kind: "command", scope: attached.scope, client: attached.client, sequence: 1,
+                command: { kind: "probe-publish", request: 204, operations: [
+                    { kind: "stored", key: "curve", value: { points: [0.5, 0.5] } },
+                    { kind: "stored", key: "shape", value: { points: [99] } },
+                    { kind: "parameter", endpoint: "gain", value: 9 },
+                    { kind: "event", endpoint: "curveBuffer", value: 20 },
+                ] },
+            }});
+        });
+        await rawPage.waitForFunction(() => window.fixture.worker.messages.some(body => body.kind === "published" && body.request === 204));
+        const reentrant = await rawPage.evaluate(async () => ({
+            result: window.fixture.worker.messages.find(body => body.kind === "published" && body.request === 204).result,
+            cache: window.fixture.connection.cachedState,
+            resetCount: window.rawMessages.filter(body => body.kind === "reset").length,
+            output: await window.fixture.readOutput(),
+        }));
+        assert.deepEqual(reentrant.result, { kind: "failed", reason: "stale-scope" });
+        assert.equal(reentrant.resetCount, 5, "reentrant raw write must not borrow owner-publication suppression");
+        assert.deepEqual(reentrant.cache.shape, { points: [0.6, 0.4] });
+        assert.ok(Math.abs(reentrant.output.min - 4.25) < 0.001 && Math.abs(reentrant.output.max - 4.25) < 0.001);
+        assert.deepEqual(rawErrors, []);
+    } finally {
+        await rawPage.evaluate(async () => { try { await window.fixture?.connection.dispose(); } finally { await window.fixture?.context.close(); } });
+        await rawPage.close();
     }
 });

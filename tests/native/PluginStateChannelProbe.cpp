@@ -838,6 +838,99 @@ void testLiveOwnerUnload (Fixture& f)
     std::cout << "PASS: live owner unload closes actual host gesture before renderer teardown and notifies once\n";
 }
 
+void testExternalStoredReplacement (Fixture& f)
+{
+    f.sendWorker (choc::json::parse (R"({"kind":"open","request":201,"parameters":["gain"],"storedKeys":["curve","shape"],"eventEndpoints":["curveBuffer"]})"));
+    f.waitFor ([&] { return f.worker->count ("opened") == 1; }, "external-state fixture did not open");
+    const auto original = f.onLoop ([&]
+    {
+        const Value scope (f.worker->last ("opened")["scope"]);
+        require (f.patch->handleClientMessage (*f.a, envelope (choc::json::create ("kind", "attach", "request", 201))),
+                 "external-state observer did not register as a real client");
+        f.patch->setStoredStateValue ("unowned", Value ("ordinary"));
+        f.patch->setStoredStateValue ("curve", choc::json::parse (R"({"points":[0,1]})"));
+        require (f.a->count ("reset") == 0, "unowned or unchanged stored write reset the document");
+        require (f.patch->findParameter (gainID())->setValue (5.5f, true, -1, 0), "raw replacement gain setup failed");
+        f.patch->setStoredStateValue ("curve", choc::json::parse (R"({"points":[0.2,0.8]})"));
+        require (f.a->count ("reset") == 1, "external owned stored write did not synchronously fence the document");
+        require (f.a->last ("reset")["scope"]["document"].getWithDefault<int64_t> (-1) == scope["document"].getWithDefault<int64_t> (-1) + 1,
+                 "external owned stored write did not advance the document once");
+        require (f.patch->findParameter (gainID())->currentValue == 5.5f, "raw stored replacement reset host parameters");
+        require (f.patch->getFullStoredState()["values"]["curve"]["points"][0].getWithDefault<double> (-1) == 0.2,
+                 "raw stored replacement was not visible before its setter returned");
+        return scope;
+    });
+    f.waitFor ([&] { return f.worker->count ("replaced") == 1; }, "raw replacement did not notify its owner");
+    f.onLoop ([&]
+    {
+        const auto replaced = f.worker->last ("replaced");
+        require (replaced["changedStoredKey"].toString() == "curve", "raw replacement lost its changed stored key");
+        require (replaced["native"]["parameters"][0]["value"].getWithDefault<double> (99) == 5.5,
+                 "raw replacement snapshot did not retain current native gain");
+        f.scope = replaced["scope"];
+    });
+    auto late = choc::json::parse (R"({"kind":"publish","request":202,"operations":[{"kind":"stored","key":"curve","value":{"points":[99]}},{"kind":"parameter","endpoint":"gain","value":9},{"kind":"event","endpoint":"curveBuffer","value":20}]})");
+    late.addMember ("scope", original);
+    f.sendWorker (late);
+    f.waitFor ([&] { return f.worker->last ("published")["request"].getWithDefault<int64_t> (0) == 202; }, "old raw-replacement publication did not settle");
+    f.onLoop ([&]
+    {
+        require (f.worker->last ("published")["result"]["reason"].toString() == "stale-scope", "old publication crossed raw replacement");
+        require (f.patch->getFullStoredState()["values"]["curve"]["points"][0].getWithDefault<double> (-1) == 0.2,
+                 "old publication overwrote raw state");
+        require (f.patch->findParameter (gainID())->currentValue == 5.5f, "old publication overwrote raw replacement gain");
+    });
+
+    const auto beforeOwn = f.onLoop ([&] { return f.a->count ("reset"); });
+    auto own = choc::json::parse (R"({"kind":"publish","request":203,"operations":[{"kind":"stored","key":"curve","value":{"points":[0.3,0.7]}},{"kind":"event","endpoint":"curveBuffer","value":0.25}]})");
+    own.addMember ("scope", f.scope);
+    f.sendWorker (own);
+    f.waitFor ([&] { return f.worker->last ("published")["request"].getWithDefault<int64_t> (0) == 203; }, "own stored publication did not settle");
+    f.onLoop ([&]
+    {
+        require (f.worker->last ("published")["result"]["kind"].toString() == "observed", "own stored publication was rejected");
+        require (f.a->count ("reset") == beforeOwn, "own stored publication reset its own document");
+        const auto wrote = std::make_shared<bool> (false);
+        f.a->changed = [&, wrote]
+        {
+            const auto& message = f.a->messages.back();
+            if (! *wrote && message["type"].toString() == "state_key_value" && message["message"]["key"].toString() == "curve")
+            {
+                *wrote = true;
+                f.patch->setStoredStateValue ("shape", choc::json::parse (R"({"points":[0.4,0.6]})"));
+            }
+            f.notify();
+        };
+        auto reentrant = choc::json::parse (R"({"kind":"publish","request":204,"operations":[{"kind":"stored","key":"curve","value":{"points":[0.5,0.5]}},{"kind":"stored","key":"shape","value":{"points":[99]}},{"kind":"parameter","endpoint":"gain","value":9},{"kind":"event","endpoint":"curveBuffer","value":20}]})");
+        reentrant.addMember ("scope", f.scope);
+        f.worker->send (reentrant);
+    });
+    f.waitFor ([&] { return f.worker->last ("published")["request"].getWithDefault<int64_t> (0) == 204; }, "reentrant raw publication did not settle");
+    f.onLoop ([&]
+    {
+        f.a->changed = [&] { f.notify(); };
+        require (f.a->count ("reset") == beforeOwn + 1, "reentrant raw write borrowed owner-publication suppression");
+        require (f.worker->last ("published")["result"]["reason"].toString() == "stale-scope", "reentrant raw write did not fence publication remainder");
+        require (f.patch->getFullStoredState()["values"]["shape"]["points"][0].getWithDefault<double> (-1) == 0.4,
+                 "publication remainder overwrote reentrant external state");
+        require (f.patch->findParameter (gainID())->currentValue == 5.5f, "reentrant external state let a stale scalar through");
+        std::array<float, 128> output {};
+        float* channels[] { output.data() };
+        for (int i = 0; i < 32; ++i)
+            f.patch->process (channels, 128, [] (uint32_t, choc::midi::MessageView) {});
+        require (std::abs (output.back() - 5.75f) < 0.001f, "raw replacement rejected its current event or let an old event reach the real DSP");
+        const auto resets = f.a->count ("reset");
+        require (f.patch->setFullStoredState (choc::json::parse (R"({"parameters":[{"name":"gain","value":4}],"values":{"curve":{"points":[1,0]},"shape":{"points":[0,1]}}})")), "nested stored restore failed");
+        require (f.a->count ("reset") == resets + 1, "full restore repeated its barrier for owned stored keys");
+    });
+    f.waitFor ([&] { return f.worker->count ("replaced") == 3; }, "full restore replacement did not arrive");
+    f.onLoop ([&]
+    {
+        require (! f.worker->last ("replaced").hasObjectMember ("changedStoredKey"), "full restore was mislabeled a single-key replacement");
+    });
+    std::cout << "PASS: external owned stored writes fence old effects, preserve parameters, and exclude own/no-op/full-restore writes\n";
+}
+
 }
 
 int main (int argc, char** argv)
@@ -873,6 +966,9 @@ int main (int argc, char** argv)
             testSameViewNewBinding (fixture);
             testExplicitClientDetach (fixture);
             testLiveOwnerUnload (fixture);
+            fixture.close();
+            fixture.load (argv[2]);
+            testExternalStoredReplacement (fixture);
             result = 0;
         }
         catch (const std::exception& error) { std::cerr << "FAIL: " << error.what() << '\n'; }
