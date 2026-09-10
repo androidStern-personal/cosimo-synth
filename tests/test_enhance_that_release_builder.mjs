@@ -4,7 +4,7 @@ import { spawnSync } from "node:child_process";
 import { chmod, mkdir, mkdtemp, readFile, readdir, realpath, rm, stat, symlink, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import { renderEnhanceThatPreinstall } from "../scripts/enhance-that-installer.mjs";
+import { renderEnhanceThatPreinstall, renderEnhanceThatPostinstall, renderEnhanceThatReadme } from "../scripts/enhance-that-installer.mjs";
 import { claimEnhanceThatOutput, enhanceThatSourceErrors, parseEnhanceThatArgs,
     enhanceThatAuIdentityErrors, selectEnhanceThatSigningIdentities,
     verifyFreshEnhanceThatBundles } from "../scripts/build_enhance_that_release.mjs";
@@ -69,94 +69,101 @@ test("first-install preflight is read-only and handles literal spaces, quotes an
     assert.deepEqual(await readdir(f.root), [...before, "preinstall"].sort());
 });
 
-for (const location of ["user legacy", "user new", "system legacy"]) {
-    test(`preflight refuses ${location} without changing its bytes`, async context => {
+
+async function bundleFixture(bundle, id = "dev.cosimo.enhancer-lite") {
+    await mkdir(path.join(bundle, "Contents"), { recursive: true });
+    await writeFile(path.join(bundle, "Contents/Info.plist"),
+        `<?xml version="1.0"?><plist version="1.0"><dict><key>CFBundleIdentifier</key><string>${id}</string></dict></plist>`);
+    await writeFile(path.join(bundle, "sentinel"), "original bytes");
+}
+
+async function postinstall(f, includeAU = false) {
+    await writeFile(f.script, renderEnhanceThatPostinstall({ includeAU }, f.options));
+    return spawnSync("/bin/sh", [f.script, "test.pkg", "/", "/"], { encoding: "utf8" });
+}
+
+for (const includeAU of [false, true]) {
+    test(`normal upgrade accepts current and legacy copies; removes only matching duplicates after payload (AU=${includeAU})`, async context => {
         const f = await fixture(context);
-        const base = location.startsWith("user") ? path.join(f.home, "Library/Audio/Plug-Ins/VST3") : f.systemRoot;
-        const bundle = path.join(base, location.endsWith("new") ? "EnhanceThat.vst3" : "CosimoEnhancerLite.vst3");
-        await mkdir(bundle, { recursive: true });
-        await writeFile(path.join(bundle, "sentinel"), "preserve original");
-        const result = await f.run();
-        assert.equal(result.status, 1);
-        assert.ok(result.stderr.includes(bundle));
-        assert.equal(await readFile(path.join(bundle, "sentinel"), "utf8"), "preserve original");
+        const formats = [["VST3", "vst3", f.systemRoot],
+            ...(includeAU ? [["Components", "component", path.join(path.dirname(f.systemRoot), "Components")]] : [])];
+        const duplicates = [];
+        for (const [scan, ext, system] of formats) {
+            await bundleFixture(path.join(system, `EnhanceThat.${ext}`));
+            for (const name of ["EnhanceThat", "CosimoEnhancerLite"]) {
+                const user = path.join(f.home, "Library/Audio/Plug-Ins", scan, `${name}.${ext}`);
+                await bundleFixture(user); duplicates.push(user);
+            }
+            const legacy = path.join(system, `CosimoEnhancerLite.${ext}`);
+            await bundleFixture(legacy); duplicates.push(legacy);
+            await bundleFixture(path.join(system, `OtherPlugin.${ext}`), "other.product");
+        }
+        const before = await f.run({ includeAU });
+        assert.equal(before.status, 0, before.stderr);
+        for (const bundle of duplicates)
+            assert.equal(await readFile(path.join(bundle, "sentinel"), "utf8"), "original bytes");
+        const result = await postinstall(f, includeAU);
+        assert.equal(result.status, 0, result.stderr);
+        assert.equal(result.stdout + result.stderr, "");
+        for (const bundle of duplicates) await assert.rejects(stat(bundle), { code: "ENOENT" });
+        for (const [, ext, system] of formats) {
+            assert.equal(await readFile(path.join(system, `EnhanceThat.${ext}/sentinel`), "utf8"), "original bytes");
+            assert.equal(await readFile(path.join(system, `OtherPlugin.${ext}/sentinel`), "utf8"), "original bytes");
+            assert.deepEqual((await readdir(system)).sort(), [`EnhanceThat.${ext}`, `OtherPlugin.${ext}`]);
+        }
         assert.equal((await readdir(path.dirname(f.systemRoot))).some(name => name.includes("previous")), false);
+        assert.equal((await postinstall(f, includeAU)).status, 0, "repeat install is idempotent");
     });
 }
 
-test("a dangling legacy symlink still blocks installation", async context => {
+test("failed/missing system payload never removes the old user copy", async context => {
     const f = await fixture(context);
-    await symlink(path.join(f.root, "missing"), path.join(f.systemRoot, "CosimoEnhancerLite.vst3"));
-    assert.equal((await f.run()).status, 1);
+    const user = path.join(f.home, "Library/Audio/Plug-Ins/VST3/EnhanceThat.vst3");
+    await bundleFixture(user);
+    assert.notEqual((await postinstall(f)).status, 0);
+    assert.equal(await readFile(path.join(user, "sentinel"), "utf8"), "original bytes");
 });
 
-test("preflight rejects a linked scan ancestor and an alternate target volume", async context => {
+test("duplicate cleanup preserves different product IDs and never follows symlinked homes or bundles", async context => {
+    const f = await fixture(context);
+    await bundleFixture(path.join(f.systemRoot, "EnhanceThat.vst3"));
+    const userRoot = path.join(f.home, "Library/Audio/Plug-Ins/VST3");
+    await bundleFixture(path.join(userRoot, "EnhanceThat.vst3"), "customer.different-plugin");
+    const outside = path.join(f.root, "outside.vst3");
+    await bundleFixture(outside);
+    await symlink(outside, path.join(userRoot, "CosimoEnhancerLite.vst3"));
+    assert.equal((await postinstall(f)).status, 0);
+    assert.equal(await readFile(path.join(outside, "sentinel"), "utf8"), "original bytes");
+    assert.equal(await readFile(path.join(userRoot, "EnhanceThat.vst3/sentinel"), "utf8"), "original bytes");
+    const linkedHome = path.join(f.root, "linked-home");
+    await symlink(f.home, linkedHome);
+    await writeFile(f.script, renderEnhanceThatPostinstall({}, { ...f.options, homeDirectories: [linkedHome] }));
+    assert.equal(spawnSync("/bin/sh", [f.script]).status, 0);
+    assert.equal(await readFile(path.join(outside, "sentinel"), "utf8"), "original bytes");
+});
+
+test("preflight rejects a linked system scan ancestor and alternate target volume", async context => {
     const f = await fixture(context);
     assert.equal((await f.run({ volume: "/Volumes/Other" })).status, 1);
     const linked = path.join(f.root, "LinkedSystem");
     await symlink(path.join(f.root, "System"), linked);
     await writeFile(f.script, renderEnhanceThatPreinstall({}, { ...f.options,
         systemRoot: path.join(linked, "Library/Audio/Plug-Ins/VST3") }));
-    const result = spawnSync("/bin/sh", [f.script], { encoding: "utf8" });
-    assert.equal(result.status, 1);
-    assert.match(result.stderr, /symbolic link/u);
+    assert.equal(spawnSync("/bin/sh", [f.script]).status, 1);
 });
 
-test("unsigned validation cannot replace an existing system plugin", async context => {
-    const f = await fixture(context);
-    await mkdir(path.join(f.systemRoot, "EnhanceThat.vst3"));
-    const result = await f.run();
-    assert.equal(result.status, 1);
-    assert.match(result.stderr, /unsigned validation installer cannot replace/u);
+test("installer roots reject shell injection, traversal, and broad roots", () => {
+    for (const systemRoot of ["/tmp/scan\nother", "/", "/tmp/../Users"])
+        assert.throws(() => renderEnhanceThatPreinstall({}, { systemRoot }), /normalized absolute single-line/u);
 });
 
-test("signed system-update workflow retains an identical backup outside scan, using a scripted signature adapter", { skip: process.platform !== "darwin" }, async context => {
-    const f = await fixture(context);
-    const bundle = path.join(f.systemRoot, "EnhanceThat.vst3");
-    await mkdir(path.join(bundle, "Contents/Resources"), { recursive: true });
-    await writeFile(path.join(bundle, "Contents/payload"), "old system payload");
-    await writeFile(path.join(bundle, "Contents/Resources/moduleinfo.json"), JSON.stringify({ Classes: [{ CID: "ABCDEF019182FAEB436F73694373454C" }] }));
-    // Workflow-only seam: this test makes no real Developer ID/signature claim.
-    const result = await f.run({ teamIdentifier: "ABCDEFGHIJ", transform: text => text.replaceAll("/usr/bin/codesign --verify --deep --strict", "/usr/bin/true") });
-    assert.equal(result.status, 0, result.stderr);
-    const parent = path.dirname(f.systemRoot);
-    const backups = (await readdir(parent)).filter(name => name.startsWith(".EnhanceThat.vst3.previous."));
-    assert.equal(backups.length, 1);
-    assert.equal(await readFile(path.join(parent, backups[0], "previous.bundle/Contents/payload"), "utf8"), "old system payload");
-    assert.equal(await readFile(path.join(bundle, "Contents/payload"), "utf8"), "old system payload");
-    assert.deepEqual(await readdir(f.systemRoot), ["EnhanceThat.vst3"]);
-    assert.ok(result.stderr.includes(backups[0]));
-});
-
-test("backup-copy failure preserves the original and reports the actual retained recovery path", { skip: process.platform !== "darwin" }, async context => {
-    const f = await fixture(context);
-    const bundle = path.join(f.systemRoot, "EnhanceThat.vst3");
-    await mkdir(path.join(bundle, "Contents/Resources"), { recursive: true });
-    await writeFile(path.join(bundle, "payload"), "original");
-    await writeFile(path.join(bundle, "Contents/Resources/moduleinfo.json"), JSON.stringify({ Classes: [{ CID: "ABCDEF019182FAEB436F73694373454C" }] }));
-    const result = await f.run({ teamIdentifier: "ABCDEFGHIJ", transform: text => text
-        .replaceAll("/usr/bin/codesign --verify --deep --strict", "/usr/bin/true")
-        .replaceAll("/usr/bin/ditto", "/usr/bin/false") });
-    assert.equal(result.status, 1);
-    assert.equal(await readFile(path.join(bundle, "payload"), "utf8"), "original");
-    const backup = (await readdir(path.dirname(f.systemRoot))).find(name => name.startsWith(".EnhanceThat.vst3.previous."));
-    assert.ok(backup && result.stderr.includes(backup));
-});
-
-test("sealed processor metadata mismatch stops a system update before creating recovery state", { skip: process.platform !== "darwin" }, async context => {
-    const f = await fixture(context);
-    const bundle = path.join(f.systemRoot, "EnhanceThat.vst3");
-    await mkdir(path.join(bundle, "Contents/Resources"), { recursive: true });
-    await writeFile(path.join(bundle, "Contents/Resources/moduleinfo.json"), JSON.stringify({ Classes: [{ CID: "WRONG" }] }));
-    const result = await f.run({ teamIdentifier: "ABCDEFGHIJ", transform: text => text.replaceAll("/usr/bin/codesign --verify --deep --strict", "/usr/bin/true") });
-    assert.equal(result.status, 1);
-    assert.match(result.stderr, /processor identity differs/u);
-    assert.deepEqual(await readdir(path.dirname(f.systemRoot)), ["VST3"]);
-});
-
-test("preinstall input validation cannot inject shell lines or signing requirements", () => {
-    assert.throws(() => renderEnhanceThatPreinstall({ teamIdentifier: 'BAD"TEAMID' }), /team identifier/u);
-    assert.throws(() => renderEnhanceThatPreinstall({}, { systemRoot: "/tmp/scan\nother" }), /single-line/u);
+test("customer README contains installation steps, not internal release or recovery notes", () => {
+    const text = renderEnhanceThatReadme({ releaseVersion: "0.1.5", payloadBundles: [
+        { relativePath: "Library/Audio/Plug-Ins/VST3/EnhanceThat.vst3" },
+    ] });
+    assert.match(text, /Quit your DAW/u);
+    assert.match(text, /Open the installer package/u);
+    assert.doesNotMatch(text, /candidate|qualification|retained|RECOVERY|unpublished|signing identity/iu);
 });
 
 test("output claiming preserves old candidates and refuses symlinked output ancestors", async context => {
@@ -176,10 +183,11 @@ test("output claiming preserves old candidates and refuses symlinked output ance
 test("package metadata separates release version from unchanged bundle version and includes the guard", () => {
     const config = { identity: { bundleName: "EnhanceThat", installerIdentifier: "dev.cosimo.enhancer-lite.pkg",
         pluginVersion: "0.1.0", patchId: "dev.cosimo.enhancer-lite" } };
-    const xml = renderPackageInfo(config, [], { packageVersion: "0.1.3", preinstall: true });
+    const xml = renderPackageInfo(config, [], { packageVersion: "0.1.3", preinstall: true, postinstall: true });
     assert.match(xml, /postinstall-action="none" version="0\.1\.3"/u);
     assert.match(xml, /CFBundleVersion="0\.1\.0"/u);
     assert.match(xml, /<preinstall file="\.\/preinstall"\/>/u);
+    assert.match(xml, /<postinstall file="\.\/postinstall"\/>/u);
     assert.equal(deterministicFlatPackageXarArgs("output.pkg", { scripts: true }).at(-1), "Scripts");
     assert.equal(deterministicFlatPackageXarArgs("output.pkg").includes("Scripts"), false);
 });
@@ -225,7 +233,7 @@ test("fresh AU is ad-hoc sealed before strict built verification", async () => {
 });
 
 for (const location of ["user legacy", "user new", "system legacy"]) {
-    test(`AU inclusion refuses ${location} without changing its bytes`, async context => {
+    test(`AU preflight accepts ${location} without changing bytes before payload replacement`, async context => {
         const f = await fixture(context);
         const base = location.startsWith("user") ? path.join(f.home, "Library/Audio/Plug-Ins/Components")
             : path.join(path.dirname(f.systemRoot), "Components");
@@ -233,43 +241,20 @@ for (const location of ["user legacy", "user new", "system legacy"]) {
         await mkdir(bundle, { recursive: true });
         await writeFile(path.join(bundle, "sentinel"), "preserve original AU");
         const result = await f.run({ includeAU: true });
-        assert.equal(result.status, 1);
-        assert.ok(result.stderr.includes(bundle));
+        assert.equal(result.status, 0, result.stderr);
+        assert.equal(result.stderr, "");
         assert.equal(await readFile(path.join(bundle, "sentinel"), "utf8"), "preserve original AU");
         assert.equal((await readdir(path.dirname(f.systemRoot))).some(name => name.includes("previous")), false);
     });
 }
 
-test("AU system update rejects a mismatched component and preserves matching recovery", { skip: process.platform !== "darwin" }, async context => {
+test("VST3-only installer never removes an existing AU", async context => {
     const f = await fixture(context);
-    const vst3 = path.join(f.systemRoot, "EnhanceThat.vst3");
-    const bundle = path.join(path.dirname(f.systemRoot), "Components/EnhanceThat.component");
-    await mkdir(path.join(bundle, "Contents"), { recursive: true });
-    const info = path.join(bundle, "Contents/Info.plist");
-    const signedFixture = { includeAU: true, teamIdentifier: "ABCDEFGHIJ",
-        transform: text => text.replaceAll("/usr/bin/codesign --verify --deep --strict", "/usr/bin/true") };
-    await writeFile(info, JSON.stringify(auInfo));
-    assert.match((await f.run({ includeAU: true })).stderr, /unsigned validation installer cannot replace/u);
-    await mkdir(path.join(vst3, "Contents/Resources"), { recursive: true });
-    await writeFile(path.join(vst3, "Contents/Resources/moduleinfo.json"), JSON.stringify({ Classes: [{ CID: "ABCDEF019182FAEB436F73694373454C" }] }));
-    await writeFile(info, JSON.stringify({ ...auInfo, AudioComponents: [...auInfo.AudioComponents, ...auInfo.AudioComponents] }));
-    assert.match((await f.run(signedFixture)).stderr, /exactly one component/u);
-    await writeFile(info, JSON.stringify({ ...auInfo, AudioComponents: [{ ...auInfo.AudioComponents[0], subtype: "WRNG" }] }));
-    assert.match((await f.run(signedFixture)).stderr, /AU identity differs/u);
-    assert.equal((await readdir(path.dirname(f.systemRoot))).some(name => name.includes("previous")), false);
-    await writeFile(info, JSON.stringify(auInfo));
-    const result = await f.run(signedFixture);
-    assert.equal(result.status, 0, result.stderr);
-    const parent = path.dirname(f.systemRoot);
-    const backups = (await readdir(parent)).filter(name => name.startsWith(".EnhanceThat.component.previous."));
-    assert.equal(backups.length, 1);
-    assert.equal(await readFile(path.join(parent, backups[0], "previous.bundle/Contents/Info.plist"), "utf8"), await readFile(info, "utf8"));
-    assert.ok((await readFile(path.join(parent, backups[0], "RECOVERY.txt"), "utf8")).includes(bundle));
-    const vst3Backup = (await readdir(parent)).find(name => name.startsWith(".EnhanceThat.vst3.previous."));
-    assert.ok(vst3Backup);
-    assert.ok(result.stderr.includes(backups[0]) && result.stderr.includes(vst3Backup));
-    assert.equal(await readFile(path.join(parent, vst3Backup, "previous.bundle/Contents/Resources/moduleinfo.json"), "utf8"),
-        await readFile(path.join(vst3, "Contents/Resources/moduleinfo.json"), "utf8"));
+    await bundleFixture(path.join(f.systemRoot, "EnhanceThat.vst3"));
+    const au = path.join(f.home, "Library/Audio/Plug-Ins/Components/EnhanceThat.component");
+    await bundleFixture(au);
+    assert.equal((await postinstall(f)).status, 0);
+    assert.equal(await readFile(path.join(au, "sentinel"), "utf8"), "original bytes");
 });
 
 test("both declared formats retain executable modes and survive existing flat-package extraction", { skip: process.platform !== "darwin" }, async context => {
@@ -301,12 +286,22 @@ test("both declared formats retain executable modes and survive existing flat-pa
     assert.ok(payloadInventoryErrors({ identity: config.identity }, files, { signed: false }).length);
     assert.throws(() => renderPackageInfo({ ...config, payloadBundles: [{ format: "AU", relativePath: "../escape" }] }, []), /payload paths/u);
     const pkg = path.join(f.root, "fixture.pkg");
-    await buildUnsignedFlatPackage(config, staging, pkg, f.root, 1788566400);
+    const scriptsRoot = path.join(f.root, "scripts");
+    await mkdir(scriptsRoot, { mode: 0o755 });
+    const hooks = { preinstall: renderEnhanceThatPreinstall({ includeAU: true }), postinstall: renderEnhanceThatPostinstall({ includeAU: true }) };
+    for (const [name, script] of Object.entries(hooks))
+        await writeFile(path.join(scriptsRoot, name), script, { mode: 0o755 });
+    await buildUnsignedFlatPackage(config, staging, pkg, f.root, 1788566400, { scriptsRoot });
     const expanded = path.join(f.root, "expanded");
     const result = spawnSync("/usr/sbin/pkgutil", ["--expand-full", pkg, expanded], { encoding: "utf8" });
     assert.equal(result.status, 0, result.stderr);
     await assertPayloadModes(config, path.join(expanded, "Payload"));
     const xml = await readFile(path.join(expanded, "PackageInfo"), "utf8");
+    for (const [name, script] of Object.entries(hooks)) {
+        assert.ok(xml.includes(`<${name} file="./${name}"/>`));
+        assert.equal(await readFile(path.join(expanded, "Scripts", name), "utf8"), script);
+        assert.equal((await stat(path.join(expanded, "Scripts", name))).mode & 0o777, 0o755);
+    }
     for (const bundle of config.payloadBundles) {
         assert.ok(xml.includes(`path="./${bundle.relativePath}"`));
         assert.equal(await readFile(path.join(expanded, "Payload", bundle.relativePath, "Contents/MacOS/EnhanceThat"), "utf8"), "fixture");

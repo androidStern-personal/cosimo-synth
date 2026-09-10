@@ -9,7 +9,7 @@ import { inspectVST3Bundle } from "../kit/scripts/install_vst3.mjs";
 import { hashInstalledPayload } from "../kit/scripts/toolchain.mjs";
 import { findChocMarkerViolations } from "../kit/scripts/check_choc_markers.mjs";
 import { enhanceThatNativeDependencies } from "./enhance-that-release-config.mjs";
-import { renderEnhanceThatPreinstall } from "./enhance-that-installer.mjs";
+import { renderEnhanceThatPreinstall, renderEnhanceThatPostinstall, renderEnhanceThatReadme } from "./enhance-that-installer.mjs";
 import {
     adHocVst3SigningArgs, assertArchiveTreeContainsOnlyFilesAndDirectories,
     assertPayloadModes, assertSeqFxDistributableExecutableIsSourceFree,
@@ -262,7 +262,9 @@ async function assemble({ config, output, source, epoch, options, signing, prove
     }
     const scripts = path.join(work, "scripts");
     await mkdir(scripts, { mode: 0o755 });
-    const preinstall = renderEnhanceThatPreinstall({ teamIdentifier: signing?.application.teamIdentifier ?? null, includeAU: options.includeAU });
+    const preinstall = renderEnhanceThatPreinstall({ includeAU: options.includeAU });
+    const postinstall = renderEnhanceThatPostinstall({ includeAU: options.includeAU });
+    await writeFile(path.join(scripts, "postinstall"), postinstall, { mode: 0o755 });
     await writeFile(path.join(scripts, "preinstall"), preinstall, { mode: 0o755 });
     await chmod(scripts, 0o755);
     await chmod(path.join(scripts, "preinstall"), 0o755);
@@ -289,6 +291,7 @@ async function assemble({ config, output, source, epoch, options, signing, prove
         assert.equal(extractedEvidence[format].payloadSha256, staged[format].payloadSha256);
     }
     assert.equal(await readFile(path.join(expanded, "Scripts/preinstall"), "utf8"), preinstall);
+    assert.equal(await readFile(path.join(expanded, "Scripts/postinstall"), "utf8"), postinstall);
     const manifest = {
         schemaVersion: 1, status: "unpublished candidate; host and customer qualification pending",
         sourceCommit: source.commit, releaseVersion: config.releaseVersion, pluginVersion: config.identity.pluginVersion,
@@ -297,13 +300,13 @@ async function assemble({ config, output, source, epoch, options, signing, prove
         dependencies: Object.fromEntries(["cmajor", "choc", "juce"].map(key => [key, { commit: provenance[key].actualRevision, clean: provenance[key].clean }])),
         native, built: built.VST3, extracted: extractedEvidence.VST3, signing: { plugin: pluginSigning.VST3, installer: installerSigning }, notarization,
         ...(options.includeAU ? { audioUnit: { built: built.AU, extracted: extractedEvidence.AU, signing: pluginSigning.AU } } : {}),
-        noticesSha256: await fileHash(config.notices), preinstallSha256: hash(preinstall),
+        noticesSha256: await fileHash(config.notices), preinstallSha256: hash(preinstall), postinstallSha256: hash(postinstall),
         packageSha256: await fileHash(packageFile), sourceDateEpoch: epoch,
         qualification: { cleanMacOS15: "pending", cleanMacOS26: "pending", DAW: "pending", listening: "pending", matchingKitAndTools: "pending" },
     };
     await jsonFile(path.join(output, "release-manifest.json"), manifest);
     await writeFile(path.join(output, "THIRD_PARTY_NOTICES.txt"), await readFile(config.notices));
-    await writeFile(path.join(output, "README.txt"), `Enhance That ${config.releaseVersion}\n\nUnpublished ${signing ? "signed/notarized" : "unsigned validation"} candidate. Final host/customer qualification remains pending.\n\nRetained target: Apple Silicon macOS 15 and 26, ${options.includeAU ? "VST3 and AU" : `VST3. AU deferred: ${options.auDeferred}`}\n\nQuit the DAW and open the pkg. Restart/rescan, then load Enhance That.\nThe installer checks local user and system ${options.includeAU ? "VST3 and Components" : "VST3"} folders. If it reports a legacy or user-level copy, retain that exact copy outside all plugin scan folders before retrying. It never deletes those copies or loads their executable as root.\nA matching Developer ID system update retains the previous bundle in /Library/Audio/Plug-Ins/.EnhanceThat.<format>.previous.* before replacement; keep its RECOVERY.txt.\n\nInstalled paths:\n${config.payloadBundles.map(bundle => `/${bundle.relativePath}`).join("\n")}\nUninstall: quit the host and retain/remove the installed bundles, then rescan.\n`);
+    await writeFile(path.join(output, "README.txt"), renderEnhanceThatReadme(config));
     const packageItems = [path.basename(packageFile), "release-manifest.json", "README.txt", "THIRD_PARTY_NOTICES.txt"];
     const checksums = await Promise.all(packageItems.map(async item => `${await fileHash(path.join(output, item))}  ${item}`));
     await writeFile(path.join(output, "checksums.txt"), `${checksums.join("\n")}\n`);
