@@ -1,6 +1,8 @@
 # Plugin state implementation
 
-Status: audit fixes and module test matrix reviewed; beginning vertical module slices.
+Status: reviewed core, Cmajor adapters, generated worker and React view implemented;
+actual native composition passes. Browser composition and plugin selection review
+are in progress. No existing plugin has been migrated yet.
 
 Branch: `codex/plugin-state-system`, starting at `44f179fdb9c35b27456bedfdf389ec563f5c9a85`.
 
@@ -144,5 +146,102 @@ being treated as editable. All now pass.
 The customer dependency allowlist and template lock include exact Jotai 3.0.0.
 The lock update contains only that dependency, with no temporary machine paths.
 All eight export tests pass. The default and focused test commands include the new
-modules; the plugin refactor still has not started. Raw Cmajor adaptation, real
-browser/native composition, thin React bindings and integration remain ahead.
+modules; the plugin refactor still had not started at that checkpoint.
+
+## Cmajor adapter and author API checkpoint
+
+The current `npm run test:plugin-state` passes all 94 cases (about half a second).
+The added coverage exercises the raw adapter, malformed messages, old attachments,
+bounded payload conversion, real MSEG preparation, actual generated worker build,
+and the previously reviewed core. `npm run test:plugin-state:browser` passes four
+actual Chromium/React cases (about 1.1 seconds). Root TypeScript passes. Independent
+test review and a separate coordinator rerun agree on these results.
+
+Author code declares parameters/stored values and optional ordinary event
+preparation, selects `stateSource` in the plugin config, and supplies a React view
+through `createStatefulPatchView`. It imports the public `kit/index`. Generated
+worker startup and view cleanup own the service and client respectively. No
+author worker script is required. The existing worker host now awaits every
+cleanup even if another cleanup fails; the original 17 tests were retained and
+one distinguishing failure/recovery test was added.
+
+The Cmajor adapter is the raw-message boundary. Startup and attach have bounded
+deadlines; exact native client incarnations prevent an old attachment from editing
+as a new one. Full command preflight occurs before allocating a sequence. An
+independently valid receipt remains usable when its accompanying snapshot fails.
+The generated worker's public import required an explicit kit side-effect policy:
+unused DOM component declarations are removed while preview/dev-tool entry effects
+and CSS are retained. The customer dependency allowlist/template lock now include
+React DOM and its types. All eight export tests pass.
+
+Three capped subprocess tests distinguish bounded refusal from expanding cyclic
+or shared graphs and oversized typed samples. They drive the actual public service,
+verify no native event escapes, and then recover with a valid edit. Conversion
+charges the native budget during traversal, before allocating the full payload.
+The child heap/time caps contain the original failures without hanging the suite.
+
+The event binding reports native-publication-processed, not an invented DSP
+acknowledgement. Pure preparation and expected delivery failures fail the target;
+unexpected channel/transport faults close the owner and retain the diagnostic.
+This binding is a bounded event transport, not the deferred large-asset design.
+
+## Actual native composition checkpoint
+
+`tests/native/run_plugin_state_system_probe.sh` builds the authored fixture through
+the actual runtime builder and runs its generated public-Kit worker inside the
+pinned native QuickJS engine. It uses real PatchViews, native saved state, host
+parameter callbacks and generated DSP. It does not inject worker replies.
+
+The complete native probe passes: current host value 2.5 versus default 1; saved
+curve boot; curve and scalar gestures; shared Undo/Redo; automation supplying the
+next Undo baseline; closure of every GUI; natively routed edits surviving closure;
+coherent full restore fencing old commands/host FIFO values; and event preparation
+with a declared parameter dependency reaching the actual DSP throughout.
+
+Two genuine integration failures were repaired with unchanged behavior assertions:
+QuickJS lacks `Array.at`, requiring three equivalent last-element accesses; and
+stored publication completion dropped an engine target, leaving the GUI stuck at
+preparing even while the real DSP had received the curve. The target fix gained a
+public session regression. The existing reference-stability test caught an initial
+allocation regression in that fix and was preserved while the code was corrected.
+
+The exact worker hash for the passing native probe is
+`56cc60bdc87dceacbd9180b85a1740ef4daa4ed5de539f6f11eb82596b74b5e0`.
+Reproducible per-run source/runtime/header/executable hashes are written to
+`build/native_plugin_state_system/probe-result.json`. The runner takes explicit
+isolated source/runtime paths; no downloaded dependency cache was patched.
+
+Cmajor source is isolated on branch `codex/plugin-state-system` in the dedicated
+`plugin-state-cmajor` worktree. Native changes are `7d6d5753` and `18c4f2e`;
+`a2cd70c` repairs the exact source compiler's existing include path so the real
+generator can build. Reviewed browser channel source is committed as `3d1ba296`.
+The root kit Cmajor pin has not been published or changed. These are local source
+qualification results, not a claim that released Builder Kit contains the channel.
+
+The separate native channel probe has 15 passing routing/lifetime cases; the
+browser channel has 15 passing actual AudioWorklet cases. Those channel probes
+are distinct from the assembled framework/native test above and the assembled
+browser test currently in progress. No DAW/listening acceptance is claimed.
+
+## Complete existing suite and remaining integration decision
+
+The complete `npm test` passed after the initial foundation checkpoint. Its only
+skip was the pre-existing optional decoded-Float32 corpus case because the local
+Spectre corpus was unavailable. No failure was hidden. Later module additions
+have been rerun through the focused commands; a later full run is still required
+after plugin integration.
+
+The two preserved seeded SeqFX property files remain the expensive phase (about
+111 seconds concurrently). A CPU profile of the state-property file (53.5 seconds
+with profiling) attributes about 14.6 seconds to dense-array construction, 6.4 to
+recursive freezing, and 5.8 to parameter default construction. This is actual
+domain generation/transition cost, not justification to reduce seeds, run counts
+or assertions. The earlier timeout/deduplication/concurrency improvements remain.
+
+Read-only migration review found material SeqFX requirements not represented by
+the candidate API: save at gesture end while uploading live; synchronous Undo
+with per-pattern revision rewriting; legacy key migration/null fallback; and
+explicitly tested preset upload behavior. Direct replacement would change those
+protections or add several special cases. The integration choice is being compared
+against a focused Cosimo migration before changing either plugin. This preserves
+the requirement to regroup when the migration pressures module design.

@@ -948,3 +948,38 @@ test("scalar application status separates native observations from owned send co
     assert.deepEqual(session.getSnapshot().fields.gain.application, { kind: "pending" });
     await session.stop();
 });
+
+test("stored persistence and gesture lifecycle preserve the current engine target so matching completion can settle", async () => {
+    const { definePluginState, storedValue } = await definitionModule;
+    const { createPluginStateSession } = await sessionModule;
+    const native = new RecordingNativePort();
+    const replacements = [];
+    const session = createPluginStateSession(definePluginState({ curve: storedValue({ initial: { points: [0, 1] }, codec: curveCodec }) }), {
+        native, onDefect: error => assert.fail(String(error)), bindings: [{ key: "curve", dependencies: [],
+            replace(input, target) { replacements.push({ input, target }); }, cancel() {}, async stop() {},
+        }],
+    });
+    const scope = { owner: "engine-owner", document: 0 };
+    await session.dispatch({ kind: "opened", scope, native: { parameters: [], values: {} } });
+    let sequence = 0;
+    const command = command => session.dispatch({ kind: "command", address: { ...scope, client: 1, sequence: ++sequence }, command });
+    await command({ kind: "begin", key: "curve", gesture: 1 });
+    await command({ kind: "edit", key: "curve", value: { points: [0, 0.4, 1] }, gesture: 1 });
+    const target = replacements.at(-1).target;
+    assert.deepEqual(target, { scope, key: "curve", generation: 1 });
+    await session.dispatch({ kind: "engine", target, status: { kind: "preparing" } });
+    await session.dispatch({ kind: "published", scope, request: native.publications.at(-1).request, result: { kind: "observed" } });
+    assert.strictEqual(session.getSnapshot().fields.curve.target, target);
+    assert.equal(session.getSnapshot().fields.curve.persistence.kind, "observed-in-native-state");
+    await command({ kind: "end", key: "curve", gesture: 1 });
+    assert.strictEqual(session.getSnapshot().fields.curve.target, target);
+    await command({ kind: "begin", key: "curve", gesture: 2 });
+    assert.strictEqual(session.getSnapshot().fields.curve.target, target);
+    await session.dispatch({ kind: "detached", scope, client: 1 });
+    assert.strictEqual(session.getSnapshot().fields.curve.target, target);
+    await session.dispatch({ kind: "engine", target, status: { kind: "sent", proof: "native-publication-processed" } });
+    assert.deepEqual(session.getSnapshot().fields.curve.application, { kind: "sent", proof: "native-publication-processed" });
+    assert.equal(session.getSnapshot().history.canUndo, true);
+    assert.equal(replacements.length, 2, "persistence and gesture boundaries do not invent a new engine request");
+    await session.stop();
+});

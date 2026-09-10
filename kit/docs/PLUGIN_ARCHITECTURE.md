@@ -463,6 +463,11 @@ for the worked extension example.
 
 ## Adding A New Effect Plugin
 
+For the opt-in shared state and Undo API, its generated worker, and React view
+composition, see [Shared plugin state](PLUGIN_STATE.md). It requires the Cmajor
+state-channel extension; it is not a replacement for an existing plugin's state
+owner merely by importing the helpers.
+
 ```text
 npm run kit:new -- <name>
 ```

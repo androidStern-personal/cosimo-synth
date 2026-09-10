@@ -93,6 +93,7 @@ const sidecarKeyValidators = {
     runtimeOut: isRepoRelativeBuildPath,
     juceOut: isRepoRelativeBuildPath,
     workerSource: isRepoRelativeSourcePath,
+    stateSource: isRepoRelativeSourcePath,
     workerOut: isPlainFileName,
     visualReviewAdapter: isRepoRelativeSourcePath,
     includeInAll: (value) => typeof value === "boolean",
@@ -550,6 +551,9 @@ function validateBuildFields(fields, filePath, validators) {
 
     if (fields.workerOut !== undefined && fields.workerSource === undefined)
         throw new Error(`${filePath} sets "workerOut" without "workerSource".`);
+
+    if (fields.stateSource !== undefined && fields.workerSource !== undefined)
+        throw new Error(`${filePath} cannot combine "stateSource" and "workerSource". The framework builds the worker for the declared state module.`);
 }
 
 const pluginConfigKeyValidators = {
@@ -757,13 +761,17 @@ function createDiscoveredPlugin({ patch, manifest, config, directoryName, patchF
         plugin.workerOut = build.workerOut ?? "worker.js";
     }
 
+    if (build.stateSource) {
+        plugin.stateSource = build.stateSource;
+    }
+
     if (build.includeInAll === false)
         plugin.includeInAll = false;
 
     if (isNonEmptyString(manifest?.view?.devModule))
         plugin.devModule = manifest.view.devModule;
 
-    plugin.jitInstallRuntime = build.jitInstallRuntime ?? Boolean(plugin.workerSource);
+    plugin.jitInstallRuntime = build.jitInstallRuntime ?? Boolean(plugin.workerSource || plugin.stateSource);
 
     return { alias, plugin };
 }
@@ -1050,7 +1058,7 @@ export function createRuntimePatchManifest(manifest, plugin, { stripDevModule = 
         runtimeManifest.plugin = { ...runtimeManifest.plugin, ...plugin.identity.plugin };
     }
 
-    if (plugin.workerSource) {
+    if (plugin.workerSource || plugin.stateSource) {
         runtimeManifest.worker = plugin.workerOut ?? "worker.js";
     }
 
@@ -1113,11 +1121,30 @@ function createProductionBundleConfig({ entry, fileName, outDir, plugins = [], s
 }
 
 async function buildWorker(plugin, runtimeRoot, { sourcemap }) {
-    if (!plugin.workerSource) {
+    if (!plugin.workerSource && !plugin.stateSource) {
         return;
     }
 
-    const workerEntry = path.join(repoRoot, plugin.workerSource);
+    const generatedEntry = path.join(repoRoot, "kit/.plugin-state-worker.virtual.js");
+    const plugins = plugin.stateSource ? [{
+        name: "plugin-state-worker",
+        resolveId(id) { return id === generatedEntry ? `\0${generatedEntry}` : undefined; },
+        load(id) {
+            if (id !== `\0${generatedEntry}`) return undefined;
+            const source = JSON.stringify(path.join(repoRoot, plugin.stateSource));
+            const adapter = JSON.stringify(path.join(repoRoot, "kit/ui/plugin-state-cmajor.ts"));
+            const services = JSON.stringify(path.join(repoRoot, "kit/ui/patch-worker-services.ts"));
+            return `import definition from ${source};
+import { createCmajorPluginStateService } from ${adapter};
+import { startPatchWorkerServices } from ${services};
+export default connection => startPatchWorkerServices(connection, [
+    () => createCmajorPluginStateService(definition, connection, {
+        onDefect: error => console.error(error instanceof Error ? error.stack ?? error.message : String(error)),
+    }),
+]);`;
+        },
+    }] : [];
+    const workerEntry = plugin.stateSource ? generatedEntry : path.join(repoRoot, plugin.workerSource);
     const workerOut = plugin.workerOut ?? "worker.js";
 
     await build(createProductionBundleConfig({
@@ -1125,6 +1152,7 @@ async function buildWorker(plugin, runtimeRoot, { sourcemap }) {
         fileName: workerOut,
         outDir: runtimeRoot,
         sourcemap,
+        plugins,
     }));
 }
 
@@ -1180,7 +1208,7 @@ export async function buildPlugin(pluginName, { environment = process.env, strip
         stripDevModule,
     });
     for (const key of runtimeCopiedManifestKeys) {
-        if (key === "worker" && plugin.workerSource)
+        if (key === "worker" && (plugin.workerSource || plugin.stateSource))
             continue;
 
         await copyRuntimeEntries(entryPlans[key], patchRoot, runtimeRoot);

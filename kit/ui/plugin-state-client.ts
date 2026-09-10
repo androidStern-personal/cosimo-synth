@@ -1,4 +1,5 @@
 import { atom, createStore } from "jotai/vanilla";
+import { isBoundedStateJson } from "./plugin-state-protocol";
 import type { PluginStateFields } from "./plugin-state-definition";
 import type {
     PluginStateCommand, PluginStateResult, PluginStateScope, PluginStateSnapshot,
@@ -14,10 +15,10 @@ export type PluginStateClientEvent<Fields extends PluginStateFields> =
     | { readonly kind: "closed"; readonly reason: string }
     | { readonly kind: "attach-failed"; readonly request: number; readonly reason: string };
 
-/** GUI requests contain no worker authority or caller-selected client identity. */
+/** Commands echo the assigned client incarnation as a stale-binding guard; native routing owns identity. */
 export type PluginStateClientMessage =
     | { readonly kind: "attach"; readonly request: number }
-    | { readonly kind: "command"; readonly scope: PluginStateScope; readonly sequence: number; readonly command: PluginStateCommand };
+    | { readonly kind: "command"; readonly scope: PluginStateScope; readonly client: number; readonly sequence: number; readonly command: PluginStateCommand };
 
 /** The platform adapter owns parsing and routing; the client owns local drafts. */
 export interface PluginStateClientChannel<Fields extends PluginStateFields> {
@@ -47,6 +48,9 @@ export function createPluginStateClient<const Fields extends PluginStateFields>(
 ) {
     const store = createStore();
     const projection = atom<PluginStateClientSnapshot<Fields>>(Object.freeze({ kind: "connecting" }));
+    // React observes this read-only atom with Jotai's own subscription machinery.
+    // Only this module can write the private projection atom.
+    const snapshotAtom = atom(get => get(projection));
     const getSnapshot = () => store.get(projection);
     let stopped = false;
     let attachRequest = 1;
@@ -132,7 +136,7 @@ export function createPluginStateClient<const Fields extends PluginStateFields>(
             for (let message = outgoing.shift(); message; message = outgoing.shift()) {
                 redraw();
                 const ticket = tickets.get(message.sequence);
-                if (stopped || !ticket || !base || !sameScope(base.state.scope, message.scope)) continue;
+                if (stopped || !ticket || !base || !sameScope(base.state.scope, message.scope) || base.client !== message.client) continue;
                 ticket.sent = true;
                 ports.channel.send(message);
             }
@@ -200,6 +204,7 @@ export function createPluginStateClient<const Fields extends PluginStateFields>(
         close();
     }
     return {
+        reactivity: Object.freeze({ store, snapshot: snapshotAtom }),
         getSnapshot,
         subscribe(listener: (snapshot: PluginStateClientSnapshot<Fields>) => void): () => void {
             return store.sub(projection, () => {
@@ -211,6 +216,7 @@ export function createPluginStateClient<const Fields extends PluginStateFields>(
                 if (stopped) return Promise.resolve({ kind: "rejected", reason: "service-closed" });
                 if (!base?.state.scope) return Promise.resolve({ kind: "rejected", reason: "not-ready" });
                 const scope = base.state.scope;
+                const client = base.client;
                 let draft: { readonly key: string; readonly value: unknown } | undefined;
                 let outbound = command;
                 if (command.kind === "edit") {
@@ -225,11 +231,13 @@ export function createPluginStateClient<const Fields extends PluginStateFields>(
                     draft = { key: command.key, value: parsed.value };
                     outbound = { ...command, value: field.kind === "stored" ? field.codec.encode(parsed.value) : parsed.value };
                 }
+                if (!isBoundedStateJson({ kind: "command", scope, client, sequence: nextSequence + 1, command: outbound }))
+                    return Promise.resolve({ kind: "rejected", reason: command.kind === "edit" ? "invalid-value" : "invalid-command" });
                 const sequence = ++nextSequence;
                 if (draft) drafts.set(sequence, draft);
                 return new Promise(finish => {
                     tickets.set(sequence, { finish, sent: false });
-                    outgoing.push({ kind: "command", scope, sequence, command: outbound });
+                    outgoing.push({ kind: "command", scope, client, sequence, command: outbound });
                     drain();
                 });
             } catch (error) {

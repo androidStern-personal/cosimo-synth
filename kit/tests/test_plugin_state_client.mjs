@@ -112,8 +112,8 @@ test("local edits draw immediately while exact receipts settle independently of 
     assert.deepEqual(client.getSnapshot().pendingFields, ["curve"]);
     firstInput[1] = 0.99;
     assert.deepEqual(channel.sent.slice(1), [
-        { kind: "command", scope, sequence: 1, command: { kind: "edit", key: "curve", value: [0, 0.3, 1] } },
-        { kind: "command", scope, sequence: 2, command: { kind: "edit", key: "curve", value: [0, 0.8, 1] } },
+        { kind: "command", scope, client: 3, sequence: 1, command: { kind: "edit", key: "curve", value: [0, 0.3, 1] } },
+        { kind: "command", scope, client: 3, sequence: 2, command: { kind: "edit", key: "curve", value: [0, 0.8, 1] } },
     ]);
     let firstSettled = false;
     void first.then(() => { firstSettled = true; });
@@ -378,4 +378,51 @@ test("retaining a last known value in failed readiness does not make it editable
     assert.deepEqual(await editing, { kind: "rejected", reason: "not-ready" });
     assert.deepEqual(client.getSnapshot().pendingFields, []);
     channel.deliver({ kind: "closed", reason: "service-closed" });
+});
+
+test("remounted clients send their assigned incarnation and cannot settle a new ticket with an old receipt", async () => {
+    const channel = new ControlledChannel();
+    const old = createPluginStateClient(definition, { channel, onDefect: error => assert.fail(String(error)) });
+    channel.deliver(attached(snapshot(), 1, 3));
+    const oldTicket = old.dispatch({ kind: "edit", key: "curve", value: [1, 0] });
+    assert.equal(channel.sent.at(-1).client, 3);
+    old.stop();
+    assert.deepEqual(await oldTicket, { kind: "interrupted", reason: "closed", acceptance: "unknown" });
+    const current = createPluginStateClient(definition, { channel, onDefect: error => assert.fail(String(error)) });
+    channel.deliver(attached(snapshot(), 1, 4));
+    const ticket = current.dispatch({ kind: "edit", key: "curve", value: [0, 0.5, 1] });
+    assert.deepEqual(channel.sent.at(-1), { kind: "command", scope, client: 4, sequence: 1,
+        command: { kind: "edit", key: "curve", value: [0, 0.5, 1] } });
+    let settled = false;
+    void ticket.then(() => { settled = true; });
+    channel.deliver({ kind: "receipt", ...receipt(1, { kind: "accepted", revision: 2, version: 1 }, 3) });
+    await Promise.resolve();
+    assert.equal(settled, false);
+    assert.deepEqual(current.getSnapshot().pendingFields, ["curve"]);
+    channel.deliver({ kind: "receipt", ...receipt(1, { kind: "rejected", reason: "busy" }, 4) });
+    assert.deepEqual(await ticket, { kind: "rejected", reason: "busy" });
+    assert.deepEqual(current.getSnapshot().pendingFields, []);
+    current.stop();
+});
+
+test("a codec-valid value over the native wire budget is rejected before sequence allocation and the next edit remains usable", async () => {
+    const textCodec = {
+        parse: value => typeof value === "string" ? { kind: "ok", value } : { kind: "error", message: "Text required." },
+        encode: value => value, equals: (a, b) => a === b,
+    };
+    const fields = definePluginState({ text: storedValue({ initial: "initial", codec: textCodec }) });
+    const channel = new ControlledChannel();
+    const client = createPluginStateClient(fields, { channel, onDefect: error => assert.fail(String(error)) });
+    channel.deliver(attached({ scope, revision: 1, fields: { text: ready("initial") }, history: { canUndo: false, canRedo: false } }));
+    const rejected = client.dispatch({ kind: "edit", key: "text", value: "x".repeat(16 * 1024 * 1024) });
+    assert.equal(channel.sent.length, 1, "oversized input must never cross the native send seam");
+    assert.deepEqual(await rejected, { kind: "rejected", reason: "invalid-value" });
+    assert.deepEqual(client.getSnapshot().pendingFields, []);
+    assert.equal(client.getSnapshot().state.fields.text.value, "initial");
+    const valid = client.dispatch({ kind: "edit", key: "text", value: "next" });
+    assert.equal(channel.sent.at(-1).sequence, 1);
+    channel.deliver({ kind: "receipt", ...receipt(1, { kind: "accepted", revision: 2, version: 1 }) });
+    assert.deepEqual(await valid, { kind: "accepted", revision: 2, version: 1 });
+    assert.equal(client.getSnapshot().kind, "ready");
+    client.stop();
 });

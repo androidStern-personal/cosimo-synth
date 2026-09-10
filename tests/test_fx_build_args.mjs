@@ -292,6 +292,29 @@ test("discovery refuses output directories that leave build/", async () => {
     });
 });
 
+test("a declared state module produces a worker-backed runtime without an author-written worker entry", async () => {
+    const { buildModule } = await loadBuildModules();
+    await withFixtureFxRoot(async fxRoot => {
+        const manifest = { name: "State Lab", source: "StateLab.cmajor", view: { src: "view/index.js" } };
+        await writeFixturePlugin(fxRoot, "state_lab", "StateLab.cmajorpatch", manifest, {
+            stateSource: "fx/state_lab/state.ts",
+        });
+        const plugin = buildModule.discoverEffectPlugins({ fxRoot })["state-lab"];
+        assert.equal(plugin.stateSource, "fx/state_lab/state.ts");
+        assert.equal(plugin.workerSource, undefined);
+        assert.equal(plugin.jitInstallRuntime, true);
+        assert.equal(buildModule.createRuntimePatchManifest(manifest, plugin).worker, "worker.js");
+        await writeJsonOrText(path.join(fxRoot, "state_lab/StateLab.plugin.json"), {
+            schemaVersion: 1, stateSource: "../outside/state.ts",
+        });
+        assert.throws(() => buildModule.discoverEffectPlugins({ fxRoot }), /invalid "stateSource"/);
+        await writeJsonOrText(path.join(fxRoot, "state_lab/StateLab.plugin.json"), {
+            schemaVersion: 1, stateSource: "fx/state_lab/state.ts", workerSource: "fx/state_lab/worker.ts",
+        });
+        assert.throws(() => buildModule.discoverEffectPlugins({ fxRoot }), /cannot combine "stateSource" and "workerSource"/);
+    });
+});
+
 test("build output roots resolve strictly inside build/ before anything is deleted", async () => {
     const { buildModule } = await loadBuildModules();
 

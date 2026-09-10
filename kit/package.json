@@ -1,0 +1,9 @@
+{
+  "private": true,
+  "type": "module",
+  "sideEffects": [
+    "./ui/effects/browser-preview.ts",
+    "./ui/effects/effect-dev-tools.js",
+    "**/*.css"
+  ]
+}

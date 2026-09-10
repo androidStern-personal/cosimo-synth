@@ -101,7 +101,7 @@ export type PluginStateCommand = {
 /** Known acceptance is independent of subsequent native publication success. */
 export type PluginStateResult =
     | { readonly kind: "accepted"; readonly revision: number; readonly version?: number }
-    | { readonly kind: "rejected"; readonly reason: "not-ready" | "invalid-command" | "invalid-value" | "stale-version" | "stale-scope" | "busy" | "service-closed" };
+    | { readonly kind: "rejected"; readonly reason: "not-ready" | "invalid-command" | "invalid-value" | "stale-version" | "stale-scope" | "busy" | "service-closed" | "sequence" };
 
 /** Exact addressed result routed back to the originating client. */
 export interface PluginStateReceipt {
@@ -226,8 +226,8 @@ export function createPluginStateSession<const Fields extends PluginStateFields>
         snapshot: Object.freeze({
             ...model.snapshot, revision: model.snapshot.revision + 1, fields: Object.freeze(fields),
             history: Object.freeze({
-                canUndo: !stopped && model.gestures.size === 0 && past.length > 0 && fields[past.at(-1)?.key ?? ""]?.readiness.kind === "ready",
-                canRedo: !stopped && model.gestures.size === 0 && future.length > 0 && fields[future.at(-1)?.key ?? ""]?.readiness.kind === "ready",
+                canUndo: !stopped && model.gestures.size === 0 && past.length > 0 && fields[past[past.length - 1]?.key ?? ""]?.readiness.kind === "ready",
+                canRedo: !stopped && model.gestures.size === 0 && future.length > 0 && fields[future[future.length - 1]?.key ?? ""]?.readiness.kind === "ready",
             }),
         }),
     });
@@ -250,8 +250,10 @@ export function createPluginStateSession<const Fields extends PluginStateFields>
                         || !Object.is(before.value, after.value));
                 });
             if (!changed) {
-                fields[binding.key] = field.application || !old?.application ? field
-                    : Object.freeze({ ...field, application: old.application, ...(old.target ? { target: old.target } : {}) });
+                const application = field.application ?? old?.application;
+                const target = old?.target ?? field.target;
+                fields[binding.key] = field.application === application && field.target === target ? field
+                    : Object.freeze({ ...field, ...(application ? { application } : {}), ...(target ? { target } : {}) });
                 continue;
             }
             const target = Object.freeze({ scope, key: binding.key, generation: reset ? 0 : (old?.target?.generation ?? -1) + 1 });
@@ -336,7 +338,7 @@ export function createPluginStateSession<const Fields extends PluginStateFields>
                 if (model.gestures.size > 0) return { kind: "rejected", reason: "busy" };
                 const undo = event.command.kind === "undo";
                 const source = undo ? model.past : model.future;
-                const entry = source.at(-1);
+                const entry = source[source.length - 1];
                 if (!entry) return { kind: "accepted", revision: model.snapshot.revision };
                 return applyValue(model, entry.key, undo ? entry.before : entry.after,
                     undo ? model.past.slice(0, -1) : [...model.past, entry],

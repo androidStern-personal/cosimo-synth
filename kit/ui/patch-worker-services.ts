@@ -66,12 +66,19 @@ export class PatchWorkerServiceHost {
         }
 
         this.started = false;
-
+        const cleanupErrors: unknown[] = [];
         for (const service of [...this.services].reverse()) {
-            await service.stop?.();
+            try {
+                await service.stop?.();
+            } catch (error) {
+                cleanupErrors.push(error);
+            }
         }
 
         this.services.length = 0;
+        if (cleanupErrors.length > 0) {
+            throw new AggregateError(cleanupErrors, "Patch worker service cleanup failed");
+        }
     }
 
     getServices() {

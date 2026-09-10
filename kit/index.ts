@@ -23,6 +23,14 @@ export * from "./ui/effects/effect-state-contract";
 export * from "./ui/stored-state-runtime-mirror";
 export * from "./ui/patch-worker-services";
 
+// Plugin-owned values and shared history; worker and message details stay inside
+// the framework-generated state service.
+export { definePluginState, parameter, storedValue, eventValue } from "./ui/plugin-state-definition";
+export type { PluginStateCodec, PluginStatePrepareContext } from "./ui/plugin-state-definition";
+export type { PluginStateControlState } from "./ui/plugin-state-react";
+export { usePluginState, usePluginHistory } from "./ui/plugin-state-react";
+export { createStatefulPatchView } from "./ui/plugin-state-view";
+
 // Primitives: React bindings for the patch connection, editor tokens and
 // surfaces, range/curve editors, parameter text entry, the spectrum display.
 export * from "./ui/cmajor-react";

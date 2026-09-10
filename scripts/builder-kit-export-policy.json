@@ -57,7 +57,9 @@
     "vite",
     "@vitejs/plugin-react",
     "react",
+    "react-dom",
     "@types/react",
+    "@types/react-dom",
     "playwright",
     "jotai"
   ],

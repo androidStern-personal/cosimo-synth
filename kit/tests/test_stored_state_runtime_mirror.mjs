@@ -627,3 +627,24 @@ test("patch worker service host stops already-created services when a later serv
     assert.deepEqual(calls, ["start-a", "start-b", "stop-b", "stop-a"]);
     assert.deepEqual(host.getServices(), []);
 });
+
+test("patch worker shutdown releases every service even when multiple cleanups fail", async () => {
+    const calls = [];
+    const firstFailure = new Error("b cleanup failed");
+    const secondFailure = new Error("a cleanup failed");
+    const host = createPatchWorkerServiceHost(new FakePatchConnection(), [
+        { start() {}, stop() { calls.push("a"); throw secondFailure; } },
+        { start() {}, async stop() { calls.push("b"); throw firstFailure; } },
+        { start() {}, stop() { calls.push("c"); } },
+    ]);
+    await host.start();
+    await assert.rejects(host.stop(), error => {
+        assert.ok(error instanceof AggregateError);
+        assert.deepEqual(error.errors, [firstFailure, secondFailure]);
+        return true;
+    });
+    assert.deepEqual(calls, ["c", "b", "a"]);
+    assert.deepEqual(host.getServices(), []);
+    await host.stop();
+    assert.deepEqual(calls, ["c", "b", "a"], "failed cleanup is not invoked twice");
+});
