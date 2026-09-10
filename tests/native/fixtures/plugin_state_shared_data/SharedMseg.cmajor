@@ -1,0 +1,20 @@
+namespace cmaj::data
+{
+    external float read (int inputIndex, int sampleIndex);
+    external int size (int inputIndex);
+}
+
+processor SharedMseg
+{
+    input value float gain [[ name: "Gain", min: 0, max: 2, init: 1 ]];
+    input value int readIndex [[ name: "Read index", min: -1, max: 2052, init: 1025 ]];
+    output stream float<3> out;
+    void main()
+    {
+        loop
+        {
+            out <- float<3> (cmaj::data::read (0, readIndex), float (cmaj::data::size (0)), gain);
+            advance();
+        }
+    }
+}

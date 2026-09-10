@@ -33,6 +33,7 @@ export type { PluginStateControlState, PluginStateControl, PluginStateHistory, P
 export { usePluginState, usePluginHistory } from "./ui/plugin-state-react";
 export { createStatefulPatchView } from "./ui/plugin-state-view";
 export { engineData } from "./ui/engine-data-delivery";
+export { sharedData } from "./ui/shared-data-delivery";
 export type { EngineDataInput } from "./ui/engine-data-delivery";
 
 // Primitives: React bindings for the patch connection, editor tokens and

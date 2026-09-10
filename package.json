@@ -153,7 +153,9 @@
     "test:plugin-state:native-data": "node --test tests/test_plugin_state_engine_data_runtime.mjs",
     "test:plugin-state:native-synth": "node --test tests/test_synth_plugin_state_native.mjs",
     "test:plugin-state:browser": "node --test kit/tests/test_plugin_state_react_browser.mjs",
-    "test:synth:plugin-state:built": "node --test --test-concurrency=1 tests/test_mock_plugin_state_host.mjs tests/test_synth_plugin_state_browser.mjs tests/test_plugin_state_legacy_browser.mjs tests/test_voice_popover_compiled_browser.mjs"
+    "test:synth:plugin-state:built": "node --test --test-concurrency=1 tests/test_mock_plugin_state_host.mjs tests/test_synth_plugin_state_browser.mjs tests/test_plugin_state_legacy_browser.mjs tests/test_voice_popover_compiled_browser.mjs",
+    "test:shared-data:modules": "node --test tests/test_shared_data_memory.mjs tests/test_shared_data_concurrent.mjs kit/tests/test_plugin_state_shared_data.mjs",
+    "test:shared-data:browser": "node tests/test_shared_data_worklet_browser.mjs && node tests/test_shared_mseg_browser.mjs"
   },
   "devDependencies": {
     "@react-grab/mcp": "0.1.29",

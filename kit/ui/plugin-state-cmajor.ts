@@ -1,5 +1,6 @@
 import { createEngineBinding, type EngineApplication, type EngineFailure, type EngineOutcome, type EngineTarget } from "./plugin-state-engine";
 import { createPluginStateClient } from "./plugin-state-client";
+import { createSharedDataPort } from "./plugin-state-shared-data-port";
 import type { PluginStateFields, PluginStateJson } from "./plugin-state-definition";
 import { createPluginStateSession, type PluginStateScope, type PluginStateEnginePort, type PluginStateEngineInput, type PluginStateSession } from "./plugin-state-session";
 import { encodeEventPayload, encodeStateSnapshot, isBoundedStateJson, isRecord, parseClientMessage, parseClientReceipt, parseServiceMessage } from "./plugin-state-protocol";
@@ -7,11 +8,11 @@ import { encodeEventPayload, encodeStateSnapshot, isBoundedStateJson, isRecord, 
 /** Existing Cmajor message transport, supplied by a native or browser connection. */
 export interface CmajorStateConnection {
     /** Listen to raw state-channel bodies delivered by the connection. */
-    addEventListener(type: "kit_state", listener: (body: unknown) => void): void;
+    addEventListener(type: "kit_state" | "kit_data", listener: (body: unknown) => void): void;
     /** Release a previously installed state-channel listener. */
-    removeEventListener(type: "kit_state", listener: (body: unknown) => void): void;
+    removeEventListener(type: "kit_state" | "kit_data", listener: (body: unknown) => void): void;
     /** Send through Cmajor's ordinary scoped native/browser envelope path. */
-    sendMessageToServer(message: { readonly type: "kit_state"; readonly message: unknown }): void;
+    sendMessageToServer(message: { readonly type: "kit_state" | "kit_data"; readonly message: unknown }): void;
     /** Needed only by deliveries that declare output endpoint subscriptions. */
     addEndpointListener?(endpoint: string, listener: (value: unknown) => void): void;
     removeEndpointListener?(endpoint: string, listener: (value: unknown) => void): void;
@@ -100,6 +101,7 @@ export function createCmajorPluginStateService<const Fields extends PluginStateF
 ) {
     let started = false;
     let stopped = false;
+    let dataPort: ReturnType<typeof createSharedDataPort> | undefined;
     let nextRequest = 0;
     let openRequest = 0;
     let starting: Promise<void> | undefined;
@@ -179,6 +181,7 @@ export function createCmajorPluginStateService<const Fields extends PluginStateF
             },
             close(reason) {
                 stopped = true;
+                dataPort?.stop();
                 for (const pending of enginePublications.values()) pending.finish({ kind: "cancelled" });
                 failStart(new Error("State service closed before native initialization completed."));
                 try { if (started && session.getSnapshot().scope) send({ kind: "close", ...reason }); }
@@ -282,6 +285,9 @@ export function createCmajorPluginStateService<const Fields extends PluginStateF
             throw new Error("Invalid prepared delivery factory or replacement policy.");
         const create = delivery.create.bind(delivery);
         const replacement = delivery.replacement;
+        const dataInputs = Object.freeze([...(delivery.dataInputs ?? [])]);
+        if (dataInputs.some(input => !Number.isSafeInteger(input) || input < 0 || input > 0x7fffffff))
+            throw new Error("Invalid shared-data input declaration.");
         const outputEndpoints = Array.isArray(delivery.outputEndpoints) ? Object.freeze([...delivery.outputEndpoints]) : delivery.outputEndpoints;
         return [{ key, dependencies: declaration.dependencies, eventEndpoints: delivery.eventEndpoints,
             hostEffects: delivery.hostEffects, outputEndpoints,
@@ -299,9 +305,24 @@ export function createCmajorPluginStateService<const Fields extends PluginStateF
                             const removals = new Set<() => void>();
                             const cleanup = () => { for (const remove of removals) remove(); };
                             const removeAbort = permit.signal.onAbort(cleanup);
+                            const deliverySignal = {
+                                get aborted() { return !delivering || permit.signal.aborted; },
+                                onAbort(listener: () => void) {
+                                    if (!delivering || permit.signal.aborted) listener();
+                                    else removals.add(listener);
+                                    return () => { removals.delete(listener); };
+                                },
+                            };
                             try {
                                 return await transport.apply(payload.value, {
                                     signal: permit.signal,
+                                    replaceData(input, samples) {
+                                        if (!dataInputs.includes(input)) return Promise.resolve({ kind: "failed", error: { kind: "engine-rejected", message: "Undeclared shared-data input." } });
+                                        if (!delivering || permit.signal.aborted || !sameScope(session.getSnapshot().scope, payload.target.scope))
+                                            return Promise.resolve({ kind: "cancelled" });
+                                        dataPort ??= createSharedDataPort(connection);
+                                        return dataPort.replace(input, samples, payload.target, deliverySignal);
+                                    },
                                     send(effect) {
                                         if (!delivering || permit.signal.aborted) return { kind: "cancelled" };
                                         const submission = context.publish(payload.target.scope, effect);

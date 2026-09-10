@@ -72,9 +72,11 @@ export function createMockPluginStateHost(options: {
             removeEventListener(_type, listener) { listeners.delete(listener); },
             deliverMessageFromServer(envelope) { for (const listener of [...listeners]) listener(envelope.message); },
             sendMessageToServer(envelope) {
+                if (envelope.type !== "kit_state") throw new Error("The development mock host does not support shared audio data.");
                 if (!worker && stopped) throw new Error("Mock state host is stopped.");
-                if (!worker && !initialized) { pending.push(structuredClone(envelope)); return; }
-                send(port, envelope);
+                const stateEnvelope: Envelope = { type: "kit_state", message: envelope.message };
+                if (!worker && !initialized) { pending.push(structuredClone(stateEnvelope)); return; }
+                send(port, stateEnvelope);
                 // The browser channel has no DAW gesture callback. This external
                 // host records the real service's requests, without accepting edits.
                 const body = envelope.message;

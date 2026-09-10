@@ -15,6 +15,8 @@ export interface PluginStateDeliveryContext {
     send(effect: PluginStateEffect): PluginStateSubmission;
     /** Listen only to a declared output; automatically removed when delivery ends. */
     listen(endpoint: string, listener: (value: unknown) => void): () => void;
+    /** Install a complete sample resource on one declared shared-data input. */
+    replaceData(input: number, samples: Float32Array): Promise<PluginStateDeliveryOutcome>;
 }
 
 /** A reusable engine implementation instantiated by the generated worker. */
@@ -22,6 +24,7 @@ export interface PluginStateDelivery<Payload> {
     readonly eventEndpoints: readonly string[];
     readonly outputEndpoints?: readonly string[];
     readonly hostEffects?: readonly string[];
+    readonly dataInputs?: readonly number[];
     /** Finish permits an in-flight same-document delivery before the newest queued value. */
     readonly replacement?: "supersede" | "finish";
     create(): {

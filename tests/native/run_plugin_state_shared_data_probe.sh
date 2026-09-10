@@ -1,0 +1,18 @@
+#!/usr/bin/env bash
+set -euo pipefail
+test_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
+cmajor_dir="${1:?Usage: run_plugin_state_shared_data_probe.sh CMAJOR_SOURCE_DIR CMAJOR_RUNTIME_LIBRARY GENERATED_MANIFEST}"
+runtime_library="${2:?Pass the Cmajor runtime library path}"
+manifest="${3:?Pass the actual generated shared-data fixture manifest}"
+build_dir="$(mktemp -d "${TMPDIR:-/tmp}/plugin-state-shared-data.XXXXXX")"
+trap 'rm -rf "$build_dir"' EXIT INT TERM
+platform_flags=()
+if [[ "$(uname)" == Darwin ]]; then
+    for framework in Accelerate AudioToolbox Cocoa CoreAudio CoreMIDI Foundation IOKit; do
+        platform_flags+=(-framework "$framework")
+    done
+fi
+"${CXX:-c++}" -std=c++17 -O1 -g0 -pthread \
+    -I "$cmajor_dir/include" -I "$cmajor_dir/include/choc" \
+    "$test_dir/PluginStateSharedDataProbe.cpp" "${platform_flags[@]}" -o "$build_dir/shared-data-state-probe"
+"$build_dir/shared-data-state-probe" "$runtime_library" "$manifest"

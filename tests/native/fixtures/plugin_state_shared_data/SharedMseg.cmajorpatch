@@ -1,0 +1,9 @@
+{
+  "CmajorVersion": 1,
+  "ID": "dev.cmajor.test.shared-mseg",
+  "version": "1.0",
+  "name": "Shared MSEG",
+  "source": "SharedMseg.cmajor",
+  "sharedData": { "inputCount": 1, "maxRetainedBytes": 32768 },
+  "view": { "src": "view/index.js", "devModule": "/fx/shared_mseg/view/source.ts" }
+}
