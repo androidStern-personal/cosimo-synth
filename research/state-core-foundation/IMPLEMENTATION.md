@@ -301,3 +301,24 @@ React browser 6/6. Root full plugin-state module command passes 110/110 and stri
 TypeScript passes. Existing exact expectations were extended only for the new
 receipt/head fields; value, version, ordering and publication assertions remain.
 Actual native/browser system probes have not yet been rebuilt for this extension.
+
+## Explicit invalid-state recovery
+
+The internal client/session protocol now distinguishes recovery from ordinary
+editing. A stored field failed with invalid saved data accepts one validated
+`recover` command guarded by version zero. It establishes version one without
+inventing a before-value or changing either history stack. Ordinary edits to a
+failed field remain refused. The public React setter selects that command; no
+additional author-facing call is needed.
+
+Raw stored-state replacement may retain previous valid display values while
+readiness remains failed. The replacement still resets the document/history and
+blocks obsolete work. This display rule never repairs saved data automatically.
+Normal full restore does not retain values from the previous document.
+
+Independent recovery review passed 61 combined core tests, all seven React cases,
+and strict TypeScript including exact optional properties and unchecked index
+access. Tests caught a real equal-primitive recovery bug: readiness becoming ready
+must start engine preparation even when the retained display value is unchanged.
+The five new recovery tests cover that repair, concurrent guards, retained history,
+wire parsing, drafts and replacement. Existing assertions were not modified.

@@ -15,7 +15,7 @@ export type ServiceMessage =
     | { readonly kind: "closed"; readonly reason: string }
     | { readonly kind: "open-failed"; readonly request: number; readonly reason: string }
     | { readonly kind: "opened"; readonly request: number; readonly scope: PluginStateScope; readonly native: PluginStateNativeSnapshot }
-    | { readonly kind: "replaced"; readonly scope: PluginStateScope; readonly native: PluginStateNativeSnapshot }
+    | { readonly kind: "replaced"; readonly scope: PluginStateScope; readonly native: PluginStateNativeSnapshot; readonly changedStoredKey?: string }
     | { readonly kind: "parameter"; readonly scope: PluginStateScope; readonly endpoint: string; readonly value: number }
     | { readonly kind: "attached-client"; readonly request: number; readonly scope: PluginStateScope; readonly client: number }
     | { readonly kind: "detach"; readonly scope: PluginStateScope; readonly client: number; readonly routedThrough: number }
@@ -129,6 +129,10 @@ function command(input: unknown): PluginStateCommand | undefined {
         return { kind: input.kind, ...(expectedEntry ? { expectedEntry } : {}) };
     }
     if (!name(input.key)) return undefined;
+    if (input.kind === "recover") {
+        return Object.hasOwn(input, "value") && input.expectedVersion === 0 && !Object.hasOwn(input, "gesture")
+            ? { kind: "recover", key: input.key, value: input.value, expectedVersion: 0 } : undefined;
+    }
     if (input.kind === "begin" || input.kind === "end") {
         if (!counter(input.gesture) || (input.label !== undefined && typeof input.label !== "string")) return undefined;
         return input.kind === "end" ? { kind: "end", key: input.key, gesture: input.gesture }
@@ -157,7 +161,10 @@ export function parseServiceMessage(input: unknown): ProtocolResult<ServiceMessa
     }
     if (input.kind === "replaced" && parsedScope) {
         const native = nativeSnapshot(input.native);
-        if (native) return { kind: "ok", value: { kind: "replaced", scope: parsedScope, native } };
+        if (native && (input.changedStoredKey === undefined || name(input.changedStoredKey)))
+            return { kind: "ok", value: { kind: "replaced", scope: parsedScope, native,
+                ...(input.changedStoredKey === undefined ? {} : { changedStoredKey: input.changedStoredKey }),
+            } };
     }
     if (input.kind === "parameter" && parsedScope && name(input.endpoint) && typeof input.value === "number")
         return { kind: "ok", value: { kind: "parameter", scope: parsedScope, endpoint: input.endpoint, value: input.value } };
@@ -234,11 +241,17 @@ function fieldSnapshot(definition: PluginStateFields[string], input: unknown): P
         return Object.freeze({ readiness: Object.freeze({ kind: "pending" }), ...common });
     if (input.readiness.kind === "failed" && !Object.hasOwn(input, "value")) {
         const reason = input.readiness.reason;
+        if (input.version !== undefined && !counter(input.version, false)) return undefined;
         if (reason === "missing-parameter" || reason === "invalid-state" || reason === "service-closed")
-            return Object.freeze({ readiness: Object.freeze({ kind: "failed", reason }), ...common });
+            return Object.freeze({ readiness: Object.freeze({ kind: "failed", reason }), ...common,
+                ...(input.version === undefined ? {} : { version: input.version }),
+            });
         return undefined;
     }
-    if (input.readiness.kind !== "ready" && !(input.readiness.kind === "failed" && input.readiness.reason === "service-closed")) return undefined;
+    const failure = input.readiness.kind === "failed" && (input.readiness.reason === "service-closed"
+        || (input.readiness.reason === "invalid-state" && definition.kind === "stored" && input.version === 0))
+        ? input.readiness.reason : undefined;
+    if (input.readiness.kind !== "ready" && !failure) return undefined;
     if (!Object.hasOwn(input, "value") || !counter(input.version, false)) return undefined;
     const parsed = definition.kind === "stored" ? definition.codec.parse(input.value)
         : typeof input.value === "number" ? { kind: "ok" as const, value: input.value } : { kind: "error" as const };
@@ -256,8 +269,8 @@ function fieldSnapshot(definition: PluginStateFields[string], input: unknown): P
         if (!isRecord(input.gesture) || !counter(input.gesture.client) || !counter(input.gesture.gesture)) return undefined;
         gesture = Object.freeze({ client: input.gesture.client, gesture: input.gesture.gesture });
     }
-    return Object.freeze({ readiness: input.readiness.kind === "ready" ? Object.freeze({ kind: "ready" })
-        : Object.freeze({ kind: "failed", reason: "service-closed" }), value: parsed.value, version: input.version,
+    return Object.freeze({ readiness: failure ? Object.freeze({ kind: "failed", reason: failure })
+        : Object.freeze({ kind: "ready" }), value: parsed.value, version: input.version,
         persistence: Object.freeze(evidence), ...(metadata ? { metadata } : {}), ...(gesture ? { gesture } : {}), ...common });
 }
 

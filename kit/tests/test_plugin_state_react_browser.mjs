@@ -38,6 +38,59 @@ async function close(page) {
     assert.deepEqual(browserErrors.get(page), [], "no uncaught browser or React errors");
 }
 
+test("public React setValue recovers invalid stored input and reset settles a held recovery without replay", async () => {
+    const page = await browser.newPage();
+    const errors = [];
+    browserErrors.set(page, errors);
+    page.on("pageerror", error => errors.push(error.message));
+    await page.goto(`${server.baseUrl}/kit/tests/helpers/module_test_shell.html`);
+    await page.evaluate(async () => {
+        const { mount } = await import("/kit/tests/helpers/plugin_state_recovery_react.tsx");
+        window.recovery = await mount(document.getElementById("mount"));
+    });
+    const control = () => page.getByTestId("recovery-state").evaluate(element => JSON.parse(element.textContent));
+    try {
+        assert.deepEqual(await control(), { kind: "failed", reason: "invalid-state" });
+        assert.deepEqual(await page.evaluate(() => window.recovery.publications()), []);
+        await page.getByText("Recover curve", { exact: true }).click();
+        assert.deepEqual((await page.evaluate(() => window.recovery.held())).map(message => message.command), [
+            { kind: "recover", key: "curve", value: [0, 0.4, 1], expectedVersion: 0 },
+        ]);
+        assert.deepEqual(await control(), { kind: "failed", reason: "invalid-state" }, "a draft does not claim valid accepted state");
+        assert.deepEqual(await page.evaluate(() => window.recovery.clientSnapshot().state.fields.curve.value), [0, 0.4, 1]);
+        assert.equal(await page.evaluate(() => Object.hasOwn(window.recovery.snapshot().fields.curve, "value")), false);
+        await page.evaluate(() => window.recovery.release());
+        await page.waitForFunction(() => JSON.parse(document.querySelector('[data-testid="recovery-state"]').textContent).kind === "ready");
+        assert.deepEqual((await control()).value, [0, 0.4, 1]);
+        assert.deepEqual(JSON.parse(await page.getByTestId("recovery-history").textContent()), { canUndo: false, canRedo: false });
+        const result = JSON.parse(await page.getByTestId("recovery-result").textContent());
+        assert.equal(result.kind, "accepted");
+        assert.equal(result.changed, true);
+        assert.equal(result.historyEntry, undefined);
+        await page.getByText("Edit curve", { exact: true }).click();
+        assert.equal((await page.evaluate(() => window.recovery.held()))[0].command.kind, "edit");
+        await page.evaluate(() => window.recovery.release());
+        await page.getByText("Undo curve", { exact: true }).click();
+        await page.evaluate(() => window.recovery.release());
+        assert.deepEqual((await control()).value, [0, 0.4, 1], "ordinary edits after baseline creation participate in shared history");
+
+        await page.evaluate(() => window.recovery.resetInvalid());
+        await page.getByText("Recover curve", { exact: true }).click();
+        assert.equal((await page.evaluate(() => window.recovery.held())).length, 1);
+        const before = await page.evaluate(() => window.recovery.publications().length);
+        await page.evaluate(() => window.recovery.resetInvalid());
+        const interrupted = JSON.parse(await page.getByTestId("recovery-result").textContent());
+        assert.deepEqual(interrupted, { kind: "interrupted", reason: "reset", acceptance: "unknown" });
+        assert.equal(await page.evaluate(() => Object.hasOwn(window.recovery.clientSnapshot().state.fields.curve, "value")), false);
+        assert.deepEqual(await page.evaluate(() => window.recovery.clientSnapshot().pendingFields), []);
+        await page.evaluate(() => window.recovery.release());
+        assert.equal(await page.evaluate(() => window.recovery.publications().length), before);
+        assert.equal(await page.evaluate(() => Object.hasOwn(window.recovery.snapshot().fields.curve, "value")), false);
+        assert.deepEqual(await page.evaluate(() => window.recovery.held()), []);
+        assert.deepEqual(await page.evaluate(() => window.recovery.defects()), []);
+    } finally { await page.evaluate(() => window.recovery.dispose()); await close(page); }
+});
+
 test("public React guarded Undo and Redo preserve a competing client's newer entry", async () => {
     const page = await browser.newPage();
     const errors = [];

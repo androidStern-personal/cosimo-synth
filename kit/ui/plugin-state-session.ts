@@ -47,12 +47,12 @@ export interface PluginStateGestureOwner {
     readonly gesture: number;
 }
 
-/** A field has no substitute value before successful initialization. */
+/** Failed readiness may retain a last valid display value; it is not an accepted editable baseline. */
 export type PluginStateFieldSnapshot<Value> = (
     | { readonly readiness: { readonly kind: "pending" } }
-    | { readonly readiness: { readonly kind: "failed"; readonly reason: "missing-parameter" | "invalid-state" | "service-closed" } }
+    | { readonly readiness: { readonly kind: "failed"; readonly reason: "missing-parameter" | "invalid-state" | "service-closed" }; readonly version?: number }
     | {
-        readonly readiness: { readonly kind: "ready" } | { readonly kind: "failed"; readonly reason: "service-closed" };
+        readonly readiness: { readonly kind: "ready" } | { readonly kind: "failed"; readonly reason: "service-closed" | "invalid-state" };
         readonly value: Value;
         readonly version: number;
         readonly persistence: PluginStatePersistence;
@@ -105,6 +105,12 @@ export type PluginStateCommand = {
     readonly value: unknown;
     readonly expectedVersion?: number;
     readonly gesture?: number;
+} | {
+    /** Establish a valid stored baseline without treating invalid display data as Undo history. */
+    readonly kind: "recover";
+    readonly key: string;
+    readonly value: unknown;
+    readonly expectedVersion: 0;
 } | { readonly kind: "begin"; readonly key: string; readonly gesture: number; readonly label?: string }
   | { readonly kind: "end"; readonly key: string; readonly gesture: number }
   | { readonly kind: "undo"; readonly expectedEntry?: PluginStateHistoryEntry }
@@ -116,7 +122,7 @@ export type PluginStateResult =
         readonly kind: "accepted";
         readonly revision: number;
         readonly version?: number;
-        /** Edit commands report actual domain value change, independently of engine delivery. */
+        /** Edit/recovery commands report actual accepted value change, independently of engine delivery. */
         readonly changed?: boolean;
         /** Present only when this command creates or seals a nonempty Undo entry. */
         readonly historyEntry?: PluginStateHistoryEntry;
@@ -155,7 +161,9 @@ export interface PluginStateNativePort<Fields extends PluginStateFields> {
 /** Parsed adapter events; only domain field values are parsed again by their codecs. */
 export type PluginStateEvent =
     | { readonly kind: "opened"; readonly scope: PluginStateScope; readonly native: PluginStateNativeSnapshot }
-    | { readonly kind: "replaced"; readonly scope: PluginStateScope; readonly native: PluginStateNativeSnapshot }
+    | { readonly kind: "replaced"; readonly scope: PluginStateScope; readonly native: PluginStateNativeSnapshot;
+        /** Marks a legacy raw-write replacement, not an exhaustive list of changed keys. */
+        readonly changedStoredKey?: string }
     | { readonly kind: "engine"; readonly target: EngineTarget; readonly status: EngineApplication }
     | { readonly kind: "detached"; readonly scope: PluginStateScope; readonly client: number }
     | { readonly kind: "parameter"; readonly scope: PluginStateScope; readonly endpoint: string; readonly value: number }
@@ -268,7 +276,8 @@ export function createPluginStateSession<const Fields extends PluginStateFields>
             if (!field) continue;
             const old = previous.snapshot.fields[binding.key];
             const reset = !previous.snapshot.scope || !sameScope(scope, previous.snapshot.scope);
-            const changed = reset || !old || ("value" in field && (!('value' in old) || !Object.is(field.value, old.value)))
+            const changed = reset || !old || old.readiness.kind !== field.readiness.kind
+                || ("value" in field && (!('value' in old) || !Object.is(field.value, old.value)))
                 || binding.dependencies.some(key => {
                     const before = previous.snapshot.fields[key];
                     const after = fields[key];
@@ -306,12 +315,15 @@ export function createPluginStateSession<const Fields extends PluginStateFields>
         return equal ? past : [...past, { key, before: gesture.before, after: gesture.after, order: gesture.order }]
             .sort((left, right) => left.order - right.order);
     };
-    const applyValue = (model: Model, key: string, value: unknown, past: readonly HistoryEntry[], future: readonly HistoryEntry[], cause: "edit" | "history"): PluginStateResult => {
+    const applyValue = (model: Model, key: string, value: unknown, past: readonly HistoryEntry[], future: readonly HistoryEntry[], cause: "edit" | "history" | "recover"): PluginStateResult => {
         const field = definition[key];
         const previous = model.snapshot.fields[key];
-        if (!field || !previous || !("value" in previous) || !model.snapshot.scope) {
+        if (!field || !previous || !model.snapshot.scope) {
             return { kind: "rejected", reason: "not-ready" };
         }
+        const baseline = "value" in previous ? previous : undefined;
+        const recovering = cause === "recover";
+        if (!baseline && !recovering) return { kind: "rejected", reason: "not-ready" };
         let operations: readonly PluginStateOperation[];
         if (field.kind === "parameter") {
             if (typeof value !== "number") return { kind: "rejected", reason: "invalid-value" };
@@ -321,12 +333,12 @@ export function createPluginStateSession<const Fields extends PluginStateFields>
                     { kind: "parameter", endpoint: field.endpoint, value },
                     { kind: "gesture-end", endpoint: field.endpoint }];
         } else operations = [{ kind: "stored", key, value: field.codec.encode(value) }];
-        const version = previous.version + 1;
+        const version = (baseline?.version ?? 0) + 1;
         const request = ++nextPublication;
         const publications = new Map(model.publications).set(request, { key, version });
-        const next = publishSnapshot(model, { ...model.snapshot.fields, [key]: readyField(value, { kind: field.kind === "parameter" ? "host-managed" : "pending" }, version, previous.metadata, previous.gesture, field.kind === "parameter" ? { kind: "pending" } : undefined) }, past, future);
+        const next = publishSnapshot(model, { ...model.snapshot.fields, [key]: readyField(value, { kind: field.kind === "parameter" ? "host-managed" : "pending" }, version, baseline?.metadata, baseline?.gesture, field.kind === "parameter" ? { kind: "pending" } : undefined) }, past, future);
         const result: PluginStateResult = { kind: "accepted", revision: next.snapshot.revision, version,
-            ...(cause === "edit" ? { changed: true } : {}),
+            ...(cause !== "history" ? { changed: true } : {}),
             ...(cause === "edit" && !model.gestures.has(key) && past.length > 0
                 ? { historyEntry: historyReference(model.snapshot.scope, past[past.length - 1]!) } : {}),
         };
@@ -354,9 +366,14 @@ export function createPluginStateSession<const Fields extends PluginStateFields>
                 } else {
                     const present = Object.hasOwn(event.native.values, key);
                     const parsed = present ? field.codec.parse(event.native.values[key]) : field.initial;
-                    fields[key] = parsed.kind === "ok"
-                        ? readyField(parsed.value, { kind: present ? "observed-in-native-state" : "not-written" })
-                        : Object.freeze({ readiness: Object.freeze({ kind: "failed", reason: "invalid-state" }) });
+                    if (parsed.kind === "ok") fields[key] = readyField(parsed.value, { kind: present ? "observed-in-native-state" : "not-written" });
+                    else {
+                        const before = model.snapshot.fields[key];
+                        const retainDisplay = event.kind === "replaced" && event.changedStoredKey !== undefined && before && "value" in before;
+                        fields[key] = Object.freeze({ readiness: Object.freeze({ kind: "failed", reason: "invalid-state" }), version: 0,
+                            ...(retainDisplay ? { value: before.value, persistence: Object.freeze({ kind: "failed" as const, reason: "invalid-state" }) } : {}),
+                        });
+                    }
                 }
             }
             const next = publishSnapshot(model, fields, [], []);
@@ -381,9 +398,19 @@ export function createPluginStateSession<const Fields extends PluginStateFields>
             const { key } = event.command;
             if (!Object.hasOwn(definition, key)) return { kind: "rejected", reason: "invalid-command" };
             const field = definition[key];
-            const previous = model.snapshot.fields[key];
-            if (!field || !previous) return { kind: "rejected", reason: "invalid-command" };
-            if (!("value" in previous)) return { kind: "rejected", reason: "not-ready" };
+            const current = model.snapshot.fields[key];
+            if (!field || !current) return { kind: "rejected", reason: "invalid-command" };
+            if (event.command.kind === "recover") {
+                if (event.command.expectedVersion !== 0 || Object.hasOwn(event.command, "gesture")) return { kind: "rejected", reason: "invalid-command" };
+                if (field.kind !== "stored") return { kind: "rejected", reason: "not-ready" };
+                if ("version" in current && current.version !== 0) return { kind: "rejected", reason: "stale-version" };
+                if (current.readiness.kind !== "failed" || current.readiness.reason !== "invalid-state") return { kind: "rejected", reason: "not-ready" };
+                const parsed = field.codec.parse(event.command.value);
+                if (parsed.kind === "error") return { kind: "rejected", reason: "invalid-value" };
+                return applyValue(model, key, parsed.value, model.past, model.future, "recover");
+            }
+            if (!("value" in current) || current.readiness.kind !== "ready") return { kind: "rejected", reason: "not-ready" };
+            const previous = current;
             const activeGesture = model.gestures.get(key);
             if (activeGesture && activeGesture.client !== event.address.client) return { kind: "rejected", reason: "busy" };
             if (event.command.kind === "begin" || event.command.kind === "end") {

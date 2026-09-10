@@ -88,6 +88,10 @@ export function usePluginState<Field extends PluginStateParameter | PluginStateS
             /** Show a draft immediately and request the edit through the state client. */
             setValue(value: PluginStateFieldValue<Field>): Promise<PluginStateClientResult> {
                 const gesture = currentGesture()?.gesture;
+                const snapshot = client.getSnapshot();
+                const field = snapshot.kind === "ready" ? snapshot.state.fields[key] : undefined;
+                if (definition[key]?.kind === "stored" && field?.readiness.kind === "failed" && field.readiness.reason === "invalid-state")
+                    return client.dispatch({ kind: "recover", key, value, expectedVersion: 0 });
                 return client.dispatch({ kind: "edit", key, value, ...(gesture === undefined ? {} : { gesture }) });
             },
             /** Finish the current group; safe to call again after pointer cancellation. */
@@ -97,7 +101,7 @@ export function usePluginState<Field extends PluginStateParameter | PluginStateS
                 return gesture === undefined ? undefined : client.dispatch({ kind: "end", key, gesture });
             },
         };
-    }, [client, key]);
+    }, [client, key, definition]);
     useEffect(() => () => { void actions.endGesture(); }, [actions]);
     return { state, ...actions };
 }

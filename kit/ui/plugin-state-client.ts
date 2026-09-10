@@ -87,8 +87,9 @@ export function createPluginStateClient<const Fields extends PluginStateFields>(
         const pendingFields = new Set<string>();
         for (const draft of drafts.values()) {
             const field = fields[draft.key];
-            if (field && "value" in field) {
-                fields[draft.key] = Object.freeze({ ...field, value: draft.value });
+            if (field && ("value" in field || (field.readiness.kind === "failed" && field.readiness.reason === "invalid-state"))) {
+                fields[draft.key] = Object.freeze("value" in field ? { ...field, value: draft.value }
+                    : { ...field, value: draft.value, version: 0, persistence: Object.freeze({ kind: "not-written" as const }) });
                 pendingFields.add(draft.key);
             }
         }
@@ -224,11 +225,16 @@ export function createPluginStateClient<const Fields extends PluginStateFields>(
                     if (!expectedEntry) return Promise.resolve({ kind: "rejected", reason: "invalid-command" });
                     outbound = { ...command, expectedEntry };
                 }
-                if (command.kind === "edit") {
+                if (command.kind === "edit" || command.kind === "recover") {
                     const field = definition[command.key];
                     const current = base.state.fields[command.key];
                     if (!Object.hasOwn(definition, command.key) || !field) return Promise.resolve({ kind: "rejected", reason: "invalid-command" });
-                    if (!current || current.readiness.kind !== "ready" || !("value" in current)) return Promise.resolve({ kind: "rejected", reason: "not-ready" });
+                    if (command.kind === "recover") {
+                        if (command.expectedVersion !== 0 || Object.hasOwn(command, "gesture")) return Promise.resolve({ kind: "rejected", reason: "invalid-command" });
+                        if (field.kind !== "stored" || !current) return Promise.resolve({ kind: "rejected", reason: "not-ready" });
+                        if ("version" in current && current.version !== 0) return Promise.resolve({ kind: "rejected", reason: "stale-version" });
+                        if (current.readiness.kind !== "failed" || current.readiness.reason !== "invalid-state") return Promise.resolve({ kind: "rejected", reason: "not-ready" });
+                    } else if (!current || current.readiness.kind !== "ready" || !("value" in current)) return Promise.resolve({ kind: "rejected", reason: "not-ready" });
                     const parsed = field.kind === "stored" ? field.codec.parse(command.value)
                         : typeof command.value === "number" && Number.isFinite(command.value)
                             ? { kind: "ok" as const, value: command.value } : { kind: "error" as const };
@@ -237,7 +243,7 @@ export function createPluginStateClient<const Fields extends PluginStateFields>(
                     outbound = { ...command, value: field.kind === "stored" ? field.codec.encode(parsed.value) : parsed.value };
                 }
                 if (!isBoundedStateJson({ kind: "command", scope, client, sequence: nextSequence + 1, command: outbound }))
-                    return Promise.resolve({ kind: "rejected", reason: command.kind === "edit" ? "invalid-value" : "invalid-command" });
+                    return Promise.resolve({ kind: "rejected", reason: command.kind === "edit" || command.kind === "recover" ? "invalid-value" : "invalid-command" });
                 const sequence = ++nextSequence;
                 if (draft) drafts.set(sequence, draft);
                 return new Promise(finish => {

@@ -43,6 +43,12 @@ The author supplies the domain codec and renderer. The codec has three methods:
 A missing saved value uses the declared initial value. Invalid saved data reports
 a failed field; it is not overwritten with a default.
 
+An explicit `setValue(validValue)` can repair an invalid stored field. The first
+valid value establishes a new baseline without adding an Undo entry for the
+invalid data; other fields' Undo and Redo entries remain intact. Concurrent repair
+requests cannot replace a baseline already accepted from another client. Normal
+editing and gesture grouping resume after that repair is accepted.
+
 The renderer receives the accepted value and returns the payload for the DSP
 event. It may return a promise and numeric typed arrays. It must not depend on
 React, DOM globals or a view remaining open. Preparation runs outside audio
@@ -142,6 +148,11 @@ invented proof of a particular GUI write.
 - Control/window removal through the view wrapper, or native client detachment,
   ends that client's gestures. A full project restore replaces the document,
   clears history and rejects old commands and delivery completions.
+- A legacy direct write to an owned stored key also replaces the document and
+  clears history. If that write makes stored data invalid, the previous valid
+  value may remain visible, but the field reports failure and cannot send that
+  display value to the engine until explicitly repaired. A full project restore
+  does not carry display values over from the previous project.
 - A lost connection never automatically replays an edit whose acceptance is
   unknown. Callers receive that uncertainty rather than a fabricated rejection.
 
