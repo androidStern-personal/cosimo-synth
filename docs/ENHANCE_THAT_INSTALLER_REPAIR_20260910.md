@@ -18,8 +18,14 @@ Worktree-relative output: `release/enhance-that/0.1.5/release/EnhanceThat-0.1.5-
 - Developer ID Installer signature verified. Apple notarization accepted `c0f8fccd-09d4-4a95-b002-fc9d68424bc8`; staple validation and Gatekeeper passed. ZIP and enclosed checksums passed.
 - Extracted VST3 passed pluginval strictness 5, including editor, audio processing, state, and automation. Optional Steinberg validator skipped (not configured). This is not a new Ableton/listening acceptance claim.
 
-## Remaining gate
+## Installation and production publication complete
+
+Andrew completed native installation and confirmed the plugin loaded in Ableton. Read-only checks verified package receipt 0.1.5, strict signatures on installed VST3/AU, byte-for-byte equality with the signed package, and absence of the old user-level VST3 duplicate.
+
+The exact ZIP was downloaded and checksum-verified through sandbox, then promoted unchanged to Song Machines production. Current production deployment: `dpl_74r3uJsRW5J81gCR3oetmhdecUYk`; public URL `https://song-machines.com/`. The live free endpoint returned 200, 9,939,499 bytes, and the ZIP SHA256 recorded above. Store manifest is `enhance-that/production/store/releases/0.1.6/delivery.json`; free installer is 0.1.5 and paid Builder Kit remains 0.1.5. Homepage bytes, checkout configuration, paid installer, setup instructions, and friend code were preserved. No shared master merge was performed.
+
+## Historical approval gate (resolved)
 
 Actual local upgrade installation requires the user's normal macOS administrator approval (`sudo -n` has no authorization). The corrected package has been opened in Installer. Existing user/system plugins have not been manually removed or moved to make the test pass.
 
-After approval, verify native installation succeeded, the user duplicate is gone, installed VST3/AU match the corrected package, and repeat installation succeeds. Then publish the corrected free download through the sandbox-to-production store release flow, preserving the paid Builder Kit 0.1.5 artifact and purchase configuration. Production download has **not** changed in this repair turn.
+The subsequent installation and publication evidence above resolves this historical gate. Repeatability of hook cleanup is covered by fixtures; a second native install was not performed. Production was unchanged at the end of the repair-build turn, then updated after Andrew's installation/Ableton acceptance and explicit go-ahead.
