@@ -1,0 +1,52 @@
+processor DesktopWrapperState [[ main ]]
+{
+    input event NoteMeta articulationNoteMeta;
+    input event std::midi::Message midiIn;
+    input value float gain [[ name: "Gain", min: -12, max: 12, init: 1 ]];
+    input value float laneGlobalFilter1OutputTrimDb [[ name: "laneGlobalFilter1OutputTrimDb", min: -60, max: 12, init: 0 ]];
+    input value float laneGlobalFilter2OutputTrimDb [[ name: "laneGlobalFilter2OutputTrimDb", min: -60, max: 12, init: 0 ]];
+    input value float laneGlobalFilter3OutputTrimDb [[ name: "laneGlobalFilter3OutputTrimDb", min: -60, max: 12, init: 0 ]];
+    input value float laneGlobalFilter4OutputTrimDb [[ name: "laneGlobalFilter4OutputTrimDb", min: -60, max: 12, init: 0 ]];
+    input value float laneGlobalFilter5OutputTrimDb [[ name: "laneGlobalFilter5OutputTrimDb", min: -60, max: 12, init: 0 ]];
+    input value float laneDistortion1OutputTrimDb [[ name: "laneDistortion1OutputTrimDb", min: -60, max: 12, init: 0 ]];
+    input value float laneDistortion2OutputTrimDb [[ name: "laneDistortion2OutputTrimDb", min: -60, max: 12, init: 0 ]];
+    input value float laneDistortion3OutputTrimDb [[ name: "laneDistortion3OutputTrimDb", min: -60, max: 12, init: 0 ]];
+    input value float laneDistortion4OutputTrimDb [[ name: "laneDistortion4OutputTrimDb", min: -60, max: 12, init: 0 ]];
+    input value float laneDistortion5OutputTrimDb [[ name: "laneDistortion5OutputTrimDb", min: -60, max: 12, init: 0 ]];
+    input value float laneOtt1OutputTrimDb [[ name: "laneOtt1OutputTrimDb", min: -60, max: 12, init: 0 ]];
+    input value float laneOtt2OutputTrimDb [[ name: "laneOtt2OutputTrimDb", min: -60, max: 12, init: 0 ]];
+    input value float laneOtt3OutputTrimDb [[ name: "laneOtt3OutputTrimDb", min: -60, max: 12, init: 0 ]];
+    input value float laneOtt4OutputTrimDb [[ name: "laneOtt4OutputTrimDb", min: -60, max: 12, init: 0 ]];
+    input value float laneOtt5OutputTrimDb [[ name: "laneOtt5OutputTrimDb", min: -60, max: 12, init: 0 ]];
+    input value float laneChorus1OutputTrimDb [[ name: "laneChorus1OutputTrimDb", min: -60, max: 12, init: 0 ]];
+    input value float laneChorus2OutputTrimDb [[ name: "laneChorus2OutputTrimDb", min: -60, max: 12, init: 0 ]];
+    input value float laneChorus3OutputTrimDb [[ name: "laneChorus3OutputTrimDb", min: -60, max: 12, init: 0 ]];
+    input value float laneChorus4OutputTrimDb [[ name: "laneChorus4OutputTrimDb", min: -60, max: 12, init: 0 ]];
+    input value float laneChorus5OutputTrimDb [[ name: "laneChorus5OutputTrimDb", min: -60, max: 12, init: 0 ]];
+    input value float laneFlanger1OutputTrimDb [[ name: "laneFlanger1OutputTrimDb", min: -60, max: 12, init: 0 ]];
+    input value float laneFlanger2OutputTrimDb [[ name: "laneFlanger2OutputTrimDb", min: -60, max: 12, init: 0 ]];
+    input value float laneFlanger3OutputTrimDb [[ name: "laneFlanger3OutputTrimDb", min: -60, max: 12, init: 0 ]];
+    input value float laneFlanger4OutputTrimDb [[ name: "laneFlanger4OutputTrimDb", min: -60, max: 12, init: 0 ]];
+    input value float laneFlanger5OutputTrimDb [[ name: "laneFlanger5OutputTrimDb", min: -60, max: 12, init: 0 ]];
+    input value float lanePhaser1OutputTrimDb [[ name: "lanePhaser1OutputTrimDb", min: -60, max: 12, init: 0 ]];
+    input value float lanePhaser2OutputTrimDb [[ name: "lanePhaser2OutputTrimDb", min: -60, max: 12, init: 0 ]];
+    input value float lanePhaser3OutputTrimDb [[ name: "lanePhaser3OutputTrimDb", min: -60, max: 12, init: 0 ]];
+    input value float lanePhaser4OutputTrimDb [[ name: "lanePhaser4OutputTrimDb", min: -60, max: 12, init: 0 ]];
+    input value float lanePhaser5OutputTrimDb [[ name: "lanePhaser5OutputTrimDb", min: -60, max: 12, init: 0 ]];
+    input value float laneDelay1OutputTrimDb [[ name: "laneDelay1OutputTrimDb", min: -60, max: 12, init: 0 ]];
+    input value float laneDelay2OutputTrimDb [[ name: "laneDelay2OutputTrimDb", min: -60, max: 12, init: 0 ]];
+    input value float laneDelay3OutputTrimDb [[ name: "laneDelay3OutputTrimDb", min: -60, max: 12, init: 0 ]];
+    input value float laneDelay4OutputTrimDb [[ name: "laneDelay4OutputTrimDb", min: -60, max: 12, init: 0 ]];
+    input value float laneDelay5OutputTrimDb [[ name: "laneDelay5OutputTrimDb", min: -60, max: 12, init: 0 ]];
+    input value float laneReverb1OutputTrimDb [[ name: "laneReverb1OutputTrimDb", min: -60, max: 12, init: 0 ]];
+    input value float laneReverb2OutputTrimDb [[ name: "laneReverb2OutputTrimDb", min: -60, max: 12, init: 0 ]];
+    input value float laneReverb3OutputTrimDb [[ name: "laneReverb3OutputTrimDb", min: -60, max: 12, init: 0 ]];
+    input value float laneReverb4OutputTrimDb [[ name: "laneReverb4OutputTrimDb", min: -60, max: 12, init: 0 ]];
+    input value float laneReverb5OutputTrimDb [[ name: "laneReverb5OutputTrimDb", min: -60, max: 12, init: 0 ]];
+    output stream float<2> out;
+    struct NoteMeta { int channel; int noteNumber; int selectorA; int selectorB; int durationSamples; int ageSamples; }
+    int selector = -1;
+    event articulationNoteMeta (NoteMeta meta) { selector = meta.selectorA; }
+    event midiIn (std::midi::Message message) {}
+    void main() { loop { out <- float<2> (gain, float (selector)); advance(); } }
+}

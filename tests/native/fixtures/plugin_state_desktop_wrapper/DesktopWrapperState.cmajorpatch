@@ -1,0 +1,7 @@
+{
+  "CmajorVersion": 1,
+  "ID": "dev.cosimo.tests.desktop-wrapper-state",
+  "version": "1.0",
+  "name": "Desktop Wrapper State Probe",
+  "source": "DesktopWrapperState.cmajor"
+}

@@ -253,18 +253,18 @@ test("desktop and iOS reject incomplete native chunks before any restore mutatio
         assert.match(source, /version == nullptr \|\| \(! version->isInt\(\) && ! version->isInt64\(\)\)/);
     }
 
-    assert.ok(
-        desktop.indexOf("isCurrentCompleteSoundState (restoredState)")
-            < desktop.indexOf("lastLoadedStateHash != stateHash"),
-    );
+    // Cmajor no longer exposes its removed hash cache: valid repeated restores
+    // must reach the restore API even after intervening edits.
+    assert.doesNotMatch(desktop, /lastLoadedStateHash/);
     assert.ok(
         desktop.indexOf("isCurrentCompleteSoundState (restoredState)")
             < desktop.indexOf("setFixedStateSynchronously (restoredState)"),
     );
     assert.ok(
         ios.indexOf("isCurrentCompleteSoundState (restoredState)")
-            < ios.indexOf("lastLoadedStateHash != stateHash"),
+            < ios.indexOf("setNewStateAsync (std::move (restoredState))"),
     );
+    assert.doesNotMatch(ios, /lastLoadedStateHash/);
     const iosRestore = ios.slice(ios.indexOf("void setNewState (const juce::ValueTree& newState)"));
     assert.ok(iosRestore.indexOf("isCurrentCompleteSoundState (newState)")
         < iosRestore.indexOf("readParametersFromState (loadParams, newState)"));

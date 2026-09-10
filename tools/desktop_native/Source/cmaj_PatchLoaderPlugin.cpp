@@ -5,6 +5,7 @@
 #include <mutex>
 
 #include "../../../native/ArticulationTriggerConfigState.h"
+#include "../../../native/ArticulationStateEffect.h"
 #include "../../../native/CompleteSoundState.h"
 
 #define CHOC_ASSERT(x) assert(x)
@@ -162,6 +163,9 @@ public:
             if (auto* editor = dynamic_cast<Editor*> (getActiveEditor()))
                 editor->statusMessageChanged();
         };
+
+        patch->handleStateHostEffect = cosimo::future_daw::createArticulationStateEffectHandler (
+            [this] (auto config) { setPendingArticulationTriggerConfig (std::move (config)); });
 
         // Match Cmajor's fixed-patch startup order: give the patch valid playback
         // params before the first synchronous load so it can build a playable renderer.
@@ -578,20 +582,13 @@ public:
         auto restoredState = juce::ValueTree::readFromData (data, static_cast<size_t> (size));
 
         // Live may send an empty, non-Cmajor, or pre-T78 state chunk when
-        // opening the device. Reject the whole document before hashing or
+        // opening the device. Reject the whole document before
         // handing any parameter/stored-state value to the patch.
         if (! isCurrentCompleteSoundState (restoredState))
             return;
 
-        choc::hash::xxHash64 hash (1);
-        hash.addInput (data, static_cast<size_t> (size));
-        auto stateHash = hash.getHash();
-
-        if (lastLoadedStateHash != stateHash)
-        {
-            lastLoadedStateHash = stateHash;
-            setFixedStateSynchronously (restoredState);
-        }
+        // The same saved document is authoritative again after live edits.
+        setFixedStateSynchronously (restoredState);
     }
 
     bool prepareManifest (cmaj::Patch::LoadParams& loadParams, const juce::ValueTree& newState) override

@@ -107,3 +107,17 @@ target_include_directories(cosimo_t78_vst3_automation_probe PRIVATE
 target_link_libraries(cosimo_t78_vst3_automation_probe PRIVATE
     juce::juce_audio_processors
 )
+
+# Uses the production processor constructor and processBlock without installing
+# a plug-in. Including its implementation keeps the probe out of the public API.
+add_executable(cosimo_plugin_state_desktop_wrapper_probe EXCLUDE_FROM_ALL
+    "${COSIMO_REPO_ROOT}/tests/native/PluginStateDesktopWrapperProbe.cpp"
+)
+target_compile_features(cosimo_plugin_state_desktop_wrapper_probe PRIVATE cxx_std_17)
+target_compile_definitions(cosimo_plugin_state_desktop_wrapper_probe PRIVATE
+    $<TARGET_PROPERTY:CosimoDesktopNative,COMPILE_DEFINITIONS>
+)
+target_include_directories(cosimo_plugin_state_desktop_wrapper_probe PRIVATE
+    $<TARGET_PROPERTY:CosimoDesktopNative,INCLUDE_DIRECTORIES>
+)
+target_link_libraries(cosimo_plugin_state_desktop_wrapper_probe PRIVATE CosimoDesktopNative)

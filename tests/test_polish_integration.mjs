@@ -142,7 +142,7 @@ test("native host state stamps the current complete sound and rejects older chun
     assert.match(desktopHost, /readParametersFromState \(loadParams, newState\);/);
     assert.ok(
         desktopHost.indexOf("isCurrentCompleteSoundState (restoredState)")
-            < desktopHost.indexOf("lastLoadedStateHash != stateHash"),
+            < desktopHost.indexOf("setFixedStateSynchronously (restoredState)"),
     );
 
     assert.match(iosHost, /completeSoundVersion \{ "completeSoundVersion" \}/);
@@ -153,7 +153,7 @@ test("native host state stamps the current complete sound and rejects older chun
     assert.match(iosHost, /loadParams\.parameterValues\[endpointID\] = static_cast<float> \(\*valueProperty\);/);
     assert.ok(
         iosHost.indexOf("isCurrentCompleteSoundState (restoredState)")
-            < iosHost.indexOf("lastLoadedStateHash != stateHash"),
+            < iosHost.indexOf("setNewStateAsync (std::move (restoredState))"),
     );
 });
 

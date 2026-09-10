@@ -25,13 +25,13 @@
 #include <vector>
 
 #include "../../native/ArticulationTriggerConfigState.h"
+#include "../../native/ArticulationStateEffect.h"
 #include "../../native/CompleteSoundState.h"
 #include "CosimoSharedWavetableLibrary.h"
 #include "cmajor/helpers/cmaj_GeneratedCppEngine.h"
 #include "cmajor/helpers/cmaj_Patch.h"
 #include "cmajor/helpers/cmaj_PatchManifest.h"
 #include "choc/gui/choc_WebView.h"
-#include "choc/memory/choc_xxHash.h"
 #include "choc/network/choc_MIMETypes.h"
 
 #include "../../native/CosimoCmajorMidiBridge.h"
@@ -667,6 +667,9 @@ public:
             handleOutputEvent (frame, endpointID, value);
         };
 
+        patch->handleStateHostEffect = cosimo::future_daw::createArticulationStateEffectHandler (
+            [this] (auto config) { setPendingArticulationTriggerConfig (std::move (config)); });
+
        #if CMAJ_USE_QUICKJS_WORKER
         enableQuickJSPatchWorker (*patch);
        #else
@@ -826,15 +829,8 @@ public:
         if (! isCurrentCompleteSoundState (restoredState))
             return;
 
-        choc::hash::xxHash64 hash (1);
-        hash.addInput (data, static_cast<size_t> (sizeInBytes));
-        const auto stateHash = hash.getHash();
-
-        if (lastLoadedStateHash != stateHash)
-        {
-            lastLoadedStateHash = stateHash;
-            setNewStateAsync (std::move (restoredState));
-        }
+        // Reapplying a saved document must replace intervening live edits.
+        setNewStateAsync (std::move (restoredState));
     }
 
     struct SharedWavetableLibraryScreen
@@ -2494,7 +2490,6 @@ private:
     std::vector<Parameter*> parameters;
     std::string statusMessage;
     bool isStatusMessageError = false;
-    uint64_t lastLoadedStateHash = 0;
     int lastEditorWidth = 0;
     int lastEditorHeight = 0;
    #if COSIMO_ENABLE_MODULATION_BENCHMARK_METRICS
