@@ -207,7 +207,7 @@ struct Fixture
 
 int main (int argc, char** argv)
 {
-    if (argc != 3 && argc != 4) { std::cerr << "Usage: PluginStateEngineDataProbe <runtime-library> <generated-patch> [--expect-boot-error]\n"; return 2; }
+    if (argc != 3 && argc != 4) { std::cerr << "Usage: PluginStateEngineDataProbe <runtime-library> <generated-patch> [--expect-boot-error|--reset]\n"; return 2; }
     choc::messageloop::initialise();
     if (! cmaj::Library::initialise (argv[1])) { std::cerr << "Runtime load failed\n"; return 1; }
     int result = 1;
@@ -254,6 +254,27 @@ int main (int argc, char** argv)
             fixture.attach();
             fixture.expectApplied (-700001, 997);
             checkpoints.addArrayElement (fixture.checkpoint ("reopened"));
+            if (argc == 4 && std::string (argv[3]) == "--reset")
+            {
+                const auto previousScope = fixture.onLoop ([&]
+                {
+                    const auto scope = fixture.view->scope;
+                    // The real public reset replaces the Performer while the
+                    // generated worker and the saved editable value survive.
+                    fixture.patch->resetToInitialState();
+                    return scope;
+                });
+                fixture.waitFor ([&]
+                {
+                    const auto reset = fixture.view->last ("reset");
+                    return reset.isObject()
+                        && reset["scope"]["document"].getWithDefault<double> (-1)
+                            > previousScope["document"].getWithDefault<double> (-1);
+                }, "real performer reset did not invalidate the previous application evidence");
+                fixture.attach();
+                fixture.expectApplied (-700001, 997);
+                checkpoints.addArrayElement (fixture.checkpoint ("reset"));
+            }
             auto receipts = choc::value::createEmptyArray();
             fixture.onLoop ([&] { for (const auto& receipt : fixture.receipts) receipts.addArrayElement (receipt); });
             std::cout << "RESULT " << choc::json::toString (choc::json::create ("checkpoints", checkpoints, "receipts", receipts)) << '\n';

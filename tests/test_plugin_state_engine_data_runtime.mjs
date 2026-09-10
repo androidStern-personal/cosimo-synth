@@ -7,7 +7,7 @@ import { buildPluginStateEngineDataFixture } from "./helpers/build_plugin_state_
 
 const repo = path.resolve(import.meta.dirname, "..");
 
-async function runNativeFixture(variant = "small") {
+async function runNativeFixture(variant = "small", mode) {
     const source = process.env.COSIMO_ENGINE_DATA_CMAJOR_SOURCE;
     const runtime = process.env.COSIMO_CMAJOR_RUNTIME_LIBRARY;
     assert.ok(source && runtime, "set the qualified Cmajor source and runtime explicitly");
@@ -22,7 +22,7 @@ async function runNativeFixture(variant = "small") {
         "-o", executable,
     ], { encoding: "utf8", timeout: 60000 });
     assert.equal(compiled.status, 0, compiled.error?.message ?? compiled.stderr);
-    const run = spawnSync(executable, [runtime, manifestPath, ...(variant === "invalid" ? ["--expect-boot-error"] : [])], { encoding: "utf8", timeout: 45000, maxBuffer: 8 * 1024 * 1024 });
+    const run = spawnSync(executable, [runtime, manifestPath, ...(variant === "invalid" ? ["--expect-boot-error"] : mode ? [mode] : [])], { encoding: "utf8", timeout: 45000, maxBuffer: 8 * 1024 * 1024 });
     await writeFile(path.join(buildRoot, "probe-run.log"), run.stdout + run.stderr);
     await writeFile(path.join(buildRoot, "probe-result.json"), JSON.stringify({ ...identity, source, runtime, exitCode: run.status }, null, 2));
     assert.equal(run.status, 0, run.error?.message ?? run.stdout + run.stderr);
@@ -88,4 +88,23 @@ test("an invalid authored engineData declaration keeps its original QuickJS boot
     assert.ok(result.bootErrors.some(error => error.includes("8192")), "retain the actual engineData constructor capacity failure");
     assert.ok(result.bootErrors.every(error => !error.includes("currentView")), "native messages after failed import must not overwrite the cause with a missing global ReferenceError");
     assert.ok(result.bootErrors.at(-1).includes("8192"), "the last native status still describes the authored configuration failure");
+});
+
+test("real Performer reset invalidates old application evidence and the surviving worker reinstalls the saved prepared value", { timeout: 120000 }, async () => {
+    const result = await runNativeFixture("small", "--reset");
+    assert.deepEqual(result.checkpoints.map(checkpoint => checkpoint.name), ["hydrated", "edited", "undone", "reopened", "reset"]);
+    const before = result.checkpoints[3];
+    const after = result.checkpoints[4];
+    assert.equal(before.state.history.canRedo, true, "there is real pre-reset history to invalidate");
+    assert.equal(after.scope.owner, before.scope.owner, "the same generated worker owns the recreated Performer");
+    assert.ok(after.scope.document > before.scope.document, "old command and delivery receipts belong to the discarded document");
+    assert.deepEqual(after.state.fields.shape.value, { base: -700001, step: 997 }, "reset preserves the saved editable shape");
+    assert.deepEqual(after.current, Array.from({ length: 257 }, (_, index) => -700001 + index * 997), "all words were reinstalled into the new actual Performer");
+    assert.deepEqual(after.held, Array(257).fill(0), "readers of the destroyed Performer do not survive a full reset");
+    assert.equal(after.state.fields.shape.application.kind, "acknowledged");
+    assert.deepEqual(after.state.history, { canUndo: false, canRedo: false });
+    const commits = result.receipts.filter(receipt => receipt.operation === 3);
+    assert.equal(commits.length, 4, "reset requires one new DSP commit beyond hydrate, edit and Undo");
+    assert.ok(commits.every(receipt => receipt.status === 0));
+    assert.equal(commits[3].generation, 1, "the fourth commit reaches new storage, not the previous Performer frontier");
 });

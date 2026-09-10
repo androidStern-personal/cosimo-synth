@@ -468,6 +468,9 @@ through actual compiled Cmajor before adding capacity/failure cases.
   The focused state run within that suite passes all 158 tests in about 1 second.
 - Cmajor checkpoint `e0d0cc7` preserves boot errors and completes reviewed browser
   host-effect routing, above `85f6f8a`. Both remain local, unpushed and unpinned.
+- Root checkpoint `6e59aaa8` was exported into an independent tree. Its canonical
+  typecheck, tests, example build and update-merge proof all passed; evidence is
+  `build/native_plugin_state/resume-export-proof.log`.
 
 Evidence boundaries: bulk tests invoke actual compiled performers, not a DAW.
 Wasm's generated 6144-word input marshaling showed a 5.84 ms observed maximum in
@@ -478,3 +481,46 @@ resident state and is separate from metadata-only module reset. Cosimo's existin
 four-slot wavetable pool also shares capacity between oscillator inputs; separate
 stock banks would consume more memory. These constraints must inform a real
 plugin migration rather than being hidden by the small fixture.
+
+### Reset qualification and the real-plugin migration
+
+The actual native reset API replaced the Performer without notifying the state
+owner. A new generated-worker/actual-DSP test observed stale acknowledged status
+and retained Redo after the engine storage was gone. The reset now uses the
+existing native document replacement barrier, preserving editable stored values,
+invalidating old commands/history, and reinstalling the saved prepared value.
+The first native reset RED/GREEN is recorded in
+`build/native_plugin_state/resume-performer-reset-{red,green}.log`. Adversarial
+callback-failure and reentrant-unload cases also pass. Cleanup attempts every
+original gesture, preserves the first exception, and stops when a callback
+replaces the owner/document. The adversarial tests first reproduced stranded
+gestures, stale closure of replacement views and an unload crash; no existing
+assertions were weakened. Full native channel and all four generated-worker/DSP
+cases pass in `build/native_plugin_state/resume-reset-{channel,engine}-final.log`.
+Browser
+public reset had the same omission; two actual-worklet tests now pass, including
+a held old effect refused after reset. Its 25 pre-existing outer tests also pass.
+No additional transport invalidation API was added.
+
+Independent migration reviews selected the existing Cosimo modulation/articulation
+delivery coordinator. Rewriting the MSEG readers/storage would add unrelated DSP
+risk. Adding coupled-field framework parsing would broaden the core unnecessarily.
+SeqFX additionally requires gesture-end persistence, legacy-key migration and
+revision rebasing on Undo; it is not the smaller takeover.
+
+The pending Cosimo slice therefore moves the complete existing `modulation.v6`
+editable value into the same session/history as Voice, with a client-backed GUI
+projection. One existing delivery coordinator still orders modulation before
+dependent articulation, through the already qualified advanced platform binding.
+Its modulation stored-state intake is removed; independent articulation editing
+and the wavetable/rack services remain outside this takeover. All sends and replay
+must use the current document's scoped publisher. The stock author-facing
+preparedState/engineData API remains available and automatically composed for
+new components; this legacy integration does not establish stock-bank adoption
+inside Cosimo's existing DSP.
+
+The new GUI projection, shared GUI-client lease and engine adapter are being
+tested before activation. Production state declarations, entrypoints and MSEG
+Undo remain unchanged at this stage. The new lease tests use the actual Cmajor
+channel and state service, with external native parameter storage substituted;
+they do not claim actual host delivery.

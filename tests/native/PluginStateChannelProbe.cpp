@@ -1109,13 +1109,228 @@ void testFailedOldPublicationPreservesRestoredGesture (Fixture& f)
     std::cout << "PASS: failed old host publication cannot end a gesture started after reentrant restore\n";
 }
 
+struct ResetCallbackFailure final : std::runtime_error
+{
+    explicit ResetCallbackFailure (const void* identity) : std::runtime_error ("original reset callback failure"), identity (identity) {}
+    const void* identity;
+};
+
+void testResetCallbackFailure (Fixture& f, bool parameterCallback)
+{
+    testOpen (f);
+    int identity = 0;
+    std::function<void(float)> previousValueChanged;
+    f.onLoop ([&]
+    {
+        require (f.patch->handleClientMessage (*f.a, envelope (choc::json::create ("kind", "attach", "request", 701))),
+                 "reset failure view could not attach");
+        const auto gain = f.patch->findParameter (gainID());
+        previousValueChanged = gain->valueChanged;
+        if (parameterCallback)
+            gain->valueChanged = [&, previousValueChanged] (float value)
+            {
+                if (previousValueChanged) previousValueChanged (value);
+                throw ResetCallbackFailure (&identity);
+            };
+        else
+            gain->gestureEnd = [&] { throw ResetCallbackFailure (&identity); };
+    });
+    if (! parameterCallback)
+    {
+        f.sendWorker (choc::json::create ("kind", "publish", "request", 702, "scope", f.scope,
+            "operations", choc::json::parse (R"([{"kind":"gesture-start","endpoint":"gain"}])")));
+        f.waitFor ([&] { return f.worker->last ("published")["request"].getWithDefault<int64_t> (0) == 702; },
+                   "actual gesture did not begin before reset failure");
+    }
+    bool originalEscaped = false;
+    try { f.onLoop ([&] { f.patch->resetToInitialState(); }); }
+    catch (const ResetCallbackFailure& error) { originalEscaped = error.identity == &identity; }
+    // Remove only the injected host fault before inspecting the resulting
+    // lifecycle or teardown. Assertions never run inside a callback being caught.
+    f.onLoop ([&]
+    {
+        const auto gain = f.patch->findParameter (gainID());
+        gain->gestureEnd = {};
+        gain->valueChanged = previousValueChanged;
+    });
+    require (originalEscaped, "reset did not preserve the original host callback exception");
+    f.waitFor ([&] { return f.a->count ("closed") != 0 || f.worker->count ("replaced") != 0; },
+               "reset callback failure left the owner neither recovered nor terminally closed");
+    f.onLoop ([&]
+    {
+        if (f.a->count ("closed") != 0)
+            require (f.a->last ("closed")["reason"].toString() == "service-closed",
+                     "failed reset did not explicitly close the affected service");
+        else
+        {
+            const auto replacement = f.worker->last ("replaced");
+            require (replacement["scope"]["document"].getWithDefault<int64_t> (-1)
+                         > f.scope["document"].getWithDefault<int64_t> (-1),
+                     "reset recovery retained the discarded document");
+            require (replacement["native"]["parameters"][0]["value"].getWithDefault<double> (999)
+                         == f.patch->findParameter (gainID())->currentValue,
+                     "reset recovery snapshot does not describe the actual surviving native value");
+        }
+        // Even after a terminal service failure, the public native reset must
+        // not be permanently suppressed by a stuck restoration flag.
+        require (f.patch->findParameter (gainID())->setValue (2.5f, true, -1, 0), "native reset recovery setup failed");
+        f.patch->resetToInitialState();
+        require (f.patch->findParameter (gainID())->currentValue == 1.0f,
+                 "a failed callback permanently blocked subsequent native resets");
+    });
+    std::cout << "PASS: reset retains the original " << (parameterCallback ? "parameter" : "gesture-end")
+              << " callback failure and settles its owner lifecycle\n";
+}
+
+void testUnloadInsideResetCallback (Fixture& f)
+{
+    testOpen (f);
+    bool unloaded = false;
+    size_t closedBefore = 0;
+    f.onLoop ([&]
+    {
+        require (f.patch->handleClientMessage (*f.a, envelope (choc::json::create ("kind", "attach", "request", 711))),
+                 "reset-unload view could not attach");
+        closedBefore = f.a->count ("closed");
+        f.a->changed = [&]
+        {
+            if (! unloaded && f.a->count ("reset") != 0)
+            {
+                unloaded = true;
+                f.patch->unload();
+                f.worker = nullptr; // The actual unload destroyed the worker context.
+                std::cerr << "TRACE: GUI reset callback completed public unload\n";
+            }
+            f.notify();
+        };
+        f.patch->resetToInitialState();
+        f.a->changed = [&] { f.notify(); };
+        require (unloaded, "the actual GUI reset callback did not invoke public unload");
+        require (! f.patch->isPlayable(), "reset reactivated a renderer unloaded by its callback");
+        require (f.a->count ("closed") == closedBefore + 1
+                     && f.a->last ("closed")["reason"].toString() == "owner-removed",
+                 "reentrant unload did not close the previous owner exactly once");
+        f.patch->resetToInitialState();
+        require (! f.patch->isPlayable() && f.a->count ("closed") == closedBefore + 1,
+                 "reset after unload recreated or closed the old owner again");
+    });
+    std::cout << "PASS: a public GUI reset callback can unload without dereferencing or reactivating its old renderer\n";
+}
+
+void testResetFailureClosesEveryOriginalGesture (Fixture& f)
+{
+    f.sendWorker (choc::json::parse (R"({"kind":"open","request":721,"parameters":["gain","resetPeer"],"storedKeys":[],"eventEndpoints":[]})"));
+    f.waitFor ([&] { return f.worker->count ("opened") == 1; }, "two-gesture reset fixture did not open");
+    int identity = 0;
+    std::vector<std::string> ended;
+    f.onLoop ([&]
+    {
+        f.scope = f.worker->last ("opened")["scope"];
+        for (const auto* name : { "gain", "resetPeer" })
+        {
+            const auto parameter = f.patch->findParameter (cmaj::EndpointID::create (std::string (name)));
+            require (parameter != nullptr, "real second reset parameter is unavailable");
+            parameter->gestureEnd = [&, name = std::string (name)]
+            {
+                ended.push_back (name);
+                if (ended.size() == 1) throw ResetCallbackFailure (&identity);
+            };
+        }
+    });
+    f.sendWorker (choc::json::create ("kind", "publish", "request", 722, "scope", f.scope,
+        "operations", choc::json::parse (R"([{"kind":"gesture-start","endpoint":"gain"},{"kind":"gesture-start","endpoint":"resetPeer"}])")));
+    f.waitFor ([&] { return f.worker->last ("published")["request"].getWithDefault<int64_t> (0) == 722; },
+               "two real host gestures did not begin");
+    bool originalEscaped = false;
+    try { f.onLoop ([&] { f.patch->resetToInitialState(); }); }
+    catch (const ResetCallbackFailure& error) { originalEscaped = error.identity == &identity; }
+    f.onLoop ([&]
+    {
+        for (const auto* name : { "gain", "resetPeer" })
+            f.patch->findParameter (cmaj::EndpointID::create (std::string (name)))->gestureEnd = {};
+    });
+    require (originalEscaped, "multi-gesture cleanup did not retain the first original exception");
+    std::sort (ended.begin(), ended.end());
+    require (ended == std::vector<std::string> { "gain", "resetPeer" },
+             "a throwing first gesture end stranded another original host gesture");
+    std::cout << "PASS: a throwing host gesture end does not strand other original gestures\n";
+}
+
+void testFailedResetCleanupDoesNotCloseReplacementOwner (Fixture& f, const char* patchPath)
+{
+    testOpen (f);
+    int identity = 0;
+    bool reloaded = false, loaded = false;
+    RecordingView* remaining = nullptr;
+    size_t closesAfterReload = 0;
+    std::string newOwner;
+    const auto oldOwner = f.scope["owner"].toString();
+    std::function<void(float)> originalValueChanged;
+    f.onLoop ([&]
+    {
+        require (f.patch->handleClientMessage (*f.a, envelope (choc::json::create ("kind", "attach", "request", 731))),
+                 "replacement-owner reset fixture could not attach");
+        const auto gain = f.patch->findParameter (gainID());
+        originalValueChanged = gain->valueChanged;
+        gain->valueChanged = [&] (float value)
+        {
+            if (originalValueChanged) originalValueChanged (value);
+            throw ResetCallbackFailure (&identity);
+        };
+        const auto onChanged = [&] (RecordingView* view)
+        {
+            if (! reloaded && view->last ("closed")["reason"].toString() == "service-closed")
+            {
+                reloaded = true;
+                remaining = view == f.a.get() ? f.b.get() : f.a.get();
+                f.worker = nullptr;
+                f.patch->unload();
+                loaded = f.patch->loadPatchFromFile (patchPath, true) && f.patch->isPlayable();
+                if (loaded)
+                {
+                    // The replacement worker initialises on the next message-loop
+                    // turn. Stale cleanup must stop at this real renderer change,
+                    // before that worker can perform its ordinary public open.
+                    closesAfterReload = remaining->count ("closed");
+                }
+            }
+            f.notify();
+        };
+        f.a->changed = [onChanged, &f] { onChanged (f.a.get()); };
+        f.b->changed = [onChanged, &f] { onChanged (f.b.get()); };
+    });
+    bool originalEscaped = false;
+    try { f.onLoop ([&] { f.patch->resetToInitialState(); }); }
+    catch (const ResetCallbackFailure& error) { originalEscaped = error.identity == &identity; }
+    f.onLoop ([&]
+    {
+        f.a->changed = f.b->changed = [&] { f.notify(); };
+        if (! reloaded) f.patch->findParameter (gainID())->valueChanged = originalValueChanged;
+        require (originalEscaped, "replacement during failure cleanup lost the original exception");
+        require (reloaded && loaded, "actual close callback did not load a replacement renderer");
+        require (remaining->count ("closed") == closesAfterReload,
+                 "stale failure cleanup closed a view after the replacement renderer loaded");
+        require (f.patch->isPlayable(), "stale failure cleanup unloaded the replacement renderer");
+    });
+    f.waitFor ([&] { return f.worker != nullptr && static_cast<bool> (f.worker->sendToHost); },
+               "replacement worker did not initialise through its ordinary public context");
+    f.sendWorker (choc::json::parse (R"({"kind":"open","request":732,"parameters":["gain"],"storedKeys":[],"eventEndpoints":[]})"));
+    f.waitFor ([&] { return f.worker->count ("opened") == 1; }, "replacement worker did not receive its open reply");
+    f.onLoop ([&]
+    {
+        newOwner = f.worker->last ("opened")["scope"]["owner"].toString();
+        require (! newOwner.empty() && newOwner != oldOwner, "replacement worker did not establish a fresh owner");
+    });
+    std::cout << "PASS: reset failure cleanup does not close participants of a replacement owner\n";
+}
+
 }
 
 int main (int argc, char** argv)
 {
-    if (argc != 3)
+    if (argc != 3 && argc != 4)
     {
-        std::cerr << "Usage: PluginStateChannelProbe <runtime-library> <patch>\n";
+        std::cerr << "Usage: PluginStateChannelProbe <runtime-library> <patch> [--reset-gesture-failure|--reset-parameter-failure|--reset-unload|--reset-all-gestures|--reset-new-owner]\n";
         return 2;
     }
     choc::messageloop::initialise();
@@ -1128,6 +1343,18 @@ int main (int argc, char** argv)
         try
         {
             fixture.load (argv[2]);
+            if (argc == 4)
+            {
+                const std::string mode (argv[3]);
+                if (mode == "--reset-gesture-failure") testResetCallbackFailure (fixture, false);
+                else if (mode == "--reset-parameter-failure") testResetCallbackFailure (fixture, true);
+                else if (mode == "--reset-unload") testUnloadInsideResetCallback (fixture);
+                else if (mode == "--reset-all-gestures") testResetFailureClosesEveryOriginalGesture (fixture);
+                else if (mode == "--reset-new-owner") testFailedResetCleanupDoesNotCloseReplacementOwner (fixture, argv[2]);
+                else throw std::runtime_error ("Unknown channel probe mode");
+            }
+            else
+            {
             testOpen (fixture);
             testAttach (fixture);
             testPublish (fixture);
@@ -1153,6 +1380,22 @@ int main (int argc, char** argv)
             fixture.close();
             fixture.load (argv[2]);
             testFailedOldPublicationPreservesRestoredGesture (fixture);
+            fixture.close();
+            fixture.load (argv[2]);
+            testResetCallbackFailure (fixture, false);
+            fixture.close();
+            fixture.load (argv[2]);
+            testResetCallbackFailure (fixture, true);
+            fixture.close();
+            fixture.load (argv[2]);
+            testUnloadInsideResetCallback (fixture);
+            fixture.close();
+            fixture.load (argv[2]);
+            testResetFailureClosesEveryOriginalGesture (fixture);
+            fixture.close();
+            fixture.load (argv[2]);
+            testFailedResetCleanupDoesNotCloseReplacementOwner (fixture, argv[2]);
+            }
             result = 0;
         }
         catch (const std::exception& error) { std::cerr << "FAIL: " << error.what() << '\n'; }
