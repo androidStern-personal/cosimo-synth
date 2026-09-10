@@ -144,12 +144,13 @@ test("the public view factory owns mounting, drag cleanup, fresh attachment on r
         await page.evaluate(() => window.viewHarness.remove());
         let traffic = await viewMessages();
         assert.equal(traffic.listeners, 0);
-        assert.deepEqual(traffic.trace, ["subscribe", "send:attach", "send:begin", "send:edit", "send:end", "unsubscribe"]);
-        assert.deepEqual(traffic.sent.slice(1).map(message => message.message.command), [
+        assert.deepEqual(traffic.trace, ["subscribe", "send:attach", "send:begin", "send:edit", "send:end", "send:detach", "unsubscribe"]);
+        assert.deepEqual(traffic.sent.slice(1, -1).map(message => message.message.command), [
             { kind: "begin", key: "gain", gesture: 1 },
             { kind: "edit", key: "gain", value: 4, gesture: 1 },
             { kind: "end", key: "gain", gesture: 1 },
         ]);
+        assert.deepEqual(traffic.sent.at(-1).message, { kind: "detach", scope, client: 2 });
         await page.evaluate(() => window.viewHarness.append());
         assert.deepEqual((await viewMessages()).sent.at(-1).message, { kind: "attach", request: 2 });
         await viewDeliver({ kind: "attached", request: 1, scope, client: 2, revision: 0, state: snapshot(2, 0, 0) });
@@ -166,5 +167,25 @@ test("the public view factory owns mounting, drag cleanup, fresh attachment on r
         assert.deepEqual((await viewMessages()).sent.at(-1).message, { kind: "attach", request: 3 });
         await page.evaluate(() => window.viewHarness.remove());
         assert.equal((await viewMessages()).listeners, 0);
+    } finally { await close(page); }
+});
+
+test("an authoritative arrival between React render and subscription updates both the field and history without another message", async () => {
+    const page = await browser.newPage();
+    const errors = [];
+    browserErrors.set(page, errors);
+    page.on("pageerror", error => errors.push(error.message));
+    try {
+        await page.goto(`${server.baseUrl}/kit/tests/helpers/module_test_shell.html`);
+        await page.evaluate(async event => {
+            window.harness = await import("/kit/tests/helpers/plugin_state_react.tsx");
+            window.unmount = window.harness.mountWithLayoutDelivery(document.getElementById("mount"), event);
+        }, { kind: "attached", request: 1, scope, client: 2, revision: 4, state: snapshot(8, 4, 2, { canUndo: true, canRedo: false }) });
+        await page.evaluate(() => new Promise(resolve => requestAnimationFrame(resolve)));
+        assert.equal(JSON.parse(await page.getByTestId("gain").textContent()).value, 8);
+        assert.equal(await page.getByText("Undo", { exact: true }).isEnabled(), true);
+        assert.equal(await page.getByText("Redo", { exact: true }).isEnabled(), false);
+        assert.deepEqual((await messages(page)).sent, [{ kind: "attach", request: 1 }], "no second message or edit wakes the view");
+        assert.deepEqual((await messages(page)).defects, []);
     } finally { await close(page); }
 });

@@ -1,6 +1,5 @@
-import { createContext, useContext, useEffect, useMemo, type ReactNode } from "react";
-import { atom } from "jotai/vanilla";
-import { useAtomValue } from "jotai";
+import { createContext, useCallback, useContext, useEffect, useMemo, useSyncExternalStore, type ReactNode } from "react";
+import { atom, type Atom } from "jotai/vanilla";
 import type { PluginStateFields, PluginStateParameter, PluginStateStored, PluginStateFieldValue } from "./plugin-state-definition";
 import type { createPluginStateClient, PluginStateClientResult } from "./plugin-state-client";
 import type { PluginStateApplication, PluginStateNativeParameter, PluginStateScope } from "./plugin-state-session";
@@ -8,6 +7,15 @@ import type { PluginStateApplication, PluginStateNativeParameter, PluginStateSco
 type Client = ReturnType<typeof createPluginStateClient<PluginStateFields>>;
 const Context = createContext<{ definition: PluginStateFields; client: Client } | null>(null);
 const gestureCounters = new WeakMap<Client, number>();
+
+function useClientValue<Value>(client: Client, selection: Atom<Value>): Value {
+    const store = client.reactivity.store;
+    const subscribe = useCallback((notify: () => void) => store.sub(selection, notify), [store, selection]);
+    const snapshot = useCallback(() => store.get(selection), [store, selection]);
+    // React rechecks after subscribing, covering a native update between render
+    // and subscription. Jotai still owns the values, dependency graph and listeners.
+    return useSyncExternalStore(subscribe, snapshot, snapshot);
+}
 
 /** Display readiness is separate from an edit awaiting acceptance or sound delivery. */
 export type PluginStateControlState<Value> =
@@ -54,7 +62,7 @@ export function usePluginState<Field extends PluginStateParameter | PluginStateS
             ...(field.metadata ? { metadata: field.metadata } : {}),
         };
     }), [client, key]);
-    const state = useAtomValue(selected, { store: client.reactivity.store });
+    const state = useClientValue(client, selected);
     const actions = useMemo(() => {
         let active: { readonly scope: PluginStateScope; readonly gesture: number } | undefined;
         const currentGesture = () => {
@@ -97,7 +105,7 @@ export function usePluginState<Field extends PluginStateParameter | PluginStateS
 /** Read and invoke the plugin's shared Undo history. */
 export function usePluginHistory() {
     const { client } = useClient();
-    const snapshot = useAtomValue(client.reactivity.snapshot, { store: client.reactivity.store });
+    const snapshot = useClientValue(client, client.reactivity.snapshot);
     const actions = useMemo(() => ({
         undo: () => client.dispatch({ kind: "undo" }),
         redo: () => client.dispatch({ kind: "redo" }),

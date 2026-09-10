@@ -517,3 +517,57 @@ test("disposal during actual asynchronous worker startup waits for the newly own
         await startingPage.close();
     }
 });
+
+test("scoped client detach removes only its surviving browser view registration and rejects stale incarnation cleanup", { timeout: 15_000 }, async () => {
+    const detachPage = await browser.newPage();
+    const detachErrors = [];
+    detachPage.on("pageerror", error => detachErrors.push(String(error)));
+    try {
+        await detachPage.goto(`http://127.0.0.1:${server.address().port}/`);
+        await detachPage.click("#start");
+        await detachPage.waitForFunction(() => window.fixture?.worker.messages.some(body => body.kind === "opened"), null, { timeout: 5_000 });
+        const result = await detachPage.evaluate(() => {
+            const { connection: a, worker } = window.fixture;
+            const b = a.createViewConnection();
+            const first = [], second = [];
+            a.addEventListener("kit_state", body => first.push(body));
+            b.addEventListener("kit_state", body => second.push(body));
+            const send = (source, message) => source.sendMessageToServer({ type: "kit_state", message });
+            send(a, { kind: "attach", request: 131 });
+            send(b, { kind: "attach", request: 132 });
+            const old = first.find(body => body.kind === "attached");
+            for (const sequence of [1, 2])
+                send(a, { kind: "command", scope: old.scope, client: old.client, sequence, command: { kind: sequence === 1 ? "begin" : "edit" } });
+            const detach = { kind: "detach", scope: old.scope, client: old.client };
+            const forged = send(b, detach);
+            const other = second.find(body => body.kind === "attached");
+            send(b, { kind: "command", scope: other.scope, client: other.client, sequence: 1, command: { kind: "undo" } });
+            const wrongScope = send(a, { ...detach, scope: { ...old.scope, document: old.scope.document + 1 } });
+            const handled = send(a, detach);
+            const repeated = send(a, detach);
+            const lateCommand = send(a, { kind: "command", scope: old.scope, client: old.client, sequence: 3, command: { kind: "undo" } });
+            send(a, { kind: "attach", request: 133 });
+            const current = first.find(body => body.kind === "attached" && body.request === 133);
+            const stale = send(a, detach);
+            send(a, { kind: "command", scope: current.scope, client: current.client, sequence: 1, command: { kind: "undo" } });
+            b.dispose();
+            return { old, current, other, forged, wrongScope, handled, repeated, lateCommand, stale, messages: worker.messages };
+        });
+        assert.equal(result.forged, false);
+        assert.equal(result.wrongScope, false);
+        assert.equal(result.handled, true);
+        assert.equal(result.repeated, false);
+        assert.equal(result.lateCommand, false);
+        assert.equal(result.stale, false);
+        assert.notEqual(result.current.client, result.old.client);
+        const detaches = result.messages.filter(body => body.kind === "detach" && body.client === result.old.client);
+        assert.deepEqual(detaches, [{ kind: "detach", scope: result.old.scope, client: result.old.client, routedThrough: 2 }]);
+        const commands = result.messages.filter(body => body.kind === "command");
+        assert.deepEqual(commands.map(body => [body.address.client, body.address.sequence]),
+            [[result.old.client, 1], [result.old.client, 2], [result.other.client, 1], [result.current.client, 1]]);
+        assert.deepEqual(detachErrors, []);
+    } finally {
+        await detachPage.evaluate(async () => { try { await window.fixture?.connection.dispose(); } finally { await window.fixture?.context.close(); } });
+        await detachPage.close();
+    }
+});

@@ -48,6 +48,8 @@ document.querySelector("#start").onclick = async () => {
         };
         window.fixture = { connection, context, outcomes, defects, agentMessages, readOutput, openViews, closeViews,
             get agent() { return agent; }, get element() { return element; },
+            stopAgent() { agent.stop(); },
+            reattachAgent() { agent = createAgent(agentConnection); },
             async dispose() { closeViews(); try { await connection.dispose(); } finally { await context.close(); } } };
     } catch (error) { window.fixtureError = String(error?.stack ?? error); }
 };

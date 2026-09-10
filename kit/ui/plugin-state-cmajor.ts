@@ -251,6 +251,7 @@ export function createCmajorPluginStateClient<const Fields extends PluginStateFi
         channel: {
             subscribe(listener) {
                 let active = true;
+                let attachment: { readonly scope: PluginStateScope; readonly client: number } | undefined;
                 const process = (body: unknown) => {
                     // Reject old mount correlations before codec work or projection.
                     if (isRecord(body) && (body.kind === "attached" || body.kind === "attach-failed")
@@ -263,8 +264,15 @@ export function createCmajorPluginStateClient<const Fields extends PluginStateFi
                         if (request === undefined) return;
                         requests.delete(message.request);
                         clearTimeout(request.deadline);
+                        if (message.kind === "attached") attachment = { scope: message.scope, client: message.client };
                         listener({ ...message, request: request.local });
-                    } else listener(message);
+                    } else {
+                        if (message.kind === "closed"
+                            || (message.kind === "reset" && attachment && message.scope.owner === attachment.scope.owner
+                                && message.scope.document > attachment.scope.document)
+                            || (message.kind === "owner-changed" && attachment && !sameScope(attachment.scope, message.scope))) attachment = undefined;
+                        listener(message);
+                    }
                 };
                 const receive = (body: unknown) => {
                     if (!active) return;
@@ -280,7 +288,13 @@ export function createCmajorPluginStateClient<const Fields extends PluginStateFi
                     if (!active) return;
                     active = false;
                     clearRequests();
-                    connection.removeEventListener("kit_state", receive);
+                    const owned = attachment;
+                    attachment = undefined;
+                    try {
+                        if (owned) connection.sendMessageToServer({ type: "kit_state", message: { kind: "detach", ...owned } });
+                    } catch (error) { options.onDefect(error); }
+                    try { connection.removeEventListener("kit_state", receive); }
+                    catch (error) { options.onDefect(error); }
                 };
                 timeout = request => {
                     if (!active) return;

@@ -727,3 +727,53 @@ test("pure preparation defects and invalid event payloads fail the target while 
     assert.equal(state.history.canUndo, true);
     assert.equal(owner.connection.bodies("close").length, 0);
 });
+
+test("stopping an attached GUI releases its exact native incarnation once without pretending its pending edit was rejected", async () => {
+    const owner = await openService();
+    const connection = new RecordingPatchConnection();
+    const defects = [];
+    const client = createCmajorPluginStateClient(definition, connection, { onDefect: error => defects.push(error) });
+    const state = owner.connection.bodies("update").at(-1).state;
+    connection.deliver({ kind: "attached", request: 1, scope: owner.scope, client: 7, revision: state.revision, state });
+    connection.deliver({ kind: "reset", scope: owner.scope });
+    connection.deliver({ kind: "reset", scope: { owner: "unrelated-owner", document: 9 } });
+    assert.equal(client.getSnapshot().kind, "ready", "irrelevant resets must not discard current ownership");
+    const pending = client.dispatch({ kind: "begin", key: "gain", gesture: 3 });
+    client.stop();
+    assert.deepEqual(connection.bodies("detach"), [{ kind: "detach", scope: owner.scope, client: 7 }]);
+    assert.equal(connection.listeners.get("kit_state").size, 0);
+    assert.deepEqual(await pending, { kind: "interrupted", reason: "closed", acceptance: "unknown" });
+    client.stop();
+    assert.equal(connection.bodies("detach").length, 1);
+    assert.deepEqual(defects, []);
+    const reconnect = createCmajorPluginStateClient(definition, connection, { onDefect: error => defects.push(error) });
+    reconnect.stop();
+    assert.equal(connection.bodies("detach").length, 1, "an unassigned attachment cannot release another client");
+    await owner.service.stop();
+});
+
+test("failed native detach still releases the GUI listener and settles owned tickets while retaining the cause", async () => {
+    const owner = await openService();
+    const connection = new RecordingPatchConnection();
+    const defects = [];
+    const client = createCmajorPluginStateClient(definition, connection, { onDefect: error => defects.push(error) });
+    const state = owner.connection.bodies("update").at(-1).state;
+    connection.deliver({ kind: "attached", request: 1, scope: owner.scope, client: 7, revision: state.revision, state });
+    const pending = client.dispatch({ kind: "edit", key: "gain", value: 3 });
+    const problem = new Error("native view disappeared before detach");
+    connection.sendMessageToServer = message => {
+        assert.equal(message.message.kind, "detach");
+        throw problem;
+    };
+    const cleanupProblem = new Error("connection cleanup failed after removing listener");
+    const remove = connection.removeEventListener.bind(connection);
+    connection.removeEventListener = (type, listener) => { remove(type, listener); throw cleanupProblem; };
+    assert.doesNotThrow(() => client.stop());
+    assert.deepEqual(defects, [problem, cleanupProblem]);
+    assert.equal(connection.listeners.get("kit_state").size, 0);
+    assert.equal(client.getSnapshot().kind, "closed");
+    assert.deepEqual(await pending, { kind: "interrupted", reason: "closed", acceptance: "unknown" });
+    client.stop();
+    assert.deepEqual(defects, [problem, cleanupProblem]);
+    await owner.service.stop();
+});

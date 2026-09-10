@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useLayoutEffect, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { flushSync } from "react-dom";
 import { definePluginState, parameter } from "../../ui/plugin-state-definition";
@@ -49,5 +49,21 @@ function View() {
 export function mount(element: HTMLElement) {
     const root = createRoot(element);
     root.render(<PluginStateProvider definition={definition} client={client}><View /></PluginStateProvider>);
+    return () => { root.unmount(); client.stop(); };
+}
+
+function LayoutDelivery({ event }: { event: PluginStateClientEvent<typeof definition> }) {
+    useLayoutEffect(() => {
+        // Deliver after the children read their first snapshot but before their
+        // passive subscriptions. This is the native fast-boot race, made exact.
+        for (const listener of listeners) listener(structuredClone(event));
+    }, [event]);
+    return <View />;
+}
+export function mountWithLayoutDelivery(element: HTMLElement, event: PluginStateClientEvent<typeof definition>) {
+    const root = createRoot(element);
+    flushSync(() => root.render(<PluginStateProvider definition={definition} client={client}>
+        <LayoutDelivery event={event} />
+    </PluginStateProvider>));
     return () => { root.unmount(); client.stop(); };
 }

@@ -201,3 +201,25 @@ test("actual full host restore fences an acknowledged old edit's pending effects
     await accepted({ kind: "undo" });
     await expectValues(-2, [1, 0.25, 0]);
 });
+
+test("client stop seals its accepted gesture while its native view survives, before any reattachment", { timeout: 15_000 }, async () => {
+    const previous = await page.evaluate(() => ({ scope: window.fixture.agent.getSnapshot().state.scope, client: window.fixture.agent.getSnapshot().client }));
+    await accepted({ kind: "begin", key: "curve", gesture: 17 });
+    await accepted({ kind: "edit", key: "curve", gesture: 17, value: { points: [1, 0.7, 0] } });
+    await expectValues(-2, [1, 0.7, 0]);
+    assert.equal(JSON.parse(await page.getByTestId("history").textContent()).canUndo, false);
+    await page.evaluate(() => window.fixture.stopAgent());
+    // The other real GUI must observe the released lock BEFORE reattachment.
+    // Reattaching would itself seal the previous client and hide a broken stop.
+    await page.waitForFunction(() => JSON.parse(document.querySelector("#mount").firstElementChild.shadowRoot
+        .querySelector('[data-testid="history"]').textContent).canUndo === true);
+    assert.equal(await page.evaluate(() => window.fixture.agent.getSnapshot().kind), "closed");
+    await page.getByText("Undo", { exact: true }).click();
+    await page.waitForFunction(() => JSON.parse(document.querySelector("#mount").firstElementChild.shadowRoot
+        .querySelector('[data-testid="curve"]').textContent).value.points[1] === 0.25);
+    await page.evaluate(() => window.fixture.reattachAgent());
+    await expectValues(-2, [1, 0.25, 0]);
+    const current = await page.evaluate(() => ({ scope: window.fixture.agent.getSnapshot().state.scope, client: window.fixture.agent.getSnapshot().client }));
+    assert.deepEqual(current.scope, previous.scope);
+    assert.notEqual(current.client, previous.client);
+});

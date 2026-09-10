@@ -739,6 +739,76 @@ void testSameViewNewBinding (Fixture& f)
     std::cout << "PASS: same actual PatchView rotates binding identity after ordered detach and rejects old incarnation commands\n";
 }
 
+void testExplicitClientDetach (Fixture& f)
+{
+    const auto oldClient = f.onLoop ([&] { return f.a->last ("attached")["client"].getWithDefault<int64_t> (0); });
+    f.onLoop ([&]
+    {
+        require (f.patch->handleClientMessage (*f.b, envelope (choc::json::create ("kind", "attach", "request", 121))),
+                 "second source could not attach for explicit detach test");
+    });
+    f.waitFor ([&] { return f.worker->last ("attached-client")["request"].getWithDefault<int64_t> (0) == 121; }, "second source attachment did not reach owner");
+    const auto before = f.onLoop ([&]
+    {
+        const auto bClient = f.worker->last ("attached-client")["client"].getWithDefault<int64_t> (0);
+        f.worker->send (choc::json::create ("kind", "snapshot", "scope", f.scope, "to", bClient,
+            "attachRequest", 121, "revision", 0, "state", choc::json::create ("gain", 3)));
+        require (f.patch->handleClientMessage (*f.a, envelope (choc::json::create ("kind", "command", "scope", f.scope,
+            "client", oldClient, "sequence", 2, "command", choc::json::create ("kind", "begin", "key", "gain", "gesture", 2)))),
+            "old client could not begin its final routed group");
+        auto start = choc::json::parse (R"({"kind":"publish","request":122,"operations":[{"kind":"gesture-start","endpoint":"gain"}]})");
+        start.addMember ("scope", f.scope);
+        f.worker->send (start);
+        return f.worker->count ("detach");
+    });
+    f.waitFor ([&] { return f.worker->last ("published")["request"].getWithDefault<int64_t> (0) == 122; }, "explicit detach setup did not start actual host gesture");
+    f.onLoop ([&]
+    {
+        require (f.gestures.back() == "begin", "explicit detach setup has no live host gesture");
+        const auto detach = choc::json::create ("kind", "detach", "scope", f.scope, "client", oldClient);
+        require (! f.patch->handleClientMessage (*f.b, envelope (detach)), "another registered source forged the target client's detach");
+        require (f.patch->handleClientMessage (*f.b, envelope (choc::json::create ("kind", "command", "scope", f.scope,
+            "client", f.b->last ("attached")["client"], "sequence", 1, "command", choc::json::create ("kind", "undo")))),
+            "rejected forged detach damaged its sender's registration");
+        auto stale = choc::json::create ("kind", "detach", "scope", choc::json::create ("owner", f.scope["owner"],
+            "document", f.scope["document"].getWithDefault<int64_t> (-1) + 1), "client", oldClient);
+        require (! f.patch->handleClientMessage (*f.a, envelope (stale)), "wrong document detached a current client");
+        f.worker->send (detach);
+        require (f.worker->count ("detach") == before, "worker identity forged an ordinary client detach");
+        require (f.patch->handleClientMessage (*f.a, envelope (detach)), "matching explicit client detach was not handled");
+        require (f.a->isActive(), "client detach destroyed its surviving native PatchView");
+        require (! f.patch->handleClientMessage (*f.a, envelope (detach)), "repeated client detach was handled twice");
+    });
+    f.waitFor ([&] { return f.worker->count ("detach") == before + 1; }, "explicit detach did not reach actual owner exactly once");
+    f.onLoop ([&]
+    {
+        const auto detached = f.worker->last ("detach");
+        require (detached["client"].getWithDefault<int64_t> (0) == oldClient
+            && detached["routedThrough"].getWithDefault<int64_t> (0) == 2, "explicit detach lost its actual routed client prefix");
+        // The controlled owner translates the real detach into its native
+        // gesture cleanup. Domain group/history sealing has separate service proof.
+        auto end = choc::json::parse (R"({"kind":"publish","request":123,"operations":[{"kind":"gesture-end","endpoint":"gain"}]})");
+        end.addMember ("scope", f.scope);
+        f.worker->send (end);
+        require (f.patch->handleClientMessage (*f.a, envelope (choc::json::create ("kind", "attach", "request", 124))),
+                 "surviving view could not reattach after explicit client detach");
+    });
+    f.waitFor ([&] { return f.worker->last ("attached-client")["request"].getWithDefault<int64_t> (0) == 124; }, "reattach after explicit detach did not reach actual owner");
+    f.onLoop ([&]
+    {
+        require (f.gestures.back() == "end", "actual owner could not finish explicitly detached client's host gesture");
+        const auto client = f.worker->last ("attached-client")["client"].getWithDefault<int64_t> (0);
+        require (client != oldClient, "explicitly detached identity was reused");
+        require (! f.patch->handleClientMessage (*f.a, envelope (choc::json::create ("kind", "detach", "scope", f.scope, "client", oldClient))),
+                 "late detach from old incarnation closed its replacement");
+        require (f.worker->count ("detach") == before + 1, "stale detach sent an owner notification");
+        require (f.patch->handleClientMessage (*f.a, envelope (choc::json::create ("kind", "command", "scope", f.scope,
+            "client", client, "sequence", 1, "command", choc::json::create ("kind", "undo")))), "stale detach broke new incarnation sequence one");
+    });
+    f.waitFor ([&] { return f.worker->count ("command") == 8; }, "fresh client command after explicit detach did not reach owner");
+    std::cout << "PASS: scoped client detach releases a surviving PatchView registration once and cannot close another incarnation\n";
+}
+
 void testLiveOwnerUnload (Fixture& f)
 {
     const auto before = f.onLoop ([&]
@@ -801,6 +871,7 @@ int main (int argc, char** argv)
             testAttachDuringRestore (fixture);
             testBoundedPayloads (fixture);
             testSameViewNewBinding (fixture);
+            testExplicitClientDetach (fixture);
             testLiveOwnerUnload (fixture);
             result = 0;
         }
