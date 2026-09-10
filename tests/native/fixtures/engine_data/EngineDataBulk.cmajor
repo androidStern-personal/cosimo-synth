@@ -1,0 +1,50 @@
+// One full packed 256-frame Cosimo table is used only as a realistic capacity.
+// The receiver and the data format remain independent of that product.
+namespace BulkData = kit::engine_data (3279616, 3, 16, 6144);
+namespace BulkBudget = kit::engine_data_budget (6144, 64);
+
+processor EngineDataBulk [[ main ]]
+{
+    input event BulkData::Begin begin;
+    input event BulkData::Chunk chunk;
+    input event BulkData::Commit commit;
+    input event BulkData::Reset resetScope;
+    input event BulkData::Query query;
+    input event int holdReader;
+    input event int releaseReader;
+    input event int scanFrom;
+    input event int stopScan;
+    input value int readIndex;
+    output event BulkData::Receipt receipt;
+    output stream float64<3> out;
+
+    BulkData::Bank bank;
+    BulkBudget::State budget;
+    int scanIndex;
+    bool scanning;
+
+    event begin (BulkData::Begin command) { receipt <- bank.receiveBegin (command); }
+    event chunk (BulkData::Chunk command) { receipt <- bank.receiveChunk (command, budget); }
+    event commit (BulkData::Commit command) { receipt <- bank.receiveCommit (command); }
+    event resetScope (BulkData::Reset command) { receipt <- bank.receiveReset (command); }
+    event query (BulkData::Query command) { receipt <- bank.receiveQuery (command); }
+    event holdReader (int reader) { bank.hold (reader); }
+    event releaseReader (int reader) { bank.release (reader); }
+    event scanFrom (int index) { scanIndex = index; scanning = true; }
+    event stopScan (int unused) { scanning = false; }
+
+    void main()
+    {
+        loop
+        {
+            budget.tick();
+            let index = scanning ? scanIndex : readIndex;
+            out <- float64<3> (bank.readCurrent (index),
+                              bank.readHeld (0, index),
+                              bank.readHeld (15, index));
+            if (scanning)
+                ++scanIndex;
+            advance();
+        }
+    }
+}

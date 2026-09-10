@@ -74,6 +74,53 @@ cancellation; cancellation cannot recall an event already sent to the engine.
 Set `"stateSource": "fx/<plugin>/state.ts"` in the plugin's `.plugin.json`.
 The normal build generates the worker. Do not also set `workerSource`.
 
+For a value that needs multiple packets and confirmation from the engine, use
+`preparedState` with `engineData`:
+
+```ts
+import { preparedState, engineData } from "../../kit/index";
+
+const envelope = preparedState({
+    schema: curveCodec,
+    initial: initialCurve,
+    prepare: renderPackedCurve,
+    engine: engineData({
+        endpoints: {
+            begin: "curveBegin", chunk: "curveChunk", commit: "curveCommit",
+            query: "curveQuery", receipt: "curveReceipt",
+        },
+        wordCapacity: 8192,
+        chunkCapacity: 256,
+    }),
+});
+```
+
+`schema` is the same full codec described above. Editable curves are saved and
+recorded in history; `renderPackedCurve` returns a separate `Int32Array` or array
+of signed 32-bit words for the DSP. Preparation never creates a worker or sends
+messages. The named endpoints must be wired to a matching
+`kit::engine_data` receiver in the authored Cmajor processor. Its finite word and
+packet capacities must match this declaration. The receiver manages staging,
+activation and held readers; the component's DSP interprets the packed words.
+The framework does not infer a custom DSP layout from a JavaScript object.
+
+The stock sender owns chunking, reply correlation, cancellation and bounded
+recovery. A lost reply triggers a receiver query; a packet is replayed only when
+the query proves it made no progress. Success requires a real receiver report
+that the complete requested version is current. Capacity refusal preserves the
+current value and held readers. Unresolved delivery reports uncertainty; it does
+not assume that a possibly completed activation was rolled back.
+
+For a different protocol, supply a `PluginStateDelivery<Payload>` as `engine`.
+Its inert `create()` returns `apply(payload, context)` and `stop()`. The context
+allows sends to declared input endpoints, subscriptions to declared output
+endpoints, and cancellation. The generated worker constructs and owns this
+delivery automatically; authors do not compose a worker service. Output listeners
+and pending sends are released when the delivery finishes, is superseded, or
+the document is replaced. The default replacement policy supersedes old work;
+`replacement: "finish"` permits an already applying value to finish before the
+newest queued value in the same document. Reset and shutdown always cancel it.
+
 The view entry composes an ordinary React component:
 
 ```tsx
@@ -145,6 +192,10 @@ invented proof of a particular GUI write.
   expire when the document is replaced. Do not construct references or infer
   ordering from them. Calling Undo/Redo without a reference retains global LIFO
   behavior; this API does not support selectively undoing an older entry.
+- `history.canUndoEntry(entry)` and `history.canRedoEntry(entry)` test whether a
+  remembered entry is currently eligible. Use these for an editor's button state;
+  comparing opaque objects with `===` is not an eligibility test. Guarded
+  `undo(entry)` and `redo(entry)` still recheck eligibility when the command runs.
 - Control/window removal through the view wrapper, or native client detachment,
   ends that client's gestures. A full project restore replaces the document,
   clears history and rejects old commands and delivery completions.
@@ -166,6 +217,24 @@ views and the worker have separate JavaScript environments; the browser currentl
 hosts the worker facade in the main browser realm, separately from the AudioWorklet.
 Engine bindings own preparation, cancellation and delivery evidence.
 The view wrapper and generated worker own startup and cleanup.
+
+For a framework integration with an existing engine protocol,
+`createCmajorPluginStateService` also accepts `bindings`. Each factory declares
+one stored field, its scalar dependencies, and its permitted event/host-effect
+names, then returns `replace`, `cancel` and `stop`. The factory receives a scoped
+publisher and target-status callback. It owns its engine protocol; the framework
+owns accepted state, history, native request correlation and document lifetime.
+Factories construct inert ports and acquire external resources on first replace.
+
+The custom publisher calls the connection synchronously and returns a separate
+native-completion promise. Replaced documents and shutdown cancel pending work.
+A raw send exception returns uncertain transport failure so a protocol with its
+own serial/probe recovery can resolve it; it does not claim that the event was
+rejected or automatically replay it. A custom computation defect explicitly
+closes the service. This advanced recovery policy does not change `eventValue`.
+Declared host effects require a corresponding host handler; an unavailable
+handler is a visible delivery failure, without discarding accepted state or Undo.
+Neither a native receipt nor a successful host callback proves audio application.
 
 `kit/package.json` marks unused library modules as removable when bundling the
 worker from the public entry point. Actual preview/dev-tool entry effects and CSS

@@ -1,0 +1,58 @@
+namespace Data = kit::engine_data (257, 3, 2, 32);
+namespace Budget = kit::engine_data_budget (32, 64);
+
+processor EngineData [[ main ]]
+{
+    input event Data::Begin begin;
+    input event Data::Chunk chunk;
+    input event Data::Commit commit;
+    input event Data::Reset resetScope;
+    input event Data::Query query;
+    input event Data::Begin peerBegin;
+    input event Data::Chunk peerChunk;
+    input event Data::Commit peerCommit;
+    input event Data::Reset peerReset;
+    input event Data::Query peerQuery;
+    // These two test endpoints exercise the DSP-facing reader lifecycle. They
+    // are not part of the host upload protocol.
+    input event int holdReader;
+    input event int releaseReader;
+    input value int readIndex;
+    input value int readBank;
+    output event Data::Receipt receipt;
+    output stream float64<3> out;
+
+    Data::Bank bank;
+    Data::Bank peer;
+    Budget::State budget;
+
+    event begin (Data::Begin command) { receipt <- bank.receiveBegin (command); }
+    event chunk (Data::Chunk command) { receipt <- bank.receiveChunk (command, budget); }
+    event commit (Data::Commit command) { receipt <- bank.receiveCommit (command); }
+    event resetScope (Data::Reset command) { receipt <- bank.receiveReset (command); }
+    event query (Data::Query command) { receipt <- bank.receiveQuery (command); }
+    event peerBegin (Data::Begin command) { receipt <- peer.receiveBegin (command); }
+    event peerChunk (Data::Chunk command) { receipt <- peer.receiveChunk (command, budget); }
+    event peerCommit (Data::Commit command) { receipt <- peer.receiveCommit (command); }
+    event peerReset (Data::Reset command) { receipt <- peer.receiveReset (command); }
+    event peerQuery (Data::Query command) { receipt <- peer.receiveQuery (command); }
+    event holdReader (int reader) { bank.hold (reader); }
+    event releaseReader (int reader) { bank.release (reader); }
+
+    void main()
+    {
+        loop
+        {
+            budget.tick();
+            if (readBank == 0)
+                out <- float64<3> (bank.readCurrent (readIndex),
+                                  bank.readHeld (0, readIndex),
+                                  bank.readHeld (1, readIndex));
+            else
+                out <- float64<3> (peer.readCurrent (readIndex),
+                                  peer.readHeld (0, readIndex),
+                                  peer.readHeld (1, readIndex));
+            advance();
+        }
+    }
+}

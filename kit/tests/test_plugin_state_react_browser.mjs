@@ -38,6 +38,107 @@ async function close(page) {
     assert.deepEqual(browserErrors.get(page), [], "no uncaught browser or React errors");
 }
 
+test("public hook results hide transport identities while opaque history references retain guarded eligibility", async () => {
+    const page = await browser.newPage();
+    const errors = [];
+    browserErrors.set(page, errors);
+    page.on("pageerror", error => errors.push(error.message));
+    await page.goto(`${server.baseUrl}/kit/tests/helpers/module_test_shell.html`);
+    await page.evaluate(async () => {
+        const { mount } = await import("/kit/tests/helpers/plugin_state_public_react.tsx");
+        window.publicState = await mount(document.getElementById("mount"));
+    });
+    const state = () => page.getByTestId("public-control").evaluate(element => JSON.parse(element.textContent));
+    try {
+        await page.waitForFunction(() => JSON.parse(document.querySelector('[data-testid="public-control"]').textContent).kind === "ready");
+        await page.evaluate(() => window.publicState.status({ kind: "acknowledged", engineSession: "private-engine", operation: "private-operation" }));
+        await page.waitForFunction(() => JSON.parse(document.querySelector('[data-testid="public-control"]').textContent).application?.kind === "acknowledged");
+        assert.deepEqual((await state()).application, { kind: "acknowledged" });
+        for (const application of [{ kind: "sent", proof: "native-publication-processed" }, { kind: "unconfirmed" }]) {
+            await page.evaluate(application => window.publicState.status(application), application);
+            await page.waitForFunction(kind => JSON.parse(document.querySelector('[data-testid="public-control"]').textContent).application?.kind === kind, application.kind);
+            assert.deepEqual((await state()).application, application);
+        }
+        const edited = await page.evaluate(async () => {
+            const result = await window.publicState.current().control.setValue(4);
+            window.rememberedHistory = result.historyEntry;
+            return { result, tokenKeys: Reflect.ownKeys(result.historyEntry).map(String), frozen: Object.isFrozen(result.historyEntry) };
+        });
+        assert.deepEqual(edited.result, { kind: "accepted", changed: true, historyEntry: {} });
+        assert.deepEqual(edited.tokenKeys, []);
+        assert.equal(edited.frozen, true);
+        await page.waitForFunction(() => JSON.parse(document.querySelector('[data-testid="public-control"]').textContent).value === 4);
+        assert.equal(await page.evaluate(() => window.publicState.current().history.canUndo), true);
+        assert.deepEqual(await page.evaluate(() => window.publicState.current().history.undo(window.rememberedHistory)), { kind: "accepted" });
+        await page.waitForFunction(() => JSON.parse(document.querySelector('[data-testid="public-control"]').textContent).value === 2);
+        assert.equal(await page.evaluate(() => window.publicState.current().history.canRedo), true);
+        assert.deepEqual(await page.evaluate(() => window.publicState.current().history.redo(window.rememberedHistory)), { kind: "accepted" });
+        await page.waitForFunction(() => JSON.parse(document.querySelector('[data-testid="public-control"]').textContent).value === 4);
+        await page.evaluate(() => window.publicState.current().control.setValue(7));
+        assert.deepEqual(await page.evaluate(() => window.publicState.current().history.undo(window.rememberedHistory)), { kind: "rejected", reason: "stale-history" });
+        assert.deepEqual(await page.evaluate(() => window.publicState.current().history.undo({})), { kind: "rejected", reason: "stale-history" });
+        assert.deepEqual(await page.evaluate(() => window.publicState.defects()), []);
+    } finally { await page.evaluate(() => window.publicState.dispose()); await close(page); }
+});
+
+test("opaque entry eligibility follows the actual shared history head, gestures and document reset", async () => {
+    const page = await browser.newPage();
+    const errors = [];
+    browserErrors.set(page, errors);
+    page.on("pageerror", error => errors.push(error.message));
+    await page.goto(`${server.baseUrl}/kit/tests/helpers/module_test_shell.html`);
+    await page.evaluate(async () => {
+        const { mount } = await import("/kit/tests/helpers/plugin_state_public_react.tsx");
+        window.publicState = await mount(document.getElementById("mount"));
+    });
+    const waitValue = value => page.waitForFunction(value => JSON.parse(document.querySelector('[data-testid="public-control"]').textContent).value === value, value);
+    const canUndo = () => page.evaluate(() => window.publicState.current().history.canUndoEntry?.(window.rememberedHistory));
+    try {
+        await waitValue(2);
+        await page.evaluate(async () => { window.rememberedHistory = (await window.publicState.current().control.setValue(4)).historyEntry; });
+        await waitValue(4);
+        assert.equal(await page.evaluate(() => window.publicState.current().history.canUndo), true);
+        assert.equal(await canUndo(), true, "a retained opaque reference to the real head must enable the editor button");
+        await page.evaluate(async () => {
+            const { mount } = await import("/kit/tests/helpers/plugin_state_public_react.tsx");
+            const element = document.createElement("div");
+            document.body.append(element);
+            window.foreignState = await mount(element);
+        });
+        await page.waitForFunction(() => document.querySelectorAll('[data-testid="public-control"]').length === 2);
+        const foreignEligible = await page.evaluate(async () => {
+            const foreign = (await window.foreignState.current().control.setValue(4)).historyEntry;
+            return {
+                own: window.foreignState.current().history.canUndoEntry(foreign),
+                foreign: window.publicState.current().history.canUndoEntry(foreign),
+            };
+        });
+        assert.deepEqual(foreignEligible, { own: true, foreign: false }, "a genuine token from another binding cannot be borrowed even with matching native entry numbers");
+        await page.evaluate(() => window.publicState.current().control.setValue(7));
+        await waitValue(7);
+        assert.equal(await canUndo(), false, "a later edit blocks the remembered editor entry");
+        await page.evaluate(() => window.publicState.current().history.undo());
+        await waitValue(4);
+        assert.equal(await canUndo(), true, "global Undo exposes the remembered entry again");
+        await page.evaluate(() => window.publicState.current().control.beginGesture());
+        assert.equal(await canUndo(), false);
+        await page.evaluate(() => window.publicState.current().control.endGesture());
+        assert.equal(await canUndo(), true);
+        assert.deepEqual(await page.evaluate(() => window.publicState.current().history.undo(window.rememberedHistory)), { kind: "accepted" });
+        await waitValue(2);
+        assert.equal(await canUndo(), false);
+        assert.equal(await page.evaluate(() => window.publicState.current().history.canRedoEntry(window.rememberedHistory)), true);
+        assert.equal(await page.evaluate(() => window.publicState.current().history.canUndoEntry({})), false);
+        assert.equal(await page.evaluate(() => window.publicState.current().history.canRedoEntry({})), false);
+        await page.evaluate(() => window.publicState.reset());
+        await waitValue(9);
+        assert.equal(await canUndo(), false);
+        assert.equal(await page.evaluate(() => window.publicState.current().history.canRedoEntry(window.rememberedHistory)), false);
+        assert.deepEqual(await page.evaluate(() => window.publicState.current().history.redo(window.rememberedHistory)), { kind: "rejected", reason: "stale-history" });
+        assert.deepEqual(await page.evaluate(() => window.publicState.defects()), []);
+    } finally { await page.evaluate(async () => { await window.foreignState?.dispose(); await window.publicState.dispose(); }); await close(page); }
+});
+
 test("public React setValue recovers invalid stored input and reset settles a held recovery without replay", async () => {
     const page = await browser.newPage();
     const errors = [];

@@ -1,0 +1,10 @@
+{
+    "CmajorVersion": 1,
+    "ID": "dev.builder-kit.engine-data-bulk-test",
+    "version": "1.0",
+    "name": "Engine Data Bulk Test",
+    "source": [
+        "../../../../kit/cmajor/engine-data.cmajor",
+        "EngineDataBulk.cmajor"
+    ]
+}

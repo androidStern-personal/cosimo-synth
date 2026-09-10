@@ -25,12 +25,15 @@ export * from "./ui/patch-worker-services";
 
 // Plugin-owned values and shared history; worker and message details stay inside
 // the framework-generated state service.
-export { definePluginState, parameter, storedValue, eventValue } from "./ui/plugin-state-definition";
-export type { PluginStateCodec, PluginStatePrepareContext } from "./ui/plugin-state-definition";
-export type { PluginStateControlState } from "./ui/plugin-state-react";
-export type { PluginStateHistoryEntry } from "./ui/plugin-state-session";
+export { definePluginState, parameter, storedValue, eventValue, preparedState } from "./ui/plugin-state-definition";
+export type { PluginStateCodec, PluginStatePrepareContext, PluginStateDelivery, PluginStateDeliveryContext,
+    PluginStateEffect, PluginStateSubmission, PluginStateDeliveryOutcome } from "./ui/plugin-state-definition";
+export type { PluginStateControlState, PluginStateControl, PluginStateHistory, PluginStateHistoryEntry,
+    PluginStateEditResult, PluginStateRejectionReason, PluginStateApplicationState } from "./ui/plugin-state-react";
 export { usePluginState, usePluginHistory } from "./ui/plugin-state-react";
 export { createStatefulPatchView } from "./ui/plugin-state-view";
+export { engineData } from "./ui/engine-data-delivery";
+export type { EngineDataInput } from "./ui/engine-data-delivery";
 
 // Primitives: React bindings for the patch connection, editor tokens and
 // surfaces, range/curve editors, parameter text entry, the spectrum display.

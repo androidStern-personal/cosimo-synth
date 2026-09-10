@@ -19,6 +19,7 @@ export type EngineFailure = {
 /** Current progress for a requested engine update. */
 export type EngineApplication =
     | { readonly kind: "preparing" }
+    | { readonly kind: "unconfirmed" }
     | EngineEvidence
     | { readonly kind: "failed"; readonly error: EngineFailure };
 
@@ -29,6 +30,7 @@ export type Prepared<T> =
 
 /** A cancelled job is neither a failed engine install nor an acknowledgement. */
 export type EngineOutcome = EngineEvidence
+    | { readonly kind: "unconfirmed" }
     | { readonly kind: "failed"; readonly error: EngineFailure }
     | { readonly kind: "cancelled" };
 
@@ -54,6 +56,8 @@ export interface EngineTransport<T> {
 
 /** Dependencies for one preparation/application lifetime. onStatus must not throw. */
 export type EngineBindingOptions<I, P> = {
+    /** Finish an applying same-document value before starting only the newest queued target. */
+    readonly replacement?: "supersede" | "finish";
     readonly prepare: (input: I, signal: EngineCancellation) => Prepared<P> | Promise<Prepared<P>>;
     readonly transport: EngineTransport<P>;
     readonly onStatus: (target: EngineTarget, status: EngineApplication) => void;
@@ -105,9 +109,12 @@ function whileActive<T>(operation: T | Promise<T>, signal: EngineCancellation): 
 /** Owns preparing and applying the latest requested value; no editable history. */
 export function createEngineBinding<I, P>(options: EngineBindingOptions<I, P>) {
     let stopped = false;
-    let current: ReturnType<typeof cancellationScope> | undefined;
+    type Job = ReturnType<typeof cancellationScope> & { applying: boolean; readonly target: EngineTarget };
+    let current: Job | undefined;
+    let queued: { readonly input: I; readonly target: EngineTarget } | undefined;
     const tasks = new Set<Promise<void>>();
-    async function apply(input: I, target: EngineTarget, signal: EngineCancellation) {
+    async function apply(input: I, target: EngineTarget, job: Job) {
+        const { signal } = job;
         options.onStatus(target, { kind: "preparing" });
         if (signal.aborted) return;
         const preparation = await whileActive(options.prepare(input, signal), signal);
@@ -118,6 +125,7 @@ export function createEngineBinding<I, P>(options: EngineBindingOptions<I, P>) {
             return;
         }
         let sending = true;
+        job.applying = true;
         let delivery: AwaitedJob<EngineOutcome>;
         try {
             delivery = await whileActive(options.transport.apply(prepared.value, {
@@ -135,37 +143,55 @@ export function createEngineBinding<I, P>(options: EngineBindingOptions<I, P>) {
                 });
             }
             return;
-        } finally { sending = false; }
+        } finally { sending = false; job.applying = false; }
         if (delivery.kind === "value" && !signal.aborted && delivery.value.kind !== "cancelled") {
             options.onStatus(target, delivery.value);
         }
     }
+    function start(input: I, target: EngineTarget): void {
+        queued = undefined;
+        const previous = current;
+        const job: Job = { ...cancellationScope(), applying: false, target };
+        current = job;
+        previous?.cancel();
+        if (stopped || job.signal.aborted) return;
+        const running = apply(input, target, job).catch(error => {
+            if (job.signal.aborted) return;
+            job.cancel();
+            options.onDefect(error);
+            options.onStatus(target, {
+                kind: "failed", error: { kind: "defect", message: "Engine update failed unexpectedly." },
+            });
+        });
+        tasks.add(running);
+        void running.then(() => {
+            tasks.delete(running);
+            if (current !== job) return;
+            current = undefined;
+            const next = queued;
+            queued = undefined;
+            if (!stopped && next) start(next.input, next.target);
+        });
+    }
     return {
-        /** Supersede previous work immediately; ignored after stop or a transport defect. */
+        /** Apply the declared replacement policy; ignored after stop or a transport defect. */
         replace(input: I, target: EngineTarget): void {
             if (stopped) return;
-            const previous = current;
-            const scope = cancellationScope();
-            current = scope;
-            previous?.cancel();
-            if (stopped || scope.signal.aborted) return;
-            const running = apply(input, target, scope.signal).catch(error => {
-                if (scope.signal.aborted) return;
-                scope.cancel();
-                options.onDefect(error);
-                options.onStatus(target, {
-                    kind: "failed", error: { kind: "defect", message: "Engine update failed unexpectedly." },
-                });
-            });
-            tasks.add(running);
-            void running.then(() => { tasks.delete(running); });
+            if (options.replacement === "finish" && current?.applying && !current.signal.aborted
+                && current.target.scope.owner === target.scope.owner && current.target.scope.document === target.scope.document) {
+                queued = { input, target };
+                options.onStatus(target, { kind: "preparing" });
+                return;
+            }
+            start(input, target);
         },
         /** Revoke the current request, retaining the transport for a later replacement. */
-        cancel(): void { current?.cancel(); },
+        cancel(): void { queued = undefined; current?.cancel(); },
         /** Close permanently and settle owned work without waiting for uncooperative external promises. */
         async stop(): Promise<void> {
             if (!stopped) {
                 stopped = true;
+                queued = undefined;
                 current?.cancel();
                 options.transport.stop();
             }

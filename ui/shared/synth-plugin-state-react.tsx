@@ -5,7 +5,7 @@ import {
     type CmajorStateConnection,
 } from "../../kit/ui/plugin-state-cmajor";
 import { PluginStateProvider, usePluginState } from "../../kit/ui/plugin-state-react";
-import type { PluginStateClientResult } from "../../kit/ui/plugin-state-client";
+import type { PluginStateEditResult } from "../../kit/index";
 import type { PatchConnectionLike } from "./cmajor-react";
 import type { PatchControlBinding } from "./patch-controls";
 import { synthPluginState } from "./synth-plugin-state";
@@ -83,8 +83,8 @@ export function useSynthPluginParameterBinding(key: keyof typeof synthPluginStat
     // Commands are already dispatched. Only their edit-bus notifications wait
     // here, preserving begin/edit/end order while the client owns ticket lifetime.
     const reportAfter = useCallback((
-        command: Promise<PluginStateClientResult> | undefined,
-        report: (result: PluginStateClientResult | undefined) => void,
+        command: Promise<PluginStateEditResult> | undefined,
+        report: (result: PluginStateEditResult | undefined) => void,
     ) => {
         const settled = command?.catch(error => { reportStateDefect(error); return undefined; });
         notifications.current = (notifications.current ?? Promise.resolve())

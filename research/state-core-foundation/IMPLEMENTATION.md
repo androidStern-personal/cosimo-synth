@@ -1,10 +1,10 @@
 # Plugin state implementation
 
-Status: implementation resumed after the author's architecture review. The core,
-Cmajor channel, generated worker and React view exist; three Cosimo Voice controls
-use them. Modulation is not migrated. Stock complex-data receiving/storage and the
-automatic custom-delivery author seam remain unfinished. Earlier checkpoint test
-results below describe their exact candidates, not the current dirty candidate.
+Status: the automatic prepared-state declaration, stock complex-data delivery,
+compiled receiver/storage, and cleaned public hook surface pass their module and
+native integration gates. Three Cosimo Voice controls use the framework;
+structured plugin migration is next. Modulation is not migrated. Earlier
+checkpoint results below describe their exact candidates, not later changes.
 
 Branch: `codex/plugin-state-system`, starting at `44f179fdb9c35b27456bedfdf389ec563f5c9a85`.
 
@@ -432,3 +432,49 @@ copies have a shared bounded budget; activation and module reset change metadata
 not full buffers. Full performer reset, backend and bulk-size timing still require
 qualification. The first new tracer checks every sample of current/held reads
 through actual compiled Cmajor before adding capacity/failure cases.
+
+### Resumed framework checkpoint
+
+- `preparedState({ schema, initial, prepare, engine })` constructs no worker at
+  import. The normal builder generates and owns its worker, delivery and cleanup.
+  Custom `PluginStateDelivery` declarations use the same automatic composition.
+- `engineData` handles finite packed-word transfers with actual receiver queries,
+  acknowledgements, bounded retries, cancellation and immutable in-flight input.
+  An acknowledgement is evidence of the receiver's current version; native send
+  completion alone is insufficient. Unknown outcomes stay unknown.
+- `kit::engine_data` owns staged/current/held slots. Commit and module reset change
+  metadata. Banks can share one bounded copy allowance. Private word blocks repair
+  the actual full-size Wasm array-metadata limit without changing the public API.
+- Public control results omit internal revisions, versions and engine IDs. Undo
+  entries are opaque tokens; guarded Undo/Redo and eligibility queries preserve
+  editor-specific controls without another history stack or an identity cache.
+- Actual generated worker -> Patch -> QuickJS -> Cmajor tests pass hydration,
+  edit, shared Undo, GUI reopen and 6144-word packets. A real failed worker import
+  also retains its original error after subsequent native notifications.
+- Current sender/receiver suite: 12/12, zero failures/skips, about 12.6 seconds
+  including intentionally lost-message deadlines. New failure tests exposed and
+  repaired lost ACK handling, lost request replay, shared-budget refusal and an
+  exception-path listener leak. All pre-existing receiver assertions remain.
+- Full-size JIT, generated C++, and Wasm each pass the same eight-generation,
+  every-index oracle for 3,279,616 words, including held readers, partial staging,
+  activation, reset, page boundaries and the final partial page. Logical three-slot
+  capacity is 39,355,392 bytes; padded word storage is 40,108,032 bytes plus metadata.
+- Public hook/type tests and real native tests received independent adversarial
+  review. The recovery test helper now waits for the actual projected result and
+  its React layout commit; no sleeps or weakened assertions were substituted.
+- `npm test` and strict TypeScript pass on this candidate. Full-suite output:
+  `build/native_plugin_state/resume-full-suite.log`. One existing test remains
+  skipped because its ignored local Spectre corpus is absent; no new skip exists.
+  The focused state run within that suite passes all 158 tests in about 1 second.
+- Cmajor checkpoint `e0d0cc7` preserves boot errors and completes reviewed browser
+  host-effect routing, above `85f6f8a`. Both remain local, unpushed and unpinned.
+
+Evidence boundaries: bulk tests invoke actual compiled performers, not a DAW.
+Wasm's generated 6144-word input marshaling showed a 5.84 ms observed maximum in
+one run; no full-size realtime AudioWorklet deadline or listening claim is made.
+The configured 6144-word/64-frame allowance alone implies about 712 ms per full
+table at 48 kHz before messaging overhead. Full Performer reset still clears
+resident state and is separate from metadata-only module reset. Cosimo's existing
+four-slot wavetable pool also shares capacity between oscillator inputs; separate
+stock banks would consume more memory. These constraints must inform a real
+plugin migration rather than being hidden by the small fixture.

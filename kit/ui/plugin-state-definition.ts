@@ -1,4 +1,34 @@
 import type { EngineCancellation } from "./plugin-state-engine";
+import type { EngineOutcome } from "./plugin-state-engine";
+import type { CmajorStateEffect, CmajorStateSubmission } from "./plugin-state-cmajor";
+
+/** A declared engine effect, without access to editable state or client identities. */
+export type PluginStateEffect = CmajorStateEffect;
+/** Synchronous handoff and its separately correlated native processing receipt. */
+export type PluginStateSubmission = CmajorStateSubmission;
+/** Delivery evidence must distinguish native processing from engine acknowledgement. */
+export type PluginStateDeliveryOutcome = EngineOutcome;
+
+/** Resources limited to one prepared delivery's lifetime. */
+export interface PluginStateDeliveryContext {
+    readonly signal: EngineCancellation;
+    send(effect: PluginStateEffect): PluginStateSubmission;
+    /** Listen only to a declared output; automatically removed when delivery ends. */
+    listen(endpoint: string, listener: (value: unknown) => void): () => void;
+}
+
+/** A reusable engine implementation instantiated by the generated worker. */
+export interface PluginStateDelivery<Payload> {
+    readonly eventEndpoints: readonly string[];
+    readonly outputEndpoints?: readonly string[];
+    readonly hostEffects?: readonly string[];
+    /** Finish permits an in-flight same-document delivery before the newest queued value. */
+    readonly replacement?: "supersede" | "finish";
+    create(): {
+        apply(payload: Payload, context: PluginStateDeliveryContext): Promise<PluginStateDeliveryOutcome>;
+        stop(): void;
+    };
+}
 
 /** A value representable by the native JSON state channel. */
 export type PluginStateJson = null | boolean | number | string
@@ -43,6 +73,14 @@ export interface PluginStateEventValue<Value> {
     prepare(value: Value, context: PluginStatePrepareContext): unknown | Promise<unknown>;
 }
 
+/** Preparation and its matching delivery remain paired inside the stored declaration. */
+export interface PluginStatePreparedValue<Value, Payload = unknown> {
+    readonly kind: "prepared";
+    readonly dependencies: readonly string[];
+    prepare(value: Value, context: PluginStatePrepareContext): Payload | Promise<Payload>;
+    readonly delivery: PluginStateDelivery<Payload>;
+}
+
 /** Declare an event endpoint and the parameter field keys captured by preparation. */
 export function eventValue<Value>(endpoint: string, prepare: PluginStateEventValue<Value>["prepare"], options: {
     readonly dependencies?: readonly string[];
@@ -51,11 +89,11 @@ export function eventValue<Value>(endpoint: string, prepare: PluginStateEventVal
 }
 
 /** Immutable configuration for a codec-owned stored field. */
-export interface PluginStateStored<Value> {
+export interface PluginStateStored<Value, Payload = unknown> {
     readonly kind: "stored";
     readonly initial: PluginStateValueResult<Value>;
     readonly codec: PluginStateCodec<Value>;
-    readonly engine?: PluginStateEventValue<Value>;
+    readonly engine?: PluginStateEventValue<Value> | PluginStatePreparedValue<Value, Payload>;
 }
 
 /** The finite field declarations accepted by a state session. */
@@ -77,6 +115,21 @@ export function storedValue<Value>(options: {
 }): PluginStateStored<Value> {
     const codec = Object.freeze({ ...options.codec });
     return Object.freeze({ kind: "stored", initial: codec.parse(options.initial), codec, ...(options.engine ? { engine: options.engine } : {}) });
+}
+
+/** Store editable values through a full codec and prepare a separate engine representation. */
+export function preparedState<Value, Payload>(options: {
+    readonly schema: PluginStateCodec<Value>;
+    readonly initial: Value;
+    readonly prepare: (value: Value, context: PluginStatePrepareContext) => Payload | Promise<Payload>;
+    readonly engine: PluginStateDelivery<Payload>;
+    readonly dependencies?: readonly string[];
+}): PluginStateStored<Value, Payload> {
+    const stored = storedValue({ initial: options.initial, codec: options.schema });
+    return Object.freeze({ ...stored, engine: Object.freeze({ kind: "prepared" as const,
+        dependencies: Object.freeze([...(options.dependencies ?? [])]),
+        prepare: options.prepare, delivery: options.engine,
+    }) });
 }
 
 /** Declare the finite plugin state surface while preserving each field's value type. */

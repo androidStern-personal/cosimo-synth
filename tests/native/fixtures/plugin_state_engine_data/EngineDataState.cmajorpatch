@@ -1,0 +1,8 @@
+{
+    "CmajorVersion": 1,
+    "ID": "dev.cmajor.test.plugin-state-engine-data",
+    "version": "1.0",
+    "name": "Engine Data State Probe",
+    "source": ["../../kit/cmajor/engine-data.cmajor", "EngineDataState.cmajor"],
+    "view": { "src": "view/index.js", "devModule": "/fx/engine_data_state/view.ts" }
+}

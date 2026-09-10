@@ -1,0 +1,250 @@
+// Fixed-capacity engine values. Word layout belongs to the consuming DSP.
+// Share ONE budget instance across all banks in a processor, and tick it once
+// per sample. Accepted chunk copies across those banks then share the declared
+// allowance; begin, commit and reader changes never refill it.
+namespace kit::engine_data_budget (int wordsPerPeriod, int framesPerPeriod)
+{
+    static_assert (wordsPerPeriod > 0 && framesPerPeriod > 0);
+
+    struct State
+    {
+        int remaining;
+        int frame;
+
+        void tick()
+        {
+            if (this.frame == 0)
+                this.remaining = wordsPerPeriod;
+
+            this.frame = (this.frame + 1) % framesPerPeriod;
+        }
+
+        bool consume (int count)
+        {
+            if (count <= 0 || count > this.remaining)
+                return false;
+
+            this.remaining -= count;
+            return true;
+        }
+    }
+}
+
+namespace kit::engine_data (int wordCapacity, int slotCount, int readerCount, int chunkCapacity)
+{
+    static_assert (wordCapacity > 0 && slotCount >= 2 && readerCount > 0 && chunkCapacity > 0);
+
+    let accepted = 0;
+    let stale = 1;
+    let invalid = 2;
+    let busy = 3;
+    let outOfOrder = 4;
+    let budgetExhausted = 5;
+    let incomplete = 6;
+
+    struct Begin { int scope; int generation; int wordCount; }
+    struct Chunk { int scope; int generation; int offset; int count; int[chunkCapacity] words; }
+    struct Commit { int scope; int generation; }
+    struct Reset { int scope; }
+    struct Query { int request; }
+    struct Receipt
+    {
+        int operation;
+        int scope;
+        int generation;
+        int status;
+        int receivedWords;
+        int currentScope;
+        int currentGeneration;
+        int request;
+    }
+
+    // Wasm's state metadata limits each array's element count. Struct blocks
+    // keep large values within that limit without changing flat word offsets.
+    let wordsPerBlock = wordCapacity < 65536 ? wordCapacity : 65536;
+    let blocksPerSlot = 1 + (wordCapacity - 1) / wordsPerBlock;
+
+    struct WordBlock
+    {
+        int[wordsPerBlock] words;
+    }
+
+    struct Slot
+    {
+        WordBlock[blocksPerSlot] blocks;
+        int scope;
+        int generation;
+        int wordCount;
+    }
+
+    struct Bank
+    {
+        Slot[slotCount] slots;
+        // Handles are slot index + 1. Zero represents absence, including the
+        // initial state, so startup requires no whole-bank repair or copy.
+        int current;
+        int staging;
+        int[readerCount] held;
+        int scope;
+        int highestGeneration;
+        int receivedWords;
+
+        Receipt result (int operation, int commandScope, int generation, int status)
+        {
+            int currentScope = 0;
+            int currentGeneration = 0;
+            if (this.current != 0)
+            {
+                currentScope = this.slots.at (this.current - 1).scope;
+                currentGeneration = this.slots.at (this.current - 1).generation;
+            }
+            return Receipt (operation, commandScope, generation, status,
+                            this.receivedWords, currentScope, currentGeneration, 0);
+        }
+
+        int findAvailableSlot()
+        {
+            for (int index = 0; index < slotCount; ++index)
+            {
+                let handle = index + 1;
+                if (handle == this.current)
+                    continue;
+
+                bool inUse = false;
+                for (int reader = 0; reader < readerCount; ++reader)
+                    if (this.held.at (reader) == handle)
+                        inUse = true;
+
+                if (! inUse)
+                    return handle;
+            }
+            return 0;
+        }
+
+        Receipt receiveBegin (const Begin& command)
+        {
+            if (command.scope <= 0 || command.generation <= 0
+                 || command.wordCount <= 0 || command.wordCount > wordCapacity)
+                return this.result (1, command.scope, command.generation, invalid);
+            if (this.scope != 0 && command.scope != this.scope)
+                return this.result (1, command.scope, command.generation, stale);
+            if (command.generation <= this.highestGeneration)
+                return this.result (1, command.scope, command.generation, stale);
+
+            let available = this.findAvailableSlot();
+            if (available == 0)
+                return this.result (1, command.scope, command.generation, busy);
+
+            this.scope = command.scope;
+            this.highestGeneration = command.generation;
+            this.staging = available;
+            this.receivedWords = 0;
+            this.slots.at (available - 1).scope = command.scope;
+            this.slots.at (available - 1).generation = command.generation;
+            this.slots.at (available - 1).wordCount = command.wordCount;
+            return this.result (1, command.scope, command.generation, accepted);
+        }
+
+        Receipt receiveChunk<Budget> (const Chunk& command, Budget& budget)
+        {
+            if (command.scope <= 0 || command.generation <= 0
+                 || command.offset < 0 || command.count <= 0 || command.count > chunkCapacity)
+                return this.result (2, command.scope, command.generation, invalid);
+            if (command.scope != this.scope || this.staging == 0
+                 || command.generation != this.highestGeneration)
+                return this.result (2, command.scope, command.generation, stale);
+            if (command.offset != this.receivedWords)
+                return this.result (2, command.scope, command.generation, outOfOrder);
+            if (command.count > this.slots.at (this.staging - 1).wordCount - this.receivedWords)
+                return this.result (2, command.scope, command.generation, invalid);
+            if (! budget.consume (command.count))
+                return this.result (2, command.scope, command.generation, budgetExhausted);
+
+            // Only this bounded loop writes word storage. Activation and
+            // lifecycle operations change metadata, never complete arrays.
+            for (int index = 0; index < command.count; ++index)
+                this.slots.at (this.staging - 1).blocks.at ((this.receivedWords + index) / wordsPerBlock)
+                    .words.at ((this.receivedWords + index) % wordsPerBlock)
+                    = command.words.at (index);
+
+            this.receivedWords += command.count;
+            return this.result (2, command.scope, command.generation, accepted);
+        }
+
+        Receipt receiveCommit (const Commit& command)
+        {
+            if (command.scope <= 0 || command.generation <= 0)
+                return this.result (3, command.scope, command.generation, invalid);
+            if (command.scope != this.scope || this.staging == 0
+                 || command.generation != this.highestGeneration)
+                return this.result (3, command.scope, command.generation, stale);
+            if (this.receivedWords != this.slots.at (this.staging - 1).wordCount)
+                return this.result (3, command.scope, command.generation, incomplete);
+
+            this.current = this.staging;
+            this.staging = 0;
+            return this.result (3, command.scope, command.generation, accepted);
+        }
+
+        Receipt receiveReset (const Reset& command)
+        {
+            if (command.scope <= 0)
+                return this.result (4, command.scope, 0, invalid);
+            if (command.scope < this.scope)
+                return this.result (4, command.scope, 0, stale);
+
+            // A repeated reset is an acknowledgement, not another reset. A
+            // delayed retry must not discard staging accepted in this scope.
+            if (command.scope > this.scope)
+            {
+                this.scope = command.scope;
+                this.highestGeneration = 0;
+                this.staging = 0;
+                this.receivedWords = 0;
+            }
+            // Current and held slots stay immutable and readable until their
+            // normal replacement/release. This is not Performer.reset().
+            return this.result (4, command.scope, 0, accepted);
+        }
+
+        Receipt receiveQuery (const Query& command)
+        {
+            var reply = this.result (5, this.scope, this.highestGeneration,
+                                     command.request > 0 ? accepted : invalid);
+            reply.request = command.request;
+            return reply;
+        }
+
+        bool hold (int readerID)
+        {
+            if (readerID < 0 || readerID >= readerCount || this.current == 0)
+                return false;
+            this.held.at (readerID) = this.current;
+            return true;
+        }
+
+        bool release (int readerID)
+        {
+            if (readerID < 0 || readerID >= readerCount || this.held.at (readerID) == 0)
+                return false;
+            this.held.at (readerID) = 0;
+            return true;
+        }
+
+        int readSlot (int handle, int index)
+        {
+            if (handle == 0 || index < 0 || index >= this.slots.at (handle - 1).wordCount)
+                return 0;
+            return this.slots.at (handle - 1).blocks.at (index / wordsPerBlock).words.at (index % wordsPerBlock);
+        }
+
+        int readCurrent (int index) { return this.readSlot (this.current, index); }
+
+        int readHeld (int readerID, int index)
+        {
+            if (readerID < 0 || readerID >= readerCount)
+                return 0;
+            return this.readSlot (this.held.at (readerID), index);
+        }
+    }
+}

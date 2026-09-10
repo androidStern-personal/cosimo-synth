@@ -1,9 +1,10 @@
-import { useState } from "react";
+import { useLayoutEffect, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { PluginStateProvider, usePluginHistory, usePluginState } from "../../ui/plugin-state-react";
 import { definePluginState, storedValue } from "../../ui/plugin-state-definition";
-import { createPluginStateClient, type PluginStateClientEvent, type PluginStateClientMessage, type PluginStateClientResult } from "../../ui/plugin-state-client";
+import { createPluginStateClient, type PluginStateClientEvent, type PluginStateClientMessage } from "../../ui/plugin-state-client";
 import { createPluginStateSession } from "../../ui/plugin-state-session";
+import type { PluginStateEditResult } from "../../index";
 
 const definition = definePluginState({ curve: storedValue({ initial: [0, 1] as readonly number[], codec: {
     parse(value: unknown) {
@@ -19,17 +20,21 @@ const definition = definePluginState({ curve: storedValue({ initial: [0, 1] as r
     equals: (left: readonly number[], right: readonly number[]) => left.length === right.length && left.every((value, index) => value === right[index]),
 } }) });
 
-function Controls() {
+function Controls({ record, rendered }: {
+    record(command: Promise<PluginStateEditResult>, finish: (result: PluginStateEditResult) => void): void;
+    rendered(): void;
+}) {
     const curve = usePluginState(definition.curve);
     const history = usePluginHistory();
-    const [result, finish] = useState<PluginStateClientResult>();
+    const [result, finish] = useState<PluginStateEditResult>();
+    useLayoutEffect(rendered, [rendered, result]);
     return <>
         <output data-testid="recovery-state">{JSON.stringify(curve.state)}</output>
         <output data-testid="recovery-result">{JSON.stringify(result ?? null)}</output>
         <output data-testid="recovery-history">{JSON.stringify({ canUndo: history.canUndo, canRedo: history.canRedo })}</output>
-        <button onClick={() => { void curve.setValue([0, 0.4, 1]).then(finish); }}>Recover curve</button>
-        <button onClick={() => { void curve.setValue([1, 0]).then(finish); }}>Edit curve</button>
-        <button onClick={() => { void history.undo().then(finish); }}>Undo curve</button>
+        <button onClick={() => record(curve.setValue([0, 0.4, 1]), finish)}>Recover curve</button>
+        <button onClick={() => record(curve.setValue([1, 0]), finish)}>Edit curve</button>
+        <button onClick={() => record(history.undo(), finish)}>Undo curve</button>
     </>;
 }
 
@@ -40,6 +45,15 @@ export async function mount(element: HTMLElement) {
     const held: PluginStateClientMessage[] = [];
     const publications: unknown[] = [];
     const defects: string[] = [];
+    let pendingResult: Promise<void> | undefined;
+    let renderedResult: (() => void) | undefined;
+    const rendered = () => { renderedResult?.(); renderedResult = undefined; };
+    const record = (command: Promise<PluginStateEditResult>, finish: (result: PluginStateEditResult) => void) => {
+        pendingResult = command.then(result => new Promise<void>(resolve => {
+            renderedResult = resolve;
+            finish(result);
+        }));
+    };
     const owner = createPluginStateSession(definition, { native: {
         publish(value) { publications.push(value); },
         update(state, receipt) {
@@ -59,7 +73,7 @@ export async function mount(element: HTMLElement) {
         },
     }, onDefect: error => defects.push(String(error)) });
     const root = createRoot(element);
-    root.render(<PluginStateProvider definition={definition} client={client}><Controls /></PluginStateProvider>);
+    root.render(<PluginStateProvider definition={definition} client={client}><Controls record={record} rendered={rendered} /></PluginStateProvider>);
     return {
         snapshot: owner.getSnapshot,
         clientSnapshot: client.getSnapshot,
@@ -75,7 +89,10 @@ export async function mount(element: HTMLElement) {
             scope = { ...scope, document: scope.document + 1 };
             await owner.dispatch({ kind: "replaced", scope, native: { values: { curve: "corrupt again" }, parameters: [] } });
             receive?.({ kind: "reset", scope });
+            // Await the actual projected hook result and its React commit.
+            // A held recovery remains interruptible; no operation is replayed.
+            await pendingResult;
         },
-        async dispose() { root.unmount(); client.stop(); await owner.stop(); },
+        async dispose() { client.stop(); await pendingResult; root.unmount(); await owner.stop(); },
     };
 }

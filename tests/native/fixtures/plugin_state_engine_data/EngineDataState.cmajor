@@ -1,0 +1,34 @@
+namespace Data = kit::engine_data (257, 3, 2, 32);
+namespace Budget = kit::engine_data_budget (32, 64);
+
+processor EngineDataState [[ main ]]
+{
+    input event Data::Begin begin;
+    input event Data::Chunk chunk;
+    input event Data::Commit commit;
+    input event Data::Query query;
+    // Probe controls use the ordinary public Patch endpoint route to exercise
+    // the real DSP reader; the worker never produces synthetic readback values.
+    input event int holdReader;
+    input event int releaseReader;
+    input value int readIndex;
+    output event Data::Receipt receipt;
+    output stream float64<3> out;
+    Data::Bank bank;
+    Budget::State budget;
+    event begin (Data::Begin command) { receipt <- bank.receiveBegin (command); }
+    event chunk (Data::Chunk command) { receipt <- bank.receiveChunk (command, budget); }
+    event commit (Data::Commit command) { receipt <- bank.receiveCommit (command); }
+    event query (Data::Query command) { receipt <- bank.receiveQuery (command); }
+    event holdReader (int reader) { bank.hold (reader); }
+    event releaseReader (int reader) { bank.release (reader); }
+    void main()
+    {
+        loop
+        {
+            budget.tick();
+            out <- float64<3> (bank.readCurrent (readIndex), bank.readHeld (0, readIndex), bank.readHeld (1, readIndex));
+            advance();
+        }
+    }
+}

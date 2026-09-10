@@ -84,7 +84,8 @@ export default async function start (connection)
     connection.sendMessageToServer ({ type: "kit_state", message: {
         kind: "open", request: 1, parameters: ["gain"],
         storedKeys: new URL (location.href).searchParams.has ("twoStoredKeys") ? ["curve", "shape"] : ["curve"],
-        eventEndpoints: ["curveBuffer"]
+        eventEndpoints: ["curveBuffer"],
+        ...(new URL (location.href).searchParams.has ("hostEffects") ? { hostEffects: ["trigger-config"] } : {})
     }});
     if (new URL (location.href).searchParams.has ("holdWorkerStart"))
         await new Promise (resolve => { finishStart = resolve; });

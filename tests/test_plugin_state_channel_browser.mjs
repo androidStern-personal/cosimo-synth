@@ -732,3 +732,164 @@ test("raw owned stored replacements fence actual worklet effects while preservin
         await rawPage.close();
     }
 });
+
+test("declared browser host effect without a consumer reports unsupported without closing editable state", { timeout: 15_000 }, async () => {
+    const hostPage = await browser.newPage();
+    const hostErrors = [];
+    hostPage.on("pageerror", error => hostErrors.push(String(error)));
+    try {
+        await hostPage.goto(`http://127.0.0.1:${server.address().port}/?hostEffects=1`);
+        await hostPage.click("#start");
+        await hostPage.waitForFunction(() => window.fixture || window.fixtureError);
+        assert.equal(await hostPage.evaluate(() => window.fixtureError), null);
+        await hostPage.evaluate(() => {
+            const { connection } = window.fixture;
+            window.hostMessages = [];
+            connection.addEventListener("kit_state", body => window.hostMessages.push(body));
+            connection.sendMessageToServer({ type: "kit_state", message: { kind: "attach", request: 301 } });
+            const attached = window.hostMessages.find(body => body.kind === "attached" && body.request === 301);
+            connection.sendMessageToServer({ type: "kit_state", message: {
+                kind: "command", scope: attached.scope, client: attached.client, sequence: 1,
+                command: { kind: "probe-publish", request: 301, operations: [
+                    { kind: "host-effect", name: "trigger-config", value: { slot: 7 } },
+                ] },
+            }});
+        });
+        await hostPage.waitForFunction(() => window.fixture.worker.messages.some(body => body.kind === "published" && body.request === 301));
+        const result = await hostPage.evaluate(() => ({
+            publication: window.fixture.worker.messages.find(body => body.kind === "published" && body.request === 301),
+            closed: window.hostMessages.filter(body => body.kind === "closed"),
+        }));
+        assert.deepEqual(result.publication.result, { kind: "failed", reason: "unsupported-host-effect" });
+        assert.deepEqual(result.closed, []);
+        assert.deepEqual(hostErrors, []);
+    } finally {
+        await hostPage.evaluate(async () => { try { await window.fixture?.connection.dispose(); } finally { await window.fixture?.context.close(); } });
+        await hostPage.close();
+    }
+});
+
+test("actual browser host effects are synchronous, declared, and fenced after queued worklet delivery", { timeout: 15_000 }, async () => {
+    const hostPage = await browser.newPage();
+    const hostErrors = [];
+    hostPage.on("pageerror", error => hostErrors.push(String(error)));
+    try {
+        await hostPage.goto(`http://127.0.0.1:${server.address().port}/?hostEffects=1`);
+        await hostPage.evaluate(() => {
+            window.hostCalls = [];
+            window.fixtureHostEffect = (name, value) => {
+                window.hostCalls.push({ name, value: structuredClone(value) });
+                if (value.mode === "reject") return false;
+                if (value.mode === "throw") throw new Error("host callback defect");
+                if (value.mode === "promise") return Promise.reject(new Error("asynchronous handler is invalid"));
+                if (value.mode === "restore") window.fixture.connection.sendStoredStateValue("curve", { points: [0.4, 0.6] });
+                return true;
+            };
+        });
+        await hostPage.click("#start");
+        await hostPage.waitForFunction(() => window.fixture || window.fixtureError);
+        assert.equal(await hostPage.evaluate(() => window.fixtureError), null);
+        await hostPage.evaluate(() => {
+            const { connection } = window.fixture;
+            window.hostMessages = [];
+            connection.addEventListener("kit_state", body => {
+                window.hostMessages.push(body);
+                if (body.kind === "attached") { window.hostAttachment = body; window.hostSequence = 0; }
+                if (body.kind === "reset") window.hostAttachment = undefined;
+            });
+            window.attachHost = request => connection.sendMessageToServer({ type: "kit_state", message: { kind: "attach", request } });
+            window.sendHost = (request, operations) => {
+                const attached = window.hostAttachment;
+                if (!attached) throw new Error("host probe is not attached");
+                connection.sendMessageToServer({ type: "kit_state", message: {
+                    kind: "command", scope: attached.scope, client: attached.client, sequence: ++window.hostSequence,
+                    command: { kind: "probe-publish", request, operations },
+                }});
+            };
+            window.attachHost(401);
+            window.sendHost(401, [
+                { kind: "event", endpoint: "curveBuffer", value: 0.5 },
+                { kind: "host-effect", name: "trigger-config", value: { slot: 7 } },
+            ]);
+        });
+        const publication = async request => {
+            await hostPage.waitForFunction(request => window.fixture.worker.messages.some(body => body.kind === "published" && body.request === request), request);
+            return hostPage.evaluate(request => window.fixture.worker.messages.find(body => body.kind === "published" && body.request === request), request);
+        };
+        assert.deepEqual((await publication(401)).result, { kind: "observed" });
+        assert.deepEqual(await hostPage.evaluate(() => window.hostCalls), [{ name: "trigger-config", value: { slot: 7 } }]);
+
+        await hostPage.evaluate(() => window.sendHost(402, [
+            { kind: "host-effect", name: "trigger-config", value: { slot: 8 } },
+            { kind: "host-effect", name: "undeclared", value: null },
+        ]));
+        assert.deepEqual((await publication(402)).result, { kind: "failed", reason: "invalid-publication" });
+        assert.equal(await hostPage.evaluate(() => window.hostCalls.length), 1, "whole-publication declaration validation must precede callback invocation");
+        for (const [request, mode, reason] of [[403, "reject", "host-effect-rejected"], [404, "throw", "host-effect-failed"], [405, "promise", "host-effect-rejected"]]) {
+            await hostPage.evaluate(({ request, mode }) => window.sendHost(request, [
+                { kind: "host-effect", name: "trigger-config", value: { mode } },
+                { kind: "event", endpoint: "curveBuffer", value: 20 },
+            ]), { request, mode });
+            assert.deepEqual((await publication(request)).result, { kind: "failed", reason });
+        }
+        const afterFailures = await hostPage.evaluate(async () => ({ output: await window.fixture.readOutput(), closed: window.hostMessages.filter(body => body.kind === "closed") }));
+        assert.ok(Math.abs(afterFailures.output.min - 3) < 0.001 && Math.abs(afterFailures.output.max - 3) < 0.001,
+            "failed host callback must fence the remaining DSP operation");
+        assert.deepEqual(afterFailures.closed, []);
+
+        await hostPage.evaluate(async () => {
+            window.sendHost(406, [
+                { kind: "event", endpoint: "curveBuffer", value: 1 },
+                { kind: "host-effect", name: "trigger-config", value: { slot: 99 } },
+            ]);
+            // The first operation reaches the actual worklet port before the
+            // native completion. Only its still-unsent callback is revoked.
+            await Promise.resolve();
+            window.fixture.connection.sendStoredStateValue("curve", { points: [0.2, 0.8] });
+        });
+        assert.deepEqual((await publication(406)).result, { kind: "failed", reason: "stale-scope" });
+        await hostPage.waitForFunction(() => window.fixture.worker.messages.some(body => body.kind === "replaced" && body.scope.document === 1));
+        const afterRaw = await hostPage.evaluate(async () => ({ calls: window.hostCalls, output: await window.fixture.readOutput() }));
+        assert.equal(afterRaw.calls.length, 4, "callback queued behind a worklet completion crossed the document barrier");
+        assert.ok(Math.abs(afterRaw.output.min - 3.5) < 0.001 && Math.abs(afterRaw.output.max - 3.5) < 0.001,
+            "first DSP operation must really cross the port before the raw barrier");
+
+        await hostPage.evaluate(() => {
+            window.attachHost(407);
+            window.sendHost(407, [
+                { kind: "event", endpoint: "curveBuffer", value: 0.25 },
+                { kind: "host-effect", name: "trigger-config", value: { slot: 8 } },
+            ]);
+        });
+        assert.deepEqual((await publication(407)).result, { kind: "observed" });
+        const current = await hostPage.evaluate(async () => ({ calls: window.hostCalls, output: await window.fixture.readOutput() }));
+        assert.equal(current.calls.length, 5);
+        assert.deepEqual(current.calls[4], { name: "trigger-config", value: { slot: 8 } });
+        assert.ok(Math.abs(current.output.min - 2.75) < 0.001 && Math.abs(current.output.max - 2.75) < 0.001);
+
+        await hostPage.evaluate(() => window.sendHost(408, [
+            { kind: "host-effect", name: "trigger-config", value: { mode: "restore" } },
+            { kind: "host-effect", name: "trigger-config", value: { slot: 99 } },
+            { kind: "event", endpoint: "curveBuffer", value: 20 },
+        ]));
+        assert.deepEqual((await publication(408)).result, { kind: "failed", reason: "stale-scope" });
+        await hostPage.waitForFunction(() => window.fixture.worker.messages.some(body => body.kind === "replaced" && body.scope.document === 2));
+        assert.equal(await hostPage.evaluate(() => window.hostCalls.length), 6, "reentrant host callback failed to fence its remainder");
+        await hostPage.evaluate(() => {
+            window.attachHost(409);
+            window.sendHost(409, [
+                { kind: "host-effect", name: "trigger-config", value: { slot: 9 } },
+                { kind: "event", endpoint: "curveBuffer", value: 0.5 },
+            ]);
+        });
+        assert.deepEqual((await publication(409)).result, { kind: "observed" });
+        const final = await hostPage.evaluate(async () => ({ calls: window.hostCalls, output: await window.fixture.readOutput() }));
+        assert.equal(final.calls.length, 7);
+        assert.deepEqual(final.calls[6], { name: "trigger-config", value: { slot: 9 } });
+        assert.ok(Math.abs(final.output.min - 3) < 0.001 && Math.abs(final.output.max - 3) < 0.001);
+        assert.deepEqual(hostErrors, []);
+    } finally {
+        await hostPage.evaluate(async () => { try { await window.fixture?.connection.dispose(); } finally { await window.fixture?.context.close(); } });
+        await hostPage.close();
+    }
+});

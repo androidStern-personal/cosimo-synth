@@ -21,7 +21,8 @@ document.querySelector ("#start").onclick = async () =>
         const PatchClass = sparse ? (await import ("/sparse.js")).default : CmajorClass;
         window.startingFixture = { connection, context, worker };
         await connection.initialise ({ CmajorClass: PatchClass, audioContext: context, workletName: "plugin-state-probe",
-            hostDescription: "Browser state channel test", initialValueOverrides: sparse ? {} : { gain: 2.5 }, rootResourcePath: location.origin });
+            hostDescription: "Browser state channel test", initialValueOverrides: sparse ? {} : { gain: 2.5 }, rootResourcePath: location.origin,
+            ...(typeof window.fixtureHostEffect === "function" ? { handleStateHostEffect: window.fixtureHostEffect } : {}) });
         if (new URL (location.href).searchParams.has ("restoreDuringOpen"))
             connection.sendFullStoredState ({ parameters: [{ name: "gain", value: -3 }], values: { curve: { points: [0.1, 0.9] } } });
         await context.resume();

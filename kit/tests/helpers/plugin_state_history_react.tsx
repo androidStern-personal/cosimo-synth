@@ -2,8 +2,9 @@ import { useState } from "react";
 import { createRoot } from "react-dom/client";
 import { PluginStateProvider, usePluginHistory, usePluginState } from "../../ui/plugin-state-react";
 import { definePluginState, parameter } from "../../ui/plugin-state-definition";
-import { createPluginStateClient, type PluginStateClientEvent, type PluginStateClientResult } from "../../ui/plugin-state-client";
-import { createPluginStateSession, type PluginStateHistoryEntry } from "../../ui/plugin-state-session";
+import { createPluginStateClient, type PluginStateClientEvent } from "../../ui/plugin-state-client";
+import { createPluginStateSession } from "../../ui/plugin-state-session";
+import type { PluginStateEditResult, PluginStateHistoryEntry } from "../../index";
 
 const definition = definePluginState({ gain: parameter("gain") });
 
@@ -11,7 +12,7 @@ function Controls() {
     const gain = usePluginState(definition.gain);
     const history = usePluginHistory();
     const [remembered, remember] = useState<PluginStateHistoryEntry>();
-    const [result, finish] = useState<PluginStateClientResult>();
+    const [result, finish] = useState<PluginStateEditResult>();
     return <>
         <output data-testid="guarded-gain">{JSON.stringify(gain.state)}</output>
         <output data-testid="guarded-result">{JSON.stringify(result ?? null)}</output>
