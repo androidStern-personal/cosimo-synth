@@ -3,9 +3,20 @@
 #include "cmajor_plugin.cpp"
 #undef createPluginFilter
 
-class EnhanceThatReleasePlugin final : public Plugin
+using EnhanceThatGeneratedPlugin = cmaj::plugin::GeneratedPlugin<::CosimoEnhancerLite>;
+
+class EnhanceThatReleasePlugin final : public EnhanceThatGeneratedPlugin
 {
 public:
+    EnhanceThatReleasePlugin() : EnhanceThatGeneratedPlugin (std::make_shared<cmaj::Patch>())
+    {
+        // Preserve the generated factory's initial and reload latency contract.
+        patchChangeCallback = [] (auto& plugin)
+        {
+            plugin.setLatencySamples (static_cast<int> (PerformerClass::latency));
+        };
+        setLatencySamples (static_cast<int> (PerformerClass::latency));
+    }
     juce::AudioProcessorEditor* createEditor() override
     {
         auto* editor = new Editor (*this);
