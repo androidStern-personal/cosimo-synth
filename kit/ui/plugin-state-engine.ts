@@ -7,7 +7,7 @@ export type EngineTarget = {
 
 /** Transport evidence never equates a completed send call with DSP application. */
 export type EngineEvidence =
-    | { readonly kind: "sent"; readonly proof: "connection-call-returned" }
+    | { readonly kind: "sent"; readonly proof: "connection-call-returned" | "native-publication-processed" }
     | { readonly kind: "acknowledged"; readonly engineSession: string; readonly operation: string };
 
 /** Expected preparation/delivery failures carry a safe, caller-facing message. */

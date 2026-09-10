@@ -110,3 +110,39 @@ transport readiness waits. Cancellation is portable and does not assume a browse
 AbortController exists in QuickJS. Arbitrary external promises cannot be forcibly
 stopped; owned tasks settle and consume their late rejection, and revoked permits
 prevent later framework-authorized sends.
+
+## Session and GUI client checkpoint
+
+The reviewed core now passes 57 tests: session 27, client 17, engine 13. Both root
+and stricter isolated TypeScript checks passed during review. The coordinator
+independently reran all 57 against the frozen candidate (77 ms). Tests use public
+constructors, real Jotai subscriptions, controlled external delivery, and one
+session composed with the actual engine binding. They do not qualify raw-wire
+parsing, React controls, native QuickJS execution, or browser AudioWorklet wiring.
+
+Session tests cover shared Undo/Redo, per-field gesture ownership, both release
+orders, field versions and ABA, host automation without echo/history, exact
+100-entry retention, reset/detach, failed publication, subscriber/codec/port
+faults, dependency-driven engine preparation, stale completion and owned cleanup.
+Review caught two additional defects: quick scalar edits used stale host values
+as successive history baselines, and one failed cleanup abandoned another pending
+cleanup. Both gained distinguishing failing tests before repairs. `canUndo` and
+`canRedo` mean actionable now; busy/closed states retain history internally.
+Scalar application starts unconfirmed, becomes pending for an owned send, and
+uses native-publication-processed evidence only after the matching native reply.
+
+Client tests cover immediate immutable drafts, attach/update races across scopes,
+foreign and reordered receipts, correct sequence allocation, reentrant subscribers,
+failed readiness, callback/codec/send faults and subscription cleanup. Reset and
+close distinguish unsent rejection from sent-but-unacknowledged unknown acceptance;
+neither automatically replays edits. A parsed accepted receipt remains accepted
+even if GUI projection subsequently fails. Independent review found and required
+three additional regressions: another scope hiding a newer attach snapshot,
+synchronous subscription closure leaking the listener, and a retained failed value
+being treated as editable. All now pass.
+
+The customer dependency allowlist and template lock include exact Jotai 3.0.0.
+The lock update contains only that dependency, with no temporary machine paths.
+All eight export tests pass. The default and focused test commands include the new
+modules; the plugin refactor still has not started. Raw Cmajor adaptation, real
+browser/native composition, thin React bindings and integration remain ahead.

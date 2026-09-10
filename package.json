@@ -4,7 +4,7 @@
   "type": "module",
   "scripts": {
     "typecheck": "tsc --noEmit",
-    "test": "npm run test:units:orphans && npm run test:seqfx:state-properties && npm run test:effect-presets:unit && npm run test:enhancer:state && npm run test:enhancer-lite:state && npm run test:bounce:bank && npm run test:speedrun:unit && npm run test:speedrun:midi && npm run test:kit:release-contracts && npm run test:kit:export && npm run test:plugin-state-engine",
+    "test": "npm run test:units:orphans && npm run test:seqfx:state-properties && npm run test:effect-presets:unit && npm run test:enhancer:state && npm run test:enhancer-lite:state && npm run test:bounce:bank && npm run test:speedrun:unit && npm run test:speedrun:midi && npm run test:kit:release-contracts && npm run test:kit:export && npm run test:plugin-state",
     "test:host-keyboard-router": "node tests/tools/qualify_host_keyboard_router.mjs",
     "assets:core-shapes": "uv run python scripts/generate_core_shapes_wavetable.py",
     "assets:mod-sources": "node scripts/generate_modulation_source_icons.mjs",
@@ -142,8 +142,9 @@
     "kit:doctor": "node kit/scripts/doctor.mjs",
     "kit:setup": "node kit/scripts/setup.mjs",
     "kit:release": "node scripts/release_builder_kit.mjs",
-    "test:state": "node --test --test-concurrency=2 kit/tests/test_stored_state_runtime_mirror.mjs kit/tests/test_stored_state_runtime_mirror_lifecycle.mjs tests/test_runtime_install_channel.mjs tests/test_parameter_authority.mjs tests/test_seqfx_runtime_bridge.mjs tests/test_seqfx_worker_service.mjs tests/test_modulation_bridge.mjs kit/tests/test_plugin_state_engine.mjs tests/test_plugin_state_engine_mseg.mjs",
-    "test:plugin-state-engine": "node --test kit/tests/test_plugin_state_engine.mjs tests/test_plugin_state_engine_mseg.mjs"
+    "test:state": "node --test --test-concurrency=2 kit/tests/test_stored_state_runtime_mirror.mjs kit/tests/test_stored_state_runtime_mirror_lifecycle.mjs tests/test_runtime_install_channel.mjs tests/test_parameter_authority.mjs tests/test_seqfx_runtime_bridge.mjs tests/test_seqfx_worker_service.mjs tests/test_modulation_bridge.mjs kit/tests/test_plugin_state_engine.mjs tests/test_plugin_state_engine_mseg.mjs kit/tests/test_plugin_state_session.mjs kit/tests/test_plugin_state_client.mjs",
+    "test:plugin-state-engine": "node --test kit/tests/test_plugin_state_engine.mjs tests/test_plugin_state_engine_mseg.mjs",
+    "test:plugin-state": "node --test kit/tests/test_plugin_state_session.mjs kit/tests/test_plugin_state_client.mjs kit/tests/test_plugin_state_engine.mjs tests/test_plugin_state_engine_mseg.mjs"
   },
   "devDependencies": {
     "@react-grab/mcp": "0.1.29",

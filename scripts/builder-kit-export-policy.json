@@ -58,7 +58,8 @@
     "@vitejs/plugin-react",
     "react",
     "@types/react",
-    "playwright"
+    "playwright",
+    "jotai"
   ],
   "templateExplicitDevDependencies": {
     "esbuild": "^0.28.2"
