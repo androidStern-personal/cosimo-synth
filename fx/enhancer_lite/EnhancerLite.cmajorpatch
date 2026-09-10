@@ -1,7 +1,7 @@
 {
   "CmajorVersion": 1,
   "ID": "dev.cosimo.enhancer-lite",
-  "version": "0.1.0",
+  "version": "0.1.7",
   "name": "Enhance That",
   "description": "One-band harmonic enhancer with Stereo and Mid/Side routing.",
   "category": "effect",

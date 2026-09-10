@@ -1,3 +1,4 @@
+import { createTrialReminder } from "./trial";
 import {
     ENHANCER_LITE_SETTING_DESCRIPTORS,
     type EnhancerLiteShape,
@@ -258,6 +259,7 @@ function responsePath(
 }
 
 class EnhancerLiteView extends HTMLElement {
+    readonly trialReminder = import.meta.env?.VITE_ENHANCE_THAT_TRIAL === "1" ? createTrialReminder() : null;
     readonly patchConnection: EnhancerLitePatchConnection;
     readonly root: ShadowRoot;
     readonly values = new Map(endpointInitialValues);
@@ -293,6 +295,7 @@ class EnhancerLiteView extends HTMLElement {
         this.effectHeader.snapshotController = this.snapshotController;
         this.root = this.attachShadow({ mode: "open" });
         this.root.innerHTML = this.getMarkup();
+        if (this.trialReminder) this.root.append(this.trialReminder);
         this.requireElement<HTMLElement>(".shell").before(this.effectHeader);
         this.bindControls();
         this.renderAll();
@@ -303,6 +306,7 @@ class EnhancerLiteView extends HTMLElement {
             return;
 
         this.hasAttached = true;
+        this.trialReminder?.showModal();
         for (const endpointID of endpointInitialValues.keys()) {
             const listener: ParameterListener = (value) => {
                 if (typeof value !== "number" || !Number.isFinite(value))
@@ -344,6 +348,7 @@ class EnhancerLiteView extends HTMLElement {
     }
 
     disconnectedCallback(): void {
+        this.trialReminder?.close();
         this.snapshotController.detach();
         this.presetController.detach();
         this.effectHeader.presetController = null;

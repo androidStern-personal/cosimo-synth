@@ -74,8 +74,9 @@ exit 0
 `;
 }
 
-export function renderEnhanceThatReadme({ releaseVersion, payloadBundles }) {
-    return `Enhance That ${releaseVersion}
+export function renderEnhanceThatReadme({ releaseVersion, payloadBundles, variant = "full" }) {
+    return `Enhance That ${releaseVersion}${variant === "trial" ? " — Trial" : ""}
+${variant === "trial" ? "\nTrial version: a reminder appears when you open the editor. Purchase at https://song-machines.com/ to remove it.\n" : ""}
 
 Apple silicon Mac · macOS 15 or later
 

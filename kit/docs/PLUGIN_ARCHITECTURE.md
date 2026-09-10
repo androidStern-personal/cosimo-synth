@@ -344,6 +344,12 @@ still supports dev-server loading.
 
 ## Native Plugin Builds
 
+Maintainer release tooling can explicitly set `KIT_NATIVE_WRAPPER_SOURCE` to an
+authored C++ translation unit. It replaces the generated factory translation unit
+and can include `cmajor_plugin.cpp` unchanged. This is a native product extension,
+not a generated-source patch. Unset by default; customer builds use the standard
+factory. The release owner must validate the wrapper and preserve plugin identity.
+
 `npm run fx:prod:build -- <alias>` then:
 
 1. Resolves the pinned `cmaj` executable: `build/kit-tools/cmaj` when it
