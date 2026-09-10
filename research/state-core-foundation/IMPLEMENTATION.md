@@ -81,3 +81,32 @@ when its value is uncertain. Baseline failures are recorded, not normalized away
 Integration target: SeqFX's structured state, based on the audit's existing public
 Undo/preset/worker and property coverage. Scalar host binding remains separately
 qualified. The plugin refactor has not started and remains gated on module tests.
+
+## Engine binding checkpoint
+
+`plugin-state-engine.ts` is independently reviewed; 13 public-seam tests pass
+(including two using Cosimo's real authored MSEG renderer). The private Cosimo
+renderer tests stay under root `tests/`, outside the customer kit. Strong isolated
+TypeScript checks pass. The default and focused state runners include these tests.
+
+Behavioral red/green steps caught: obsolete preparation sending after a newer
+curve; a transport resuming an obsolete send after readiness; stop waiting forever
+for stalled preparation; discarded unexpected diagnostic causes; reuse of a
+completed send permit; reuse of an unexpectedly damaged transport; and a nested
+replacement being overwritten during cancellation. Additional cases check late
+acknowledgement/rejection, document replacement with equal generation, expected
+resource/delivery failures, and shutdown from a progress callback.
+
+Reviewed adjustment to matrix E4: a pure preparation defect fails/cancels its
+request and retains the diagnostic cause, but a new edit may try again. It has not
+mutated accepted state or entered the transport. An unexpected transport defect
+closes the binding and transport permanently because delivery may be partial.
+Expected typed resource/transport failures can recover on a fresh request. The
+independent reviewers accepted this distinction; it is not a relaxed test.
+
+This is engine-module evidence, not proof of a real acknowledgement protocol or
+native/browser teardown. Final physical sends use a scope-checked permit after
+transport readiness waits. Cancellation is portable and does not assume a browser
+AbortController exists in QuickJS. Arbitrary external promises cannot be forcibly
+stopped; owned tasks settle and consume their late rejection, and revoked permits
+prevent later framework-authorized sends.
