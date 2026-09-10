@@ -5,7 +5,7 @@ export const enhanceThatNativeDependencies = Object.freeze({
         cpmName: "cosimo_cmajor",
         sourceDirectoryCacheKey: "CPM_PACKAGE_cosimo_cmajor_SOURCE_DIR",
         repository: "https://github.com/androidStern-personal/cmajor.git",
-        revision: "2fc4c2dce2a1b625c1578409e10bf312a5ac39b5",
+        revision: "9ed4f96cc70996a8e4ab2e6aa13decb0460e260a",
     }),
     choc: Object.freeze({
         repository: "https://github.com/androidStern-personal/choc.git",
