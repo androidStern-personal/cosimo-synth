@@ -470,7 +470,7 @@ function createGeneratedRouteId() {
     return routeId;
 }
 
-function createAvailableGeneratedRouteId(routes: ReadonlyArray<Pick<ModulationRoute, "id">>) {
+export function createAvailableGeneratedRouteId(routes: ReadonlyArray<Pick<ModulationRoute, "id">>) {
     const usedRouteIds = new Set(routes.map((route) => route.id));
     let routeId = createGeneratedRouteId();
 
@@ -816,7 +816,7 @@ export function normalizeEnvelope(value: unknown, slotIndex = 0): ModulationEnve
     };
 }
 
-function normalizeEnvelopeSlot(value: unknown, slotIndex = 0): ModulationEnvelopeSlot {
+export function normalizeEnvelopeSlot(value: unknown, slotIndex = 0): ModulationEnvelopeSlot {
     const normalized = normalizeEnvelope(value, slotIndex);
     return { name: normalized.name };
 }
@@ -872,7 +872,7 @@ export function modulationRoutePairKey(
     return `${route.sourceKind}:${route.sourceSlot ?? 0}->${route.targetKind}`;
 }
 
-function normalizeRoutes(value: unknown): ModulationRoute[] {
+export function normalizeRoutes(value: unknown): ModulationRoute[] {
     const inputRoutes = Array.isArray(value) ? value : [];
     return inputRoutes.map((route, routeIndex) => normalizeRoute(route, routeIndex));
 }
