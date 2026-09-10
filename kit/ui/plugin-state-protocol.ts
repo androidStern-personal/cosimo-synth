@@ -3,7 +3,7 @@ import type { PluginStateClientEvent } from "./plugin-state-client";
 import type { PluginStateFields, PluginStateJson } from "./plugin-state-definition";
 import type {
     PluginStateAddress, PluginStateCommand, PluginStateNativeSnapshot,
-    PluginStateScope, PluginStateSnapshot, PluginStatePersistence, PluginStateFieldSnapshot, PluginStateResult, PluginStateReceipt, PluginStateApplication,
+    PluginStateScope, PluginStateSnapshot, PluginStatePersistence, PluginStateFieldSnapshot, PluginStateResult, PluginStateReceipt, PluginStateApplication, PluginStateHistoryEntry,
 } from "./plugin-state-session";
 
 /** A parsed channel body or an expected protocol validation failure. */
@@ -95,6 +95,13 @@ function scope(input: unknown): PluginStateScope | undefined {
         ? Object.freeze({ owner: input.owner, document: input.document }) : undefined;
 }
 
+/** Validate an opaque history reference without assuming it belongs to the current document. */
+export function parseHistoryEntry(input: unknown): PluginStateHistoryEntry | undefined {
+    if (!isRecord(input) || !counter(input.id)) return undefined;
+    const parsedScope = scope(input.scope);
+    return parsedScope ? Object.freeze({ scope: parsedScope, id: input.id }) : undefined;
+}
+
 function address(input: unknown): PluginStateAddress | undefined {
     const parsedScope = scope(input);
     return parsedScope && isRecord(input) && counter(input.client) && counter(input.sequence)
@@ -116,7 +123,11 @@ function nativeSnapshot(input: unknown): PluginStateNativeSnapshot | undefined {
 
 function command(input: unknown): PluginStateCommand | undefined {
     if (!isRecord(input)) return undefined;
-    if (input.kind === "undo" || input.kind === "redo") return { kind: input.kind };
+    if (input.kind === "undo" || input.kind === "redo") {
+        const expectedEntry = parseHistoryEntry(input.expectedEntry);
+        if (input.expectedEntry !== undefined && !expectedEntry) return undefined;
+        return { kind: input.kind, ...(expectedEntry ? { expectedEntry } : {}) };
+    }
     if (!name(input.key)) return undefined;
     if (input.kind === "begin" || input.kind === "end") {
         if (!counter(input.gesture) || (input.label !== undefined && typeof input.label !== "string")) return undefined;
@@ -255,6 +266,12 @@ function stateSnapshot<Fields extends PluginStateFields>(definition: Fields, inp
         || typeof input.history.canUndo !== "boolean" || typeof input.history.canRedo !== "boolean") return undefined;
     const parsedScope = scope(input.scope);
     if (!parsedScope) return undefined;
+    const undoEntry = parseHistoryEntry(input.history.undoEntry);
+    const redoEntry = parseHistoryEntry(input.history.redoEntry);
+    if ((input.history.undoEntry !== undefined && !undoEntry) || (input.history.redoEntry !== undefined && !redoEntry)) return undefined;
+    for (const entry of [undoEntry, redoEntry]) {
+        if (entry && (entry.scope.owner !== parsedScope.owner || entry.scope.document !== parsedScope.document)) return undefined;
+    }
     const fields: Record<string, PluginStateFieldSnapshot<unknown>> = Object.create(null);
     for (const [key, declaration] of Object.entries(definition)) {
         if (!Object.hasOwn(input.fields, key)) return undefined;
@@ -266,22 +283,27 @@ function stateSnapshot<Fields extends PluginStateFields>(definition: Fields, inp
     // SAFETY: every declared key was parsed with that declaration's codec. This
     // correlates the generic mapped keys; no unvalidated wire object is cast.
     return Object.freeze({ scope: parsedScope, revision: input.revision, fields: Object.freeze(fields),
-        history: Object.freeze({ canUndo: input.history.canUndo, canRedo: input.history.canRedo }),
+        history: Object.freeze({ canUndo: input.history.canUndo, canRedo: input.history.canRedo,
+            ...(undoEntry ? { undoEntry } : {}), ...(redoEntry ? { redoEntry } : {}),
+        }),
     }) as PluginStateSnapshot<Fields>;
 }
 
 function result(input: unknown): PluginStateResult | undefined {
     if (!isRecord(input)) return undefined;
+    const historyEntry = parseHistoryEntry(input.historyEntry);
+    if (input.historyEntry !== undefined && !historyEntry) return undefined;
     if (input.kind === "accepted" && counter(input.revision, false) && (input.version === undefined || counter(input.version, false))
         && (input.changed === undefined || typeof input.changed === "boolean"))
         return { kind: "accepted", revision: input.revision, ...(input.version !== undefined ? { version: input.version } : {}),
             ...(input.changed !== undefined ? { changed: input.changed } : {}),
+            ...(historyEntry ? { historyEntry } : {}),
         };
     if (input.kind !== "rejected") return undefined;
     const reason = input.reason;
     if (reason === "closed" || reason === "closed-client") return { kind: "rejected", reason: "service-closed" };
     if (reason === "not-ready" || reason === "invalid-command" || reason === "invalid-value" || reason === "stale-version"
-        || reason === "stale-scope" || reason === "busy" || reason === "service-closed" || reason === "sequence") return { kind: "rejected", reason };
+        || reason === "stale-history" || reason === "stale-scope" || reason === "busy" || reason === "service-closed" || reason === "sequence") return { kind: "rejected", reason };
     return undefined;
 }
 
@@ -289,6 +311,8 @@ function receipt(input: unknown): PluginStateReceipt | undefined {
     if (!isRecord(input)) return undefined;
     const parsedAddress = address(input.address);
     const parsedResult = result(input.result);
+    if (parsedAddress && parsedResult?.kind === "accepted" && parsedResult.historyEntry
+        && (parsedResult.historyEntry.scope.owner !== parsedAddress.owner || parsedResult.historyEntry.scope.document !== parsedAddress.document)) return undefined;
     return parsedAddress && parsedResult ? { address: parsedAddress, result: parsedResult } : undefined;
 }
 

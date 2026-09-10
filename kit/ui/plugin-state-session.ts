@@ -8,6 +8,12 @@ export interface PluginStateScope {
     readonly document: number;
 }
 
+/** Opaque identity for one Undo entry, valid only in its original document. */
+export interface PluginStateHistoryEntry {
+    readonly scope: PluginStateScope;
+    readonly id: number;
+}
+
 /** A command address already authenticated and ordered by the channel adapter. */
 export interface PluginStateAddress extends PluginStateScope {
     readonly client: number;
@@ -84,7 +90,12 @@ export interface PluginStateSnapshot<Fields extends PluginStateFields = PluginSt
     readonly scope: PluginStateScope | null;
     readonly revision: number;
     readonly fields: { readonly [Key in keyof Fields]: PluginStateFieldSnapshot<PluginStateFieldValue<Fields[Key]>> };
-    readonly history: { readonly canUndo: boolean; readonly canRedo: boolean };
+    readonly history: {
+        readonly canUndo: boolean;
+        readonly canRedo: boolean;
+        readonly undoEntry?: PluginStateHistoryEntry;
+        readonly redoEntry?: PluginStateHistoryEntry;
+    };
 }
 
 /** Shared edit command; agent adapters require expectedVersion before entering this seam. */
@@ -96,7 +107,8 @@ export type PluginStateCommand = {
     readonly gesture?: number;
 } | { readonly kind: "begin"; readonly key: string; readonly gesture: number; readonly label?: string }
   | { readonly kind: "end"; readonly key: string; readonly gesture: number }
-  | { readonly kind: "undo" } | { readonly kind: "redo" };
+  | { readonly kind: "undo"; readonly expectedEntry?: PluginStateHistoryEntry }
+  | { readonly kind: "redo"; readonly expectedEntry?: PluginStateHistoryEntry };
 
 /** Known acceptance is independent of subsequent native publication success. */
 export type PluginStateResult =
@@ -106,8 +118,10 @@ export type PluginStateResult =
         readonly version?: number;
         /** Edit commands report actual domain value change, independently of engine delivery. */
         readonly changed?: boolean;
+        /** Present only when this command creates or seals a nonempty Undo entry. */
+        readonly historyEntry?: PluginStateHistoryEntry;
     }
-    | { readonly kind: "rejected"; readonly reason: "not-ready" | "invalid-command" | "invalid-value" | "stale-version" | "stale-scope" | "busy" | "service-closed" | "sequence" };
+    | { readonly kind: "rejected"; readonly reason: "not-ready" | "invalid-command" | "invalid-value" | "stale-version" | "stale-history" | "stale-scope" | "busy" | "service-closed" | "sequence" };
 
 /** Exact addressed result routed back to the originating client. */
 export interface PluginStateReceipt {
@@ -184,6 +198,10 @@ function sameScope(left: PluginStateScope, right: PluginStateScope): boolean {
     return left.owner === right.owner && left.document === right.document;
 }
 
+function historyReference(scope: PluginStateScope, entry: HistoryEntry): PluginStateHistoryEntry {
+    return Object.freeze({ scope, id: entry.order });
+}
+
 function validParameter(parameter: PluginStateNativeParameter): boolean {
     return [parameter.value, parameter.min, parameter.max, parameter.step, parameter.defaultValue].every(Number.isFinite)
         && parameter.min <= parameter.max && parameter.step >= 0
@@ -234,6 +252,8 @@ export function createPluginStateSession<const Fields extends PluginStateFields>
             history: Object.freeze({
                 canUndo: !stopped && model.gestures.size === 0 && past.length > 0 && fields[past[past.length - 1]?.key ?? ""]?.readiness.kind === "ready",
                 canRedo: !stopped && model.gestures.size === 0 && future.length > 0 && fields[future[future.length - 1]?.key ?? ""]?.readiness.kind === "ready",
+                ...(model.snapshot.scope && past.length > 0 ? { undoEntry: historyReference(model.snapshot.scope, past[past.length - 1]!) } : {}),
+                ...(model.snapshot.scope && future.length > 0 ? { redoEntry: historyReference(model.snapshot.scope, future[future.length - 1]!) } : {}),
             }),
         }),
     });
@@ -307,6 +327,8 @@ export function createPluginStateSession<const Fields extends PluginStateFields>
         const next = publishSnapshot(model, { ...model.snapshot.fields, [key]: readyField(value, { kind: field.kind === "parameter" ? "host-managed" : "pending" }, version, previous.metadata, previous.gesture, field.kind === "parameter" ? { kind: "pending" } : undefined) }, past, future);
         const result: PluginStateResult = { kind: "accepted", revision: next.snapshot.revision, version,
             ...(cause === "edit" ? { changed: true } : {}),
+            ...(cause === "edit" && !model.gestures.has(key) && past.length > 0
+                ? { historyEntry: historyReference(model.snapshot.scope, past[past.length - 1]!) } : {}),
         };
         accepted = result;
         commit({ ...next, publications });
@@ -348,6 +370,9 @@ export function createPluginStateSession<const Fields extends PluginStateFields>
                 const undo = event.command.kind === "undo";
                 const source = undo ? model.past : model.future;
                 const entry = source[source.length - 1];
+                const expected = event.command.expectedEntry;
+                if (expected && (!entry || !sameScope(expected.scope, model.snapshot.scope) || expected.id !== entry.order))
+                    return { kind: "rejected", reason: "stale-history" };
                 if (!entry) return { kind: "accepted", revision: model.snapshot.revision };
                 return applyValue(model, entry.key, undo ? entry.before : entry.after,
                     undo ? model.past.slice(0, -1) : [...model.past, entry],
@@ -370,6 +395,7 @@ export function createPluginStateSession<const Fields extends PluginStateFields>
                 const gestures = new Map(model.gestures);
                 let past = model.past;
                 let gestureOwner: PluginStateGestureOwner | undefined;
+                let historyEntry: PluginStateHistoryEntry | undefined;
                 if (begin) {
                     gestureOwner = Object.freeze({ client: event.address.client, gesture });
                     const baseline = previous.value;
@@ -377,17 +403,21 @@ export function createPluginStateSession<const Fields extends PluginStateFields>
                 } else if (activeGesture) {
                     gestures.delete(key);
                     past = sealGesture(past, key, activeGesture);
+                    if (past !== model.past) historyEntry = historyReference(model.snapshot.scope, { key, ...activeGesture });
                 }
                 const next = publishSnapshot({ ...model, gestures }, { ...model.snapshot.fields,
                     [key]: readyField(previous.value, previous.persistence, previous.version, previous.metadata, gestureOwner, previous.application),
                 }, past);
-                accepted = { kind: "accepted", revision: next.snapshot.revision, version: previous.version };
+                const result: PluginStateResult = { kind: "accepted", revision: next.snapshot.revision, version: previous.version,
+                    ...(historyEntry ? { historyEntry } : {}),
+                };
+                accepted = result;
                 commit({ ...next, gestures });
-                if (stopped) return accepted;
+                if (stopped) return result;
                 if (field.kind === "parameter") ports.native.publish({ request: ++nextPublication, scope: model.snapshot.scope,
                     operations: [{ kind: begin ? "gesture-start" : "gesture-end", endpoint: field.endpoint }],
                 });
-                return { kind: "accepted", revision: next.snapshot.revision, version: previous.version };
+                return result;
             }
             const { value, expectedVersion } = event.command;
             if (event.command.gesture !== undefined && (!activeGesture || activeGesture.gesture !== event.command.gesture)) {

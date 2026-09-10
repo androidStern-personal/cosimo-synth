@@ -28,6 +28,7 @@ export * from "./ui/patch-worker-services";
 export { definePluginState, parameter, storedValue, eventValue } from "./ui/plugin-state-definition";
 export type { PluginStateCodec, PluginStatePrepareContext } from "./ui/plugin-state-definition";
 export type { PluginStateControlState } from "./ui/plugin-state-react";
+export type { PluginStateHistoryEntry } from "./ui/plugin-state-session";
 export { usePluginState, usePluginHistory } from "./ui/plugin-state-react";
 export { createStatefulPatchView } from "./ui/plugin-state-view";
 

@@ -1,5 +1,5 @@
 import { atom, createStore } from "jotai/vanilla";
-import { isBoundedStateJson } from "./plugin-state-protocol";
+import { isBoundedStateJson, parseHistoryEntry } from "./plugin-state-protocol";
 import type { PluginStateFields } from "./plugin-state-definition";
 import type {
     PluginStateCommand, PluginStateResult, PluginStateScope, PluginStateSnapshot,
@@ -219,6 +219,11 @@ export function createPluginStateClient<const Fields extends PluginStateFields>(
                 const client = base.client;
                 let draft: { readonly key: string; readonly value: unknown } | undefined;
                 let outbound = command;
+                if ((command.kind === "undo" || command.kind === "redo") && command.expectedEntry !== undefined) {
+                    const expectedEntry = parseHistoryEntry(command.expectedEntry);
+                    if (!expectedEntry) return Promise.resolve({ kind: "rejected", reason: "invalid-command" });
+                    outbound = { ...command, expectedEntry };
+                }
                 if (command.kind === "edit") {
                     const field = definition[command.key];
                     const current = base.state.fields[command.key];

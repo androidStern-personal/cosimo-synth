@@ -287,3 +287,17 @@ eleven phases retained. The unchanged heavy property phase is111.8s. New state
 module/helper phase is101 tests in~508ms. Root current native rebuilt fixture worker
 SHA is `aba172f97c73b1804ae8593ea62bd50287202d8c3c1fc5907a5d50caa5fccfb9`, exact
 Cmajor9ed4f96; actual DSP/automation/restore/history groups pass.
+# Guarded history continuation
+
+The shared ledger now exposes opaque document-scoped head references. Changed
+one-shot edits and nonempty gesture ends return their own entry reference;
+optional guarded Undo/Redo rejects a different head without any state or native
+effect. Existing sealed edit order supplies identity, with no new counter or
+history ledger. Public React calls preserve the guard through client preflight,
+wire parsing, and the session's single transition queue.
+
+Independent qualification: new history 9/9, history plus existing session 37/37,
+React browser 6/6. Root full plugin-state module command passes 110/110 and strict
+TypeScript passes. Existing exact expectations were extended only for the new
+receipt/head fields; value, version, ordering and publication assertions remain.
+Actual native/browser system probes have not yet been rebuilt for this extension.

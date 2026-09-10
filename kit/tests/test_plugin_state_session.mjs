@@ -132,12 +132,13 @@ test("native boot hydrates host gain and absent curve, then publishes one cohere
         command: { kind: "edit", key: "curve", value: proposedCurve },
     });
     const edited = session.getSnapshot();
-    assert.deepEqual(result, { kind: "accepted", revision: edited.revision, version: 1, changed: true });
+    assert.ok(result.historyEntry);
+    assert.deepEqual(result, { kind: "accepted", revision: edited.revision, version: 1, changed: true, historyEntry: result.historyEntry });
     assert.equal(edited.revision, boot.revision + 1);
     assert.deepEqual(edited.fields.curve.value, { points: [0, 0.5, 1] });
     assert.equal(edited.fields.curve.version, 1);
     assert.deepEqual(edited.fields.curve.persistence, { kind: "pending" });
-    assert.deepEqual(edited.history, { canUndo: true, canRedo: false });
+    assert.deepEqual(edited.history, { canUndo: true, canRedo: false, undoEntry: result.historyEntry });
     assert.strictEqual(edited.fields.gain, boot.fields.gain, "unrelated host field retains its projection");
     assert.strictEqual(observedSnapshots.at(-1), edited);
     assert.deepEqual(native.publications, [{
@@ -155,7 +156,7 @@ test("native boot hydrates host gain and absent curve, then publishes one cohere
     assert.deepEqual(persisted.fields.curve.persistence, { kind: "observed-in-native-state" });
     assert.strictEqual(persisted.fields.curve.value, edited.fields.curve.value);
     assert.equal(persisted.fields.curve.version, 1);
-    assert.deepEqual(persisted.history, { canUndo: true, canRedo: false });
+    assert.deepEqual(persisted.history, { canUndo: true, canRedo: false, undoEntry: result.historyEntry });
     assert.equal(native.publications.length, 1, "publication observation is not another write");
     unsubscribe();
     session.stop();
@@ -165,14 +166,14 @@ test("shared Undo and Redo restore accepted curve values while no-op and rejecte
     const { session, native, command } = await openCurveSession();
     const firstCurve = { points: [0, 0.25, 1] };
     const secondCurve = { points: [0, 0.75, 1] };
-    await command({ kind: "edit", key: "curve", value: firstCurve });
-    await command({ kind: "edit", key: "curve", value: secondCurve, expectedVersion: 1 }, 2);
+    const first = await command({ kind: "edit", key: "curve", value: firstCurve });
+    const second = await command({ kind: "edit", key: "curve", value: secondCurve, expectedVersion: 1 }, 2);
 
     assert.equal((await command({ kind: "undo" })).kind, "accepted");
     const undone = session.getSnapshot();
     assert.deepEqual(undone.fields.curve.value, firstCurve);
     assert.equal(undone.fields.curve.version, 3);
-    assert.deepEqual(undone.history, { canUndo: true, canRedo: true });
+    assert.deepEqual(undone.history, { canUndo: true, canRedo: true, undoEntry: first.historyEntry, redoEntry: second.historyEntry });
     assert.deepEqual(native.publications.at(-1).operations, [{ kind: "stored", key: "curve", value: firstCurve }]);
     const writeCount = native.publications.length;
 
@@ -188,12 +189,12 @@ test("shared Undo and Redo restore accepted curve values while no-op and rejecte
     assert.equal((await command({ kind: "redo" }, 2)).kind, "accepted");
     assert.deepEqual(session.getSnapshot().fields.curve.value, secondCurve);
     assert.equal(session.getSnapshot().fields.curve.version, 4);
-    assert.deepEqual(session.getSnapshot().history, { canUndo: true, canRedo: false });
+    assert.deepEqual(session.getSnapshot().history, { canUndo: true, canRedo: false, undoEntry: second.historyEntry });
     assert.deepEqual(native.publications.at(-1).operations, [{ kind: "stored", key: "curve", value: secondCurve }]);
     await command({ kind: "undo" });
     await command({ kind: "undo" });
     assert.deepEqual(session.getSnapshot().fields.curve.value, { points: [0, 1] });
-    assert.deepEqual(session.getSnapshot().history, { canUndo: false, canRedo: true });
+    assert.deepEqual(session.getSnapshot().history, { canUndo: false, canRedo: true, redoEntry: first.historyEntry });
     session.stop();
 });
 
@@ -234,7 +235,8 @@ test("invalid host metadata and present malformed storage fail only their fields
 
 test("scalar edits follow host range and step while observations remain history-free and invalidate only that field", async () => {
     const { session, native, scope, command } = await openMixedSession();
-    assert.equal((await command({ kind: "edit", key: "gain", value: 3.24 })).kind, "accepted");
+    const edit = await command({ kind: "edit", key: "gain", value: 3.24 });
+    assert.equal(edit.kind, "accepted");
     const edited = session.getSnapshot();
     assert.equal(edited.fields.gain.value, 3);
     assert.equal(edited.fields.gain.version, 1);
@@ -261,9 +263,9 @@ test("scalar edits follow host range and step while observations remain history-
 
     await command({ kind: "undo" }, 2);
     assert.equal(session.getSnapshot().fields.gain.value, 2.5, "Undo uses the native initial baseline, not its default or later automation");
-    assert.deepEqual(session.getSnapshot().history, { canUndo: false, canRedo: true });
+    assert.deepEqual(session.getSnapshot().history, { canUndo: false, canRedo: true, redoEntry: edit.historyEntry });
     await observe(4);
-    assert.deepEqual(session.getSnapshot().history, { canUndo: false, canRedo: true });
+    assert.deepEqual(session.getSnapshot().history, { canUndo: false, canRedo: true, redoEntry: edit.historyEntry });
     await command({ kind: "redo" });
     assert.equal(session.getSnapshot().fields.gain.value, 3, "Redo restores accepted user intent, not the automation value");
     assert.deepEqual(native.publications.at(-1).operations[1], { kind: "parameter", endpoint: "gain", value: 3 });
@@ -290,7 +292,8 @@ test("each field keeps its gesture owner while other fields proceed and shared h
         assert.strictEqual(session.getSnapshot(), locked);
         assert.equal(native.publications.length, writes);
 
-        assert.equal((await command({ kind: "edit", key: "gain", value: 3 }, contender)).kind, "accepted");
+        const gainEdit = await command({ kind: "edit", key: "gain", value: 3 }, contender);
+        assert.equal(gainEdit.kind, "accepted");
         await command({ kind: "edit", key: "curve", gesture: 1, value: { points: [0, 0.5, 1] }, expectedVersion: 1 }, owner);
         const beforeHistoryAttempt = session.getSnapshot();
         for (const client of [owner, contender]) {
@@ -308,7 +311,7 @@ test("each field keeps its gesture owner while other fields proceed and shared h
         assert.equal(session.getSnapshot().fields.gain.value, 3, "curve's last edit followed the gain edit");
         await command({ kind: "undo" }, owner);
         assert.equal(session.getSnapshot().fields.gain.value, 2.5);
-        assert.deepEqual(session.getSnapshot().history, { canUndo: false, canRedo: true });
+        assert.deepEqual(session.getSnapshot().history, { canUndo: false, canRedo: true, redoEntry: gainEdit.historyEntry });
         session.stop();
     }
 });
@@ -387,21 +390,24 @@ test("a throwing subscriber preserves known acceptance, closes readiness, and se
 
 test("exactly one hundred completed edits remain undoable and a new edit clears redo", async () => {
     const { session, native, command } = await openCurveSession();
+    const edits = [];
     for (let index = 1; index <= 101; index++) {
-        assert.equal((await command({ kind: "edit", key: "curve", value: { points: [0, index / 102, 1] } })).kind, "accepted");
+        const edit = await command({ kind: "edit", key: "curve", value: { points: [0, index / 102, 1] } });
+        edits.push(edit);
+        assert.equal(edit.kind, "accepted");
     }
     for (let index = 100; index >= 1; index--) {
         await command({ kind: "undo" });
         assert.deepEqual(session.getSnapshot().fields.curve.value.points, [0, index / 102, 1]);
     }
-    assert.deepEqual(session.getSnapshot().history, { canUndo: false, canRedo: true });
+    assert.deepEqual(session.getSnapshot().history, { canUndo: false, canRedo: true, redoEntry: edits[1].historyEntry });
     const oldest = session.getSnapshot();
     const count = native.publications.length;
     await command({ kind: "undo" });
     assert.strictEqual(session.getSnapshot(), oldest, "the pre-cap initial value is no longer reachable");
     assert.equal(native.publications.length, count);
-    await command({ kind: "edit", key: "curve", value: { points: [0, 0.999, 1] } });
-    assert.deepEqual(session.getSnapshot().history, { canUndo: true, canRedo: false });
+    const replacement = await command({ kind: "edit", key: "curve", value: { points: [0, 0.999, 1] } });
+    assert.deepEqual(session.getSnapshot().history, { canUndo: true, canRedo: false, undoEntry: replacement.historyEntry });
     session.stop();
 });
 
@@ -439,7 +445,7 @@ test("overlapping gestures undo by last accepted edit, independent of release or
 
 test("empty and net-zero gestures add no history, repeated boundaries are harmless, and stale release cannot unlock", async () => {
     const { session, native, command } = await openMixedSession();
-    await command({ kind: "edit", key: "curve", value: { points: [0, 0.5, 1] } });
+    const edit = await command({ kind: "edit", key: "curve", value: { points: [0, 0.5, 1] } });
     await command({ kind: "undo" });
     await command({ kind: "begin", key: "gain", gesture: 1 });
     const begin = session.getSnapshot();
@@ -451,7 +457,7 @@ test("empty and net-zero gestures add no history, repeated boundaries are harmle
     await command({ kind: "end", key: "gain", gesture: 1 });
     assert.strictEqual(session.getSnapshot(), ended);
     assert.equal(native.publications.length, writes);
-    assert.deepEqual(ended.history, { canUndo: false, canRedo: true });
+    assert.deepEqual(ended.history, { canUndo: false, canRedo: true, redoEntry: edit.historyEntry });
     assert.equal(ended.fields.gain.version, 0);
     await command({ kind: "redo" });
     await command({ kind: "undo" });
@@ -841,8 +847,10 @@ test("unknown command keys including object prototype names reject without chang
     }
     assert.strictEqual(session.getSnapshot(), before);
     assert.equal(native.publications.length, 0);
-    assert.deepEqual(await command({ kind: "edit", key: "curve", value: { points: [0, 0.5, 1] } }),
-        { kind: "accepted", revision: before.revision + 1, version: 1, changed: true });
+    const edit = await command({ kind: "edit", key: "curve", value: { points: [0, 0.5, 1] } });
+    assert.ok(edit.historyEntry);
+    assert.deepEqual(edit,
+        { kind: "accepted", revision: before.revision + 1, version: 1, changed: true, historyEntry: edit.historyEntry });
     await session.stop();
 });
 
@@ -872,24 +880,24 @@ test("closing after native initialization fails leaves fields failed without fal
 
 test("history availability matches dispatch policy during gestures and returns with retained Undo and Redo on release", async () => {
     const { session, command } = await openMixedSession();
-    await command({ kind: "edit", key: "curve", value: { points: [0, 0.3, 1] } });
-    await command({ kind: "edit", key: "gain", value: 3 });
+    const curve = await command({ kind: "edit", key: "curve", value: { points: [0, 0.3, 1] } });
+    const gain = await command({ kind: "edit", key: "gain", value: 3 });
     await command({ kind: "undo" });
-    assert.deepEqual(session.getSnapshot().history, { canUndo: true, canRedo: true });
+    assert.deepEqual(session.getSnapshot().history, { canUndo: true, canRedo: true, undoEntry: curve.historyEntry, redoEntry: gain.historyEntry });
     await command({ kind: "begin", key: "rate", gesture: 1 });
-    assert.deepEqual(session.getSnapshot().history, { canUndo: false, canRedo: false });
+    assert.deepEqual(session.getSnapshot().history, { canUndo: false, canRedo: false, undoEntry: curve.historyEntry, redoEntry: gain.historyEntry });
     assert.deepEqual(await command({ kind: "undo" }), { kind: "rejected", reason: "busy" });
     assert.deepEqual(await command({ kind: "redo" }), { kind: "rejected", reason: "busy" });
     await command({ kind: "end", key: "rate", gesture: 1 });
-    assert.deepEqual(session.getSnapshot().history, { canUndo: true, canRedo: true });
+    assert.deepEqual(session.getSnapshot().history, { canUndo: true, canRedo: true, undoEntry: curve.historyEntry, redoEntry: gain.historyEntry });
     await command({ kind: "redo" });
     assert.equal(session.getSnapshot().fields.gain.value, 3);
     await command({ kind: "undo" });
     await command({ kind: "undo" });
     assert.deepEqual(session.getSnapshot().fields.curve.value.points, [0, 1]);
-    assert.deepEqual(session.getSnapshot().history, { canUndo: false, canRedo: true });
+    assert.deepEqual(session.getSnapshot().history, { canUndo: false, canRedo: true, redoEntry: curve.historyEntry });
     await session.stop();
-    assert.deepEqual(session.getSnapshot().history, { canUndo: false, canRedo: false });
+    assert.deepEqual(session.getSnapshot().history, { canUndo: false, canRedo: false, redoEntry: curve.historyEntry });
 });
 
 test("a failed engine cleanup retains its cause without completing stop before another binding releases", async () => {

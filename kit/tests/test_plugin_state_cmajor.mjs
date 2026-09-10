@@ -67,9 +67,11 @@ test("Cmajor service opens real declarations, parses native state, and routes an
         operations: [{ kind: "stored", key: "curve", value: [0, 0.75, 1] }],
     });
     const updated = connection.bodies("update").at(-1);
-    assert.deepEqual(updated.receipt, { address, result: { kind: "accepted", revision: attached.revision + 1, version: 1, changed: true } });
+    const historyEntry = updated.receipt.result.historyEntry;
+    assert.ok(historyEntry);
+    assert.deepEqual(updated.receipt, { address, result: { kind: "accepted", revision: attached.revision + 1, version: 1, changed: true, historyEntry } });
     assert.deepEqual(updated.state.fields.curve.value, [0, 0.75, 1]);
-    assert.deepEqual(updated.state.history, { canUndo: true, canRedo: false });
+    assert.deepEqual(updated.state.history, { canUndo: true, canRedo: false, undoEntry: historyEntry });
     connection.deliver({ kind: "published", request: publication.request, scope, result: { kind: "observed" } });
     await Promise.resolve();
     assert.deepEqual(connection.bodies("update").at(-1).state.fields.curve.persistence, { kind: "observed-in-native-state" });
@@ -252,8 +254,11 @@ test("raw owner updates settle GUI edits with parsed canonical values and addres
     const editing = client.dispatch({ kind: "edit", key: "curve", value: [0, 0.6, 1], expectedVersion: 0 });
     const command = connection.bodies("command").at(-1);
     owner.connection.deliver({ kind: "command", address: { ...command.scope, client: command.client, sequence: command.sequence }, command: command.command });
-    connection.deliver(owner.connection.bodies("update").at(-1));
-    assert.deepEqual(await editing, { kind: "accepted", revision: 2, version: 1, changed: true });
+    const update = owner.connection.bodies("update").at(-1);
+    const historyEntry = update.receipt.result.historyEntry;
+    assert.ok(historyEntry);
+    connection.deliver(update);
+    assert.deepEqual(await editing, { kind: "accepted", revision: 2, version: 1, changed: true, historyEntry });
     assert.deepEqual(client.getSnapshot().pendingFields, []);
     assert.deepEqual(client.getSnapshot().state.fields.curve.value, [0, 0.6, 1]);
     assert.equal(client.getSnapshot().state.history.canUndo, true);
@@ -456,10 +461,12 @@ test("a valid accepted receipt survives malformed snapshot data or a codec defec
         const editing = client.dispatch({ kind: "edit", key: "curve", value: [1, 0] });
         owner.connection.deliver({ kind: "command", address: { ...owner.scope, client: 7, sequence: 1 }, command: { kind: "edit", key: "curve", value: [1, 0] } });
         const update = JSON.parse(JSON.stringify(owner.connection.bodies("update").at(-1)));
+        const historyEntry = update.receipt.result.historyEntry;
+        assert.ok(historyEntry);
         if (failure === "invalid-state") update.state.fields.gain.metadata.step = "broken";
         else update.state.fields.curve.value = [9, 1];
         connection.deliver(update);
-        assert.deepEqual(await editing, { kind: "accepted", revision: 2, version: 1, changed: true }, failure);
+        assert.deepEqual(await editing, { kind: "accepted", revision: 2, version: 1, changed: true, historyEntry }, failure);
         assert.equal(client.getSnapshot().kind, "closed");
         assert.equal(connection.listeners.get("kit_state").size, 0);
         assert.equal(defects.length, 1);

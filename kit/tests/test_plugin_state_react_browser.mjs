@@ -38,6 +38,41 @@ async function close(page) {
     assert.deepEqual(browserErrors.get(page), [], "no uncaught browser or React errors");
 }
 
+test("public React guarded Undo and Redo preserve a competing client's newer entry", async () => {
+    const page = await browser.newPage();
+    const errors = [];
+    browserErrors.set(page, errors);
+    page.on("pageerror", error => errors.push(error.message));
+    await page.goto(`${server.baseUrl}/kit/tests/helpers/module_test_shell.html`);
+    await page.evaluate(async () => {
+        const { mount } = await import("/kit/tests/helpers/plugin_state_history_react.tsx");
+        window.guardedHistory = await mount(document.getElementById("mount"));
+    });
+    const gain = () => page.getByTestId("guarded-gain").evaluate(element => JSON.parse(element.textContent).value);
+    try {
+        await page.getByText("Edit four", { exact: true }).click();
+        assert.equal(await gain(), 4);
+        await page.getByText("Remember Undo", { exact: true }).click();
+        const newer = await page.evaluate(() => window.guardedHistory.otherEdit(7));
+        assert.equal(newer.kind, "accepted");
+        await page.waitForFunction(() => JSON.parse(document.querySelector('[data-testid="guarded-gain"]').textContent).value === 7);
+        const publications = await page.evaluate(() => window.guardedHistory.publicationCount());
+        await page.getByText("Guarded Undo", { exact: true }).click();
+        assert.deepEqual(JSON.parse(await page.getByTestId("guarded-result").textContent()), { kind: "rejected", reason: "stale-history" });
+        assert.equal(await gain(), 7);
+        assert.equal(await page.evaluate(() => window.guardedHistory.snapshot().fields.gain.value), 7);
+        assert.equal(await page.evaluate(() => window.guardedHistory.publicationCount()), publications);
+        await page.getByText("Remember Undo", { exact: true }).click();
+        await page.getByText("Guarded Undo", { exact: true }).click();
+        assert.equal(await gain(), 4);
+        await page.getByText("Remember Redo", { exact: true }).click();
+        await page.getByText("Guarded Redo", { exact: true }).click();
+        assert.equal(await gain(), 7);
+        assert.deepEqual(await page.evaluate(() => window.guardedHistory.snapshot().history.undoEntry), newer.historyEntry);
+        assert.deepEqual(await page.evaluate(() => window.guardedHistory.defects()), []);
+    } finally { await page.evaluate(() => window.guardedHistory.dispose()); await close(page); }
+});
+
 test("React reads the real client's Jotai projection: host hydration, immediate drafts, and late receipts preserve newer input", async () => {
     const page = await open();
     try {

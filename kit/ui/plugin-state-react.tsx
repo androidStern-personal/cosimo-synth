@@ -2,7 +2,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useSyncExte
 import { atom, type Atom } from "jotai/vanilla";
 import type { PluginStateFields, PluginStateParameter, PluginStateStored, PluginStateFieldValue } from "./plugin-state-definition";
 import type { createPluginStateClient, PluginStateClientResult } from "./plugin-state-client";
-import type { PluginStateApplication, PluginStateNativeParameter, PluginStateScope } from "./plugin-state-session";
+import type { PluginStateApplication, PluginStateNativeParameter, PluginStateScope, PluginStateHistoryEntry } from "./plugin-state-session";
 
 type Client = ReturnType<typeof createPluginStateClient<PluginStateFields>>;
 const Context = createContext<{ definition: PluginStateFields; client: Client } | null>(null);
@@ -107,8 +107,8 @@ export function usePluginHistory() {
     const { client } = useClient();
     const snapshot = useClientValue(client, client.reactivity.snapshot);
     const actions = useMemo(() => ({
-        undo: () => client.dispatch({ kind: "undo" }),
-        redo: () => client.dispatch({ kind: "redo" }),
+        undo: (expectedEntry?: PluginStateHistoryEntry) => client.dispatch({ kind: "undo", ...(expectedEntry === undefined ? {} : { expectedEntry }) }),
+        redo: (expectedEntry?: PluginStateHistoryEntry) => client.dispatch({ kind: "redo", ...(expectedEntry === undefined ? {} : { expectedEntry }) }),
     }), [client]);
     return { ...(snapshot.kind === "ready" ? snapshot.state.history : { canUndo: false, canRedo: false }), ...actions };
 }

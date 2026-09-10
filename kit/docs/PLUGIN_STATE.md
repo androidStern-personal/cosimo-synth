@@ -130,6 +130,15 @@ invented proof of a particular GUI write.
   install an MCP server. Automation updates the current value without making
   Undo entries or echoing another write to the host.
 - Undo and Redo are unavailable while any gesture is active.
+- A changed one-shot edit or a nonempty gesture end returns `historyEntry`.
+  Keep that opaque reference when a control should undo only its own last edit.
+  `history.undo(entry)` and `history.redo(entry)` act only if that entry is still
+  the corresponding history head; otherwise they return `stale-history` without
+  changing anything. `history.undoEntry` and `history.redoEntry` expose those
+  heads for button availability, alongside `canUndo` and `canRedo`. References
+  expire when the document is replaced. Do not construct references or infer
+  ordering from them. Calling Undo/Redo without a reference retains global LIFO
+  behavior; this API does not support selectively undoing an older entry.
 - Control/window removal through the view wrapper, or native client detachment,
   ends that client's gestures. A full project restore replaces the document,
   clears history and rejects old commands and delivery completions.
