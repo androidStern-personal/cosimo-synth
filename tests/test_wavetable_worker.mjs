@@ -1,6 +1,15 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
+import path from "node:path";
+import { pathToFileURL } from "node:url";
+import { stageCmajorWebRuntime } from "../kit/fx/vite.shared.mjs";
+import { createPluginStateTestPlatform } from "./helpers/plugin_state_test_platform.mjs";
+
+const stateRuntime = stageCmajorWebRuntime(path.resolve(import.meta.dirname, ".."), {
+    buildDirectory: path.resolve(import.meta.dirname, "../build/cmajor_web_runtime-worker-state-tests"),
+});
+const { PluginStateChannel } = await import(pathToFileURL(path.join(stateRuntime, "cmaj-plugin-state-channel.js")));
 
 import runWavetableWorker, {
     WAVETABLE_RUNTIME_STATE_SYNC_SERIAL,
@@ -565,6 +574,13 @@ class FakePatchConnection {
 
 class FakeWorkerPatchConnection {
     constructor(storedState = {}) {
+        // This existing worker test now also hosts the real state service. Only
+        // its external native parameter storage is simulated here.
+        this.statePlatform = createPluginStateTestPlatform(PluginStateChannel, { parameters: [
+            { endpoint: "playMode", value: 0, min: 0, max: 2, step: 1, defaultValue: 0 },
+            { endpoint: "glideTime", value: 0.15, min: 0, max: 2, step: 0, defaultValue: 0.15 },
+            { endpoint: "globalTune", value: 0, min: -24, max: 24, step: 0, defaultValue: 0 },
+        ] });
         this.storedState = { ...storedState };
         this.endpointListeners = new Map();
         this.storedStateListeners = new Set();
@@ -575,6 +591,10 @@ class FakeWorkerPatchConnection {
         this.acceptedArticulationSerial = 0;
         this.rejectionsRemainingByEndpoint = new Map();
     }
+
+    addEventListener(type, listener) { this.statePlatform.worker.addEventListener(type, listener); }
+    removeEventListener(type, listener) { this.statePlatform.worker.removeEventListener(type, listener); }
+    sendMessageToServer(envelope) { this.statePlatform.worker.sendMessageToServer(envelope); }
 
     addEndpointListener(endpointID, listener) {
         const listeners = this.endpointListeners.get(endpointID) ?? [];

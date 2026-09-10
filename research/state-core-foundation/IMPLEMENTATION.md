@@ -47,7 +47,7 @@ own groups. An unchanged group contributes no history entry.
 ## Safety and evidence
 
 Unrelated dirty trackers and other research remain untouched and unstaged. No
-master merge, push, deployment, installed plugin replacement, or DAW manipulation
+master merge, product release, deployment, installed plugin replacement, or DAW manipulation
 is part of this implementation without separate scope. Native build artifacts
 use a task-specific build directory. Do not modify downloaded dependency caches.
 
@@ -215,8 +215,9 @@ Cmajor source is isolated on branch `codex/plugin-state-system` in the dedicated
 `plugin-state-cmajor` worktree. Native changes are `7d6d5753` and `18c4f2e`;
 `a2cd70c` repairs the exact source compiler's existing include path so the real
 generator can build. Reviewed browser channel source is committed as `3d1ba296`.
-The root kit Cmajor pin has not been published or changed. These are local source
-qualification results, not a claim that released Builder Kit contains the channel.
+At this checkpoint the pin was still local. It has since been published on the
+Cmajor feature branch at `9ed4f96` and the root implementation now pins that exact
+revision. This is not a released Builder Kit or a master merge.
 
 The separate native channel probe has 15 passing routing/lifetime cases; the
 browser channel has 15 passing actual AudioWorklet cases. Those channel probes
@@ -245,3 +246,44 @@ explicitly tested preset upload behavior. Direct replacement would change those
 protections or add several special cases. The integration choice is being compared
 against a focused Cosimo migration before changing either plugin. This preserves
 the requirement to regroup when the migration pressures module design.
+
+## Default build dependency qualification
+
+The dependency feature branch `codex/plugin-state-system` is published on the
+existing Cmajor fork at `9ed4f96cc70996a8e4ab2e6aa13decb0460e260a`. Production CPM,
+toolchain source identity and live product notices now agree. Existing test
+expected pins changed only to match that API/dependency identity; no assertions
+were weakened. Notice file SHA was recomputed; historical qualification evidence
+and blank prebuilt archive hashes remain unchanged.
+
+Root results: cold CPM **5/5**, release dependency/toolchain **15/15**, release
+builder **35/35**, and normal web runtime staging includes the real channel module.
+Release checks use the already approved Node22.22.3 binary outside the repository;
+its exact approved SHA matches. Canonical TMPDIR avoids the pre-existing macOS
+/var vs /private/var fixture-origin mismatch. No approval hashes changed.
+
+Independent review checked the consistent pins, notice SHA and retained strict
+qualification gates. Root app integration uses the production channel/service in
+the dev host; its three public helper tests cover delayed startup, stopping before
+module load, and releasing pending parameter-read subscriptions on stop.
+
+## Reviewed Voice integration checkpoint
+
+`1805e022` pins the remotely fetchable Cmajor extension; `66e642e3` records the
+reviewed adapter and accepted-change evidence. Accepted edits now explicitly report
+`changed` after native parameter rounding/domain equality. This prevents refused
+or no-op writes from masquerading as audible-preview edits. Captured suppression
+and ordered completion notifications preserve existing direct-user gesture order
+even when actual receipts arrive end/edit/begin. No second value/history owner.
+
+Root updated only fixture native-notification seams for raw parameter writes and
+legacy host Undo, with actual Mock browser regressions. Production Voice source
+uses the shared owner in three existing controls. Module and focused app reviewers
+approved source and test integrity; final broad regression diagnosis remains in
+CONTINUATION.md. Generated UI/worker artifacts were rebuilt from current source.
+
+Full default suite:1301 passes, one existing optional-corpus skip, zero failures;
+eleven phases retained. The unchanged heavy property phase is111.8s. New state
+module/helper phase is101 tests in~508ms. Root current native rebuilt fixture worker
+SHA is `aba172f97c73b1804ae8593ea62bd50287202d8c3c1fc5907a5d50caa5fccfb9`, exact
+Cmajor9ed4f96; actual DSP/automation/restore/history groups pass.

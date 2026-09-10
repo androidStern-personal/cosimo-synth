@@ -1,19 +1,10 @@
 var jsxRuntime = { exports: {} };
 var reactJsxRuntime_production = {};
-/**
- * @license React
- * react-jsx-runtime.production.js
- *
- * Copyright (c) Meta Platforms, Inc. and affiliates.
- *
- * This source code is licensed under the MIT license found in the
- * LICENSE file in the root directory of this source tree.
- */
 var hasRequiredReactJsxRuntime_production;
 function requireReactJsxRuntime_production() {
   if (hasRequiredReactJsxRuntime_production) return reactJsxRuntime_production;
   hasRequiredReactJsxRuntime_production = 1;
-  var REACT_ELEMENT_TYPE = Symbol.for("react.transitional.element"), REACT_FRAGMENT_TYPE = Symbol.for("react.fragment");
+  var REACT_ELEMENT_TYPE = /* @__PURE__ */ Symbol.for("react.transitional.element"), REACT_FRAGMENT_TYPE = /* @__PURE__ */ Symbol.for("react.fragment");
   function jsxProd(type, config, maybeKey) {
     var key = null;
     void 0 !== maybeKey && (key = "" + maybeKey);
@@ -49,20 +40,11 @@ function requireJsxRuntime() {
 var jsxRuntimeExports = requireJsxRuntime();
 var react = { exports: {} };
 var react_production = {};
-/**
- * @license React
- * react.production.js
- *
- * Copyright (c) Meta Platforms, Inc. and affiliates.
- *
- * This source code is licensed under the MIT license found in the
- * LICENSE file in the root directory of this source tree.
- */
 var hasRequiredReact_production;
 function requireReact_production() {
   if (hasRequiredReact_production) return react_production;
   hasRequiredReact_production = 1;
-  var REACT_ELEMENT_TYPE = Symbol.for("react.transitional.element"), REACT_PORTAL_TYPE = Symbol.for("react.portal"), REACT_FRAGMENT_TYPE = Symbol.for("react.fragment"), REACT_STRICT_MODE_TYPE = Symbol.for("react.strict_mode"), REACT_PROFILER_TYPE = Symbol.for("react.profiler"), REACT_CONSUMER_TYPE = Symbol.for("react.consumer"), REACT_CONTEXT_TYPE = Symbol.for("react.context"), REACT_FORWARD_REF_TYPE = Symbol.for("react.forward_ref"), REACT_SUSPENSE_TYPE = Symbol.for("react.suspense"), REACT_MEMO_TYPE = Symbol.for("react.memo"), REACT_LAZY_TYPE = Symbol.for("react.lazy"), REACT_ACTIVITY_TYPE = Symbol.for("react.activity"), MAYBE_ITERATOR_SYMBOL = Symbol.iterator;
+  var REACT_ELEMENT_TYPE = /* @__PURE__ */ Symbol.for("react.transitional.element"), REACT_PORTAL_TYPE = /* @__PURE__ */ Symbol.for("react.portal"), REACT_FRAGMENT_TYPE = /* @__PURE__ */ Symbol.for("react.fragment"), REACT_STRICT_MODE_TYPE = /* @__PURE__ */ Symbol.for("react.strict_mode"), REACT_PROFILER_TYPE = /* @__PURE__ */ Symbol.for("react.profiler"), REACT_CONSUMER_TYPE = /* @__PURE__ */ Symbol.for("react.consumer"), REACT_CONTEXT_TYPE = /* @__PURE__ */ Symbol.for("react.context"), REACT_FORWARD_REF_TYPE = /* @__PURE__ */ Symbol.for("react.forward_ref"), REACT_SUSPENSE_TYPE = /* @__PURE__ */ Symbol.for("react.suspense"), REACT_MEMO_TYPE = /* @__PURE__ */ Symbol.for("react.memo"), REACT_LAZY_TYPE = /* @__PURE__ */ Symbol.for("react.lazy"), REACT_ACTIVITY_TYPE = /* @__PURE__ */ Symbol.for("react.activity"), MAYBE_ITERATOR_SYMBOL = Symbol.iterator;
   function getIteratorFn(maybeIterable) {
     if (null === maybeIterable || "object" !== typeof maybeIterable) return null;
     maybeIterable = MAYBE_ITERATOR_SYMBOL && maybeIterable[MAYBE_ITERATOR_SYMBOL] || maybeIterable["@@iterator"];
@@ -238,11 +220,11 @@ function requireReact_production() {
   }
   function mapChildren(children, func, context) {
     if (null == children) return children;
-    var result = [], count = 0;
-    mapIntoArray(children, result, "", "", function(child) {
+    var result2 = [], count = 0;
+    mapIntoArray(children, result2, "", "", function(child) {
       return func.call(context, child, count++);
     });
-    return result;
+    return result2;
   }
   function lazyInitializer(payload) {
     if (-1 === payload._status) {
@@ -403,11 +385,11 @@ function requireReact_production() {
       compare: void 0 === compare ? null : compare
     };
   };
-  react_production.startTransition = function(scope) {
+  react_production.startTransition = function(scope2) {
     var prevTransition = ReactSharedInternals.T, currentTransition = {};
     ReactSharedInternals.T = currentTransition;
     try {
-      var returnValue = scope(), onStartTransitionFinish = ReactSharedInternals.S;
+      var returnValue = scope2(), onStartTransitionFinish = ReactSharedInternals.S;
       null !== onStartTransitionFinish && onStartTransitionFinish(currentTransition, returnValue);
       "object" === typeof returnValue && null !== returnValue && "function" === typeof returnValue.then && returnValue.then(noop, reportGlobalError);
     } catch (error) {
@@ -428,8 +410,8 @@ function requireReact_production() {
   react_production.useCallback = function(callback, deps) {
     return ReactSharedInternals.H.useCallback(callback, deps);
   };
-  react_production.useContext = function(Context) {
-    return ReactSharedInternals.H.useContext(Context);
+  react_production.useContext = function(Context2) {
+    return ReactSharedInternals.H.useContext(Context2);
   };
   react_production.useDebugValue = function() {
   };
@@ -496,15 +478,6 @@ var client = { exports: {} };
 var reactDomClient_production = {};
 var scheduler = { exports: {} };
 var scheduler_production = {};
-/**
- * @license React
- * scheduler.production.js
- *
- * Copyright (c) Meta Platforms, Inc. and affiliates.
- *
- * This source code is licensed under the MIT license found in the
- * LICENSE file in the root directory of this source tree.
- */
 var hasRequiredScheduler_production;
 function requireScheduler_production() {
   if (hasRequiredScheduler_production) return scheduler_production;
@@ -771,15 +744,6 @@ function requireScheduler() {
 }
 var reactDom = { exports: {} };
 var reactDom_production = {};
-/**
- * @license React
- * react-dom.production.js
- *
- * Copyright (c) Meta Platforms, Inc. and affiliates.
- *
- * This source code is licensed under the MIT license found in the
- * LICENSE file in the root directory of this source tree.
- */
 var hasRequiredReactDom_production;
 function requireReactDom_production() {
   if (hasRequiredReactDom_production) return reactDom_production;
@@ -812,7 +776,7 @@ function requireReactDom_production() {
     },
     p: 0,
     findDOMNode: null
-  }, REACT_PORTAL_TYPE = Symbol.for("react.portal");
+  }, REACT_PORTAL_TYPE = /* @__PURE__ */ Symbol.for("react.portal");
   function createPortal$1(children, containerInfo, implementation) {
     var key = 3 < arguments.length && void 0 !== arguments[3] ? arguments[3] : null;
     return {
@@ -947,15 +911,6 @@ function requireReactDom() {
   }
   return reactDom.exports;
 }
-/**
- * @license React
- * react-dom-client.production.js
- *
- * Copyright (c) Meta Platforms, Inc. and affiliates.
- *
- * This source code is licensed under the MIT license found in the
- * LICENSE file in the root directory of this source tree.
- */
 var hasRequiredReactDomClient_production;
 function requireReactDomClient_production() {
   if (hasRequiredReactDomClient_production) return reactDomClient_production;
@@ -1082,16 +1037,16 @@ function requireReactDomClient_production() {
     }
     return null;
   }
-  var assign = Object.assign, REACT_LEGACY_ELEMENT_TYPE = Symbol.for("react.element"), REACT_ELEMENT_TYPE = Symbol.for("react.transitional.element"), REACT_PORTAL_TYPE = Symbol.for("react.portal"), REACT_FRAGMENT_TYPE = Symbol.for("react.fragment"), REACT_STRICT_MODE_TYPE = Symbol.for("react.strict_mode"), REACT_PROFILER_TYPE = Symbol.for("react.profiler"), REACT_CONSUMER_TYPE = Symbol.for("react.consumer"), REACT_CONTEXT_TYPE = Symbol.for("react.context"), REACT_FORWARD_REF_TYPE = Symbol.for("react.forward_ref"), REACT_SUSPENSE_TYPE = Symbol.for("react.suspense"), REACT_SUSPENSE_LIST_TYPE = Symbol.for("react.suspense_list"), REACT_MEMO_TYPE = Symbol.for("react.memo"), REACT_LAZY_TYPE = Symbol.for("react.lazy");
-  var REACT_ACTIVITY_TYPE = Symbol.for("react.activity");
-  var REACT_MEMO_CACHE_SENTINEL = Symbol.for("react.memo_cache_sentinel");
+  var assign = Object.assign, REACT_LEGACY_ELEMENT_TYPE = /* @__PURE__ */ Symbol.for("react.element"), REACT_ELEMENT_TYPE = /* @__PURE__ */ Symbol.for("react.transitional.element"), REACT_PORTAL_TYPE = /* @__PURE__ */ Symbol.for("react.portal"), REACT_FRAGMENT_TYPE = /* @__PURE__ */ Symbol.for("react.fragment"), REACT_STRICT_MODE_TYPE = /* @__PURE__ */ Symbol.for("react.strict_mode"), REACT_PROFILER_TYPE = /* @__PURE__ */ Symbol.for("react.profiler"), REACT_CONSUMER_TYPE = /* @__PURE__ */ Symbol.for("react.consumer"), REACT_CONTEXT_TYPE = /* @__PURE__ */ Symbol.for("react.context"), REACT_FORWARD_REF_TYPE = /* @__PURE__ */ Symbol.for("react.forward_ref"), REACT_SUSPENSE_TYPE = /* @__PURE__ */ Symbol.for("react.suspense"), REACT_SUSPENSE_LIST_TYPE = /* @__PURE__ */ Symbol.for("react.suspense_list"), REACT_MEMO_TYPE = /* @__PURE__ */ Symbol.for("react.memo"), REACT_LAZY_TYPE = /* @__PURE__ */ Symbol.for("react.lazy");
+  var REACT_ACTIVITY_TYPE = /* @__PURE__ */ Symbol.for("react.activity");
+  var REACT_MEMO_CACHE_SENTINEL = /* @__PURE__ */ Symbol.for("react.memo_cache_sentinel");
   var MAYBE_ITERATOR_SYMBOL = Symbol.iterator;
   function getIteratorFn(maybeIterable) {
     if (null === maybeIterable || "object" !== typeof maybeIterable) return null;
     maybeIterable = MAYBE_ITERATOR_SYMBOL && maybeIterable[MAYBE_ITERATOR_SYMBOL] || maybeIterable["@@iterator"];
     return "function" === typeof maybeIterable ? maybeIterable : null;
   }
-  var REACT_CLIENT_REFERENCE = Symbol.for("react.client.reference");
+  var REACT_CLIENT_REFERENCE = /* @__PURE__ */ Symbol.for("react.client.reference");
   function getComponentNameFromType(type) {
     if (null == type) return null;
     if ("function" === typeof type)
@@ -1197,7 +1152,7 @@ function requireReactDomClient_production() {
     hostTransitionProviderCursor.current === fiber && (pop(hostTransitionProviderCursor), HostTransitionContext._currentValue = sharedNotPendingObject);
   }
   var prefix, suffix;
-  function describeBuiltInComponentFrame(name) {
+  function describeBuiltInComponentFrame(name2) {
     if (void 0 === prefix)
       try {
         throw Error();
@@ -1206,7 +1161,7 @@ function requireReactDomClient_production() {
         prefix = match && match[1] || "";
         suffix = -1 < x.stack.indexOf("\n    at") ? " (<anonymous>)" : -1 < x.stack.indexOf("@") ? "@unknown:0:0" : "";
       }
-    return "\n" + prefix + name + suffix;
+    return "\n" + prefix + name2 + suffix;
   }
   var reentry = false;
   function describeNativeComponentFrame(fn, construct) {
@@ -1644,52 +1599,52 @@ function requireReactDomClient_production() {
     illegalAttributeNameCache[attributeName] = true;
     return false;
   }
-  function setValueForAttribute(node, name, value) {
-    if (isAttributeNameSafe(name))
-      if (null === value) node.removeAttribute(name);
+  function setValueForAttribute(node, name2, value) {
+    if (isAttributeNameSafe(name2))
+      if (null === value) node.removeAttribute(name2);
       else {
         switch (typeof value) {
           case "undefined":
           case "function":
           case "symbol":
-            node.removeAttribute(name);
+            node.removeAttribute(name2);
             return;
           case "boolean":
-            var prefix$10 = name.toLowerCase().slice(0, 5);
+            var prefix$10 = name2.toLowerCase().slice(0, 5);
             if ("data-" !== prefix$10 && "aria-" !== prefix$10) {
-              node.removeAttribute(name);
+              node.removeAttribute(name2);
               return;
             }
         }
-        node.setAttribute(name, "" + value);
+        node.setAttribute(name2, "" + value);
       }
   }
-  function setValueForKnownAttribute(node, name, value) {
-    if (null === value) node.removeAttribute(name);
+  function setValueForKnownAttribute(node, name2, value) {
+    if (null === value) node.removeAttribute(name2);
     else {
       switch (typeof value) {
         case "undefined":
         case "function":
         case "symbol":
         case "boolean":
-          node.removeAttribute(name);
+          node.removeAttribute(name2);
           return;
       }
-      node.setAttribute(name, "" + value);
+      node.setAttribute(name2, "" + value);
     }
   }
-  function setValueForNamespacedAttribute(node, namespace, name, value) {
-    if (null === value) node.removeAttribute(name);
+  function setValueForNamespacedAttribute(node, namespace, name2, value) {
+    if (null === value) node.removeAttribute(name2);
     else {
       switch (typeof value) {
         case "undefined":
         case "function":
         case "symbol":
         case "boolean":
-          node.removeAttribute(name);
+          node.removeAttribute(name2);
           return;
       }
-      node.setAttributeNS(namespace, name, "" + value);
+      node.setAttributeNS(namespace, name2, "" + value);
     }
   }
   function getToStringValue(value) {
@@ -1782,7 +1737,7 @@ function requireReactDomClient_production() {
       }
     );
   }
-  function updateInput(element, value, defaultValue, lastDefaultValue, checked, defaultChecked, type, name) {
+  function updateInput(element, value, defaultValue, lastDefaultValue, checked, defaultChecked, type, name2) {
     element.name = "";
     null != type && "function" !== typeof type && "symbol" !== typeof type && "boolean" !== typeof type ? element.type = type : element.removeAttribute("type");
     if (null != value)
@@ -1796,9 +1751,9 @@ function requireReactDomClient_production() {
     null != value ? setDefaultValue(element, type, getToStringValue(value)) : null != defaultValue ? setDefaultValue(element, type, getToStringValue(defaultValue)) : null != lastDefaultValue && element.removeAttribute("value");
     null == checked && null != defaultChecked && (element.defaultChecked = !!defaultChecked);
     null != checked && (element.checked = checked && "function" !== typeof checked && "symbol" !== typeof checked);
-    null != name && "function" !== typeof name && "symbol" !== typeof name && "boolean" !== typeof name ? element.name = "" + getToStringValue(name) : element.removeAttribute("name");
+    null != name2 && "function" !== typeof name2 && "symbol" !== typeof name2 && "boolean" !== typeof name2 ? element.name = "" + getToStringValue(name2) : element.removeAttribute("name");
   }
-  function initInput(element, value, defaultValue, checked, defaultChecked, type, name, isHydrating2) {
+  function initInput(element, value, defaultValue, checked, defaultChecked, type, name2, isHydrating2) {
     null != type && "function" !== typeof type && "symbol" !== typeof type && "boolean" !== typeof type && (element.type = type);
     if (null != value || null != defaultValue) {
       if (!("submit" !== type && "reset" !== type || void 0 !== value && null !== value)) {
@@ -1814,7 +1769,7 @@ function requireReactDomClient_production() {
     checked = "function" !== typeof checked && "symbol" !== typeof checked && !!checked;
     element.checked = isHydrating2 ? element.checked : !!checked;
     element.defaultChecked = !!checked;
-    null != name && "function" !== typeof name && "symbol" !== typeof name && "boolean" !== typeof name && (element.name = name);
+    null != name2 && "function" !== typeof name2 && "symbol" !== typeof name2 && "boolean" !== typeof name2 && (element.name = name2);
     track(element);
   }
   function setDefaultValue(node, type, value) {
@@ -3185,7 +3140,7 @@ function requireReactDomClient_production() {
       for (var i = 0; i < listeners2.length; i++) (0, listeners2[i])();
     }
   }
-  function chainThenableValue(thenable, result) {
+  function chainThenableValue(thenable, result2) {
     var listeners2 = [], thenableWithOverride = {
       status: "pending",
       value: null,
@@ -3197,8 +3152,8 @@ function requireReactDomClient_production() {
     thenable.then(
       function() {
         thenableWithOverride.status = "fulfilled";
-        thenableWithOverride.value = result;
-        for (var i = 0; i < listeners2.length; i++) (0, listeners2[i])(result);
+        thenableWithOverride.value = result2;
+        for (var i = 0; i < listeners2.length; i++) (0, listeners2[i])(result2);
       },
       function(error) {
         thenableWithOverride.status = "rejected";
@@ -10710,7 +10665,7 @@ function requireReactDomClient_production() {
       case "li":
         break;
       case "input":
-        var name = null, type = null, value = null, defaultValue = null, lastDefaultValue = null, checked = null, defaultChecked = null;
+        var name2 = null, type = null, value = null, defaultValue = null, lastDefaultValue = null, checked = null, defaultChecked = null;
         for (propKey in lastProps) {
           var lastProp = lastProps[propKey];
           if (lastProps.hasOwnProperty(propKey) && null != lastProp)
@@ -10734,7 +10689,7 @@ function requireReactDomClient_production() {
                 type = propKey;
                 break;
               case "name":
-                name = propKey;
+                name2 = propKey;
                 break;
               case "checked":
                 checked = propKey;
@@ -10772,7 +10727,7 @@ function requireReactDomClient_production() {
           checked,
           defaultChecked,
           type,
-          name
+          name2
         );
         return;
       case "select":
@@ -10794,9 +10749,9 @@ function requireReactDomClient_production() {
                   lastDefaultValue
                 );
             }
-        for (name in nextProps)
-          if (type = nextProps[name], lastDefaultValue = lastProps[name], nextProps.hasOwnProperty(name) && (null != type || null != lastDefaultValue))
-            switch (name) {
+        for (name2 in nextProps)
+          if (type = nextProps[name2], lastDefaultValue = lastProps[name2], nextProps.hasOwnProperty(name2) && (null != type || null != lastDefaultValue))
+            switch (name2) {
               case "value":
                 propKey$201 = type;
                 break;
@@ -10809,7 +10764,7 @@ function requireReactDomClient_production() {
                 type !== lastDefaultValue && setProp(
                   domElement,
                   tag,
-                  name,
+                  name2,
                   type,
                   nextProps,
                   lastDefaultValue
@@ -10823,31 +10778,31 @@ function requireReactDomClient_production() {
       case "textarea":
         propKey = propKey$201 = null;
         for (defaultValue in lastProps)
-          if (name = lastProps[defaultValue], lastProps.hasOwnProperty(defaultValue) && null != name && !nextProps.hasOwnProperty(defaultValue))
+          if (name2 = lastProps[defaultValue], lastProps.hasOwnProperty(defaultValue) && null != name2 && !nextProps.hasOwnProperty(defaultValue))
             switch (defaultValue) {
               case "value":
                 break;
               case "children":
                 break;
               default:
-                setProp(domElement, tag, defaultValue, null, nextProps, name);
+                setProp(domElement, tag, defaultValue, null, nextProps, name2);
             }
         for (value in nextProps)
-          if (name = nextProps[value], type = lastProps[value], nextProps.hasOwnProperty(value) && (null != name || null != type))
+          if (name2 = nextProps[value], type = lastProps[value], nextProps.hasOwnProperty(value) && (null != name2 || null != type))
             switch (value) {
               case "value":
-                propKey$201 = name;
+                propKey$201 = name2;
                 break;
               case "defaultValue":
-                propKey = name;
+                propKey = name2;
                 break;
               case "children":
                 break;
               case "dangerouslySetInnerHTML":
-                if (null != name) throw Error(formatProdErrorMessage(91));
+                if (null != name2) throw Error(formatProdErrorMessage(91));
                 break;
               default:
-                name !== type && setProp(domElement, tag, value, name, nextProps, type);
+                name2 !== type && setProp(domElement, tag, value, name2, nextProps, type);
             }
         updateTextarea(domElement, propKey$201, propKey);
         return;
@@ -11113,8 +11068,8 @@ function requireReactDomClient_production() {
           break;
       } else if (!inRootOrSingleton)
         if ("input" === type && "hidden" === instance.type) {
-          var name = null == anyProps.name ? null : "" + anyProps.name;
-          if ("hidden" === anyProps.type && instance.getAttribute("name") === name)
+          var name2 = null == anyProps.name ? null : "" + anyProps.name;
+          if ("hidden" === anyProps.type && instance.getAttribute("name") === name2)
             return instance;
         } else return instance;
       else if (!instance[internalHoistableMarker])
@@ -11123,18 +11078,18 @@ function requireReactDomClient_production() {
             if (!instance.hasAttribute("itemprop")) break;
             return instance;
           case "link":
-            name = instance.getAttribute("rel");
-            if ("stylesheet" === name && instance.hasAttribute("data-precedence"))
+            name2 = instance.getAttribute("rel");
+            if ("stylesheet" === name2 && instance.hasAttribute("data-precedence"))
               break;
-            else if (name !== anyProps.rel || instance.getAttribute("href") !== (null == anyProps.href || "" === anyProps.href ? null : anyProps.href) || instance.getAttribute("crossorigin") !== (null == anyProps.crossOrigin ? null : anyProps.crossOrigin) || instance.getAttribute("title") !== (null == anyProps.title ? null : anyProps.title))
+            else if (name2 !== anyProps.rel || instance.getAttribute("href") !== (null == anyProps.href || "" === anyProps.href ? null : anyProps.href) || instance.getAttribute("crossorigin") !== (null == anyProps.crossOrigin ? null : anyProps.crossOrigin) || instance.getAttribute("title") !== (null == anyProps.title ? null : anyProps.title))
               break;
             return instance;
           case "style":
             if (instance.hasAttribute("data-precedence")) break;
             return instance;
           case "script":
-            name = instance.getAttribute("src");
-            if ((name !== (null == anyProps.src ? null : anyProps.src) || instance.getAttribute("type") !== (null == anyProps.type ? null : anyProps.type) || instance.getAttribute("crossorigin") !== (null == anyProps.crossOrigin ? null : anyProps.crossOrigin)) && name && instance.hasAttribute("async") && !instance.hasAttribute("itemprop"))
+            name2 = instance.getAttribute("src");
+            if ((name2 !== (null == anyProps.src ? null : anyProps.src) || instance.getAttribute("type") !== (null == anyProps.type ? null : anyProps.type) || instance.getAttribute("crossorigin") !== (null == anyProps.crossOrigin ? null : anyProps.crossOrigin)) && name2 && instance.hasAttribute("async") && !instance.hasAttribute("itemprop"))
               break;
             return instance;
           default:
@@ -12494,7 +12449,7 @@ function requireClient() {
   return client.exports;
 }
 var clientExports = requireClient();
-const cssText = '/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com */\n@layer properties {\n  @supports (((-webkit-hyphens: none)) and (not (margin-trim: inline))) or ((-moz-orient: inline) and (not (color: rgb(from red r g b)))) {\n    *, :before, :after, ::backdrop {\n      --tw-translate-x: 0;\n      --tw-translate-y: 0;\n      --tw-translate-z: 0;\n      --tw-rotate-x: initial;\n      --tw-rotate-y: initial;\n      --tw-rotate-z: initial;\n      --tw-skew-x: initial;\n      --tw-skew-y: initial;\n      --tw-border-style: solid;\n      --tw-leading: initial;\n      --tw-font-weight: initial;\n      --tw-tracking: initial;\n      --tw-ordinal: initial;\n      --tw-slashed-zero: initial;\n      --tw-numeric-figure: initial;\n      --tw-numeric-spacing: initial;\n      --tw-numeric-fraction: initial;\n      --tw-shadow: 0 0 #0000;\n      --tw-shadow-color: initial;\n      --tw-shadow-alpha: 100%;\n      --tw-inset-shadow: 0 0 #0000;\n      --tw-inset-shadow-color: initial;\n      --tw-inset-shadow-alpha: 100%;\n      --tw-ring-color: initial;\n      --tw-ring-shadow: 0 0 #0000;\n      --tw-inset-ring-color: initial;\n      --tw-inset-ring-shadow: 0 0 #0000;\n      --tw-ring-inset: initial;\n      --tw-ring-offset-width: 0px;\n      --tw-ring-offset-color: #fff;\n      --tw-ring-offset-shadow: 0 0 #0000;\n      --tw-outline-style: solid;\n      --tw-blur: initial;\n      --tw-brightness: initial;\n      --tw-contrast: initial;\n      --tw-grayscale: initial;\n      --tw-hue-rotate: initial;\n      --tw-invert: initial;\n      --tw-opacity: initial;\n      --tw-saturate: initial;\n      --tw-sepia: initial;\n      --tw-drop-shadow: initial;\n      --tw-drop-shadow-color: initial;\n      --tw-drop-shadow-alpha: 100%;\n      --tw-drop-shadow-size: initial;\n      --tw-backdrop-blur: initial;\n      --tw-backdrop-brightness: initial;\n      --tw-backdrop-contrast: initial;\n      --tw-backdrop-grayscale: initial;\n      --tw-backdrop-hue-rotate: initial;\n      --tw-backdrop-invert: initial;\n      --tw-backdrop-opacity: initial;\n      --tw-backdrop-saturate: initial;\n      --tw-backdrop-sepia: initial;\n      --tw-duration: initial;\n      --tw-ease: initial;\n    }\n  }\n}\n\n@layer theme {\n  :root, :host {\n    --font-sans: ui-sans-serif, system-ui, sans-serif, "Apple Color Emoji",\n      "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";\n    --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono",\n      "Courier New", monospace;\n    --color-amber-100: oklch(96.2% .059 95.617);\n    --color-amber-200: oklch(92.4% .12 95.746);\n    --color-amber-300: oklch(87.9% .169 91.605);\n    --color-cyan-100: oklch(95.6% .045 203.388);\n    --color-cyan-200: oklch(91.7% .08 205.041);\n    --color-cyan-300: oklch(86.5% .127 207.078);\n    --color-rose-100: oklch(94.1% .03 12.58);\n    --color-rose-200: oklch(89.2% .058 10.001);\n    --color-rose-300: oklch(81% .117 11.638);\n    --color-slate-100: oklch(96.8% .007 247.896);\n    --color-slate-200: oklch(92.9% .013 255.508);\n    --color-slate-300: oklch(86.9% .022 252.894);\n    --color-slate-400: oklch(70.4% .04 256.788);\n    --color-black: #000;\n    --color-white: #fff;\n    --spacing: .25rem;\n    --text-sm: .875rem;\n    --text-sm--line-height: calc(1.25 / .875);\n    --font-weight-medium: 500;\n    --font-weight-semibold: 600;\n    --font-weight-bold: 700;\n    --leading-tight: 1.25;\n    --radius-2xl: 1rem;\n    --ease-out: cubic-bezier(0, 0, .2, 1);\n    --blur-md: 12px;\n    --default-transition-duration: .15s;\n    --default-transition-timing-function: cubic-bezier(.4, 0, .2, 1);\n    --default-font-family: var(--font-sans);\n    --default-mono-font-family: var(--font-mono);\n  }\n}\n\n@layer base {\n  *, :after, :before, ::backdrop {\n    box-sizing: border-box;\n    border: 0 solid;\n    margin: 0;\n    padding: 0;\n  }\n\n  ::file-selector-button {\n    box-sizing: border-box;\n    border: 0 solid;\n    margin: 0;\n    padding: 0;\n  }\n\n  html, :host {\n    -webkit-text-size-adjust: 100%;\n    tab-size: 4;\n    line-height: 1.5;\n    font-family: var(--default-font-family, ui-sans-serif, system-ui, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji");\n    font-feature-settings: var(--default-font-feature-settings, normal);\n    font-variation-settings: var(--default-font-variation-settings, normal);\n    -webkit-tap-highlight-color: transparent;\n  }\n\n  hr {\n    height: 0;\n    color: inherit;\n    border-top-width: 1px;\n  }\n\n  abbr:where([title]) {\n    -webkit-text-decoration: underline dotted;\n    text-decoration: underline dotted;\n  }\n\n  h1, h2, h3, h4, h5, h6 {\n    font-size: inherit;\n    font-weight: inherit;\n  }\n\n  a {\n    color: inherit;\n    -webkit-text-decoration: inherit;\n    -webkit-text-decoration: inherit;\n    -webkit-text-decoration: inherit;\n    text-decoration: inherit;\n  }\n\n  b, strong {\n    font-weight: bolder;\n  }\n\n  code, kbd, samp, pre {\n    font-family: var(--default-mono-font-family, ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace);\n    font-feature-settings: var(--default-mono-font-feature-settings, normal);\n    font-variation-settings: var(--default-mono-font-variation-settings, normal);\n    font-size: 1em;\n  }\n\n  small {\n    font-size: 80%;\n  }\n\n  sub, sup {\n    vertical-align: baseline;\n    font-size: 75%;\n    line-height: 0;\n    position: relative;\n  }\n\n  sub {\n    bottom: -.25em;\n  }\n\n  sup {\n    top: -.5em;\n  }\n\n  table {\n    text-indent: 0;\n    border-color: inherit;\n    border-collapse: collapse;\n  }\n\n  :-moz-focusring {\n    outline: auto;\n  }\n\n  progress {\n    vertical-align: baseline;\n  }\n\n  summary {\n    display: list-item;\n  }\n\n  ol, ul, menu {\n    list-style: none;\n  }\n\n  img, svg, video, canvas, audio, iframe, embed, object {\n    vertical-align: middle;\n    display: block;\n  }\n\n  img, video {\n    max-width: 100%;\n    height: auto;\n  }\n\n  button, input, select, optgroup, textarea {\n    font: inherit;\n    font-feature-settings: inherit;\n    font-variation-settings: inherit;\n    letter-spacing: inherit;\n    color: inherit;\n    opacity: 1;\n    background-color: #0000;\n    border-radius: 0;\n  }\n\n  ::file-selector-button {\n    font: inherit;\n    font-feature-settings: inherit;\n    font-variation-settings: inherit;\n    letter-spacing: inherit;\n    color: inherit;\n    opacity: 1;\n    background-color: #0000;\n    border-radius: 0;\n  }\n\n  :where(select:is([multiple], [size])) optgroup {\n    font-weight: bolder;\n  }\n\n  :where(select:is([multiple], [size])) optgroup option {\n    padding-inline-start: 20px;\n  }\n\n  ::file-selector-button {\n    margin-inline-end: 4px;\n  }\n\n  ::placeholder {\n    opacity: 1;\n  }\n\n  @supports (not ((-webkit-appearance: -apple-pay-button))) or (contain-intrinsic-size: 1px) {\n    ::placeholder {\n      color: currentColor;\n    }\n\n    @supports (color: color-mix(in lab, red, red)) {\n      ::placeholder {\n        color: color-mix(in oklab, currentcolor 50%, transparent);\n      }\n    }\n  }\n\n  textarea {\n    resize: vertical;\n  }\n\n  ::-webkit-search-decoration {\n    -webkit-appearance: none;\n  }\n\n  ::-webkit-date-and-time-value {\n    min-height: 1lh;\n    text-align: inherit;\n  }\n\n  ::-webkit-datetime-edit {\n    display: inline-flex;\n  }\n\n  ::-webkit-datetime-edit-fields-wrapper {\n    padding: 0;\n  }\n\n  ::-webkit-datetime-edit {\n    padding-block: 0;\n  }\n\n  ::-webkit-datetime-edit-year-field {\n    padding-block: 0;\n  }\n\n  ::-webkit-datetime-edit-month-field {\n    padding-block: 0;\n  }\n\n  ::-webkit-datetime-edit-day-field {\n    padding-block: 0;\n  }\n\n  ::-webkit-datetime-edit-hour-field {\n    padding-block: 0;\n  }\n\n  ::-webkit-datetime-edit-minute-field {\n    padding-block: 0;\n  }\n\n  ::-webkit-datetime-edit-second-field {\n    padding-block: 0;\n  }\n\n  ::-webkit-datetime-edit-millisecond-field {\n    padding-block: 0;\n  }\n\n  ::-webkit-datetime-edit-meridiem-field {\n    padding-block: 0;\n  }\n\n  ::-webkit-calendar-picker-indicator {\n    line-height: 1;\n  }\n\n  :-moz-ui-invalid {\n    box-shadow: none;\n  }\n\n  button, input:where([type="button"], [type="reset"], [type="submit"]) {\n    appearance: button;\n  }\n\n  ::file-selector-button {\n    appearance: button;\n  }\n\n  ::-webkit-inner-spin-button {\n    height: auto;\n  }\n\n  ::-webkit-outer-spin-button {\n    height: auto;\n  }\n\n  [hidden]:where(:not([hidden="until-found"])) {\n    display: none !important;\n  }\n}\n\n@layer components;\n\n@layer utilities {\n  .pointer-events-none {\n    pointer-events: none;\n  }\n\n  .collapse {\n    visibility: collapse;\n  }\n\n  .invisible {\n    visibility: hidden;\n  }\n\n  .visible {\n    visibility: visible;\n  }\n\n  .sr-only {\n    clip-path: inset(50%);\n    white-space: nowrap;\n    border-width: 0;\n    width: 1px;\n    height: 1px;\n    margin: -1px;\n    padding: 0;\n    position: absolute;\n    overflow: hidden;\n  }\n\n  .absolute {\n    position: absolute;\n  }\n\n  .fixed {\n    position: fixed;\n  }\n\n  .relative {\n    position: relative;\n  }\n\n  .static {\n    position: static;\n  }\n\n  .inset-0 {\n    inset: calc(var(--spacing) * 0);\n  }\n\n  .inset-x-0 {\n    inset-inline: calc(var(--spacing) * 0);\n  }\n\n  .inset-x-3 {\n    inset-inline: calc(var(--spacing) * 3);\n  }\n\n  .inset-y-0 {\n    inset-block: calc(var(--spacing) * 0);\n  }\n\n  .start {\n    inset-inline-start: var(--spacing);\n  }\n\n  .end {\n    inset-inline-end: var(--spacing);\n  }\n\n  .top-0 {\n    top: calc(var(--spacing) * 0);\n  }\n\n  .top-1\\/2 {\n    top: 50%;\n  }\n\n  .top-2 {\n    top: calc(var(--spacing) * 2);\n  }\n\n  .right-0 {\n    right: calc(var(--spacing) * 0);\n  }\n\n  .right-1\\.5 {\n    right: calc(var(--spacing) * 1.5);\n  }\n\n  .right-5 {\n    right: calc(var(--spacing) * 5);\n  }\n\n  .bottom-0 {\n    bottom: calc(var(--spacing) * 0);\n  }\n\n  .bottom-1 {\n    bottom: calc(var(--spacing) * 1);\n  }\n\n  .left-0 {\n    left: calc(var(--spacing) * 0);\n  }\n\n  .left-1\\.5 {\n    left: calc(var(--spacing) * 1.5);\n  }\n\n  .left-1\\/2 {\n    left: 50%;\n  }\n\n  .z-10 {\n    z-index: 10;\n  }\n\n  .container {\n    width: 100%;\n  }\n\n  @media (min-width: 40rem) {\n    .container {\n      max-width: 40rem;\n    }\n  }\n\n  @media (min-width: 48rem) {\n    .container {\n      max-width: 48rem;\n    }\n  }\n\n  @media (min-width: 64rem) {\n    .container {\n      max-width: 64rem;\n    }\n  }\n\n  @media (min-width: 80rem) {\n    .container {\n      max-width: 80rem;\n    }\n  }\n\n  @media (min-width: 96rem) {\n    .container {\n      max-width: 96rem;\n    }\n  }\n\n  .mt-0\\.5 {\n    margin-top: calc(var(--spacing) * .5);\n  }\n\n  .mt-1 {\n    margin-top: calc(var(--spacing) * 1);\n  }\n\n  .block {\n    display: block;\n  }\n\n  .contents {\n    display: contents;\n  }\n\n  .flex {\n    display: flex;\n  }\n\n  .grid {\n    display: grid;\n  }\n\n  .hidden {\n    display: none;\n  }\n\n  .inline {\n    display: inline;\n  }\n\n  .inline-flex {\n    display: inline-flex;\n  }\n\n  .inline-grid {\n    display: inline-grid;\n  }\n\n  .table {\n    display: table;\n  }\n\n  .aspect-\\[50\\/27\\] {\n    aspect-ratio: 50 / 27;\n  }\n\n  .size-3\\.5 {\n    width: calc(var(--spacing) * 3.5);\n    height: calc(var(--spacing) * 3.5);\n  }\n\n  .h-1 {\n    height: calc(var(--spacing) * 1);\n  }\n\n  .h-2 {\n    height: calc(var(--spacing) * 2);\n  }\n\n  .h-2\\.5 {\n    height: calc(var(--spacing) * 2.5);\n  }\n\n  .h-3\\.5 {\n    height: calc(var(--spacing) * 3.5);\n  }\n\n  .h-4 {\n    height: calc(var(--spacing) * 4);\n  }\n\n  .h-5 {\n    height: calc(var(--spacing) * 5);\n  }\n\n  .h-8 {\n    height: calc(var(--spacing) * 8);\n  }\n\n  .h-10 {\n    height: calc(var(--spacing) * 10);\n  }\n\n  .h-11 {\n    height: calc(var(--spacing) * 11);\n  }\n\n  .h-32 {\n    height: calc(var(--spacing) * 32);\n  }\n\n  .h-auto {\n    height: auto;\n  }\n\n  .h-full {\n    height: 100%;\n  }\n\n  .h-px {\n    height: 1px;\n  }\n\n  .min-h-0 {\n    min-height: calc(var(--spacing) * 0);\n  }\n\n  .min-h-\\[130px\\] {\n    min-height: 130px;\n  }\n\n  .min-h-\\[230px\\] {\n    min-height: 230px;\n  }\n\n  .w-1\\.5 {\n    width: calc(var(--spacing) * 1.5);\n  }\n\n  .w-2\\.5 {\n    width: calc(var(--spacing) * 2.5);\n  }\n\n  .w-3\\.5 {\n    width: calc(var(--spacing) * 3.5);\n  }\n\n  .w-6 {\n    width: calc(var(--spacing) * 6);\n  }\n\n  .w-9 {\n    width: calc(var(--spacing) * 9);\n  }\n\n  .w-full {\n    width: 100%;\n  }\n\n  .max-w-\\[128px\\] {\n    max-width: 128px;\n  }\n\n  .max-w-\\[220px\\] {\n    max-width: 220px;\n  }\n\n  .min-w-0 {\n    min-width: calc(var(--spacing) * 0);\n  }\n\n  .min-w-\\[150px\\] {\n    min-width: 150px;\n  }\n\n  .flex-1 {\n    flex: 1;\n  }\n\n  .flex-shrink, .shrink {\n    flex-shrink: 1;\n  }\n\n  .shrink-0 {\n    flex-shrink: 0;\n  }\n\n  .-translate-x-1\\/2 {\n    --tw-translate-x: calc(calc(1 / 2 * 100%) * -1);\n    translate: var(--tw-translate-x) var(--tw-translate-y);\n  }\n\n  .-translate-y-1\\/2 {\n    --tw-translate-y: calc(calc(1 / 2 * 100%) * -1);\n    translate: var(--tw-translate-x) var(--tw-translate-y);\n  }\n\n  .-translate-y-px {\n    --tw-translate-y: -1px;\n    translate: var(--tw-translate-x) var(--tw-translate-y);\n  }\n\n  .translate-y-1\\/2 {\n    --tw-translate-y: calc(1 / 2 * 100%);\n    translate: var(--tw-translate-x) var(--tw-translate-y);\n  }\n\n  .transform {\n    transform: var(--tw-rotate-x, ) var(--tw-rotate-y, ) var(--tw-rotate-z, ) var(--tw-skew-x, ) var(--tw-skew-y, );\n  }\n\n  .cursor-grab {\n    cursor: grab;\n  }\n\n  .cursor-ns-resize {\n    cursor: ns-resize;\n  }\n\n  .cursor-pointer {\n    cursor: pointer;\n  }\n\n  .cursor-wait {\n    cursor: wait;\n  }\n\n  .touch-none {\n    touch-action: none;\n  }\n\n  .resize {\n    resize: both;\n  }\n\n  .grid-cols-\\[minmax\\(0\\,1fr\\)_88px\\] {\n    grid-template-columns: minmax(0, 1fr) 88px;\n  }\n\n  .grid-cols-\\[minmax\\(0\\,1fr\\)_92px\\] {\n    grid-template-columns: minmax(0, 1fr) 92px;\n  }\n\n  .grid-cols-\\[minmax\\(0\\,1fr\\)_92px_auto\\] {\n    grid-template-columns: minmax(0, 1fr) 92px auto;\n  }\n\n  .grid-rows-\\[auto_minmax\\(0\\,1fr\\)_auto\\] {\n    grid-template-rows: auto minmax(0, 1fr) auto;\n  }\n\n  .flex-col {\n    flex-direction: column;\n  }\n\n  .flex-wrap {\n    flex-wrap: wrap;\n  }\n\n  .items-center {\n    align-items: center;\n  }\n\n  .items-end {\n    align-items: flex-end;\n  }\n\n  .items-start {\n    align-items: flex-start;\n  }\n\n  .justify-between {\n    justify-content: space-between;\n  }\n\n  .justify-center {\n    justify-content: center;\n  }\n\n  .justify-end {\n    justify-content: flex-end;\n  }\n\n  .gap-1 {\n    gap: calc(var(--spacing) * 1);\n  }\n\n  .gap-1\\.5 {\n    gap: calc(var(--spacing) * 1.5);\n  }\n\n  .gap-2 {\n    gap: calc(var(--spacing) * 2);\n  }\n\n  .gap-3 {\n    gap: calc(var(--spacing) * 3);\n  }\n\n  .gap-4 {\n    gap: calc(var(--spacing) * 4);\n  }\n\n  .truncate {\n    text-overflow: ellipsis;\n    white-space: nowrap;\n    overflow: hidden;\n  }\n\n  .overflow-hidden {\n    overflow: hidden;\n  }\n\n  .overflow-visible {\n    overflow: visible;\n  }\n\n  .rounded {\n    border-radius: .25rem;\n  }\n\n  .rounded-2xl {\n    border-radius: var(--radius-2xl);\n  }\n\n  .rounded-\\[5px\\] {\n    border-radius: 5px;\n  }\n\n  .rounded-\\[8px\\] {\n    border-radius: 8px;\n  }\n\n  .rounded-\\[9px\\] {\n    border-radius: 9px;\n  }\n\n  .rounded-\\[14px\\] {\n    border-radius: 14px;\n  }\n\n  .rounded-\\[18px\\] {\n    border-radius: 18px;\n  }\n\n  .rounded-\\[20px\\] {\n    border-radius: 20px;\n  }\n\n  .rounded-\\[22px\\] {\n    border-radius: 22px;\n  }\n\n  .rounded-\\[24px\\] {\n    border-radius: 24px;\n  }\n\n  .rounded-\\[30px\\] {\n    border-radius: 30px;\n  }\n\n  .rounded-full {\n    border-radius: 3.40282e38px;\n  }\n\n  .border {\n    border-style: var(--tw-border-style);\n    border-width: 1px;\n  }\n\n  .border-2 {\n    border-style: var(--tw-border-style);\n    border-width: 2px;\n  }\n\n  .border-t {\n    border-top-style: var(--tw-border-style);\n    border-top-width: 1px;\n  }\n\n  .border-l {\n    border-left-style: var(--tw-border-style);\n    border-left-width: 1px;\n  }\n\n  .border-\\[rgba\\(3\\,5\\,12\\,0\\.7\\)\\] {\n    border-color: #03050cb3;\n  }\n\n  .border-amber-200\\/20 {\n    border-color: #fee68533;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .border-amber-200\\/20 {\n      border-color: color-mix(in oklab, var(--color-amber-200) 20%, transparent);\n    }\n  }\n\n  .border-cyan-200\\/10 {\n    border-color: #a2f4fd1a;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .border-cyan-200\\/10 {\n      border-color: color-mix(in oklab, var(--color-cyan-200) 10%, transparent);\n    }\n  }\n\n  .border-cyan-200\\/20 {\n    border-color: #a2f4fd33;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .border-cyan-200\\/20 {\n      border-color: color-mix(in oklab, var(--color-cyan-200) 20%, transparent);\n    }\n  }\n\n  .border-cyan-200\\/90 {\n    border-color: #a2f4fde6;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .border-cyan-200\\/90 {\n      border-color: color-mix(in oklab, var(--color-cyan-200) 90%, transparent);\n    }\n  }\n\n  .border-rose-200\\/10 {\n    border-color: #ffccd31a;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .border-rose-200\\/10 {\n      border-color: color-mix(in oklab, var(--color-rose-200) 10%, transparent);\n    }\n  }\n\n  .border-rose-200\\/20 {\n    border-color: #ffccd333;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .border-rose-200\\/20 {\n      border-color: color-mix(in oklab, var(--color-rose-200) 20%, transparent);\n    }\n  }\n\n  .border-slate-400\\/25 {\n    border-color: #90a1b940;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .border-slate-400\\/25 {\n      border-color: color-mix(in oklab, var(--color-slate-400) 25%, transparent);\n    }\n  }\n\n  .border-white\\/6 {\n    border-color: #ffffff0f;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .border-white\\/6 {\n      border-color: color-mix(in oklab, var(--color-white) 6%, transparent);\n    }\n  }\n\n  .border-white\\/8 {\n    border-color: #ffffff14;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .border-white\\/8 {\n      border-color: color-mix(in oklab, var(--color-white) 8%, transparent);\n    }\n  }\n\n  .border-white\\/\\[0\\.05\\] {\n    border-color: #ffffff0d;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .border-white\\/\\[0\\.05\\] {\n      border-color: color-mix(in oklab, var(--color-white) 5%, transparent);\n    }\n  }\n\n  .bg-\\[radial-gradient\\(circle_at_50\\%_35\\%\\,rgb\\(34_211_238\\/0\\.08\\)\\,transparent_62\\%\\)\\,rgb\\(4_10_18\\/0\\.92\\)\\] {\n    background-color: radial-gradient(circle at 50% 35%,#22d3ee14,transparent 62%),#040a12eb;\n  }\n\n  .bg-\\[rgb\\(var\\(--section-accent-rgb\\)\\/0\\.12\\)\\] {\n    background-color: rgb(var(--section-accent-rgb)/.12);\n  }\n\n  .bg-amber-300\\/10 {\n    background-color: #ffd2361a;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .bg-amber-300\\/10 {\n      background-color: color-mix(in oklab, var(--color-amber-300) 10%, transparent);\n    }\n  }\n\n  .bg-black\\/20 {\n    background-color: #0003;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .bg-black\\/20 {\n      background-color: color-mix(in oklab, var(--color-black) 20%, transparent);\n    }\n  }\n\n  .bg-black\\/60 {\n    background-color: #0009;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .bg-black\\/60 {\n      background-color: color-mix(in oklab, var(--color-black) 60%, transparent);\n    }\n  }\n\n  .bg-cyan-300 {\n    background-color: var(--color-cyan-300);\n  }\n\n  .bg-cyan-300\\/12 {\n    background-color: #53eafd1f;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .bg-cyan-300\\/12 {\n      background-color: color-mix(in oklab, var(--color-cyan-300) 12%, transparent);\n    }\n  }\n\n  .bg-rose-300\\/8 {\n    background-color: #ffa2ae14;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .bg-rose-300\\/8 {\n      background-color: color-mix(in oklab, var(--color-rose-300) 8%, transparent);\n    }\n  }\n\n  .bg-rose-300\\/10 {\n    background-color: #ffa2ae1a;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .bg-rose-300\\/10 {\n      background-color: color-mix(in oklab, var(--color-rose-300) 10%, transparent);\n    }\n  }\n\n  .bg-white\\/\\[0\\.03\\] {\n    background-color: #ffffff08;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .bg-white\\/\\[0\\.03\\] {\n      background-color: color-mix(in oklab, var(--color-white) 3%, transparent);\n    }\n  }\n\n  .bg-white\\/\\[0\\.04\\] {\n    background-color: #ffffff0a;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .bg-white\\/\\[0\\.04\\] {\n      background-color: color-mix(in oklab, var(--color-white) 4%, transparent);\n    }\n  }\n\n  .bg-white\\/\\[0\\.07\\] {\n    background-color: #ffffff12;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .bg-white\\/\\[0\\.07\\] {\n      background-color: color-mix(in oklab, var(--color-white) 7.0%, transparent);\n    }\n  }\n\n  .bg-white\\/\\[0\\.12\\] {\n    background-color: #ffffff1f;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .bg-white\\/\\[0\\.12\\] {\n      background-color: color-mix(in oklab, var(--color-white) 12%, transparent);\n    }\n  }\n\n  .bg-white\\/\\[0\\.025\\] {\n    background-color: #ffffff06;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .bg-white\\/\\[0\\.025\\] {\n      background-color: color-mix(in oklab, var(--color-white) 2.5%, transparent);\n    }\n  }\n\n  .p-0 {\n    padding: calc(var(--spacing) * 0);\n  }\n\n  .p-1 {\n    padding: calc(var(--spacing) * 1);\n  }\n\n  .p-3 {\n    padding: calc(var(--spacing) * 3);\n  }\n\n  .p-4 {\n    padding: calc(var(--spacing) * 4);\n  }\n\n  .px-1 {\n    padding-inline: calc(var(--spacing) * 1);\n  }\n\n  .px-1\\.5 {\n    padding-inline: calc(var(--spacing) * 1.5);\n  }\n\n  .px-2 {\n    padding-inline: calc(var(--spacing) * 2);\n  }\n\n  .px-2\\.5 {\n    padding-inline: calc(var(--spacing) * 2.5);\n  }\n\n  .px-3 {\n    padding-inline: calc(var(--spacing) * 3);\n  }\n\n  .px-4 {\n    padding-inline: calc(var(--spacing) * 4);\n  }\n\n  .py-1 {\n    padding-block: calc(var(--spacing) * 1);\n  }\n\n  .py-1\\.5 {\n    padding-block: calc(var(--spacing) * 1.5);\n  }\n\n  .py-2 {\n    padding-block: calc(var(--spacing) * 2);\n  }\n\n  .py-2\\.5 {\n    padding-block: calc(var(--spacing) * 2.5);\n  }\n\n  .py-3 {\n    padding-block: calc(var(--spacing) * 3);\n  }\n\n  .py-5 {\n    padding-block: calc(var(--spacing) * 5);\n  }\n\n  .pt-1 {\n    padding-top: calc(var(--spacing) * 1);\n  }\n\n  .pt-3 {\n    padding-top: calc(var(--spacing) * 3);\n  }\n\n  .pr-5 {\n    padding-right: calc(var(--spacing) * 5);\n  }\n\n  .pb-1 {\n    padding-bottom: calc(var(--spacing) * 1);\n  }\n\n  .pb-5 {\n    padding-bottom: calc(var(--spacing) * 5);\n  }\n\n  .text-center {\n    text-align: center;\n  }\n\n  .text-left {\n    text-align: left;\n  }\n\n  .text-right {\n    text-align: right;\n  }\n\n  .font-mono {\n    font-family: var(--font-mono);\n  }\n\n  .text-sm {\n    font-size: var(--text-sm);\n    line-height: var(--tw-leading, var(--text-sm--line-height));\n  }\n\n  .text-\\[7px\\] {\n    font-size: 7px;\n  }\n\n  .text-\\[8px\\] {\n    font-size: 8px;\n  }\n\n  .text-\\[9px\\] {\n    font-size: 9px;\n  }\n\n  .text-\\[10px\\] {\n    font-size: 10px;\n  }\n\n  .text-\\[11px\\] {\n    font-size: 11px;\n  }\n\n  .leading-tight {\n    --tw-leading: var(--leading-tight);\n    line-height: var(--leading-tight);\n  }\n\n  .font-bold {\n    --tw-font-weight: var(--font-weight-bold);\n    font-weight: var(--font-weight-bold);\n  }\n\n  .font-medium {\n    --tw-font-weight: var(--font-weight-medium);\n    font-weight: var(--font-weight-medium);\n  }\n\n  .font-semibold {\n    --tw-font-weight: var(--font-weight-semibold);\n    font-weight: var(--font-weight-semibold);\n  }\n\n  .tracking-\\[0\\.1em\\] {\n    --tw-tracking: .1em;\n    letter-spacing: .1em;\n  }\n\n  .tracking-\\[0\\.2em\\] {\n    --tw-tracking: .2em;\n    letter-spacing: .2em;\n  }\n\n  .tracking-\\[0\\.04em\\] {\n    --tw-tracking: .04em;\n    letter-spacing: .04em;\n  }\n\n  .tracking-\\[0\\.10em\\] {\n    --tw-tracking: .1em;\n    letter-spacing: .1em;\n  }\n\n  .tracking-\\[0\\.12em\\] {\n    --tw-tracking: .12em;\n    letter-spacing: .12em;\n  }\n\n  .tracking-\\[0\\.14em\\] {\n    --tw-tracking: .14em;\n    letter-spacing: .14em;\n  }\n\n  .tracking-\\[0\\.15em\\] {\n    --tw-tracking: .15em;\n    letter-spacing: .15em;\n  }\n\n  .tracking-\\[0\\.16em\\] {\n    --tw-tracking: .16em;\n    letter-spacing: .16em;\n  }\n\n  .tracking-\\[0\\.18em\\] {\n    --tw-tracking: .18em;\n    letter-spacing: .18em;\n  }\n\n  .text-\\[var\\(--section-accent\\)\\] {\n    color: var(--section-accent);\n  }\n\n  .text-amber-100 {\n    color: var(--color-amber-100);\n  }\n\n  .text-cyan-100 {\n    color: var(--color-cyan-100);\n  }\n\n  .text-cyan-100\\/75 {\n    color: #cefafebf;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .text-cyan-100\\/75 {\n      color: color-mix(in oklab, var(--color-cyan-100) 75%, transparent);\n    }\n  }\n\n  .text-cyan-200\\/40 {\n    color: #a2f4fd66;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .text-cyan-200\\/40 {\n      color: color-mix(in oklab, var(--color-cyan-200) 40%, transparent);\n    }\n  }\n\n  .text-cyan-200\\/55 {\n    color: #a2f4fd8c;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .text-cyan-200\\/55 {\n      color: color-mix(in oklab, var(--color-cyan-200) 55%, transparent);\n    }\n  }\n\n  .text-rose-100 {\n    color: var(--color-rose-100);\n  }\n\n  .text-rose-100\\/85 {\n    color: #ffe4e6d9;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .text-rose-100\\/85 {\n      color: color-mix(in oklab, var(--color-rose-100) 85%, transparent);\n    }\n  }\n\n  .text-rose-200\\/85 {\n    color: #ffccd3d9;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .text-rose-200\\/85 {\n      color: color-mix(in oklab, var(--color-rose-200) 85%, transparent);\n    }\n  }\n\n  .text-slate-100\\/85 {\n    color: #f1f5f9d9;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .text-slate-100\\/85 {\n      color: color-mix(in oklab, var(--color-slate-100) 85%, transparent);\n    }\n  }\n\n  .text-slate-200\\/55 {\n    color: #e2e8f08c;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .text-slate-200\\/55 {\n      color: color-mix(in oklab, var(--color-slate-200) 55%, transparent);\n    }\n  }\n\n  .text-slate-300\\/55 {\n    color: #cad5e28c;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .text-slate-300\\/55 {\n      color: color-mix(in oklab, var(--color-slate-300) 55%, transparent);\n    }\n  }\n\n  .text-slate-300\\/60 {\n    color: #cad5e299;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .text-slate-300\\/60 {\n      color: color-mix(in oklab, var(--color-slate-300) 60%, transparent);\n    }\n  }\n\n  .text-slate-300\\/62 {\n    color: #cad5e29e;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .text-slate-300\\/62 {\n      color: color-mix(in oklab, var(--color-slate-300) 62%, transparent);\n    }\n  }\n\n  .text-slate-300\\/70 {\n    color: #cad5e2b3;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .text-slate-300\\/70 {\n      color: color-mix(in oklab, var(--color-slate-300) 70%, transparent);\n    }\n  }\n\n  .text-slate-400\\/45 {\n    color: #90a1b973;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .text-slate-400\\/45 {\n      color: color-mix(in oklab, var(--color-slate-400) 45%, transparent);\n    }\n  }\n\n  .uppercase {\n    text-transform: uppercase;\n  }\n\n  .ordinal {\n    --tw-ordinal: ordinal;\n    font-variant-numeric: var(--tw-ordinal, ) var(--tw-slashed-zero, ) var(--tw-numeric-figure, ) var(--tw-numeric-spacing, ) var(--tw-numeric-fraction, );\n  }\n\n  .tabular-nums {\n    --tw-numeric-spacing: tabular-nums;\n    font-variant-numeric: var(--tw-ordinal, ) var(--tw-slashed-zero, ) var(--tw-numeric-figure, ) var(--tw-numeric-spacing, ) var(--tw-numeric-fraction, );\n  }\n\n  .opacity-0 {\n    opacity: 0;\n  }\n\n  .opacity-45 {\n    opacity: .45;\n  }\n\n  .opacity-70 {\n    opacity: .7;\n  }\n\n  .opacity-75 {\n    opacity: .75;\n  }\n\n  .shadow {\n    --tw-shadow: 0 1px 3px 0 var(--tw-shadow-color, #0000001a), 0 1px 2px -1px var(--tw-shadow-color, #0000001a);\n    box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);\n  }\n\n  .shadow-\\[0_0_8px_rgb\\(103_232_249\\/0\\.55\\)\\] {\n    --tw-shadow: 0 0 8px var(--tw-shadow-color, #67e8f98c);\n    box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);\n  }\n\n  .shadow-\\[0_0_16px_rgb\\(34_211_238\\/0\\.08\\)\\] {\n    --tw-shadow: 0 0 16px var(--tw-shadow-color, #22d3ee14);\n    box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);\n  }\n\n  .shadow-lg {\n    --tw-shadow: 0 10px 15px -3px var(--tw-shadow-color, #0000001a), 0 4px 6px -4px var(--tw-shadow-color, #0000001a);\n    box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);\n  }\n\n  .ring {\n    --tw-ring-shadow: var(--tw-ring-inset, ) 0 0 0 calc(1px + var(--tw-ring-offset-width)) var(--tw-ring-color, currentcolor);\n    box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);\n  }\n\n  .outline {\n    outline-style: var(--tw-outline-style);\n    outline-width: 1px;\n  }\n\n  .blur {\n    --tw-blur: blur(8px);\n    filter: var(--tw-blur, ) var(--tw-brightness, ) var(--tw-contrast, ) var(--tw-grayscale, ) var(--tw-hue-rotate, ) var(--tw-invert, ) var(--tw-saturate, ) var(--tw-sepia, ) var(--tw-drop-shadow, );\n  }\n\n  .grayscale {\n    --tw-grayscale: grayscale(100%);\n    filter: var(--tw-blur, ) var(--tw-brightness, ) var(--tw-contrast, ) var(--tw-grayscale, ) var(--tw-hue-rotate, ) var(--tw-invert, ) var(--tw-saturate, ) var(--tw-sepia, ) var(--tw-drop-shadow, );\n  }\n\n  .invert {\n    --tw-invert: invert(100%);\n    filter: var(--tw-blur, ) var(--tw-brightness, ) var(--tw-contrast, ) var(--tw-grayscale, ) var(--tw-hue-rotate, ) var(--tw-invert, ) var(--tw-saturate, ) var(--tw-sepia, ) var(--tw-drop-shadow, );\n  }\n\n  .filter {\n    filter: var(--tw-blur, ) var(--tw-brightness, ) var(--tw-contrast, ) var(--tw-grayscale, ) var(--tw-hue-rotate, ) var(--tw-invert, ) var(--tw-saturate, ) var(--tw-sepia, ) var(--tw-drop-shadow, );\n  }\n\n  .backdrop-blur-md {\n    --tw-backdrop-blur: blur(var(--blur-md));\n    -webkit-backdrop-filter: var(--tw-backdrop-blur, ) var(--tw-backdrop-brightness, ) var(--tw-backdrop-contrast, ) var(--tw-backdrop-grayscale, ) var(--tw-backdrop-hue-rotate, ) var(--tw-backdrop-invert, ) var(--tw-backdrop-opacity, ) var(--tw-backdrop-saturate, ) var(--tw-backdrop-sepia, );\n    backdrop-filter: var(--tw-backdrop-blur, ) var(--tw-backdrop-brightness, ) var(--tw-backdrop-contrast, ) var(--tw-backdrop-grayscale, ) var(--tw-backdrop-hue-rotate, ) var(--tw-backdrop-invert, ) var(--tw-backdrop-opacity, ) var(--tw-backdrop-saturate, ) var(--tw-backdrop-sepia, );\n  }\n\n  .backdrop-filter {\n    -webkit-backdrop-filter: var(--tw-backdrop-blur, ) var(--tw-backdrop-brightness, ) var(--tw-backdrop-contrast, ) var(--tw-backdrop-grayscale, ) var(--tw-backdrop-hue-rotate, ) var(--tw-backdrop-invert, ) var(--tw-backdrop-opacity, ) var(--tw-backdrop-saturate, ) var(--tw-backdrop-sepia, );\n    backdrop-filter: var(--tw-backdrop-blur, ) var(--tw-backdrop-brightness, ) var(--tw-backdrop-contrast, ) var(--tw-backdrop-grayscale, ) var(--tw-backdrop-hue-rotate, ) var(--tw-backdrop-invert, ) var(--tw-backdrop-opacity, ) var(--tw-backdrop-saturate, ) var(--tw-backdrop-sepia, );\n  }\n\n  .transition {\n    transition-property: color, background-color, border-color, outline-color, text-decoration-color, fill, stroke, --tw-gradient-from, --tw-gradient-via, --tw-gradient-to, opacity, box-shadow, transform, translate, scale, rotate, filter, -webkit-backdrop-filter, backdrop-filter, display, content-visibility, overlay, pointer-events;\n    transition-timing-function: var(--tw-ease, var(--default-transition-timing-function));\n    transition-duration: var(--tw-duration, var(--default-transition-duration));\n  }\n\n  .transition-\\[width\\] {\n    transition-property: width;\n    transition-timing-function: var(--tw-ease, var(--default-transition-timing-function));\n    transition-duration: var(--tw-duration, var(--default-transition-duration));\n  }\n\n  .duration-200 {\n    --tw-duration: .2s;\n    transition-duration: .2s;\n  }\n\n  .ease-out {\n    --tw-ease: var(--ease-out);\n    transition-timing-function: var(--ease-out);\n  }\n\n  @media (hover: hover) {\n    .hover\\:border-cyan-200\\/35:hover {\n      border-color: #a2f4fd59;\n    }\n\n    @supports (color: color-mix(in lab, red, red)) {\n      .hover\\:border-cyan-200\\/35:hover {\n        border-color: color-mix(in oklab, var(--color-cyan-200) 35%, transparent);\n      }\n    }\n\n    .hover\\:border-white\\/12:hover {\n      border-color: #ffffff1f;\n    }\n\n    @supports (color: color-mix(in lab, red, red)) {\n      .hover\\:border-white\\/12:hover {\n        border-color: color-mix(in oklab, var(--color-white) 12%, transparent);\n      }\n    }\n\n    .hover\\:bg-\\[rgb\\(var\\(--section-accent-rgb\\)\\/0\\.05\\)\\]:hover {\n      background-color: rgb(var(--section-accent-rgb)/.05);\n    }\n\n    .hover\\:bg-amber-300\\/17:hover {\n      background-color: #ffd2362b;\n    }\n\n    @supports (color: color-mix(in lab, red, red)) {\n      .hover\\:bg-amber-300\\/17:hover {\n        background-color: color-mix(in oklab, var(--color-amber-300) 17%, transparent);\n      }\n    }\n\n    .hover\\:bg-black\\/24:hover {\n      background-color: #0000003d;\n    }\n\n    @supports (color: color-mix(in lab, red, red)) {\n      .hover\\:bg-black\\/24:hover {\n        background-color: color-mix(in oklab, var(--color-black) 24%, transparent);\n      }\n    }\n\n    .hover\\:bg-cyan-300\\/18:hover {\n      background-color: #53eafd2e;\n    }\n\n    @supports (color: color-mix(in lab, red, red)) {\n      .hover\\:bg-cyan-300\\/18:hover {\n        background-color: color-mix(in oklab, var(--color-cyan-300) 18%, transparent);\n      }\n    }\n\n    .hover\\:bg-rose-300\\/18:hover {\n      background-color: #ffa2ae2e;\n    }\n\n    @supports (color: color-mix(in lab, red, red)) {\n      .hover\\:bg-rose-300\\/18:hover {\n        background-color: color-mix(in oklab, var(--color-rose-300) 18%, transparent);\n      }\n    }\n\n    .hover\\:text-slate-100:hover {\n      color: var(--color-slate-100);\n    }\n  }\n\n  .active\\:cursor-grabbing:active {\n    cursor: grabbing;\n  }\n\n  .disabled\\:cursor-wait:disabled {\n    cursor: wait;\n  }\n\n  .disabled\\:opacity-35:disabled {\n    opacity: .35;\n  }\n\n  .disabled\\:opacity-40:disabled {\n    opacity: .4;\n  }\n}\n\n@font-face {\n  font-family: Departure Mono;\n  src: url("data:font/woff2;base64,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") format("woff2");\n  font-style: normal;\n  font-weight: 400;\n  font-display: swap;\n}\n\n@font-face {\n  font-family: IBM Plex Sans Condensed;\n  src: url("data:font/woff2;base64,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") format("woff2");\n  font-style: normal;\n  font-weight: 600;\n  font-display: swap;\n}\n\n:host, .cosimo-surface, .ios-shell {\n  --cosimo-font-label: "IBM Plex Sans Condensed", "Avenir Next Condensed", "Arial Narrow", sans-serif;\n  --cosimo-font-readout: "Departure Mono", "SF Mono", "IBM Plex Mono", Menlo, monospace;\n  --cosimo-font-system: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;\n  --cosimo-type-caption: 8px;\n  --cosimo-type-label: 10px;\n  --cosimo-type-title: 13px;\n  --cosimo-type-display: 16px;\n  --cosimo-track-tight: .05em;\n  --cosimo-track: .08em;\n  --cosimo-track-wide: .1em;\n  --cosimo-ground: #101010;\n  --cosimo-ground-rgb: 16 16 16;\n  --cosimo-surface: #1c1c1c;\n  --cosimo-surface-rgb: 28 28 28;\n  --cosimo-raised: #2b2b2b;\n  --cosimo-raised-rgb: 43 43 43;\n  --cosimo-edge: #4d4d4d;\n  --cosimo-edge-rgb: 77 77 77;\n  --cosimo-text-rgb: 232 236 239;\n  --cosimo-ink: rgb(var(--cosimo-text-rgb) / 1);\n  --cosimo-ink-muted: rgb(var(--cosimo-text-rgb) / .62);\n  --cosimo-ink-faint: rgb(var(--cosimo-text-rgb) / .38);\n  --cosimo-wash: #ffffff08;\n  --cosimo-line: #ffffff14;\n  --cosimo-stroke: #ffffff4d;\n  --cosimo-line-width: 1px;\n  --cosimo-space-1: 4px;\n  --cosimo-space-2: 8px;\n  --cosimo-space-3: 12px;\n  --cosimo-space-4: 16px;\n  --cosimo-module: 40px;\n  --cosimo-module-sm: 24px;\n  --cosimo-module-lg: 48px;\n  --cosimo-hit-min: 44px;\n  --cosimo-radius-xs: 3px;\n  --cosimo-radius-sm: 5px;\n  --cosimo-radius: 8px;\n  --cosimo-radius-lg: 14px;\n  --cosimo-radius-full: 999px;\n  --cosimo-shadow-inset: inset 0 1px 2px #000000c2, inset 0 -1px 0 var(--cosimo-wash);\n  --cosimo-shadow-raised: inset 0 1px 0 var(--cosimo-line), 0 4px 10px #0000004d;\n  --cosimo-shadow-float: 0 18px 52px #000000b8, inset 0 1px var(--cosimo-line);\n  --cosimo-accent-cyan: #7df7ff;\n  --cosimo-accent-cyan-rgb: 125 247 255;\n  --cosimo-accent-ion: #6fa8ff;\n  --cosimo-accent-ion-rgb: 111 168 255;\n  --cosimo-accent-violet: #a98cff;\n  --cosimo-accent-violet-rgb: 169 140 255;\n  --cosimo-accent-purple: #cc59d2;\n  --cosimo-accent-purple-rgb: 204 89 210;\n  --cosimo-accent-pink: #ff79d8;\n  --cosimo-accent-pink-rgb: 255 121 216;\n  --cosimo-accent-coral: #ff7a6c;\n  --cosimo-accent-coral-rgb: 255 122 108;\n  --cosimo-accent-amber: #ffd36e;\n  --cosimo-accent-amber-rgb: 255 211 110;\n  --cosimo-accent-lime: #b7ff6a;\n  --cosimo-accent-lime-rgb: 183 255 106;\n  --cosimo-accent-mint: #68ffc2;\n  --cosimo-accent-mint-rgb: 104 255 194;\n  --cosimo-accent-teal: #69d5c5;\n  --cosimo-accent-teal-rgb: 105 213 197;\n  --cosimo-adsr-curve: var(--cosimo-accent-cyan);\n  --cosimo-adsr-curve-rgb: var(--cosimo-accent-cyan-rgb);\n  --cosimo-mseg-shape-a: var(--cosimo-accent-purple);\n  --cosimo-mseg-shape-a-rgb: var(--cosimo-accent-purple-rgb);\n  --cosimo-mseg-shape-b: #e1e7f0;\n  --cosimo-mseg-shape-b-rgb: 225 231 240;\n  --cosimo-mseg-realized: var(--cosimo-accent-cyan);\n  --cosimo-mseg-realized-rgb: var(--cosimo-accent-cyan-rgb);\n  --section-accent: var(--cosimo-accent-cyan);\n  --section-accent-rgb: var(--cosimo-accent-cyan-rgb);\n  --section-accent-dim: rgb(var(--section-accent-rgb) / .24);\n  --section-accent-soft: rgb(var(--section-accent-rgb) / .12);\n  --section-accent-glow: rgb(var(--section-accent-rgb) / .36);\n  --cosimo-emissive-shadow: 0 0 12px var(--section-accent-glow);\n  --cosimo-shell-pad: 0px;\n  --cosimo-panel-pad: 0px;\n  --cosimo-graph-pad: 0px;\n  --cosimo-panel-radius: 0px;\n  --cosimo-panel-border: transparent;\n  --cosimo-panel-bg: var(--cosimo-ground);\n  --cosimo-rail-dock: 40px;\n  --cosimo-card-bg: transparent;\n  --cosimo-cast-shadow: #0000008c;\n  --cosimo-field-top: #4b164f;\n  --cosimo-field-bottom: #1f4f5c;\n  --cosimo-field: linear-gradient(180deg, var(--cosimo-field-top), var(--cosimo-field-bottom));\n}\n\n.cosimo-mod-prototype-theme {\n  color: var(--cosimo-ink);\n  font-family: var(--cosimo-font-label);\n}\n\n[data-section-accent="cyan"] {\n  --section-accent: var(--cosimo-accent-cyan);\n  --section-accent-rgb: var(--cosimo-accent-cyan-rgb);\n}\n\n[data-section-accent="ion"] {\n  --section-accent: var(--cosimo-accent-ion);\n  --section-accent-rgb: var(--cosimo-accent-ion-rgb);\n}\n\n[data-section-accent="violet"] {\n  --section-accent: var(--cosimo-accent-violet);\n  --section-accent-rgb: var(--cosimo-accent-violet-rgb);\n}\n\n[data-section-accent="pink"] {\n  --section-accent: var(--cosimo-accent-pink);\n  --section-accent-rgb: var(--cosimo-accent-pink-rgb);\n}\n\n[data-section-accent="coral"] {\n  --section-accent: var(--cosimo-accent-coral);\n  --section-accent-rgb: var(--cosimo-accent-coral-rgb);\n}\n\n[data-section-accent="amber"] {\n  --section-accent: var(--cosimo-accent-amber);\n  --section-accent-rgb: var(--cosimo-accent-amber-rgb);\n}\n\n[data-section-accent="lime"] {\n  --section-accent: var(--cosimo-accent-lime);\n  --section-accent-rgb: var(--cosimo-accent-lime-rgb);\n}\n\n[data-section-accent="mint"] {\n  --section-accent: var(--cosimo-accent-mint);\n  --section-accent-rgb: var(--cosimo-accent-mint-rgb);\n}\n\n[data-section-accent="teal"] {\n  --section-accent: var(--cosimo-accent-teal);\n  --section-accent-rgb: var(--cosimo-accent-teal-rgb);\n}\n\n.cosimo-surface, .ios-shell {\n  color: var(--cosimo-ink);\n  font-family: var(--cosimo-font-label);\n}\n\n.cosimo-surface .font-mono, .ios-shell .font-mono {\n  font-family: var(--cosimo-font-readout);\n}\n\n.cosimo-label {\n  color: var(--cosimo-ink-muted);\n  font-family: var(--cosimo-font-readout);\n  font-size: var(--cosimo-type-caption);\n  letter-spacing: var(--cosimo-track-wide);\n  text-overflow: ellipsis;\n  text-transform: uppercase;\n  white-space: nowrap;\n  font-weight: 700;\n  overflow: hidden;\n}\n\n.cosimo-readout {\n  color: var(--section-accent);\n  font-family: var(--cosimo-font-readout);\n  font-size: var(--cosimo-type-label);\n  letter-spacing: var(--cosimo-track);\n  text-overflow: ellipsis;\n  text-shadow: 0 0 10px var(--section-accent-glow);\n  white-space: nowrap;\n  font-weight: 400;\n  overflow: hidden;\n}\n\n.cosimo-readout.is-caps {\n  text-transform: uppercase;\n}\n\n.cosimo-readout.is-caption {\n  font-size: var(--cosimo-type-caption);\n}\n\n.cosimo-readout.is-title {\n  font-size: var(--cosimo-type-title);\n}\n\n.cosimo-readout.is-display {\n  font-size: var(--cosimo-type-display);\n}\n\n.cosimo-label.is-strong {\n  color: var(--cosimo-ink);\n  font-size: var(--cosimo-type-label);\n}\n\n.cosimo-label.is-centered, .cosimo-readout.is-centered {\n  text-align: center;\n}\n\n.cosimo-readout.is-end {\n  justify-self: end;\n}\n\n.cosimo-readout.is-neutral {\n  color: var(--cosimo-ink);\n  text-shadow: none;\n}\n\n.synth-grid-card-shell, [data-layout-card="desktop-grid-card"] {\n  isolation: isolate;\n  border-color: rgb(var(--cosimo-edge-rgb) / .28);\n  background: linear-gradient(180deg, rgb(var(--cosimo-raised-rgb) / .96), rgb(var(--cosimo-surface-rgb) / .98));\n  box-shadow: var(--cosimo-shadow-raised);\n  position: relative;\n}\n\n.cosimo-section-title {\n  font-family: var(--cosimo-font-label);\n  font-size: var(--cosimo-type-label);\n  letter-spacing: var(--cosimo-track-wide);\n  text-transform: uppercase;\n  color: rgb(var(--section-accent-rgb) / .56);\n  text-shadow: 0 0 12px rgb(var(--section-accent-rgb) / .18);\n  font-weight: 600;\n  line-height: 1;\n}\n\n.cosimo-section-title.is-title {\n  font-size: var(--cosimo-type-title);\n}\n\n.synth-grid-card-inset {\n  pointer-events: none;\n  border-radius: inherit;\n  position: absolute;\n  inset: 0;\n  box-shadow: inset 0 1px #ffffff0d, inset 0 -34px 58px #0000004d;\n}\n\n.cosimo-control, .cosimo-button {\n  border: 1px solid rgb(var(--cosimo-edge-rgb) / .34);\n  background: rgb(var(--cosimo-raised-rgb) / .58);\n  color: var(--cosimo-ink);\n  box-shadow: var(--cosimo-shadow-raised);\n}\n\n.cosimo-control-text {\n  font-family: var(--cosimo-font-readout);\n  font-size: var(--cosimo-type-caption);\n  letter-spacing: var(--cosimo-track-wide);\n  text-transform: uppercase;\n}\n\n.cosimo-control-value {\n  color: var(--section-accent);\n  text-shadow: 0 0 10px var(--section-accent-glow);\n}\n\n.synth-accent-icon-dot {\n  border: 1px solid rgb(var(--section-accent-rgb) / .22);\n  background: rgb(var(--section-accent-rgb) / .08);\n  color: var(--section-accent);\n}\n\n.synth-accent-soft-bg {\n  background: rgb(var(--section-accent-rgb) / .12);\n  color: var(--section-accent);\n}\n\n.synth-accent-faint-bg {\n  background: rgb(var(--section-accent-rgb) / .045);\n}\n\n.synth-accent-strip-bg {\n  background: rgb(var(--section-accent-rgb) / .12);\n}\n\n.synth-accent-solid-bg {\n  background: var(--section-accent);\n}\n\n.synth-accent-active-button {\n  border-color: rgb(var(--section-accent-rgb) / .25);\n  background: rgb(var(--section-accent-rgb) / .15);\n  color: var(--section-accent);\n}\n\n.synth-display-recess {\n  border: 1px solid rgb(var(--cosimo-edge-rgb) / .24);\n  background: rgb(var(--cosimo-ground-rgb) / .92);\n  box-shadow: var(--cosimo-shadow-inset);\n}\n\n.synth-control-rail {\n  border: 1px solid rgb(var(--cosimo-edge-rgb) / .24);\n  background: rgb(var(--cosimo-raised-rgb) / .22);\n}\n\n.synth-modal-backdrop {\n  background: rgb(var(--cosimo-ground-rgb) / .86);\n  -webkit-backdrop-filter: blur(10px);\n  backdrop-filter: blur(10px);\n}\n\n.synth-modal-frame {\n  border: 1px solid rgb(var(--cosimo-edge-rgb) / .34);\n  background: linear-gradient(180deg, rgb(var(--cosimo-raised-rgb) / .98), rgb(var(--cosimo-surface-rgb) / .99));\n  box-shadow: 0 36px 80px #00000080;\n}\n\n.synth-menu-surface {\n  border: 1px solid rgb(var(--cosimo-edge-rgb) / .34);\n  background: rgb(var(--cosimo-ground-rgb) / .97);\n  box-shadow: var(--cosimo-shadow-raised);\n  -webkit-backdrop-filter: blur(6px);\n  backdrop-filter: blur(6px);\n  font-family: var(--cosimo-font-system);\n  letter-spacing: normal;\n  text-transform: none;\n}\n\n.synth-menu-surface button, .synth-menu-surface input, .synth-menu-surface select, .synth-menu-surface .cosimo-readout {\n  letter-spacing: normal;\n  text-shadow: none;\n  text-transform: none;\n  font-family: inherit;\n}\n\n[data-liquid-detail]:before {\n  content: "";\n  z-index: 2;\n  pointer-events: none;\n  background: linear-gradient(135deg, #ffffff2e, rgb(var(--section-accent-rgb) / .09) 38%, #ffffff09);\n  box-shadow: var(--cosimo-shadow-raised);\n  -webkit-backdrop-filter: blur(9px) saturate(1.28);\n  backdrop-filter: blur(9px) saturate(1.28);\n  border: 1px solid #ffffff29;\n  position: absolute;\n}\n\n[data-liquid-detail="display-lip"]:before {\n  border-radius: var(--cosimo-radius-full);\n  opacity: .72;\n  height: 12px;\n  top: 7px;\n  left: 14px;\n  right: 14px;\n}\n\n[data-liquid-detail="meter-cover"]:before {\n  border-radius: var(--cosimo-radius-full);\n  width: 52px;\n  height: 10px;\n  bottom: 10px;\n  right: 10px;\n}\n\n[data-liquid-detail="icon-lens"]:before {\n  border-radius: var(--cosimo-radius-full);\n  width: 20px;\n  height: 20px;\n  top: 9px;\n  right: 10px;\n}\n\n[data-liquid-detail="section-tab"]:before {\n  border-radius: var(--cosimo-radius-full);\n  width: 10px;\n  height: 28px;\n  top: 10px;\n  left: 10px;\n}\n\n[data-liquid-detail="routing-node"]:before {\n  border-radius: var(--cosimo-radius-full);\n  width: 13px;\n  height: 13px;\n  top: 14px;\n  right: 14px;\n}\n\n[data-liquid-detail="edge-rail"]:before {\n  border-radius: var(--cosimo-radius-full);\n  width: 6px;\n  top: 14px;\n  bottom: 14px;\n  right: 10px;\n}\n\n.synth-display-lip-controls {\n  z-index: 10;\n  border: 1px solid rgb(var(--section-accent-rgb) / .18);\n  background: rgb(var(--cosimo-ground-rgb) / .54);\n  min-height: 26px;\n  box-shadow: var(--cosimo-shadow-raised);\n  -webkit-backdrop-filter: blur(8px) saturate(1.18);\n  backdrop-filter: blur(8px) saturate(1.18);\n  border-radius: 10px;\n  justify-content: space-between;\n  align-items: center;\n  gap: 6px;\n  padding: 4px 5px;\n  display: flex;\n  position: absolute;\n  top: 8px;\n  left: 8px;\n  right: 8px;\n}\n\n.synth-display-lip-controls:before {\n  content: "";\n  border-radius: var(--cosimo-radius-full);\n  opacity: .58;\n  pointer-events: none;\n  background: linear-gradient(90deg, #0000, #ffffff3d, #0000);\n  height: 2px;\n  position: absolute;\n  top: 3px;\n  left: 18px;\n  right: 18px;\n}\n\n.cosimo-tabs {\n  height: var(--cosimo-module);\n  flex: 0 0 var(--cosimo-module);\n  border-bottom: var(--cosimo-line-width) solid var(--cosimo-line);\n  background: var(--cosimo-wash);\n  grid-auto-columns: minmax(0, 1fr);\n  grid-auto-flow: column;\n  display: grid;\n  position: relative;\n}\n\n.cosimo-tabs[data-dock="top"] {\n  border-top: var(--cosimo-line-width) solid var(--cosimo-line);\n  border-bottom: 0;\n}\n\n.cosimo-tabs.is-small {\n  width: max-content;\n  height: var(--cosimo-module-sm);\n  border: var(--cosimo-line-width) solid var(--cosimo-line);\n  border-radius: var(--cosimo-radius-sm);\n  background: rgb(var(--cosimo-raised-rgb) / .22);\n  flex: none;\n  padding: 2px;\n}\n\n.cosimo-tab-slot {\n  min-width: 0;\n  display: grid;\n  position: relative;\n}\n\n.cosimo-tabs.is-small .cosimo-tab-slot {\n  min-width: var(--cosimo-module);\n}\n\n.cosimo-tab-slot:not(:last-child) {\n  border-right: var(--cosimo-line-width) solid var(--cosimo-line);\n}\n\n.cosimo-tab {\n  width: 100%;\n  min-width: 0;\n  height: 100%;\n  box-shadow: none;\n  color: var(--cosimo-ink-muted);\n  cursor: pointer;\n  font-family: var(--cosimo-font-label, sans-serif);\n  font-size: var(--cosimo-type-title);\n  letter-spacing: var(--cosimo-track);\n  text-transform: uppercase;\n  background: none;\n  border: 0;\n  place-items: center;\n  padding: 0;\n  font-weight: 600;\n  display: grid;\n  position: relative;\n}\n\n.cosimo-tabs.is-small .cosimo-tab {\n  font-size: var(--cosimo-type-label);\n}\n\n.cosimo-tab.is-active {\n  background: var(--cosimo-wash);\n  box-shadow: inset 0 -2px var(--section-accent);\n  color: var(--section-accent);\n}\n\n.cosimo-tab.is-muted:not(.is-active) {\n  color: var(--cosimo-ink-faint);\n  opacity: .6;\n}\n\n.cosimo-tab.is-muted.is-active {\n  box-shadow: inset 0 -2px var(--cosimo-ink-faint);\n  color: var(--cosimo-ink-faint);\n}\n\n.cosimo-tab:focus-visible {\n  outline: 2px solid var(--cosimo-ink);\n  outline-offset: -3px;\n}\n\n.cosimo-tabs.is-neutral {\n  --section-accent: var(--cosimo-ink);\n}\n\n.mobile-voice-editor {\n  --mobile-voice-owner-accent: var(--cosimo-accent-teal);\n  --mobile-voice-owner-accent-rgb: var(--cosimo-accent-teal-rgb);\n  --section-accent: var(--cosimo-accent-teal);\n  --section-accent-rgb: var(--cosimo-accent-teal-rgb);\n  min-width: 0;\n  color: var(--cosimo-ink);\n  flex-direction: column;\n  display: flex;\n  position: relative;\n  overflow: hidden;\n}\n\n.mobile-voice-tab-solo {\n  z-index: 2;\n  width: var(--cosimo-space-4);\n  height: var(--cosimo-space-4);\n  border: 1px solid rgb(var(--cosimo-accent-amber-rgb) / .65);\n  border-radius: var(--cosimo-radius-sm);\n  color: var(--cosimo-accent-amber);\n  cursor: pointer;\n  font-family: var(--cosimo-font-readout, monospace);\n  font-size: var(--cosimo-type-caption);\n  opacity: .75;\n  background: none;\n  place-items: center;\n  font-weight: 700;\n  line-height: 1;\n  display: grid;\n  position: absolute;\n  top: 3px;\n  right: 4px;\n}\n\n.mobile-voice-tab-solo.is-active {\n  border-color: var(--cosimo-accent-amber);\n  background: var(--cosimo-accent-amber);\n  box-shadow: 0 0 8px rgb(var(--cosimo-accent-amber-rgb) / .35);\n  color: var(--cosimo-ground);\n  opacity: 1;\n}\n\n.mobile-voice-unit {\n  background: var(--cosimo-field);\n  flex-direction: column;\n  flex: auto;\n  min-height: 0;\n  display: flex;\n}\n\n.mobile-voice-graph {\n  touch-action: none;\n  -webkit-user-select: none;\n  user-select: none;\n  -webkit-touch-callout: none;\n  flex: 180px;\n  min-height: 0;\n  position: relative;\n}\n\n.mobile-voice-graph.is-muted, .mobile-voice-toolbar.is-muted {\n  opacity: .38;\n}\n\n.mobile-voice-graph.is-loading, .mobile-voice-chip.is-loading, .mobile-voice-cell.is-loading, .mobile-voice-tab-solo:disabled, .cosimo-tab.is-loading {\n  cursor: wait;\n  opacity: .45;\n}\n\n.mobile-voice-chip {\n  z-index: 5;\n  height: var(--cosimo-module-sm);\n  align-items: center;\n  gap: var(--cosimo-space-1);\n  padding: 0 var(--cosimo-space-2);\n  border: 1px solid rgb(var(--mobile-voice-owner-accent-rgb) / .2);\n  border-radius: var(--cosimo-radius);\n  background: rgb(var(--cosimo-ground-rgb) / .54);\n  box-shadow: var(--cosimo-shadow-raised);\n  -webkit-backdrop-filter: blur(8px) saturate(1.18);\n  backdrop-filter: blur(8px) saturate(1.18);\n  color: var(--cosimo-ink);\n  cursor: pointer;\n  display: flex;\n  position: absolute;\n}\n\n.mobile-voice-chip[data-corner="top-left"] {\n  top: var(--cosimo-space-2);\n  left: var(--cosimo-space-2);\n}\n\n.mobile-voice-chip[data-corner="top-right"] {\n  top: var(--cosimo-space-2);\n  right: var(--cosimo-space-2);\n}\n\n.mobile-voice-chip[data-corner="bottom-left"] {\n  bottom: var(--cosimo-space-2);\n  left: var(--cosimo-space-2);\n}\n\n.mobile-voice-chip[data-corner="bottom-right"] {\n  bottom: var(--cosimo-space-2);\n  right: var(--cosimo-space-2);\n}\n\n.mobile-voice-chip[data-corner="top-left-stacked"] {\n  top: calc((var(--cosimo-space-2) * 2) + var(--cosimo-module-sm));\n  left: var(--cosimo-space-2);\n}\n\n.mobile-voice-chip.is-readout {\n  cursor: move;\n  touch-action: none;\n  -webkit-user-select: none;\n  user-select: none;\n  -webkit-touch-callout: none;\n}\n\n.mobile-voice-chip-layer {\n  align-items: center;\n  gap: var(--cosimo-space-1);\n  transition: opacity .12s;\n  display: flex;\n}\n\n.mobile-voice-chip-layer.is-hidden {\n  opacity: 0;\n  pointer-events: none;\n}\n\n.mobile-voice-chip-layer.is-overlaid {\n  left: var(--cosimo-space-2);\n  position: absolute;\n}\n\n@media (prefers-reduced-motion: reduce) {\n  .mobile-voice-chip-layer {\n    transition: none;\n  }\n}\n\n.mobile-voice-table-select {\n  cursor: pointer;\n  opacity: 0;\n  color-scheme: light;\n  position: absolute;\n  inset: 0;\n}\n\n.mobile-voice-table-select option {\n  color: canvastext;\n  background: canvas;\n}\n\n.mobile-voice-toolbar {\n  height: var(--cosimo-module);\n  flex: 0 0 var(--cosimo-module);\n  border-bottom: 1px solid var(--cosimo-line);\n  grid-template-columns: 38px minmax(0, 1fr) 30px;\n  display: grid;\n}\n\n.mobile-voice-paddle {\n  align-content: center;\n  justify-items: center;\n  gap: var(--cosimo-space-1);\n  background: rgb(var(--mobile-voice-owner-accent-rgb) / .05);\n  min-width: 0;\n  color: var(--mobile-voice-owner-accent);\n  cursor: pointer;\n  border: 0;\n  padding: 0;\n  display: grid;\n}\n\n.mobile-voice-paddle.is-previous {\n  border-right: 1px solid var(--cosimo-line);\n}\n\n.mobile-voice-paddle.is-next {\n  border-left: 1px solid var(--cosimo-line);\n}\n\n.mobile-voice-page {\n  gap: var(--cosimo-space-1);\n  padding: var(--cosimo-space-1);\n  display: grid;\n}\n\n.mobile-voice-cell {\n  align-content: center;\n  place-items: center start;\n  column-gap: var(--cosimo-space-1);\n  min-width: 0;\n  padding: 0 var(--cosimo-space-1) var(--cosimo-space-1);\n  border: 1px solid var(--cosimo-line);\n  border-radius: var(--cosimo-panel-radius);\n  background: var(--cosimo-wash);\n  text-align: left;\n  grid-template-columns: auto minmax(0, 1fr);\n  display: grid;\n  position: relative;\n  overflow: hidden;\n}\n\n.mobile-voice-cell.is-readout {\n  cursor: move;\n  touch-action: none;\n  -webkit-user-select: none;\n  user-select: none;\n  -webkit-touch-callout: none;\n}\n\n.mobile-voice-cell.is-compact-knob {\n  grid-template-columns: auto 28px minmax(0, 1fr);\n  gap: 1px;\n  min-height: 38px;\n  padding: 0 2px;\n  overflow: visible;\n}\n\n.mobile-voice-cell.is-compact-knob > :is(.cosimo-label, .cosimo-readout) {\n  text-overflow: ellipsis;\n  white-space: nowrap;\n  max-width: 100%;\n  overflow: hidden;\n}\n\n.compact-readout-knob-art {\n  width: 28px;\n  height: 28px;\n  display: block;\n}\n\n.mobile-voice-cell.is-choice {\n  cursor: pointer;\n  padding-bottom: 0;\n}\n\n.mobile-voice-cell[data-dragging="pending"] {\n  background: var(--cosimo-wash);\n}\n\n.mobile-voice-cell[data-dragging="base"] {\n  background: linear-gradient(110deg, rgb(var(--mobile-voice-owner-accent-rgb, var(--cosimo-accent-teal-rgb)) / .1), rgb(var(--mobile-voice-owner-accent-rgb, var(--cosimo-accent-teal-rgb)) / .02));\n}\n\n.mobile-voice-cell[data-dragging="base"] :is(.cosimo-readout, .mod-led-base-val) {\n  text-shadow: 0 0 12px rgb(var(--mobile-voice-owner-accent-rgb, var(--cosimo-accent-teal-rgb)) / .62);\n}\n\n.mobile-voice-cell[data-dragging="modulation"] {\n  background: linear-gradient(110deg, var(--cosimo-wash), var(--mobile-voice-source-accent, transparent));\n}\n\n@supports (color: color-mix(in lab, red, red)) {\n  .mobile-voice-cell[data-dragging="modulation"] {\n    background: linear-gradient(110deg, var(--cosimo-wash), color-mix(in srgb, var(--mobile-voice-source-accent, transparent) 13%, transparent));\n  }\n}\n\n.mobile-voice-rail {\n  height: var(--cosimo-space-1);\n  background: var(--cosimo-wash);\n  position: absolute;\n  bottom: 0;\n  left: 0;\n  right: 0;\n  overflow: hidden;\n}\n\n.mobile-voice-rail > span {\n  display: block;\n  position: absolute;\n}\n\n.mobile-voice-rail-track {\n  background: repeating-linear-gradient(90deg, rgb(var(--cosimo-text-rgb) / .12) 0 1px, transparent 1px 4px);\n  opacity: .6;\n  inset: 0;\n}\n\n.mobile-voice-rail-track.is-unmapped {\n  background: repeating-linear-gradient(90deg, rgb(var(--cosimo-text-rgb) / .3) 0 1.5px, transparent 1.5px 6px);\n  opacity: .5;\n}\n\n.mobile-voice-rail-band {\n  background: var(--mobile-voice-source-accent);\n  height: 2px;\n  box-shadow: 0 0 5px var(--mobile-voice-source-accent);\n  top: 1px;\n}\n\n@supports (color: color-mix(in lab, red, red)) {\n  .mobile-voice-rail-band {\n    box-shadow: 0 0 5px color-mix(in srgb, var(--mobile-voice-source-accent) 70%, transparent);\n  }\n}\n\n.mobile-voice-rail-band.is-bypassed {\n  background: repeating-linear-gradient(90deg, var(--mobile-voice-source-accent) 0 2.4px, transparent 2.4px 4.8px);\n  box-shadow: none;\n  opacity: .34;\n}\n\n.mobile-voice-rail-zero {\n  background: var(--mobile-voice-source-accent);\n  width: 3px;\n  box-shadow: 0 0 4px var(--mobile-voice-source-accent);\n  top: 0;\n  bottom: 0;\n}\n\n@supports (color: color-mix(in lab, red, red)) {\n  .mobile-voice-rail-zero {\n    box-shadow: 0 0 4px color-mix(in srgb, var(--mobile-voice-source-accent) 80%, transparent);\n  }\n}\n\n.mobile-voice-rail-clip {\n  background: var(--mobile-voice-source-accent);\n  width: 2px;\n  box-shadow: 0 0 5px var(--mobile-voice-source-accent);\n  top: 0;\n  bottom: 0;\n}\n\n.mobile-voice-rail-tick {\n  background: var(--cosimo-ink);\n  width: 2px;\n  box-shadow: 0 0 4px rgb(var(--cosimo-text-rgb) / .72);\n  top: 0;\n  bottom: 0;\n  transform: translateX(-1px);\n}\n\n.mobile-voice-rail-light {\n  background: var(--cosimo-ink);\n  width: 3px;\n  box-shadow: 0 0 4px var(--mobile-voice-source-accent), 0 0 8px var(--mobile-voice-source-accent);\n  top: 0;\n  bottom: 0;\n}\n\n@supports (color: color-mix(in lab, red, red)) {\n  .mobile-voice-rail-light {\n    box-shadow: 0 0 4px var(--mobile-voice-source-accent), 0 0 8px color-mix(in srgb, var(--mobile-voice-source-accent) 65%, transparent);\n  }\n}\n\n.mobile-voice-rail-light {\n  opacity: 0;\n  pointer-events: none;\n  transition: opacity .16s;\n  transform: translateX(-1.5px);\n}\n\n.mobile-voice-hud {\n  --mobile-voice-owner-accent: var(--cosimo-accent-teal);\n  --mobile-voice-owner-accent-rgb: var(--cosimo-accent-teal-rgb);\n  z-index: 40;\n  top: max(var(--cosimo-space-3), env(safe-area-inset-top));\n  border: 1px solid rgb(var(--mobile-voice-owner-accent-rgb) / .46);\n  border-radius: var(--cosimo-radius-lg);\n  background: rgb(var(--cosimo-ground-rgb) / .97);\n  width: 252px;\n  min-height: 196px;\n  box-shadow: var(--cosimo-shadow-float);\n  opacity: 0;\n  pointer-events: none;\n  transform-origin: top;\n  visibility: hidden;\n  grid-template-rows: 32px minmax(0, 1fr) 24px;\n  transition: opacity 90ms, transform .12s, visibility 0s linear .12s;\n  display: grid;\n  position: absolute;\n  left: 50%;\n  overflow: hidden;\n  transform: translate(-50%, 7px) scale(.96);\n}\n\n.mobile-voice-hud.is-visible {\n  opacity: 1;\n  visibility: visible;\n  transition-delay: 0s;\n  transform: translate(-50%) scale(1);\n}\n\n.mobile-voice-hud.is-modulation {\n  border-color: var(--mobile-voice-source-accent, var(--cosimo-accent-pink));\n}\n\n@supports (color: color-mix(in lab, red, red)) {\n  .mobile-voice-hud.is-modulation {\n    border-color: color-mix(in srgb, var(--mobile-voice-source-accent, var(--cosimo-accent-pink)) 40%, transparent);\n  }\n}\n\n@media (prefers-reduced-motion: reduce) {\n  .mobile-voice-hud {\n    transition: opacity 90ms, visibility 0s linear 90ms;\n    transform: translate(-50%) scale(1);\n  }\n}\n\n.mobile-voice-hud-header, .mobile-voice-hud-footer {\n  padding: 0 var(--cosimo-space-2);\n  align-items: center;\n  display: flex;\n}\n\n.mobile-voice-hud-header {\n  gap: var(--cosimo-space-2);\n  border-bottom: 1px solid var(--cosimo-line);\n  grid-template-columns: 58px minmax(0, 1fr) 96px;\n  display: grid;\n}\n\n.mobile-voice-hud-source {\n  text-overflow: ellipsis;\n  justify-self: end;\n  max-width: 100%;\n  overflow: hidden;\n}\n\n.mobile-voice-hud-footer {\n  border-top: 1px solid var(--cosimo-line);\n  justify-content: space-between;\n}\n\n.mobile-voice-hud-knob {\n  width: 164px;\n  height: 132px;\n  margin: 2px auto 0;\n  position: relative;\n}\n\n.mobile-voice-hud-visual {\n  width: 100%;\n  height: 132px;\n  position: relative;\n}\n\n.mobile-voice-hud-graphic {\n  border-radius: var(--cosimo-radius-md);\n  background: rgb(var(--cosimo-ground-rgb) / .54);\n  position: absolute;\n  inset: 3px 8px 27px;\n  overflow: hidden;\n}\n\n.mobile-voice-hud-visual-value {\n  right: var(--cosimo-space-2);\n  bottom: 2px;\n  left: var(--cosimo-space-2);\n  justify-content: center;\n  align-items: baseline;\n  gap: var(--cosimo-space-2);\n  display: flex;\n  position: absolute;\n}\n\n.mobile-voice-hud-visual-value span {\n  color: var(--cosimo-ink-faint);\n  font-family: var(--cosimo-font-readout, monospace);\n  font-size: var(--cosimo-type-caption);\n  letter-spacing: var(--cosimo-track-wide);\n  text-transform: uppercase;\n  font-weight: 700;\n}\n\n.mobile-voice-hud-visual-value strong {\n  color: var(--cosimo-ink);\n  font-family: var(--cosimo-font-readout, monospace);\n  font-size: var(--cosimo-type-display);\n  font-weight: 400;\n}\n\n.mobile-voice-hud-knob svg {\n  width: 112px;\n  height: 112px;\n  position: absolute;\n  top: 1px;\n  left: 26px;\n}\n\n.mobile-voice-hud-center {\n  justify-items: center;\n  gap: var(--cosimo-space-1);\n  width: 96px;\n  display: grid;\n  position: absolute;\n  top: 38px;\n  left: 50%;\n  transform: translateX(-50%);\n}\n\n.mobile-voice-hud-center span, .mobile-voice-hud-limit span {\n  color: var(--cosimo-ink-faint);\n  font-family: var(--cosimo-font-readout, monospace);\n  font-size: var(--cosimo-type-caption);\n  letter-spacing: var(--cosimo-track-wide);\n  text-transform: uppercase;\n  font-weight: 700;\n}\n\n.mobile-voice-hud-center strong {\n  color: var(--cosimo-ink);\n  font-family: var(--cosimo-font-readout, monospace);\n  font-size: var(--cosimo-type-display);\n  text-shadow: 0 0 6px rgb(var(--cosimo-ground-rgb) / .9), 0 0 2px rgb(var(--cosimo-ground-rgb) / .9);\n  font-weight: 400;\n}\n\n.mobile-voice-hud-limit {\n  gap: var(--cosimo-space-1);\n  min-width: 60px;\n  display: grid;\n  position: absolute;\n  bottom: 1px;\n}\n\n.mobile-voice-hud-limit.is-low {\n  justify-items: start;\n  left: 0;\n}\n\n.mobile-voice-hud-limit.is-high {\n  justify-items: end;\n  right: 0;\n}\n\n.mobile-voice-hud-limit strong {\n  color: var(--mobile-voice-source-accent, var(--cosimo-accent-pink));\n  font-family: var(--cosimo-font-readout, monospace);\n  font-size: var(--cosimo-type-label);\n  font-weight: 400;\n}\n\n.mobile-voice-chip-dot {\n  border-radius: var(--cosimo-radius-full);\n  flex: none;\n  width: 5px;\n  height: 5px;\n}\n\n.mobile-voice-panel-viewport {\n  flex-direction: column;\n  flex: auto;\n  min-height: 0;\n  display: flex;\n  position: relative;\n  overflow: hidden;\n}\n\n.mobile-voice-panel-live {\n  flex-direction: column;\n  flex: auto;\n  min-height: 0;\n  display: flex;\n}\n\n.mobile-voice-chip .cosimo-readout {\n  max-width: 128px;\n}\n\n.rack-parameter-knob {\n  width: 100%;\n  min-width: 0;\n  height: 100%;\n  min-height: 72px;\n  color: var(--cosimo-ink-muted);\n  cursor: grab;\n  touch-action: none;\n  -webkit-user-select: none;\n  user-select: none;\n  -webkit-touch-callout: none;\n  background: none;\n  border: 0;\n  grid-template-rows: auto minmax(0, 1fr) auto;\n  place-items: center;\n  gap: 1px;\n  padding: 3px;\n  display: grid;\n}\n\n.oscillator-parameter-knob {\n  flex: 64px;\n  width: auto;\n  min-width: 64px;\n  max-width: 78px;\n  height: 86px;\n}\n\n.global-tune-knob-cell {\n  justify-items: center;\n  min-width: 0;\n  height: 100%;\n  display: grid;\n  position: relative;\n}\n\n.has-key-track-status .rack-knob-label {\n  transform: translateX(8px);\n}\n\n.rack-knob-label, .rack-knob-readout {\n  max-width: 100%;\n  font-family: var(--cosimo-font-readout);\n  font-size: var(--cosimo-type-label);\n  text-overflow: ellipsis;\n  white-space: nowrap;\n  line-height: 1;\n  overflow: hidden;\n}\n\n.rack-knob-label {\n  color: var(--cosimo-ink-muted);\n}\n\n.rack-knob-readout {\n  color: var(--editor-accent);\n}\n\n.rack-knob-art {\n  width: 58px;\n  max-width: 100%;\n  height: 58px;\n  display: block;\n  overflow: visible;\n}\n\n.rack-knob-base-track, .rack-knob-mod-track {\n  opacity: .34;\n}\n\n.rack-knob-mod-track.is-hidden {\n  opacity: 0;\n}\n\n.rack-knob-mod-track.is-unmapped {\n  fill: none;\n  opacity: .5;\n  stroke: var(--rack-knob-mod-accent);\n  stroke-width: 2.2px;\n  stroke-dasharray: 1.2 4.6;\n}\n\n.rack-knob-mod-track.is-mapped {\n  opacity: .38;\n}\n\n.rack-knob-mod-track.is-bypassed, .rack-knob-mod-fill.is-bypassed {\n  fill: none;\n  opacity: .5;\n  stroke: var(--rack-knob-bypassed-ink);\n  stroke-width: 1.2px;\n  stroke-dasharray: 2.4 2.4;\n}\n\n.rack-knob-base-fill {\n  fill: var(--rack-knob-accent);\n}\n\n.rack-knob-mod-track, .rack-knob-mod-fill, .rack-knob-route-presence {\n  transition: opacity .14s;\n}\n\n.rack-knob-mod-fill {\n  fill: var(--rack-knob-mod-accent);\n  opacity: .94;\n}\n\n.rack-knob-route-presence {\n  fill: var(--rack-knob-mod-accent);\n  stroke: var(--cosimo-ink);\n  stroke-width: .9px;\n  filter: drop-shadow(0 0 2px var(--rack-knob-mod-accent));\n}\n\n.rack-knob-mod-light {\n  fill: var(--cosimo-ink);\n  filter: drop-shadow(0 0 3px var(--rack-knob-mod-accent));\n  opacity: 0;\n  pointer-events: none;\n  transition: opacity .16s;\n}\n\n.rack-knob-route-presence.is-bypassed {\n  fill: #0000;\n  opacity: .34;\n  stroke: var(--rack-knob-bypassed-ink);\n  stroke-dasharray: 1 1;\n  filter: none;\n}\n\n.rack-parameter-knob[data-dragging="base"] .rack-knob-base-track, .rack-parameter-knob[data-dragging="base"] .rack-knob-base-fill {\n  filter: drop-shadow(0 0 4px var(--rack-knob-accent));\n  opacity: 1;\n}\n\n.rack-parameter-knob[data-dragging="modulation"] .rack-knob-mod-track, .rack-parameter-knob[data-dragging="modulation"] .rack-knob-mod-fill, .rack-parameter-knob[data-dragging="modulation"] .rack-knob-route-presence {\n  filter: drop-shadow(0 0 4px var(--rack-knob-mod-accent));\n  opacity: 1;\n}\n\n.rack-parameter-knob[data-route-state="bypassed"][data-dragging="modulation"] .rack-knob-mod-track, .rack-parameter-knob[data-route-state="bypassed"][data-dragging="modulation"] .rack-knob-mod-fill, .rack-parameter-knob[data-route-state="bypassed"][data-dragging="modulation"] .rack-knob-route-presence {\n  filter: none;\n  opacity: .28;\n}\n\n.rack-parameter-knob[data-route-effectiveness="effect-bypassed"] .rack-knob-mod-track, .rack-parameter-knob[data-route-effectiveness="effect-bypassed"] .rack-knob-mod-fill, .rack-parameter-knob[data-route-effectiveness="effect-bypassed"] .rack-knob-route-presence, .rack-parameter-knob[data-route-effectiveness="target-suspended"] .rack-knob-mod-track, .rack-parameter-knob[data-route-effectiveness="target-suspended"] .rack-knob-mod-fill, .rack-parameter-knob[data-route-effectiveness="target-suspended"] .rack-knob-route-presence {\n  filter: none;\n  opacity: .3;\n}\n\n.rack-parameter-knob[data-route-effectiveness="target-suspended"] .rack-knob-mod-track, .rack-parameter-knob[data-route-effectiveness="target-suspended"] .rack-knob-mod-fill {\n  stroke: var(--rack-knob-mod-accent);\n  stroke-width: .8px;\n  stroke-dasharray: 1 3;\n}\n\n.rack-knob-handle {\n  fill: var(--cosimo-ink);\n  stroke: rgb(var(--cosimo-ground-rgb) / .72);\n  stroke-width: 1px;\n}\n\n.rack-knob-default-marker {\n  fill: var(--cosimo-ground);\n  stroke: var(--cosimo-ink);\n  stroke-width: 1.2px;\n}\n\n:host {\n  box-sizing: border-box;\n  overscroll-behavior: none;\n  background: var(--cosimo-surface);\n  width: 100%;\n  height: 100%;\n  min-height: 100dvh;\n  color: var(--cosimo-ink);\n  color-scheme: dark;\n  font-family: var(--cosimo-font-label);\n  --cosimo-ios-top-inset: 0px;\n  --cosimo-ios-right-inset: 0px;\n  --cosimo-ios-bottom-inset: 0px;\n  --cosimo-ios-left-inset: 0px;\n  --cosimo-ios-safe-top: calc(env(safe-area-inset-top) + var(--cosimo-ios-top-inset));\n  --cosimo-ios-safe-right: calc(env(safe-area-inset-right) + var(--cosimo-ios-right-inset));\n  --cosimo-ios-safe-bottom: calc(env(safe-area-inset-bottom) + var(--cosimo-ios-bottom-inset));\n  --cosimo-ios-safe-left: calc(env(safe-area-inset-left) + var(--cosimo-ios-left-inset));\n  --cosimo-stage-min-height: 248px;\n  --cosimo-keyboard-height: 94px;\n  --cosimo-control-height: 54px;\n  display: block;\n  overflow-x: hidden;\n}\n\n* {\n  box-sizing: border-box;\n}\n\nbutton, input, select {\n  font: inherit;\n}\n\n.cosimo-mod-amount-field {\n  justify-content: flex-end;\n  align-items: center;\n  gap: 10px;\n  min-width: 0;\n  display: flex;\n}\n\n.cosimo-mod-direction-toggle {\n  border: 1px solid rgb(var(--cosimo-edge-rgb) / .34);\n  background: rgb(var(--cosimo-raised-rgb) / .42);\n  border-radius: 16px;\n  gap: 4px;\n  padding: 4px;\n  display: grid;\n}\n\n.cosimo-mod-direction-button {\n  color: #e2e8f0b8;\n  background: none;\n  border: 0;\n  border-radius: 11px;\n  width: 26px;\n  height: 26px;\n  font-size: 14px;\n  font-weight: 700;\n  line-height: 1;\n}\n\n.cosimo-mod-direction-button[data-active="true"] {\n  background: var(--section-accent-soft);\n  color: var(--section-accent);\n}\n\n.cosimo-mod-knob {\n  flex: none;\n  width: 66px;\n  height: 66px;\n  position: relative;\n}\n\n.cosimo-mod-knob-stack {\n  justify-items: center;\n  gap: 4px;\n  min-width: 0;\n  display: grid;\n}\n\n.cosimo-mod-knob-track {\n  border-radius: var(--cosimo-radius-full);\n  border: 1px solid rgb(var(--cosimo-edge-rgb) / .28);\n  width: 100%;\n  height: 100%;\n  box-shadow: var(--cosimo-shadow-raised);\n  position: relative;\n}\n\n.cosimo-mod-knob-arc {\n  pointer-events: none;\n  width: 100%;\n  height: 100%;\n  position: absolute;\n  inset: 0;\n  overflow: visible;\n}\n\n.cosimo-mod-knob-arc-track {\n  fill: none;\n  stroke: #ffffff1a;\n  stroke-width: 4px;\n  stroke-linecap: round;\n}\n\n.cosimo-mod-knob-arc-fill {\n  fill: none;\n  stroke: rgb(var(--section-accent-rgb) / .92);\n  stroke-width: 4px;\n  stroke-linecap: round;\n  filter: drop-shadow(0 0 8px var(--section-accent-glow));\n}\n\n.cosimo-mod-knob-core {\n  border-radius: var(--cosimo-radius-full);\n  background: var(--cosimo-ground);\n  color: var(--section-accent);\n  place-items: center;\n  display: grid;\n  position: absolute;\n  inset: 9px;\n}\n\n.cosimo-mod-knob-percent {\n  font-family: var(--cosimo-font-readout);\n  letter-spacing: .12em;\n  text-transform: uppercase;\n  font-size: 10px;\n  font-weight: 700;\n}\n\n.cosimo-mod-knob-indicator {\n  border-radius: var(--cosimo-radius-full);\n  background: var(--cosimo-accent-coral);\n  transform-origin: 50% 26px;\n  width: 3px;\n  height: 19px;\n  box-shadow: var(--cosimo-emissive-shadow);\n  pointer-events: none;\n  position: absolute;\n  top: 7px;\n  left: 50%;\n}\n\n.cosimo-mod-knob-center-marker {\n  border-radius: var(--cosimo-radius-full);\n  background: rgb(var(--cosimo-raised-rgb) / .4);\n  pointer-events: none;\n  width: 2px;\n  height: 9px;\n  position: absolute;\n  top: 3px;\n  left: 50%;\n  transform: translateX(-50%);\n}\n\n.cosimo-mod-knob[data-polarity="bipolar"] .cosimo-mod-knob-center-marker {\n  background: rgb(var(--cosimo-raised-rgb) / .84);\n}\n\n.cosimo-mod-knob-input {\n  opacity: 0;\n  width: 100%;\n  height: 100%;\n  margin: 0;\n  position: absolute;\n  inset: 0;\n}\n\n.cosimo-mod-amount-copy {\n  gap: 2px;\n  min-width: 0;\n  display: grid;\n}\n\n.cosimo-mod-amount-readout {\n  font-family: var(--cosimo-font-readout);\n  letter-spacing: .08em;\n  color: var(--cosimo-ink);\n  white-space: nowrap;\n  font-size: 11px;\n  font-weight: 600;\n}\n\n.cosimo-mod-amount-caption {\n  font-family: var(--cosimo-font-label);\n  letter-spacing: .18em;\n  text-transform: uppercase;\n  color: var(--cosimo-ink-muted);\n  font-size: 9px;\n}\n\n.ios-shell {\n  box-sizing: border-box;\n  width: 100%;\n  height: 100%;\n  min-height: 100dvh;\n  padding: var(--cosimo-ios-safe-top) var(--cosimo-ios-safe-right) var(--cosimo-ios-safe-bottom) var(--cosimo-ios-safe-left);\n  grid-template-rows: minmax(0, 1fr) auto;\n  min-width: 0;\n  display: grid;\n}\n\n.ios-top-row {\n  grid-template-rows: minmax(0, 1fr);\n  grid-template-columns: minmax(0, 1fr);\n  min-height: 0;\n  display: grid;\n  position: relative;\n  overflow: hidden;\n}\n\n.ios-main-view {\n  grid-area: 1 / 1;\n  min-height: 0;\n  display: grid;\n}\n\n.ios-main-view[data-hidden="true"] {\n  visibility: hidden;\n  pointer-events: none;\n}\n\n.ios-scroll {\n  overscroll-behavior: contain;\n  -webkit-overflow-scrolling: touch;\n  height: 100%;\n  min-height: 0;\n  overflow-y: auto;\n}\n\n.ios-content {\n  align-content: start;\n  gap: 16px;\n  min-width: 0;\n  padding: 0 16px;\n  display: grid;\n}\n\n.wavetable-panel, .play-panel, .mseg-shell, .keyboard-footer {\n  min-width: 0;\n}\n\n.ios-section-panel {\n  border: 1px solid rgb(var(--cosimo-edge-rgb) / .28);\n  background: linear-gradient(180deg, rgb(var(--cosimo-raised-rgb) / .96), rgb(var(--cosimo-surface-rgb) / .98));\n  min-width: 0;\n  box-shadow: var(--cosimo-shadow-raised);\n  border-radius: 24px;\n  gap: .9rem;\n  padding: 1rem;\n  display: grid;\n  position: relative;\n  overflow: hidden;\n}\n\n.section-label, .mini-label, .mseg-eyebrow, .mseg-depth-label {\n  font-family: var(--cosimo-font-label);\n  letter-spacing: .16em;\n  text-transform: uppercase;\n}\n\n.display-status, .bank-readout, .octave-readout, .glide-time-readout, .mseg-depth-readout, .mseg-rate-readout, .mseg-launcher-rate-readout {\n  font-family: var(--cosimo-font-readout);\n  letter-spacing: .08em;\n  text-transform: uppercase;\n}\n\n.wavetable-stage {\n  width: 100%;\n  min-width: 0;\n  max-width: 100%;\n  min-height: var(--cosimo-stage-min-height);\n  aspect-ratio: 1.55;\n  background: var(--cosimo-ground);\n  touch-action: none;\n  border-radius: 18px;\n  position: relative;\n  overflow: hidden;\n}\n\n.wavetable-stage:before {\n  content: "";\n  opacity: .24;\n  pointer-events: none;\n  background-color: #0000;\n  background-image: linear-gradient(#ffffff07 1px, #0000 1px), linear-gradient(90deg, #ffffff07 1px, #0000 1px);\n  background-position: 0 0, 0 0;\n  background-repeat: repeat, repeat;\n  background-size: 28px 28px;\n  background-attachment: scroll, scroll;\n  background-origin: padding-box, padding-box;\n  background-clip: border-box, border-box;\n  position: absolute;\n  inset: 0;\n}\n\n.wavetable-display-stack {\n  position: absolute;\n  inset: 0;\n}\n\n.wavetable-layer {\n  will-change: transform;\n  position: absolute;\n  inset: 0;\n}\n\n.display-overlay {\n  text-align: center;\n  color: rgb(var(--cosimo-accent-amber-rgb) / .86);\n  background: rgb(var(--cosimo-ground-rgb) / .82);\n  -webkit-backdrop-filter: blur(4px);\n  backdrop-filter: blur(4px);\n  place-items: center;\n  padding: 20px;\n  font-size: 13px;\n  display: grid;\n  position: absolute;\n  inset: 0;\n}\n\n.display-overlay[hidden] {\n  display: none;\n}\n\n.stage-copy {\n  padding: var(--cosimo-space-3);\n  pointer-events: none;\n  grid-template-rows: auto 1fr auto;\n  gap: 8px;\n  display: grid;\n  position: absolute;\n  inset: 0;\n}\n\n.stage-copy-row {\n  pointer-events: auto;\n  justify-content: space-between;\n  align-items: center;\n  gap: 8px;\n  display: flex;\n}\n\n.stage-copy-row:last-child {\n  align-items: end;\n}\n\n.mini-label {\n  color: #d4dce66b;\n  font-size: 10px;\n}\n\n.mini-label.active {\n  color: var(--section-accent);\n}\n\n.mini-label.warm {\n  color: var(--cosimo-accent-amber);\n}\n\n.display-status, .bank-readout {\n  color: #d4dce67a;\n  font-size: 10px;\n}\n\n.display-status {\n  border-radius: var(--cosimo-radius-full);\n  background: rgb(var(--cosimo-raised-rgb) / .42);\n  justify-self: start;\n  padding: 6px 10px;\n}\n\n.shape-readout {\n  font-family: var(--cosimo-font-readout);\n  letter-spacing: -.03em;\n  color: var(--section-accent);\n  font-size: 12px;\n  font-weight: 600;\n}\n\n.bank-picker-trigger {\n  pointer-events: auto;\n  align-items: end;\n  min-width: 0;\n  max-width: min(72%, 260px);\n  display: inline-flex;\n  position: relative;\n}\n\n.table-select-overlay {\n  opacity: .001;\n  appearance: none;\n  color: #0000;\n  cursor: pointer;\n  background: none;\n  border: 0;\n  width: calc(100% + 20px);\n  min-height: 40px;\n  font-size: 16px;\n  position: absolute;\n  inset: -8px -10px;\n}\n\n.bank-readout {\n  white-space: nowrap;\n  text-overflow: ellipsis;\n  min-width: 0;\n  overflow: hidden;\n}\n\n.table-retry-button {\n  border: 1px solid rgb(var(--cosimo-accent-pink-rgb) / .28);\n  border-radius: var(--cosimo-radius-full);\n  background: rgb(var(--cosimo-accent-pink-rgb) / .08);\n  color: #ffd8e8;\n  letter-spacing: .08em;\n  text-transform: uppercase;\n  pointer-events: auto;\n  padding: 6px 10px;\n  font-size: 10px;\n}\n\n.table-retry-button[hidden] {\n  display: none;\n}\n\n.table-error-banner {\n  border: 1px solid rgb(var(--cosimo-accent-pink-rgb) / .24);\n  background: rgb(var(--cosimo-accent-pink-rgb) / .12);\n  color: #ffd8e8;\n  border-radius: 14px;\n  min-width: 0;\n  padding: 10px 12px;\n  font-size: 12px;\n  line-height: 1.35;\n  display: block;\n}\n\n.table-error-banner[hidden] {\n  display: none;\n}\n\n.play-grid {\n  grid-template-columns: minmax(104px, 132px) minmax(84px, 104px) minmax(0, 1fr);\n  align-items: center;\n  gap: 10px;\n  min-width: 0;\n  display: grid;\n}\n\n.ios-global-tune-field {\n  --editor-accent: var(--section-accent);\n  width: 100%;\n  height: 88px;\n  min-height: 88px;\n}\n\n.ios-global-tune-field .rack-parameter-knob {\n  min-height: 88px;\n  padding-block: 0;\n}\n\n.ios-global-tune-field .rack-knob-art {\n  width: 52px;\n  height: 52px;\n}\n\n.play-field {\n  min-width: 0;\n  display: grid;\n}\n\n.play-select {\n  border: 1px solid rgb(var(--cosimo-edge-rgb) / .34);\n  background: rgb(var(--cosimo-raised-rgb) / .58);\n  width: 100%;\n  min-height: 36px;\n  color: var(--cosimo-ink);\n  border-radius: 12px;\n  padding: 8px 10px;\n  font-size: 13px;\n}\n\n.glide-field-body {\n  grid-template-columns: minmax(0, 1fr) auto;\n  align-items: center;\n  gap: 10px;\n  display: grid;\n}\n\n.glide-time-slider {\n  width: 100%;\n}\n\n.glide-time-readout, .mseg-depth-readout, .mseg-rate-readout, .mseg-launcher-rate-readout {\n  color: var(--section-accent);\n  letter-spacing: .08em;\n  white-space: nowrap;\n  font-size: 12px;\n}\n\n.mseg-shell {\n  gap: 10px;\n  display: grid;\n}\n\n.mseg-launcher {\n  gap: var(--cosimo-space-3);\n  display: grid;\n}\n\n.mseg-launcher-head {\n  justify-content: space-between;\n  align-items: end;\n  gap: var(--cosimo-space-3);\n  display: flex;\n}\n\n.mseg-launcher-copy, .mseg-modal-copy {\n  gap: 4px;\n  min-width: 0;\n  display: grid;\n}\n\n.mseg-eyebrow {\n  letter-spacing: .16em;\n  text-transform: uppercase;\n  color: #d4dce66b;\n  font-size: 10px;\n  font-family: var(--cosimo-font-label);\n}\n\n.mseg-route-title {\n  color: var(--cosimo-ink);\n  letter-spacing: .02em;\n  font-size: 15px;\n  font-weight: 600;\n}\n\n.mseg-preview-button {\n  appearance: none;\n  text-align: left;\n  background: none;\n  border: 0;\n  width: 100%;\n  padding: 0;\n  display: block;\n}\n\n.mseg-preview-shell {\n  background: var(--cosimo-ground);\n  height: 128px;\n  min-height: 128px;\n  box-shadow: var(--cosimo-shadow-inset);\n  border-radius: 18px;\n  overflow: hidden;\n}\n\n.mseg-preview-footer {\n  justify-content: space-between;\n  align-items: center;\n  gap: 10px;\n  display: flex;\n}\n\n.mseg-controls {\n  grid-template-columns: minmax(0, 1fr) auto;\n  align-items: center;\n  gap: 10px;\n  display: grid;\n}\n\n.mseg-depth {\n  gap: 8px;\n  display: grid;\n}\n\n.mseg-depth-label {\n  letter-spacing: .16em;\n  text-transform: uppercase;\n  color: #d4dce66b;\n  font-size: 10px;\n  font-family: var(--cosimo-font-label);\n}\n\n.mseg-depth-slider, .mseg-rate-slider {\n  width: 100%;\n}\n\n.play-select:disabled, .glide-time-slider:disabled, .mseg-depth-slider:disabled, .mseg-rate-slider:disabled {\n  cursor: wait;\n  opacity: .45;\n}\n\n.mseg-modal-layer {\n  pointer-events: none;\n  grid-area: 1 / 1;\n  min-height: 0;\n  padding: 0;\n  position: relative;\n  inset: auto;\n}\n\n.mseg-modal-layer[data-open="true"] {\n  pointer-events: auto;\n}\n\n.mseg-modal-backdrop {\n  display: none;\n}\n\n.mseg-modal {\n  grid-template-rows: auto minmax(0, 1fr) auto;\n  gap: 4px;\n  min-height: 100%;\n  padding: 0 8px;\n  display: grid;\n  position: relative;\n}\n\n.mseg-modal.ios-section-panel {\n  min-height: 100%;\n}\n\n.mseg-modal-copy {\n  display: none;\n}\n\n.mseg-modal-head {\n  justify-content: end;\n  align-items: start;\n  min-height: 24px;\n  padding: 0;\n  display: flex;\n}\n\n.mseg-modal-close {\n  appearance: none;\n  color: var(--cosimo-ink);\n  letter-spacing: 0;\n  text-transform: none;\n  background: none;\n  border: 0;\n  border-radius: 0;\n  justify-content: center;\n  align-items: center;\n  width: 28px;\n  min-width: 28px;\n  height: 24px;\n  min-height: 24px;\n  padding: 0;\n  font-size: 15px;\n  font-weight: 600;\n  line-height: 1;\n  display: inline-flex;\n}\n\n.mseg-modal-stage {\n  min-height: 0;\n  padding-top: 3px;\n}\n\n.mseg-modal-editor-shell {\n  height: 100%;\n  min-height: 0;\n}\n\n.mseg-modal-surface {\n  touch-action: none;\n  width: 100%;\n  height: 100%;\n  min-height: 148px;\n  display: block;\n}\n\n.mseg-modal-footer {\n  gap: var(--cosimo-space-3);\n  grid-template-columns: minmax(0, 1fr) auto auto;\n  align-items: center;\n  display: grid;\n}\n\n.mseg-rate {\n  gap: 8px;\n  display: grid;\n}\n\n.mseg-modal-footer-actions {\n  align-items: center;\n  gap: 10px;\n  display: flex;\n}\n\n.mseg-loop-button {\n  border: 1px solid rgb(var(--cosimo-edge-rgb) / .28);\n  border-radius: var(--cosimo-radius-full);\n  background: rgb(var(--cosimo-raised-rgb) / .42);\n  color: var(--section-accent);\n  min-width: 36px;\n  min-height: 36px;\n  padding: 0 10px;\n}\n\n.mseg-loop-button svg {\n  fill: currentColor;\n  width: 20px;\n  height: 20px;\n}\n\n.keyboard-footer {\n  z-index: 1;\n  background: var(--cosimo-surface);\n  gap: 0;\n  padding: 0 12px;\n  display: grid;\n  position: relative;\n}\n\n.keyboard-toolbar {\n  justify-content: center;\n  align-items: center;\n  display: flex;\n}\n\n.octave-controls {\n  grid-template-columns: auto auto auto;\n  align-items: center;\n  gap: 8px;\n  display: inline-grid;\n}\n\n.octave-button {\n  border: 1px solid rgb(var(--cosimo-edge-rgb) / .34);\n  border-radius: var(--cosimo-radius-full);\n  background: rgb(var(--cosimo-raised-rgb) / .58);\n  min-width: 72px;\n  min-height: 34px;\n  color: var(--cosimo-ink);\n  letter-spacing: .08em;\n  text-transform: uppercase;\n  font-size: 12px;\n}\n\n.octave-button:disabled {\n  opacity: .32;\n}\n\n.octave-readout {\n  text-align: center;\n  min-width: 88px;\n  color: var(--section-accent);\n  font-size: 12px;\n}\n\n.keyboard-host {\n  min-width: 0;\n  min-height: var(--cosimo-keyboard-height);\n  align-items: stretch;\n  display: grid;\n}\n\n.keyboard {\n  width: 100%;\n  height: var(--cosimo-keyboard-height);\n  background: var(--cosimo-ground);\n  box-shadow: var(--cosimo-shadow-inset);\n  touch-action: none;\n  border-radius: 14px 14px 0 0;\n  padding: 6px 6px 0;\n  overflow: hidden;\n}\n\n.cosimo-grid-line {\n  stroke: #ffffff14;\n  stroke-width: 1px;\n}\n\n.cosimo-curve-fill {\n  fill: rgb(var(--section-accent-rgb) / .08);\n}\n\n.cosimo-curve-fill-progress {\n  fill: rgb(var(--section-accent-rgb) / .22);\n}\n\n.cosimo-curve-line {\n  fill: none;\n  stroke: var(--section-accent);\n  stroke-width: 3px;\n  stroke-linecap: round;\n  stroke-linejoin: round;\n}\n\n.cosimo-curve-fill-muted {\n  fill: #e1e7f00a;\n}\n\n.cosimo-curve-line-muted {\n  stroke: #e1e7f061;\n}\n\n.cosimo-reference-curve-fill {\n  fill: #e1e7f00a;\n}\n\n.cosimo-reference-curve-line {\n  fill: none;\n  stroke: #e1e7f061;\n  stroke-width: 3px;\n  stroke-linecap: round;\n  stroke-linejoin: round;\n}\n\n.cosimo-mseg-effective-curve-line {\n  fill: none;\n  stroke: var(--cosimo-mseg-realized);\n  stroke-width: 3.25px;\n  stroke-linecap: round;\n  stroke-linejoin: round;\n  filter: drop-shadow(0 0 8px rgb(var(--cosimo-mseg-realized-rgb) / .32));\n}\n\n.cosimo-mseg-shape-a-fill {\n  fill: rgb(var(--cosimo-mseg-shape-a-rgb) / .09);\n}\n\n.cosimo-mseg-shape-a-curve-line {\n  stroke: var(--cosimo-mseg-shape-a);\n}\n\n.cosimo-mseg-shape-b-fill {\n  fill: rgb(var(--cosimo-mseg-shape-b-rgb) / .04);\n}\n\n.cosimo-mseg-shape-b-curve-line {\n  stroke: rgb(var(--cosimo-mseg-shape-b-rgb) / .48);\n}\n\n.cosimo-mseg-realized-fill {\n  fill: rgb(var(--cosimo-mseg-realized-rgb) / .12);\n}\n\n.cosimo-mseg-realized-curve-line {\n  stroke: var(--cosimo-mseg-realized);\n}\n\n.cosimo-curve-line-highlight {\n  stroke: var(--cosimo-accent-mint);\n}\n\n.cosimo-curve-line-highlight.cosimo-mseg-shape-a-curve-line {\n  stroke: var(--cosimo-mseg-shape-a);\n}\n\n.cosimo-curve-line-highlight.cosimo-mseg-shape-b-curve-line {\n  stroke: rgb(var(--cosimo-mseg-shape-b-rgb) / .48);\n}\n\n.cosimo-mseg-playhead {\n  stroke: #f4fbfff5;\n  stroke-width: 2px;\n  stroke-linecap: round;\n}\n\n.cosimo-mseg-point-default {\n  fill: var(--section-accent);\n  stroke: var(--cosimo-ground);\n  stroke-width: 2px;\n}\n\n.cosimo-mseg-point-selected {\n  fill: var(--cosimo-accent-pink);\n  stroke: var(--cosimo-ground);\n  stroke-width: 3px;\n}\n\n.cosimo-mseg-point-highlight {\n  fill: var(--cosimo-accent-mint);\n  stroke: var(--cosimo-ground);\n  stroke-width: 2px;\n}\n\n.cosimo-mseg-point-muted {\n  fill: #e1e7f0c7;\n  stroke: var(--cosimo-ground);\n  stroke-width: 2px;\n  opacity: .62;\n}\n\n[data-role="mseg-edit-points"][data-shape-identity="a"] :is(.cosimo-mseg-point-default, .cosimo-mseg-point-highlight, .cosimo-mseg-point-selected) {\n  fill: var(--cosimo-mseg-shape-a);\n}\n\n[data-role="mseg-edit-points"][data-shape-identity="b"] :is(.cosimo-mseg-point-default, .cosimo-mseg-point-highlight, .cosimo-mseg-point-selected) {\n  fill: rgb(var(--cosimo-mseg-shape-b-rgb) / .82);\n}\n\n.ios-section-panel select, .ios-section-panel input[type="range"], .ios-section-panel button {\n  font-family: var(--cosimo-font-label);\n}\n\n.ios-section-panel select {\n  appearance: none;\n  border: 1px solid rgb(var(--cosimo-edge-rgb) / .34);\n  background: rgb(var(--cosimo-raised-rgb) / .58);\n  min-height: 36px;\n  color: var(--cosimo-ink);\n  border-radius: 12px;\n  padding: 8px 28px 8px 10px;\n}\n\n.ios-section-panel input[type="range"] {\n  accent-color: var(--section-accent);\n}\n\n.ios-section-panel button:focus-visible, .ios-section-panel select:focus-visible, .ios-section-panel input[type="range"]:focus-visible {\n  outline: 2px solid var(--section-accent);\n  outline-offset: 2px;\n}\n\n@media (max-height: 720px) {\n  .ios-content {\n    gap: 14px;\n  }\n\n  .mseg-preview-shell, .mseg-modal-surface {\n    height: 136px;\n    min-height: 136px;\n  }\n}\n\n.ios-mobile-voice-hud-layer {\n  z-index: 40;\n  pointer-events: none;\n  position: fixed;\n  inset: 0;\n}\n\n.ios-armed-source-row {\n  background: #ffffff05;\n  border: 1px solid #ffffff14;\n  border-radius: 12px;\n  align-items: center;\n  gap: 10px;\n  padding: 8px 10px;\n  display: flex;\n}\n\n.ios-armed-source-row .ios-armed-source-label {\n  color: var(--cosimo-ink-muted, #8e969b);\n  font-family: var(--cosimo-font-readout, monospace);\n  letter-spacing: .1em;\n  text-transform: uppercase;\n  font-size: 9px;\n}\n\n.ios-armed-source-row select {\n  border: 1px solid rgb(var(--cosimo-edge-rgb, 77 77 77) / .34);\n  background: rgb(var(--cosimo-raised-rgb, 55 55 55) / .58);\n  min-height: 36px;\n  color: var(--cosimo-ink, #e8ecef);\n  color-scheme: light;\n  border-radius: 8px;\n  flex: auto;\n  padding: 0 8px;\n}\n\n.ios-armed-source-row select option {\n  color: canvastext;\n  background: canvas;\n}\n\n.ios-voice-status {\n  color: var(--cosimo-ink, #e8ecef);\n  font-family: var(--cosimo-font-readout, monospace);\n  background: #ff7a6c0f;\n  border: 1px solid #ff7a6c4d;\n  border-radius: 10px;\n  padding: 8px 10px;\n  font-size: 10px;\n  line-height: 1.4;\n}\n\n@property --tw-translate-x {\n  syntax: "*";\n  inherits: false;\n  initial-value: 0;\n}\n\n@property --tw-translate-y {\n  syntax: "*";\n  inherits: false;\n  initial-value: 0;\n}\n\n@property --tw-translate-z {\n  syntax: "*";\n  inherits: false;\n  initial-value: 0;\n}\n\n@property --tw-rotate-x {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-rotate-y {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-rotate-z {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-skew-x {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-skew-y {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-border-style {\n  syntax: "*";\n  inherits: false;\n  initial-value: solid;\n}\n\n@property --tw-leading {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-font-weight {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-tracking {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-ordinal {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-slashed-zero {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-numeric-figure {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-numeric-spacing {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-numeric-fraction {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-shadow {\n  syntax: "*";\n  inherits: false;\n  initial-value: 0 0 #0000;\n}\n\n@property --tw-shadow-color {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-shadow-alpha {\n  syntax: "<percentage>";\n  inherits: false;\n  initial-value: 100%;\n}\n\n@property --tw-inset-shadow {\n  syntax: "*";\n  inherits: false;\n  initial-value: 0 0 #0000;\n}\n\n@property --tw-inset-shadow-color {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-inset-shadow-alpha {\n  syntax: "<percentage>";\n  inherits: false;\n  initial-value: 100%;\n}\n\n@property --tw-ring-color {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-ring-shadow {\n  syntax: "*";\n  inherits: false;\n  initial-value: 0 0 #0000;\n}\n\n@property --tw-inset-ring-color {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-inset-ring-shadow {\n  syntax: "*";\n  inherits: false;\n  initial-value: 0 0 #0000;\n}\n\n@property --tw-ring-inset {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-ring-offset-width {\n  syntax: "<length>";\n  inherits: false;\n  initial-value: 0;\n}\n\n@property --tw-ring-offset-color {\n  syntax: "*";\n  inherits: false;\n  initial-value: #fff;\n}\n\n@property --tw-ring-offset-shadow {\n  syntax: "*";\n  inherits: false;\n  initial-value: 0 0 #0000;\n}\n\n@property --tw-outline-style {\n  syntax: "*";\n  inherits: false;\n  initial-value: solid;\n}\n\n@property --tw-blur {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-brightness {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-contrast {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-grayscale {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-hue-rotate {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-invert {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-opacity {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-saturate {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-sepia {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-drop-shadow {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-drop-shadow-color {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-drop-shadow-alpha {\n  syntax: "<percentage>";\n  inherits: false;\n  initial-value: 100%;\n}\n\n@property --tw-drop-shadow-size {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-backdrop-blur {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-backdrop-brightness {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-backdrop-contrast {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-backdrop-grayscale {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-backdrop-hue-rotate {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-backdrop-invert {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-backdrop-opacity {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-backdrop-saturate {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-backdrop-sepia {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-duration {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-ease {\n  syntax: "*";\n  inherits: false\n}\n';
+const cssText = '/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com */\n@layer properties {\n  @supports (((-webkit-hyphens: none)) and (not (margin-trim: inline))) or ((-moz-orient: inline) and (not (color: rgb(from red r g b)))) {\n    *, :before, :after, ::backdrop {\n      --tw-translate-x: 0;\n      --tw-translate-y: 0;\n      --tw-translate-z: 0;\n      --tw-rotate-x: initial;\n      --tw-rotate-y: initial;\n      --tw-rotate-z: initial;\n      --tw-skew-x: initial;\n      --tw-skew-y: initial;\n      --tw-border-style: solid;\n      --tw-leading: initial;\n      --tw-font-weight: initial;\n      --tw-tracking: initial;\n      --tw-ordinal: initial;\n      --tw-slashed-zero: initial;\n      --tw-numeric-figure: initial;\n      --tw-numeric-spacing: initial;\n      --tw-numeric-fraction: initial;\n      --tw-shadow: 0 0 #0000;\n      --tw-shadow-color: initial;\n      --tw-shadow-alpha: 100%;\n      --tw-inset-shadow: 0 0 #0000;\n      --tw-inset-shadow-color: initial;\n      --tw-inset-shadow-alpha: 100%;\n      --tw-ring-color: initial;\n      --tw-ring-shadow: 0 0 #0000;\n      --tw-inset-ring-color: initial;\n      --tw-inset-ring-shadow: 0 0 #0000;\n      --tw-ring-inset: initial;\n      --tw-ring-offset-width: 0px;\n      --tw-ring-offset-color: #fff;\n      --tw-ring-offset-shadow: 0 0 #0000;\n      --tw-outline-style: solid;\n      --tw-blur: initial;\n      --tw-brightness: initial;\n      --tw-contrast: initial;\n      --tw-grayscale: initial;\n      --tw-hue-rotate: initial;\n      --tw-invert: initial;\n      --tw-opacity: initial;\n      --tw-saturate: initial;\n      --tw-sepia: initial;\n      --tw-drop-shadow: initial;\n      --tw-drop-shadow-color: initial;\n      --tw-drop-shadow-alpha: 100%;\n      --tw-drop-shadow-size: initial;\n      --tw-backdrop-blur: initial;\n      --tw-backdrop-brightness: initial;\n      --tw-backdrop-contrast: initial;\n      --tw-backdrop-grayscale: initial;\n      --tw-backdrop-hue-rotate: initial;\n      --tw-backdrop-invert: initial;\n      --tw-backdrop-opacity: initial;\n      --tw-backdrop-saturate: initial;\n      --tw-backdrop-sepia: initial;\n      --tw-duration: initial;\n      --tw-ease: initial;\n    }\n  }\n}\n\n@layer theme {\n  :root, :host {\n    --font-sans: ui-sans-serif, system-ui, sans-serif, "Apple Color Emoji",\n      "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";\n    --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono",\n      "Courier New", monospace;\n    --color-amber-100: oklch(96.2% .059 95.617);\n    --color-amber-200: oklch(92.4% .12 95.746);\n    --color-amber-300: oklch(87.9% .169 91.605);\n    --color-cyan-100: oklch(95.6% .045 203.388);\n    --color-cyan-200: oklch(91.7% .08 205.041);\n    --color-cyan-300: oklch(86.5% .127 207.078);\n    --color-rose-100: oklch(94.1% .03 12.58);\n    --color-rose-200: oklch(89.2% .058 10.001);\n    --color-rose-300: oklch(81% .117 11.638);\n    --color-slate-100: oklch(96.8% .007 247.896);\n    --color-slate-200: oklch(92.9% .013 255.508);\n    --color-slate-300: oklch(86.9% .022 252.894);\n    --color-slate-400: oklch(70.4% .04 256.788);\n    --color-black: #000;\n    --color-white: #fff;\n    --spacing: .25rem;\n    --text-sm: .875rem;\n    --text-sm--line-height: calc(1.25 / .875);\n    --font-weight-medium: 500;\n    --font-weight-semibold: 600;\n    --font-weight-bold: 700;\n    --leading-tight: 1.25;\n    --radius-2xl: 1rem;\n    --ease-out: cubic-bezier(0, 0, .2, 1);\n    --blur-md: 12px;\n    --default-transition-duration: .15s;\n    --default-transition-timing-function: cubic-bezier(.4, 0, .2, 1);\n    --default-font-family: var(--font-sans);\n    --default-mono-font-family: var(--font-mono);\n  }\n}\n\n@layer base {\n  *, :after, :before, ::backdrop {\n    box-sizing: border-box;\n    border: 0 solid;\n    margin: 0;\n    padding: 0;\n  }\n\n  ::file-selector-button {\n    box-sizing: border-box;\n    border: 0 solid;\n    margin: 0;\n    padding: 0;\n  }\n\n  html, :host {\n    -webkit-text-size-adjust: 100%;\n    tab-size: 4;\n    line-height: 1.5;\n    font-family: var(--default-font-family, ui-sans-serif, system-ui, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji");\n    font-feature-settings: var(--default-font-feature-settings, normal);\n    font-variation-settings: var(--default-font-variation-settings, normal);\n    -webkit-tap-highlight-color: transparent;\n  }\n\n  hr {\n    height: 0;\n    color: inherit;\n    border-top-width: 1px;\n  }\n\n  abbr:where([title]) {\n    -webkit-text-decoration: underline dotted;\n    text-decoration: underline dotted;\n  }\n\n  h1, h2, h3, h4, h5, h6 {\n    font-size: inherit;\n    font-weight: inherit;\n  }\n\n  a {\n    color: inherit;\n    -webkit-text-decoration: inherit;\n    -webkit-text-decoration: inherit;\n    -webkit-text-decoration: inherit;\n    text-decoration: inherit;\n  }\n\n  b, strong {\n    font-weight: bolder;\n  }\n\n  code, kbd, samp, pre {\n    font-family: var(--default-mono-font-family, ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace);\n    font-feature-settings: var(--default-mono-font-feature-settings, normal);\n    font-variation-settings: var(--default-mono-font-variation-settings, normal);\n    font-size: 1em;\n  }\n\n  small {\n    font-size: 80%;\n  }\n\n  sub, sup {\n    vertical-align: baseline;\n    font-size: 75%;\n    line-height: 0;\n    position: relative;\n  }\n\n  sub {\n    bottom: -.25em;\n  }\n\n  sup {\n    top: -.5em;\n  }\n\n  table {\n    text-indent: 0;\n    border-color: inherit;\n    border-collapse: collapse;\n  }\n\n  :-moz-focusring {\n    outline: auto;\n  }\n\n  progress {\n    vertical-align: baseline;\n  }\n\n  summary {\n    display: list-item;\n  }\n\n  ol, ul, menu {\n    list-style: none;\n  }\n\n  img, svg, video, canvas, audio, iframe, embed, object {\n    vertical-align: middle;\n    display: block;\n  }\n\n  img, video {\n    max-width: 100%;\n    height: auto;\n  }\n\n  button, input, select, optgroup, textarea {\n    font: inherit;\n    font-feature-settings: inherit;\n    font-variation-settings: inherit;\n    letter-spacing: inherit;\n    color: inherit;\n    opacity: 1;\n    background-color: #0000;\n    border-radius: 0;\n  }\n\n  ::file-selector-button {\n    font: inherit;\n    font-feature-settings: inherit;\n    font-variation-settings: inherit;\n    letter-spacing: inherit;\n    color: inherit;\n    opacity: 1;\n    background-color: #0000;\n    border-radius: 0;\n  }\n\n  :where(select:is([multiple], [size])) optgroup {\n    font-weight: bolder;\n  }\n\n  :where(select:is([multiple], [size])) optgroup option {\n    padding-inline-start: 20px;\n  }\n\n  ::file-selector-button {\n    margin-inline-end: 4px;\n  }\n\n  ::placeholder {\n    opacity: 1;\n  }\n\n  @supports (not ((-webkit-appearance: -apple-pay-button))) or (contain-intrinsic-size: 1px) {\n    ::placeholder {\n      color: currentColor;\n    }\n\n    @supports (color: color-mix(in lab, red, red)) {\n      ::placeholder {\n        color: color-mix(in oklab, currentcolor 50%, transparent);\n      }\n    }\n  }\n\n  textarea {\n    resize: vertical;\n  }\n\n  ::-webkit-search-decoration {\n    -webkit-appearance: none;\n  }\n\n  ::-webkit-date-and-time-value {\n    min-height: 1lh;\n    text-align: inherit;\n  }\n\n  ::-webkit-datetime-edit {\n    display: inline-flex;\n  }\n\n  ::-webkit-datetime-edit-fields-wrapper {\n    padding: 0;\n  }\n\n  ::-webkit-datetime-edit {\n    padding-block: 0;\n  }\n\n  ::-webkit-datetime-edit-year-field {\n    padding-block: 0;\n  }\n\n  ::-webkit-datetime-edit-month-field {\n    padding-block: 0;\n  }\n\n  ::-webkit-datetime-edit-day-field {\n    padding-block: 0;\n  }\n\n  ::-webkit-datetime-edit-hour-field {\n    padding-block: 0;\n  }\n\n  ::-webkit-datetime-edit-minute-field {\n    padding-block: 0;\n  }\n\n  ::-webkit-datetime-edit-second-field {\n    padding-block: 0;\n  }\n\n  ::-webkit-datetime-edit-millisecond-field {\n    padding-block: 0;\n  }\n\n  ::-webkit-datetime-edit-meridiem-field {\n    padding-block: 0;\n  }\n\n  ::-webkit-calendar-picker-indicator {\n    line-height: 1;\n  }\n\n  :-moz-ui-invalid {\n    box-shadow: none;\n  }\n\n  button, input:where([type="button"], [type="reset"], [type="submit"]) {\n    appearance: button;\n  }\n\n  ::file-selector-button {\n    appearance: button;\n  }\n\n  ::-webkit-inner-spin-button {\n    height: auto;\n  }\n\n  ::-webkit-outer-spin-button {\n    height: auto;\n  }\n\n  [hidden]:where(:not([hidden="until-found"])) {\n    display: none !important;\n  }\n}\n\n@layer components;\n\n@layer utilities {\n  .pointer-events-none {\n    pointer-events: none;\n  }\n\n  .invisible {\n    visibility: hidden;\n  }\n\n  .visible {\n    visibility: visible;\n  }\n\n  .sr-only {\n    clip-path: inset(50%);\n    white-space: nowrap;\n    border-width: 0;\n    width: 1px;\n    height: 1px;\n    margin: -1px;\n    padding: 0;\n    position: absolute;\n    overflow: hidden;\n  }\n\n  .absolute {\n    position: absolute;\n  }\n\n  .fixed {\n    position: fixed;\n  }\n\n  .relative {\n    position: relative;\n  }\n\n  .static {\n    position: static;\n  }\n\n  .inset-0 {\n    inset: calc(var(--spacing) * 0);\n  }\n\n  .inset-x-0 {\n    inset-inline: calc(var(--spacing) * 0);\n  }\n\n  .inset-x-3 {\n    inset-inline: calc(var(--spacing) * 3);\n  }\n\n  .inset-y-0 {\n    inset-block: calc(var(--spacing) * 0);\n  }\n\n  .start {\n    inset-inline-start: var(--spacing);\n  }\n\n  .end {\n    inset-inline-end: var(--spacing);\n  }\n\n  .top-0 {\n    top: calc(var(--spacing) * 0);\n  }\n\n  .top-1\\/2 {\n    top: 50%;\n  }\n\n  .top-2 {\n    top: calc(var(--spacing) * 2);\n  }\n\n  .right-0 {\n    right: calc(var(--spacing) * 0);\n  }\n\n  .right-1\\.5 {\n    right: calc(var(--spacing) * 1.5);\n  }\n\n  .right-5 {\n    right: calc(var(--spacing) * 5);\n  }\n\n  .bottom-0 {\n    bottom: calc(var(--spacing) * 0);\n  }\n\n  .bottom-1 {\n    bottom: calc(var(--spacing) * 1);\n  }\n\n  .left-0 {\n    left: calc(var(--spacing) * 0);\n  }\n\n  .left-1\\.5 {\n    left: calc(var(--spacing) * 1.5);\n  }\n\n  .left-1\\/2 {\n    left: 50%;\n  }\n\n  .z-10 {\n    z-index: 10;\n  }\n\n  .container {\n    width: 100%;\n  }\n\n  @media (min-width: 40rem) {\n    .container {\n      max-width: 40rem;\n    }\n  }\n\n  @media (min-width: 48rem) {\n    .container {\n      max-width: 48rem;\n    }\n  }\n\n  @media (min-width: 64rem) {\n    .container {\n      max-width: 64rem;\n    }\n  }\n\n  @media (min-width: 80rem) {\n    .container {\n      max-width: 80rem;\n    }\n  }\n\n  @media (min-width: 96rem) {\n    .container {\n      max-width: 96rem;\n    }\n  }\n\n  .mt-0\\.5 {\n    margin-top: calc(var(--spacing) * .5);\n  }\n\n  .mt-1 {\n    margin-top: calc(var(--spacing) * 1);\n  }\n\n  .block {\n    display: block;\n  }\n\n  .flex {\n    display: flex;\n  }\n\n  .grid {\n    display: grid;\n  }\n\n  .hidden {\n    display: none;\n  }\n\n  .inline {\n    display: inline;\n  }\n\n  .inline-flex {\n    display: inline-flex;\n  }\n\n  .inline-grid {\n    display: inline-grid;\n  }\n\n  .table {\n    display: table;\n  }\n\n  .aspect-\\[50\\/27\\] {\n    aspect-ratio: 50 / 27;\n  }\n\n  .size-3\\.5 {\n    width: calc(var(--spacing) * 3.5);\n    height: calc(var(--spacing) * 3.5);\n  }\n\n  .h-1 {\n    height: calc(var(--spacing) * 1);\n  }\n\n  .h-2 {\n    height: calc(var(--spacing) * 2);\n  }\n\n  .h-2\\.5 {\n    height: calc(var(--spacing) * 2.5);\n  }\n\n  .h-3\\.5 {\n    height: calc(var(--spacing) * 3.5);\n  }\n\n  .h-4 {\n    height: calc(var(--spacing) * 4);\n  }\n\n  .h-5 {\n    height: calc(var(--spacing) * 5);\n  }\n\n  .h-8 {\n    height: calc(var(--spacing) * 8);\n  }\n\n  .h-10 {\n    height: calc(var(--spacing) * 10);\n  }\n\n  .h-11 {\n    height: calc(var(--spacing) * 11);\n  }\n\n  .h-32 {\n    height: calc(var(--spacing) * 32);\n  }\n\n  .h-auto {\n    height: auto;\n  }\n\n  .h-full {\n    height: 100%;\n  }\n\n  .h-px {\n    height: 1px;\n  }\n\n  .min-h-0 {\n    min-height: calc(var(--spacing) * 0);\n  }\n\n  .min-h-\\[130px\\] {\n    min-height: 130px;\n  }\n\n  .min-h-\\[230px\\] {\n    min-height: 230px;\n  }\n\n  .w-1\\.5 {\n    width: calc(var(--spacing) * 1.5);\n  }\n\n  .w-2\\.5 {\n    width: calc(var(--spacing) * 2.5);\n  }\n\n  .w-3\\.5 {\n    width: calc(var(--spacing) * 3.5);\n  }\n\n  .w-6 {\n    width: calc(var(--spacing) * 6);\n  }\n\n  .w-9 {\n    width: calc(var(--spacing) * 9);\n  }\n\n  .w-full {\n    width: 100%;\n  }\n\n  .max-w-\\[128px\\] {\n    max-width: 128px;\n  }\n\n  .max-w-\\[220px\\] {\n    max-width: 220px;\n  }\n\n  .min-w-0 {\n    min-width: calc(var(--spacing) * 0);\n  }\n\n  .min-w-\\[150px\\] {\n    min-width: 150px;\n  }\n\n  .flex-1 {\n    flex: 1;\n  }\n\n  .flex-shrink, .shrink {\n    flex-shrink: 1;\n  }\n\n  .shrink-0 {\n    flex-shrink: 0;\n  }\n\n  .-translate-x-1\\/2 {\n    --tw-translate-x: calc(calc(1 / 2 * 100%) * -1);\n    translate: var(--tw-translate-x) var(--tw-translate-y);\n  }\n\n  .-translate-y-1\\/2 {\n    --tw-translate-y: calc(calc(1 / 2 * 100%) * -1);\n    translate: var(--tw-translate-x) var(--tw-translate-y);\n  }\n\n  .-translate-y-px {\n    --tw-translate-y: -1px;\n    translate: var(--tw-translate-x) var(--tw-translate-y);\n  }\n\n  .translate-y-1\\/2 {\n    --tw-translate-y: calc(1 / 2 * 100%);\n    translate: var(--tw-translate-x) var(--tw-translate-y);\n  }\n\n  .transform {\n    transform: var(--tw-rotate-x, ) var(--tw-rotate-y, ) var(--tw-rotate-z, ) var(--tw-skew-x, ) var(--tw-skew-y, );\n  }\n\n  .cursor-grab {\n    cursor: grab;\n  }\n\n  .cursor-ns-resize {\n    cursor: ns-resize;\n  }\n\n  .cursor-pointer {\n    cursor: pointer;\n  }\n\n  .cursor-wait {\n    cursor: wait;\n  }\n\n  .touch-none {\n    touch-action: none;\n  }\n\n  .resize {\n    resize: both;\n  }\n\n  .grid-cols-\\[minmax\\(0\\,1fr\\)_88px\\] {\n    grid-template-columns: minmax(0, 1fr) 88px;\n  }\n\n  .grid-cols-\\[minmax\\(0\\,1fr\\)_92px\\] {\n    grid-template-columns: minmax(0, 1fr) 92px;\n  }\n\n  .grid-cols-\\[minmax\\(0\\,1fr\\)_92px_auto\\] {\n    grid-template-columns: minmax(0, 1fr) 92px auto;\n  }\n\n  .grid-rows-\\[auto_minmax\\(0\\,1fr\\)_auto\\] {\n    grid-template-rows: auto minmax(0, 1fr) auto;\n  }\n\n  .flex-col {\n    flex-direction: column;\n  }\n\n  .flex-wrap {\n    flex-wrap: wrap;\n  }\n\n  .items-center {\n    align-items: center;\n  }\n\n  .items-end {\n    align-items: flex-end;\n  }\n\n  .items-start {\n    align-items: flex-start;\n  }\n\n  .justify-between {\n    justify-content: space-between;\n  }\n\n  .justify-center {\n    justify-content: center;\n  }\n\n  .justify-end {\n    justify-content: flex-end;\n  }\n\n  .gap-1 {\n    gap: calc(var(--spacing) * 1);\n  }\n\n  .gap-1\\.5 {\n    gap: calc(var(--spacing) * 1.5);\n  }\n\n  .gap-2 {\n    gap: calc(var(--spacing) * 2);\n  }\n\n  .gap-3 {\n    gap: calc(var(--spacing) * 3);\n  }\n\n  .gap-4 {\n    gap: calc(var(--spacing) * 4);\n  }\n\n  .truncate {\n    text-overflow: ellipsis;\n    white-space: nowrap;\n    overflow: hidden;\n  }\n\n  .overflow-hidden {\n    overflow: hidden;\n  }\n\n  .overflow-visible {\n    overflow: visible;\n  }\n\n  .rounded {\n    border-radius: .25rem;\n  }\n\n  .rounded-2xl {\n    border-radius: var(--radius-2xl);\n  }\n\n  .rounded-\\[5px\\] {\n    border-radius: 5px;\n  }\n\n  .rounded-\\[8px\\] {\n    border-radius: 8px;\n  }\n\n  .rounded-\\[9px\\] {\n    border-radius: 9px;\n  }\n\n  .rounded-\\[14px\\] {\n    border-radius: 14px;\n  }\n\n  .rounded-\\[18px\\] {\n    border-radius: 18px;\n  }\n\n  .rounded-\\[20px\\] {\n    border-radius: 20px;\n  }\n\n  .rounded-\\[22px\\] {\n    border-radius: 22px;\n  }\n\n  .rounded-\\[24px\\] {\n    border-radius: 24px;\n  }\n\n  .rounded-\\[30px\\] {\n    border-radius: 30px;\n  }\n\n  .rounded-full {\n    border-radius: 3.40282e38px;\n  }\n\n  .border {\n    border-style: var(--tw-border-style);\n    border-width: 1px;\n  }\n\n  .border-2 {\n    border-style: var(--tw-border-style);\n    border-width: 2px;\n  }\n\n  .border-t {\n    border-top-style: var(--tw-border-style);\n    border-top-width: 1px;\n  }\n\n  .border-l {\n    border-left-style: var(--tw-border-style);\n    border-left-width: 1px;\n  }\n\n  .border-\\[rgba\\(3\\,5\\,12\\,0\\.7\\)\\] {\n    border-color: #03050cb3;\n  }\n\n  .border-amber-200\\/20 {\n    border-color: #fee68533;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .border-amber-200\\/20 {\n      border-color: color-mix(in oklab, var(--color-amber-200) 20%, transparent);\n    }\n  }\n\n  .border-cyan-200\\/10 {\n    border-color: #a2f4fd1a;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .border-cyan-200\\/10 {\n      border-color: color-mix(in oklab, var(--color-cyan-200) 10%, transparent);\n    }\n  }\n\n  .border-cyan-200\\/20 {\n    border-color: #a2f4fd33;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .border-cyan-200\\/20 {\n      border-color: color-mix(in oklab, var(--color-cyan-200) 20%, transparent);\n    }\n  }\n\n  .border-cyan-200\\/90 {\n    border-color: #a2f4fde6;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .border-cyan-200\\/90 {\n      border-color: color-mix(in oklab, var(--color-cyan-200) 90%, transparent);\n    }\n  }\n\n  .border-rose-200\\/10 {\n    border-color: #ffccd31a;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .border-rose-200\\/10 {\n      border-color: color-mix(in oklab, var(--color-rose-200) 10%, transparent);\n    }\n  }\n\n  .border-rose-200\\/20 {\n    border-color: #ffccd333;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .border-rose-200\\/20 {\n      border-color: color-mix(in oklab, var(--color-rose-200) 20%, transparent);\n    }\n  }\n\n  .border-slate-400\\/25 {\n    border-color: #90a1b940;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .border-slate-400\\/25 {\n      border-color: color-mix(in oklab, var(--color-slate-400) 25%, transparent);\n    }\n  }\n\n  .border-white\\/6 {\n    border-color: #ffffff0f;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .border-white\\/6 {\n      border-color: color-mix(in oklab, var(--color-white) 6%, transparent);\n    }\n  }\n\n  .border-white\\/8 {\n    border-color: #ffffff14;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .border-white\\/8 {\n      border-color: color-mix(in oklab, var(--color-white) 8%, transparent);\n    }\n  }\n\n  .border-white\\/\\[0\\.05\\] {\n    border-color: #ffffff0d;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .border-white\\/\\[0\\.05\\] {\n      border-color: color-mix(in oklab, var(--color-white) 5%, transparent);\n    }\n  }\n\n  .bg-\\[radial-gradient\\(circle_at_50\\%_35\\%\\,rgb\\(34_211_238\\/0\\.08\\)\\,transparent_62\\%\\)\\,rgb\\(4_10_18\\/0\\.92\\)\\] {\n    background-color: radial-gradient(circle at 50% 35%,#22d3ee14,transparent 62%),#040a12eb;\n  }\n\n  .bg-\\[rgb\\(var\\(--section-accent-rgb\\)\\/0\\.12\\)\\] {\n    background-color: rgb(var(--section-accent-rgb)/.12);\n  }\n\n  .bg-amber-300\\/10 {\n    background-color: #ffd2361a;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .bg-amber-300\\/10 {\n      background-color: color-mix(in oklab, var(--color-amber-300) 10%, transparent);\n    }\n  }\n\n  .bg-black\\/20 {\n    background-color: #0003;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .bg-black\\/20 {\n      background-color: color-mix(in oklab, var(--color-black) 20%, transparent);\n    }\n  }\n\n  .bg-black\\/60 {\n    background-color: #0009;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .bg-black\\/60 {\n      background-color: color-mix(in oklab, var(--color-black) 60%, transparent);\n    }\n  }\n\n  .bg-cyan-300 {\n    background-color: var(--color-cyan-300);\n  }\n\n  .bg-cyan-300\\/12 {\n    background-color: #53eafd1f;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .bg-cyan-300\\/12 {\n      background-color: color-mix(in oklab, var(--color-cyan-300) 12%, transparent);\n    }\n  }\n\n  .bg-rose-300\\/8 {\n    background-color: #ffa2ae14;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .bg-rose-300\\/8 {\n      background-color: color-mix(in oklab, var(--color-rose-300) 8%, transparent);\n    }\n  }\n\n  .bg-rose-300\\/10 {\n    background-color: #ffa2ae1a;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .bg-rose-300\\/10 {\n      background-color: color-mix(in oklab, var(--color-rose-300) 10%, transparent);\n    }\n  }\n\n  .bg-white\\/\\[0\\.03\\] {\n    background-color: #ffffff08;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .bg-white\\/\\[0\\.03\\] {\n      background-color: color-mix(in oklab, var(--color-white) 3%, transparent);\n    }\n  }\n\n  .bg-white\\/\\[0\\.04\\] {\n    background-color: #ffffff0a;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .bg-white\\/\\[0\\.04\\] {\n      background-color: color-mix(in oklab, var(--color-white) 4%, transparent);\n    }\n  }\n\n  .bg-white\\/\\[0\\.07\\] {\n    background-color: #ffffff12;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .bg-white\\/\\[0\\.07\\] {\n      background-color: color-mix(in oklab, var(--color-white) 7.0%, transparent);\n    }\n  }\n\n  .bg-white\\/\\[0\\.12\\] {\n    background-color: #ffffff1f;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .bg-white\\/\\[0\\.12\\] {\n      background-color: color-mix(in oklab, var(--color-white) 12%, transparent);\n    }\n  }\n\n  .bg-white\\/\\[0\\.025\\] {\n    background-color: #ffffff06;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .bg-white\\/\\[0\\.025\\] {\n      background-color: color-mix(in oklab, var(--color-white) 2.5%, transparent);\n    }\n  }\n\n  .p-0 {\n    padding: calc(var(--spacing) * 0);\n  }\n\n  .p-1 {\n    padding: calc(var(--spacing) * 1);\n  }\n\n  .p-3 {\n    padding: calc(var(--spacing) * 3);\n  }\n\n  .p-4 {\n    padding: calc(var(--spacing) * 4);\n  }\n\n  .px-1 {\n    padding-inline: calc(var(--spacing) * 1);\n  }\n\n  .px-1\\.5 {\n    padding-inline: calc(var(--spacing) * 1.5);\n  }\n\n  .px-2 {\n    padding-inline: calc(var(--spacing) * 2);\n  }\n\n  .px-2\\.5 {\n    padding-inline: calc(var(--spacing) * 2.5);\n  }\n\n  .px-3 {\n    padding-inline: calc(var(--spacing) * 3);\n  }\n\n  .px-4 {\n    padding-inline: calc(var(--spacing) * 4);\n  }\n\n  .py-1 {\n    padding-block: calc(var(--spacing) * 1);\n  }\n\n  .py-1\\.5 {\n    padding-block: calc(var(--spacing) * 1.5);\n  }\n\n  .py-2 {\n    padding-block: calc(var(--spacing) * 2);\n  }\n\n  .py-2\\.5 {\n    padding-block: calc(var(--spacing) * 2.5);\n  }\n\n  .py-3 {\n    padding-block: calc(var(--spacing) * 3);\n  }\n\n  .py-5 {\n    padding-block: calc(var(--spacing) * 5);\n  }\n\n  .pt-1 {\n    padding-top: calc(var(--spacing) * 1);\n  }\n\n  .pt-3 {\n    padding-top: calc(var(--spacing) * 3);\n  }\n\n  .pr-5 {\n    padding-right: calc(var(--spacing) * 5);\n  }\n\n  .pb-1 {\n    padding-bottom: calc(var(--spacing) * 1);\n  }\n\n  .pb-5 {\n    padding-bottom: calc(var(--spacing) * 5);\n  }\n\n  .text-center {\n    text-align: center;\n  }\n\n  .text-left {\n    text-align: left;\n  }\n\n  .text-right {\n    text-align: right;\n  }\n\n  .font-mono {\n    font-family: var(--font-mono);\n  }\n\n  .text-sm {\n    font-size: var(--text-sm);\n    line-height: var(--tw-leading, var(--text-sm--line-height));\n  }\n\n  .text-\\[7px\\] {\n    font-size: 7px;\n  }\n\n  .text-\\[8px\\] {\n    font-size: 8px;\n  }\n\n  .text-\\[9px\\] {\n    font-size: 9px;\n  }\n\n  .text-\\[10px\\] {\n    font-size: 10px;\n  }\n\n  .text-\\[11px\\] {\n    font-size: 11px;\n  }\n\n  .leading-tight {\n    --tw-leading: var(--leading-tight);\n    line-height: var(--leading-tight);\n  }\n\n  .font-bold {\n    --tw-font-weight: var(--font-weight-bold);\n    font-weight: var(--font-weight-bold);\n  }\n\n  .font-medium {\n    --tw-font-weight: var(--font-weight-medium);\n    font-weight: var(--font-weight-medium);\n  }\n\n  .font-semibold {\n    --tw-font-weight: var(--font-weight-semibold);\n    font-weight: var(--font-weight-semibold);\n  }\n\n  .tracking-\\[0\\.1em\\] {\n    --tw-tracking: .1em;\n    letter-spacing: .1em;\n  }\n\n  .tracking-\\[0\\.2em\\] {\n    --tw-tracking: .2em;\n    letter-spacing: .2em;\n  }\n\n  .tracking-\\[0\\.04em\\] {\n    --tw-tracking: .04em;\n    letter-spacing: .04em;\n  }\n\n  .tracking-\\[0\\.10em\\] {\n    --tw-tracking: .1em;\n    letter-spacing: .1em;\n  }\n\n  .tracking-\\[0\\.12em\\] {\n    --tw-tracking: .12em;\n    letter-spacing: .12em;\n  }\n\n  .tracking-\\[0\\.14em\\] {\n    --tw-tracking: .14em;\n    letter-spacing: .14em;\n  }\n\n  .tracking-\\[0\\.15em\\] {\n    --tw-tracking: .15em;\n    letter-spacing: .15em;\n  }\n\n  .tracking-\\[0\\.16em\\] {\n    --tw-tracking: .16em;\n    letter-spacing: .16em;\n  }\n\n  .tracking-\\[0\\.18em\\] {\n    --tw-tracking: .18em;\n    letter-spacing: .18em;\n  }\n\n  .text-\\[var\\(--section-accent\\)\\] {\n    color: var(--section-accent);\n  }\n\n  .text-amber-100 {\n    color: var(--color-amber-100);\n  }\n\n  .text-cyan-100 {\n    color: var(--color-cyan-100);\n  }\n\n  .text-cyan-100\\/75 {\n    color: #cefafebf;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .text-cyan-100\\/75 {\n      color: color-mix(in oklab, var(--color-cyan-100) 75%, transparent);\n    }\n  }\n\n  .text-cyan-200\\/40 {\n    color: #a2f4fd66;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .text-cyan-200\\/40 {\n      color: color-mix(in oklab, var(--color-cyan-200) 40%, transparent);\n    }\n  }\n\n  .text-cyan-200\\/55 {\n    color: #a2f4fd8c;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .text-cyan-200\\/55 {\n      color: color-mix(in oklab, var(--color-cyan-200) 55%, transparent);\n    }\n  }\n\n  .text-rose-100 {\n    color: var(--color-rose-100);\n  }\n\n  .text-rose-100\\/85 {\n    color: #ffe4e6d9;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .text-rose-100\\/85 {\n      color: color-mix(in oklab, var(--color-rose-100) 85%, transparent);\n    }\n  }\n\n  .text-rose-200\\/85 {\n    color: #ffccd3d9;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .text-rose-200\\/85 {\n      color: color-mix(in oklab, var(--color-rose-200) 85%, transparent);\n    }\n  }\n\n  .text-slate-100\\/85 {\n    color: #f1f5f9d9;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .text-slate-100\\/85 {\n      color: color-mix(in oklab, var(--color-slate-100) 85%, transparent);\n    }\n  }\n\n  .text-slate-200\\/55 {\n    color: #e2e8f08c;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .text-slate-200\\/55 {\n      color: color-mix(in oklab, var(--color-slate-200) 55%, transparent);\n    }\n  }\n\n  .text-slate-300\\/55 {\n    color: #cad5e28c;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .text-slate-300\\/55 {\n      color: color-mix(in oklab, var(--color-slate-300) 55%, transparent);\n    }\n  }\n\n  .text-slate-300\\/60 {\n    color: #cad5e299;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .text-slate-300\\/60 {\n      color: color-mix(in oklab, var(--color-slate-300) 60%, transparent);\n    }\n  }\n\n  .text-slate-300\\/62 {\n    color: #cad5e29e;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .text-slate-300\\/62 {\n      color: color-mix(in oklab, var(--color-slate-300) 62%, transparent);\n    }\n  }\n\n  .text-slate-300\\/70 {\n    color: #cad5e2b3;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .text-slate-300\\/70 {\n      color: color-mix(in oklab, var(--color-slate-300) 70%, transparent);\n    }\n  }\n\n  .text-slate-400\\/45 {\n    color: #90a1b973;\n  }\n\n  @supports (color: color-mix(in lab, red, red)) {\n    .text-slate-400\\/45 {\n      color: color-mix(in oklab, var(--color-slate-400) 45%, transparent);\n    }\n  }\n\n  .uppercase {\n    text-transform: uppercase;\n  }\n\n  .ordinal {\n    --tw-ordinal: ordinal;\n    font-variant-numeric: var(--tw-ordinal, ) var(--tw-slashed-zero, ) var(--tw-numeric-figure, ) var(--tw-numeric-spacing, ) var(--tw-numeric-fraction, );\n  }\n\n  .tabular-nums {\n    --tw-numeric-spacing: tabular-nums;\n    font-variant-numeric: var(--tw-ordinal, ) var(--tw-slashed-zero, ) var(--tw-numeric-figure, ) var(--tw-numeric-spacing, ) var(--tw-numeric-fraction, );\n  }\n\n  .opacity-0 {\n    opacity: 0;\n  }\n\n  .opacity-45 {\n    opacity: .45;\n  }\n\n  .opacity-70 {\n    opacity: .7;\n  }\n\n  .opacity-75 {\n    opacity: .75;\n  }\n\n  .shadow {\n    --tw-shadow: 0 1px 3px 0 var(--tw-shadow-color, #0000001a), 0 1px 2px -1px var(--tw-shadow-color, #0000001a);\n    box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);\n  }\n\n  .shadow-\\[0_0_8px_rgb\\(103_232_249\\/0\\.55\\)\\] {\n    --tw-shadow: 0 0 8px var(--tw-shadow-color, #67e8f98c);\n    box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);\n  }\n\n  .shadow-\\[0_0_16px_rgb\\(34_211_238\\/0\\.08\\)\\] {\n    --tw-shadow: 0 0 16px var(--tw-shadow-color, #22d3ee14);\n    box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);\n  }\n\n  .shadow-lg {\n    --tw-shadow: 0 10px 15px -3px var(--tw-shadow-color, #0000001a), 0 4px 6px -4px var(--tw-shadow-color, #0000001a);\n    box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);\n  }\n\n  .ring {\n    --tw-ring-shadow: var(--tw-ring-inset, ) 0 0 0 calc(1px + var(--tw-ring-offset-width)) var(--tw-ring-color, currentcolor);\n    box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);\n  }\n\n  .outline {\n    outline-style: var(--tw-outline-style);\n    outline-width: 1px;\n  }\n\n  .blur {\n    --tw-blur: blur(8px);\n    filter: var(--tw-blur, ) var(--tw-brightness, ) var(--tw-contrast, ) var(--tw-grayscale, ) var(--tw-hue-rotate, ) var(--tw-invert, ) var(--tw-saturate, ) var(--tw-sepia, ) var(--tw-drop-shadow, );\n  }\n\n  .grayscale {\n    --tw-grayscale: grayscale(100%);\n    filter: var(--tw-blur, ) var(--tw-brightness, ) var(--tw-contrast, ) var(--tw-grayscale, ) var(--tw-hue-rotate, ) var(--tw-invert, ) var(--tw-saturate, ) var(--tw-sepia, ) var(--tw-drop-shadow, );\n  }\n\n  .invert {\n    --tw-invert: invert(100%);\n    filter: var(--tw-blur, ) var(--tw-brightness, ) var(--tw-contrast, ) var(--tw-grayscale, ) var(--tw-hue-rotate, ) var(--tw-invert, ) var(--tw-saturate, ) var(--tw-sepia, ) var(--tw-drop-shadow, );\n  }\n\n  .filter {\n    filter: var(--tw-blur, ) var(--tw-brightness, ) var(--tw-contrast, ) var(--tw-grayscale, ) var(--tw-hue-rotate, ) var(--tw-invert, ) var(--tw-saturate, ) var(--tw-sepia, ) var(--tw-drop-shadow, );\n  }\n\n  .backdrop-blur-md {\n    --tw-backdrop-blur: blur(var(--blur-md));\n    -webkit-backdrop-filter: var(--tw-backdrop-blur, ) var(--tw-backdrop-brightness, ) var(--tw-backdrop-contrast, ) var(--tw-backdrop-grayscale, ) var(--tw-backdrop-hue-rotate, ) var(--tw-backdrop-invert, ) var(--tw-backdrop-opacity, ) var(--tw-backdrop-saturate, ) var(--tw-backdrop-sepia, );\n    backdrop-filter: var(--tw-backdrop-blur, ) var(--tw-backdrop-brightness, ) var(--tw-backdrop-contrast, ) var(--tw-backdrop-grayscale, ) var(--tw-backdrop-hue-rotate, ) var(--tw-backdrop-invert, ) var(--tw-backdrop-opacity, ) var(--tw-backdrop-saturate, ) var(--tw-backdrop-sepia, );\n  }\n\n  .transition {\n    transition-property: color, background-color, border-color, outline-color, text-decoration-color, fill, stroke, --tw-gradient-from, --tw-gradient-via, --tw-gradient-to, opacity, box-shadow, transform, translate, scale, rotate, filter, -webkit-backdrop-filter, backdrop-filter, display, content-visibility, overlay, pointer-events;\n    transition-timing-function: var(--tw-ease, var(--default-transition-timing-function));\n    transition-duration: var(--tw-duration, var(--default-transition-duration));\n  }\n\n  .transition-\\[width\\] {\n    transition-property: width;\n    transition-timing-function: var(--tw-ease, var(--default-transition-timing-function));\n    transition-duration: var(--tw-duration, var(--default-transition-duration));\n  }\n\n  .duration-200 {\n    --tw-duration: .2s;\n    transition-duration: .2s;\n  }\n\n  .ease-out {\n    --tw-ease: var(--ease-out);\n    transition-timing-function: var(--ease-out);\n  }\n\n  @media (hover: hover) {\n    .hover\\:border-cyan-200\\/35:hover {\n      border-color: #a2f4fd59;\n    }\n\n    @supports (color: color-mix(in lab, red, red)) {\n      .hover\\:border-cyan-200\\/35:hover {\n        border-color: color-mix(in oklab, var(--color-cyan-200) 35%, transparent);\n      }\n    }\n\n    .hover\\:border-white\\/12:hover {\n      border-color: #ffffff1f;\n    }\n\n    @supports (color: color-mix(in lab, red, red)) {\n      .hover\\:border-white\\/12:hover {\n        border-color: color-mix(in oklab, var(--color-white) 12%, transparent);\n      }\n    }\n\n    .hover\\:bg-\\[rgb\\(var\\(--section-accent-rgb\\)\\/0\\.05\\)\\]:hover {\n      background-color: rgb(var(--section-accent-rgb)/.05);\n    }\n\n    .hover\\:bg-amber-300\\/17:hover {\n      background-color: #ffd2362b;\n    }\n\n    @supports (color: color-mix(in lab, red, red)) {\n      .hover\\:bg-amber-300\\/17:hover {\n        background-color: color-mix(in oklab, var(--color-amber-300) 17%, transparent);\n      }\n    }\n\n    .hover\\:bg-black\\/24:hover {\n      background-color: #0000003d;\n    }\n\n    @supports (color: color-mix(in lab, red, red)) {\n      .hover\\:bg-black\\/24:hover {\n        background-color: color-mix(in oklab, var(--color-black) 24%, transparent);\n      }\n    }\n\n    .hover\\:bg-cyan-300\\/18:hover {\n      background-color: #53eafd2e;\n    }\n\n    @supports (color: color-mix(in lab, red, red)) {\n      .hover\\:bg-cyan-300\\/18:hover {\n        background-color: color-mix(in oklab, var(--color-cyan-300) 18%, transparent);\n      }\n    }\n\n    .hover\\:bg-rose-300\\/18:hover {\n      background-color: #ffa2ae2e;\n    }\n\n    @supports (color: color-mix(in lab, red, red)) {\n      .hover\\:bg-rose-300\\/18:hover {\n        background-color: color-mix(in oklab, var(--color-rose-300) 18%, transparent);\n      }\n    }\n\n    .hover\\:text-slate-100:hover {\n      color: var(--color-slate-100);\n    }\n  }\n\n  .active\\:cursor-grabbing:active {\n    cursor: grabbing;\n  }\n\n  .disabled\\:cursor-wait:disabled {\n    cursor: wait;\n  }\n\n  .disabled\\:opacity-35:disabled {\n    opacity: .35;\n  }\n\n  .disabled\\:opacity-40:disabled {\n    opacity: .4;\n  }\n}\n\n@font-face {\n  font-family: Departure Mono;\n  src: url("data:font/woff2;base64,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") format("woff2");\n  font-style: normal;\n  font-weight: 400;\n  font-display: swap;\n}\n\n@font-face {\n  font-family: IBM Plex Sans Condensed;\n  src: url("data:font/woff2;base64,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") format("woff2");\n  font-style: normal;\n  font-weight: 600;\n  font-display: swap;\n}\n\n:host, .cosimo-surface, .ios-shell {\n  --cosimo-font-label: "IBM Plex Sans Condensed", "Avenir Next Condensed", "Arial Narrow", sans-serif;\n  --cosimo-font-readout: "Departure Mono", "SF Mono", "IBM Plex Mono", Menlo, monospace;\n  --cosimo-font-system: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;\n  --cosimo-type-caption: 8px;\n  --cosimo-type-label: 10px;\n  --cosimo-type-title: 13px;\n  --cosimo-type-display: 16px;\n  --cosimo-track-tight: .05em;\n  --cosimo-track: .08em;\n  --cosimo-track-wide: .1em;\n  --cosimo-ground: #101010;\n  --cosimo-ground-rgb: 16 16 16;\n  --cosimo-surface: #1c1c1c;\n  --cosimo-surface-rgb: 28 28 28;\n  --cosimo-raised: #2b2b2b;\n  --cosimo-raised-rgb: 43 43 43;\n  --cosimo-edge: #4d4d4d;\n  --cosimo-edge-rgb: 77 77 77;\n  --cosimo-text-rgb: 232 236 239;\n  --cosimo-ink: rgb(var(--cosimo-text-rgb) / 1);\n  --cosimo-ink-muted: rgb(var(--cosimo-text-rgb) / .62);\n  --cosimo-ink-faint: rgb(var(--cosimo-text-rgb) / .38);\n  --cosimo-wash: #ffffff08;\n  --cosimo-line: #ffffff14;\n  --cosimo-stroke: #ffffff4d;\n  --cosimo-line-width: 1px;\n  --cosimo-space-1: 4px;\n  --cosimo-space-2: 8px;\n  --cosimo-space-3: 12px;\n  --cosimo-space-4: 16px;\n  --cosimo-module: 40px;\n  --cosimo-module-sm: 24px;\n  --cosimo-module-lg: 48px;\n  --cosimo-hit-min: 44px;\n  --cosimo-radius-xs: 3px;\n  --cosimo-radius-sm: 5px;\n  --cosimo-radius: 8px;\n  --cosimo-radius-lg: 14px;\n  --cosimo-radius-full: 999px;\n  --cosimo-shadow-inset: inset 0 1px 2px #000000c2, inset 0 -1px 0 var(--cosimo-wash);\n  --cosimo-shadow-raised: inset 0 1px 0 var(--cosimo-line), 0 4px 10px #0000004d;\n  --cosimo-shadow-float: 0 18px 52px #000000b8, inset 0 1px var(--cosimo-line);\n  --cosimo-accent-cyan: #7df7ff;\n  --cosimo-accent-cyan-rgb: 125 247 255;\n  --cosimo-accent-ion: #6fa8ff;\n  --cosimo-accent-ion-rgb: 111 168 255;\n  --cosimo-accent-violet: #a98cff;\n  --cosimo-accent-violet-rgb: 169 140 255;\n  --cosimo-accent-purple: #cc59d2;\n  --cosimo-accent-purple-rgb: 204 89 210;\n  --cosimo-accent-pink: #ff79d8;\n  --cosimo-accent-pink-rgb: 255 121 216;\n  --cosimo-accent-coral: #ff7a6c;\n  --cosimo-accent-coral-rgb: 255 122 108;\n  --cosimo-accent-amber: #ffd36e;\n  --cosimo-accent-amber-rgb: 255 211 110;\n  --cosimo-accent-lime: #b7ff6a;\n  --cosimo-accent-lime-rgb: 183 255 106;\n  --cosimo-accent-mint: #68ffc2;\n  --cosimo-accent-mint-rgb: 104 255 194;\n  --cosimo-accent-teal: #69d5c5;\n  --cosimo-accent-teal-rgb: 105 213 197;\n  --cosimo-adsr-curve: var(--cosimo-accent-cyan);\n  --cosimo-adsr-curve-rgb: var(--cosimo-accent-cyan-rgb);\n  --cosimo-mseg-shape-a: var(--cosimo-accent-purple);\n  --cosimo-mseg-shape-a-rgb: var(--cosimo-accent-purple-rgb);\n  --cosimo-mseg-shape-b: #e1e7f0;\n  --cosimo-mseg-shape-b-rgb: 225 231 240;\n  --cosimo-mseg-realized: var(--cosimo-accent-cyan);\n  --cosimo-mseg-realized-rgb: var(--cosimo-accent-cyan-rgb);\n  --section-accent: var(--cosimo-accent-cyan);\n  --section-accent-rgb: var(--cosimo-accent-cyan-rgb);\n  --section-accent-dim: rgb(var(--section-accent-rgb) / .24);\n  --section-accent-soft: rgb(var(--section-accent-rgb) / .12);\n  --section-accent-glow: rgb(var(--section-accent-rgb) / .36);\n  --cosimo-emissive-shadow: 0 0 12px var(--section-accent-glow);\n  --cosimo-shell-pad: 0px;\n  --cosimo-panel-pad: 0px;\n  --cosimo-graph-pad: 0px;\n  --cosimo-panel-radius: 0px;\n  --cosimo-panel-border: transparent;\n  --cosimo-panel-bg: var(--cosimo-ground);\n  --cosimo-rail-dock: 40px;\n  --cosimo-card-bg: transparent;\n  --cosimo-cast-shadow: #0000008c;\n  --cosimo-field-top: #4b164f;\n  --cosimo-field-bottom: #1f4f5c;\n  --cosimo-field: linear-gradient(180deg, var(--cosimo-field-top), var(--cosimo-field-bottom));\n}\n\n.cosimo-mod-prototype-theme {\n  color: var(--cosimo-ink);\n  font-family: var(--cosimo-font-label);\n}\n\n[data-section-accent="cyan"] {\n  --section-accent: var(--cosimo-accent-cyan);\n  --section-accent-rgb: var(--cosimo-accent-cyan-rgb);\n}\n\n[data-section-accent="ion"] {\n  --section-accent: var(--cosimo-accent-ion);\n  --section-accent-rgb: var(--cosimo-accent-ion-rgb);\n}\n\n[data-section-accent="violet"] {\n  --section-accent: var(--cosimo-accent-violet);\n  --section-accent-rgb: var(--cosimo-accent-violet-rgb);\n}\n\n[data-section-accent="pink"] {\n  --section-accent: var(--cosimo-accent-pink);\n  --section-accent-rgb: var(--cosimo-accent-pink-rgb);\n}\n\n[data-section-accent="coral"] {\n  --section-accent: var(--cosimo-accent-coral);\n  --section-accent-rgb: var(--cosimo-accent-coral-rgb);\n}\n\n[data-section-accent="amber"] {\n  --section-accent: var(--cosimo-accent-amber);\n  --section-accent-rgb: var(--cosimo-accent-amber-rgb);\n}\n\n[data-section-accent="lime"] {\n  --section-accent: var(--cosimo-accent-lime);\n  --section-accent-rgb: var(--cosimo-accent-lime-rgb);\n}\n\n[data-section-accent="mint"] {\n  --section-accent: var(--cosimo-accent-mint);\n  --section-accent-rgb: var(--cosimo-accent-mint-rgb);\n}\n\n[data-section-accent="teal"] {\n  --section-accent: var(--cosimo-accent-teal);\n  --section-accent-rgb: var(--cosimo-accent-teal-rgb);\n}\n\n.cosimo-surface, .ios-shell {\n  color: var(--cosimo-ink);\n  font-family: var(--cosimo-font-label);\n}\n\n.cosimo-surface .font-mono, .ios-shell .font-mono {\n  font-family: var(--cosimo-font-readout);\n}\n\n.cosimo-label {\n  color: var(--cosimo-ink-muted);\n  font-family: var(--cosimo-font-readout);\n  font-size: var(--cosimo-type-caption);\n  letter-spacing: var(--cosimo-track-wide);\n  text-overflow: ellipsis;\n  text-transform: uppercase;\n  white-space: nowrap;\n  font-weight: 700;\n  overflow: hidden;\n}\n\n.cosimo-readout {\n  color: var(--section-accent);\n  font-family: var(--cosimo-font-readout);\n  font-size: var(--cosimo-type-label);\n  letter-spacing: var(--cosimo-track);\n  text-overflow: ellipsis;\n  text-shadow: 0 0 10px var(--section-accent-glow);\n  white-space: nowrap;\n  font-weight: 400;\n  overflow: hidden;\n}\n\n.cosimo-readout.is-caps {\n  text-transform: uppercase;\n}\n\n.cosimo-readout.is-caption {\n  font-size: var(--cosimo-type-caption);\n}\n\n.cosimo-readout.is-title {\n  font-size: var(--cosimo-type-title);\n}\n\n.cosimo-readout.is-display {\n  font-size: var(--cosimo-type-display);\n}\n\n.cosimo-label.is-strong {\n  color: var(--cosimo-ink);\n  font-size: var(--cosimo-type-label);\n}\n\n.cosimo-label.is-centered, .cosimo-readout.is-centered {\n  text-align: center;\n}\n\n.cosimo-readout.is-end {\n  justify-self: end;\n}\n\n.cosimo-readout.is-neutral {\n  color: var(--cosimo-ink);\n  text-shadow: none;\n}\n\n.synth-grid-card-shell, [data-layout-card="desktop-grid-card"] {\n  isolation: isolate;\n  border-color: rgb(var(--cosimo-edge-rgb) / .28);\n  background: linear-gradient(180deg, rgb(var(--cosimo-raised-rgb) / .96), rgb(var(--cosimo-surface-rgb) / .98));\n  box-shadow: var(--cosimo-shadow-raised);\n  position: relative;\n}\n\n.cosimo-section-title {\n  font-family: var(--cosimo-font-label);\n  font-size: var(--cosimo-type-label);\n  letter-spacing: var(--cosimo-track-wide);\n  text-transform: uppercase;\n  color: rgb(var(--section-accent-rgb) / .56);\n  text-shadow: 0 0 12px rgb(var(--section-accent-rgb) / .18);\n  font-weight: 600;\n  line-height: 1;\n}\n\n.cosimo-section-title.is-title {\n  font-size: var(--cosimo-type-title);\n}\n\n.synth-grid-card-inset {\n  pointer-events: none;\n  border-radius: inherit;\n  position: absolute;\n  inset: 0;\n  box-shadow: inset 0 1px #ffffff0d, inset 0 -34px 58px #0000004d;\n}\n\n.cosimo-control, .cosimo-button {\n  border: 1px solid rgb(var(--cosimo-edge-rgb) / .34);\n  background: rgb(var(--cosimo-raised-rgb) / .58);\n  color: var(--cosimo-ink);\n  box-shadow: var(--cosimo-shadow-raised);\n}\n\n.cosimo-control-text {\n  font-family: var(--cosimo-font-readout);\n  font-size: var(--cosimo-type-caption);\n  letter-spacing: var(--cosimo-track-wide);\n  text-transform: uppercase;\n}\n\n.cosimo-control-value {\n  color: var(--section-accent);\n  text-shadow: 0 0 10px var(--section-accent-glow);\n}\n\n.synth-accent-icon-dot {\n  border: 1px solid rgb(var(--section-accent-rgb) / .22);\n  background: rgb(var(--section-accent-rgb) / .08);\n  color: var(--section-accent);\n}\n\n.synth-accent-soft-bg {\n  background: rgb(var(--section-accent-rgb) / .12);\n  color: var(--section-accent);\n}\n\n.synth-accent-faint-bg {\n  background: rgb(var(--section-accent-rgb) / .045);\n}\n\n.synth-accent-strip-bg {\n  background: rgb(var(--section-accent-rgb) / .12);\n}\n\n.synth-accent-solid-bg {\n  background: var(--section-accent);\n}\n\n.synth-accent-active-button {\n  border-color: rgb(var(--section-accent-rgb) / .25);\n  background: rgb(var(--section-accent-rgb) / .15);\n  color: var(--section-accent);\n}\n\n.synth-display-recess {\n  border: 1px solid rgb(var(--cosimo-edge-rgb) / .24);\n  background: rgb(var(--cosimo-ground-rgb) / .92);\n  box-shadow: var(--cosimo-shadow-inset);\n}\n\n.synth-control-rail {\n  border: 1px solid rgb(var(--cosimo-edge-rgb) / .24);\n  background: rgb(var(--cosimo-raised-rgb) / .22);\n}\n\n.synth-modal-backdrop {\n  background: rgb(var(--cosimo-ground-rgb) / .86);\n  -webkit-backdrop-filter: blur(10px);\n  backdrop-filter: blur(10px);\n}\n\n.synth-modal-frame {\n  border: 1px solid rgb(var(--cosimo-edge-rgb) / .34);\n  background: linear-gradient(180deg, rgb(var(--cosimo-raised-rgb) / .98), rgb(var(--cosimo-surface-rgb) / .99));\n  box-shadow: 0 36px 80px #00000080;\n}\n\n.synth-menu-surface {\n  border: 1px solid rgb(var(--cosimo-edge-rgb) / .34);\n  background: rgb(var(--cosimo-ground-rgb) / .97);\n  box-shadow: var(--cosimo-shadow-raised);\n  -webkit-backdrop-filter: blur(6px);\n  backdrop-filter: blur(6px);\n  font-family: var(--cosimo-font-system);\n  letter-spacing: normal;\n  text-transform: none;\n}\n\n.synth-menu-surface button, .synth-menu-surface input, .synth-menu-surface select, .synth-menu-surface .cosimo-readout {\n  letter-spacing: normal;\n  text-shadow: none;\n  text-transform: none;\n  font-family: inherit;\n}\n\n[data-liquid-detail]:before {\n  content: "";\n  z-index: 2;\n  pointer-events: none;\n  background: linear-gradient(135deg, #ffffff2e, rgb(var(--section-accent-rgb) / .09) 38%, #ffffff09);\n  box-shadow: var(--cosimo-shadow-raised);\n  -webkit-backdrop-filter: blur(9px) saturate(1.28);\n  backdrop-filter: blur(9px) saturate(1.28);\n  border: 1px solid #ffffff29;\n  position: absolute;\n}\n\n[data-liquid-detail="display-lip"]:before {\n  border-radius: var(--cosimo-radius-full);\n  opacity: .72;\n  height: 12px;\n  top: 7px;\n  left: 14px;\n  right: 14px;\n}\n\n[data-liquid-detail="meter-cover"]:before {\n  border-radius: var(--cosimo-radius-full);\n  width: 52px;\n  height: 10px;\n  bottom: 10px;\n  right: 10px;\n}\n\n[data-liquid-detail="icon-lens"]:before {\n  border-radius: var(--cosimo-radius-full);\n  width: 20px;\n  height: 20px;\n  top: 9px;\n  right: 10px;\n}\n\n[data-liquid-detail="section-tab"]:before {\n  border-radius: var(--cosimo-radius-full);\n  width: 10px;\n  height: 28px;\n  top: 10px;\n  left: 10px;\n}\n\n[data-liquid-detail="routing-node"]:before {\n  border-radius: var(--cosimo-radius-full);\n  width: 13px;\n  height: 13px;\n  top: 14px;\n  right: 14px;\n}\n\n[data-liquid-detail="edge-rail"]:before {\n  border-radius: var(--cosimo-radius-full);\n  width: 6px;\n  top: 14px;\n  bottom: 14px;\n  right: 10px;\n}\n\n.synth-display-lip-controls {\n  z-index: 10;\n  border: 1px solid rgb(var(--section-accent-rgb) / .18);\n  background: rgb(var(--cosimo-ground-rgb) / .54);\n  min-height: 26px;\n  box-shadow: var(--cosimo-shadow-raised);\n  -webkit-backdrop-filter: blur(8px) saturate(1.18);\n  backdrop-filter: blur(8px) saturate(1.18);\n  border-radius: 10px;\n  justify-content: space-between;\n  align-items: center;\n  gap: 6px;\n  padding: 4px 5px;\n  display: flex;\n  position: absolute;\n  top: 8px;\n  left: 8px;\n  right: 8px;\n}\n\n.synth-display-lip-controls:before {\n  content: "";\n  border-radius: var(--cosimo-radius-full);\n  opacity: .58;\n  pointer-events: none;\n  background: linear-gradient(90deg, #0000, #ffffff3d, #0000);\n  height: 2px;\n  position: absolute;\n  top: 3px;\n  left: 18px;\n  right: 18px;\n}\n\n.cosimo-tabs {\n  height: var(--cosimo-module);\n  flex: 0 0 var(--cosimo-module);\n  border-bottom: var(--cosimo-line-width) solid var(--cosimo-line);\n  background: var(--cosimo-wash);\n  grid-auto-columns: minmax(0, 1fr);\n  grid-auto-flow: column;\n  display: grid;\n  position: relative;\n}\n\n.cosimo-tabs[data-dock="top"] {\n  border-top: var(--cosimo-line-width) solid var(--cosimo-line);\n  border-bottom: 0;\n}\n\n.cosimo-tabs.is-small {\n  width: max-content;\n  height: var(--cosimo-module-sm);\n  border: var(--cosimo-line-width) solid var(--cosimo-line);\n  border-radius: var(--cosimo-radius-sm);\n  background: rgb(var(--cosimo-raised-rgb) / .22);\n  flex: none;\n  padding: 2px;\n}\n\n.cosimo-tab-slot {\n  min-width: 0;\n  display: grid;\n  position: relative;\n}\n\n.cosimo-tabs.is-small .cosimo-tab-slot {\n  min-width: var(--cosimo-module);\n}\n\n.cosimo-tab-slot:not(:last-child) {\n  border-right: var(--cosimo-line-width) solid var(--cosimo-line);\n}\n\n.cosimo-tab {\n  width: 100%;\n  min-width: 0;\n  height: 100%;\n  box-shadow: none;\n  color: var(--cosimo-ink-muted);\n  cursor: pointer;\n  font-family: var(--cosimo-font-label, sans-serif);\n  font-size: var(--cosimo-type-title);\n  letter-spacing: var(--cosimo-track);\n  text-transform: uppercase;\n  background: none;\n  border: 0;\n  place-items: center;\n  padding: 0;\n  font-weight: 600;\n  display: grid;\n  position: relative;\n}\n\n.cosimo-tabs.is-small .cosimo-tab {\n  font-size: var(--cosimo-type-label);\n}\n\n.cosimo-tab.is-active {\n  background: var(--cosimo-wash);\n  box-shadow: inset 0 -2px var(--section-accent);\n  color: var(--section-accent);\n}\n\n.cosimo-tab.is-muted:not(.is-active) {\n  color: var(--cosimo-ink-faint);\n  opacity: .6;\n}\n\n.cosimo-tab.is-muted.is-active {\n  box-shadow: inset 0 -2px var(--cosimo-ink-faint);\n  color: var(--cosimo-ink-faint);\n}\n\n.cosimo-tab:focus-visible {\n  outline: 2px solid var(--cosimo-ink);\n  outline-offset: -3px;\n}\n\n.cosimo-tabs.is-neutral {\n  --section-accent: var(--cosimo-ink);\n}\n\n.mobile-voice-editor {\n  --mobile-voice-owner-accent: var(--cosimo-accent-teal);\n  --mobile-voice-owner-accent-rgb: var(--cosimo-accent-teal-rgb);\n  --section-accent: var(--cosimo-accent-teal);\n  --section-accent-rgb: var(--cosimo-accent-teal-rgb);\n  min-width: 0;\n  color: var(--cosimo-ink);\n  flex-direction: column;\n  display: flex;\n  position: relative;\n  overflow: hidden;\n}\n\n.mobile-voice-tab-solo {\n  z-index: 2;\n  width: var(--cosimo-space-4);\n  height: var(--cosimo-space-4);\n  border: 1px solid rgb(var(--cosimo-accent-amber-rgb) / .65);\n  border-radius: var(--cosimo-radius-sm);\n  color: var(--cosimo-accent-amber);\n  cursor: pointer;\n  font-family: var(--cosimo-font-readout, monospace);\n  font-size: var(--cosimo-type-caption);\n  opacity: .75;\n  background: none;\n  place-items: center;\n  font-weight: 700;\n  line-height: 1;\n  display: grid;\n  position: absolute;\n  top: 3px;\n  right: 4px;\n}\n\n.mobile-voice-tab-solo.is-active {\n  border-color: var(--cosimo-accent-amber);\n  background: var(--cosimo-accent-amber);\n  box-shadow: 0 0 8px rgb(var(--cosimo-accent-amber-rgb) / .35);\n  color: var(--cosimo-ground);\n  opacity: 1;\n}\n\n.mobile-voice-unit {\n  background: var(--cosimo-field);\n  flex-direction: column;\n  flex: auto;\n  min-height: 0;\n  display: flex;\n}\n\n.mobile-voice-graph {\n  touch-action: none;\n  -webkit-user-select: none;\n  user-select: none;\n  -webkit-touch-callout: none;\n  flex: 180px;\n  min-height: 0;\n  position: relative;\n}\n\n.mobile-voice-graph.is-muted, .mobile-voice-toolbar.is-muted {\n  opacity: .38;\n}\n\n.mobile-voice-graph.is-loading, .mobile-voice-chip.is-loading, .mobile-voice-cell.is-loading, .mobile-voice-tab-solo:disabled, .cosimo-tab.is-loading {\n  cursor: wait;\n  opacity: .45;\n}\n\n.mobile-voice-chip {\n  z-index: 5;\n  height: var(--cosimo-module-sm);\n  align-items: center;\n  gap: var(--cosimo-space-1);\n  padding: 0 var(--cosimo-space-2);\n  border: 1px solid rgb(var(--mobile-voice-owner-accent-rgb) / .2);\n  border-radius: var(--cosimo-radius);\n  background: rgb(var(--cosimo-ground-rgb) / .54);\n  box-shadow: var(--cosimo-shadow-raised);\n  -webkit-backdrop-filter: blur(8px) saturate(1.18);\n  backdrop-filter: blur(8px) saturate(1.18);\n  color: var(--cosimo-ink);\n  cursor: pointer;\n  display: flex;\n  position: absolute;\n}\n\n.mobile-voice-chip[data-corner="top-left"] {\n  top: var(--cosimo-space-2);\n  left: var(--cosimo-space-2);\n}\n\n.mobile-voice-chip[data-corner="top-right"] {\n  top: var(--cosimo-space-2);\n  right: var(--cosimo-space-2);\n}\n\n.mobile-voice-chip[data-corner="bottom-left"] {\n  bottom: var(--cosimo-space-2);\n  left: var(--cosimo-space-2);\n}\n\n.mobile-voice-chip[data-corner="bottom-right"] {\n  bottom: var(--cosimo-space-2);\n  right: var(--cosimo-space-2);\n}\n\n.mobile-voice-chip[data-corner="top-left-stacked"] {\n  top: calc((var(--cosimo-space-2) * 2) + var(--cosimo-module-sm));\n  left: var(--cosimo-space-2);\n}\n\n.mobile-voice-chip.is-readout {\n  cursor: move;\n  touch-action: none;\n  -webkit-user-select: none;\n  user-select: none;\n  -webkit-touch-callout: none;\n}\n\n.mobile-voice-chip-layer {\n  align-items: center;\n  gap: var(--cosimo-space-1);\n  transition: opacity .12s;\n  display: flex;\n}\n\n.mobile-voice-chip-layer.is-hidden {\n  opacity: 0;\n  pointer-events: none;\n}\n\n.mobile-voice-chip-layer.is-overlaid {\n  left: var(--cosimo-space-2);\n  position: absolute;\n}\n\n@media (prefers-reduced-motion: reduce) {\n  .mobile-voice-chip-layer {\n    transition: none;\n  }\n}\n\n.mobile-voice-table-select {\n  cursor: pointer;\n  opacity: 0;\n  color-scheme: light;\n  position: absolute;\n  inset: 0;\n}\n\n.mobile-voice-table-select option {\n  color: canvastext;\n  background: canvas;\n}\n\n.mobile-voice-toolbar {\n  height: var(--cosimo-module);\n  flex: 0 0 var(--cosimo-module);\n  border-bottom: 1px solid var(--cosimo-line);\n  grid-template-columns: 38px minmax(0, 1fr) 30px;\n  display: grid;\n}\n\n.mobile-voice-paddle {\n  align-content: center;\n  justify-items: center;\n  gap: var(--cosimo-space-1);\n  background: rgb(var(--mobile-voice-owner-accent-rgb) / .05);\n  min-width: 0;\n  color: var(--mobile-voice-owner-accent);\n  cursor: pointer;\n  border: 0;\n  padding: 0;\n  display: grid;\n}\n\n.mobile-voice-paddle.is-previous {\n  border-right: 1px solid var(--cosimo-line);\n}\n\n.mobile-voice-paddle.is-next {\n  border-left: 1px solid var(--cosimo-line);\n}\n\n.mobile-voice-page {\n  gap: var(--cosimo-space-1);\n  padding: var(--cosimo-space-1);\n  display: grid;\n}\n\n.mobile-voice-cell {\n  align-content: center;\n  place-items: center start;\n  column-gap: var(--cosimo-space-1);\n  min-width: 0;\n  padding: 0 var(--cosimo-space-1) var(--cosimo-space-1);\n  border: 1px solid var(--cosimo-line);\n  border-radius: var(--cosimo-panel-radius);\n  background: var(--cosimo-wash);\n  text-align: left;\n  grid-template-columns: auto minmax(0, 1fr);\n  display: grid;\n  position: relative;\n  overflow: hidden;\n}\n\n.mobile-voice-cell.is-readout {\n  cursor: move;\n  touch-action: none;\n  -webkit-user-select: none;\n  user-select: none;\n  -webkit-touch-callout: none;\n}\n\n.mobile-voice-cell.is-compact-knob {\n  grid-template-columns: auto 28px minmax(0, 1fr);\n  gap: 1px;\n  min-height: 38px;\n  padding: 0 2px;\n  overflow: visible;\n}\n\n.mobile-voice-cell.is-compact-knob > :is(.cosimo-label, .cosimo-readout) {\n  text-overflow: ellipsis;\n  white-space: nowrap;\n  max-width: 100%;\n  overflow: hidden;\n}\n\n.compact-readout-knob-art {\n  width: 28px;\n  height: 28px;\n  display: block;\n}\n\n.mobile-voice-cell.is-choice {\n  cursor: pointer;\n  padding-bottom: 0;\n}\n\n.mobile-voice-cell[data-dragging="pending"] {\n  background: var(--cosimo-wash);\n}\n\n.mobile-voice-cell[data-dragging="base"] {\n  background: linear-gradient(110deg, rgb(var(--mobile-voice-owner-accent-rgb, var(--cosimo-accent-teal-rgb)) / .1), rgb(var(--mobile-voice-owner-accent-rgb, var(--cosimo-accent-teal-rgb)) / .02));\n}\n\n.mobile-voice-cell[data-dragging="base"] :is(.cosimo-readout, .mod-led-base-val) {\n  text-shadow: 0 0 12px rgb(var(--mobile-voice-owner-accent-rgb, var(--cosimo-accent-teal-rgb)) / .62);\n}\n\n.mobile-voice-cell[data-dragging="modulation"] {\n  background: linear-gradient(110deg, var(--cosimo-wash), var(--mobile-voice-source-accent, transparent));\n}\n\n@supports (color: color-mix(in lab, red, red)) {\n  .mobile-voice-cell[data-dragging="modulation"] {\n    background: linear-gradient(110deg, var(--cosimo-wash), color-mix(in srgb, var(--mobile-voice-source-accent, transparent) 13%, transparent));\n  }\n}\n\n.mobile-voice-rail {\n  height: var(--cosimo-space-1);\n  background: var(--cosimo-wash);\n  position: absolute;\n  bottom: 0;\n  left: 0;\n  right: 0;\n  overflow: hidden;\n}\n\n.mobile-voice-rail > span {\n  display: block;\n  position: absolute;\n}\n\n.mobile-voice-rail-track {\n  background: repeating-linear-gradient(90deg, rgb(var(--cosimo-text-rgb) / .12) 0 1px, transparent 1px 4px);\n  opacity: .6;\n  inset: 0;\n}\n\n.mobile-voice-rail-track.is-unmapped {\n  background: repeating-linear-gradient(90deg, rgb(var(--cosimo-text-rgb) / .3) 0 1.5px, transparent 1.5px 6px);\n  opacity: .5;\n}\n\n.mobile-voice-rail-band {\n  background: var(--mobile-voice-source-accent);\n  height: 2px;\n  box-shadow: 0 0 5px var(--mobile-voice-source-accent);\n  top: 1px;\n}\n\n@supports (color: color-mix(in lab, red, red)) {\n  .mobile-voice-rail-band {\n    box-shadow: 0 0 5px color-mix(in srgb, var(--mobile-voice-source-accent) 70%, transparent);\n  }\n}\n\n.mobile-voice-rail-band.is-bypassed {\n  background: repeating-linear-gradient(90deg, var(--mobile-voice-source-accent) 0 2.4px, transparent 2.4px 4.8px);\n  box-shadow: none;\n  opacity: .34;\n}\n\n.mobile-voice-rail-zero {\n  background: var(--mobile-voice-source-accent);\n  width: 3px;\n  box-shadow: 0 0 4px var(--mobile-voice-source-accent);\n  top: 0;\n  bottom: 0;\n}\n\n@supports (color: color-mix(in lab, red, red)) {\n  .mobile-voice-rail-zero {\n    box-shadow: 0 0 4px color-mix(in srgb, var(--mobile-voice-source-accent) 80%, transparent);\n  }\n}\n\n.mobile-voice-rail-clip {\n  background: var(--mobile-voice-source-accent);\n  width: 2px;\n  box-shadow: 0 0 5px var(--mobile-voice-source-accent);\n  top: 0;\n  bottom: 0;\n}\n\n.mobile-voice-rail-tick {\n  background: var(--cosimo-ink);\n  width: 2px;\n  box-shadow: 0 0 4px rgb(var(--cosimo-text-rgb) / .72);\n  top: 0;\n  bottom: 0;\n  transform: translateX(-1px);\n}\n\n.mobile-voice-rail-light {\n  background: var(--cosimo-ink);\n  width: 3px;\n  box-shadow: 0 0 4px var(--mobile-voice-source-accent), 0 0 8px var(--mobile-voice-source-accent);\n  top: 0;\n  bottom: 0;\n}\n\n@supports (color: color-mix(in lab, red, red)) {\n  .mobile-voice-rail-light {\n    box-shadow: 0 0 4px var(--mobile-voice-source-accent), 0 0 8px color-mix(in srgb, var(--mobile-voice-source-accent) 65%, transparent);\n  }\n}\n\n.mobile-voice-rail-light {\n  opacity: 0;\n  pointer-events: none;\n  transition: opacity .16s;\n  transform: translateX(-1.5px);\n}\n\n.mobile-voice-hud {\n  --mobile-voice-owner-accent: var(--cosimo-accent-teal);\n  --mobile-voice-owner-accent-rgb: var(--cosimo-accent-teal-rgb);\n  z-index: 40;\n  top: max(var(--cosimo-space-3), env(safe-area-inset-top));\n  border: 1px solid rgb(var(--mobile-voice-owner-accent-rgb) / .46);\n  border-radius: var(--cosimo-radius-lg);\n  background: rgb(var(--cosimo-ground-rgb) / .97);\n  width: 252px;\n  min-height: 196px;\n  box-shadow: var(--cosimo-shadow-float);\n  opacity: 0;\n  pointer-events: none;\n  transform-origin: top;\n  visibility: hidden;\n  grid-template-rows: 32px minmax(0, 1fr) 24px;\n  transition: opacity 90ms, transform .12s, visibility 0s linear .12s;\n  display: grid;\n  position: absolute;\n  left: 50%;\n  overflow: hidden;\n  transform: translate(-50%, 7px) scale(.96);\n}\n\n.mobile-voice-hud.is-visible {\n  opacity: 1;\n  visibility: visible;\n  transition-delay: 0s;\n  transform: translate(-50%) scale(1);\n}\n\n.mobile-voice-hud.is-modulation {\n  border-color: var(--mobile-voice-source-accent, var(--cosimo-accent-pink));\n}\n\n@supports (color: color-mix(in lab, red, red)) {\n  .mobile-voice-hud.is-modulation {\n    border-color: color-mix(in srgb, var(--mobile-voice-source-accent, var(--cosimo-accent-pink)) 40%, transparent);\n  }\n}\n\n@media (prefers-reduced-motion: reduce) {\n  .mobile-voice-hud {\n    transition: opacity 90ms, visibility 0s linear 90ms;\n    transform: translate(-50%) scale(1);\n  }\n}\n\n.mobile-voice-hud-header, .mobile-voice-hud-footer {\n  padding: 0 var(--cosimo-space-2);\n  align-items: center;\n  display: flex;\n}\n\n.mobile-voice-hud-header {\n  gap: var(--cosimo-space-2);\n  border-bottom: 1px solid var(--cosimo-line);\n  grid-template-columns: 58px minmax(0, 1fr) 96px;\n  display: grid;\n}\n\n.mobile-voice-hud-source {\n  text-overflow: ellipsis;\n  justify-self: end;\n  max-width: 100%;\n  overflow: hidden;\n}\n\n.mobile-voice-hud-footer {\n  border-top: 1px solid var(--cosimo-line);\n  justify-content: space-between;\n}\n\n.mobile-voice-hud-knob {\n  width: 164px;\n  height: 132px;\n  margin: 2px auto 0;\n  position: relative;\n}\n\n.mobile-voice-hud-visual {\n  width: 100%;\n  height: 132px;\n  position: relative;\n}\n\n.mobile-voice-hud-graphic {\n  border-radius: var(--cosimo-radius-md);\n  background: rgb(var(--cosimo-ground-rgb) / .54);\n  position: absolute;\n  inset: 3px 8px 27px;\n  overflow: hidden;\n}\n\n.mobile-voice-hud-visual-value {\n  right: var(--cosimo-space-2);\n  bottom: 2px;\n  left: var(--cosimo-space-2);\n  justify-content: center;\n  align-items: baseline;\n  gap: var(--cosimo-space-2);\n  display: flex;\n  position: absolute;\n}\n\n.mobile-voice-hud-visual-value span {\n  color: var(--cosimo-ink-faint);\n  font-family: var(--cosimo-font-readout, monospace);\n  font-size: var(--cosimo-type-caption);\n  letter-spacing: var(--cosimo-track-wide);\n  text-transform: uppercase;\n  font-weight: 700;\n}\n\n.mobile-voice-hud-visual-value strong {\n  color: var(--cosimo-ink);\n  font-family: var(--cosimo-font-readout, monospace);\n  font-size: var(--cosimo-type-display);\n  font-weight: 400;\n}\n\n.mobile-voice-hud-knob svg {\n  width: 112px;\n  height: 112px;\n  position: absolute;\n  top: 1px;\n  left: 26px;\n}\n\n.mobile-voice-hud-center {\n  justify-items: center;\n  gap: var(--cosimo-space-1);\n  width: 96px;\n  display: grid;\n  position: absolute;\n  top: 38px;\n  left: 50%;\n  transform: translateX(-50%);\n}\n\n.mobile-voice-hud-center span, .mobile-voice-hud-limit span {\n  color: var(--cosimo-ink-faint);\n  font-family: var(--cosimo-font-readout, monospace);\n  font-size: var(--cosimo-type-caption);\n  letter-spacing: var(--cosimo-track-wide);\n  text-transform: uppercase;\n  font-weight: 700;\n}\n\n.mobile-voice-hud-center strong {\n  color: var(--cosimo-ink);\n  font-family: var(--cosimo-font-readout, monospace);\n  font-size: var(--cosimo-type-display);\n  text-shadow: 0 0 6px rgb(var(--cosimo-ground-rgb) / .9), 0 0 2px rgb(var(--cosimo-ground-rgb) / .9);\n  font-weight: 400;\n}\n\n.mobile-voice-hud-limit {\n  gap: var(--cosimo-space-1);\n  min-width: 60px;\n  display: grid;\n  position: absolute;\n  bottom: 1px;\n}\n\n.mobile-voice-hud-limit.is-low {\n  justify-items: start;\n  left: 0;\n}\n\n.mobile-voice-hud-limit.is-high {\n  justify-items: end;\n  right: 0;\n}\n\n.mobile-voice-hud-limit strong {\n  color: var(--mobile-voice-source-accent, var(--cosimo-accent-pink));\n  font-family: var(--cosimo-font-readout, monospace);\n  font-size: var(--cosimo-type-label);\n  font-weight: 400;\n}\n\n.mobile-voice-chip-dot {\n  border-radius: var(--cosimo-radius-full);\n  flex: none;\n  width: 5px;\n  height: 5px;\n}\n\n.mobile-voice-panel-viewport {\n  flex-direction: column;\n  flex: auto;\n  min-height: 0;\n  display: flex;\n  position: relative;\n  overflow: hidden;\n}\n\n.mobile-voice-panel-live {\n  flex-direction: column;\n  flex: auto;\n  min-height: 0;\n  display: flex;\n}\n\n.mobile-voice-chip .cosimo-readout {\n  max-width: 128px;\n}\n\n.rack-parameter-knob {\n  width: 100%;\n  min-width: 0;\n  height: 100%;\n  min-height: 72px;\n  color: var(--cosimo-ink-muted);\n  cursor: grab;\n  touch-action: none;\n  -webkit-user-select: none;\n  user-select: none;\n  -webkit-touch-callout: none;\n  background: none;\n  border: 0;\n  grid-template-rows: auto minmax(0, 1fr) auto;\n  place-items: center;\n  gap: 1px;\n  padding: 3px;\n  display: grid;\n}\n\n.oscillator-parameter-knob {\n  flex: 64px;\n  width: auto;\n  min-width: 64px;\n  max-width: 78px;\n  height: 86px;\n}\n\n.global-tune-knob-cell {\n  justify-items: center;\n  min-width: 0;\n  height: 100%;\n  display: grid;\n  position: relative;\n}\n\n.has-key-track-status .rack-knob-label {\n  transform: translateX(8px);\n}\n\n.rack-knob-label, .rack-knob-readout {\n  max-width: 100%;\n  font-family: var(--cosimo-font-readout);\n  font-size: var(--cosimo-type-label);\n  text-overflow: ellipsis;\n  white-space: nowrap;\n  line-height: 1;\n  overflow: hidden;\n}\n\n.rack-knob-label {\n  color: var(--cosimo-ink-muted);\n}\n\n.rack-knob-readout {\n  color: var(--editor-accent);\n}\n\n.rack-knob-art {\n  width: 58px;\n  max-width: 100%;\n  height: 58px;\n  display: block;\n  overflow: visible;\n}\n\n.rack-knob-base-track, .rack-knob-mod-track {\n  opacity: .34;\n}\n\n.rack-knob-mod-track.is-hidden {\n  opacity: 0;\n}\n\n.rack-knob-mod-track.is-unmapped {\n  fill: none;\n  opacity: .5;\n  stroke: var(--rack-knob-mod-accent);\n  stroke-width: 2.2px;\n  stroke-dasharray: 1.2 4.6;\n}\n\n.rack-knob-mod-track.is-mapped {\n  opacity: .38;\n}\n\n.rack-knob-mod-track.is-bypassed, .rack-knob-mod-fill.is-bypassed {\n  fill: none;\n  opacity: .5;\n  stroke: var(--rack-knob-bypassed-ink);\n  stroke-width: 1.2px;\n  stroke-dasharray: 2.4 2.4;\n}\n\n.rack-knob-base-fill {\n  fill: var(--rack-knob-accent);\n}\n\n.rack-knob-mod-track, .rack-knob-mod-fill, .rack-knob-route-presence {\n  transition: opacity .14s;\n}\n\n.rack-knob-mod-fill {\n  fill: var(--rack-knob-mod-accent);\n  opacity: .94;\n}\n\n.rack-knob-route-presence {\n  fill: var(--rack-knob-mod-accent);\n  stroke: var(--cosimo-ink);\n  stroke-width: .9px;\n  filter: drop-shadow(0 0 2px var(--rack-knob-mod-accent));\n}\n\n.rack-knob-mod-light {\n  fill: var(--cosimo-ink);\n  filter: drop-shadow(0 0 3px var(--rack-knob-mod-accent));\n  opacity: 0;\n  pointer-events: none;\n  transition: opacity .16s;\n}\n\n.rack-knob-route-presence.is-bypassed {\n  fill: #0000;\n  opacity: .34;\n  stroke: var(--rack-knob-bypassed-ink);\n  stroke-dasharray: 1 1;\n  filter: none;\n}\n\n.rack-parameter-knob[data-dragging="base"] .rack-knob-base-track, .rack-parameter-knob[data-dragging="base"] .rack-knob-base-fill {\n  filter: drop-shadow(0 0 4px var(--rack-knob-accent));\n  opacity: 1;\n}\n\n.rack-parameter-knob[data-dragging="modulation"] .rack-knob-mod-track, .rack-parameter-knob[data-dragging="modulation"] .rack-knob-mod-fill, .rack-parameter-knob[data-dragging="modulation"] .rack-knob-route-presence {\n  filter: drop-shadow(0 0 4px var(--rack-knob-mod-accent));\n  opacity: 1;\n}\n\n.rack-parameter-knob[data-route-state="bypassed"][data-dragging="modulation"] .rack-knob-mod-track, .rack-parameter-knob[data-route-state="bypassed"][data-dragging="modulation"] .rack-knob-mod-fill, .rack-parameter-knob[data-route-state="bypassed"][data-dragging="modulation"] .rack-knob-route-presence {\n  filter: none;\n  opacity: .28;\n}\n\n.rack-parameter-knob[data-route-effectiveness="effect-bypassed"] .rack-knob-mod-track, .rack-parameter-knob[data-route-effectiveness="effect-bypassed"] .rack-knob-mod-fill, .rack-parameter-knob[data-route-effectiveness="effect-bypassed"] .rack-knob-route-presence, .rack-parameter-knob[data-route-effectiveness="target-suspended"] .rack-knob-mod-track, .rack-parameter-knob[data-route-effectiveness="target-suspended"] .rack-knob-mod-fill, .rack-parameter-knob[data-route-effectiveness="target-suspended"] .rack-knob-route-presence {\n  filter: none;\n  opacity: .3;\n}\n\n.rack-parameter-knob[data-route-effectiveness="target-suspended"] .rack-knob-mod-track, .rack-parameter-knob[data-route-effectiveness="target-suspended"] .rack-knob-mod-fill {\n  stroke: var(--rack-knob-mod-accent);\n  stroke-width: .8px;\n  stroke-dasharray: 1 3;\n}\n\n.rack-knob-handle {\n  fill: var(--cosimo-ink);\n  stroke: rgb(var(--cosimo-ground-rgb) / .72);\n  stroke-width: 1px;\n}\n\n.rack-knob-default-marker {\n  fill: var(--cosimo-ground);\n  stroke: var(--cosimo-ink);\n  stroke-width: 1.2px;\n}\n\n:host {\n  box-sizing: border-box;\n  overscroll-behavior: none;\n  background: var(--cosimo-surface);\n  width: 100%;\n  height: 100%;\n  min-height: 100dvh;\n  color: var(--cosimo-ink);\n  color-scheme: dark;\n  font-family: var(--cosimo-font-label);\n  --cosimo-ios-top-inset: 0px;\n  --cosimo-ios-right-inset: 0px;\n  --cosimo-ios-bottom-inset: 0px;\n  --cosimo-ios-left-inset: 0px;\n  --cosimo-ios-safe-top: calc(env(safe-area-inset-top) + var(--cosimo-ios-top-inset));\n  --cosimo-ios-safe-right: calc(env(safe-area-inset-right) + var(--cosimo-ios-right-inset));\n  --cosimo-ios-safe-bottom: calc(env(safe-area-inset-bottom) + var(--cosimo-ios-bottom-inset));\n  --cosimo-ios-safe-left: calc(env(safe-area-inset-left) + var(--cosimo-ios-left-inset));\n  --cosimo-stage-min-height: 248px;\n  --cosimo-keyboard-height: 94px;\n  --cosimo-control-height: 54px;\n  display: block;\n  overflow-x: hidden;\n}\n\n* {\n  box-sizing: border-box;\n}\n\nbutton, input, select {\n  font: inherit;\n}\n\n.cosimo-mod-amount-field {\n  justify-content: flex-end;\n  align-items: center;\n  gap: 10px;\n  min-width: 0;\n  display: flex;\n}\n\n.cosimo-mod-direction-toggle {\n  border: 1px solid rgb(var(--cosimo-edge-rgb) / .34);\n  background: rgb(var(--cosimo-raised-rgb) / .42);\n  border-radius: 16px;\n  gap: 4px;\n  padding: 4px;\n  display: grid;\n}\n\n.cosimo-mod-direction-button {\n  color: #e2e8f0b8;\n  background: none;\n  border: 0;\n  border-radius: 11px;\n  width: 26px;\n  height: 26px;\n  font-size: 14px;\n  font-weight: 700;\n  line-height: 1;\n}\n\n.cosimo-mod-direction-button[data-active="true"] {\n  background: var(--section-accent-soft);\n  color: var(--section-accent);\n}\n\n.cosimo-mod-knob {\n  flex: none;\n  width: 66px;\n  height: 66px;\n  position: relative;\n}\n\n.cosimo-mod-knob-stack {\n  justify-items: center;\n  gap: 4px;\n  min-width: 0;\n  display: grid;\n}\n\n.cosimo-mod-knob-track {\n  border-radius: var(--cosimo-radius-full);\n  border: 1px solid rgb(var(--cosimo-edge-rgb) / .28);\n  width: 100%;\n  height: 100%;\n  box-shadow: var(--cosimo-shadow-raised);\n  position: relative;\n}\n\n.cosimo-mod-knob-arc {\n  pointer-events: none;\n  width: 100%;\n  height: 100%;\n  position: absolute;\n  inset: 0;\n  overflow: visible;\n}\n\n.cosimo-mod-knob-arc-track {\n  fill: none;\n  stroke: #ffffff1a;\n  stroke-width: 4px;\n  stroke-linecap: round;\n}\n\n.cosimo-mod-knob-arc-fill {\n  fill: none;\n  stroke: rgb(var(--section-accent-rgb) / .92);\n  stroke-width: 4px;\n  stroke-linecap: round;\n  filter: drop-shadow(0 0 8px var(--section-accent-glow));\n}\n\n.cosimo-mod-knob-core {\n  border-radius: var(--cosimo-radius-full);\n  background: var(--cosimo-ground);\n  color: var(--section-accent);\n  place-items: center;\n  display: grid;\n  position: absolute;\n  inset: 9px;\n}\n\n.cosimo-mod-knob-percent {\n  font-family: var(--cosimo-font-readout);\n  letter-spacing: .12em;\n  text-transform: uppercase;\n  font-size: 10px;\n  font-weight: 700;\n}\n\n.cosimo-mod-knob-indicator {\n  border-radius: var(--cosimo-radius-full);\n  background: var(--cosimo-accent-coral);\n  transform-origin: 50% 26px;\n  width: 3px;\n  height: 19px;\n  box-shadow: var(--cosimo-emissive-shadow);\n  pointer-events: none;\n  position: absolute;\n  top: 7px;\n  left: 50%;\n}\n\n.cosimo-mod-knob-center-marker {\n  border-radius: var(--cosimo-radius-full);\n  background: rgb(var(--cosimo-raised-rgb) / .4);\n  pointer-events: none;\n  width: 2px;\n  height: 9px;\n  position: absolute;\n  top: 3px;\n  left: 50%;\n  transform: translateX(-50%);\n}\n\n.cosimo-mod-knob[data-polarity="bipolar"] .cosimo-mod-knob-center-marker {\n  background: rgb(var(--cosimo-raised-rgb) / .84);\n}\n\n.cosimo-mod-knob-input {\n  opacity: 0;\n  width: 100%;\n  height: 100%;\n  margin: 0;\n  position: absolute;\n  inset: 0;\n}\n\n.cosimo-mod-amount-copy {\n  gap: 2px;\n  min-width: 0;\n  display: grid;\n}\n\n.cosimo-mod-amount-readout {\n  font-family: var(--cosimo-font-readout);\n  letter-spacing: .08em;\n  color: var(--cosimo-ink);\n  white-space: nowrap;\n  font-size: 11px;\n  font-weight: 600;\n}\n\n.cosimo-mod-amount-caption {\n  font-family: var(--cosimo-font-label);\n  letter-spacing: .18em;\n  text-transform: uppercase;\n  color: var(--cosimo-ink-muted);\n  font-size: 9px;\n}\n\n.ios-shell {\n  box-sizing: border-box;\n  width: 100%;\n  height: 100%;\n  min-height: 100dvh;\n  padding: var(--cosimo-ios-safe-top) var(--cosimo-ios-safe-right) var(--cosimo-ios-safe-bottom) var(--cosimo-ios-safe-left);\n  grid-template-rows: minmax(0, 1fr) auto;\n  min-width: 0;\n  display: grid;\n}\n\n.ios-top-row {\n  grid-template-rows: minmax(0, 1fr);\n  grid-template-columns: minmax(0, 1fr);\n  min-height: 0;\n  display: grid;\n  position: relative;\n  overflow: hidden;\n}\n\n.ios-main-view {\n  grid-area: 1 / 1;\n  min-height: 0;\n  display: grid;\n}\n\n.ios-main-view[data-hidden="true"] {\n  visibility: hidden;\n  pointer-events: none;\n}\n\n.ios-scroll {\n  overscroll-behavior: contain;\n  -webkit-overflow-scrolling: touch;\n  height: 100%;\n  min-height: 0;\n  overflow-y: auto;\n}\n\n.ios-content {\n  align-content: start;\n  gap: 16px;\n  min-width: 0;\n  padding: 0 16px;\n  display: grid;\n}\n\n.wavetable-panel, .play-panel, .mseg-shell, .keyboard-footer {\n  min-width: 0;\n}\n\n.ios-section-panel {\n  border: 1px solid rgb(var(--cosimo-edge-rgb) / .28);\n  background: linear-gradient(180deg, rgb(var(--cosimo-raised-rgb) / .96), rgb(var(--cosimo-surface-rgb) / .98));\n  min-width: 0;\n  box-shadow: var(--cosimo-shadow-raised);\n  border-radius: 24px;\n  gap: .9rem;\n  padding: 1rem;\n  display: grid;\n  position: relative;\n  overflow: hidden;\n}\n\n.section-label, .mini-label, .mseg-eyebrow, .mseg-depth-label {\n  font-family: var(--cosimo-font-label);\n  letter-spacing: .16em;\n  text-transform: uppercase;\n}\n\n.display-status, .bank-readout, .octave-readout, .glide-time-readout, .mseg-depth-readout, .mseg-rate-readout, .mseg-launcher-rate-readout {\n  font-family: var(--cosimo-font-readout);\n  letter-spacing: .08em;\n  text-transform: uppercase;\n}\n\n.wavetable-stage {\n  width: 100%;\n  min-width: 0;\n  max-width: 100%;\n  min-height: var(--cosimo-stage-min-height);\n  aspect-ratio: 1.55;\n  background: var(--cosimo-ground);\n  touch-action: none;\n  border-radius: 18px;\n  position: relative;\n  overflow: hidden;\n}\n\n.wavetable-stage:before {\n  content: "";\n  opacity: .24;\n  pointer-events: none;\n  background-color: #0000;\n  background-image: linear-gradient(#ffffff07 1px, #0000 1px), linear-gradient(90deg, #ffffff07 1px, #0000 1px);\n  background-position: 0 0, 0 0;\n  background-repeat: repeat, repeat;\n  background-size: 28px 28px;\n  background-attachment: scroll, scroll;\n  background-origin: padding-box, padding-box;\n  background-clip: border-box, border-box;\n  position: absolute;\n  inset: 0;\n}\n\n.wavetable-display-stack {\n  position: absolute;\n  inset: 0;\n}\n\n.wavetable-layer {\n  will-change: transform;\n  position: absolute;\n  inset: 0;\n}\n\n.display-overlay {\n  text-align: center;\n  color: rgb(var(--cosimo-accent-amber-rgb) / .86);\n  background: rgb(var(--cosimo-ground-rgb) / .82);\n  -webkit-backdrop-filter: blur(4px);\n  backdrop-filter: blur(4px);\n  place-items: center;\n  padding: 20px;\n  font-size: 13px;\n  display: grid;\n  position: absolute;\n  inset: 0;\n}\n\n.display-overlay[hidden] {\n  display: none;\n}\n\n.stage-copy {\n  padding: var(--cosimo-space-3);\n  pointer-events: none;\n  grid-template-rows: auto 1fr auto;\n  gap: 8px;\n  display: grid;\n  position: absolute;\n  inset: 0;\n}\n\n.stage-copy-row {\n  pointer-events: auto;\n  justify-content: space-between;\n  align-items: center;\n  gap: 8px;\n  display: flex;\n}\n\n.stage-copy-row:last-child {\n  align-items: end;\n}\n\n.mini-label {\n  color: #d4dce66b;\n  font-size: 10px;\n}\n\n.mini-label.active {\n  color: var(--section-accent);\n}\n\n.mini-label.warm {\n  color: var(--cosimo-accent-amber);\n}\n\n.display-status, .bank-readout {\n  color: #d4dce67a;\n  font-size: 10px;\n}\n\n.display-status {\n  border-radius: var(--cosimo-radius-full);\n  background: rgb(var(--cosimo-raised-rgb) / .42);\n  justify-self: start;\n  padding: 6px 10px;\n}\n\n.shape-readout {\n  font-family: var(--cosimo-font-readout);\n  letter-spacing: -.03em;\n  color: var(--section-accent);\n  font-size: 12px;\n  font-weight: 600;\n}\n\n.bank-picker-trigger {\n  pointer-events: auto;\n  align-items: end;\n  min-width: 0;\n  max-width: min(72%, 260px);\n  display: inline-flex;\n  position: relative;\n}\n\n.table-select-overlay {\n  opacity: .001;\n  appearance: none;\n  color: #0000;\n  cursor: pointer;\n  background: none;\n  border: 0;\n  width: calc(100% + 20px);\n  min-height: 40px;\n  font-size: 16px;\n  position: absolute;\n  inset: -8px -10px;\n}\n\n.bank-readout {\n  white-space: nowrap;\n  text-overflow: ellipsis;\n  min-width: 0;\n  overflow: hidden;\n}\n\n.table-retry-button {\n  border: 1px solid rgb(var(--cosimo-accent-pink-rgb) / .28);\n  border-radius: var(--cosimo-radius-full);\n  background: rgb(var(--cosimo-accent-pink-rgb) / .08);\n  color: #ffd8e8;\n  letter-spacing: .08em;\n  text-transform: uppercase;\n  pointer-events: auto;\n  padding: 6px 10px;\n  font-size: 10px;\n}\n\n.table-retry-button[hidden] {\n  display: none;\n}\n\n.table-error-banner {\n  border: 1px solid rgb(var(--cosimo-accent-pink-rgb) / .24);\n  background: rgb(var(--cosimo-accent-pink-rgb) / .12);\n  color: #ffd8e8;\n  border-radius: 14px;\n  min-width: 0;\n  padding: 10px 12px;\n  font-size: 12px;\n  line-height: 1.35;\n  display: block;\n}\n\n.table-error-banner[hidden] {\n  display: none;\n}\n\n.play-grid {\n  grid-template-columns: minmax(104px, 132px) minmax(84px, 104px) minmax(0, 1fr);\n  align-items: center;\n  gap: 10px;\n  min-width: 0;\n  display: grid;\n}\n\n.ios-global-tune-field {\n  --editor-accent: var(--section-accent);\n  width: 100%;\n  height: 88px;\n  min-height: 88px;\n}\n\n.ios-global-tune-field .rack-parameter-knob {\n  min-height: 88px;\n  padding-block: 0;\n}\n\n.ios-global-tune-field .rack-knob-art {\n  width: 52px;\n  height: 52px;\n}\n\n.play-field {\n  min-width: 0;\n  display: grid;\n}\n\n.play-select {\n  border: 1px solid rgb(var(--cosimo-edge-rgb) / .34);\n  background: rgb(var(--cosimo-raised-rgb) / .58);\n  width: 100%;\n  min-height: 36px;\n  color: var(--cosimo-ink);\n  border-radius: 12px;\n  padding: 8px 10px;\n  font-size: 13px;\n}\n\n.glide-field-body {\n  grid-template-columns: minmax(0, 1fr) auto;\n  align-items: center;\n  gap: 10px;\n  display: grid;\n}\n\n.glide-time-slider {\n  width: 100%;\n}\n\n.glide-time-readout, .mseg-depth-readout, .mseg-rate-readout, .mseg-launcher-rate-readout {\n  color: var(--section-accent);\n  letter-spacing: .08em;\n  white-space: nowrap;\n  font-size: 12px;\n}\n\n.mseg-shell {\n  gap: 10px;\n  display: grid;\n}\n\n.mseg-launcher {\n  gap: var(--cosimo-space-3);\n  display: grid;\n}\n\n.mseg-launcher-head {\n  justify-content: space-between;\n  align-items: end;\n  gap: var(--cosimo-space-3);\n  display: flex;\n}\n\n.mseg-launcher-copy, .mseg-modal-copy {\n  gap: 4px;\n  min-width: 0;\n  display: grid;\n}\n\n.mseg-eyebrow {\n  letter-spacing: .16em;\n  text-transform: uppercase;\n  color: #d4dce66b;\n  font-size: 10px;\n  font-family: var(--cosimo-font-label);\n}\n\n.mseg-route-title {\n  color: var(--cosimo-ink);\n  letter-spacing: .02em;\n  font-size: 15px;\n  font-weight: 600;\n}\n\n.mseg-preview-button {\n  appearance: none;\n  text-align: left;\n  background: none;\n  border: 0;\n  width: 100%;\n  padding: 0;\n  display: block;\n}\n\n.mseg-preview-shell {\n  background: var(--cosimo-ground);\n  height: 128px;\n  min-height: 128px;\n  box-shadow: var(--cosimo-shadow-inset);\n  border-radius: 18px;\n  overflow: hidden;\n}\n\n.mseg-preview-footer {\n  justify-content: space-between;\n  align-items: center;\n  gap: 10px;\n  display: flex;\n}\n\n.mseg-controls {\n  grid-template-columns: minmax(0, 1fr) auto;\n  align-items: center;\n  gap: 10px;\n  display: grid;\n}\n\n.mseg-depth {\n  gap: 8px;\n  display: grid;\n}\n\n.mseg-depth-label {\n  letter-spacing: .16em;\n  text-transform: uppercase;\n  color: #d4dce66b;\n  font-size: 10px;\n  font-family: var(--cosimo-font-label);\n}\n\n.mseg-depth-slider, .mseg-rate-slider {\n  width: 100%;\n}\n\n.play-select:disabled, .glide-time-slider:disabled, .mseg-depth-slider:disabled, .mseg-rate-slider:disabled {\n  cursor: wait;\n  opacity: .45;\n}\n\n.mseg-modal-layer {\n  pointer-events: none;\n  grid-area: 1 / 1;\n  min-height: 0;\n  padding: 0;\n  position: relative;\n  inset: auto;\n}\n\n.mseg-modal-layer[data-open="true"] {\n  pointer-events: auto;\n}\n\n.mseg-modal-backdrop {\n  display: none;\n}\n\n.mseg-modal {\n  grid-template-rows: auto minmax(0, 1fr) auto;\n  gap: 4px;\n  min-height: 100%;\n  padding: 0 8px;\n  display: grid;\n  position: relative;\n}\n\n.mseg-modal.ios-section-panel {\n  min-height: 100%;\n}\n\n.mseg-modal-copy {\n  display: none;\n}\n\n.mseg-modal-head {\n  justify-content: end;\n  align-items: start;\n  min-height: 24px;\n  padding: 0;\n  display: flex;\n}\n\n.mseg-modal-close {\n  appearance: none;\n  color: var(--cosimo-ink);\n  letter-spacing: 0;\n  text-transform: none;\n  background: none;\n  border: 0;\n  border-radius: 0;\n  justify-content: center;\n  align-items: center;\n  width: 28px;\n  min-width: 28px;\n  height: 24px;\n  min-height: 24px;\n  padding: 0;\n  font-size: 15px;\n  font-weight: 600;\n  line-height: 1;\n  display: inline-flex;\n}\n\n.mseg-modal-stage {\n  min-height: 0;\n  padding-top: 3px;\n}\n\n.mseg-modal-editor-shell {\n  height: 100%;\n  min-height: 0;\n}\n\n.mseg-modal-surface {\n  touch-action: none;\n  width: 100%;\n  height: 100%;\n  min-height: 148px;\n  display: block;\n}\n\n.mseg-modal-footer {\n  gap: var(--cosimo-space-3);\n  grid-template-columns: minmax(0, 1fr) auto auto;\n  align-items: center;\n  display: grid;\n}\n\n.mseg-rate {\n  gap: 8px;\n  display: grid;\n}\n\n.mseg-modal-footer-actions {\n  align-items: center;\n  gap: 10px;\n  display: flex;\n}\n\n.mseg-loop-button {\n  border: 1px solid rgb(var(--cosimo-edge-rgb) / .28);\n  border-radius: var(--cosimo-radius-full);\n  background: rgb(var(--cosimo-raised-rgb) / .42);\n  color: var(--section-accent);\n  min-width: 36px;\n  min-height: 36px;\n  padding: 0 10px;\n}\n\n.mseg-loop-button svg {\n  fill: currentColor;\n  width: 20px;\n  height: 20px;\n}\n\n.keyboard-footer {\n  z-index: 1;\n  background: var(--cosimo-surface);\n  gap: 0;\n  padding: 0 12px;\n  display: grid;\n  position: relative;\n}\n\n.keyboard-toolbar {\n  justify-content: center;\n  align-items: center;\n  display: flex;\n}\n\n.octave-controls {\n  grid-template-columns: auto auto auto;\n  align-items: center;\n  gap: 8px;\n  display: inline-grid;\n}\n\n.octave-button {\n  border: 1px solid rgb(var(--cosimo-edge-rgb) / .34);\n  border-radius: var(--cosimo-radius-full);\n  background: rgb(var(--cosimo-raised-rgb) / .58);\n  min-width: 72px;\n  min-height: 34px;\n  color: var(--cosimo-ink);\n  letter-spacing: .08em;\n  text-transform: uppercase;\n  font-size: 12px;\n}\n\n.octave-button:disabled {\n  opacity: .32;\n}\n\n.octave-readout {\n  text-align: center;\n  min-width: 88px;\n  color: var(--section-accent);\n  font-size: 12px;\n}\n\n.keyboard-host {\n  min-width: 0;\n  min-height: var(--cosimo-keyboard-height);\n  align-items: stretch;\n  display: grid;\n}\n\n.keyboard {\n  width: 100%;\n  height: var(--cosimo-keyboard-height);\n  background: var(--cosimo-ground);\n  box-shadow: var(--cosimo-shadow-inset);\n  touch-action: none;\n  border-radius: 14px 14px 0 0;\n  padding: 6px 6px 0;\n  overflow: hidden;\n}\n\n.cosimo-grid-line {\n  stroke: #ffffff14;\n  stroke-width: 1px;\n}\n\n.cosimo-curve-fill {\n  fill: rgb(var(--section-accent-rgb) / .08);\n}\n\n.cosimo-curve-fill-progress {\n  fill: rgb(var(--section-accent-rgb) / .22);\n}\n\n.cosimo-curve-line {\n  fill: none;\n  stroke: var(--section-accent);\n  stroke-width: 3px;\n  stroke-linecap: round;\n  stroke-linejoin: round;\n}\n\n.cosimo-curve-fill-muted {\n  fill: #e1e7f00a;\n}\n\n.cosimo-curve-line-muted {\n  stroke: #e1e7f061;\n}\n\n.cosimo-reference-curve-fill {\n  fill: #e1e7f00a;\n}\n\n.cosimo-reference-curve-line {\n  fill: none;\n  stroke: #e1e7f061;\n  stroke-width: 3px;\n  stroke-linecap: round;\n  stroke-linejoin: round;\n}\n\n.cosimo-mseg-effective-curve-line {\n  fill: none;\n  stroke: var(--cosimo-mseg-realized);\n  stroke-width: 3.25px;\n  stroke-linecap: round;\n  stroke-linejoin: round;\n  filter: drop-shadow(0 0 8px rgb(var(--cosimo-mseg-realized-rgb) / .32));\n}\n\n.cosimo-mseg-shape-a-fill {\n  fill: rgb(var(--cosimo-mseg-shape-a-rgb) / .09);\n}\n\n.cosimo-mseg-shape-a-curve-line {\n  stroke: var(--cosimo-mseg-shape-a);\n}\n\n.cosimo-mseg-shape-b-fill {\n  fill: rgb(var(--cosimo-mseg-shape-b-rgb) / .04);\n}\n\n.cosimo-mseg-shape-b-curve-line {\n  stroke: rgb(var(--cosimo-mseg-shape-b-rgb) / .48);\n}\n\n.cosimo-mseg-realized-fill {\n  fill: rgb(var(--cosimo-mseg-realized-rgb) / .12);\n}\n\n.cosimo-mseg-realized-curve-line {\n  stroke: var(--cosimo-mseg-realized);\n}\n\n.cosimo-curve-line-highlight {\n  stroke: var(--cosimo-accent-mint);\n}\n\n.cosimo-curve-line-highlight.cosimo-mseg-shape-a-curve-line {\n  stroke: var(--cosimo-mseg-shape-a);\n}\n\n.cosimo-curve-line-highlight.cosimo-mseg-shape-b-curve-line {\n  stroke: rgb(var(--cosimo-mseg-shape-b-rgb) / .48);\n}\n\n.cosimo-mseg-playhead {\n  stroke: #f4fbfff5;\n  stroke-width: 2px;\n  stroke-linecap: round;\n}\n\n.cosimo-mseg-point-default {\n  fill: var(--section-accent);\n  stroke: var(--cosimo-ground);\n  stroke-width: 2px;\n}\n\n.cosimo-mseg-point-selected {\n  fill: var(--cosimo-accent-pink);\n  stroke: var(--cosimo-ground);\n  stroke-width: 3px;\n}\n\n.cosimo-mseg-point-highlight {\n  fill: var(--cosimo-accent-mint);\n  stroke: var(--cosimo-ground);\n  stroke-width: 2px;\n}\n\n.cosimo-mseg-point-muted {\n  fill: #e1e7f0c7;\n  stroke: var(--cosimo-ground);\n  stroke-width: 2px;\n  opacity: .62;\n}\n\n[data-role="mseg-edit-points"][data-shape-identity="a"] :is(.cosimo-mseg-point-default, .cosimo-mseg-point-highlight, .cosimo-mseg-point-selected) {\n  fill: var(--cosimo-mseg-shape-a);\n}\n\n[data-role="mseg-edit-points"][data-shape-identity="b"] :is(.cosimo-mseg-point-default, .cosimo-mseg-point-highlight, .cosimo-mseg-point-selected) {\n  fill: rgb(var(--cosimo-mseg-shape-b-rgb) / .82);\n}\n\n.ios-section-panel select, .ios-section-panel input[type="range"], .ios-section-panel button {\n  font-family: var(--cosimo-font-label);\n}\n\n.ios-section-panel select {\n  appearance: none;\n  border: 1px solid rgb(var(--cosimo-edge-rgb) / .34);\n  background: rgb(var(--cosimo-raised-rgb) / .58);\n  min-height: 36px;\n  color: var(--cosimo-ink);\n  border-radius: 12px;\n  padding: 8px 28px 8px 10px;\n}\n\n.ios-section-panel input[type="range"] {\n  accent-color: var(--section-accent);\n}\n\n.ios-section-panel button:focus-visible, .ios-section-panel select:focus-visible, .ios-section-panel input[type="range"]:focus-visible {\n  outline: 2px solid var(--section-accent);\n  outline-offset: 2px;\n}\n\n@media (max-height: 720px) {\n  .ios-content {\n    gap: 14px;\n  }\n\n  .mseg-preview-shell, .mseg-modal-surface {\n    height: 136px;\n    min-height: 136px;\n  }\n}\n\n.ios-mobile-voice-hud-layer {\n  z-index: 40;\n  pointer-events: none;\n  position: fixed;\n  inset: 0;\n}\n\n.ios-armed-source-row {\n  background: #ffffff05;\n  border: 1px solid #ffffff14;\n  border-radius: 12px;\n  align-items: center;\n  gap: 10px;\n  padding: 8px 10px;\n  display: flex;\n}\n\n.ios-armed-source-row .ios-armed-source-label {\n  color: var(--cosimo-ink-muted, #8e969b);\n  font-family: var(--cosimo-font-readout, monospace);\n  letter-spacing: .1em;\n  text-transform: uppercase;\n  font-size: 9px;\n}\n\n.ios-armed-source-row select {\n  border: 1px solid rgb(var(--cosimo-edge-rgb, 77 77 77) / .34);\n  background: rgb(var(--cosimo-raised-rgb, 55 55 55) / .58);\n  min-height: 36px;\n  color: var(--cosimo-ink, #e8ecef);\n  color-scheme: light;\n  border-radius: 8px;\n  flex: auto;\n  padding: 0 8px;\n}\n\n.ios-armed-source-row select option {\n  color: canvastext;\n  background: canvas;\n}\n\n.ios-voice-status {\n  color: var(--cosimo-ink, #e8ecef);\n  font-family: var(--cosimo-font-readout, monospace);\n  background: #ff7a6c0f;\n  border: 1px solid #ff7a6c4d;\n  border-radius: 10px;\n  padding: 8px 10px;\n  font-size: 10px;\n  line-height: 1.4;\n}\n\n@property --tw-translate-x {\n  syntax: "*";\n  inherits: false;\n  initial-value: 0;\n}\n\n@property --tw-translate-y {\n  syntax: "*";\n  inherits: false;\n  initial-value: 0;\n}\n\n@property --tw-translate-z {\n  syntax: "*";\n  inherits: false;\n  initial-value: 0;\n}\n\n@property --tw-rotate-x {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-rotate-y {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-rotate-z {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-skew-x {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-skew-y {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-border-style {\n  syntax: "*";\n  inherits: false;\n  initial-value: solid;\n}\n\n@property --tw-leading {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-font-weight {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-tracking {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-ordinal {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-slashed-zero {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-numeric-figure {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-numeric-spacing {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-numeric-fraction {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-shadow {\n  syntax: "*";\n  inherits: false;\n  initial-value: 0 0 #0000;\n}\n\n@property --tw-shadow-color {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-shadow-alpha {\n  syntax: "<percentage>";\n  inherits: false;\n  initial-value: 100%;\n}\n\n@property --tw-inset-shadow {\n  syntax: "*";\n  inherits: false;\n  initial-value: 0 0 #0000;\n}\n\n@property --tw-inset-shadow-color {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-inset-shadow-alpha {\n  syntax: "<percentage>";\n  inherits: false;\n  initial-value: 100%;\n}\n\n@property --tw-ring-color {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-ring-shadow {\n  syntax: "*";\n  inherits: false;\n  initial-value: 0 0 #0000;\n}\n\n@property --tw-inset-ring-color {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-inset-ring-shadow {\n  syntax: "*";\n  inherits: false;\n  initial-value: 0 0 #0000;\n}\n\n@property --tw-ring-inset {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-ring-offset-width {\n  syntax: "<length>";\n  inherits: false;\n  initial-value: 0;\n}\n\n@property --tw-ring-offset-color {\n  syntax: "*";\n  inherits: false;\n  initial-value: #fff;\n}\n\n@property --tw-ring-offset-shadow {\n  syntax: "*";\n  inherits: false;\n  initial-value: 0 0 #0000;\n}\n\n@property --tw-outline-style {\n  syntax: "*";\n  inherits: false;\n  initial-value: solid;\n}\n\n@property --tw-blur {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-brightness {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-contrast {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-grayscale {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-hue-rotate {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-invert {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-opacity {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-saturate {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-sepia {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-drop-shadow {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-drop-shadow-color {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-drop-shadow-alpha {\n  syntax: "<percentage>";\n  inherits: false;\n  initial-value: 100%;\n}\n\n@property --tw-drop-shadow-size {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-backdrop-blur {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-backdrop-brightness {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-backdrop-contrast {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-backdrop-grayscale {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-backdrop-hue-rotate {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-backdrop-invert {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-backdrop-opacity {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-backdrop-saturate {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-backdrop-sepia {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-duration {\n  syntax: "*";\n  inherits: false\n}\n\n@property --tw-ease {\n  syntax: "*";\n  inherits: false\n}\n';
 const ANALYZER_ACTIVITY_ENDPOINT_IDS = {
   filterSpectrum: "filterSpectrumActivity",
   distortionScope: "distortionScopeActivity",
@@ -12904,6 +12859,23 @@ function subscribeToUserEdits(listener) {
     listeners$1.delete(listener);
   };
 }
+function captureUserEditReporter() {
+  const suppressed = programmaticWriteDepth > 0;
+  return Object.freeze({
+    parameterEdit(edit) {
+      if (suppressed) return;
+      for (const listener of listeners$1) listener.onParameterEdit?.(edit);
+    },
+    gestureStart() {
+      if (suppressed) return;
+      for (const listener of listeners$1) listener.onGestureStart?.();
+    },
+    gestureEnd() {
+      if (suppressed) return;
+      for (const listener of listeners$1) listener.onGestureEnd?.();
+    }
+  });
+}
 function reportUserParameterEdit(edit) {
   if (programmaticWriteDepth > 0) {
     return;
@@ -13251,14 +13223,2131 @@ function usePatchFoldedVisualEndpoint(endpointID, initialValue, fold, active = t
   }, [active, endpointID, patchConnection]);
   return value;
 }
+let keyCount = 0;
+function atom(read, write) {
+  const key = `atom${++keyCount}`;
+  const config = {
+    toString() {
+      return key;
+    }
+  };
+  if (typeof read === "function") {
+    config.read = read;
+  } else {
+    config.init = read;
+    config.read = defaultRead;
+    config.write = defaultWrite;
+  }
+  return config;
+}
+function defaultRead(get) {
+  return get(this);
+}
+function defaultWrite(get, set, arg) {
+  return set(this, typeof arg === "function" ? arg(get(this)) : arg);
+}
+const KEY_atomStateMap = "a";
+const KEY_mountedMap = "m";
+const KEY_invalidatedAtoms = "i";
+const KEY_changedAtoms = "c";
+const KEY_mountCallbacks = "q";
+const KEY_unmountCallbacks = "Q";
+const KEY_storeHooks = "h";
+const KEY_atomRead = "R";
+const KEY_atomWrite = "W";
+const KEY_atomOnInit = "I";
+const KEY_atomOnMount = "M";
+const KEY_ensureAtomState = "e";
+const KEY_flushCallbacks = "f";
+const KEY_recomputeInvalidatedAtoms = "C";
+const KEY_readAtomState = "r";
+const KEY_invalidateDependents = "d";
+const KEY_writeAtomState = "w";
+const KEY_mountDependencies = "D";
+const KEY_mountAtom = "t";
+const KEY_unmountAtom = "T";
+const KEY_setAtomStateValueOrPromise = "v";
+const KEY_storeGet = "g";
+const KEY_storeSet = "s";
+const KEY_storeSub = "b";
+const KEY_enhanceBuildingBlocks = "B";
+const KEY_abortHandlersMap = "p";
+const KEY_registerAbortHandler = "H";
+const KEY_abortPromise = "A";
+const KEY_storeEpochHolder = "E";
+function hasInitialValue(atom2) {
+  return "init" in atom2;
+}
+function isActuallyWritableAtom(atom2) {
+  return typeof atom2.write === "function";
+}
+function hasOnMount(atom2) {
+  return !!atom2.onMount;
+}
+function isAtomStateInitialized(atomState) {
+  return "v" in atomState || "e" in atomState;
+}
+function returnAtomValue(atomState) {
+  if ("e" in atomState) {
+    throw atomState.e;
+  }
+  return atomState.v;
+}
+function isPromiseLike(p2) {
+  return typeof p2?.then === "function";
+}
+function shouldThrowSynchronously(error) {
+  if (!(error instanceof Error)) {
+    return false;
+  }
+  const name2 = error.name;
+  const message = error.message.toLowerCase();
+  return (name2 === "RangeError" || name2 === "InternalError") && (message.includes("call stack") || message.includes("too much recursion") || message.includes("stack overflow"));
+}
+function addPendingPromiseToDependency(atom2, promise, dependencyAtomState) {
+  if (!dependencyAtomState.p.has(atom2)) {
+    dependencyAtomState.p.add(atom2);
+    const cleanup = () => dependencyAtomState.p.delete(atom2);
+    promise.then(cleanup, cleanup);
+  }
+}
+function getMountedOrPendingDependents(atom2, atomState, mountedMap) {
+  const mounted = mountedMap.get(atom2);
+  const mountedDependents = mounted?.t;
+  const pendingDependents = atomState.p;
+  if (!mountedDependents?.size) {
+    return pendingDependents;
+  }
+  if (!pendingDependents.size) {
+    return mountedDependents;
+  }
+  const dependents = new Set(mountedDependents);
+  for (const a of pendingDependents) {
+    dependents.add(a);
+  }
+  return dependents;
+}
+function hasOnInit(atom2) {
+  return !!atom2.INTERNAL_onInit;
+}
+const BUILDING_BLOCK_atomRead = (_buildingBlocks, _store, atom2, ...params) => atom2.read(...params);
+const BUILDING_BLOCK_atomWrite = (_buildingBlocks, _store, atom2, ...params) => atom2.write(...params);
+const BUILDING_BLOCK_atomOnInit = (_buildingBlocks, store, atom2) => atom2.INTERNAL_onInit(store);
+const BUILDING_BLOCK_atomOnMount = (_buildingBlocks, _store, atom2, setAtom) => atom2.onMount?.(setAtom);
+const BUILDING_BLOCK_ensureAtomState = (buildingBlocks, store, atom2) => {
+  const atomStateMap = buildingBlocks[KEY_atomStateMap];
+  let atomState = atomStateMap.get(atom2);
+  if (!atomState) {
+    const storeHooks = buildingBlocks[KEY_storeHooks];
+    const atomOnInit = buildingBlocks[KEY_atomOnInit];
+    atomState = { d: /* @__PURE__ */ new Map(), p: /* @__PURE__ */ new Set(), n: 0 };
+    atomStateMap.set(atom2, atomState);
+    storeHooks.i?.(atom2);
+    if (hasOnInit(atom2)) {
+      atomOnInit(buildingBlocks, store, atom2);
+    }
+  }
+  return atomState;
+};
+const BUILDING_BLOCK_flushCallbacks = (buildingBlocks, store) => {
+  const mountedMap = buildingBlocks[KEY_mountedMap];
+  const changedAtoms = buildingBlocks[KEY_changedAtoms];
+  const mountCallbacks = buildingBlocks[KEY_mountCallbacks];
+  const unmountCallbacks = buildingBlocks[KEY_unmountCallbacks];
+  const storeHooks = buildingBlocks[KEY_storeHooks];
+  const recomputeInvalidatedAtoms = buildingBlocks[KEY_recomputeInvalidatedAtoms];
+  if (!storeHooks.f && !changedAtoms.size && !mountCallbacks.size && !unmountCallbacks.size) {
+    return;
+  }
+  const errors = [];
+  const call = (fn) => {
+    try {
+      fn();
+    } catch (e) {
+      errors.push(e);
+    }
+  };
+  do {
+    if (storeHooks.f) {
+      call(storeHooks.f);
+    }
+    const callbacks = /* @__PURE__ */ new Set();
+    for (const atom2 of changedAtoms) {
+      const listeners2 = mountedMap.get(atom2)?.l;
+      if (listeners2) {
+        for (const listener of listeners2) {
+          callbacks.add(listener);
+        }
+      }
+    }
+    changedAtoms.clear();
+    for (const fn of unmountCallbacks) {
+      callbacks.add(fn);
+    }
+    unmountCallbacks.clear();
+    for (const fn of mountCallbacks) {
+      callbacks.add(fn);
+    }
+    mountCallbacks.clear();
+    for (const fn of callbacks) {
+      call(fn);
+    }
+    if (changedAtoms.size) {
+      recomputeInvalidatedAtoms(buildingBlocks, store);
+    }
+  } while (changedAtoms.size || unmountCallbacks.size || mountCallbacks.size);
+  if (errors.length) {
+    if (typeof AggregateError === "function") {
+      throw new AggregateError(errors);
+    }
+    throw Object.assign(new Error(), { errors });
+  }
+};
+const BUILDING_BLOCK_recomputeInvalidatedAtoms = (buildingBlocks, store) => {
+  const mountedMap = buildingBlocks[KEY_mountedMap];
+  const invalidatedAtoms = buildingBlocks[KEY_invalidatedAtoms];
+  const changedAtoms = buildingBlocks[KEY_changedAtoms];
+  const ensureAtomState = buildingBlocks[KEY_ensureAtomState];
+  const readAtomState = buildingBlocks[KEY_readAtomState];
+  const mountDependencies = buildingBlocks[KEY_mountDependencies];
+  if (!changedAtoms.size) {
+    return;
+  }
+  const sortedReversedAtoms = [];
+  const sortedReversedStates = [];
+  const visiting = /* @__PURE__ */ new WeakSet();
+  const visited = /* @__PURE__ */ new WeakSet();
+  const stackAtoms = [];
+  const stackStates = [];
+  for (const atom2 of changedAtoms) {
+    stackAtoms.push(atom2);
+    stackStates.push(ensureAtomState(buildingBlocks, store, atom2));
+  }
+  while (stackAtoms.length) {
+    const top = stackAtoms.length - 1;
+    const a = stackAtoms[top];
+    const aState = stackStates[top];
+    if (visited.has(a)) {
+      stackAtoms.pop();
+      stackStates.pop();
+      continue;
+    }
+    if (visiting.has(a)) {
+      if (invalidatedAtoms.get(a) === aState.n) {
+        sortedReversedAtoms.push(a);
+        sortedReversedStates.push(aState);
+      }
+      visited.add(a);
+      stackAtoms.pop();
+      stackStates.pop();
+      continue;
+    }
+    visiting.add(a);
+    for (const d of getMountedOrPendingDependents(a, aState, mountedMap)) {
+      if (!visiting.has(d)) {
+        stackAtoms.push(d);
+        stackStates.push(ensureAtomState(buildingBlocks, store, d));
+      }
+    }
+  }
+  for (let i = sortedReversedAtoms.length - 1; i >= 0; --i) {
+    const a = sortedReversedAtoms[i];
+    const aState = sortedReversedStates[i];
+    let hasChangedDeps = false;
+    for (const dep of aState.d.keys()) {
+      if (dep !== a && changedAtoms.has(dep)) {
+        hasChangedDeps = true;
+        break;
+      }
+    }
+    if (hasChangedDeps) {
+      invalidatedAtoms.set(a, aState.n);
+      readAtomState(buildingBlocks, store, a);
+      mountDependencies(buildingBlocks, store, a);
+    }
+    invalidatedAtoms.delete(a);
+  }
+};
+const storeMutationSet = /* @__PURE__ */ new WeakSet();
+const BUILDING_BLOCK_readAtomState = (buildingBlocks, store, atom2) => {
+  const mountedMap = buildingBlocks[KEY_mountedMap];
+  const invalidatedAtoms = buildingBlocks[KEY_invalidatedAtoms];
+  const changedAtoms = buildingBlocks[KEY_changedAtoms];
+  const storeHooks = buildingBlocks[KEY_storeHooks];
+  const atomRead = buildingBlocks[KEY_atomRead];
+  const ensureAtomState = buildingBlocks[KEY_ensureAtomState];
+  const flushCallbacks = buildingBlocks[KEY_flushCallbacks];
+  const recomputeInvalidatedAtoms = buildingBlocks[KEY_recomputeInvalidatedAtoms];
+  const readAtomState = buildingBlocks[KEY_readAtomState];
+  const mountDependencies = buildingBlocks[KEY_mountDependencies];
+  const setAtomStateValueOrPromise = buildingBlocks[KEY_setAtomStateValueOrPromise];
+  const registerAbortHandler = buildingBlocks[KEY_registerAbortHandler];
+  const storeEpochHolder = buildingBlocks[KEY_storeEpochHolder];
+  const atomState = ensureAtomState(buildingBlocks, store, atom2);
+  const storeEpochNumber = storeEpochHolder[0];
+  if (isAtomStateInitialized(atomState)) {
+    if (
+      // If the atom is mounted, we can use cached atom state,
+      // because it should have been updated by dependencies.
+      // We can't use the cache if the atom is invalidated.
+      mountedMap.has(atom2) && invalidatedAtoms.get(atom2) !== atomState.n || // If atom is not mounted, we can use cached atom state,
+      // only if store hasn't been mutated.
+      atomState.m === storeEpochNumber
+    ) {
+      atomState.m = storeEpochNumber;
+      return atomState;
+    }
+    let hasChangedDeps = false;
+    for (const [a, n] of atomState.d) {
+      if (readAtomState(buildingBlocks, store, a).n !== n) {
+        hasChangedDeps = true;
+        break;
+      }
+    }
+    if (!hasChangedDeps) {
+      atomState.m = storeEpochNumber;
+      return atomState;
+    }
+  }
+  let isSync = true;
+  const prevDeps = new Set(atomState.d.keys());
+  const pruneDependencies = () => {
+    for (const a of prevDeps) {
+      atomState.d.delete(a);
+    }
+  };
+  const mountDependenciesIfAsync = () => {
+    if (mountedMap.has(atom2)) {
+      const shouldRecompute = !changedAtoms.size;
+      mountDependencies(buildingBlocks, store, atom2);
+      if (shouldRecompute) {
+        recomputeInvalidatedAtoms(buildingBlocks, store);
+        flushCallbacks(buildingBlocks, store);
+      }
+    }
+  };
+  const getter = (a) => {
+    if (a === atom2) {
+      const aState2 = ensureAtomState(buildingBlocks, store, a);
+      if (!isAtomStateInitialized(aState2)) {
+        if (hasInitialValue(a)) {
+          setAtomStateValueOrPromise(buildingBlocks, store, a, a.init);
+        } else {
+          throw new Error("no atom init");
+        }
+      }
+      return returnAtomValue(aState2);
+    }
+    const aState = readAtomState(buildingBlocks, store, a);
+    try {
+      return returnAtomValue(aState);
+    } finally {
+      prevDeps.delete(a);
+      atomState.d.set(a, aState.n);
+      if (isPromiseLike(atomState.v)) {
+        addPendingPromiseToDependency(atom2, atomState.v, aState);
+      }
+      if (mountedMap.has(atom2)) {
+        mountedMap.get(a)?.t.add(atom2);
+      }
+      if (!isSync) {
+        mountDependenciesIfAsync();
+      }
+    }
+  };
+  let controller;
+  const options = {
+    get signal() {
+      if (!controller) {
+        controller = new AbortController();
+      }
+      return controller.signal;
+    }
+  };
+  const prevEpochNumber = atomState.n;
+  const prevInvalidated = invalidatedAtoms.get(atom2) === prevEpochNumber;
+  try {
+    if (false) ;
+    const valueOrPromise = atomRead(buildingBlocks, store, atom2, getter, options);
+    if (false) ;
+    setAtomStateValueOrPromise(buildingBlocks, store, atom2, valueOrPromise);
+    if (isPromiseLike(valueOrPromise)) {
+      registerAbortHandler(buildingBlocks, store, valueOrPromise, () => controller?.abort());
+      const settle = () => {
+        pruneDependencies();
+        mountDependenciesIfAsync();
+      };
+      valueOrPromise.then(settle, settle);
+    } else {
+      pruneDependencies();
+    }
+    storeHooks.r?.(atom2);
+    atomState.m = storeEpochNumber;
+    return atomState;
+  } catch (error) {
+    if (shouldThrowSynchronously(error)) {
+      throw error;
+    }
+    delete atomState.v;
+    atomState.e = error;
+    ++atomState.n;
+    atomState.m = storeEpochNumber;
+    return atomState;
+  } finally {
+    isSync = false;
+    if (atomState.n !== prevEpochNumber && prevInvalidated) {
+      invalidatedAtoms.set(atom2, atomState.n);
+      changedAtoms.add(atom2);
+      storeHooks.c?.(atom2);
+    }
+  }
+};
+const BUILDING_BLOCK_invalidateDependents = (buildingBlocks, store, atom2) => {
+  const mountedMap = buildingBlocks[KEY_mountedMap];
+  const invalidatedAtoms = buildingBlocks[KEY_invalidatedAtoms];
+  const ensureAtomState = buildingBlocks[KEY_ensureAtomState];
+  const stack = [atom2];
+  while (stack.length) {
+    const a = stack.pop();
+    const aState = ensureAtomState(buildingBlocks, store, a);
+    for (const d of getMountedOrPendingDependents(a, aState, mountedMap)) {
+      const dState = ensureAtomState(buildingBlocks, store, d);
+      if (invalidatedAtoms.get(d) !== dState.n) {
+        invalidatedAtoms.set(d, dState.n);
+        stack.push(d);
+      }
+    }
+  }
+};
+const BUILDING_BLOCK_writeAtomState = (buildingBlocks, store, atom2, args) => {
+  const changedAtoms = buildingBlocks[KEY_changedAtoms];
+  const storeHooks = buildingBlocks[KEY_storeHooks];
+  const atomWrite = buildingBlocks[KEY_atomWrite];
+  const ensureAtomState = buildingBlocks[KEY_ensureAtomState];
+  const flushCallbacks = buildingBlocks[KEY_flushCallbacks];
+  const recomputeInvalidatedAtoms = buildingBlocks[KEY_recomputeInvalidatedAtoms];
+  const readAtomState = buildingBlocks[KEY_readAtomState];
+  const invalidateDependents = buildingBlocks[KEY_invalidateDependents];
+  const writeAtomState = buildingBlocks[KEY_writeAtomState];
+  const mountDependencies = buildingBlocks[KEY_mountDependencies];
+  const setAtomStateValueOrPromise = buildingBlocks[KEY_setAtomStateValueOrPromise];
+  const storeEpochHolder = buildingBlocks[KEY_storeEpochHolder];
+  let isSync = true;
+  const getter = (a) => returnAtomValue(readAtomState(buildingBlocks, store, a));
+  const setter = (a, ...args2) => {
+    const aState = ensureAtomState(buildingBlocks, store, a);
+    try {
+      if (a === atom2) {
+        if (!hasInitialValue(a)) {
+          throw new Error("atom not writable");
+        }
+        if (false) ;
+        const prevEpochNumber = aState.n;
+        const v = args2[0];
+        setAtomStateValueOrPromise(buildingBlocks, store, a, v);
+        mountDependencies(buildingBlocks, store, a);
+        if (prevEpochNumber !== aState.n) {
+          ++storeEpochHolder[0];
+          changedAtoms.add(a);
+          invalidateDependents(buildingBlocks, store, a);
+          storeHooks.c?.(a);
+        }
+        return void 0;
+      } else {
+        return writeAtomState(buildingBlocks, store, a, args2);
+      }
+    } finally {
+      if (!isSync) {
+        recomputeInvalidatedAtoms(buildingBlocks, store);
+        flushCallbacks(buildingBlocks, store);
+      }
+    }
+  };
+  try {
+    return atomWrite(buildingBlocks, store, atom2, getter, setter, ...args);
+  } finally {
+    isSync = false;
+  }
+};
+const BUILDING_BLOCK_mountDependencies = (buildingBlocks, store, atom2) => {
+  const mountedMap = buildingBlocks[KEY_mountedMap];
+  const changedAtoms = buildingBlocks[KEY_changedAtoms];
+  const storeHooks = buildingBlocks[KEY_storeHooks];
+  const ensureAtomState = buildingBlocks[KEY_ensureAtomState];
+  const invalidateDependents = buildingBlocks[KEY_invalidateDependents];
+  const mountAtom = buildingBlocks[KEY_mountAtom];
+  const unmountAtom = buildingBlocks[KEY_unmountAtom];
+  const atomState = ensureAtomState(buildingBlocks, store, atom2);
+  const mounted = mountedMap.get(atom2);
+  if (mounted && atomState.d.size > 0) {
+    for (const [a, n] of atomState.d) {
+      if (!mounted.d.has(a)) {
+        const aState = ensureAtomState(buildingBlocks, store, a);
+        const aMounted = mountAtom(buildingBlocks, store, a);
+        aMounted.t.add(atom2);
+        mounted.d.add(a);
+        if (n !== aState.n) {
+          changedAtoms.add(a);
+          invalidateDependents(buildingBlocks, store, a);
+          storeHooks.c?.(a);
+        }
+      }
+    }
+    for (const a of mounted.d) {
+      if (!atomState.d.has(a)) {
+        mounted.d.delete(a);
+        const aMounted = unmountAtom(buildingBlocks, store, a);
+        aMounted?.t.delete(atom2);
+      }
+    }
+  }
+};
+const BUILDING_BLOCK_mountAtom = (buildingBlocks, store, atom2) => {
+  const mountedMap = buildingBlocks[KEY_mountedMap];
+  const mountCallbacks = buildingBlocks[KEY_mountCallbacks];
+  const storeHooks = buildingBlocks[KEY_storeHooks];
+  const atomOnMount = buildingBlocks[KEY_atomOnMount];
+  const ensureAtomState = buildingBlocks[KEY_ensureAtomState];
+  const flushCallbacks = buildingBlocks[KEY_flushCallbacks];
+  const recomputeInvalidatedAtoms = buildingBlocks[KEY_recomputeInvalidatedAtoms];
+  const readAtomState = buildingBlocks[KEY_readAtomState];
+  const writeAtomState = buildingBlocks[KEY_writeAtomState];
+  const mountAtom = buildingBlocks[KEY_mountAtom];
+  const atomState = ensureAtomState(buildingBlocks, store, atom2);
+  let mounted = mountedMap.get(atom2);
+  if (!mounted) {
+    readAtomState(buildingBlocks, store, atom2);
+    for (const a of atomState.d.keys()) {
+      const aMounted = mountAtom(buildingBlocks, store, a);
+      aMounted.t.add(atom2);
+    }
+    mounted = {
+      l: /* @__PURE__ */ new Set(),
+      d: new Set(atomState.d.keys()),
+      t: /* @__PURE__ */ new Set()
+    };
+    mountedMap.set(atom2, mounted);
+    if (isActuallyWritableAtom(atom2) && hasOnMount(atom2)) {
+      const processOnMount = () => {
+        let isSync = true;
+        const setAtom = (...args) => {
+          try {
+            return writeAtomState(buildingBlocks, store, atom2, args);
+          } finally {
+            if (!isSync) {
+              recomputeInvalidatedAtoms(buildingBlocks, store);
+              flushCallbacks(buildingBlocks, store);
+            }
+          }
+        };
+        try {
+          const onUnmount = atomOnMount(buildingBlocks, store, atom2, setAtom);
+          if (onUnmount) {
+            mounted.u = () => {
+              isSync = true;
+              try {
+                onUnmount();
+              } finally {
+                isSync = false;
+              }
+            };
+          }
+        } finally {
+          isSync = false;
+        }
+      };
+      mountCallbacks.add(processOnMount);
+    }
+    storeHooks.m?.(atom2);
+  }
+  return mounted;
+};
+const BUILDING_BLOCK_unmountAtom = (buildingBlocks, store, atom2) => {
+  const mountedMap = buildingBlocks[KEY_mountedMap];
+  const unmountCallbacks = buildingBlocks[KEY_unmountCallbacks];
+  const storeHooks = buildingBlocks[KEY_storeHooks];
+  const ensureAtomState = buildingBlocks[KEY_ensureAtomState];
+  const unmountAtom = buildingBlocks[KEY_unmountAtom];
+  const atomState = ensureAtomState(buildingBlocks, store, atom2);
+  let mounted = mountedMap.get(atom2);
+  if (!mounted || mounted.l.size) {
+    return mounted;
+  }
+  let isDependent = false;
+  for (const a of mounted.t) {
+    if (mountedMap.get(a)?.d.has(atom2)) {
+      isDependent = true;
+      break;
+    }
+  }
+  if (!isDependent) {
+    if (mounted.u) {
+      unmountCallbacks.add(mounted.u);
+    }
+    mounted = void 0;
+    mountedMap.delete(atom2);
+    for (const a of atomState.d.keys()) {
+      const aMounted = unmountAtom(buildingBlocks, store, a);
+      aMounted?.t.delete(atom2);
+    }
+    storeHooks.u?.(atom2);
+    return void 0;
+  }
+  return mounted;
+};
+const BUILDING_BLOCK_setAtomStateValueOrPromise = (buildingBlocks, store, atom2, valueOrPromise) => {
+  const ensureAtomState = buildingBlocks[KEY_ensureAtomState];
+  const abortPromise = buildingBlocks[KEY_abortPromise];
+  const atomState = ensureAtomState(buildingBlocks, store, atom2);
+  const hasPrevValue = "v" in atomState;
+  const prevValue = atomState.v;
+  if (isPromiseLike(valueOrPromise)) {
+    for (const a of atomState.d.keys()) {
+      addPendingPromiseToDependency(atom2, valueOrPromise, ensureAtomState(buildingBlocks, store, a));
+    }
+  }
+  atomState.v = valueOrPromise;
+  delete atomState.e;
+  if (!hasPrevValue || !Object.is(prevValue, atomState.v)) {
+    ++atomState.n;
+    if (isPromiseLike(prevValue)) {
+      abortPromise(buildingBlocks, store, prevValue);
+    }
+  }
+};
+const BUILDING_BLOCK_storeGet = (buildingBlocks, store, atom2) => {
+  const readAtomState = buildingBlocks[KEY_readAtomState];
+  return returnAtomValue(readAtomState(buildingBlocks, store, atom2));
+};
+const BUILDING_BLOCK_storeSet = (buildingBlocks, store, atom2, ...args) => {
+  const changedAtoms = buildingBlocks[KEY_changedAtoms];
+  const flushCallbacks = buildingBlocks[KEY_flushCallbacks];
+  const recomputeInvalidatedAtoms = buildingBlocks[KEY_recomputeInvalidatedAtoms];
+  const writeAtomState = buildingBlocks[KEY_writeAtomState];
+  const prevChangedAtomsSize = changedAtoms.size;
+  try {
+    return writeAtomState(buildingBlocks, store, atom2, args);
+  } finally {
+    if (changedAtoms.size !== prevChangedAtomsSize) {
+      recomputeInvalidatedAtoms(buildingBlocks, store);
+      flushCallbacks(buildingBlocks, store);
+    }
+  }
+};
+const BUILDING_BLOCK_storeSub = (buildingBlocks, store, atom2, listener) => {
+  const flushCallbacks = buildingBlocks[KEY_flushCallbacks];
+  const recomputeInvalidatedAtoms = buildingBlocks[KEY_recomputeInvalidatedAtoms];
+  const mountAtom = buildingBlocks[KEY_mountAtom];
+  const unmountAtom = buildingBlocks[KEY_unmountAtom];
+  const mounted = mountAtom(buildingBlocks, store, atom2);
+  const listeners2 = mounted.l;
+  listeners2.add(listener);
+  recomputeInvalidatedAtoms(buildingBlocks, store);
+  flushCallbacks(buildingBlocks, store);
+  return () => {
+    listeners2.delete(listener);
+    unmountAtom(buildingBlocks, store, atom2);
+    recomputeInvalidatedAtoms(buildingBlocks, store);
+    flushCallbacks(buildingBlocks, store);
+  };
+};
+const BUILDING_BLOCK_registerAbortHandler = (buildingBlocks, _store, promise, abortHandler) => {
+  const abortHandlersMap = buildingBlocks[KEY_abortHandlersMap];
+  let abortHandlers = abortHandlersMap.get(promise);
+  if (!abortHandlers) {
+    abortHandlers = /* @__PURE__ */ new Set();
+    abortHandlersMap.set(promise, abortHandlers);
+    const cleanup = () => abortHandlersMap.delete(promise);
+    promise.then(cleanup, cleanup);
+  }
+  abortHandlers.add(abortHandler);
+};
+const BUILDING_BLOCK_abortPromise = (buildingBlocks, _store, promise) => {
+  const abortHandlersMap = buildingBlocks[KEY_abortHandlersMap];
+  const abortHandlers = abortHandlersMap.get(promise);
+  abortHandlers?.forEach((fn) => fn());
+};
+const buildingBlockMap = /* @__PURE__ */ new WeakMap();
+function buildStore(partialBuildingBlocks) {
+  const store = {
+    get(atom2) {
+      return storeGet(buildingBlocks, store, atom2);
+    },
+    set(atom2, ...args) {
+      return storeSet(buildingBlocks, store, atom2, ...args);
+    },
+    sub(atom2, listener) {
+      return storeSub(buildingBlocks, store, atom2, listener);
+    }
+  };
+  const defaultBuildingBlocks = {
+    // store state
+    [KEY_atomStateMap]: /* @__PURE__ */ new WeakMap(),
+    [KEY_mountedMap]: /* @__PURE__ */ new WeakMap(),
+    [KEY_invalidatedAtoms]: /* @__PURE__ */ new WeakMap(),
+    [KEY_changedAtoms]: /* @__PURE__ */ new Set(),
+    [KEY_mountCallbacks]: /* @__PURE__ */ new Set(),
+    [KEY_unmountCallbacks]: /* @__PURE__ */ new Set(),
+    [KEY_storeHooks]: {},
+    // atom interceptors
+    [KEY_atomRead]: BUILDING_BLOCK_atomRead,
+    [KEY_atomWrite]: BUILDING_BLOCK_atomWrite,
+    [KEY_atomOnInit]: BUILDING_BLOCK_atomOnInit,
+    [KEY_atomOnMount]: BUILDING_BLOCK_atomOnMount,
+    // building-block functions
+    [KEY_ensureAtomState]: BUILDING_BLOCK_ensureAtomState,
+    [KEY_flushCallbacks]: BUILDING_BLOCK_flushCallbacks,
+    [KEY_recomputeInvalidatedAtoms]: BUILDING_BLOCK_recomputeInvalidatedAtoms,
+    [KEY_readAtomState]: BUILDING_BLOCK_readAtomState,
+    [KEY_invalidateDependents]: BUILDING_BLOCK_invalidateDependents,
+    [KEY_writeAtomState]: BUILDING_BLOCK_writeAtomState,
+    [KEY_mountDependencies]: BUILDING_BLOCK_mountDependencies,
+    [KEY_mountAtom]: BUILDING_BLOCK_mountAtom,
+    [KEY_unmountAtom]: BUILDING_BLOCK_unmountAtom,
+    [KEY_setAtomStateValueOrPromise]: BUILDING_BLOCK_setAtomStateValueOrPromise,
+    // store api
+    [KEY_storeGet]: BUILDING_BLOCK_storeGet,
+    [KEY_storeSet]: BUILDING_BLOCK_storeSet,
+    [KEY_storeSub]: BUILDING_BLOCK_storeSub,
+    [KEY_enhanceBuildingBlocks]: void 0,
+    // abortable promise support
+    [KEY_abortHandlersMap]: /* @__PURE__ */ new WeakMap(),
+    [KEY_registerAbortHandler]: BUILDING_BLOCK_registerAbortHandler,
+    [KEY_abortPromise]: BUILDING_BLOCK_abortPromise,
+    // store epoch
+    [KEY_storeEpochHolder]: [0]
+  };
+  const buildingBlocks = Object.freeze({
+    ...defaultBuildingBlocks,
+    ...partialBuildingBlocks
+  });
+  buildingBlockMap.set(store, buildingBlocks);
+  const storeGet = buildingBlocks[KEY_storeGet];
+  const storeSet = buildingBlocks[KEY_storeSet];
+  const storeSub = buildingBlocks[KEY_storeSub];
+  return store;
+}
+function createStore() {
+  return buildStore();
+}
+function isRecord$5(value) {
+  return value !== null && typeof value === "object" && !Array.isArray(value) && (Object.getPrototypeOf(value) === Object.prototype || Object.getPrototypeOf(value) === null);
+}
+function stringBytes(value, limit = Infinity) {
+  let size = 0;
+  for (let index = 0; index < value.length; index++) {
+    const code = value.charCodeAt(index);
+    if (code < 128) size++;
+    else if (code < 2048) size += 2;
+    else if (code >= 55296 && code <= 56319) {
+      const following = value.charCodeAt(++index);
+      if (!(following >= 56320 && following <= 57343)) return Infinity;
+      size += 4;
+    } else if (code >= 56320 && code <= 57343) return Infinity;
+    else size += 3;
+    if (size > limit) return Infinity;
+  }
+  return size;
+}
+function jsonBudget() {
+  let remaining = 16 * 1024 * 1024;
+  return {
+    node(depth) {
+      if (depth > 64 || remaining < 32) return false;
+      remaining -= 32;
+      return true;
+    },
+    text(value) {
+      remaining -= stringBytes(value, remaining);
+      return remaining >= 0;
+    },
+    elements(length) {
+      return length <= Math.floor(remaining / 32);
+    }
+  };
+}
+function isBoundedStateJson(value) {
+  const budget = jsonBudget();
+  const visit = (input, depth) => {
+    if (!budget.node(depth)) return false;
+    if (input === null || typeof input === "boolean") return true;
+    if (typeof input === "number") return Number.isFinite(input);
+    if (typeof input === "string") return budget.text(input);
+    if (Array.isArray(input)) {
+      if (!budget.elements(input.length)) return false;
+      for (const item of input) if (!visit(item, depth + 1)) return false;
+      return true;
+    }
+    if (!isRecord$5(input)) return false;
+    for (const key in input) {
+      if (Object.hasOwn(input, key) && (!budget.text(key) || !visit(input[key], depth + 1))) return false;
+    }
+    return true;
+  };
+  return visit(value, 0);
+}
+function counter(value, positive = true) {
+  return typeof value === "number" && Number.isSafeInteger(value) && value >= (positive ? 1 : 0);
+}
+function name(value) {
+  return typeof value === "string" && value.length > 0 && stringBytes(value) <= 256;
+}
+function scope(input) {
+  return isRecord$5(input) && name(input.owner) && counter(input.document, false) ? Object.freeze({ owner: input.owner, document: input.document }) : void 0;
+}
+function address(input) {
+  const parsedScope = scope(input);
+  return parsedScope && isRecord$5(input) && counter(input.client) && counter(input.sequence) ? Object.freeze({ ...parsedScope, client: input.client, sequence: input.sequence }) : void 0;
+}
+function persistence(input) {
+  if (!isRecord$5(input)) return void 0;
+  if (input.kind === "host-managed" || input.kind === "not-written" || input.kind === "pending" || input.kind === "observed-in-native-state")
+    return { kind: input.kind };
+  if (input.kind === "failed" && typeof input.reason === "string") return { kind: "failed", reason: input.reason };
+  return void 0;
+}
+function application(input) {
+  if (!isRecord$5(input)) return void 0;
+  if (input.kind === "unconfirmed" || input.kind === "pending" || input.kind === "waiting-for-inputs" || input.kind === "preparing")
+    return Object.freeze({ kind: input.kind });
+  if (input.kind === "sent" && (input.proof === "connection-call-returned" || input.proof === "native-publication-processed"))
+    return Object.freeze({ kind: "sent", proof: input.proof });
+  if (input.kind === "acknowledged" && name(input.engineSession) && name(input.operation))
+    return Object.freeze({ kind: "acknowledged", engineSession: input.engineSession, operation: input.operation });
+  if (input.kind === "failed" && isRecord$5(input.error) && typeof input.error.message === "string") {
+    const kind = input.error.kind;
+    if (kind === "resource" || kind === "transport" || kind === "engine-rejected" || kind === "defect")
+      return Object.freeze({ kind: "failed", error: Object.freeze({ kind, message: input.error.message }) });
+  }
+  return void 0;
+}
+function engineTarget(input) {
+  if (!isRecord$5(input) || !name(input.key) || !counter(input.generation, false)) return void 0;
+  const parsedScope = scope(input.scope);
+  return parsedScope ? Object.freeze({ scope: parsedScope, key: input.key, generation: input.generation }) : void 0;
+}
+function fieldSnapshot(definition, input) {
+  if (!isRecord$5(input) || !isRecord$5(input.readiness)) return void 0;
+  const parsedApplication = application(input.application);
+  const target = engineTarget(input.target);
+  if (input.application !== void 0 && !parsedApplication || input.target !== void 0 && !target) return void 0;
+  const common = { ...parsedApplication ? { application: parsedApplication } : {}, ...target ? { target } : {} };
+  if (input.readiness.kind === "pending" && !Object.hasOwn(input, "value"))
+    return Object.freeze({ readiness: Object.freeze({ kind: "pending" }), ...common });
+  if (input.readiness.kind === "failed" && !Object.hasOwn(input, "value")) {
+    const reason = input.readiness.reason;
+    if (reason === "missing-parameter" || reason === "invalid-state" || reason === "service-closed")
+      return Object.freeze({ readiness: Object.freeze({ kind: "failed", reason }), ...common });
+    return void 0;
+  }
+  if (input.readiness.kind !== "ready" && !(input.readiness.kind === "failed" && input.readiness.reason === "service-closed")) return void 0;
+  if (!Object.hasOwn(input, "value") || !counter(input.version, false)) return void 0;
+  const parsed = definition.kind === "stored" ? definition.codec.parse(input.value) : typeof input.value === "number" ? { kind: "ok", value: input.value } : { kind: "error" };
+  const evidence = persistence(input.persistence);
+  if (parsed.kind !== "ok" || !evidence) return void 0;
+  let metadata;
+  if (input.metadata !== void 0) {
+    if (!isRecord$5(input.metadata)) return void 0;
+    const { min, max, step, defaultValue } = input.metadata;
+    if (typeof min !== "number" || typeof max !== "number" || typeof step !== "number" || typeof defaultValue !== "number") return void 0;
+    metadata = Object.freeze({ min, max, step, defaultValue });
+  }
+  let gesture;
+  if (input.gesture !== void 0) {
+    if (!isRecord$5(input.gesture) || !counter(input.gesture.client) || !counter(input.gesture.gesture)) return void 0;
+    gesture = Object.freeze({ client: input.gesture.client, gesture: input.gesture.gesture });
+  }
+  return Object.freeze({
+    readiness: input.readiness.kind === "ready" ? Object.freeze({ kind: "ready" }) : Object.freeze({ kind: "failed", reason: "service-closed" }),
+    value: parsed.value,
+    version: input.version,
+    persistence: Object.freeze(evidence),
+    ...metadata ? { metadata } : {},
+    ...gesture ? { gesture } : {},
+    ...common
+  });
+}
+function stateSnapshot(definition, input) {
+  if (!isRecord$5(input) || !counter(input.revision, false) || !isRecord$5(input.fields) || !isRecord$5(input.history) || typeof input.history.canUndo !== "boolean" || typeof input.history.canRedo !== "boolean") return void 0;
+  const parsedScope = scope(input.scope);
+  if (!parsedScope) return void 0;
+  const fields = /* @__PURE__ */ Object.create(null);
+  for (const [key, declaration] of Object.entries(definition)) {
+    if (!Object.hasOwn(input.fields, key)) return void 0;
+    const parsed = fieldSnapshot(declaration, input.fields[key]);
+    if (!parsed || parsed.target && (parsed.target.key !== key || parsed.target.scope.owner !== parsedScope.owner || parsed.target.scope.document !== parsedScope.document)) return void 0;
+    fields[key] = parsed;
+  }
+  return Object.freeze({
+    scope: parsedScope,
+    revision: input.revision,
+    fields: Object.freeze(fields),
+    history: Object.freeze({ canUndo: input.history.canUndo, canRedo: input.history.canRedo })
+  });
+}
+function result(input) {
+  if (!isRecord$5(input)) return void 0;
+  if (input.kind === "accepted" && counter(input.revision, false) && (input.version === void 0 || counter(input.version, false)) && (input.changed === void 0 || typeof input.changed === "boolean"))
+    return {
+      kind: "accepted",
+      revision: input.revision,
+      ...input.version !== void 0 ? { version: input.version } : {},
+      ...input.changed !== void 0 ? { changed: input.changed } : {}
+    };
+  if (input.kind !== "rejected") return void 0;
+  const reason = input.reason;
+  if (reason === "closed" || reason === "closed-client") return { kind: "rejected", reason: "service-closed" };
+  if (reason === "not-ready" || reason === "invalid-command" || reason === "invalid-value" || reason === "stale-version" || reason === "stale-scope" || reason === "busy" || reason === "service-closed" || reason === "sequence") return { kind: "rejected", reason };
+  return void 0;
+}
+function receipt(input) {
+  if (!isRecord$5(input)) return void 0;
+  const parsedAddress = address(input.address);
+  const parsedResult = result(input.result);
+  return parsedAddress && parsedResult ? { address: parsedAddress, result: parsedResult } : void 0;
+}
+function parseClientMessage(definition, input) {
+  if (!isBoundedStateJson(input) || !isRecord$5(input)) return { kind: "invalid", message: "Invalid GUI state-channel body." };
+  if (input.kind === "closed" && name(input.reason)) return { kind: "ok", value: { kind: "closed", reason: input.reason } };
+  if (input.kind === "attach-failed" && counter(input.request) && name(input.reason))
+    return { kind: "ok", value: { kind: "attach-failed", request: input.request, reason: input.reason } };
+  const parsedScope = scope(input.scope);
+  if ((input.kind === "reset" || input.kind === "owner-changed") && parsedScope)
+    return { kind: "ok", value: { kind: input.kind, scope: parsedScope } };
+  if (input.kind === "receipt") {
+    const parsed = receipt(input);
+    if (parsed) return { kind: "ok", value: { kind: "receipt", ...parsed } };
+  }
+  if ((input.kind === "attached" || input.kind === "update") && parsedScope && counter(input.revision, false)) {
+    const state2 = stateSnapshot(definition, input.state);
+    if (state2 && state2.revision === input.revision && state2.scope?.owner === parsedScope.owner && state2.scope.document === parsedScope.document) {
+      if (input.kind === "attached" && counter(input.request) && counter(input.client))
+        return { kind: "ok", value: { kind: "attached", request: input.request, client: input.client, scope: parsedScope, revision: input.revision, state: state2 } };
+      if (input.kind === "update") {
+        const parsedReceipt = input.receipt === void 0 ? void 0 : receipt(input.receipt);
+        if (input.receipt === void 0 || parsedReceipt) return { kind: "ok", value: {
+          kind: "update",
+          scope: parsedScope,
+          revision: input.revision,
+          state: state2,
+          ...parsedReceipt ? { receipt: parsedReceipt } : {}
+        } };
+      }
+    }
+  }
+  return { kind: "invalid", message: "Unrecognized or malformed GUI state-channel message." };
+}
+function parseClientReceipt(input) {
+  if (!isRecord$5(input)) return void 0;
+  const candidate = input.kind === "update" ? input.receipt : input.kind === "receipt" ? input : void 0;
+  return isBoundedStateJson(candidate) ? receipt(candidate) : void 0;
+}
+function sameScope$1(a, b) {
+  return a !== null && a.owner === b.owner && a.document === b.document;
+}
+function createPluginStateClient(definition, ports) {
+  const store = createStore();
+  const projection = atom(Object.freeze({ kind: "connecting" }));
+  const snapshotAtom = atom((get) => get(projection));
+  const getSnapshot = () => store.get(projection);
+  let stopped = false;
+  let attachRequest = 1;
+  let expectedScope;
+  let remove = () => {
+  };
+  let nextSequence = 0;
+  let base;
+  const drafts = /* @__PURE__ */ new Map();
+  const tickets = /* @__PURE__ */ new Map();
+  const outgoing = [];
+  let sending = false;
+  const duringAttach = /* @__PURE__ */ new Map();
+  const scopeKey = (scope2) => JSON.stringify([scope2.owner, scope2.document]);
+  const retainValues = (incoming, previous) => {
+    const fields = {};
+    for (const key of Object.keys(definition)) {
+      const next = incoming.fields[key];
+      const before = previous?.fields[key];
+      const field = definition[key];
+      if (!next || !field) continue;
+      const value = "value" in next && before && "value" in before && (field.kind === "stored" ? field.codec.equals(before.value, next.value) : before.value === next.value) ? before.value : "value" in next ? next.value : void 0;
+      fields[key] = Object.freeze("value" in next ? { ...next, value } : next);
+    }
+    return Object.freeze({ ...incoming, fields: Object.freeze(fields) });
+  };
+  const redraw = () => {
+    if (!base) return;
+    const fields = { ...base.state.fields };
+    const pendingFields = /* @__PURE__ */ new Set();
+    for (const draft of drafts.values()) {
+      const field = fields[draft.key];
+      if (field && "value" in field) {
+        fields[draft.key] = Object.freeze({ ...field, value: draft.value });
+        pendingFields.add(draft.key);
+      }
+    }
+    const state2 = Object.freeze({ ...base.state, fields: Object.freeze(fields) });
+    store.set(projection, Object.freeze({ ...base, state: state2, pendingFields: Object.freeze([...pendingFields]) }));
+  };
+  const settle = (receipt2) => {
+    if (!base || !sameScope$1(base.state.scope, receipt2.address) || receipt2.address.client !== base.client) return;
+    const ticket = tickets.get(receipt2.address.sequence);
+    if (!ticket?.sent) return;
+    const ownDraft = drafts.get(receipt2.address.sequence);
+    if (ownDraft) {
+      for (const [sequence, draft] of drafts) {
+        if (draft.key === ownDraft.key && sequence <= receipt2.address.sequence) drafts.delete(sequence);
+      }
+    }
+    tickets.delete(receipt2.address.sequence);
+    redraw();
+    ticket.finish(receipt2.result);
+  };
+  const interrupt = (reason) => {
+    const pending = [...tickets.values()];
+    tickets.clear();
+    drafts.clear();
+    outgoing.length = 0;
+    base = void 0;
+    duringAttach.clear();
+    for (const ticket of pending) ticket.finish(ticket.sent ? { kind: "interrupted", reason, acceptance: "unknown" } : { kind: "rejected", reason: reason === "reset" ? "stale-scope" : "service-closed" });
+  };
+  const close = (knownReceipt) => {
+    if (stopped) return;
+    stopped = true;
+    remove();
+    if (knownReceipt) settle(knownReceipt);
+    interrupt("closed");
+    store.set(projection, Object.freeze({ kind: "closed" }));
+  };
+  const drain = () => {
+    if (sending) return;
+    sending = true;
+    try {
+      for (let message = outgoing.shift(); message; message = outgoing.shift()) {
+        redraw();
+        const ticket = tickets.get(message.sequence);
+        if (stopped || !ticket || !base || !sameScope$1(base.state.scope, message.scope) || base.client !== message.client) continue;
+        ticket.sent = true;
+        ports.channel.send(message);
+      }
+    } catch (error) {
+      ports.onDefect(error);
+      close();
+    } finally {
+      sending = false;
+    }
+  };
+  const receive = (message) => {
+    if (stopped) return;
+    const current = getSnapshot();
+    if (message.kind === "attached") {
+      if (current.kind !== "connecting" || message.request !== attachRequest || expectedScope && !sameScope$1(expectedScope, message.scope)) return;
+      expectedScope = message.scope;
+      const pending = duringAttach.get(scopeKey(message.scope));
+      const newest = pending && pending.revision > message.revision ? pending.state : message.state;
+      duringAttach.clear();
+      base = { kind: "ready", client: message.client, state: retainValues(newest), pendingFields: [] };
+      redraw();
+    } else if (message.kind === "update") {
+      if (current.kind === "connecting") {
+        if (expectedScope && !sameScope$1(expectedScope, message.scope)) return;
+        const key = scopeKey(message.scope);
+        const pending = duringAttach.get(key);
+        if (!pending || message.revision > pending.revision) duringAttach.set(key, message);
+      } else if (base && sameScope$1(base.state.scope, message.scope)) {
+        if (message.revision > base.state.revision) {
+          base = { ...base, state: retainValues(message.state, base.state) };
+          redraw();
+        }
+        if (message.receipt) settle(message.receipt);
+      }
+    } else if (message.kind === "receipt") settle(message);
+    else if (message.kind === "closed") close();
+    else if (message.kind === "attach-failed") {
+      if (message.request !== attachRequest || current.kind !== "connecting") return;
+      duringAttach.clear();
+      store.set(projection, Object.freeze({ kind: "failed", reason: message.reason }));
+    } else {
+      if (expectedScope && (message.kind === "reset" ? message.scope.owner !== expectedScope.owner || message.scope.document <= expectedScope.document : sameScope$1(expectedScope, message.scope))) return;
+      expectedScope = message.scope;
+      interrupt("reset");
+      nextSequence = 0;
+      attachRequest++;
+      store.set(projection, Object.freeze({ kind: "connecting" }));
+      ports.channel.send({ kind: "attach", request: attachRequest });
+    }
+  };
+  const receiveSafely = (message) => {
+    try {
+      receive(message);
+    } catch (error) {
+      ports.onDefect(error);
+      close(message.kind === "update" ? message.receipt : message.kind === "receipt" ? message : void 0);
+    }
+  };
+  try {
+    remove = ports.channel.subscribe(receiveSafely);
+    if (stopped) remove();
+    else ports.channel.send({ kind: "attach", request: attachRequest });
+  } catch (error) {
+    ports.onDefect(error);
+    close();
+  }
+  return {
+    reactivity: Object.freeze({ store, snapshot: snapshotAtom }),
+    getSnapshot,
+    subscribe(listener) {
+      return store.sub(projection, () => {
+        try {
+          listener(getSnapshot());
+        } catch (error) {
+          ports.onDefect(error);
+        }
+      });
+    },
+    dispatch(command) {
+      try {
+        if (stopped) return Promise.resolve({ kind: "rejected", reason: "service-closed" });
+        if (!base?.state.scope) return Promise.resolve({ kind: "rejected", reason: "not-ready" });
+        const scope2 = base.state.scope;
+        const client2 = base.client;
+        let draft;
+        let outbound = command;
+        if (command.kind === "edit") {
+          const field = definition[command.key];
+          const current = base.state.fields[command.key];
+          if (!Object.hasOwn(definition, command.key) || !field) return Promise.resolve({ kind: "rejected", reason: "invalid-command" });
+          if (!current || current.readiness.kind !== "ready" || !("value" in current)) return Promise.resolve({ kind: "rejected", reason: "not-ready" });
+          const parsed = field.kind === "stored" ? field.codec.parse(command.value) : typeof command.value === "number" && Number.isFinite(command.value) ? { kind: "ok", value: command.value } : { kind: "error" };
+          if (parsed.kind === "error") return Promise.resolve({ kind: "rejected", reason: "invalid-value" });
+          draft = { key: command.key, value: parsed.value };
+          outbound = { ...command, value: field.kind === "stored" ? field.codec.encode(parsed.value) : parsed.value };
+        }
+        if (!isBoundedStateJson({ kind: "command", scope: scope2, client: client2, sequence: nextSequence + 1, command: outbound }))
+          return Promise.resolve({ kind: "rejected", reason: command.kind === "edit" ? "invalid-value" : "invalid-command" });
+        const sequence = ++nextSequence;
+        if (draft) drafts.set(sequence, draft);
+        return new Promise((finish) => {
+          tickets.set(sequence, { finish, sent: false });
+          outgoing.push({ kind: "command", scope: scope2, client: client2, sequence, command: outbound });
+          drain();
+        });
+      } catch (error) {
+        ports.onDefect(error);
+        close();
+        return Promise.resolve({ kind: "rejected", reason: "service-closed" });
+      }
+    },
+    stop: () => close()
+  };
+}
+const handshakeDeadlineMs = 5e3;
+function sameScope(left, right) {
+  return left !== null && left.owner === right.owner && left.document === right.document;
+}
+const attachRegistryKey = /* @__PURE__ */ Symbol.for("builder-kit.plugin-state.attach-requests.v1");
+const existingAttachRegistry = Reflect.get(globalThis, attachRegistryKey);
+const attachRequests = existingAttachRegistry instanceof WeakMap ? existingAttachRegistry : /* @__PURE__ */ new WeakMap();
+if (existingAttachRegistry !== attachRequests) Object.defineProperty(globalThis, attachRegistryKey, { value: attachRequests });
+function createCmajorPluginStateClient(definition, connection, options) {
+  const requests = /* @__PURE__ */ new Map();
+  const clearRequests = () => {
+    for (const request of requests.values()) clearTimeout(request.deadline);
+    requests.clear();
+  };
+  let timeout = () => {
+  };
+  return createPluginStateClient(definition, {
+    onDefect: options.onDefect,
+    channel: {
+      subscribe(listener) {
+        let active = true;
+        let attachment;
+        const process2 = (body) => {
+          if (isRecord$5(body) && (body.kind === "attached" || body.kind === "attach-failed") && (typeof body.request !== "number" || !requests.has(body.request))) return;
+          const parsed = parseClientMessage(definition, body);
+          if (parsed.kind === "invalid") throw new Error(parsed.message);
+          const message = parsed.value;
+          if (message.kind === "attached" || message.kind === "attach-failed") {
+            const request = requests.get(message.request);
+            if (request === void 0) return;
+            requests.delete(message.request);
+            clearTimeout(request.deadline);
+            if (message.kind === "attached") attachment = { scope: message.scope, client: message.client };
+            listener({ ...message, request: request.local });
+          } else {
+            if (message.kind === "closed" || message.kind === "reset" && attachment && message.scope.owner === attachment.scope.owner && message.scope.document > attachment.scope.document || message.kind === "owner-changed" && attachment && !sameScope(attachment.scope, message.scope)) attachment = void 0;
+            listener(message);
+          }
+        };
+        const receive = (body) => {
+          if (!active) return;
+          try {
+            process2(body);
+          } catch (error) {
+            const receipt2 = parseClientReceipt(body);
+            if (receipt2) listener({ kind: "receipt", ...receipt2 });
+            options.onDefect(error);
+            listener({ kind: "closed", reason: "service-closed" });
+          }
+        };
+        const release = () => {
+          if (!active) return;
+          active = false;
+          clearRequests();
+          const owned = attachment;
+          attachment = void 0;
+          try {
+            if (owned) connection.sendMessageToServer({ type: "kit_state", message: { kind: "detach", ...owned } });
+          } catch (error) {
+            options.onDefect(error);
+          }
+          try {
+            connection.removeEventListener("kit_state", receive);
+          } catch (error) {
+            options.onDefect(error);
+          }
+        };
+        timeout = (request) => {
+          if (!active) return;
+          listener({ kind: "attach-failed", request, reason: "state-channel-unavailable" });
+          release();
+        };
+        try {
+          connection.addEventListener("kit_state", receive);
+        } catch (error) {
+          release();
+          throw error;
+        }
+        return release;
+      },
+      send(message) {
+        if (message.kind !== "attach") {
+          connection.sendMessageToServer({ type: "kit_state", message });
+          return;
+        }
+        const previous = attachRequests.get(connection);
+        const request = typeof previous === "number" && Number.isSafeInteger(previous) && previous > 0 ? previous + 1 : 1;
+        if (!Number.isSafeInteger(request)) throw new Error("State attachment request sequence is exhausted.");
+        attachRequests.set(connection, request);
+        clearRequests();
+        requests.set(request, {
+          local: message.request,
+          deadline: setTimeout(() => timeout(message.request), handshakeDeadlineMs)
+        });
+        connection.sendMessageToServer({ type: "kit_state", message: { kind: "attach", request } });
+      }
+    }
+  });
+}
+const Context = reactExports.createContext(null);
+const gestureCounters = /* @__PURE__ */ new WeakMap();
+function useClientValue(client2, selection) {
+  const store = client2.reactivity.store;
+  const subscribe = reactExports.useCallback((notify) => store.sub(selection, notify), [store, selection]);
+  const snapshot = reactExports.useCallback(() => store.get(selection), [store, selection]);
+  return reactExports.useSyncExternalStore(subscribe, snapshot, snapshot);
+}
+function useClient() {
+  const context = reactExports.useContext(Context);
+  if (!context) throw new Error("PluginStateProvider is missing.");
+  return context;
+}
+function PluginStateProvider(props) {
+  const value = reactExports.useMemo(() => ({ definition: props.definition, client: props.client }), [props.definition, props.client]);
+  return /* @__PURE__ */ jsxRuntimeExports.jsx(Context.Provider, { value, children: props.children });
+}
+function usePluginState(declaration) {
+  const { definition, client: client2 } = useClient();
+  const key = Object.keys(definition).find((key2) => definition[key2] === declaration);
+  if (key === void 0) throw new Error("The field does not belong to this plugin state definition.");
+  const selected = reactExports.useMemo(() => atom((get) => {
+    const snapshot = get(client2.reactivity.snapshot);
+    if (snapshot.kind !== "ready") return snapshot;
+    const field = snapshot.state.fields[key];
+    if (!field || field.readiness.kind === "pending") return { kind: "connecting" };
+    if (field.readiness.kind === "failed") return { kind: "failed", reason: field.readiness.reason };
+    if (!("value" in field)) return { kind: "connecting" };
+    return {
+      kind: "ready",
+      // SAFETY: identity lookup above selected this exact field declaration.
+      value: field.value,
+      pending: snapshot.pendingFields.includes(key),
+      ...field.application ? { application: field.application } : {},
+      ...field.metadata ? { metadata: field.metadata } : {}
+    };
+  }), [client2, key]);
+  const state2 = useClientValue(client2, selected);
+  const actions = reactExports.useMemo(() => {
+    let active;
+    const currentGesture = () => {
+      const snapshot = client2.getSnapshot();
+      const scope2 = snapshot.kind === "ready" ? snapshot.state.scope : null;
+      if (active && (!scope2 || scope2.owner !== active.scope.owner || scope2.document !== active.scope.document)) active = void 0;
+      return active;
+    };
+    return {
+      /** Group subsequent edits into one Undo entry. */
+      beginGesture() {
+        if (currentGesture()) return Promise.resolve({ kind: "rejected", reason: "busy" });
+        const snapshot = client2.getSnapshot();
+        if (snapshot.kind !== "ready" || !snapshot.state.scope) return Promise.resolve({ kind: "rejected", reason: "not-ready" });
+        const gesture = (gestureCounters.get(client2) ?? 0) + 1;
+        gestureCounters.set(client2, gesture);
+        active = { scope: snapshot.state.scope, gesture };
+        return client2.dispatch({ kind: "begin", key, gesture }).then((result2) => {
+          if (result2.kind !== "accepted" && active?.gesture === gesture) active = void 0;
+          return result2;
+        });
+      },
+      /** Show a draft immediately and request the edit through the state client. */
+      setValue(value) {
+        const gesture = currentGesture()?.gesture;
+        return client2.dispatch({ kind: "edit", key, value, ...gesture === void 0 ? {} : { gesture } });
+      },
+      /** Finish the current group; safe to call again after pointer cancellation. */
+      endGesture() {
+        const gesture = currentGesture()?.gesture;
+        active = void 0;
+        return gesture === void 0 ? void 0 : client2.dispatch({ kind: "end", key, gesture });
+      }
+    };
+  }, [client2, key]);
+  reactExports.useEffect(() => () => {
+    void actions.endGesture();
+  }, [actions]);
+  return { state: state2, ...actions };
+}
+function usePluginHistory() {
+  const { client: client2 } = useClient();
+  const snapshot = useClientValue(client2, client2.reactivity.snapshot);
+  const actions = reactExports.useMemo(() => ({
+    undo: () => client2.dispatch({ kind: "undo" }),
+    redo: () => client2.dispatch({ kind: "redo" })
+  }), [client2]);
+  return { ...snapshot.kind === "ready" ? snapshot.state.history : { canUndo: false, canRedo: false }, ...actions };
+}
+function parameter$1(endpoint) {
+  return Object.freeze({ kind: "parameter", endpoint });
+}
+function definePluginState(fields) {
+  return Object.freeze({ ...fields });
+}
+function clamp$j(value, min, max) {
+  return Math.min(Math.max(value, min), max);
+}
+function quantize(value, spec) {
+  if (!(spec.step > 0)) {
+    return clamp$j(value, spec.min, spec.max);
+  }
+  const clamped = clamp$j(value, spec.min, spec.max);
+  const stepped = spec.min + Math.round((clamped - spec.min) / spec.step) * spec.step;
+  return clamp$j(Number(stepped.toFixed(8)), spec.min, spec.max);
+}
+function formatFrequencyDisplay(value) {
+  if (value >= 1e4) {
+    return `${(value / 1e3).toFixed(1)} kHz`;
+  }
+  if (value >= 1e3) {
+    return `${(value / 1e3).toFixed(2)} kHz`;
+  }
+  return `${Math.round(value)} Hz`;
+}
+function formatTrimmed(value, digits) {
+  return String(Number(value.toFixed(digits)));
+}
+function normalizeEntryText(text) {
+  return text.trim().toLowerCase().replace(/,/g, "");
+}
+function valueCommit(value, spec, mode = null) {
+  const canonicalValue = quantize(value, spec);
+  return {
+    _tag: "accepted",
+    commit: { _tag: "value", value: canonicalValue, mode },
+    echo: formatParameterEntry(spec, canonicalValue)
+  };
+}
+function rejectForUnit(unit, defaultUnit) {
+  return {
+    _tag: "rejected",
+    message: `${unit} is not compatible with a value in ${defaultUnit}.`
+  };
+}
+function frequencySpec(min, max, step, percentScale) {
+  return { _tag: "frequency", min, max, step, defaultUnit: "Hz", percentScale };
+}
+function scalarSpec({
+  min,
+  max,
+  step,
+  unit,
+  canonicalPerDisplayedUnit = 1,
+  digits = 3
+}) {
+  return {
+    _tag: "scalar",
+    min,
+    max,
+    step,
+    defaultUnit: unit,
+    canonicalPerDisplayedUnit,
+    digits
+  };
+}
+function requirePositiveLogarithmicBase(baseValue) {
+  if (!Number.isFinite(baseValue) || baseValue <= 0) {
+    throw new RangeError("A logarithmic modulation amount requires a positive finite base value.");
+  }
+}
+function amountSpec(args) {
+  return { _tag: "amount", ...args };
+}
+function parameterEntrySpecForSeconds({
+  minSeconds,
+  maxSeconds,
+  stepSeconds,
+  currentSeconds,
+  displayUnit
+}) {
+  return {
+    _tag: "seconds",
+    min: minSeconds,
+    max: maxSeconds,
+    step: stepSeconds,
+    defaultUnit: displayUnit ?? (currentSeconds < 1 ? "ms" : "s")
+  };
+}
+function parameterEntrySpecForFrequency({
+  minHz,
+  maxHz,
+  stepHz,
+  allowLogPercent
+}) {
+  return frequencySpec(minHz, maxHz, stepHz, null);
+}
+function parameterEntrySpecForScalar(input) {
+  return scalarSpec(input);
+}
+function scalarDisplay(spec, canonicalValue) {
+  const displayedValue = canonicalValue / spec.canonicalPerDisplayedUnit;
+  const draft = formatTrimmed(displayedValue, spec.digits);
+  if (spec.defaultUnit === "") {
+    return { display: draft, draft, unit: "" };
+  }
+  if (spec.defaultUnit === "%" || spec.defaultUnit === "°" || spec.defaultUnit === "x") {
+    return { display: `${draft}${spec.defaultUnit}`, draft, unit: spec.defaultUnit };
+  }
+  return { display: `${draft} ${spec.defaultUnit}`, draft, unit: spec.defaultUnit };
+}
+function amountDisplay(spec, canonicalValue) {
+  const displayedValue = canonicalValue / spec.canonicalPerDisplayedUnit;
+  const draft = formatTrimmed(displayedValue, spec.digits);
+  if (spec.defaultUnit === "%" || spec.defaultUnit === "°") {
+    return { display: `${draft}${spec.defaultUnit}`, draft, unit: spec.defaultUnit };
+  }
+  return { display: `${draft} ${spec.defaultUnit}`, draft, unit: spec.defaultUnit };
+}
+function formatParameterEntry(spec, value) {
+  if (spec._tag === "tempoSync") {
+    return formatParameterEntry(spec.freeSpec, value);
+  }
+  const canonicalValue = quantize(value, spec);
+  if (spec._tag === "frequency") {
+    return { display: formatFrequencyDisplay(canonicalValue), draft: String(canonicalValue), unit: spec.defaultUnit };
+  }
+  if (spec._tag === "scalar") {
+    return scalarDisplay(spec, canonicalValue);
+  }
+  if (spec._tag === "seconds") {
+    const editingValue = spec.defaultUnit === "ms" ? canonicalValue * 1e3 : canonicalValue;
+    const draft = formatTrimmed(editingValue, 3);
+    return { display: `${draft} ${spec.defaultUnit}`, draft, unit: spec.defaultUnit };
+  }
+  if (spec._tag === "milliseconds") {
+    const editingValue = spec.defaultUnit === "s" ? canonicalValue / 1e3 : canonicalValue;
+    const draft = formatTrimmed(editingValue, 3);
+    return { display: `${draft} ${spec.defaultUnit}`, draft, unit: spec.defaultUnit };
+  }
+  if (spec._tag === "pan") {
+    const percent = Math.round(canonicalValue * 100);
+    const draft = String(percent);
+    const display = percent === 0 ? "C" : percent < 0 ? `${-percent} L` : `${percent} R`;
+    return { display, draft, unit: spec.defaultUnit };
+  }
+  if (spec._tag === "choice") {
+    const choice2 = spec.choices.find((candidate) => candidate.value === Math.round(canonicalValue));
+    if (choice2 === void 0) {
+      throw new RangeError(`Choice value ${canonicalValue} is absent from its parameter entry spec.`);
+    }
+    return { display: choice2.label, draft: choice2.label, unit: spec.defaultUnit };
+  }
+  return amountDisplay(spec, canonicalValue);
+}
+function parseNumericAndUnit(text) {
+  const match = text.match(/^([+-]?(?:\d+(?:\.\d*)?|\.\d+))\s*([a-z%°]+)?$/);
+  const numericText = match?.[1];
+  if (numericText === void 0) {
+    return null;
+  }
+  return { numericText, unit: match?.[2] };
+}
+function unitIs(unit, ...aliases) {
+  return unit !== void 0 && aliases.includes(unit);
+}
+function parseFrequency(spec, text) {
+  const parsed = parseNumericAndUnit(text);
+  if (parsed === null) {
+    return { _tag: "rejected", message: "Enter a number in Hz or kHz." };
+  }
+  const numericValue = Number(parsed.numericText);
+  if (!Number.isFinite(numericValue)) {
+    return { _tag: "rejected", message: "Enter a finite number in Hz or kHz." };
+  }
+  if (parsed.unit === "%" && spec.percentScale === null) {
+    return rejectForUnit("%", spec.defaultUnit);
+  }
+  if (parsed.unit !== void 0 && parsed.unit !== "%" && !unitIs(parsed.unit, "hz", "khz", "k")) {
+    return rejectForUnit(parsed.unit, spec.defaultUnit);
+  }
+  const value = unitIs(parsed.unit, "khz", "k") ? numericValue * 1e3 : parsed.unit === "%" ? spec.min * (spec.max / spec.min) ** (numericValue / 100) : numericValue;
+  return valueCommit(value, spec);
+}
+function scalarEntryPrompt(spec, finite) {
+  if (spec.defaultUnit === "x") {
+    return "Enter a finite number of voices.";
+  }
+  if (spec.defaultUnit === "") {
+    return finite ? "Enter a finite unitless number." : "Enter a unitless number.";
+  }
+  return `Enter ${finite ? "a finite number" : "a number"} in ${spec.defaultUnit}.`;
+}
+function parseScalar(spec, text) {
+  const parsed = parseNumericAndUnit(text);
+  if (parsed === null) {
+    return { _tag: "rejected", message: scalarEntryPrompt(spec, false) };
+  }
+  const compatible = parsed.unit === void 0 || spec.defaultUnit === "%" && parsed.unit === "%" || spec.defaultUnit === "BPM" && unitIs(parsed.unit, "bpm") || spec.defaultUnit === "Q" && unitIs(parsed.unit, "q") || spec.defaultUnit === "dB" && unitIs(parsed.unit, "db") || spec.defaultUnit === "°" && unitIs(parsed.unit, "°", "deg", "degree", "degrees") || spec.defaultUnit === "st" && unitIs(parsed.unit, "st", "semitone", "semitones", "ct", "cent", "cents") || spec.defaultUnit === "oct" && unitIs(parsed.unit, "oct", "octave", "octaves") || spec.defaultUnit === "ct" && unitIs(parsed.unit, "ct", "cent", "cents") || spec.defaultUnit === "x" && unitIs(parsed.unit, "x", "voice", "voices");
+  if (!compatible && parsed.unit !== void 0) {
+    if (spec.defaultUnit === "") {
+      return { _tag: "rejected", message: `${parsed.unit} is not compatible with a unitless value.` };
+    }
+    return rejectForUnit(parsed.unit, spec.defaultUnit);
+  }
+  const numericValue = Number(parsed.numericText);
+  if (!Number.isFinite(numericValue)) {
+    return { _tag: "rejected", message: scalarEntryPrompt(spec, true) };
+  }
+  const centsScale = spec.defaultUnit === "st" && unitIs(parsed.unit, "ct", "cent", "cents") ? 0.01 : 1;
+  return valueCommit(numericValue * centsScale * spec.canonicalPerDisplayedUnit, spec);
+}
+function timeUnitKind(unit) {
+  if (unit === void 0) return "bare";
+  if (unitIs(unit, "ms", "msec", "msecs", "millisecond", "milliseconds")) return "milliseconds";
+  if (unitIs(unit, "s", "sec", "secs", "second", "seconds")) return "seconds";
+  return "unknown";
+}
+function parseTime(spec, text) {
+  const parsed = parseNumericAndUnit(text);
+  if (parsed === null) {
+    return { _tag: "rejected", message: "Enter a time in ms or s." };
+  }
+  const unitKind = timeUnitKind(parsed.unit);
+  if (unitKind === "unknown" && parsed.unit !== void 0) {
+    return rejectForUnit(parsed.unit, spec.defaultUnit);
+  }
+  const numericValue = Number(parsed.numericText);
+  if (!Number.isFinite(numericValue)) {
+    return { _tag: "rejected", message: "Enter a finite time in ms or s." };
+  }
+  if (spec._tag === "seconds") {
+    const value2 = unitKind === "milliseconds" || unitKind === "bare" && spec.defaultUnit === "ms" ? numericValue / 1e3 : numericValue;
+    return valueCommit(value2, spec);
+  }
+  const value = unitKind === "seconds" || unitKind === "bare" && spec.defaultUnit === "s" ? numericValue * 1e3 : numericValue;
+  return valueCommit(value, spec);
+}
+function parsePan(spec, text) {
+  if (text === "c" || text === "center" || text === "centre") {
+    return valueCommit(0, spec);
+  }
+  const match = text.match(/^([+-]?(?:\d+(?:\.\d*)?|\.\d+))\s*%?\s*([lr])?$/);
+  const numericText = match?.[1];
+  if (numericText === void 0) {
+    return { _tag: "rejected", message: "Enter Pan as a percentage, optionally followed by L or R." };
+  }
+  const numericValue = Number(numericText);
+  if (!Number.isFinite(numericValue)) {
+    return { _tag: "rejected", message: "Enter a finite Pan percentage." };
+  }
+  const direction = match?.[2];
+  const signedPercent = direction === "l" ? -Math.abs(numericValue) : direction === "r" ? Math.abs(numericValue) : numericValue;
+  return valueCommit(signedPercent / 100, spec);
+}
+function parseChoice(spec, text) {
+  const choice2 = spec.choices.find((candidate) => candidate.label.toLowerCase() === text);
+  if (choice2 !== void 0) {
+    return valueCommit(choice2.value, spec);
+  }
+  const parsed = parseNumericAndUnit(text);
+  if (parsed === null || parsed.unit !== void 0) {
+    return { _tag: "rejected", message: "Enter one of the shown choices." };
+  }
+  const numericValue = Number(parsed.numericText);
+  if (!Number.isFinite(numericValue)) {
+    return { _tag: "rejected", message: "Enter one of the shown choices." };
+  }
+  return valueCommit(numericValue, spec);
+}
+function depthPercentValue(spec, numericValue) {
+  const sideLimit = numericValue < 0 ? Math.abs(spec.min) : Math.abs(spec.max);
+  return sideLimit * (numericValue / 100);
+}
+function parseOctavePhysicalInterval(spec, numericText, numericValue, unit) {
+  if (spec.baseValue === null || spec.physicalIntervalUnit === null) {
+    return null;
+  }
+  const isCompatiblePhysicalUnit = spec.physicalIntervalUnit === "frequency" ? unitIs(unit, "hz", "khz", "k") : timeUnitKind(unit) !== "unknown";
+  if (!isCompatiblePhysicalUnit) {
+    return null;
+  }
+  if (!/^[+-]/.test(numericText)) {
+    return {
+      _tag: "rejected",
+      message: `Enter a signed ${spec.physicalIntervalUnit === "frequency" ? "Hz/kHz" : "ms/s"} movement.`
+    };
+  }
+  let movement;
+  if (spec.physicalIntervalUnit === "frequency") {
+    movement = unitIs(unit, "khz", "k") ? numericValue * 1e3 : numericValue;
+  } else {
+    movement = timeUnitKind(unit) === "seconds" ? numericValue * 1e3 : numericValue;
+  }
+  const endpoint = spec.baseValue + movement;
+  if (!(endpoint > 0)) {
+    return { _tag: "rejected", message: "The resulting value must be above zero." };
+  }
+  return valueCommit(Math.log2(endpoint / spec.baseValue), spec);
+}
+function amountUnitCompatible(spec, unit) {
+  return spec.defaultUnit === "oct" && unitIs(unit, "oct", "octave", "octaves") || spec.defaultUnit === "st" && unitIs(unit, "st", "semitone", "semitones", "ct", "cent", "cents") || spec.defaultUnit === "dB" && unitIs(unit, "db") || spec.defaultUnit === "Q" && unitIs(unit, "q") || spec.defaultUnit === "s" && timeUnitKind(unit) !== "unknown" || spec.defaultUnit === "ms" && timeUnitKind(unit) !== "unknown" || spec.defaultUnit === "Hz" && unitIs(unit, "hz", "khz", "k") || spec.defaultUnit === "°" && unitIs(unit, "°", "deg", "degree", "degrees") || spec.defaultUnit === "%" && unit === "%";
+}
+function parseAmount(spec, text) {
+  const parsed = parseNumericAndUnit(text);
+  if (parsed === null) {
+    return { _tag: "rejected", message: `Enter an amount in ${spec.defaultUnit} or %.` };
+  }
+  const numericValue = Number(parsed.numericText);
+  if (!Number.isFinite(numericValue)) {
+    return { _tag: "rejected", message: `Enter a finite amount in ${spec.defaultUnit} or %.` };
+  }
+  if (parsed.unit === "%") {
+    const value2 = spec.percentMeaning === "native" ? numericValue * spec.canonicalPerDisplayedUnit : depthPercentValue(spec, numericValue);
+    return valueCommit(value2, spec);
+  }
+  if (spec.defaultUnit === "oct" && parsed.unit !== void 0) {
+    const interval = parseOctavePhysicalInterval(spec, parsed.numericText, numericValue, parsed.unit);
+    if (interval !== null) {
+      return interval;
+    }
+  }
+  if (parsed.unit !== void 0 && !amountUnitCompatible(spec, parsed.unit)) {
+    return rejectForUnit(parsed.unit, spec.defaultUnit);
+  }
+  const centsScale = spec.defaultUnit === "st" && unitIs(parsed.unit, "ct", "cent", "cents") ? 0.01 : 1;
+  let value = numericValue * centsScale * spec.canonicalPerDisplayedUnit;
+  if (spec.defaultUnit === "s" && timeUnitKind(parsed.unit) === "milliseconds") {
+    value = numericValue / 1e3;
+  } else if (spec.defaultUnit === "ms" && timeUnitKind(parsed.unit) === "seconds") {
+    value = numericValue * 1e3;
+  } else if (spec.defaultUnit === "Hz" && unitIs(parsed.unit, "khz", "k")) {
+    value = numericValue * 1e3;
+  }
+  return valueCommit(value, spec);
+}
+function parseTempoSync(spec, text) {
+  const division = spec.divisions.find((candidate) => candidate.label.toLowerCase() === text);
+  if (division !== void 0) {
+    return {
+      _tag: "accepted",
+      commit: {
+        _tag: "tempoDivision",
+        mode: "sync",
+        divisionValue: division.value,
+        divisionLabel: division.label
+      },
+      echo: { display: `${division.label} Sync`, draft: division.label, unit: "Sync" }
+    };
+  }
+  if (/^\d+\/\d+(?:\.|t)?$/i.test(text)) {
+    return { _tag: "rejected", message: "That tempo division is not supported for this parameter." };
+  }
+  const result2 = spec.freeSpec._tag === "frequency" ? parseFrequency(spec.freeSpec, text) : parseTime(spec.freeSpec, text);
+  if (result2._tag === "rejected") {
+    return result2;
+  }
+  if (result2.commit._tag !== "value") {
+    throw new Error("A Free-value parser returned a tempo division.");
+  }
+  return {
+    ...result2,
+    commit: { ...result2.commit, mode: "free" }
+  };
+}
+function parseParameterEntry(spec, text) {
+  const normalizedText = normalizeEntryText(text);
+  if (spec._tag === "tempoSync") return parseTempoSync(spec, normalizedText);
+  if (spec._tag === "frequency") return parseFrequency(spec, normalizedText);
+  if (spec._tag === "scalar") return parseScalar(spec, normalizedText);
+  if (spec._tag === "seconds" || spec._tag === "milliseconds") return parseTime(spec, normalizedText);
+  if (spec._tag === "pan") return parsePan(spec, normalizedText);
+  if (spec._tag === "choice") return parseChoice(spec, normalizedText);
+  return parseAmount(spec, normalizedText);
+}
+const FILTER_CUTOFF_MIN_HZ$1 = 20;
+const FILTER_CUTOFF_MAX_HZ$1 = 2e4;
+const FILTER_Q_MIN$2 = 0.1;
+const FILTER_Q_MAX$2 = 20;
+const FILTER_RESPONSE_POINT_COUNT = 240;
+const FILTER_MODE_OFF$1 = 0;
+const FILTER_MODE_LOWPASS$1 = 1;
+const FILTER_MODE_HIGHPASS = 2;
+const FILTER_MODE_BANDPASS = 3;
+const FILTER_MODE_NOTCH = 4;
+const FILTER_MODE_PEAK$1 = 5;
+function clamp$i(value, min, max) {
+  return Math.min(Math.max(value, min), max);
+}
+function clampFilterMode$1(value) {
+  return clamp$i(Math.round(Number(value) || 0), FILTER_MODE_OFF$1, FILTER_MODE_PEAK$1);
+}
+function clampFilterCutoffHz$1(value) {
+  return clamp$i(Number(value) || FILTER_CUTOFF_MIN_HZ$1, FILTER_CUTOFF_MIN_HZ$1, FILTER_CUTOFF_MAX_HZ$1);
+}
+function clampFilterQ$1(value) {
+  return clamp$i(Number(value) || 0, FILTER_Q_MIN$2, FILTER_Q_MAX$2);
+}
+function filterCutoffHzToNormalized(value) {
+  const clampedHz = clampFilterCutoffHz$1(value);
+  const minLog = Math.log(FILTER_CUTOFF_MIN_HZ$1);
+  const maxLog = Math.log(FILTER_CUTOFF_MAX_HZ$1);
+  return clamp$i((Math.log(clampedHz) - minLog) / (maxLog - minLog), 0, 1);
+}
+function normalizedToFilterCutoffHz(value) {
+  const normalized2 = clamp$i(Number(value) || 0, 0, 1);
+  const minLog = Math.log(FILTER_CUTOFF_MIN_HZ$1);
+  const maxLog = Math.log(FILTER_CUTOFF_MAX_HZ$1);
+  return Math.exp(minLog + (maxLog - minLog) * normalized2);
+}
+function filterQToNormalized(value) {
+  const clampedQ = clampFilterQ$1(value);
+  return (clampedQ - FILTER_Q_MIN$2) / (FILTER_Q_MAX$2 - FILTER_Q_MIN$2);
+}
+function normalizedToFilterQ(value) {
+  const normalized2 = clamp$i(Number(value) || 0, 0, 1);
+  return FILTER_Q_MIN$2 + (FILTER_Q_MAX$2 - FILTER_Q_MIN$2) * normalized2;
+}
+function complexAdd(left, right) {
+  return {
+    real: left.real + right.real,
+    imaginary: left.imaginary + right.imaginary
+  };
+}
+function complexSubtract(left, right) {
+  return {
+    real: left.real - right.real,
+    imaginary: left.imaginary - right.imaginary
+  };
+}
+function complexScale(value, scalar) {
+  return {
+    real: value.real * scalar,
+    imaginary: value.imaginary * scalar
+  };
+}
+function complexMultiply(left, right) {
+  return {
+    real: left.real * right.real - left.imaginary * right.imaginary,
+    imaginary: left.real * right.imaginary + left.imaginary * right.real
+  };
+}
+function complexDivide(numerator, denominator) {
+  const denominatorMagnitude = denominator.real * denominator.real + denominator.imaginary * denominator.imaginary;
+  if (denominatorMagnitude <= 1e-18) {
+    return { real: 0, imaginary: 0 };
+  }
+  return {
+    real: (numerator.real * denominator.real + numerator.imaginary * denominator.imaginary) / denominatorMagnitude,
+    imaginary: (numerator.imaginary * denominator.real - numerator.real * denominator.imaginary) / denominatorMagnitude
+  };
+}
+function responseGainForFrequency({
+  mode,
+  cutoffHz,
+  q,
+  sampleRate,
+  frequencyHz
+}) {
+  if (mode === FILTER_MODE_OFF$1) {
+    return 1;
+  }
+  const resolvedMode = clampFilterMode$1(mode);
+  const safeSampleRate = Math.max(1, Number(sampleRate) || 44100);
+  const clampedCutoff = clampFilterCutoffHz$1(Math.min(Number(cutoffHz) || 0, safeSampleRate * 0.48));
+  const clampedQ = clampFilterQ$1(q);
+  const safeFrequency = clamp$i(frequencyHz, 10, safeSampleRate * 0.49);
+  const g = Math.tan(Math.PI * clampedCutoff / safeSampleRate);
+  const k = 1 / clampedQ;
+  let f0 = 1;
+  let f1 = 0;
+  let f2 = 0;
+  if (resolvedMode === FILTER_MODE_LOWPASS$1) {
+    f0 = 0;
+    f1 = 0;
+    f2 = 1;
+  } else if (resolvedMode === FILTER_MODE_HIGHPASS) {
+    f0 = 1;
+    f1 = -k;
+    f2 = -1;
+  } else if (resolvedMode === FILTER_MODE_BANDPASS) {
+    f0 = 0;
+    f1 = 1;
+    f2 = 0;
+  } else if (resolvedMode === FILTER_MODE_NOTCH) {
+    f0 = 1;
+    f1 = -k;
+    f2 = 0;
+  } else if (resolvedMode === FILTER_MODE_PEAK$1) {
+    f0 = 1;
+    f1 = -k;
+    f2 = -2;
+  }
+  const a1 = 1 / (1 + g * (g + k));
+  const a2 = g * a1;
+  const a3 = g * a2;
+  const z = {
+    real: Math.cos(2 * Math.PI * safeFrequency / safeSampleRate),
+    imaginary: Math.sin(2 * Math.PI * safeFrequency / safeSampleRate)
+  };
+  const m00 = complexSubtract(z, { real: 2 * a1 - 1, imaginary: 0 });
+  const m01 = { real: 2 * a2, imaginary: 0 };
+  const m10 = { real: -2 * a2, imaginary: 0 };
+  const m11 = complexSubtract(z, { real: 1 - 2 * a3, imaginary: 0 });
+  const det = complexSubtract(complexMultiply(m00, m11), complexMultiply(m01, m10));
+  const b0 = { real: 2 * a2, imaginary: 0 };
+  const b1 = { real: 2 * a3, imaginary: 0 };
+  const state1 = complexDivide(complexSubtract(complexMultiply(b0, m11), complexMultiply(m01, b1)), det);
+  const state2 = complexDivide(complexSubtract(complexMultiply(m00, b1), complexMultiply(b0, m10)), det);
+  const c0 = f1 * a1 + f2 * a2;
+  const c1 = -f1 * a2 + f2 * (1 - a3);
+  const d = f0 + f1 * a2 + f2 * a3;
+  const transfer = complexAdd(
+    { real: d, imaginary: 0 },
+    complexAdd(complexScale(state1, c0), complexScale(state2, c1))
+  );
+  return Math.hypot(transfer.real, transfer.imaginary);
+}
+function buildFrequencies(pointCount) {
+  return Array.from({ length: pointCount }, (_, index) => normalizedToFilterCutoffHz(index / Math.max(1, pointCount - 1)));
+}
+function createFilterResponseModel({
+  mode,
+  cutoffHz,
+  q,
+  sampleRate = 44100,
+  pointCount = FILTER_RESPONSE_POINT_COUNT
+}) {
+  const resolvedMode = clampFilterMode$1(mode);
+  const resolvedCutoff = clampFilterCutoffHz$1(cutoffHz);
+  const resolvedQ = clampFilterQ$1(q);
+  const resolvedSampleRate = Math.max(1, Math.round(sampleRate || 44100));
+  const frequenciesHz = buildFrequencies(pointCount);
+  const magnitudesDb = frequenciesHz.map((frequencyHz) => {
+    const gain = responseGainForFrequency({
+      mode: resolvedMode,
+      cutoffHz: resolvedCutoff,
+      q: resolvedQ,
+      sampleRate: resolvedSampleRate,
+      frequencyHz
+    });
+    return 20 * Math.log10(Math.max(gain, 1e-6));
+  });
+  let peakIndex = 0;
+  let minIndex = 0;
+  for (let index = 1; index < magnitudesDb.length; index += 1) {
+    if (magnitudesDb[index] > magnitudesDb[peakIndex]) {
+      peakIndex = index;
+    }
+    if (magnitudesDb[index] < magnitudesDb[minIndex]) {
+      minIndex = index;
+    }
+  }
+  return {
+    mode: resolvedMode,
+    cutoffHz: resolvedCutoff,
+    q: resolvedQ,
+    sampleRate: resolvedSampleRate,
+    frequenciesHz,
+    magnitudesDb,
+    peakIndex,
+    minIndex
+  };
+}
+const ENHANCER_SPECTRUM_PLOT = Object.freeze({
+  width: 760,
+  height: 272,
+  left: 42,
+  right: 42,
+  top: 18,
+  bottom: 28,
+  minimumHz: 20,
+  maximumHz: 2e4,
+  minimumGainDb: 0,
+  maximumGainDb: 12,
+  minimumLevelDbfs: -72,
+  maximumLevelDbfs: 0
+});
+const spectrumPointCount = 241;
+const spectrumAttackMs = 55;
+const spectrumReleaseMs = 190;
+function clamp$h(value, minimum, maximum) {
+  return Math.min(maximum, Math.max(minimum, value));
+}
+function isRecord$4(value) {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+function normalizeSpectrumMessage(message) {
+  const payload = isRecord$4(message) && Object.hasOwn(message, "event") ? message.event : message;
+  if (!isRecord$4(payload)) {
+    return null;
+  }
+  const sampleRateHz = payload.sampleRateHz;
+  const magnitudes = payload.magnitudes;
+  if (typeof sampleRateHz !== "number" || !Number.isFinite(sampleRateHz) || sampleRateHz <= 0 || !Array.isArray(magnitudes) || magnitudes.length < 8) {
+    return null;
+  }
+  return {
+    sampleRateHz,
+    magnitudes: magnitudes.map((value) => typeof value === "number" && Number.isFinite(value) ? Math.max(0, value) : 0)
+  };
+}
+function interpolateLogFrequency(normalized2) {
+  return ENHANCER_SPECTRUM_PLOT.minimumHz * Math.pow(
+    ENHANCER_SPECTRUM_PLOT.maximumHz / ENHANCER_SPECTRUM_PLOT.minimumHz,
+    clamp$h(normalized2, 0, 1)
+  );
+}
+const spectrumRanges = Object.freeze(
+  Array.from({ length: spectrumPointCount }, (_, index) => {
+    const normalized2 = index / (spectrumPointCount - 1);
+    const centerHz = interpolateLogFrequency(normalized2);
+    const previousHz = interpolateLogFrequency(
+      Math.max(0, index - 0.5) / (spectrumPointCount - 1)
+    );
+    const nextHz = interpolateLogFrequency(
+      Math.min(spectrumPointCount - 1, index + 0.5) / (spectrumPointCount - 1)
+    );
+    return {
+      centerHz,
+      lowHz: index === 0 ? ENHANCER_SPECTRUM_PLOT.minimumHz : previousHz,
+      highHz: index === spectrumPointCount - 1 ? ENHANCER_SPECTRUM_PLOT.maximumHz : nextHz
+    };
+  })
+);
+function magnitudeToDbfs(magnitude) {
+  return 20 * Math.log10(Math.max(1e-9, magnitude));
+}
+function sampleFrame(frame) {
+  const binHz = frame.sampleRateHz / (frame.magnitudes.length * 2);
+  const maximumBin = frame.magnitudes.length - 1;
+  return spectrumRanges.map(({ lowHz, highHz }) => {
+    const firstBin = clamp$h(Math.floor(lowHz / binHz), 0, maximumBin);
+    const lastBin = clamp$h(Math.ceil(highHz / binHz), firstBin, maximumBin);
+    let maximumMagnitude = 0;
+    for (let bin = firstBin; bin <= lastBin; bin += 1) {
+      maximumMagnitude = Math.max(maximumMagnitude, frame.magnitudes[bin] ?? 0);
+    }
+    return magnitudeToDbfs(maximumMagnitude);
+  });
+}
+function smoothSpectrum(previous, targetDbfs, timestampMs) {
+  if (previous === null || previous.magnitudesDbfs.length !== targetDbfs.length) {
+    return targetDbfs;
+  }
+  const deltaMs = clamp$h(timestampMs - previous.timestampMs, 0, 1e3);
+  return targetDbfs.map((target, index) => {
+    const prior = previous.magnitudesDbfs[index] ?? target;
+    const timeMs = target > prior ? spectrumAttackMs : spectrumReleaseMs;
+    const coefficient = Math.exp(-deltaMs / timeMs);
+    return target + (prior - target) * coefficient;
+  });
+}
+function findPeakDbfs(magnitudesDbfs) {
+  let peak = ENHANCER_SPECTRUM_PLOT.minimumLevelDbfs;
+  for (const magnitudeDbfs of magnitudesDbfs) {
+    peak = Math.max(peak, magnitudeDbfs);
+  }
+  return peak;
+}
+function enhancerFrequencyX(frequencyHz) {
+  const normalized2 = Math.log(
+    clamp$h(
+      frequencyHz,
+      ENHANCER_SPECTRUM_PLOT.minimumHz,
+      ENHANCER_SPECTRUM_PLOT.maximumHz
+    ) / ENHANCER_SPECTRUM_PLOT.minimumHz
+  ) / Math.log(
+    ENHANCER_SPECTRUM_PLOT.maximumHz / ENHANCER_SPECTRUM_PLOT.minimumHz
+  );
+  return ENHANCER_SPECTRUM_PLOT.left + normalized2 * (ENHANCER_SPECTRUM_PLOT.width - ENHANCER_SPECTRUM_PLOT.left - ENHANCER_SPECTRUM_PLOT.right);
+}
+function enhancerLevelY(levelDbfs) {
+  const normalized2 = (clamp$h(
+    levelDbfs,
+    ENHANCER_SPECTRUM_PLOT.minimumLevelDbfs,
+    ENHANCER_SPECTRUM_PLOT.maximumLevelDbfs
+  ) - ENHANCER_SPECTRUM_PLOT.minimumLevelDbfs) / (ENHANCER_SPECTRUM_PLOT.maximumLevelDbfs - ENHANCER_SPECTRUM_PLOT.minimumLevelDbfs);
+  return ENHANCER_SPECTRUM_PLOT.height - ENHANCER_SPECTRUM_PLOT.bottom - normalized2 * (ENHANCER_SPECTRUM_PLOT.height - ENHANCER_SPECTRUM_PLOT.top - ENHANCER_SPECTRUM_PLOT.bottom);
+}
+function createEnhancerFrequencyPath(yAtFrequency) {
+  return spectrumRanges.map(({ centerHz }, index) => `${index === 0 ? "M" : "L"} ${enhancerFrequencyX(centerHz).toFixed(2)} ` + yAtFrequency(centerHz).toFixed(2)).join(" ");
+}
+function advanceEnhancerSpectrum(message, previous, timestampMs) {
+  const frame = normalizeSpectrumMessage(message);
+  if (frame === null) {
+    return previous;
+  }
+  const magnitudesDbfs = smoothSpectrum(previous, sampleFrame(frame), timestampMs);
+  const path = createEnhancerFrequencyPath((frequencyHz) => {
+    const index = Math.round(
+      Math.log(frequencyHz / ENHANCER_SPECTRUM_PLOT.minimumHz) / Math.log(
+        ENHANCER_SPECTRUM_PLOT.maximumHz / ENHANCER_SPECTRUM_PLOT.minimumHz
+      ) * (spectrumPointCount - 1)
+    );
+    return enhancerLevelY(
+      magnitudesDbfs[index] ?? ENHANCER_SPECTRUM_PLOT.minimumLevelDbfs
+    );
+  });
+  return {
+    path,
+    peakDbfs: findPeakDbfs(magnitudesDbfs),
+    magnitudesDbfs,
+    timestampMs
+  };
+}
+const synthPluginState = definePluginState({
+  playMode: parameter$1("playMode"),
+  glideTime: parameter$1("glideTime"),
+  globalTune: parameter$1("globalTune")
+});
+function reportStateDefect(error) {
+  console.error("Cosimo Voice state failed", error instanceof Error ? error.stack ?? error.message : String(error));
+}
+function hasStateChannel(connection) {
+  return "addEventListener" in connection && typeof connection.addEventListener === "function" && "removeEventListener" in connection && typeof connection.removeEventListener === "function" && "sendMessageToServer" in connection && typeof connection.sendMessageToServer === "function";
+}
+function SynthStateProvider({ patchConnection, children }) {
+  const [viewConnection, setViewConnection] = reactExports.useState(null);
+  reactExports.useEffect(() => {
+    if (!hasStateChannel(patchConnection)) {
+      setViewConnection({ kind: "failed", patchConnection });
+      return;
+    }
+    const client2 = createCmajorPluginStateClient(synthPluginState, patchConnection, {
+      onDefect: reportStateDefect
+    });
+    setViewConnection({ kind: "connected", patchConnection, client: client2 });
+    return () => client2.stop();
+  }, [patchConnection]);
+  if (viewConnection?.patchConnection !== patchConnection) {
+    return /* @__PURE__ */ jsxRuntimeExports.jsx("div", { role: "status", children: "Connecting Voice controls…" });
+  }
+  if (viewConnection.kind === "failed") {
+    return /* @__PURE__ */ jsxRuntimeExports.jsx("div", { role: "alert", children: "Voice controls require the current plugin state runtime." });
+  }
+  return /* @__PURE__ */ jsxRuntimeExports.jsx(PluginStateProvider, { definition: synthPluginState, client: viewConnection.client, children });
+}
+function useSynthPluginParameterBinding(key, options) {
+  const parameter2 = usePluginState(synthPluginState[key]);
+  const firstHostValue = reactExports.useRef(null);
+  if (parameter2.state.kind === "ready" && firstHostValue.current?.key !== key) {
+    firstHostValue.current = { key, value: options.coerce(parameter2.state.value) };
+  }
+  const isReady = parameter2.state.kind === "ready";
+  const value = parameter2.state.kind === "ready" ? options.coerce(parameter2.state.value) : options.initialValue;
+  const initialValue = parameter2.state.kind === "ready" ? options.coerce(parameter2.state.metadata?.defaultValue ?? options.initialValue) : options.initialValue;
+  const endpointID = synthPluginState[key].endpoint;
+  const presentation = reactExports.useRef({ isReady, coerce: options.coerce });
+  presentation.current = { isReady, coerce: options.coerce };
+  const reportingGesture = reactExports.useRef(null);
+  const notifications = reactExports.useRef(null);
+  const reportAfter = reactExports.useCallback((command, report) => {
+    const settled = command?.catch((error) => {
+      reportStateDefect(error);
+      return void 0;
+    });
+    notifications.current = (notifications.current ?? Promise.resolve()).then(() => settled).then(report).catch(reportStateDefect);
+  }, []);
+  const setValue = reactExports.useCallback((nextValue) => {
+    const current = presentation.current;
+    if (!current.isReady) return;
+    const coercedValue = current.coerce(nextValue);
+    const reporter = captureUserEditReporter();
+    reportAfter(parameter2.setValue(coercedValue), (result2) => {
+      if (result2?.kind !== "accepted") return;
+      if (typeof result2.changed !== "boolean") {
+        reportStateDefect(new Error("An accepted Voice edit did not report whether its value changed."));
+        return;
+      }
+      reporter.parameterEdit({ endpointID, changed: result2.changed });
+    });
+  }, [endpointID, parameter2.setValue, reportAfter]);
+  const beginGesture = reactExports.useCallback(() => {
+    if (!presentation.current.isReady || reportingGesture.current) return;
+    const gesture = { reporter: captureUserEditReporter(), started: false };
+    reportingGesture.current = gesture;
+    reportAfter(parameter2.beginGesture(), (result2) => {
+      if (result2?.kind !== "accepted") return;
+      gesture.started = true;
+      gesture.reporter.gestureStart();
+    });
+  }, [parameter2.beginGesture, reportAfter]);
+  const endGesture = reactExports.useCallback(() => {
+    const gesture = reportingGesture.current;
+    if (!gesture) return;
+    reportingGesture.current = null;
+    reportAfter(parameter2.endGesture(), () => {
+      if (!gesture.started) return;
+      gesture.started = false;
+      gesture.reporter.gestureEnd();
+    });
+  }, [parameter2.endGesture, reportAfter]);
+  reactExports.useEffect(() => endGesture, [endGesture]);
+  const commitValue = reactExports.useCallback((nextValue) => {
+    beginGesture();
+    setValue(nextValue);
+    endGesture();
+  }, [beginGesture, endGesture, setValue]);
+  return reactExports.useMemo(() => ({
+    endpointID,
+    value,
+    initialValue,
+    isReady,
+    hostBaseline: isReady && firstHostValue.current?.key === key ? { _tag: "host-confirmed", value: firstHostValue.current.value } : { _tag: "pending" },
+    setValue,
+    commitValue,
+    beginGesture,
+    endGesture
+  }), [beginGesture, commitValue, endGesture, endpointID, initialValue, isReady, key, setValue, value]);
+}
 const runtimeFailurePhaseLoadSource = 1;
 const runtimeFailurePhaseBuildMip = 2;
 const runtimeFailurePhaseTransferMip = 3;
 const runtimeFailureReasonTimeout = 2;
 const runtimeFailureScopeService = 1;
-const FILTER_MODE_OFF$1 = 0;
-const FILTER_MODE_LOWPASS$1 = 1;
-const FILTER_MODE_PEAK$1 = 5;
+const FILTER_MODE_OFF = 0;
+const FILTER_MODE_LOWPASS = 1;
+const FILTER_MODE_PEAK = 5;
 const WARP_MODE_OFF$1 = 0;
 const WARP_MODE_MIRROR$1 = 4;
 const UNISON_MAX_VOICES = 8;
@@ -13266,42 +15355,42 @@ const UNISON_DETUNE_MODE_LINEAR = 0;
 const UNISON_DETUNE_MODE_RANDOM = 4;
 const UNISON_STACK_MODE_OFF = 0;
 const UNISON_STACK_MODE_CENTER_TWO_OCTAVES = 4;
-const FILTER_CUTOFF_MIN_HZ$1 = 20;
-const FILTER_CUTOFF_MAX_HZ$1 = 2e4;
-const FILTER_Q_MIN$2 = 0.1;
-const FILTER_Q_MAX$2 = 20;
-function clamp$j(value, min, max) {
+const FILTER_CUTOFF_MIN_HZ = 20;
+const FILTER_CUTOFF_MAX_HZ = 2e4;
+const FILTER_Q_MIN$1 = 0.1;
+const FILTER_Q_MAX$1 = 20;
+function clamp$g(value, min, max) {
   return Math.min(Math.max(value, min), max);
 }
-function clampFilterCutoffHz$1(value) {
-  return clamp$j(Number(value) || 0, FILTER_CUTOFF_MIN_HZ$1, FILTER_CUTOFF_MAX_HZ$1);
+function clampFilterCutoffHz(value) {
+  return clamp$g(Number(value) || 0, FILTER_CUTOFF_MIN_HZ, FILTER_CUTOFF_MAX_HZ);
 }
-function clampFilterQ$1(value) {
-  return clamp$j(Number(value) || 0, FILTER_Q_MIN$2, FILTER_Q_MAX$2);
+function clampFilterQ(value) {
+  return clamp$g(Number(value) || 0, FILTER_Q_MIN$1, FILTER_Q_MAX$1);
 }
-function clampFilterMode$1(value) {
-  return clamp$j(Math.round(Number(value) || 0), FILTER_MODE_OFF$1, FILTER_MODE_PEAK$1);
+function clampFilterMode(value) {
+  return clamp$g(Math.round(Number(value) || 0), FILTER_MODE_OFF, FILTER_MODE_PEAK);
 }
 function clampWarpMode(value) {
-  return clamp$j(Math.round(Number(value) || 0), WARP_MODE_OFF$1, WARP_MODE_MIRROR$1);
+  return clamp$g(Math.round(Number(value) || 0), WARP_MODE_OFF$1, WARP_MODE_MIRROR$1);
 }
 function clampWarpAmount(value) {
-  return clamp$j(Number(value) || 0, 0, 1);
+  return clamp$g(Number(value) || 0, 0, 1);
 }
 function clampUnisonVoiceCount(value) {
-  return clamp$j(Math.round(Number(value) || 1), 1, UNISON_MAX_VOICES);
+  return clamp$g(Math.round(Number(value) || 1), 1, UNISON_MAX_VOICES);
 }
 function clampUnison01(value) {
-  return clamp$j(Number(value) || 0, 0, 1);
+  return clamp$g(Number(value) || 0, 0, 1);
 }
 function clampUnisonDetuneMode(value) {
-  return clamp$j(Math.round(Number(value) || 0), UNISON_DETUNE_MODE_LINEAR, UNISON_DETUNE_MODE_RANDOM);
+  return clamp$g(Math.round(Number(value) || 0), UNISON_DETUNE_MODE_LINEAR, UNISON_DETUNE_MODE_RANDOM);
 }
 function clampUnisonStackMode(value) {
-  return clamp$j(Math.round(Number(value) || 0), UNISON_STACK_MODE_OFF, UNISON_STACK_MODE_CENTER_TWO_OCTAVES);
+  return clamp$g(Math.round(Number(value) || 0), UNISON_STACK_MODE_OFF, UNISON_STACK_MODE_CENTER_TWO_OCTAVES);
 }
 function clampDisplayPosition(value) {
-  return clamp$j(Number(value) || 0, 0, 1);
+  return clamp$g(Number(value) || 0, 0, 1);
 }
 function mapDisplayDragToPosition(startValue, startClientY, nextClientY, dragSpan) {
   const safeSpan = Math.max(1, Number(dragSpan) || 0);
@@ -13361,23 +15450,23 @@ function normalizeEffectiveFilterStateMessage(message) {
   return {
     voiceGeneration: Number.isFinite(rawGeneration) ? Math.max(0, Math.trunc(rawGeneration)) : 0,
     hasActive: Boolean(rawHasActive),
-    mode: clampFilterMode$1(payload.mode),
-    cutoffHz: clampFilterCutoffHz$1(rawCutoff),
-    q: clampFilterQ$1(rawQ)
+    mode: clampFilterMode(payload.mode),
+    cutoffHz: clampFilterCutoffHz(rawCutoff),
+    q: clampFilterQ(rawQ)
   };
 }
 function selectObservedEffectiveFilterState(currentState, message) {
   const previousState = currentState && typeof currentState === "object" ? {
     voiceGeneration: Number.isFinite(Number(currentState.voiceGeneration)) ? Math.trunc(Number(currentState.voiceGeneration)) : -1,
     hasActive: Boolean(currentState.hasActive),
-    mode: clampFilterMode$1(currentState.mode),
-    cutoffHz: clampFilterCutoffHz$1(currentState.cutoffHz),
-    q: clampFilterQ$1(currentState.q)
+    mode: clampFilterMode(currentState.mode),
+    cutoffHz: clampFilterCutoffHz(currentState.cutoffHz),
+    q: clampFilterQ(currentState.q)
   } : {
     voiceGeneration: -1,
     hasActive: false,
-    mode: FILTER_MODE_OFF$1,
-    cutoffHz: FILTER_CUTOFF_MIN_HZ$1,
+    mode: FILTER_MODE_OFF,
+    cutoffHz: FILTER_CUTOFF_MIN_HZ,
     q: 0.707107
   };
   const nextState = normalizeEffectiveFilterStateMessage(message);
@@ -13596,7 +15685,7 @@ const MSEG_NOTE_OFF_POLICY_VALUES = /* @__PURE__ */ new Set([
   "immediate",
   "ignore"
 ]);
-function clamp$i(value, min, max) {
+function clamp$f(value, min, max) {
   return Math.min(Math.max(value, min), max);
 }
 function greatestCommonDivisor(left, right) {
@@ -13632,16 +15721,16 @@ function almostEqual(left, right, epsilon = 1e-12) {
   return Math.abs(left - right) <= epsilon;
 }
 function clampCurvePower(value) {
-  return clamp$i(Number.isFinite(value) ? value : 0, -MSEG_CURVE_POWER_LIMIT, MSEG_CURVE_POWER_LIMIT);
+  return clamp$f(Number.isFinite(value) ? value : 0, -MSEG_CURVE_POWER_LIMIT, MSEG_CURVE_POWER_LIMIT);
 }
 function clamp01$7(value) {
-  return clamp$i(Number.isFinite(value) ? value : 0, 0, 1);
+  return clamp$f(Number.isFinite(value) ? value : 0, 0, 1);
 }
-function createDefaultMsegShape(name = MSEG_DEFAULT_NAME) {
+function createDefaultMsegShape(name2 = MSEG_DEFAULT_NAME) {
   return {
     format: "cosimo.mseg.shape",
     version: 1,
-    name,
+    name: name2,
     globalSmooth: false,
     points: [
       { x: 0, y: 0, curvePower: 0 },
@@ -13665,7 +15754,7 @@ function createDefaultMsegPlayback() {
 }
 function clampMsegRateSeconds(value) {
   const numericValue = Number(value);
-  return clamp$i(
+  return clamp$f(
     Number.isFinite(numericValue) ? numericValue : 1,
     MSEG_RATE_MIN_SECONDS,
     MSEG_RATE_MAX_SECONDS
@@ -13835,7 +15924,7 @@ function distanceSquaredToLineSegment(targetX, targetY, fromX, fromY, toX, toY) 
     const pointDeltaY2 = targetY - fromY;
     return pointDeltaX2 * pointDeltaX2 + pointDeltaY2 * pointDeltaY2;
   }
-  const projection = clamp$i(
+  const projection = clamp$f(
     ((targetX - fromX) * deltaX + (targetY - fromY) * deltaY) / segmentLengthSquared,
     0,
     1
@@ -14054,9 +16143,9 @@ function deriveMsegSegmentCurvePower(shape, segmentIndex, x, y) {
   if (width <= 1e-12 || Math.abs(deltaY) <= 1e-12) {
     return 0;
   }
-  const localX = clamp$i(clamp01$7(Number(x)), from.x, to.x);
-  const t = clamp$i((localX - from.x) / width, 1e-4, 1 - 1e-4);
-  const targetCurvedT = clamp$i((Number(y) - from.y) / deltaY, 1e-4, 1 - 1e-4);
+  const localX = clamp$f(clamp01$7(Number(x)), from.x, to.x);
+  const t = clamp$f((localX - from.x) / width, 1e-4, 1 - 1e-4);
+  const targetCurvedT = clamp$f((Number(y) - from.y) / deltaY, 1e-4, 1 - 1e-4);
   if (!Number.isFinite(targetCurvedT) || almostEqual(targetCurvedT, t, 1e-4)) {
     return 0;
   }
@@ -14064,7 +16153,7 @@ function deriveMsegSegmentCurvePower(shape, segmentIndex, x, y) {
   let high = MSEG_CURVE_POWER_LIMIT;
   let lowValue = powerScale(t, low);
   let highValue = powerScale(t, high);
-  const target = clamp$i(targetCurvedT, Math.min(lowValue, highValue), Math.max(lowValue, highValue));
+  const target = clamp$f(targetCurvedT, Math.min(lowValue, highValue), Math.max(lowValue, highValue));
   const ascending = lowValue <= highValue;
   for (let iteration = 0; iteration < 32; iteration += 1) {
     const middle = (low + high) * 0.5;
@@ -14118,7 +16207,7 @@ function moveMsegPoint(shape, pointIndex, x, y) {
   } else if (pointIndex === points.length - 1) {
     moved.x = 1;
   } else {
-    moved.x = clamp$i(clamp01$7(Number(x)), previousX, nextX);
+    moved.x = clamp$f(clamp01$7(Number(x)), previousX, nextX);
   }
   points[pointIndex] = moved;
   return normalizeMsegShape({
@@ -14208,7 +16297,7 @@ const WARP_MODE_PWM = 2;
 const WARP_MODE_ASYM = 3;
 const WARP_MODE_MIRROR = 4;
 const DEFAULT_WAVETABLE_THEME = createDefaultWavetableTheme();
-function clamp$h(value, min, max) {
+function clamp$e(value, min, max) {
   return Math.min(Math.max(value, min), max);
 }
 function requestNextAnimationFrame(callback) {
@@ -14255,10 +16344,10 @@ function assertFrames(frames) {
   }
 }
 function resolveWarpMode(rawMode) {
-  return clamp$h(Math.round(Number(rawMode) || 0), WARP_MODE_OFF, WARP_MODE_MIRROR);
+  return clamp$e(Math.round(Number(rawMode) || 0), WARP_MODE_OFF, WARP_MODE_MIRROR);
 }
 function isIdentityWarp(warpMode, warpAmount) {
-  const clampedAmount = clamp$h(Number(warpAmount) || 0, 0, 1);
+  const clampedAmount = clamp$e(Number(warpAmount) || 0, 0, 1);
   if (warpMode <= WARP_MODE_OFF) {
     return true;
   }
@@ -14277,84 +16366,84 @@ function isIdentityWarp(warpMode, warpAmount) {
   return true;
 }
 function curvedWarpRight(phase, amount) {
-  const clampedPhase = clamp$h(Number(phase) || 0, 0, 1);
-  const clampedAmount = clamp$h(Number(amount) || 0, 0, 1);
+  const clampedPhase = clamp$e(Number(phase) || 0, 0, 1);
+  const clampedAmount = clamp$e(Number(amount) || 0, 0, 1);
   const exponent = Math.pow(2, 4 * clampedAmount);
   return Math.pow(clampedPhase, exponent);
 }
 function curvedWarpLeft(phase, amount) {
-  const clampedPhase = clamp$h(Number(phase) || 0, 0, 1);
-  const clampedAmount = clamp$h(Number(amount) || 0, 0, 1);
+  const clampedPhase = clamp$e(Number(phase) || 0, 0, 1);
+  const clampedAmount = clamp$e(Number(amount) || 0, 0, 1);
   const exponent = Math.pow(2, 4 * clampedAmount);
   return 1 - Math.pow(1 - clampedPhase, exponent);
 }
 function curvedAsymSigned(phase, dial) {
-  const clampedDial = clamp$h(Number(dial) || 0, 0, 1);
+  const clampedDial = clamp$e(Number(dial) || 0, 0, 1);
   const signedAmount = 2 * clampedDial - 1;
   const magnitude = Math.abs(signedAmount);
   return signedAmount >= 0 ? curvedWarpRight(phase, magnitude) : curvedWarpLeft(phase, magnitude);
 }
 function linearSkewSigned(phase, dial) {
-  const clampedPhase = clamp$h(Number(phase) || 0, 0, 1);
-  const clampedDial = clamp$h(Number(dial) || 0, 0, 1);
+  const clampedPhase = clamp$e(Number(phase) || 0, 0, 1);
+  const clampedDial = clamp$e(Number(dial) || 0, 0, 1);
   const signedAmount = 2 * clampedDial - 1;
-  const split = clamp$h(0.5 + 0.48 * signedAmount, 0.02, 0.98);
+  const split = clamp$e(0.5 + 0.48 * signedAmount, 0.02, 0.98);
   if (clampedPhase < split) {
     return 0.5 * (clampedPhase / split);
   }
   return 0.5 + 0.5 * ((clampedPhase - split) / (1 - split));
 }
 function mirrorBasePhase(phase) {
-  const clampedPhase = clamp$h(Number(phase) || 0, 0, 1);
+  const clampedPhase = clamp$e(Number(phase) || 0, 0, 1);
   if (clampedPhase < 0.5) {
     return clampedPhase * 2;
   }
   return 2 - 2 * clampedPhase;
 }
 function pwmActivePortion(amount) {
-  const clampedAmount = clamp$h(Number(amount) || 0, 0, 1);
+  const clampedAmount = clamp$e(Number(amount) || 0, 0, 1);
   return 1 - (1 - 0.02) * clampedAmount;
 }
 function resolveDisplayWarpPhase(warpMode, warpAmount, phase) {
-  const clampedPhase = clamp$h(Number(phase) || 0, 0, 1);
-  const result = {
+  const clampedPhase = clamp$e(Number(phase) || 0, 0, 1);
+  const result2 = {
     shouldLookup: true,
     phase: clampedPhase
   };
   if (warpMode <= WARP_MODE_OFF || clampedPhase >= 1) {
-    return result;
+    return result2;
   }
-  const clampedAmount = clamp$h(Number(warpAmount) || 0, 0, 1);
+  const clampedAmount = clamp$e(Number(warpAmount) || 0, 0, 1);
   if (warpMode === WARP_MODE_BEND) {
     const invertedDial = 1 - clampedAmount;
     if (clampedPhase < 0.5) {
-      result.phase = 0.5 * curvedAsymSigned(clampedPhase * 2, invertedDial);
+      result2.phase = 0.5 * curvedAsymSigned(clampedPhase * 2, invertedDial);
     } else {
-      result.phase = 1 - 0.5 * curvedAsymSigned(2 - 2 * clampedPhase, invertedDial);
+      result2.phase = 1 - 0.5 * curvedAsymSigned(2 - 2 * clampedPhase, invertedDial);
     }
-    return result;
+    return result2;
   }
   if (warpMode === WARP_MODE_PWM) {
     const activePortion = pwmActivePortion(clampedAmount);
     if (clampedPhase < activePortion) {
-      result.phase = clampedPhase / activePortion;
+      result2.phase = clampedPhase / activePortion;
     } else {
-      result.phase = 1;
+      result2.phase = 1;
     }
-    return result;
+    return result2;
   }
   if (warpMode === WARP_MODE_ASYM) {
-    result.phase = linearSkewSigned(clampedPhase, clampedAmount);
-    return result;
+    result2.phase = linearSkewSigned(clampedPhase, clampedAmount);
+    return result2;
   }
   if (warpMode === WARP_MODE_MIRROR) {
-    result.phase = linearSkewSigned(mirrorBasePhase(clampedPhase), clampedAmount);
-    return result;
+    result2.phase = linearSkewSigned(mirrorBasePhase(clampedPhase), clampedAmount);
+    return result2;
   }
-  return result;
+  return result2;
 }
 function sampleDisplayFrame(frame, phase) {
-  const safePhase = clamp$h(Number(phase) || 0, 0, 1);
+  const safePhase = clamp$e(Number(phase) || 0, 0, 1);
   const frameLength = frame.length;
   if (frameLength === 0) {
     return 0;
@@ -14465,17 +16554,17 @@ function createCamera() {
 }
 function createViewportPadding(width, height) {
   return {
-    left: clamp$h(width * 0.06, 22, 48),
-    right: clamp$h(width * 0.06, 22, 48),
-    top: clamp$h(height * 0.1, 20, 56),
-    bottom: clamp$h(height * 0.09, 20, 52)
+    left: clamp$e(width * 0.06, 22, 48),
+    right: clamp$e(width * 0.06, 22, 48),
+    top: clamp$e(height * 0.1, 20, 56),
+    bottom: clamp$e(height * 0.09, 20, 52)
   };
 }
 function createDrawableViewport(width, height, insets = {}) {
-  const left = clamp$h(Number(insets.left) || 0, 0, width - 1);
-  const right = clamp$h(Number(insets.right) || 0, 0, width - left - 1);
-  const top = clamp$h(Number(insets.top) || 0, 0, height - 1);
-  const bottom = clamp$h(Number(insets.bottom) || 0, 0, height - top - 1);
+  const left = clamp$e(Number(insets.left) || 0, 0, width - 1);
+  const right = clamp$e(Number(insets.right) || 0, 0, width - left - 1);
+  const top = clamp$e(Number(insets.top) || 0, 0, height - 1);
+  const bottom = clamp$e(Number(insets.bottom) || 0, 0, height - top - 1);
   return {
     x: left,
     y: top,
@@ -14540,10 +16629,10 @@ function createProjection(points, width, height, drawableInsets = {}) {
   };
 }
 function getSurfacePointCount(width, sampleCount) {
-  return clamp$h(Math.round(width / 10), 64, Math.min(128, sampleCount));
+  return clamp$e(Math.round(width / 10), 64, Math.min(128, sampleCount));
 }
 function getContourPointCount(width, sampleCount) {
-  return clamp$h(Math.round(width / 4), 128, Math.min(256, sampleCount));
+  return clamp$e(Math.round(width / 4), 128, Math.min(256, sampleCount));
 }
 function createObjectPoints(samples, depth) {
   const points = new Array(samples.length);
@@ -14718,8 +16807,8 @@ function createSurfaceBands(projectedFrames) {
       const lightDirection = normaliseVector({ x: -0.2, y: 0.95, z: -0.5 });
       const averageCameraDepth = quad.reduce((total, point) => total + point.cameraDepth, 0) / quad.length;
       const depthNormalized = (frontFrame.depthNormalized + backFrame.depthNormalized) * 0.5;
-      const slopeLight = clamp$h((dotProduct(surfaceNormal, lightDirection) + 1) * 0.5, 0, 1);
-      const ridgeAmount = clamp$h(
+      const slopeLight = clamp$e((dotProduct(surfaceNormal, lightDirection) + 1) * 0.5, 0, 1);
+      const ridgeAmount = clamp$e(
         Math.abs(frontFrame.samples[sampleIndex + 1] - frontFrame.samples[sampleIndex]) * 0.95 + Math.abs(backFrame.samples[sampleIndex + 1] - backFrame.samples[sampleIndex]) * 0.95,
         0,
         1
@@ -14744,7 +16833,7 @@ function createSurfaceRibs(projectedFrames) {
   if (sampleCount < 3) {
     return [];
   }
-  const desiredRibCount = clamp$h(Math.round(sampleCount / 10), 8, 14);
+  const desiredRibCount = clamp$e(Math.round(sampleCount / 10), 8, 14);
   const selectedColumns = /* @__PURE__ */ new Set([0, sampleCount - 1]);
   for (let ribIndex = 1; ribIndex < desiredRibCount - 1; ribIndex += 1) {
     selectedColumns.add(
@@ -14787,7 +16876,7 @@ function createInterpolatedSurfaceSlices(sourceFrames, camera, projection) {
   if (frameCount === 0) {
     return [];
   }
-  const sliceCount = clamp$h(frameCount * 3 - 2, 17, 41);
+  const sliceCount = clamp$e(frameCount * 3 - 2, 17, 41);
   const slices = [];
   for (let sliceIndex = 0; sliceIndex < sliceCount; sliceIndex += 1) {
     const framePosition = sliceIndex * (frameCount - 1) / Math.max(1, sliceCount - 1);
@@ -14828,7 +16917,7 @@ function createCurrentSlice(staticScene, frameState) {
   const lowFrame = staticScene.contourFrames[frameState.frameLo];
   const highFrame = staticScene.contourFrames[frameState.frameHi];
   const warpMode = resolveWarpMode(frameState.warpMode);
-  const warpAmount = clamp$h(Number(frameState.warpAmount) || 0, 0, 1);
+  const warpAmount = clamp$e(Number(frameState.warpAmount) || 0, 0, 1);
   const blendedSamples = isIdentityWarp(warpMode, warpAmount) ? buildInterpolatedFrame(lowFrame.samples, highFrame.samples, frameState.frameT) : buildWarpedFrame(lowFrame.samples, highFrame.samples, frameState.frameT, warpMode, warpAmount);
   const depth = getSceneDepth(frameState.frameIndex, staticScene.frameCount);
   const objectPoints = createObjectPoints(blendedSamples, depth);
@@ -14842,8 +16931,8 @@ function createCurrentSlice(staticScene, frameState) {
   const labelAnchor = points[Math.floor(points.length * 0.78)] ?? points[points.length - 1];
   const label = {
     text: buildCurrentSliceLabel(frameState, staticScene.frameCount),
-    x: clamp$h(labelAnchor.x + 14, 18, staticScene.width - 236),
-    y: clamp$h(labelAnchor.y - 18, 24, staticScene.height - 24)
+    x: clamp$e(labelAnchor.x + 14, 18, staticScene.width - 236),
+    y: clamp$e(labelAnchor.y - 18, 24, staticScene.height - 24)
   };
   return {
     frameState,
@@ -14858,7 +16947,7 @@ function createCurrentSlice(staticScene, frameState) {
 }
 function buildCurrentSliceLabel(frameState, frameCount) {
   const warpMode = resolveWarpMode(frameState.warpMode);
-  const warpAmount = clamp$h(Number(frameState.warpAmount) || 0, 0, 1);
+  const warpAmount = clamp$e(Number(frameState.warpAmount) || 0, 0, 1);
   const baseLabel = `Frame ${frameState.frameIndex.toFixed(2)} / ${frameCount - 1}`;
   if (isIdentityWarp(warpMode, warpAmount)) {
     return baseLabel;
@@ -14882,7 +16971,7 @@ function buildCurrentSliceLabel(frameState, frameCount) {
 }
 function createFrameState(frameCount, position, warpMode = 0, warpAmount = 0) {
   const safeFrameCount = Math.max(1, Number(frameCount) || 0);
-  const clampedPosition = clamp$h(Number(position) || 0, 0, 1);
+  const clampedPosition = clamp$e(Number(position) || 0, 0, 1);
   const frameIndex = clampedPosition * (safeFrameCount - 1);
   const frameLo = Math.floor(frameIndex);
   const frameHi = Math.min(frameLo + 1, safeFrameCount - 1);
@@ -14895,7 +16984,7 @@ function createFrameState(frameCount, position, warpMode = 0, warpAmount = 0) {
     frameHi,
     frameT,
     warpMode: resolveWarpMode(warpMode),
-    warpAmount: clamp$h(Number(warpAmount) || 0, 0, 1)
+    warpAmount: clamp$e(Number(warpAmount) || 0, 0, 1)
   };
 }
 function decimateFrame(frame, targetPointCount) {
@@ -15075,7 +17164,7 @@ function drawWavetableModel(context, model, theme = DEFAULT_WAVETABLE_THEME, opt
     context.restore();
   }
   for (const contour of model.contours) {
-    const strokeColour = mixRGB(theme.frameColor, theme.backgroundRGB, clamp$h(contour.colourMix, 0, 0.92));
+    const strokeColour = mixRGB(theme.frameColor, theme.backgroundRGB, clamp$e(contour.colourMix, 0, 0.92));
     context.save();
     context.strokeStyle = toRGBA(tintColour(strokeColour, overlayLineTint(contour.frameIndex)), contour.alpha);
     context.lineWidth = contour.lineWidth;
@@ -15160,12 +17249,12 @@ class CanvasWavetableDisplay {
     this.queueRender();
   }
   setPosition(position) {
-    this.position = clamp$h(Number(position) || 0, 0, 1);
+    this.position = clamp$e(Number(position) || 0, 0, 1);
     this.queueRender();
   }
   setWarp(mode, amount) {
     this.warpMode = resolveWarpMode(mode);
-    this.warpAmount = clamp$h(Number(amount) || 0, 0, 1);
+    this.warpAmount = clamp$e(Number(amount) || 0, 0, 1);
     this.queueRender();
   }
   setModulationRange(overlay) {
@@ -15269,195 +17358,6 @@ class CanvasWavetableDisplay {
     });
   }
 }
-const FILTER_CUTOFF_MIN_HZ = 20;
-const FILTER_CUTOFF_MAX_HZ = 2e4;
-const FILTER_Q_MIN$1 = 0.1;
-const FILTER_Q_MAX$1 = 20;
-const FILTER_RESPONSE_POINT_COUNT = 240;
-const FILTER_MODE_OFF = 0;
-const FILTER_MODE_LOWPASS = 1;
-const FILTER_MODE_HIGHPASS = 2;
-const FILTER_MODE_BANDPASS = 3;
-const FILTER_MODE_NOTCH = 4;
-const FILTER_MODE_PEAK = 5;
-function clamp$g(value, min, max) {
-  return Math.min(Math.max(value, min), max);
-}
-function clampFilterMode(value) {
-  return clamp$g(Math.round(Number(value) || 0), FILTER_MODE_OFF, FILTER_MODE_PEAK);
-}
-function clampFilterCutoffHz(value) {
-  return clamp$g(Number(value) || FILTER_CUTOFF_MIN_HZ, FILTER_CUTOFF_MIN_HZ, FILTER_CUTOFF_MAX_HZ);
-}
-function clampFilterQ(value) {
-  return clamp$g(Number(value) || 0, FILTER_Q_MIN$1, FILTER_Q_MAX$1);
-}
-function filterCutoffHzToNormalized(value) {
-  const clampedHz = clampFilterCutoffHz(value);
-  const minLog = Math.log(FILTER_CUTOFF_MIN_HZ);
-  const maxLog = Math.log(FILTER_CUTOFF_MAX_HZ);
-  return clamp$g((Math.log(clampedHz) - minLog) / (maxLog - minLog), 0, 1);
-}
-function normalizedToFilterCutoffHz(value) {
-  const normalized2 = clamp$g(Number(value) || 0, 0, 1);
-  const minLog = Math.log(FILTER_CUTOFF_MIN_HZ);
-  const maxLog = Math.log(FILTER_CUTOFF_MAX_HZ);
-  return Math.exp(minLog + (maxLog - minLog) * normalized2);
-}
-function filterQToNormalized(value) {
-  const clampedQ = clampFilterQ(value);
-  return (clampedQ - FILTER_Q_MIN$1) / (FILTER_Q_MAX$1 - FILTER_Q_MIN$1);
-}
-function normalizedToFilterQ(value) {
-  const normalized2 = clamp$g(Number(value) || 0, 0, 1);
-  return FILTER_Q_MIN$1 + (FILTER_Q_MAX$1 - FILTER_Q_MIN$1) * normalized2;
-}
-function complexAdd(left, right) {
-  return {
-    real: left.real + right.real,
-    imaginary: left.imaginary + right.imaginary
-  };
-}
-function complexSubtract(left, right) {
-  return {
-    real: left.real - right.real,
-    imaginary: left.imaginary - right.imaginary
-  };
-}
-function complexScale(value, scalar) {
-  return {
-    real: value.real * scalar,
-    imaginary: value.imaginary * scalar
-  };
-}
-function complexMultiply(left, right) {
-  return {
-    real: left.real * right.real - left.imaginary * right.imaginary,
-    imaginary: left.real * right.imaginary + left.imaginary * right.real
-  };
-}
-function complexDivide(numerator, denominator) {
-  const denominatorMagnitude = denominator.real * denominator.real + denominator.imaginary * denominator.imaginary;
-  if (denominatorMagnitude <= 1e-18) {
-    return { real: 0, imaginary: 0 };
-  }
-  return {
-    real: (numerator.real * denominator.real + numerator.imaginary * denominator.imaginary) / denominatorMagnitude,
-    imaginary: (numerator.imaginary * denominator.real - numerator.real * denominator.imaginary) / denominatorMagnitude
-  };
-}
-function responseGainForFrequency({
-  mode,
-  cutoffHz,
-  q,
-  sampleRate,
-  frequencyHz
-}) {
-  if (mode === FILTER_MODE_OFF) {
-    return 1;
-  }
-  const resolvedMode = clampFilterMode(mode);
-  const safeSampleRate = Math.max(1, Number(sampleRate) || 44100);
-  const clampedCutoff = clampFilterCutoffHz(Math.min(Number(cutoffHz) || 0, safeSampleRate * 0.48));
-  const clampedQ = clampFilterQ(q);
-  const safeFrequency = clamp$g(frequencyHz, 10, safeSampleRate * 0.49);
-  const g = Math.tan(Math.PI * clampedCutoff / safeSampleRate);
-  const k = 1 / clampedQ;
-  let f0 = 1;
-  let f1 = 0;
-  let f2 = 0;
-  if (resolvedMode === FILTER_MODE_LOWPASS) {
-    f0 = 0;
-    f1 = 0;
-    f2 = 1;
-  } else if (resolvedMode === FILTER_MODE_HIGHPASS) {
-    f0 = 1;
-    f1 = -k;
-    f2 = -1;
-  } else if (resolvedMode === FILTER_MODE_BANDPASS) {
-    f0 = 0;
-    f1 = 1;
-    f2 = 0;
-  } else if (resolvedMode === FILTER_MODE_NOTCH) {
-    f0 = 1;
-    f1 = -k;
-    f2 = 0;
-  } else if (resolvedMode === FILTER_MODE_PEAK) {
-    f0 = 1;
-    f1 = -k;
-    f2 = -2;
-  }
-  const a1 = 1 / (1 + g * (g + k));
-  const a2 = g * a1;
-  const a3 = g * a2;
-  const z = {
-    real: Math.cos(2 * Math.PI * safeFrequency / safeSampleRate),
-    imaginary: Math.sin(2 * Math.PI * safeFrequency / safeSampleRate)
-  };
-  const m00 = complexSubtract(z, { real: 2 * a1 - 1, imaginary: 0 });
-  const m01 = { real: 2 * a2, imaginary: 0 };
-  const m10 = { real: -2 * a2, imaginary: 0 };
-  const m11 = complexSubtract(z, { real: 1 - 2 * a3, imaginary: 0 });
-  const det = complexSubtract(complexMultiply(m00, m11), complexMultiply(m01, m10));
-  const b0 = { real: 2 * a2, imaginary: 0 };
-  const b1 = { real: 2 * a3, imaginary: 0 };
-  const state1 = complexDivide(complexSubtract(complexMultiply(b0, m11), complexMultiply(m01, b1)), det);
-  const state2 = complexDivide(complexSubtract(complexMultiply(m00, b1), complexMultiply(b0, m10)), det);
-  const c0 = f1 * a1 + f2 * a2;
-  const c1 = -f1 * a2 + f2 * (1 - a3);
-  const d = f0 + f1 * a2 + f2 * a3;
-  const transfer = complexAdd(
-    { real: d, imaginary: 0 },
-    complexAdd(complexScale(state1, c0), complexScale(state2, c1))
-  );
-  return Math.hypot(transfer.real, transfer.imaginary);
-}
-function buildFrequencies(pointCount) {
-  return Array.from({ length: pointCount }, (_, index) => normalizedToFilterCutoffHz(index / Math.max(1, pointCount - 1)));
-}
-function createFilterResponseModel({
-  mode,
-  cutoffHz,
-  q,
-  sampleRate = 44100,
-  pointCount = FILTER_RESPONSE_POINT_COUNT
-}) {
-  const resolvedMode = clampFilterMode(mode);
-  const resolvedCutoff = clampFilterCutoffHz(cutoffHz);
-  const resolvedQ = clampFilterQ(q);
-  const resolvedSampleRate = Math.max(1, Math.round(sampleRate || 44100));
-  const frequenciesHz = buildFrequencies(pointCount);
-  const magnitudesDb = frequenciesHz.map((frequencyHz) => {
-    const gain = responseGainForFrequency({
-      mode: resolvedMode,
-      cutoffHz: resolvedCutoff,
-      q: resolvedQ,
-      sampleRate: resolvedSampleRate,
-      frequencyHz
-    });
-    return 20 * Math.log10(Math.max(gain, 1e-6));
-  });
-  let peakIndex = 0;
-  let minIndex = 0;
-  for (let index = 1; index < magnitudesDb.length; index += 1) {
-    if (magnitudesDb[index] > magnitudesDb[peakIndex]) {
-      peakIndex = index;
-    }
-    if (magnitudesDb[index] < magnitudesDb[minIndex]) {
-      minIndex = index;
-    }
-  }
-  return {
-    mode: resolvedMode,
-    cutoffHz: resolvedCutoff,
-    q: resolvedQ,
-    sampleRate: resolvedSampleRate,
-    frequenciesHz,
-    magnitudesDb,
-    peakIndex,
-    minIndex
-  };
-}
 const FILTER_SPECTRUM_MIN_DB = -90;
 const FILTER_SPECTRUM_MAX_DB = -18;
 const FILTER_SPECTRUM_BAND_COUNT = 120;
@@ -15468,7 +17368,7 @@ const FILTER_SPECTRUM_PEAK_HOLD_MS = 300;
 const FILTER_SPECTRUM_PEAK_FALL_RATE_DB_PER_SECOND = 24;
 const FILTER_SPECTRUM_FREQUENCY_TICK_VALUES = [20, 50, 100, 200, 500, 1e3, 2e3, 5e3, 1e4, 2e4];
 const FILTER_SPECTRUM_DB_TICK_VALUES = [-18, -36, -54, -72, -90];
-function clamp$f(value, min, max) {
+function clamp$d(value, min, max) {
   return Math.min(Math.max(value, min), max);
 }
 function coerceFiniteNumber$1(value) {
@@ -15476,13 +17376,13 @@ function coerceFiniteNumber$1(value) {
   return Number.isFinite(coerced) ? coerced : null;
 }
 function frequencyHzToNormalized(value) {
-  const clampedHz = clamp$f(value, FILTER_CUTOFF_MIN_HZ, FILTER_CUTOFF_MAX_HZ);
-  const minLog = Math.log(FILTER_CUTOFF_MIN_HZ);
-  const maxLog = Math.log(FILTER_CUTOFF_MAX_HZ);
-  return clamp$f((Math.log(clampedHz) - minLog) / (maxLog - minLog), 0, 1);
+  const clampedHz = clamp$d(value, FILTER_CUTOFF_MIN_HZ$1, FILTER_CUTOFF_MAX_HZ$1);
+  const minLog = Math.log(FILTER_CUTOFF_MIN_HZ$1);
+  const maxLog = Math.log(FILTER_CUTOFF_MAX_HZ$1);
+  return clamp$d((Math.log(clampedHz) - minLog) / (maxLog - minLog), 0, 1);
 }
 function dbToNormalizedY(value) {
-  return clamp$f((value - FILTER_SPECTRUM_MAX_DB) / (FILTER_SPECTRUM_MIN_DB - FILTER_SPECTRUM_MAX_DB), 0, 1);
+  return clamp$d((value - FILTER_SPECTRUM_MAX_DB) / (FILTER_SPECTRUM_MIN_DB - FILTER_SPECTRUM_MAX_DB), 0, 1);
 }
 function formatFrequencyLabel(frequencyHz) {
   if (frequencyHz >= 1e3) {
@@ -15492,7 +17392,7 @@ function formatFrequencyLabel(frequencyHz) {
   return String(Math.round(frequencyHz));
 }
 function magnitudeToDb(magnitude) {
-  return clamp$f(20 * Math.log10(Math.max(1e-9, magnitude)), FILTER_SPECTRUM_MIN_DB, FILTER_SPECTRUM_MAX_DB);
+  return clamp$d(20 * Math.log10(Math.max(1e-9, magnitude)), FILTER_SPECTRUM_MIN_DB, FILTER_SPECTRUM_MAX_DB);
 }
 function findPeakIndex(values) {
   let peakIndex = 0;
@@ -15518,15 +17418,15 @@ function sampleMagnitudeAtIndexRange(magnitudes, startIndex, endIndex) {
 function buildSpectrumRanges(pointCount) {
   const safeCount = Math.max(1, Math.round(pointCount || 1));
   const centers = Array.from({ length: safeCount }, (_, index) => interpolateFrequency(
-    FILTER_CUTOFF_MIN_HZ,
-    FILTER_CUTOFF_MAX_HZ,
+    FILTER_CUTOFF_MIN_HZ$1,
+    FILTER_CUTOFF_MAX_HZ$1,
     index / Math.max(1, safeCount - 1)
   ));
   return centers.map((centerHz, index) => {
     const previousCenterHz = centers[Math.max(0, index - 1)] ?? centerHz;
     const nextCenterHz = centers[Math.min(safeCount - 1, index + 1)] ?? centerHz;
-    const lowHz = index === 0 ? FILTER_CUTOFF_MIN_HZ : Math.sqrt(previousCenterHz * centerHz);
-    const highHz = index === safeCount - 1 ? FILTER_CUTOFF_MAX_HZ : Math.sqrt(centerHz * nextCenterHz);
+    const lowHz = index === 0 ? FILTER_CUTOFF_MIN_HZ$1 : Math.sqrt(previousCenterHz * centerHz);
+    const highHz = index === safeCount - 1 ? FILTER_CUTOFF_MAX_HZ$1 : Math.sqrt(centerHz * nextCenterHz);
     return {
       lowHz,
       centerHz,
@@ -15594,8 +17494,8 @@ function createPlotMetrics(width, height, {
   };
 }
 function createPlotPoint(normalizedX, magnitudeDb, plot) {
-  const x = plot.plotLeft + plot.plotWidth * clamp$f(normalizedX, 0, 1);
-  const normalizedY = clamp$f((clamp$f(magnitudeDb, FILTER_SPECTRUM_MIN_DB, FILTER_SPECTRUM_MAX_DB) - FILTER_SPECTRUM_MIN_DB) / (FILTER_SPECTRUM_MAX_DB - FILTER_SPECTRUM_MIN_DB), 0, 1);
+  const x = plot.plotLeft + plot.plotWidth * clamp$d(normalizedX, 0, 1);
+  const normalizedY = clamp$d((clamp$d(magnitudeDb, FILTER_SPECTRUM_MIN_DB, FILTER_SPECTRUM_MAX_DB) - FILTER_SPECTRUM_MIN_DB) / (FILTER_SPECTRUM_MAX_DB - FILTER_SPECTRUM_MIN_DB), 0, 1);
   const y = plot.plotBottom - plot.plotHeight * normalizedY;
   return { x, y };
 }
@@ -15774,8 +17674,8 @@ function createFilterSpectrumDisplayFrame({
   const maxBinIndex = Math.max(0, sourceBinCount - 1);
   const nyquistHz = Math.max(1, frame.sampleRateHz * 0.5);
   const sampleDisplayRange = (range) => {
-    const startIndex = clamp$f(Math.floor(clamp$f(range.lowHz, 0, nyquistHz) / nyquistHz * maxBinIndex), 0, maxBinIndex);
-    const endIndex = clamp$f(Math.ceil(clamp$f(range.highHz, 0, nyquistHz) / nyquistHz * maxBinIndex), startIndex, maxBinIndex);
+    const startIndex = clamp$d(Math.floor(clamp$d(range.lowHz, 0, nyquistHz) / nyquistHz * maxBinIndex), 0, maxBinIndex);
+    const endIndex = clamp$d(Math.ceil(clamp$d(range.highHz, 0, nyquistHz) / nyquistHz * maxBinIndex), startIndex, maxBinIndex);
     return magnitudeToDb(sampleMagnitudeAtIndexRange(frame.magnitudes, startIndex, endIndex));
   };
   const bandMagnitudesDb = bands.map(sampleDisplayRange);
@@ -15937,26 +17837,26 @@ function parseEffectOutputTrimHostEndpointID(endpointID) {
   }
   return null;
 }
-function clamp$e(value, min, max) {
+function clamp$c(value, min, max) {
   return Math.min(max, Math.max(min, value));
 }
 function effectOutputTrimEffectiveDb(baseDb, modulationDb) {
-  const clampedBase = clamp$e(baseDb, EFFECT_OUTPUT_TRIM_SILENCE_DB, EFFECT_OUTPUT_TRIM_MAX_DB);
+  const clampedBase = clamp$c(baseDb, EFFECT_OUTPUT_TRIM_SILENCE_DB, EFFECT_OUTPUT_TRIM_MAX_DB);
   if (clampedBase === EFFECT_OUTPUT_TRIM_SILENCE_DB) {
     return EFFECT_OUTPUT_TRIM_SILENCE_DB;
   }
-  return clamp$e(
+  return clamp$c(
     clampedBase + modulationDb,
     EFFECT_OUTPUT_TRIM_SILENCE_DB,
     EFFECT_OUTPUT_TRIM_MAX_DB
   );
 }
 function effectOutputTrimNormalizedValue(valueDb) {
-  const ratio = (clamp$e(valueDb, EFFECT_OUTPUT_TRIM_SILENCE_DB, EFFECT_OUTPUT_TRIM_MAX_DB) - EFFECT_OUTPUT_TRIM_SILENCE_DB) / (EFFECT_OUTPUT_TRIM_MAX_DB - EFFECT_OUTPUT_TRIM_SILENCE_DB);
+  const ratio = (clamp$c(valueDb, EFFECT_OUTPUT_TRIM_SILENCE_DB, EFFECT_OUTPUT_TRIM_MAX_DB) - EFFECT_OUTPUT_TRIM_SILENCE_DB) / (EFFECT_OUTPUT_TRIM_MAX_DB - EFFECT_OUTPUT_TRIM_SILENCE_DB);
   return ratio * ratio;
 }
 function effectOutputTrimValueFromNormalized(normalizedValue2) {
-  const ratio = Math.sqrt(clamp$e(normalizedValue2, 0, 1));
+  const ratio = Math.sqrt(clamp$c(normalizedValue2, 0, 1));
   return EFFECT_OUTPUT_TRIM_SILENCE_DB + ratio * (EFFECT_OUTPUT_TRIM_MAX_DB - EFFECT_OUTPUT_TRIM_SILENCE_DB);
 }
 const choice = (label, value) => ({ label, value });
@@ -16613,148 +18513,6 @@ const OSCILLATOR_DEFAULT_MUTE_BY_ID = Object.freeze({
 });
 function getOscillatorDefaultMute(oscillatorID) {
   return OSCILLATOR_DEFAULT_MUTE_BY_ID[oscillatorID];
-}
-const ENHANCER_SPECTRUM_PLOT = Object.freeze({
-  width: 760,
-  height: 272,
-  left: 42,
-  right: 42,
-  top: 18,
-  bottom: 28,
-  minimumHz: 20,
-  maximumHz: 2e4,
-  minimumGainDb: 0,
-  maximumGainDb: 12,
-  minimumLevelDbfs: -72,
-  maximumLevelDbfs: 0
-});
-const spectrumPointCount = 241;
-const spectrumAttackMs = 55;
-const spectrumReleaseMs = 190;
-function clamp$d(value, minimum, maximum) {
-  return Math.min(maximum, Math.max(minimum, value));
-}
-function isRecord$4(value) {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-function normalizeSpectrumMessage(message) {
-  const payload = isRecord$4(message) && Object.hasOwn(message, "event") ? message.event : message;
-  if (!isRecord$4(payload)) {
-    return null;
-  }
-  const sampleRateHz = payload.sampleRateHz;
-  const magnitudes = payload.magnitudes;
-  if (typeof sampleRateHz !== "number" || !Number.isFinite(sampleRateHz) || sampleRateHz <= 0 || !Array.isArray(magnitudes) || magnitudes.length < 8) {
-    return null;
-  }
-  return {
-    sampleRateHz,
-    magnitudes: magnitudes.map((value) => typeof value === "number" && Number.isFinite(value) ? Math.max(0, value) : 0)
-  };
-}
-function interpolateLogFrequency(normalized2) {
-  return ENHANCER_SPECTRUM_PLOT.minimumHz * Math.pow(
-    ENHANCER_SPECTRUM_PLOT.maximumHz / ENHANCER_SPECTRUM_PLOT.minimumHz,
-    clamp$d(normalized2, 0, 1)
-  );
-}
-const spectrumRanges = Object.freeze(
-  Array.from({ length: spectrumPointCount }, (_, index) => {
-    const normalized2 = index / (spectrumPointCount - 1);
-    const centerHz = interpolateLogFrequency(normalized2);
-    const previousHz = interpolateLogFrequency(
-      Math.max(0, index - 0.5) / (spectrumPointCount - 1)
-    );
-    const nextHz = interpolateLogFrequency(
-      Math.min(spectrumPointCount - 1, index + 0.5) / (spectrumPointCount - 1)
-    );
-    return {
-      centerHz,
-      lowHz: index === 0 ? ENHANCER_SPECTRUM_PLOT.minimumHz : previousHz,
-      highHz: index === spectrumPointCount - 1 ? ENHANCER_SPECTRUM_PLOT.maximumHz : nextHz
-    };
-  })
-);
-function magnitudeToDbfs(magnitude) {
-  return 20 * Math.log10(Math.max(1e-9, magnitude));
-}
-function sampleFrame(frame) {
-  const binHz = frame.sampleRateHz / (frame.magnitudes.length * 2);
-  const maximumBin = frame.magnitudes.length - 1;
-  return spectrumRanges.map(({ lowHz, highHz }) => {
-    const firstBin = clamp$d(Math.floor(lowHz / binHz), 0, maximumBin);
-    const lastBin = clamp$d(Math.ceil(highHz / binHz), firstBin, maximumBin);
-    let maximumMagnitude = 0;
-    for (let bin = firstBin; bin <= lastBin; bin += 1) {
-      maximumMagnitude = Math.max(maximumMagnitude, frame.magnitudes[bin] ?? 0);
-    }
-    return magnitudeToDbfs(maximumMagnitude);
-  });
-}
-function smoothSpectrum(previous, targetDbfs, timestampMs) {
-  if (previous === null || previous.magnitudesDbfs.length !== targetDbfs.length) {
-    return targetDbfs;
-  }
-  const deltaMs = clamp$d(timestampMs - previous.timestampMs, 0, 1e3);
-  return targetDbfs.map((target, index) => {
-    const prior = previous.magnitudesDbfs[index] ?? target;
-    const timeMs = target > prior ? spectrumAttackMs : spectrumReleaseMs;
-    const coefficient = Math.exp(-deltaMs / timeMs);
-    return target + (prior - target) * coefficient;
-  });
-}
-function findPeakDbfs(magnitudesDbfs) {
-  let peak = ENHANCER_SPECTRUM_PLOT.minimumLevelDbfs;
-  for (const magnitudeDbfs of magnitudesDbfs) {
-    peak = Math.max(peak, magnitudeDbfs);
-  }
-  return peak;
-}
-function enhancerFrequencyX(frequencyHz) {
-  const normalized2 = Math.log(
-    clamp$d(
-      frequencyHz,
-      ENHANCER_SPECTRUM_PLOT.minimumHz,
-      ENHANCER_SPECTRUM_PLOT.maximumHz
-    ) / ENHANCER_SPECTRUM_PLOT.minimumHz
-  ) / Math.log(
-    ENHANCER_SPECTRUM_PLOT.maximumHz / ENHANCER_SPECTRUM_PLOT.minimumHz
-  );
-  return ENHANCER_SPECTRUM_PLOT.left + normalized2 * (ENHANCER_SPECTRUM_PLOT.width - ENHANCER_SPECTRUM_PLOT.left - ENHANCER_SPECTRUM_PLOT.right);
-}
-function enhancerLevelY(levelDbfs) {
-  const normalized2 = (clamp$d(
-    levelDbfs,
-    ENHANCER_SPECTRUM_PLOT.minimumLevelDbfs,
-    ENHANCER_SPECTRUM_PLOT.maximumLevelDbfs
-  ) - ENHANCER_SPECTRUM_PLOT.minimumLevelDbfs) / (ENHANCER_SPECTRUM_PLOT.maximumLevelDbfs - ENHANCER_SPECTRUM_PLOT.minimumLevelDbfs);
-  return ENHANCER_SPECTRUM_PLOT.height - ENHANCER_SPECTRUM_PLOT.bottom - normalized2 * (ENHANCER_SPECTRUM_PLOT.height - ENHANCER_SPECTRUM_PLOT.top - ENHANCER_SPECTRUM_PLOT.bottom);
-}
-function createEnhancerFrequencyPath(yAtFrequency) {
-  return spectrumRanges.map(({ centerHz }, index) => `${index === 0 ? "M" : "L"} ${enhancerFrequencyX(centerHz).toFixed(2)} ` + yAtFrequency(centerHz).toFixed(2)).join(" ");
-}
-function advanceEnhancerSpectrum(message, previous, timestampMs) {
-  const frame = normalizeSpectrumMessage(message);
-  if (frame === null) {
-    return previous;
-  }
-  const magnitudesDbfs = smoothSpectrum(previous, sampleFrame(frame), timestampMs);
-  const path = createEnhancerFrequencyPath((frequencyHz) => {
-    const index = Math.round(
-      Math.log(frequencyHz / ENHANCER_SPECTRUM_PLOT.minimumHz) / Math.log(
-        ENHANCER_SPECTRUM_PLOT.maximumHz / ENHANCER_SPECTRUM_PLOT.minimumHz
-      ) * (spectrumPointCount - 1)
-    );
-    return enhancerLevelY(
-      magnitudesDbfs[index] ?? ENHANCER_SPECTRUM_PLOT.minimumLevelDbfs
-    );
-  });
-  return {
-    path,
-    peakDbfs: findPeakDbfs(magnitudesDbfs),
-    magnitudesDbfs,
-    timestampMs
-  };
 }
 const VOICE_ENHANCER_FREQUENCY_ENDPOINT_ID = "voiceEnhancerFrequency";
 const VOICE_ENHANCER_Q_ENDPOINT_ID = "voiceEnhancerQ";
@@ -17425,12 +19183,12 @@ function readFullStoredStateValue$2(storedState, key) {
   }
   return void 0;
 }
-function clamp$c(value, min, max) {
+function clamp$b(value, min, max) {
   return Math.min(Math.max(value, min), max);
 }
 function clampEnvSeconds(value, fallback) {
   const numeric = Number(value);
-  return clamp$c(Number.isFinite(numeric) ? numeric : fallback, ENV_MIN_SECONDS, ENV_MAX_SECONDS);
+  return clamp$b(Number.isFinite(numeric) ? numeric : fallback, ENV_MIN_SECONDS, ENV_MAX_SECONDS);
 }
 function formatMagnitude(value, digits) {
   const numeric = Number.isFinite(value) ? value : 0;
@@ -17525,7 +19283,7 @@ function getModulationAmountBounds(targetKind) {
 function clampModulationRouteAmount(targetKind, value) {
   const limits = getRouteAmountLimit(targetKind);
   const numeric = Number(value);
-  return clamp$c(Number.isFinite(numeric) ? numeric : 0, limits.min, limits.max);
+  return clamp$b(Number.isFinite(numeric) ? numeric : 0, limits.min, limits.max);
 }
 function getModulationAmountDepth(targetKind, amount) {
   const clampedAmount = clampModulationRouteAmount(targetKind, amount);
@@ -17533,11 +19291,11 @@ function getModulationAmountDepth(targetKind, amount) {
   if (limit <= 0) {
     return 0;
   }
-  return clamp$c(Math.abs(clampedAmount) / limit, 0, 1);
+  return clamp$b(Math.abs(clampedAmount) / limit, 0, 1);
 }
 function composeModulationAmount(targetKind, depth) {
   const limits = getRouteAmountLimit(targetKind);
-  const clampedDepth = clamp$c(Number.isFinite(depth) ? depth : 0, 0, 1);
+  const clampedDepth = clamp$b(Number.isFinite(depth) ? depth : 0, 0, 1);
   if (Math.abs(clampedDepth - 0.5) <= 1e-9) {
     return 0;
   }
@@ -17564,12 +19322,12 @@ function getModulationAmountSliderPosition(targetKind, amount) {
     if (Math.abs(limits.min) <= 1e-9) {
       return 0.5;
     }
-    return clamp$c(0.5 * (1 - Math.abs(clampedAmount) / Math.abs(limits.min)), 0, 0.5);
+    return clamp$b(0.5 * (1 - Math.abs(clampedAmount) / Math.abs(limits.min)), 0, 0.5);
   }
   if (Math.abs(limits.max) <= 1e-9) {
     return 0.5;
   }
-  return clamp$c(0.5 + 0.5 * (clampedAmount / limits.max), 0.5, 1);
+  return clamp$b(0.5 + 0.5 * (clampedAmount / limits.max), 0.5, 1);
 }
 function formatModulationAmountReadout(rawTargetKind, amount, polarity = "unipolar") {
   const targetKind = amountAuthorityKind(rawTargetKind);
@@ -17755,7 +19513,7 @@ function normalizeSourceSlot(sourceKind, rawSlot) {
     return null;
   }
   const maxSlot = sourceKind === "mseg" ? MODULATION_MSEG_SLOT_COUNT : sourceKind === "macro" ? MODULATION_MACRO_SLOT_COUNT : AMP_ENVELOPE_SOURCE_SLOT;
-  return clamp$c(Number.isFinite(numericSlot) ? numericSlot : 1, 1, maxSlot);
+  return clamp$b(Number.isFinite(numericSlot) ? numericSlot : 1, 1, maxSlot);
 }
 function createDefaultEnvelope(slotIndex) {
   return {
@@ -18080,13 +19838,13 @@ class ModulationRuntimeBridge {
     return routeIndex === void 0 ? false : this.setRouteAmount(routeIndex, nextAmount);
   }
   getMsegSlotController(slotIndex) {
-    return this.slotControllers[clamp$c(Math.round(slotIndex), 0, MODULATION_MSEG_SLOT_COUNT - 1)];
+    return this.slotControllers[clamp$b(Math.round(slotIndex), 0, MODULATION_MSEG_SLOT_COUNT - 1)];
   }
   getMsegSlotEditShapeIndex(slotIndex) {
-    return this.msegSlotEditShapeIndexes[clamp$c(Math.round(slotIndex), 0, MODULATION_MSEG_SLOT_COUNT - 1)];
+    return this.msegSlotEditShapeIndexes[clamp$b(Math.round(slotIndex), 0, MODULATION_MSEG_SLOT_COUNT - 1)];
   }
   setMsegSlotEditShapeIndex(slotIndex, shapeIndex) {
-    const normalizedSlotIndex = clamp$c(Math.round(slotIndex), 0, MODULATION_MSEG_SLOT_COUNT - 1);
+    const normalizedSlotIndex = clamp$b(Math.round(slotIndex), 0, MODULATION_MSEG_SLOT_COUNT - 1);
     const normalizedShapeIndex = Math.round(Number(shapeIndex)) === 1 ? 1 : 0;
     if (this.msegSlotEditShapeIndexes[normalizedSlotIndex] === normalizedShapeIndex) {
       return;
@@ -18259,13 +20017,13 @@ class ModulationRuntimeBridge {
     }
   }
   emitStateChange(changeKind = "general") {
-    const stateSnapshot = {
+    const stateSnapshot2 = {
       ...this.state,
       msegSlots: [...this.state.msegSlots],
       envelopeSlots: [...this.state.envelopeSlots],
       routes: [...this.state.routes]
     };
-    this.stateListeners.forEach((listener) => listener(stateSnapshot, changeKind));
+    this.stateListeners.forEach((listener) => listener(stateSnapshot2, changeKind));
   }
   replaceCanonicalState(nextState, shouldPersist) {
     const previousRouteAmountsById = this.routeAmountsById;
@@ -18397,7 +20155,7 @@ function useResizeObserver$1(ref) {
   }, [ref]);
   return size;
 }
-function clamp$b(value, min, max) {
+function clamp$a(value, min, max) {
   return Math.min(Math.max(value, min), max);
 }
 function buildMsegSurfacePaths(points, width, height, options = {}) {
@@ -18427,7 +20185,7 @@ function buildMsegMorphSurfacePaths(shapeAPoints, shapeBPoints, morphValue, widt
   try {
     const bufferA = renderMsegShape({ points: shapeAPoints });
     const bufferB = renderMsegShape({ points: shapeBPoints });
-    const morph = clamp$b(Number(morphValue) || 0, 0, 1);
+    const morph = clamp$a(Number(morphValue) || 0, 0, 1);
     const metrics = createMsegEditorMetrics(width, height, {
       pointRadius: options.pointRadius,
       horizontalPadding: options.horizontalPadding ?? MSEG_EDITOR_HORIZONTAL_PADDING_PX,
@@ -18438,7 +20196,7 @@ function buildMsegMorphSurfacePaths(shapeAPoints, shapeBPoints, morphValue, widt
       const x = sampleIndex / Math.max(1, sampleCount - 1);
       const valueA = sampleRenderedMsegBuffer(bufferA, x);
       const valueB = sampleRenderedMsegBuffer(bufferB, x);
-      const y = clamp$b(valueA + (valueB - valueA) * morph, 0, 1);
+      const y = clamp$a(valueA + (valueB - valueA) * morph, 0, 1);
       return pointToMsegEditorCoordinates({ x, y }, width, height, options);
     });
     const curvePath = polylineToSvgPath(polyline);
@@ -18533,7 +20291,7 @@ function MsegPreview({
       morphShapeBFillPath: shapeBReferencePaths?.fillPath ?? ""
     };
   }, [morphShapeAPoints, morphShapeBPoints, morphValue, orientation, points, referencePoints, size.height, size.width]);
-  const clampedProgressFillEnd = progressFillEnd !== null && progressFillEnd !== void 0 && Number.isFinite(Number(progressFillEnd)) ? clamp$b(Number(progressFillEnd), 0, 1) : null;
+  const clampedProgressFillEnd = progressFillEnd !== null && progressFillEnd !== void 0 && Number.isFinite(Number(progressFillEnd)) ? clamp$a(Number(progressFillEnd), 0, 1) : null;
   const progressClipRect = reactExports.useMemo(() => {
     if (clampedProgressFillEnd === null) {
       return null;
@@ -19116,7 +20874,7 @@ function buildMagnitudePlotPoints(magnitudesDb, width, height, {
   const points = [];
   for (let index = 0; index < magnitudesDb.length; index += 1) {
     const x = plotLeft + plotWidth * (index / Math.max(1, magnitudesDb.length - 1));
-    const normalized2 = clamp$b((clamp$b(magnitudesDb[index], minDb, maxDb) - minDb) / (maxDb - minDb), 0, 1);
+    const normalized2 = clamp$a((clamp$a(magnitudesDb[index], minDb, maxDb) - minDb) / (maxDb - minDb), 0, 1);
     const y = plotBottom - plotHeight * normalized2;
     points.push({ x, y });
   }
@@ -19363,7 +21121,7 @@ function FilterResponseGraph({
   }, [size.height, size.width, spectrumGeometry]);
   const baseHandle = reactExports.useMemo(() => {
     const cutoffNormalized = filterCutoffHzToNormalized(baseModel.cutoffHz);
-    const qNormalized = clamp$b(resonanceNormalizedFromQ(baseModel.q), 0, 1);
+    const qNormalized = clamp$a(resonanceNormalizedFromQ(baseModel.q), 0, 1);
     return {
       cutoffNormalized,
       qNormalized,
@@ -19376,12 +21134,12 @@ function FilterResponseGraph({
       return null;
     }
     const pointFor = (state2) => ({
-      x: basePath.plotLeft + basePath.plotWidth * clamp$b(
-        filterCutoffHzToNormalized(clamp$b(state2.cutoffHz, FILTER_CUTOFF_MIN_HZ, FILTER_CUTOFF_MAX_HZ)),
+      x: basePath.plotLeft + basePath.plotWidth * clamp$a(
+        filterCutoffHzToNormalized(clamp$a(state2.cutoffHz, FILTER_CUTOFF_MIN_HZ$1, FILTER_CUTOFF_MAX_HZ$1)),
         0,
         1
       ),
-      y: basePath.plotBottom - basePath.plotHeight * clamp$b(resonanceNormalizedFromQ(state2.q), 0, 1)
+      y: basePath.plotBottom - basePath.plotHeight * clamp$a(resonanceNormalizedFromQ(state2.q), 0, 1)
     });
     const toPolyline = (points) => points.map((point) => `${point.x.toFixed(2)} ${point.y.toFixed(2)}`).join(" L ");
     const startResponse = buildFilterResponsePath(
@@ -19457,21 +21215,21 @@ function FilterResponseGraph({
     }
     const bounds = surface.getBoundingClientRect();
     const stateAtPlotPoint = (rawPlotX, rawPlotY) => {
-      const plotX = clamp$b(rawPlotX, basePath.plotLeft, basePath.plotRight);
-      const plotY = clamp$b(rawPlotY, basePath.plotTop, basePath.plotBottom);
-      const cutoffNormalized = clamp$b(
+      const plotX = clamp$a(rawPlotX, basePath.plotLeft, basePath.plotRight);
+      const plotY = clamp$a(rawPlotY, basePath.plotTop, basePath.plotBottom);
+      const cutoffNormalized = clamp$a(
         (plotX - basePath.plotLeft) / Math.max(1, basePath.plotWidth),
         0,
         1
       );
-      const qNormalized = clamp$b(
+      const qNormalized = clamp$a(
         1 - (plotY - basePath.plotTop) / Math.max(1, basePath.plotHeight),
         0,
         1
       );
       return {
-        cutoffHz: clamp$b(normalizedToFilterCutoffHz(cutoffNormalized), FILTER_CUTOFF_MIN_HZ, FILTER_CUTOFF_MAX_HZ),
-        q: clamp$b(resonanceQFromSurface(qNormalized), FILTER_Q_MIN$1, FILTER_Q_MAX$1)
+        cutoffHz: clamp$a(normalizedToFilterCutoffHz(cutoffNormalized), FILTER_CUTOFF_MIN_HZ$1, FILTER_CUTOFF_MAX_HZ$1),
+        q: clamp$a(resonanceQFromSurface(qNormalized), FILTER_Q_MIN$2, FILTER_Q_MAX$2)
       };
     };
     if (dragState.target === "center") {
@@ -19485,8 +21243,8 @@ function FilterResponseGraph({
       const maxX = Math.max(anchor.startPoint.x, anchor.endPoint.x);
       const minY = Math.min(anchor.startPoint.y, anchor.endPoint.y);
       const maxY = Math.max(anchor.startPoint.y, anchor.endPoint.y);
-      const deltaX = clamp$b(rawDeltaX, basePath.plotLeft - minX, basePath.plotRight - maxX);
-      const deltaY = clamp$b(rawDeltaY, basePath.plotTop - minY, basePath.plotBottom - maxY);
+      const deltaX = clamp$a(rawDeltaX, basePath.plotLeft - minX, basePath.plotRight - maxX);
+      const deltaY = clamp$a(rawDeltaY, basePath.plotTop - minY, basePath.plotBottom - maxY);
       onTravelTranslateRef.current?.(
         stateAtPlotPoint(anchor.startPoint.x + deltaX, anchor.startPoint.y + deltaY),
         stateAtPlotPoint(anchor.endPoint.x + deltaX, anchor.endPoint.y + deltaY)
@@ -19936,8 +21694,8 @@ function FilterResponseGraph({
                             "data-role": "filter-travel-hit-target-center",
                             role: "slider",
                             "aria-label": "Translate filter modulation travel",
-                            "aria-valuemin": FILTER_CUTOFF_MIN_HZ,
-                            "aria-valuemax": FILTER_CUTOFF_MAX_HZ,
+                            "aria-valuemin": FILTER_CUTOFF_MIN_HZ$1,
+                            "aria-valuemax": FILTER_CUTOFF_MAX_HZ$1,
                             "aria-valuenow": Math.round(baseCutoffHz),
                             tabIndex: 0,
                             cx: travelGeometry.centerPoint.x,
@@ -20025,8 +21783,8 @@ function FilterResponseGraph({
                             "data-role": `filter-travel-hit-target-${side}`,
                             role: "slider",
                             "aria-label": `Filter modulation travel ${side}`,
-                            "aria-valuemin": FILTER_CUTOFF_MIN_HZ,
-                            "aria-valuemax": FILTER_CUTOFF_MAX_HZ,
+                            "aria-valuemin": FILTER_CUTOFF_MIN_HZ$1,
+                            "aria-valuemax": FILTER_CUTOFF_MAX_HZ$1,
                             "aria-valuenow": Math.round(state2.cutoffHz),
                             tabIndex: 0,
                             cx: point.x,
@@ -20044,19 +21802,19 @@ function FilterResponseGraph({
                               event.preventDefault();
                               onTravelGestureStartRef.current?.(side);
                               onTravelEndpointSetRef.current?.(side, {
-                                cutoffHz: clamp$b(
+                                cutoffHz: clamp$a(
                                   state2.cutoffHz * 2 ** stepOctaves,
-                                  FILTER_CUTOFF_MIN_HZ,
-                                  FILTER_CUTOFF_MAX_HZ
+                                  FILTER_CUTOFF_MIN_HZ$1,
+                                  FILTER_CUTOFF_MAX_HZ$1
                                 ),
-                                q: clamp$b(
-                                  resonanceQFromSurface(clamp$b(
+                                q: clamp$a(
+                                  resonanceQFromSurface(clamp$a(
                                     resonanceNormalizedFromQ(state2.q) + stepSurface,
                                     0,
                                     1
                                   )),
-                                  FILTER_Q_MIN$1,
-                                  FILTER_Q_MAX$1
+                                  FILTER_Q_MIN$2,
+                                  FILTER_Q_MAX$2
                                 )
                               });
                               onTravelGestureEndRef.current?.();
@@ -20084,7 +21842,7 @@ const DISTORTION_CURVE_POINT_COUNT = 241;
 const DISTORTION_TRANSFER_OCCUPANCY_BIN_COUNT = 81;
 const DISTORTION_TRANSFER_OCCUPANCY_ACTIVITY_EPSILON = 0.035;
 const DISTORTION_DRIVE_ENGAGEMENT_DB = 6;
-function clamp$a(value, min, max) {
+function clamp$9(value, min, max) {
   return Math.min(Math.max(value, min), max);
 }
 function coerceFiniteNumber(value) {
@@ -20138,7 +21896,7 @@ function normalizeDistortionScopeMessage(message) {
   const computedRemovedPeak = findPeak(normalizedInput.map((inputSample, index) => inputSample - normalizedOutput[index]));
   return {
     sampleRateHz: Math.max(1, coerceFiniteNumber(record.sampleRateHz) ?? 44100),
-    dominantChannel: clamp$a(Math.round(coerceFiniteNumber(record.dominantChannel) ?? 0), 0, 1),
+    dominantChannel: clamp$9(Math.round(coerceFiniteNumber(record.dominantChannel) ?? 0), 0, 1),
     inputPeak: Math.max(0, coerceFiniteNumber(record.inputPeak) ?? computedInputPeak),
     outputPeak: Math.max(0, coerceFiniteNumber(record.outputPeak) ?? computedOutputPeak),
     removedPeak: Math.max(0, coerceFiniteNumber(record.removedPeak) ?? computedRemovedPeak),
@@ -20168,12 +21926,12 @@ function normalizeDistortionHistoryMessage(message) {
   if (availableBinCount <= 0) {
     return null;
   }
-  const binCount = clamp$a(
+  const binCount = clamp$9(
     Math.round(coerceFiniteNumber(record.binCount) ?? availableBinCount),
     1,
     availableBinCount
   );
-  const validBinCount = clamp$a(
+  const validBinCount = clamp$9(
     Math.round(coerceFiniteNumber(record.validBinCount) ?? binCount),
     0,
     binCount
@@ -20199,7 +21957,7 @@ function normalizeDistortionHistoryMessage(message) {
   };
 }
 function shapeSymmetricDistortionSample(inputSample, knee) {
-  const clampedKnee = clamp$a(Number(knee) || 0, 0, 1);
+  const clampedKnee = clamp$9(Number(knee) || 0, 0, 1);
   const exponent = 2 + 10 * clampedKnee * clampedKnee;
   const magnitude = Math.abs(Number(inputSample) || 0);
   const denominator = Math.pow(1 + Math.pow(magnitude, exponent), 1 / exponent);
@@ -20207,7 +21965,7 @@ function shapeSymmetricDistortionSample(inputSample, knee) {
 }
 function shapeDistortionSample(inputSample, knee, type = 0, driveDb = DISTORTION_DRIVE_ENGAGEMENT_DB) {
   const input = Number(inputSample) || 0;
-  const selectedType = clamp$a(Math.round(Number(type) || 0), 0, 2);
+  const selectedType = clamp$9(Math.round(Number(type) || 0), 0, 2);
   let shapedSample;
   if (selectedType === 1) {
     const bias = 0.08;
@@ -20218,18 +21976,18 @@ function shapeDistortionSample(inputSample, knee, type = 0, driveDb = DISTORTION
       shapedSample = input;
     } else {
       const segment = Math.floor((magnitude - 1) * 0.5);
-      const phase = clamp$a((magnitude - (1 + 2 * segment)) * 0.5, 0, 1);
+      const phase = clamp$9((magnitude - (1 + 2 * segment)) * 0.5, 0, 1);
       const segmentSign = segment % 2 === 0 ? 1 : -1;
       const roundedReflection = segmentSign * Math.cos(Math.PI * phase);
       const mirrorReflection = segmentSign * (1 - 2 * phase);
-      const reflectionStrength = clamp$a(Number(knee) || 0, 0, 1);
+      const reflectionStrength = clamp$9(Number(knee) || 0, 0, 1);
       const folded = roundedReflection + (mirrorReflection - roundedReflection) * reflectionStrength;
       shapedSample = input < 0 ? -folded : folded;
     }
   } else {
     shapedSample = shapeSymmetricDistortionSample(input, knee);
   }
-  const engagement = clamp$a(
+  const engagement = clamp$9(
     (Number(driveDb) || 0) / DISTORTION_DRIVE_ENGAGEMENT_DB,
     0,
     1
@@ -20260,7 +22018,7 @@ function buildDistortionHistoryBins(frame) {
     frame.outputMins.length,
     frame.outputMaxs.length
   );
-  const safeValidBinCount = clamp$a(frame.validBinCount, 0, activeBinCount);
+  const safeValidBinCount = clamp$9(frame.validBinCount, 0, activeBinCount);
   const leadingPaddingCount = Math.max(0, activeBinCount - safeValidBinCount);
   const bins = [];
   for (let index = 0; index < leadingPaddingCount; index += 1) {
@@ -20408,7 +22166,7 @@ function buildDistortionTransferOccupancy({
       continue;
     }
     const normalized2 = (point.input + safeInputRange) / (safeInputRange * 2);
-    const binIndex = clamp$a(
+    const binIndex = clamp$9(
       Math.round(normalized2 * (safeBinCount - 1)),
       0,
       safeBinCount - 1
@@ -20505,15 +22263,15 @@ const COMPACT_PLOT = {
 function joinClasses(...classes) {
   return classes.filter(Boolean).join(" ");
 }
-function clamp$9(value, min, max) {
+function clamp$8(value, min, max) {
   return Math.min(Math.max(value, min), max);
 }
 function mapPlotX(sampleValue, plot, range) {
-  const normalized2 = clamp$9((sampleValue + range) / (Math.max(range, 1e-6) * 2), 0, 1);
+  const normalized2 = clamp$8((sampleValue + range) / (Math.max(range, 1e-6) * 2), 0, 1);
   return plot.left + plot.width * normalized2;
 }
 function mapPlotY(sampleValue, plot, range) {
-  const normalized2 = clamp$9((range - sampleValue) / (Math.max(range, 1e-6) * 2), 0, 1);
+  const normalized2 = clamp$8((range - sampleValue) / (Math.max(range, 1e-6) * 2), 0, 1);
   return plot.top + plot.height * normalized2;
 }
 function buildPolylinePath(points) {
@@ -20688,7 +22446,7 @@ function DistortionVisualizer({
     const peakDensity = mappedPoints.reduce((peak, point) => Math.max(peak, point.density), 0);
     return {
       glowPath: buildRibbonPath(mappedPoints),
-      glowOpacity: clamp$9(0.12 + peakDensity * 0.12, 0.12, 0.24),
+      glowOpacity: clamp$8(0.12 + peakDensity * 0.12, 0.12, 0.24),
       regions: splitTransferRibbonByClipping(mappedPoints).map((region) => {
         const regionPeakDensity = region.points.reduce(
           (peak, point) => Math.max(peak, point.density),
@@ -20697,7 +22455,7 @@ function DistortionVisualizer({
         return {
           clipped: region.clipped,
           path: buildRibbonPath(region.points),
-          opacity: region.clipped ? clamp$9(0.82 + regionPeakDensity * 0.16, 0.82, 0.98) : clamp$9(0.58 + regionPeakDensity * 0.26, 0.58, 0.84)
+          opacity: region.clipped ? clamp$8(0.82 + regionPeakDensity * 0.16, 0.82, 0.98) : clamp$8(0.58 + regionPeakDensity * 0.26, 0.58, 0.84)
         };
       }).filter((region) => region.path)
     };
@@ -23044,12 +24802,12 @@ function getOscillatorControlAddress(oscillatorID, controlID) {
   return control;
 }
 function projectSelectedOscillatorWrite(selectedOscillatorID, controlID, value) {
-  const address = getOscillatorControlAddress(selectedOscillatorID, controlID);
+  const address2 = getOscillatorControlAddress(selectedOscillatorID, controlID);
   return Object.freeze({
     oscillatorID: selectedOscillatorID,
-    oscillatorIndex: address.oscillatorIndex,
+    oscillatorIndex: address2.oscillatorIndex,
     controlID,
-    endpointID: address.endpointID,
+    endpointID: address2.endpointID,
     value
   });
 }
@@ -23353,67 +25111,6 @@ function assertManifestCoverage() {
   }
 }
 assertManifestCoverage();
-function clamp$8(value, min, max) {
-  return Math.min(Math.max(value, min), max);
-}
-function quantize(value, spec) {
-  if (!(spec.step > 0)) {
-    return clamp$8(value, spec.min, spec.max);
-  }
-  const clamped = clamp$8(value, spec.min, spec.max);
-  const stepped = spec.min + Math.round((clamped - spec.min) / spec.step) * spec.step;
-  return clamp$8(Number(stepped.toFixed(8)), spec.min, spec.max);
-}
-function formatFrequencyDisplay(value) {
-  if (value >= 1e4) {
-    return `${(value / 1e3).toFixed(1)} kHz`;
-  }
-  if (value >= 1e3) {
-    return `${(value / 1e3).toFixed(2)} kHz`;
-  }
-  return `${Math.round(value)} Hz`;
-}
-function formatTrimmed(value, digits) {
-  return String(Number(value.toFixed(digits)));
-}
-function normalizeEntryText(text) {
-  return text.trim().toLowerCase().replace(/,/g, "");
-}
-function valueCommit(value, spec, mode = null) {
-  const canonicalValue = quantize(value, spec);
-  return {
-    _tag: "accepted",
-    commit: { _tag: "value", value: canonicalValue, mode },
-    echo: formatParameterEntry(spec, canonicalValue)
-  };
-}
-function rejectForUnit(unit, defaultUnit) {
-  return {
-    _tag: "rejected",
-    message: `${unit} is not compatible with a value in ${defaultUnit}.`
-  };
-}
-function frequencySpec(min, max, step, percentScale) {
-  return { _tag: "frequency", min, max, step, defaultUnit: "Hz", percentScale };
-}
-function scalarSpec({
-  min,
-  max,
-  step,
-  unit,
-  canonicalPerDisplayedUnit = 1,
-  digits = 3
-}) {
-  return {
-    _tag: "scalar",
-    min,
-    max,
-    step,
-    defaultUnit: unit,
-    canonicalPerDisplayedUnit,
-    digits
-  };
-}
 function millisecondsSpec(descriptor, currentValue) {
   return {
     _tag: "milliseconds",
@@ -23484,14 +25181,6 @@ function parameterEntrySpecForRackParameter(descriptor, currentValue) {
     freeSpec: spec,
     divisions: divisionDescriptor.choices
   };
-}
-function requirePositiveLogarithmicBase(baseValue) {
-  if (!Number.isFinite(baseValue) || baseValue <= 0) {
-    throw new RangeError("A logarithmic modulation amount requires a positive finite base value.");
-  }
-}
-function amountSpec(args) {
-  return { _tag: "amount", ...args };
 }
 function nativePercentAmount(min, max, step, canonicalPerDisplayedUnit) {
   return amountSpec({
@@ -23642,31 +25331,6 @@ function parameterEntrySpecForModulationAmount(targetKind, baseValue) {
   }
   return rackAmountSpec(targetKind, descriptor, baseValue);
 }
-function parameterEntrySpecForSeconds({
-  minSeconds,
-  maxSeconds,
-  stepSeconds,
-  currentSeconds
-}) {
-  return {
-    _tag: "seconds",
-    min: minSeconds,
-    max: maxSeconds,
-    step: stepSeconds,
-    defaultUnit: currentSeconds < 1 ? "ms" : "s"
-  };
-}
-function parameterEntrySpecForFrequency({
-  minHz,
-  maxHz,
-  stepHz,
-  allowLogPercent
-}) {
-  return frequencySpec(minHz, maxHz, stepHz, null);
-}
-function parameterEntrySpecForScalar(input) {
-  return scalarSpec(input);
-}
 function parameterEntrySpecForKeyTrackOffset(family) {
   const range = requireKeyTrackRange(family);
   return scalarSpec({
@@ -23730,272 +25394,6 @@ function parameterEntrySpecForMobileVoiceControl(controlID) {
     };
   }
   throw new Error(`Mobile Voice control "${controlID}" has no exact-entry format.`);
-}
-function scalarDisplay(spec, canonicalValue) {
-  const displayedValue = canonicalValue / spec.canonicalPerDisplayedUnit;
-  const draft = formatTrimmed(displayedValue, spec.digits);
-  if (spec.defaultUnit === "%" || spec.defaultUnit === "°" || spec.defaultUnit === "x") {
-    return { display: `${draft}${spec.defaultUnit}`, draft, unit: spec.defaultUnit };
-  }
-  return { display: `${draft} ${spec.defaultUnit}`, draft, unit: spec.defaultUnit };
-}
-function amountDisplay(spec, canonicalValue) {
-  const displayedValue = canonicalValue / spec.canonicalPerDisplayedUnit;
-  const draft = formatTrimmed(displayedValue, spec.digits);
-  if (spec.defaultUnit === "%" || spec.defaultUnit === "°") {
-    return { display: `${draft}${spec.defaultUnit}`, draft, unit: spec.defaultUnit };
-  }
-  return { display: `${draft} ${spec.defaultUnit}`, draft, unit: spec.defaultUnit };
-}
-function formatParameterEntry(spec, value) {
-  if (spec._tag === "tempoSync") {
-    return formatParameterEntry(spec.freeSpec, value);
-  }
-  const canonicalValue = quantize(value, spec);
-  if (spec._tag === "frequency") {
-    return { display: formatFrequencyDisplay(canonicalValue), draft: String(canonicalValue), unit: spec.defaultUnit };
-  }
-  if (spec._tag === "scalar") {
-    return scalarDisplay(spec, canonicalValue);
-  }
-  if (spec._tag === "seconds") {
-    const editingValue = spec.defaultUnit === "ms" ? canonicalValue * 1e3 : canonicalValue;
-    const draft = formatTrimmed(editingValue, 3);
-    return { display: `${draft} ${spec.defaultUnit}`, draft, unit: spec.defaultUnit };
-  }
-  if (spec._tag === "milliseconds") {
-    const editingValue = spec.defaultUnit === "s" ? canonicalValue / 1e3 : canonicalValue;
-    const draft = formatTrimmed(editingValue, 3);
-    return { display: `${draft} ${spec.defaultUnit}`, draft, unit: spec.defaultUnit };
-  }
-  if (spec._tag === "pan") {
-    const percent = Math.round(canonicalValue * 100);
-    const draft = String(percent);
-    const display = percent === 0 ? "C" : percent < 0 ? `${-percent} L` : `${percent} R`;
-    return { display, draft, unit: spec.defaultUnit };
-  }
-  if (spec._tag === "choice") {
-    const choice2 = spec.choices.find((candidate) => candidate.value === Math.round(canonicalValue));
-    if (choice2 === void 0) {
-      throw new RangeError(`Choice value ${canonicalValue} is absent from its parameter entry spec.`);
-    }
-    return { display: choice2.label, draft: choice2.label, unit: spec.defaultUnit };
-  }
-  return amountDisplay(spec, canonicalValue);
-}
-function parseNumericAndUnit(text) {
-  const match = text.match(/^([+-]?(?:\d+(?:\.\d*)?|\.\d+))\s*([a-z%°]+)?$/);
-  const numericText = match?.[1];
-  if (numericText === void 0) {
-    return null;
-  }
-  return { numericText, unit: match?.[2] };
-}
-function unitIs(unit, ...aliases) {
-  return unit !== void 0 && aliases.includes(unit);
-}
-function parseFrequency(spec, text) {
-  const parsed = parseNumericAndUnit(text);
-  if (parsed === null) {
-    return { _tag: "rejected", message: "Enter a number in Hz or kHz." };
-  }
-  const numericValue = Number(parsed.numericText);
-  if (!Number.isFinite(numericValue)) {
-    return { _tag: "rejected", message: "Enter a finite number in Hz or kHz." };
-  }
-  if (parsed.unit === "%" && spec.percentScale === null) {
-    return rejectForUnit("%", spec.defaultUnit);
-  }
-  if (parsed.unit !== void 0 && parsed.unit !== "%" && !unitIs(parsed.unit, "hz", "khz", "k")) {
-    return rejectForUnit(parsed.unit, spec.defaultUnit);
-  }
-  const value = unitIs(parsed.unit, "khz", "k") ? numericValue * 1e3 : parsed.unit === "%" ? spec.min * (spec.max / spec.min) ** (numericValue / 100) : numericValue;
-  return valueCommit(value, spec);
-}
-function parseScalar(spec, text) {
-  const parsed = parseNumericAndUnit(text);
-  if (parsed === null) {
-    return {
-      _tag: "rejected",
-      message: spec.defaultUnit === "x" ? "Enter a finite number of voices." : `Enter a number in ${spec.defaultUnit}.`
-    };
-  }
-  const compatible = parsed.unit === void 0 || spec.defaultUnit === "%" && parsed.unit === "%" || spec.defaultUnit === "Q" && unitIs(parsed.unit, "q") || spec.defaultUnit === "dB" && unitIs(parsed.unit, "db") || spec.defaultUnit === "°" && unitIs(parsed.unit, "°", "deg", "degree", "degrees") || spec.defaultUnit === "st" && unitIs(parsed.unit, "st", "semitone", "semitones", "ct", "cent", "cents") || spec.defaultUnit === "oct" && unitIs(parsed.unit, "oct", "octave", "octaves") || spec.defaultUnit === "ct" && unitIs(parsed.unit, "ct", "cent", "cents") || spec.defaultUnit === "x" && unitIs(parsed.unit, "x", "voice", "voices");
-  if (!compatible && parsed.unit !== void 0) {
-    return rejectForUnit(parsed.unit, spec.defaultUnit);
-  }
-  const numericValue = Number(parsed.numericText);
-  if (!Number.isFinite(numericValue)) {
-    return {
-      _tag: "rejected",
-      message: spec.defaultUnit === "x" ? "Enter a finite number of voices." : `Enter a finite number in ${spec.defaultUnit}.`
-    };
-  }
-  const centsScale = spec.defaultUnit === "st" && unitIs(parsed.unit, "ct", "cent", "cents") ? 0.01 : 1;
-  return valueCommit(numericValue * centsScale * spec.canonicalPerDisplayedUnit, spec);
-}
-function timeUnitKind(unit) {
-  if (unit === void 0) return "bare";
-  if (unitIs(unit, "ms", "msec", "msecs", "millisecond", "milliseconds")) return "milliseconds";
-  if (unitIs(unit, "s", "sec", "secs", "second", "seconds")) return "seconds";
-  return "unknown";
-}
-function parseTime(spec, text) {
-  const parsed = parseNumericAndUnit(text);
-  if (parsed === null) {
-    return { _tag: "rejected", message: "Enter a time in ms or s." };
-  }
-  const unitKind = timeUnitKind(parsed.unit);
-  if (unitKind === "unknown" && parsed.unit !== void 0) {
-    return rejectForUnit(parsed.unit, spec.defaultUnit);
-  }
-  const numericValue = Number(parsed.numericText);
-  if (!Number.isFinite(numericValue)) {
-    return { _tag: "rejected", message: "Enter a finite time in ms or s." };
-  }
-  if (spec._tag === "seconds") {
-    const value2 = unitKind === "milliseconds" || unitKind === "bare" && spec.defaultUnit === "ms" ? numericValue / 1e3 : numericValue;
-    return valueCommit(value2, spec);
-  }
-  const value = unitKind === "seconds" || unitKind === "bare" && spec.defaultUnit === "s" ? numericValue * 1e3 : numericValue;
-  return valueCommit(value, spec);
-}
-function parsePan(spec, text) {
-  if (text === "c" || text === "center" || text === "centre") {
-    return valueCommit(0, spec);
-  }
-  const match = text.match(/^([+-]?(?:\d+(?:\.\d*)?|\.\d+))\s*%?\s*([lr])?$/);
-  const numericText = match?.[1];
-  if (numericText === void 0) {
-    return { _tag: "rejected", message: "Enter Pan as a percentage, optionally followed by L or R." };
-  }
-  const numericValue = Number(numericText);
-  if (!Number.isFinite(numericValue)) {
-    return { _tag: "rejected", message: "Enter a finite Pan percentage." };
-  }
-  const direction = match?.[2];
-  const signedPercent = direction === "l" ? -Math.abs(numericValue) : direction === "r" ? Math.abs(numericValue) : numericValue;
-  return valueCommit(signedPercent / 100, spec);
-}
-function parseChoice(spec, text) {
-  const choice2 = spec.choices.find((candidate) => candidate.label.toLowerCase() === text);
-  if (choice2 !== void 0) {
-    return valueCommit(choice2.value, spec);
-  }
-  const parsed = parseNumericAndUnit(text);
-  if (parsed === null || parsed.unit !== void 0) {
-    return { _tag: "rejected", message: "Enter one of the shown choices." };
-  }
-  const numericValue = Number(parsed.numericText);
-  if (!Number.isFinite(numericValue)) {
-    return { _tag: "rejected", message: "Enter one of the shown choices." };
-  }
-  return valueCommit(numericValue, spec);
-}
-function depthPercentValue(spec, numericValue) {
-  const sideLimit = numericValue < 0 ? Math.abs(spec.min) : Math.abs(spec.max);
-  return sideLimit * (numericValue / 100);
-}
-function parseOctavePhysicalInterval(spec, numericText, numericValue, unit) {
-  if (spec.baseValue === null || spec.physicalIntervalUnit === null) {
-    return null;
-  }
-  const isCompatiblePhysicalUnit = spec.physicalIntervalUnit === "frequency" ? unitIs(unit, "hz", "khz", "k") : timeUnitKind(unit) !== "unknown";
-  if (!isCompatiblePhysicalUnit) {
-    return null;
-  }
-  if (!/^[+-]/.test(numericText)) {
-    return {
-      _tag: "rejected",
-      message: `Enter a signed ${spec.physicalIntervalUnit === "frequency" ? "Hz/kHz" : "ms/s"} movement.`
-    };
-  }
-  let movement;
-  if (spec.physicalIntervalUnit === "frequency") {
-    movement = unitIs(unit, "khz", "k") ? numericValue * 1e3 : numericValue;
-  } else {
-    movement = timeUnitKind(unit) === "seconds" ? numericValue * 1e3 : numericValue;
-  }
-  const endpoint = spec.baseValue + movement;
-  if (!(endpoint > 0)) {
-    return { _tag: "rejected", message: "The resulting value must be above zero." };
-  }
-  return valueCommit(Math.log2(endpoint / spec.baseValue), spec);
-}
-function amountUnitCompatible(spec, unit) {
-  return spec.defaultUnit === "oct" && unitIs(unit, "oct", "octave", "octaves") || spec.defaultUnit === "st" && unitIs(unit, "st", "semitone", "semitones", "ct", "cent", "cents") || spec.defaultUnit === "dB" && unitIs(unit, "db") || spec.defaultUnit === "Q" && unitIs(unit, "q") || spec.defaultUnit === "s" && timeUnitKind(unit) !== "unknown" || spec.defaultUnit === "ms" && timeUnitKind(unit) !== "unknown" || spec.defaultUnit === "Hz" && unitIs(unit, "hz", "khz", "k") || spec.defaultUnit === "°" && unitIs(unit, "°", "deg", "degree", "degrees") || spec.defaultUnit === "%" && unit === "%";
-}
-function parseAmount(spec, text) {
-  const parsed = parseNumericAndUnit(text);
-  if (parsed === null) {
-    return { _tag: "rejected", message: `Enter an amount in ${spec.defaultUnit} or %.` };
-  }
-  const numericValue = Number(parsed.numericText);
-  if (!Number.isFinite(numericValue)) {
-    return { _tag: "rejected", message: `Enter a finite amount in ${spec.defaultUnit} or %.` };
-  }
-  if (parsed.unit === "%") {
-    const value2 = spec.percentMeaning === "native" ? numericValue * spec.canonicalPerDisplayedUnit : depthPercentValue(spec, numericValue);
-    return valueCommit(value2, spec);
-  }
-  if (spec.defaultUnit === "oct" && parsed.unit !== void 0) {
-    const interval = parseOctavePhysicalInterval(spec, parsed.numericText, numericValue, parsed.unit);
-    if (interval !== null) {
-      return interval;
-    }
-  }
-  if (parsed.unit !== void 0 && !amountUnitCompatible(spec, parsed.unit)) {
-    return rejectForUnit(parsed.unit, spec.defaultUnit);
-  }
-  const centsScale = spec.defaultUnit === "st" && unitIs(parsed.unit, "ct", "cent", "cents") ? 0.01 : 1;
-  let value = numericValue * centsScale * spec.canonicalPerDisplayedUnit;
-  if (spec.defaultUnit === "s" && timeUnitKind(parsed.unit) === "milliseconds") {
-    value = numericValue / 1e3;
-  } else if (spec.defaultUnit === "ms" && timeUnitKind(parsed.unit) === "seconds") {
-    value = numericValue * 1e3;
-  } else if (spec.defaultUnit === "Hz" && unitIs(parsed.unit, "khz", "k")) {
-    value = numericValue * 1e3;
-  }
-  return valueCommit(value, spec);
-}
-function parseTempoSync(spec, text) {
-  const division = spec.divisions.find((candidate) => candidate.label.toLowerCase() === text);
-  if (division !== void 0) {
-    return {
-      _tag: "accepted",
-      commit: {
-        _tag: "tempoDivision",
-        mode: "sync",
-        divisionValue: division.value,
-        divisionLabel: division.label
-      },
-      echo: { display: `${division.label} Sync`, draft: division.label, unit: "Sync" }
-    };
-  }
-  if (/^\d+\/\d+(?:\.|t)?$/i.test(text)) {
-    return { _tag: "rejected", message: "That tempo division is not supported for this parameter." };
-  }
-  const result = spec.freeSpec._tag === "frequency" ? parseFrequency(spec.freeSpec, text) : parseTime(spec.freeSpec, text);
-  if (result._tag === "rejected") {
-    return result;
-  }
-  if (result.commit._tag !== "value") {
-    throw new Error("A Free-value parser returned a tempo division.");
-  }
-  return {
-    ...result,
-    commit: { ...result.commit, mode: "free" }
-  };
-}
-function parseParameterEntry(spec, text) {
-  const normalizedText = normalizeEntryText(text);
-  if (spec._tag === "tempoSync") return parseTempoSync(spec, normalizedText);
-  if (spec._tag === "frequency") return parseFrequency(spec, normalizedText);
-  if (spec._tag === "scalar") return parseScalar(spec, normalizedText);
-  if (spec._tag === "seconds" || spec._tag === "milliseconds") return parseTime(spec, normalizedText);
-  if (spec._tag === "pan") return parsePan(spec, normalizedText);
-  if (spec._tag === "choice") return parseChoice(spec, normalizedText);
-  return parseAmount(spec, normalizedText);
 }
 function presentRouteWithCanonicalAmount(route, binding) {
   return route === null || binding.value === null ? route : { ...route, amount: binding.value };
@@ -24199,8 +25597,8 @@ function applyRollingAxisSample(state2, sample, config = DEFAULT_ROLLING_AXIS_CO
       application: null
     };
   }
-  const application = state2.mode === "horizontal" ? Object.freeze({ axis: "horizontal", dx, dy: 0 }) : Object.freeze({ axis: "vertical", dx: 0, dy: dyUp });
-  return { state: moved, transition: "none", application };
+  const application2 = state2.mode === "horizontal" ? Object.freeze({ axis: "horizontal", dx, dy: 0 }) : Object.freeze({ axis: "vertical", dx: 0, dy: dyUp });
+  return { state: moved, transition: "none", application: application2 };
 }
 const PARAMETER_GESTURE_BASE_PIXELS_PER_FULL_RANGE = 220;
 const PARAMETER_GESTURE_MODULATION_PIXELS_PER_FULL_SPAN = 360;
@@ -24303,19 +25701,19 @@ function useParameterGesture() {
     const coalesced = typeof event.getCoalescedEvents === "function" ? event.getCoalescedEvents() : [];
     const samples = coalesced.length > 0 ? coalesced : [event];
     for (const sample of samples) {
-      const result = applyRollingAxisSample(gesture.classifier, {
+      const result2 = applyRollingAxisSample(gesture.classifier, {
         x: sample.clientX,
         y: sample.clientY,
         time: Number(sample.timeStamp) || performance.now(),
         pointerType: gesture.plan.pointerType
       });
-      gesture.classifier = result.state;
-      if (result.transition === "activate" || result.transition === "switch") {
+      gesture.classifier = result2.state;
+      if (result2.transition === "activate" || result2.transition === "switch") {
         if (gesture.longPressTimer !== null) {
           window.clearTimeout(gesture.longPressTimer);
           gesture.longPressTimer = null;
         }
-        const nextAxis = result.state.mode;
+        const nextAxis = result2.state.mode;
         const previousAxis = gesture.ownedAxis;
         if (previousAxis !== null && previousAxis !== nextAxis) {
           const previousChannel = previousAxis === "horizontal" ? gesture.plan.horizontal : gesture.plan.vertical;
@@ -24326,15 +25724,15 @@ function useParameterGesture() {
         channel2?.onActivate?.();
         continue;
       }
-      const application = result.application;
-      if (application === null || gesture.ownedAxis === null) {
+      const application2 = result2.application;
+      if (application2 === null || gesture.ownedAxis === null) {
         continue;
       }
       const channel = gesture.ownedAxis === "horizontal" ? gesture.plan.horizontal : gesture.plan.vertical;
       if (channel === null || channel.write === null) {
         continue;
       }
-      const delta = gesture.ownedAxis === "horizontal" ? application.dx : application.dy;
+      const delta = gesture.ownedAxis === "horizontal" ? application2.dx : application2.dy;
       const step = delta * (channel.direction ?? 1) / channel.pixelsPerFullSpan;
       if (gesture.ownedAxis === "horizontal") {
         gesture.horizontalNormalized = clamp01$6(gesture.horizontalNormalized + step);
@@ -26231,13 +27629,13 @@ function MobileVoiceFocusedEditor({
   });
   const beginTabTransition = panelTransition.beginTabTransition;
   const targetKindFor = reactExports.useCallback((parameterKind) => {
-    const address = contract.modulationTargets.find(
+    const address2 = contract.modulationTargets.find(
       (candidate) => candidate.parameterKind === parameterKind
     );
-    if (address === void 0) {
+    if (address2 === void 0) {
       throw new Error(`Oscillator ${contract.id} has no MOD target ${parameterKind}`);
     }
-    return address.targetKind;
+    return address2.targetKind;
   }, [contract]);
   reactExports.useCallback((parameterKind) => {
     if (parameterKind === null || armedSource === null) {
@@ -27649,11 +29047,11 @@ function normalizeArticulationSlot(value, fallbackRuntimeSlot) {
   const nextValue = value;
   const runtimeSlot = normalizeInteger(nextValue.runtimeSlot, fallbackRuntimeSlot, 0, ARTICULATION_MAX_SLOTS - 1);
   const id = typeof nextValue.id === "string" && nextValue.id.trim() ? nextValue.id.trim() : `articulation-${runtimeSlot}`;
-  const name = typeof nextValue.name === "string" && nextValue.name.trim() ? nextValue.name.trim() : createDefaultArticulationName(runtimeSlot);
+  const name2 = typeof nextValue.name === "string" && nextValue.name.trim() ? nextValue.name.trim() : createDefaultArticulationName(runtimeSlot);
   return {
     id,
     runtimeSlot,
-    name,
+    name: name2,
     snapshot: normalizeArticulationSnapshot(nextValue.snapshot)
   };
 }
@@ -27833,6 +29231,8 @@ class ArticulationsParseError extends Error {
     this.reason = reason;
     this.detail = detail;
   }
+  reason;
+  detail;
   _tag = "ArticulationsParseError";
 }
 function malformed(detail) {
@@ -28542,8 +29942,8 @@ function selectArticulationV4(state2, slotId) {
 function setArticulationTriggerModeV4(state2, mode) {
   return state2.activeTriggerMode === mode ? state2 : { ...state2, activeTriggerMode: mode };
 }
-function renameArticulationV4(state2, slotId, name) {
-  const trimmed = name.trim();
+function renameArticulationV4(state2, slotId, name2) {
+  const trimmed = name2.trim();
   return trimmed ? updateSlot(state2, slotId, (slot) => ({ ...slot, name: trimmed })) : state2;
 }
 function duplicateArticulationV4(state2, slotId) {
@@ -29305,8 +30705,6 @@ const EFFECTIVE_FILTER_STATE_ENDPOINT_ID = "effectiveFilterState";
 const FILTER_SPECTRUM_ENDPOINT_ID = "filterSpectrum";
 const DISPLAY_SWIPE_THRESHOLD_PX = 2;
 const MSEG_DRAG_THRESHOLD_PX = 8;
-const PLAY_MODE_ENDPOINT_ID = "playMode";
-const GLIDE_TIME_ENDPOINT_ID = "glideTime";
 const FILTER_MODE_ENDPOINT_ID = "filterMode";
 const FILTER_CUTOFF_ENDPOINT_ID = "filterCutoff";
 const FILTER_CUTOFF_KEY_TRACK_ENABLED_ENDPOINT_ID = "filterCutoffKeyTrackEnabled";
@@ -31024,21 +32422,19 @@ function useSynthPatchViewModel({
     initialValue: DEFAULT_FACTORY_TABLE_INDEX,
     coerce: (value) => Math.max(0, Math.trunc(Number(value) || 0))
   });
-  const playMode = usePatchParameterBinding({
-    endpointID: PLAY_MODE_ENDPOINT_ID,
+  const playMode = useSynthPluginParameterBinding("playMode", {
     initialValue: 0,
     coerce: (value) => clamp$3(Math.round(Number(value) || 0), 0, Math.max(0, voiceModeCount - 1))
   });
-  const glideTime = usePatchParameterBinding({
-    endpointID: GLIDE_TIME_ENDPOINT_ID,
+  const glideTime = useSynthPluginParameterBinding("glideTime", {
     initialValue: 0,
     coerce: (value) => clamp$3(Number(value) || 0, GLIDE_TIME_MIN_SECONDS, GLIDE_TIME_MAX_SECONDS)
   });
-  const globalTune = usePatchParameterBinding({
-    endpointID: GLOBAL_TUNE_ENDPOINT_ID,
+  const globalTune = useSynthPluginParameterBinding("globalTune", {
     initialValue: GLOBAL_TUNE_INITIAL_SEMITONES,
     coerce: clampGlobalTuneSemitones
   });
+  const voiceHistory = usePluginHistory();
   const pan = usePatchParameterBinding({
     endpointID: oscillatorEndpointID("pan"),
     initialValue: 0,
@@ -31090,7 +32486,7 @@ function useSynthPatchViewModel({
   });
   const filterMode = usePatchParameterBinding({
     endpointID: FILTER_MODE_ENDPOINT_ID,
-    initialValue: FILTER_MODE_LOWPASS$1,
+    initialValue: FILTER_MODE_LOWPASS,
     coerce: (value) => clamp$3(Math.round(Number(value) || 0), 0, 5)
   });
   const filterCutoff = usePatchParameterBinding({
@@ -31564,11 +32960,11 @@ function useSynthPatchViewModel({
     });
   }, [msegState?.playback, observedMsegState, selectedMsegSlot]);
   const selectedEnvelope = reactExports.useMemo(() => {
-    const name = modulationState?.envelopeSlots[selectedEnvelopeSlot]?.name;
+    const name2 = modulationState?.envelopeSlots[selectedEnvelopeSlot]?.name;
     const bindings = envelopeEditorBindings[selectedEnvelopeSlot];
     if (!modulationState || !bindings) return null;
     return {
-      name: selectedEnvelopeSlot === 3 ? "Amp Envelope" : name ?? `Env ${selectedEnvelopeSlot + 1}`,
+      name: selectedEnvelopeSlot === 3 ? "Amp Envelope" : name2 ?? `Env ${selectedEnvelopeSlot + 1}`,
       attackSeconds: bindings.attackSeconds.value,
       decaySeconds: bindings.decaySeconds.value,
       sustain: bindings.sustain.value,
@@ -32806,6 +34202,7 @@ function useSynthPatchViewModel({
     playMode,
     glideTime,
     globalTune,
+    voiceHistory,
     pan,
     oscillatorOctave,
     oscillatorSemitone,
@@ -33022,10 +34419,10 @@ function ensureIOSKeyboardElement(patchConnection, styleName, keyboardOptions) {
           touchTarget.addEventListener("touchcancel", (event) => keyboard.touchEnd?.(event));
         }
       }
-      attributeChangedCallback(name, oldValue, newValue) {
+      attributeChangedCallback(name2, oldValue, newValue) {
         const keyboard = this;
         const baseAttributeChanged = BaseKeyboard.prototype.attributeChangedCallback;
-        baseAttributeChanged?.call(this, name, oldValue, newValue);
+        baseAttributeChanged?.call(this, name2, oldValue, newValue);
         if (oldValue === newValue) {
           return;
         }
@@ -35083,7 +36480,7 @@ function IOSPatchView({
   patchConnection,
   resourceClient
 }) {
-  return /* @__PURE__ */ jsxRuntimeExports.jsx(PatchConnectionProvider, { patchConnection, resourceClient, children: /* @__PURE__ */ jsxRuntimeExports.jsx(IOSPatchViewBody, {}) });
+  return /* @__PURE__ */ jsxRuntimeExports.jsx(PatchConnectionProvider, { patchConnection, resourceClient, children: /* @__PURE__ */ jsxRuntimeExports.jsx(SynthStateProvider, { patchConnection, children: /* @__PURE__ */ jsxRuntimeExports.jsx(IOSPatchViewBody, {}) }) });
 }
 function formatErrorMessage(error) {
   if (error && typeof error === "object") {

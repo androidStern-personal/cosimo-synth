@@ -2,10 +2,9 @@
 /**
  * The user-edit bus (T12): the single stream of direct user parameter edits.
  *
- * Exactly two seams publish here — usePatchParameter's write path (all scalar
- * engine parameters) and the modulation runtime bridge (route amounts and MSEG
- * shapes). Preset loads, DAW/host restore, engine echo, and undo enter the app
- * around both seams by construction, so anything on this bus is a direct user
+ * Scalar control bindings and the modulation runtime bridge publish here.
+ * Preset loads, DAW/host restore, engine echo, and undo enter the app
+ * around these seams by construction, so anything on this bus is a direct user
  * edit — with one exception, articulation snapshot application, which writes
  * through scalar bindings and must wrap itself in a programmatic-writes block.
  */
@@ -16,6 +15,30 @@ export function subscribeToUserEdits(listener) {
     return () => {
         listeners.delete(listener);
     };
+}
+/** Preserve the caller's programmatic-write suppression after an async command settles. */
+export function captureUserEditReporter() {
+    const suppressed = programmaticWriteDepth > 0;
+    return Object.freeze({
+        parameterEdit(edit) {
+            if (suppressed)
+                return;
+            for (const listener of listeners)
+                listener.onParameterEdit?.(edit);
+        },
+        gestureStart() {
+            if (suppressed)
+                return;
+            for (const listener of listeners)
+                listener.onGestureStart?.();
+        },
+        gestureEnd() {
+            if (suppressed)
+                return;
+            for (const listener of listeners)
+                listener.onGestureEnd?.();
+        },
+    });
 }
 export function reportUserParameterEdit(edit) {
     if (programmaticWriteDepth > 0) {

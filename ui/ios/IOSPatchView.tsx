@@ -15,6 +15,7 @@ import {
     type PatchConnectionLike,
 } from "../shared/cmajor-react";
 import type { ResourceClient } from "../shared/resource-client";
+import { SynthStateProvider } from "../shared/synth-plugin-state-react";
 import {
     EditableMsegSurface,
     ModulationAmountField,
@@ -1725,7 +1726,9 @@ export function IOSPatchView({
 }) {
     return (
         <PatchConnectionProvider patchConnection={patchConnection} resourceClient={resourceClient}>
-            <IOSPatchViewBody />
+            <SynthStateProvider patchConnection={patchConnection}>
+                <IOSPatchViewBody />
+            </SynthStateProvider>
         </PatchConnectionProvider>
     );
 }

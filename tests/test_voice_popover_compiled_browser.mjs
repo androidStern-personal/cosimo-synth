@@ -11,6 +11,64 @@ const PHONE_VIEWPORT = { width: 393, height: 852 };
 const SHORT_PHONE_VIEWPORT = { width: 320, height: 568 };
 const MOD_RAIL_POSITION_KEY = "cosimo.mobile-global-mod-rail.position.v1";
 
+test("compiled Voice controls share Undo and Redo after the popover closes", async () => {
+    const pageErrors = [];
+    const page = await openBuiltDesktopBundlePage({
+        beforeGoto: nextPage => {
+            nextPage.on("pageerror", error => pageErrors.push(error.message));
+            return nextPage.setViewportSize(PHONE_VIEWPORT);
+        },
+    });
+    const cdp = await page.context().newCDPSession(page);
+    try {
+        const rail = page.locator('[data-role="mobile-global-mod-rail"]');
+        await rail.waitFor();
+        await expandGlobalModRail(page);
+        const toggle = rail.locator('[data-role="mobile-global-mod-rail-voice-toggle"]');
+        await touchTap(page, cdp, toggle);
+        await waitForBuiltVoicePopover(page, true);
+        const popover = page.locator('[data-role="mobile-global-mod-rail-voice-popover"]');
+        const undo = popover.getByRole("button", { name: "Undo Voice edit", exact: true });
+        const redo = popover.getByRole("button", { name: "Redo Voice edit", exact: true });
+        assert.equal(await undo.count(), 1, "Voice must expose its real shared history action");
+        assert.equal(await undo.isDisabled(), true);
+        assert.equal(await redo.isDisabled(), true);
+
+        await touchTap(page, cdp, popover.locator(".mobile-global-mod-rail-voice-mode", { hasText: "Mono" }));
+        await page.waitForFunction(() => window.__COSIMO_BUILT_DESKTOP_DEBUG__.getSnapshot().sentMessages
+            .some(message => message.endpointID === "playMode" && message.value === 1));
+        await touchDragHorizontally(page, cdp, popover.locator('[aria-label="Glide time"]'), 36);
+        await page.waitForFunction(() => window.__COSIMO_BUILT_DESKTOP_DEBUG__.getSnapshot().sentMessages
+            .some(message => message.endpointID === "glideTime" && message.value > 0.15));
+        const editedGlide = await page.evaluate(() => window.__COSIMO_BUILT_DESKTOP_DEBUG__.getSnapshot().sentMessages
+            .filter(message => message.endpointID === "glideTime").at(-1).value);
+
+        await touchTap(page, cdp, toggle);
+        await waitForBuiltVoicePopover(page, false);
+        await touchTap(page, cdp, toggle);
+        await waitForBuiltVoicePopover(page, true);
+        assert.equal(await undo.isDisabled(), false, "Closing a popover must retain history");
+        const waitForLastWrite = async (endpoint, value) => page.waitForFunction(({ endpoint, value }) =>
+            window.__COSIMO_BUILT_DESKTOP_DEBUG__.getSnapshot().sentMessages
+                .filter(message => message.endpointID === endpoint).at(-1)?.value === value, { endpoint, value });
+        await touchTap(page, cdp, undo);
+        await waitForLastWrite("glideTime", 0.15);
+        assert.equal((await toggle.textContent())?.trim(), "Mono", "Undoing Glide must leave Play Mode alone");
+        await touchTap(page, cdp, undo);
+        await waitForLastWrite("playMode", 0);
+        assert.equal((await toggle.textContent())?.trim(), "Poly");
+        assert.equal(await undo.isDisabled(), true, "One drag and one choice make exactly two history entries");
+        await touchTap(page, cdp, redo);
+        await waitForLastWrite("playMode", 1);
+        await touchTap(page, cdp, redo);
+        await waitForLastWrite("glideTime", editedGlide);
+        assert.equal(await redo.isDisabled(), true);
+    } finally {
+        await page.close();
+    }
+    assert.deepEqual(pageErrors, [], "History and view cleanup must not throw");
+});
+
 async function builtModRailGripPoint(page) {
     const bounds = await page.locator('[data-role="mobile-global-mod-rail-grip"]').boundingBox();
     assert.ok(bounds, "The compiled Mod rail grip must be rendered.");

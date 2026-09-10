@@ -1,5 +1,10 @@
 import type { PatchConnectionLike } from "../shared/cmajor-react";
 import {
+    createCmajorPluginStateService,
+    type CmajorStateConnection,
+} from "../../kit/ui/plugin-state-cmajor";
+import { synthPluginState } from "../shared/synth-plugin-state";
+import {
     DEFAULT_SAMPLES_PER_FRAME,
     getFactoryBankCatalogValue,
     type FactoryBankCatalog,
@@ -1607,10 +1612,13 @@ export function createWavetableWorkerController(connection: PatchConnectionLike,
     return new WavetableWorkerController(connection, options);
 }
 
-export default async function runWavetableWorker(connection: PatchConnectionLike, options: WavetableWorkerOptions = {}) {
+export default async function runWavetableWorker(connection: PatchConnectionLike & CmajorStateConnection, options: WavetableWorkerOptions = {}) {
     return startPatchWorkerServices(connection, [
         createModulationArticulationWorkerService,
         createRackStateWorkerService,
         () => createWavetableWorkerController(connection, options),
+        () => createCmajorPluginStateService(synthPluginState, connection, {
+            onDefect: error => console.error("Cosimo Voice state failed", describeErrorDetail(error)),
+        }),
     ]);
 }

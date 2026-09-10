@@ -19,17 +19,22 @@ before(async () => {
 });
 after(async () => { await browser?.close(); await server?.stop(); });
 
-async function open() {
+async function open(useRealMock = false) {
     const page = await browser.newPage();
     page.setDefaultTimeout(5_000);
     const errors = [];
     page.on("pageerror", error => errors.push(error.message));
-    await page.goto(`${server.baseUrl}/kit/tests/helpers/module_test_shell.html`);
-    await page.evaluate(async () => {
-        const { PluginStateChannel } = await import("/cmaj_api/cmaj-plugin-state-channel.js");
-        const { mount } = await import("/tests/browser/fixtures/synth_plugin_state/view.tsx");
-        window.fixture = await mount(document.getElementById("mount"), PluginStateChannel);
+    if (useRealMock) page.on("console", message => {
+        if (message.type() === "error") errors.push(message.text());
     });
+    await page.goto(`${server.baseUrl}/kit/tests/helpers/module_test_shell.html`);
+    await page.evaluate(async useRealMock => {
+        const { PluginStateChannel } = await import("/cmaj_api/cmaj-plugin-state-channel.js");
+        const { mount, mountMock } = await import("/tests/browser/fixtures/synth_plugin_state/view.tsx");
+        window.fixture = useRealMock
+            ? await mountMock(document.getElementById("mount"))
+            : await mount(document.getElementById("mount"), PluginStateChannel);
+    }, useRealMock);
     return { page, async close() {
         try { await page.evaluate(() => window.fixture.dispose()); }
         finally { await page.close(); }
@@ -43,6 +48,62 @@ async function releaseBoot(page) {
     await page.waitForFunction(() => window.fixture.messages().some(message => message.kind === "attached"));
     await page.evaluate(() => new Promise(resolve => requestAnimationFrame(resolve)));
 }
+
+test("the real development Mock raw write updates Voice authority without echo or adding history", async () => {
+    const { page, close } = await open(true);
+    try {
+        await page.waitForFunction(() => JSON.parse(document.querySelector('[data-testid="globalTune"]')?.textContent ?? "{}").isReady);
+        assert.equal((await binding(page, "globalTune")).value, -7.5);
+        const before = await page.evaluate(() => window.fixture.snapshot().sentMessages.length);
+        await page.evaluate(() => {
+            window.fixture.rawWrite("globalTune", 6.5);
+            // A later native observation provides a positive owner/React delivery barrier.
+            window.fixture.automate("playMode", 2);
+        });
+        await page.waitForFunction(() => JSON.parse(document.querySelector('[data-testid="playMode"]')?.textContent ?? "{}").value === 2);
+        assert.equal((await binding(page, "globalTune")).value, 6.5, "legacy raw writes must reach the mounted Voice owner");
+        assert.equal(await page.evaluate(() => window.fixture.snapshot().parameterValues.globalTune), 6.5);
+        assert.deepEqual(await page.evaluate(before => window.fixture.snapshot().sentMessages.slice(before)
+            .filter(message => message.endpointID === "globalTune"), before), [{ endpointID: "globalTune", value: 6.5 }], "one external write, no echo from the state owner");
+        assert.deepEqual(JSON.parse(await page.getByTestId("history").textContent()), { canUndo: false, canRedo: false });
+        await page.getByText("Tune five", { exact: true }).click();
+        await page.waitForFunction(() => window.fixture.snapshot().parameterValues.globalTune === 5);
+        await page.getByText("Undo", { exact: true }).click();
+        await page.waitForFunction(() => window.fixture.snapshot().parameterValues.globalTune === 6.5);
+        assert.equal((await binding(page, "globalTune")).value, 6.5, "Undo uses the latest externally observed native baseline");
+        assert.equal(await page.getByText("Undo", { exact: true }).isEnabled(), false, "the raw write did not create an extra history entry");
+    } finally { await close(); }
+});
+
+test("the real development Mock host Undo observes the restored baseline without echo or shared history", async () => {
+    const { page, close } = await open(true);
+    try {
+        await page.waitForFunction(() => JSON.parse(document.querySelector('[data-testid="globalTune"]')?.textContent ?? "{}").isReady);
+        await page.evaluate(() => window.fixture.hostGestureWrite("globalTune", 5));
+        await page.waitForFunction(() => JSON.parse(document.querySelector('[data-testid="globalTune"]')?.textContent ?? "{}").value === 5);
+        assert.equal(await page.evaluate(() => window.fixture.snapshot().parameterTransactions.length), 1, "the actual legacy Mock owns the host gesture transaction");
+        assert.deepEqual(JSON.parse(await page.getByTestId("history").textContent()), { canUndo: false, canRedo: false });
+        const beforeUndo = await page.evaluate(() => window.fixture.snapshot().sentMessages.length);
+        assert.equal(await page.evaluate(() => {
+            const restored = window.fixture.hostUndo();
+            window.fixture.automate("playMode", 2);
+            return restored;
+        }), true);
+        await page.waitForFunction(() => JSON.parse(document.querySelector('[data-testid="playMode"]')?.textContent ?? "{}").value === 2);
+        assert.equal(await page.evaluate(() => window.fixture.snapshot().parameterValues.globalTune), -7.5);
+        assert.equal((await binding(page, "globalTune")).value, -7.5, "the existing host Undo path must notify the Voice owner");
+        assert.deepEqual(await page.evaluate(before => window.fixture.snapshot().sentMessages.slice(before)
+            .filter(message => message.endpointID === "globalTune"), beforeUndo), [], "host Undo observations must not echo a parameter write");
+        assert.deepEqual(JSON.parse(await page.getByTestId("history").textContent()), { canUndo: false, canRedo: false });
+        assert.equal(await page.evaluate(() => window.fixture.hostUndo()), false, "the single host transaction was consumed");
+        await page.getByText("Tune five", { exact: true }).click();
+        await page.waitForFunction(() => window.fixture.snapshot().parameterValues.globalTune === 5);
+        await page.getByText("Undo", { exact: true }).click();
+        await page.waitForFunction(() => window.fixture.snapshot().parameterValues.globalTune === -7.5);
+        assert.equal((await binding(page, "globalTune")).value, -7.5);
+        assert.equal(await page.getByText("Undo", { exact: true }).isEnabled(), false);
+    } finally { await close(); }
+});
 
 test("the Cosimo Voice adapter waits for authoritative host values and uses native defaults for reset", async () => {
     const { page, close } = await open();

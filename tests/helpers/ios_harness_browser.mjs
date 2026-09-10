@@ -8,7 +8,7 @@ import {
 } from "./desktop_harness_browser.mjs";
 
 export async function startIOSHarnessServer() {
-    return startStaticRepoServer();
+    return startStaticRepoServer({ bundleTypeScript: true });
 }
 
 export async function startIOSSourceHarnessServer() {
@@ -62,6 +62,9 @@ export function createIOSHarnessInitScript() {
         ]);
         const deferredParameters = new Set(deferredParameterResponses);
         const pendingParameterResponses = new Map();
+        const pendingStateReads = new Map();
+        let stateHost;
+        let stateHostLoading;
         let readyNotificationCount = 0;
         let bundledFallbackRequestCount = 0;
 
@@ -372,10 +375,46 @@ export function createIOSHarnessInitScript() {
             throw new Error(`Unexpected bridged audio request for ${resourcePath}`);
         };
 
+        const getStateHost = () => stateHostLoading ??= (async () => {
+            const { createMockPluginStateHost } = await import(new URL("ui/shared/mock-plugin-state-host.ts", rootUrl).href);
+            stateHost = createMockPluginStateHost({
+                readParameter: async (endpoint, signal) => {
+                    const annotation = status.details.inputs.find(input => input.endpointID === endpoint)?.annotation;
+                    if (!annotation) throw new Error(`Missing native fixture metadata for ${endpoint}`);
+                    // Preserve the existing fixture's request-time deferred reply.
+                    const value = parameterValues.get(endpoint) ?? 0;
+                    if (deferredParameters.has(endpoint)) {
+                        await new Promise((resolve, reject) => {
+                            const waiting = pendingStateReads.get(endpoint) ?? new Set();
+                            const finish = () => { waiting.delete(finish); signal.removeEventListener("abort", abort); resolve(); };
+                            const abort = () => { waiting.delete(finish); reject(new Error("Native fixture read stopped")); };
+                            if (signal.aborted) { abort(); return; }
+                            waiting.add(finish);
+                            pendingStateReads.set(endpoint, waiting);
+                            signal.addEventListener("abort", abort, { once: true });
+                        });
+                    }
+                    return { endpoint, value, min: annotation.min ?? 0,
+                        max: annotation.max ?? 1, step: annotation.step ?? 0, defaultValue: annotation.init ?? 0 };
+                },
+                writeParameter: (endpoint, value) => { void globalThis.cmaj_sendMessageToServer({ type: "send_value", id: endpoint, value }); },
+                beginGesture: endpoint => gestureStarts.push(endpoint),
+                endGesture: endpoint => gestureEnds.push(endpoint),
+                onDefect: error => { throw error; },
+            });
+            stateHost.addEventListener("kit_state", body => deliverMessage("kit_state", body));
+            window.addEventListener("pagehide", () => { void stateHost.stop(); }, { once: true });
+            return stateHost;
+        })();
+
         globalThis.cmaj_sendMessageToServer = async (message) => {
             const type = message?.type ?? "";
 
             switch (type) {
+            case "kit_state":
+                (await getStateHost()).sendMessageToServer(message);
+                return;
+
             case "req_status":
                 await ensureManifest();
                 queueMicrotask(() => deliverMessage("status", status));
@@ -472,6 +511,7 @@ export function createIOSHarnessInitScript() {
                 ) {
                     parameterValues.set(endpointID, value);
                     queueMicrotask(() => emitParameterValue(endpointID, value));
+                    stateHost?.observeParameter(endpointID);
                 }
 
                 if (oscillatorPositionMatch) {
@@ -958,6 +998,7 @@ export function createIOSHarnessInitScript() {
             setParameterValue(endpointID, value, emitEndpointDirectly = false) {
                 parameterValues.set(endpointID, value);
                 emitParameterValue(endpointID, value);
+                stateHost?.observeParameter(endpointID);
 
                 if (emitEndpointDirectly) {
                     emitEndpoint(endpointID, value);
@@ -965,6 +1006,8 @@ export function createIOSHarnessInitScript() {
             },
             releaseParameterResponse(endpointID) {
                 deferredParameters.delete(endpointID);
+                for (const finish of pendingStateReads.get(endpointID) ?? []) finish();
+                pendingStateReads.delete(endpointID);
                 if (!pendingParameterResponses.has(endpointID)) {
                     return;
                 }

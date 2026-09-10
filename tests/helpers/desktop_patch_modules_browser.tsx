@@ -67,6 +67,7 @@ import {
     serializeArticulationsV4,
 } from "../../ui/shared/articulation-image";
 import { addCapturedArticulationV4 } from "../../ui/shared/articulation-v4-editor";
+import { SynthStateProvider } from "../../ui/shared/synth-plugin-state-react";
 import { MockPatchConnection, loadHarnessManifest } from "../../ui/shared/patch-connection-mock";
 import { useModulationRouteAmountBinding } from "../../ui/shared/modulation-route-amount";
 import { ParameterMenuContext } from "../../ui/shared/parameter-context-menu";
@@ -140,6 +141,14 @@ function waitForMicrotask() {
     return new Promise<void>((resolve) => {
         queueMicrotask(() => resolve());
     });
+}
+
+async function waitForStateReaderMounted(isMounted: () => boolean) {
+    const deadline = performance.now() + 3000;
+    while (!isMounted()) {
+        if (performance.now() >= deadline) throw new Error("The state provider did not mount its fixture reader.");
+        await new Promise<void>(resolve => requestAnimationFrame(() => resolve()));
+    }
 }
 
 function readSurfaceBounds(selector: string) {
@@ -2070,7 +2079,9 @@ export async function installArticulationReconnectHydrationHarness(target: HTMLE
             selectConnection = setConnectionID;
             return (
                 <PatchConnectionProvider patchConnection={connections[connectionID]}>
-                    <Reader />
+                    <SynthStateProvider patchConnection={connections[connectionID]}>
+                        <Reader />
+                    </SynthStateProvider>
                 </PatchConnectionProvider>
             );
         }
@@ -2152,7 +2163,7 @@ export async function installArticulationReconnectHydrationHarness(target: HTMLE
         },
     };
 
-    await waitForMicrotask();
+    await waitForStateReaderMounted(() => synthView !== null);
 }
 
 export async function installArticulationKeyHydrationHarness(target: HTMLElement) {
@@ -2242,7 +2253,9 @@ export async function installArticulationKeyHydrationHarness(target: HTMLElement
             selectConnection = setConnectionID;
             return (
                 <PatchConnectionProvider patchConnection={connections[connectionID]}>
-                    <Reader />
+                    <SynthStateProvider patchConnection={connections[connectionID]}>
+                        <Reader />
+                    </SynthStateProvider>
                 </PatchConnectionProvider>
             );
         }
@@ -2286,7 +2299,7 @@ export async function installArticulationKeyHydrationHarness(target: HTMLElement
         },
     };
 
-    await waitForMicrotask();
+    await waitForStateReaderMounted(() => synthView !== null);
 }
 
 export async function installPrecisionOptimisticEchoHarness(target: HTMLElement) {
@@ -2996,7 +3009,9 @@ export async function installAutoPreviewSynthHookHarness(target: HTMLElement) {
 
         root.render(
             <PatchConnectionProvider patchConnection={patchConnection}>
-                <Harness />
+                <SynthStateProvider patchConnection={patchConnection}>
+                    <Harness />
+                </SynthStateProvider>
             </PatchConnectionProvider>,
         );
     });

@@ -1,4 +1,6 @@
 import type { PatchConnectionLike } from "./cmajor-react";
+import { createMockPluginStateHost } from "./mock-plugin-state-host";
+import type { PluginStateNativeParameter } from "../../kit/ui/plugin-state-session";
 import {
     EFFECT_ID_TO_LANE_TYPE,
     LANE_STATE_KEY,
@@ -858,15 +860,61 @@ export class MockPatchConnection implements PatchConnectionLike {
         ownerEndpointIDs: string[];
         changes: Array<{ endpointID: string; before: unknown; after: unknown }>;
     }> = [];
-    private status: unknown;
+    private status: ReturnType<typeof buildHarnessStatus>;
     private readonly modulationArticulationWorkerService;
+    private readonly pluginStateHost;
 
     constructor(manifest: unknown) {
         this.manifest = manifest;
         this.status = buildHarnessStatus(manifest);
+        this.pluginStateHost = createMockPluginStateHost({
+            readParameter: (endpoint, signal) => this.readStateParameter(endpoint, signal),
+            writeParameter: (endpoint, value) => this.sendEventOrValue(endpoint, value),
+            beginGesture: endpoint => this.sendParameterGestureStart(endpoint),
+            endGesture: endpoint => this.sendParameterGestureEnd(endpoint),
+            onDefect: error => console.error("Mock plugin state host failed", error),
+        });
         this.modulationArticulationWorkerService = createModulationArticulationWorkerService(this);
         this.modulationArticulationWorkerService.start();
         queueMicrotask(() => this.emitEndpoint(runtimeStateEndpointID, this.runtimeState));
+    }
+
+    addEventListener(type: "kit_state", listener: (message: unknown) => void) {
+        this.pluginStateHost.addEventListener(type, listener);
+    }
+
+    removeEventListener(type: "kit_state", listener: (message: unknown) => void) {
+        this.pluginStateHost.removeEventListener(type, listener);
+    }
+
+    sendMessageToServer(envelope: { readonly type: "kit_state"; readonly message: unknown }) {
+        this.pluginStateHost.sendMessageToServer(envelope);
+    }
+
+    private readStateParameter(endpoint: string, signal: AbortSignal): Promise<PluginStateNativeParameter> {
+        const input = this.status.details.inputs.find(candidate => candidate.endpointID === endpoint);
+        if (!input || !("annotation" in input) || !input.annotation) return Promise.reject(new Error(`Unknown mock parameter ${endpoint}.`));
+        const annotation = input.annotation;
+        return new Promise((resolve, reject) => {
+            const cleanup = () => {
+                this.removeParameterListener(endpoint, receive);
+                signal.removeEventListener("abort", abort);
+            };
+            const abort = () => { cleanup(); reject(signal.reason); };
+            const receive = (rawValue: unknown) => {
+                cleanup();
+                resolve({
+                    endpoint, value: Number(rawValue),
+                    min: Number(annotation.min), max: Number(annotation.max),
+                    step: Number("step" in annotation ? annotation.step : 0),
+                    defaultValue: Number(annotation.init),
+                });
+            };
+            if (signal.aborted) { abort(); return; }
+            signal.addEventListener("abort", abort, { once: true });
+            this.addParameterListener(endpoint, receive);
+            this.requestParameterValue(endpoint);
+        });
     }
 
     protected cancelScheduledWavetableActivation() {
@@ -1030,6 +1078,8 @@ export class MockPatchConnection implements PatchConnectionLike {
         this.parameterValues.set(endpointID, value);
         this.parameterListeners.get(endpointID)?.forEach((listener) => listener(value));
 
+        this.pluginStateHost.observeParameter(endpointID);
+
         if (endpointID === wavetablePositionEndpointID) {
             this.emitEndpoint(effectiveWavetablePositionEndpointID, {
                 voiceGeneration: 1,
@@ -1107,6 +1157,7 @@ export class MockPatchConnection implements PatchConnectionLike {
         for (const change of transaction.changes) {
             this.parameterValues.set(change.endpointID, change.before);
             this.parameterListeners.get(change.endpointID)?.forEach((listener) => listener(change.before));
+            this.pluginStateHost.observeParameter(change.endpointID);
         }
         return true;
     }
@@ -1308,6 +1359,7 @@ export class MockPatchConnection implements PatchConnectionLike {
     setParameterValue(endpointID: string, value: unknown, emitEndpoint = false) {
         this.parameterValues.set(endpointID, value);
         this.parameterListeners.get(endpointID)?.forEach((listener) => listener(value));
+        this.pluginStateHost.observeParameter(endpointID);
 
         if (emitEndpoint) {
             this.emitEndpoint(endpointID, value);

@@ -7,6 +7,7 @@ import type { PluginStateCommand } from "../../../../kit/ui/plugin-state-session
 import { usePluginHistory } from "../../../../kit/index";
 import { createPluginStateTestPlatform } from "../../../helpers/plugin_state_test_platform.mjs";
 import { runProgrammaticWrites, subscribeToUserEdits } from "../../../../ui/shared/user-edit-bus";
+import { MockPatchConnection, loadHarnessManifest } from "../../../../ui/shared/patch-connection-mock";
 
 const coerce = (value: unknown) => Number(value);
 function Controls() {
@@ -31,6 +32,26 @@ function Controls() {
         <button disabled={!history.canUndo} onClick={() => history.undo()}>Undo</button>
         <button disabled={!history.canRedo} onClick={() => history.redo()}>Redo</button>
     </>;
+}
+
+/** Exercise the development connection itself, including its legacy raw-write paths. */
+export async function mountMock(element: HTMLElement) {
+    const connection = new MockPatchConnection(await loadHarnessManifest());
+    connection.setParameterValue("globalTune", -7.5);
+    const root = createRoot(element);
+    flushSync(() => root.render(<SynthStateProvider patchConnection={connection}><Controls /></SynthStateProvider>));
+    return {
+        rawWrite(endpoint: string, value: number) { connection.sendEventOrValue(endpoint, value); },
+        automate(endpoint: string, value: number) { connection.setParameterValue(endpoint, value); },
+        hostGestureWrite(endpoint: string, value: number) {
+            connection.sendParameterGestureStart(endpoint);
+            connection.sendEventOrValue(endpoint, value);
+            connection.sendParameterGestureEnd(endpoint);
+        },
+        hostUndo: () => connection.undoLastParameterTransaction(),
+        snapshot: () => connection.getDebugSnapshot(),
+        dispose() { root.unmount(); },
+    };
 }
 
 // The constructor is supplied from the actual pinned Cmajor browser module.

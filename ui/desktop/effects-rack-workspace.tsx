@@ -283,6 +283,7 @@ export type ModRailVoiceSettings = {
     readonly playMode: PatchControlBinding<number>;
     readonly glideTime: PatchControlBinding<number>;
     readonly globalTuneControl: ReactNode;
+    readonly history: SynthPatchViewModel["voiceHistory"];
 };
 
 function ModRailVoiceSettingsPopover({
@@ -350,6 +351,32 @@ function ModRailVoiceSettingsPopover({
                     width={64 * scale}
                     height={22 * scale}
                 />
+            </div>
+            <div className="voice-history" role="group" aria-label="Voice edit history">
+                <button
+                    type="button"
+                    className="voice-history-button"
+                    data-role="voice-undo"
+                    aria-label="Undo Voice edit"
+                    disabled={!settings.history.canUndo}
+                    onClick={() => {
+                        settings.history.undo().catch(error => console.error("Voice Undo failed", error));
+                    }}
+                >
+                    Undo
+                </button>
+                <button
+                    type="button"
+                    className="voice-history-button"
+                    data-role="voice-redo"
+                    aria-label="Redo Voice edit"
+                    disabled={!settings.history.canRedo}
+                    onClick={() => {
+                        settings.history.redo().catch(error => console.error("Voice Redo failed", error));
+                    }}
+                >
+                    Redo
+                </button>
             </div>
         </div>
     );
@@ -4616,6 +4643,11 @@ export function EffectsRackWorkspace({
             return;
         }
         const measuredGraphWidth = list.clientWidth;
+        // Hidden workspaces have no layout width. Keep their last visible
+        // geometry so scroll restoration does not target a collapsed graph.
+        if (measuredGraphWidth === 0) {
+            return;
+        }
         setRackGraphWidth((current) => (
             current === measuredGraphWidth ? current : measuredGraphWidth
         ));

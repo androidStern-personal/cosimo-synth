@@ -60,6 +60,7 @@ export class StoredStateRuntimeMirror {
     forceFullReplay = false;
     hasState = false;
     started = false;
+    lifetime = 0;
     lastAppliedToken = null;
     lastAppliedRuntimeEndpointsToken = null;
     lastAppliedSnapshot = null;
@@ -78,6 +79,12 @@ export class StoredStateRuntimeMirror {
             return;
         }
         this.started = true;
+        this.lifetime += 1;
+        this.deliveryInProgress = false;
+        this.deliveryRefreshPending = false;
+        this.lastAppliedToken = null;
+        this.lastAppliedRuntimeEndpointsToken = null;
+        this.lastAppliedSnapshot = null;
         this.pendingStateKeyIndex = null;
         this.activeStateKeyIndex = null;
         this.connection.addStoredStateValueListener?.(this.handleStoredStateValue);
@@ -116,7 +123,11 @@ export class StoredStateRuntimeMirror {
     }
     requestStoredState() {
         if (typeof this.connection.requestFullStoredState === "function") {
+            const lifetime = this.lifetime;
             this.connection.requestFullStoredState((storedState) => {
+                if (!this.started || lifetime !== this.lifetime) {
+                    return;
+                }
                 for (let keyIndex = 0; keyIndex < this.stateKeys.length; keyIndex += 1) {
                     const storedValue = getFullStoredStateValue(storedState, this.stateKeys[keyIndex]);
                     if (storedValue.found && storedValue.value != null) {
@@ -268,14 +279,15 @@ export class StoredStateRuntimeMirror {
             return;
         }
         if (this.options.sendRuntimeEvents) {
+            const lifetime = this.lifetime;
             this.deliveryInProgress = true;
             this.deliveryRefreshPending = false;
             this.forceFullReplay = false;
             void this.options.sendRuntimeEvents(events, snapshot).then((delivered) => {
-                this.deliveryInProgress = false;
-                if (!this.started) {
+                if (!this.started || lifetime !== this.lifetime) {
                     return;
                 }
+                this.deliveryInProgress = false;
                 if (delivered) {
                     this.lastAppliedToken = nextAppliedToken;
                     this.lastAppliedRuntimeEndpointsToken = runtimeEndpointsToken;
@@ -290,10 +302,10 @@ export class StoredStateRuntimeMirror {
                     this.applyRuntimeStateIfReady();
                 }
             }).catch(() => {
-                this.deliveryInProgress = false;
-                if (!this.started) {
+                if (!this.started || lifetime !== this.lifetime) {
                     return;
                 }
+                this.deliveryInProgress = false;
                 this.options.onDeliveryFailure?.(events);
                 const shouldRefresh = this.deliveryRefreshPending;
                 this.deliveryRefreshPending = false;

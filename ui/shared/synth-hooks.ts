@@ -10,6 +10,8 @@ import {
 } from "react";
 import { useLaneParameterBinding } from "./lane-param-bindings";
 import { getRackParameterDescriptor } from "./rack-parameter-descriptors";
+import { usePluginHistory } from "../../kit/ui/plugin-state-react";
+import { useSynthPluginParameterBinding } from "./synth-plugin-state-react";
 
 import {
     usePatchConnection,
@@ -71,7 +73,6 @@ import {
 } from "./modulation";
 import { isOscillatorModulationTargetKind } from "./modulation-targets";
 import {
-    GLOBAL_TUNE_ENDPOINT_ID,
     GLOBAL_TUNE_INITIAL_SEMITONES,
     clampGlobalTuneSemitones,
 } from "./global-tune";
@@ -251,8 +252,6 @@ export const EFFECTIVE_FILTER_STATE_ENDPOINT_ID = "effectiveFilterState";
 export const FILTER_SPECTRUM_ENDPOINT_ID = "filterSpectrum";
 export const DISPLAY_SWIPE_THRESHOLD_PX = 2;
 export const MSEG_DRAG_THRESHOLD_PX = 8;
-const PLAY_MODE_ENDPOINT_ID = "playMode";
-const GLIDE_TIME_ENDPOINT_ID = "glideTime";
 const FILTER_MODE_ENDPOINT_ID = "filterMode";
 const FILTER_CUTOFF_ENDPOINT_ID = "filterCutoff";
 const FILTER_CUTOFF_KEY_TRACK_ENABLED_ENDPOINT_ID = "filterCutoffKeyTrackEnabled";
@@ -480,6 +479,7 @@ export type SynthPatchViewModel = {
     playMode: PatchControlBinding<number>;
     glideTime: PatchControlBinding<number>;
     globalTune: PatchControlBinding<number>;
+    voiceHistory: ReturnType<typeof usePluginHistory>;
     pan: PatchControlBinding<number>;
     oscillatorOctave: PatchControlBinding<number>;
     oscillatorSemitone: PatchControlBinding<number>;
@@ -2673,21 +2673,19 @@ export function useSynthPatchViewModel({
         initialValue: DEFAULT_FACTORY_TABLE_INDEX,
         coerce: (value) => Math.max(0, Math.trunc(Number(value) || 0)),
     });
-    const playMode = usePatchParameterBinding<number>({
-        endpointID: PLAY_MODE_ENDPOINT_ID,
+    const playMode = useSynthPluginParameterBinding("playMode", {
         initialValue: 0,
         coerce: (value) => clamp(Math.round(Number(value) || 0), 0, Math.max(0, voiceModeCount - 1)),
     });
-    const glideTime = usePatchParameterBinding<number>({
-        endpointID: GLIDE_TIME_ENDPOINT_ID,
+    const glideTime = useSynthPluginParameterBinding("glideTime", {
         initialValue: 0,
         coerce: (value) => clamp(Number(value) || 0, GLIDE_TIME_MIN_SECONDS, GLIDE_TIME_MAX_SECONDS),
     });
-    const globalTune = usePatchParameterBinding<number>({
-        endpointID: GLOBAL_TUNE_ENDPOINT_ID,
+    const globalTune = useSynthPluginParameterBinding("globalTune", {
         initialValue: GLOBAL_TUNE_INITIAL_SEMITONES,
         coerce: clampGlobalTuneSemitones,
     });
+    const voiceHistory = usePluginHistory();
     const pan = usePatchParameterBinding<number>({
         endpointID: oscillatorEndpointID("pan"),
         initialValue: 0,
@@ -4804,6 +4802,7 @@ export function useSynthPatchViewModel({
         playMode,
         glideTime,
         globalTune,
+        voiceHistory,
         pan,
         oscillatorOctave,
         oscillatorSemitone,

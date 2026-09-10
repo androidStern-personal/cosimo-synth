@@ -974,12 +974,20 @@ export async function openBuiltDesktopBundlePage({
             ["oscAWavetableSelect", 0],
             ["playMode", 0],
             ["glideTime", 0.15],
+            ["globalTune", 0],
             ["oscAVolumeDb", 0],
             ["oscBVolumeDb", 0],
             ["oscCVolumeDb", 0],
             ["oscAMute", 0],
             ["oscBMute", 1],
             ["oscCMute", 1],
+        ]);
+        // Metadata matches cmajor/WavetableSynth.cmajor: the loaded Glide
+        // value is 0.15, while its authored reset default is zero.
+        const voiceMetadata = new Map([
+            ["playMode", { min: 0, max: 2, step: 1, init: 0 }],
+            ["glideTime", { min: 0, max: 2, step: 0, init: 0 }],
+            ["globalTune", { min: -24, max: 24, step: 0, init: 0 }],
         ]);
         const resourceReads = [];
         const sentMessages = [];
@@ -1021,6 +1029,7 @@ export async function openBuiltDesktopBundlePage({
                 sentMessages.push({ endpointID, value });
                 parameterValues.set(endpointID, value);
                 parameterListeners.get(endpointID)?.forEach((listener) => listener(value));
+                stateHost.observeParameter(endpointID);
 
                 if (endpointID === "runtimeSyncRequest") {
                     emitEndpoint("runtimeState", runtimeState);
@@ -1042,7 +1051,7 @@ export async function openBuiltDesktopBundlePage({
             },
             requestStatusUpdate() {
                 queueMicrotask(() => {
-                    statusListeners.forEach((listener) => listener({ details: { inputs: [] } }));
+                    statusListeners.forEach((listener) => listener({ details: { inputs: [...voiceMetadata].map(([endpointID, annotation]) => ({ endpointID, purpose: "parameter", annotation })) } }));
                 });
             },
             addStoredStateValueListener(listener) {
@@ -1061,27 +1070,30 @@ export async function openBuiltDesktopBundlePage({
             },
         };
 
-        const createPatchView = (await import(entryModuleUrl)).default;
-        const {
-            createStoredStateRuntimeMirror,
-        } = await import("/patch_gui/stored-state-runtime-mirror.js");
-        const {
-            MODULATION_STATE_KEY,
-            buildModulationRuntimeEvents,
-            deserializeModulationState,
-        } = await import("/patch_gui/modulation.js");
-        const modulationRuntimeMirror = createStoredStateRuntimeMirror(patchConnection, {
-            stateKey: MODULATION_STATE_KEY,
-            runtimeEndpointDependencies: [{
-                endpointID: "runtimeState",
-                required: true,
-                mapValue: (value) => Number(value?.dspSessionId) || 0,
-            }],
-            applyDefaultRuntimeStateWhenMissing: true,
-            deserializeStoredState: deserializeModulationState,
-            buildRuntimeEvents: ({ state }) => buildModulationRuntimeEvents(state),
+        const { createMockPluginStateHost } = await import("/ui/shared/mock-plugin-state-host.ts");
+        const stateHost = createMockPluginStateHost({
+            readParameter: async endpoint => {
+                const annotation = voiceMetadata.get(endpoint);
+                if (!annotation || !parameterValues.has(endpoint)) throw new Error(`Missing fixture parameter ${endpoint}`);
+                return { endpoint, value: parameterValues.get(endpoint), min: annotation.min,
+                    max: annotation.max, step: annotation.step, defaultValue: annotation.init };
+            },
+            writeParameter: (endpoint, value) => patchConnection.sendEventOrValue(endpoint, value),
+            beginGesture: endpoint => patchConnection.sendParameterGestureStart(endpoint),
+            endGesture: endpoint => patchConnection.sendParameterGestureEnd(endpoint),
+            onDefect: error => { throw error; },
         });
-        modulationRuntimeMirror.start();
+        Object.assign(patchConnection, {
+            addEventListener: stateHost.addEventListener,
+            removeEventListener: stateHost.removeEventListener,
+            sendMessageToServer: stateHost.sendMessageToServer,
+        });
+        await stateHost.ready;
+        window.addEventListener("pagehide", () => { void stateHost.stop(); }, { once: true });
+
+        const createPatchView = (await import(entryModuleUrl)).default;
+        // This connection records GUI traffic. Modulation installation belongs
+        // to the patch worker and must not be started on this view's port.
         const patchView = await createPatchView(patchConnection);
         const mountPoint = document.getElementById("mount");
 
@@ -1090,6 +1102,9 @@ export async function openBuiltDesktopBundlePage({
         }
 
         window.__COSIMO_BUILT_DESKTOP_DEBUG__ = {
+            writeParameter(endpointID, value) {
+                patchConnection.sendEventOrValue(endpointID, value);
+            },
             getSnapshot() {
                 return {
                     sentMessages: sentMessages.map(({ endpointID, value }) => ({ endpointID, value })),
@@ -1140,12 +1155,20 @@ export async function openDesktopEntryPageWithInjectedResourceClient() {
             ["oscAWavetableSelect", 0],
             ["playMode", 0],
             ["glideTime", 0.15],
+            ["globalTune", 0],
             ["oscAVolumeDb", 0],
             ["oscBVolumeDb", 0],
             ["oscCVolumeDb", 0],
             ["oscAMute", 0],
             ["oscBMute", 1],
             ["oscCMute", 1],
+        ]);
+        // Metadata matches cmajor/WavetableSynth.cmajor: the loaded Glide
+        // value is 0.15, while its authored reset default is zero.
+        const voiceMetadata = new Map([
+            ["playMode", { min: 0, max: 2, step: 1, init: 0 }],
+            ["glideTime", { min: 0, max: 2, step: 0, init: 0 }],
+            ["globalTune", { min: -24, max: 24, step: 0, init: 0 }],
         ]);
         const resourceReads = [];
         const sentMessages = [];
@@ -1203,6 +1226,7 @@ export async function openDesktopEntryPageWithInjectedResourceClient() {
                 sentMessages.push({ endpointID, value });
                 parameterValues.set(endpointID, value);
                 parameterListeners.get(endpointID)?.forEach((listener) => listener(value));
+                stateHost.observeParameter(endpointID);
 
                 if (endpointID === "runtimeSyncRequest") {
                     emitEndpoint("runtimeState", runtimeState);
@@ -1224,7 +1248,7 @@ export async function openDesktopEntryPageWithInjectedResourceClient() {
             },
             requestStatusUpdate() {
                 queueMicrotask(() => {
-                    statusListeners.forEach((listener) => listener({ details: { inputs: [] } }));
+                    statusListeners.forEach((listener) => listener({ details: { inputs: [...voiceMetadata].map(([endpointID, annotation]) => ({ endpointID, purpose: "parameter", annotation })) } }));
                 });
             },
             addStoredStateValueListener(listener) {
@@ -1287,6 +1311,27 @@ export async function openDesktopEntryPageWithInjectedResourceClient() {
             },
         };
 
+        const { createMockPluginStateHost } = await import("/ui/shared/mock-plugin-state-host.ts");
+        const stateHost = createMockPluginStateHost({
+            readParameter: async endpoint => {
+                const annotation = voiceMetadata.get(endpoint);
+                if (!annotation || !parameterValues.has(endpoint)) throw new Error(`Missing fixture parameter ${endpoint}`);
+                return { endpoint, value: parameterValues.get(endpoint), min: annotation.min,
+                    max: annotation.max, step: annotation.step, defaultValue: annotation.init };
+            },
+            writeParameter: (endpoint, value) => patchConnection.sendEventOrValue(endpoint, value),
+            beginGesture: endpoint => patchConnection.sendParameterGestureStart(endpoint),
+            endGesture: endpoint => patchConnection.sendParameterGestureEnd(endpoint),
+            onDefect: error => { throw error; },
+        });
+        Object.assign(patchConnection, {
+            addEventListener: stateHost.addEventListener,
+            removeEventListener: stateHost.removeEventListener,
+            sendMessageToServer: stateHost.sendMessageToServer,
+        });
+        await stateHost.ready;
+        window.addEventListener("pagehide", () => { void stateHost.stop(); }, { once: true });
+
         const { createDesktopPatchView } = await import("/ui/desktop/patch-view-entry.tsx");
         const mountPoint = document.getElementById("mount");
 
@@ -1311,7 +1356,7 @@ export async function openDesktopEntryPageWithInjectedResourceClient() {
 
 before(async () => {
     server = await startDesktopHarnessServer();
-    builtBundleServer = await startStaticRepoServer();
+    builtBundleServer = await startStaticRepoServer({ bundleTypeScript: true });
     browser = await chromium.launch({
         headless: true,
     });

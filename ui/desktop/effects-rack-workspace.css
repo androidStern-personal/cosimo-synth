@@ -1787,6 +1787,31 @@
     opacity: 0.38;
 }
 
+.voice-history {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: calc(4px * var(--rail-scale, 1));
+}
+
+.voice-history-button {
+    height: calc(26px * var(--rail-scale, 1));
+    padding: 0;
+    border: 1px solid var(--cosimo-line);
+    border-radius: var(--cosimo-radius-sm);
+    background: var(--cosimo-wash);
+    box-shadow: none;
+    color: var(--cosimo-ink-muted);
+    cursor: pointer;
+    font-family: var(--cosimo-font-label, sans-serif);
+    font-size: var(--rail-label, var(--cosimo-type-label));
+    font-weight: 600;
+}
+
+.voice-history-button:disabled {
+    opacity: 0.38;
+    cursor: default;
+}
+
 .rack-mod-row {
     display: grid;
     grid-template-columns: 20px minmax(0, 1fr) 20px;

@@ -37,6 +37,7 @@ import {
     type PatchConnectionLike,
 } from "../shared/cmajor-react";
 import { useBounceInPlace } from "../shared/use-bounce-in-place";
+import { SynthStateProvider } from "../shared/synth-plugin-state-react";
 import {
     BounceActionControl,
     BounceSampledSourceStage,
@@ -5637,6 +5638,7 @@ function DesktopPatchViewBody({
     const modRailVoiceSettings = useMemo<ModRailVoiceSettings>(() => ({
         playMode: synthView.playMode,
         glideTime: synthView.glideTime,
+        history: synthView.voiceHistory,
         globalTuneControl: (
             <GlobalTuneKnob
                 binding={synthView.globalTune}
@@ -5650,6 +5652,7 @@ function DesktopPatchViewBody({
         synthView.globalTune,
         synthView.playMode,
         synthView.routes,
+        synthView.voiceHistory,
     ]);
     useEffect(() => {
         postNativeKeyboardProbeStatus(`cosimo-keyboard-router-ready:${keyboardInputMode}`);
@@ -6942,7 +6945,9 @@ export function DesktopPatchView({
 }) {
     return (
         <PatchConnectionProvider patchConnection={patchConnection} resourceClient={resourceClient}>
-            <DesktopPatchViewBody keyboardInputMode={keyboardInputMode} />
+            <SynthStateProvider patchConnection={patchConnection}>
+                <DesktopPatchViewBody keyboardInputMode={keyboardInputMode} />
+            </SynthStateProvider>
         </PatchConnectionProvider>
     );
 }
