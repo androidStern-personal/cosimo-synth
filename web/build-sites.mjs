@@ -79,7 +79,10 @@ try {
     await fs.mkdir(path.join(distDirectory, "server"), { recursive: true });
     const assetsDirectory = path.join(distDirectory, "assets");
     await fs.cp(webBuildDirectory, assetsDirectory, { recursive: true });
-    await fs.copyFile(path.join(webDirectory, "_headers"), path.join(assetsDirectory, "_headers"));
+    // Sites serves matching static assets before the Worker and does not apply
+    // Cloudflare _headers files. Keep the document behind the Worker so its
+    // isolation headers reach the browser; all large assets stay static.
+    await fs.rename(path.join(assetsDirectory, "index.html"), path.join(assetsDirectory, "synth-page.html"));
     await curateFactoryBank(assetsDirectory);
     await enforcePublicAssetPolicy(assetsDirectory);
     await fs.writeFile(
@@ -87,8 +90,10 @@ try {
         `const worker = {
     async fetch(request, env) {
         const url = new URL(request.url);
-        if (url.pathname === "/" || url.pathname === "/favicon.ico") {
-            url.pathname = url.pathname === "/" ? "/index.html" : "/favicon.svg";
+        if (url.pathname === "/" || url.pathname === "/index.html") {
+            url.pathname = "/synth-page.html";
+        } else if (url.pathname === "/favicon.ico") {
+            url.pathname = "/favicon.svg";
         }
         const asset = await env.ASSETS.fetch(new Request(url, request));
         const response = new Response(asset.body, asset);
