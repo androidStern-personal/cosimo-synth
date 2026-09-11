@@ -79,6 +79,7 @@ try {
     await fs.mkdir(path.join(distDirectory, "server"), { recursive: true });
     const assetsDirectory = path.join(distDirectory, "assets");
     await fs.cp(webBuildDirectory, assetsDirectory, { recursive: true });
+    await fs.copyFile(path.join(webDirectory, "_headers"), path.join(assetsDirectory, "_headers"));
     await curateFactoryBank(assetsDirectory);
     await enforcePublicAssetPolicy(assetsDirectory);
     await fs.writeFile(
