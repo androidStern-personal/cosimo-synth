@@ -20,6 +20,28 @@ npm run test:web:poc
 
 The generated application lives under `build/web/` and is intentionally not committed.
 
+## Vercel hosting
+
+The shared-memory web synth is deployed at https://synth.song-machines.com/ in
+the `cosimo-synth` Vercel project under `andrew-sterns-projects`.
+This is separate from the `song-machines` website project.
+
+Deploy the already-built static application, with `index.html` at its root and
+`web/vercel.json` copied into that root. The configuration supplies the isolation
+headers required for shared memory; no server function or Vercel build is needed.
+Keep `.env*`, `.gitignore`, and `.vercel` excluded in `.vercelignore`.
+
+The current deployment directory is `build/vercel-shared-memory/`. It contains
+the validated `dist/assets/` build with `synth-page.html` renamed to `index.html`.
+After replacing its assets with a newly validated build, deploy from that directory:
+
+```sh
+vercel deploy --prod --yes --scope andrew-sterns-projects
+```
+
+Verify HTTPS, `crossOriginIsolated`, successful wavetable loading, and non-silent
+audio on the deployed URL. Never upload the repository root as the static site.
+
 ## On-device performance HUD
 
 Append `?perf=1` to the app URL (before any `#p=` share fragment) to enable the
