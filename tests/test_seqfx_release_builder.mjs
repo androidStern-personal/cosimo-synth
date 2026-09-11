@@ -69,6 +69,24 @@ test("release staging rejects embedded source maps, source content, and TypeScri
     await assert.doesNotReject(assertSeqFxDistributableExecutableIsSourceFree(executablePath));
 });
 
+test("release provenance checks finish promptly with an embedded logo and still reject source leaks", async (context) => {
+    const fixtureRoot = await mkdtemp(path.join(os.tmpdir(), "release-embedded-logo-"));
+    const executablePath = path.join(fixtureRoot, "plugin");
+    context.after(() => rm(fixtureRoot, { recursive: true, force: true }));
+    const artwork = "data:image/png;base64," + "Ab09+/".repeat(180000);
+    const check = `import { assertSeqFxDistributableExecutableIsSourceFree as check } from ${JSON.stringify(scriptPath)}; await check(${JSON.stringify(executablePath)});`;
+    await writeFile(executablePath, artwork);
+    const clean = spawnSync(process.execPath, ["--input-type=module", "-e", check], { timeout: 2500, encoding: "utf8" });
+    assert.equal(clean.error, undefined, "an embedded image must not stall the provenance scan");
+    assert.equal(clean.status, 0, clean.stderr);
+    await writeFile(executablePath, artwork + "\0private/view.tsx\0app.js.map");
+    const leaked = spawnSync(process.execPath, ["--input-type=module", "-e", check], { timeout: 2500, encoding: "utf8" });
+    assert.equal(leaked.error, undefined);
+    assert.equal(leaked.status, 1);
+    assert.match(leaked.stderr, /private\/view\.tsx/);
+    assert.match(leaked.stderr, /app\.js\.map/);
+});
+
 function syntheticUnsignedFlatPackage(creationTime) {
     const toc = Buffer.from([
         '<?xml version="1.0" encoding="UTF-8"?>',

@@ -1387,12 +1387,14 @@ export async function assertSeqFxDistributableExecutableIsSourceFree(executableP
         }
     }
 
-    const sourceMapFilenames = executableText.match(/[A-Za-z0-9_@+./?-]+\.(?:css|js)\.map/gu) ?? [];
+    // Start once per filename token. Retrying the greedy prefix at every byte
+    // makes a large embedded base64 image take quadratic time to reject.
+    const sourceMapFilenames = executableText.match(/(?<![A-Za-z0-9_@+./?-])[A-Za-z0-9_@+./?-]+\.(?:css|js)\.map/gu) ?? [];
     for (const filename of new Set(sourceMapFilenames)) {
         findings.push(`source map filename ${filename}`);
     }
 
-    const typeScriptFilenames = executableText.match(/[A-Za-z0-9_@+./?-]+\.(?:cts|mts|ts|tsx)(?=[^A-Za-z0-9_]|$)/gu) ?? [];
+    const typeScriptFilenames = executableText.match(/(?<![A-Za-z0-9_@+./?-])[A-Za-z0-9_@+./?-]+\.(?:cts|mts|ts|tsx)(?=[^A-Za-z0-9_]|$)/gu) ?? [];
     for (const filename of new Set(typeScriptFilenames)) {
         findings.push(`TypeScript filename ${filename}`);
     }
