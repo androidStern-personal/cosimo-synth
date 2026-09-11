@@ -38,7 +38,9 @@ npm run typecheck
 node tests/helpers/build_shared_mseg_fixture.mjs
 # Use the generated manifest printed by the build; this is the real author build.
 tests/native/run_plugin_state_shared_data_probe.sh "$COSIMO_PLUGIN_STATE_CMAJOR_SOURCE" "$CMAJOR_RUNTIME_LIBRARY" "$GENERATED_MANIFEST"
-tests/native/run_plugin_state_shared_data_probe.sh "$COSIMO_PLUGIN_STATE_CMAJOR_SOURCE" "$CMAJOR_RUNTIME_LIBRARY" "$GENERATED_MANIFEST" aot
+AOT_DIRECTORY="$(mktemp -d)"
+scripts/generate_cmajor_cpp_with_externals.sh "$GENERATED_MANIFEST" "$AOT_DIRECTORY/SharedStateDSP.h" SharedStateDSP
+tests/native/run_plugin_state_shared_data_probe.sh "$COSIMO_PLUGIN_STATE_CMAJOR_SOURCE" "$CMAJOR_RUNTIME_LIBRARY" "$GENERATED_MANIFEST" aot "$AOT_DIRECTORY"
 ```
 
 The legacy packet-port test remains intact as
