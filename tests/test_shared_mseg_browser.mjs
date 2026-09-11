@@ -12,8 +12,11 @@ assert.ok(source,'Set COSIMO_PLUGIN_STATE_CMAJOR_SOURCE to authored Cmajor check
 const {staging,manifest,runtime}=await buildSharedMsegFixture();
 await bundle({entryPoints:[path.join(staging,'fx/shared_mseg/view/browser.tsx')],outfile:path.join(runtime,'browser.js'),
     bundle:true,format:'esm',platform:'browser',jsx:'automatic',target:'es2022',logLevel:'silent'});
+const patchManifest=JSON.parse(await readFile(manifest,'utf8'));
+const combinedSource=path.join(runtime,'qualification.cmajor');
+await writeFile(combinedSource,(await Promise.all(patchManifest.source.map(file=>readFile(path.join(runtime,file),'utf8')))).join('\n'));
 execFileSync(process.env.CMAJOR_SHARED_GENERATOR??path.resolve('build/shared_data_codegen/source/shared_memory_generator'),
-    [path.join(runtime,'SharedMseg.cmajor'),path.join(runtime,'generated.js'),JSON.stringify({SIMD:'simd-only',sharedMemory:{maximumPages:256}})]);
+    [combinedSource,path.join(runtime,'generated.js'),JSON.stringify({SIMD:'simd-only',sharedMemory:{maximumPages:256}})]);
 await writeFile(path.join(runtime,'index.html'),`<!doctype html><button id="start">Start</button><main></main>
 <script type="module">
 import {AudioWorkletPatchConnection} from '/cmaj_api/cmaj-audio-worklet-helper.js';
@@ -22,7 +25,7 @@ import createView,{createAgent,outcomes,defects} from '/browser.js';
 document.querySelector('#start').onclick=async()=>{try{
  const context=new AudioContext({sampleRate:48000});
  const connection=new AudioWorkletPatchConnection(await(await fetch('/manifest.json')).json());
- connection.sendStoredStateValue('shape',{format:'cosimo.mseg.shape',version:1,name:'MSEG 1',globalSmooth:false,
+ connection.sendStoredStateValue('shape',{format:'mseg.shape',version:1,name:'MSEG 1',globalSmooth:false,
      points:[{x:0,y:0,curvePower:0},{x:1,y:1,curvePower:0}]});
  await connection.initialise({CmajorClass:DSP,audioContext:context,workletName:'shared-mseg',rootResourcePath:location.origin+'/'});
  const capture=context.createScriptProcessor(256,3,1),silent=context.createGain();silent.gain.value=0;
@@ -87,7 +90,7 @@ try {
     await page.getByText('Undo',{exact:true}).click();await expect(1,1);
     const old=await page.evaluate(()=>window.fixture.agent.getSnapshot().state.scope);
     await page.evaluate(()=>window.fixture.connection.sendFullStoredState({parameters:[{name:'gain',value:0.5}],values:{shape:{
-        format:'cosimo.mseg.shape',version:1,name:'MSEG 1',globalSmooth:false,points:[{x:0,y:0,curvePower:0},{x:1,y:1,curvePower:0}],
+        format:'mseg.shape',version:1,name:'MSEG 1',globalSmooth:false,points:[{x:0,y:0,curvePower:0},{x:1,y:1,curvePower:0}],
     }}}));
     await expect(1,0.5);
     const next=await page.evaluate(()=>window.fixture.agent.getSnapshot().state.scope);

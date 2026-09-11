@@ -129,6 +129,13 @@ function command(input: unknown): PluginStateCommand | undefined {
         return { kind: input.kind, ...(expectedEntry ? { expectedEntry } : {}) };
     }
     if (!name(input.key)) return undefined;
+    if (input.kind === "retry") {
+        return counter(input.expectedVersion, false)
+            && (input.expectedGeneration === null || counter(input.expectedGeneration, false))
+            && (input.expectedPersistenceRequest === null || counter(input.expectedPersistenceRequest))
+            ? { kind: "retry", key: input.key, expectedVersion: input.expectedVersion,
+                expectedGeneration: input.expectedGeneration, expectedPersistenceRequest: input.expectedPersistenceRequest } : undefined;
+    }
     if (input.kind === "recover") {
         return Object.hasOwn(input, "value") && input.expectedVersion === 0 && !Object.hasOwn(input, "gesture")
             ? { kind: "recover", key: input.key, value: input.value, expectedVersion: 0 } : undefined;
@@ -236,7 +243,9 @@ function fieldSnapshot(definition: PluginStateFields[string], input: unknown): P
     const parsedApplication = application(input.application);
     const target = engineTarget(input.target);
     if ((input.application !== undefined && !parsedApplication) || (input.target !== undefined && !target)) return undefined;
-    const common = { ...(parsedApplication ? { application: parsedApplication } : {}), ...(target ? { target } : {}) };
+    if (input.persistenceRequest !== undefined && !counter(input.persistenceRequest)) return undefined;
+    const common = { ...(parsedApplication ? { application: parsedApplication } : {}), ...(target ? { target } : {}),
+        ...(input.persistenceRequest !== undefined ? { persistenceRequest: input.persistenceRequest } : {}) };
     if (input.readiness.kind === "pending" && !Object.hasOwn(input, "value"))
         return Object.freeze({ readiness: Object.freeze({ kind: "pending" }), ...common });
     if (input.readiness.kind === "failed" && !Object.hasOwn(input, "value")) {

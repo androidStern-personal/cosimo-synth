@@ -1,3 +1,1 @@
-export default function createView() {
-    return document.createElement("div");
-}
+export { default } from "./browser";

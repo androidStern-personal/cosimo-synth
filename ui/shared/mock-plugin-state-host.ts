@@ -1,4 +1,5 @@
-import { createCmajorPluginStateService, type CmajorStateBindingFactory, type CmajorStateConnection } from "../../kit/ui/plugin-state-cmajor";
+import { createCmajorPluginStateService, type CmajorStateConnection } from "../../kit/ui/plugin-state-cmajor";
+import type { SharedDataDestination } from "../../kit/ui/prepared-shared-data";
 import type { PluginStateNativeParameter, PluginStateScope } from "../../kit/ui/plugin-state-session";
 import { synthPluginState } from "./synth-plugin-state";
 
@@ -35,7 +36,9 @@ export function createMockPluginStateHost(options: {
     /** The same saved values exposed by the development patch connection. */
     readonly storedValues?: { read(key: string): unknown; write(key: string, value: unknown): void };
     readonly engine?: {
-        readonly bindings: readonly CmajorStateBindingFactory[];
+        readonly resources?: Partial<CmajorStateConnection>;
+        /** Development DSP model consumes the actual prepared allocation, without audio execution. */
+        installSharedData?(input: number, destination: SharedDataDestination): void;
         sendEvent(endpoint: string, value: unknown): void;
         handleHostEffect(name: string, value: unknown): boolean;
     };
@@ -97,8 +100,49 @@ export function createMockPluginStateHost(options: {
         return port;
     };
     const worker = makePort(true);
+    const dataListeners = new Set<Listener>();
+    const allocations = new Map<number, SharedDataDestination & { readonly id: number; readonly input: number; readonly scope: PluginStateScope }>();
+    let nextAllocation = 0;
+    const stateAdd = worker.addEventListener.bind(worker), stateRemove = worker.removeEventListener.bind(worker);
+    worker.addEventListener = (type, listener) => {
+        if (type === "kit_data") { dataListeners.add(listener); options.engine?.resources?.addEventListener?.(type, listener); }
+        else stateAdd(type, listener);
+    };
+    worker.removeEventListener = (type, listener) => {
+        if (type === "kit_data") { dataListeners.delete(listener); options.engine?.resources?.removeEventListener?.(type, listener); }
+        else stateRemove(type, listener);
+    };
+    const modeledData = options.engine?.installSharedData ? {
+        reserve(input: number, byteLength: number) {
+            if (!scope || stopped) throw new Error("Development engine has no active document.");
+            if (!Number.isSafeInteger(byteLength) || byteLength <= 0 || byteLength > 1024 * 1024) throw new Error("Development shared allocation exceeds its budget.");
+            const allocation = { id: ++nextAllocation, input, buffer: new ArrayBuffer(byteLength), byteOffset: 0, byteLength, scope: { ...scope } };
+            allocations.set(allocation.id, allocation); return allocation;
+        },
+        commit(id: number) {
+            const allocation = allocations.get(id);
+            if (!allocation) throw new Error("Development shared allocation was cancelled.");
+            const receipt = { kind: "submitted", id, input: allocation.input, generation: id, serial: id };
+            queueMicrotask(() => {
+                if (!allocations.delete(id) || stopped || scope?.owner !== allocation.scope.owner || scope.document !== allocation.scope.document) return;
+                options.engine?.installSharedData?.(allocation.input, allocation);
+                for (const listener of dataListeners) listener({ ...receipt, kind: "applied", scope: allocation.scope });
+            });
+            return receipt;
+        },
+        cancel(id: number) { allocations.delete(id); },
+    } : undefined;
+    worker.addEndpointListener = (endpoint, listener) => options.engine?.resources?.addEndpointListener?.(endpoint, listener);
+    worker.removeEndpointListener = (endpoint, listener) => options.engine?.resources?.removeEndpointListener?.(endpoint, listener);
+    worker.addStoredStateValueListener = listener => options.engine?.resources?.addStoredStateValueListener?.(listener);
+    worker.removeStoredStateValueListener = listener => options.engine?.resources?.removeStoredStateValueListener?.(listener);
+    worker.requestFullStoredState = callback => {
+        if (options.engine?.resources?.requestFullStoredState) options.engine.resources.requestFullStoredState(callback);
+        else queueMicrotask(() => callback({ values: {} }));
+    };
+    Object.defineProperty(worker, "sharedData", { get: () => options.engine?.resources?.sharedData ?? modeledData });
     const view = makePort(false);
-    const service = createCmajorPluginStateService(synthPluginState, worker, { onDefect: options.onDefect, bindings: options.engine?.bindings });
+    const service = createCmajorPluginStateService(synthPluginState, worker, { onDefect: options.onDefect });
     let settleStopped = () => {};
     const stoppedReady = new Promise<void>(resolve => { settleStopped = resolve; });
     const initialization = (async () => {
@@ -114,6 +158,7 @@ export function createMockPluginStateHost(options: {
                     return { parameters: await Promise.all(request.parameters.map(endpoint => options.readParameter(endpoint, reads.signal))) };
                 case "restore":
                     scope = request.scope;
+                    allocations.clear();
                     finishGestures();
                     return { parameters: await Promise.all(parameterEndpoints.map(endpoint => options.readParameter(endpoint, reads.signal))) };
                 case "read": return { value: (await options.readParameter(request.endpoint, reads.signal)).value };
@@ -143,6 +188,7 @@ export function createMockPluginStateHost(options: {
     const stop = (reason: "owner-removed" | "service-closed") => {
         if (stopping) return stopping;
         stopped = true;
+        allocations.clear();
         pending.length = 0;
         settleStopped();
         reads.abort();

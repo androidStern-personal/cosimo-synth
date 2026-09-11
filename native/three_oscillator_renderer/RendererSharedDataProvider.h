@@ -1,38 +1,26 @@
 #pragma once
 
 #include "RendererBridge.h"
-#include "cmajor/helpers/cmaj_PatchSharedData.h"
+#include "../../kit/native/shared_data/NativeSharedData.h"
 
 namespace cosimo::three_osc::bridge
 {
-inline SharedDataView readNativeSharedData (std::int32_t input) noexcept
-{
-    return { cmaj::PatchSharedData::data (input),
-             static_cast<std::size_t> (cmaj::PatchSharedData::byteSize (input)) };
-}
+using builder_kit::shared_data::readNativeSharedData;
 
 struct NativeSharedBlock
 {
     SharedTableBlock tables;
     SharedMsegBlock msegs;
+    void refresh (SharedDataReader read) noexcept
+    {
+        tables.refresh (read);
+        msegs.refresh (read);
+    }
 };
 
 inline const NativeSharedBlock& nativeSharedBlock() noexcept
 {
-    // Every access checks the active scope before touching borrowed pointers.
-    // A->B->A nested rendering refreshes on both switches, even when both
-    // instances use identical table generations or reuse a memory address.
-    thread_local NativeSharedBlock block;
-    thread_local std::uint64_t cachedScope = 0;
-    const auto scope = cmaj::PatchSharedData::readScopeToken();
-    if (scope != cachedScope)
-    {
-        const auto read = scope != 0 ? readNativeSharedData : nullptr;
-        block.tables.refresh (read);
-        block.msegs.refresh (read);
-        cachedScope = scope;
-    }
-    return block;
+    return builder_kit::shared_data::readNativeBlock<NativeSharedBlock>();
 }
 
 inline const SharedTableBlock& nativeSharedTableBlock() noexcept { return nativeSharedBlock().tables; }

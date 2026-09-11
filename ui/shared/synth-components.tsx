@@ -11,25 +11,23 @@ import {
     type RefObject,
 } from "react";
 
+import { MsegEditorSurface } from "../../kit/ui/mseg-editor";
+import { buildMsegSurfacePaths } from "../../kit/ui/mseg-editor-geometry";
+
 import type { PatchControlBinding } from "./patch-controls";
 import { useSliderDrag } from "./use-slider-drag";
 import { clampDisplayPosition } from "./runtime-table-state";
 import {
     MSEG_EDITOR_HORIZONTAL_PADDING_PX,
     MSEG_EDITOR_VERTICAL_PADDING_PX,
-    MSEG_POINT_RADIUS_PX,
     MSEG_RATE_MAX_SECONDS,
     MSEG_RATE_MIN_SECONDS,
-    MSEG_SELECTED_POINT_RADIUS_PX,
     clampMsegRateSeconds,
-    createMsegTimeAxisTicks,
     createMsegEditorMetrics,
     pointToMsegEditorCoordinates,
     renderMsegShape,
     resolveMsegSurfaceOrientation,
     sampleRenderedMsegBuffer,
-    sampleMsegEditorPolyline,
-    sampleMsegSegmentEditorPolyline,
     type MsegSurfaceOrientation,
     type MsegState,
     type MsegTimeAxisScale,
@@ -369,41 +367,16 @@ function clamp(value: number, min: number, max: number) {
     return Math.min(Math.max(value, min), max);
 }
 
-function buildMsegSurfacePaths(
-    points: Array<{ x: number; y: number; curvePower: number }>,
-    width: number,
-    height: number,
-    options: {
-        orientation?: MsegSurfaceOrientation;
-        pointRadius?: number;
-        horizontalPadding?: number;
-        verticalPadding?: number;
-    } = {},
-) {
-    const metrics = createMsegEditorMetrics(width, height, {
-        pointRadius: options.pointRadius,
-        horizontalPadding: options.horizontalPadding ?? MSEG_EDITOR_HORIZONTAL_PADDING_PX,
-        verticalPadding: options.verticalPadding ?? MSEG_EDITOR_VERTICAL_PADDING_PX,
-    });
-    const curvePath = polylineToSvgPath(sampleMsegEditorPolyline(
-        { points },
-        width,
-        height,
-        {
-            orientation: options.orientation,
-            pointRadius: options.pointRadius,
-            horizontalPadding: options.horizontalPadding,
-            verticalPadding: options.verticalPadding,
-        },
-    ));
-    const fillPath = options.orientation === "vertical"
-        ? `${curvePath} L ${metrics.plotLeft.toFixed(3)} ${metrics.plotBottom.toFixed(3)} ` +
-            `L ${metrics.plotLeft.toFixed(3)} ${metrics.plotTop.toFixed(3)} Z`
-        : `${curvePath} L ${metrics.plotRight.toFixed(3)} ${metrics.plotBottom.toFixed(3)} ` +
-            `L ${metrics.plotLeft.toFixed(3)} ${metrics.plotBottom.toFixed(3)} Z`;
+function polylineToSvgPath(polyline: Array<{ x: number; y: number }>) {
+    if (polyline.length === 0) {
+        return "";
+    }
 
-    return { curvePath, fillPath, metrics };
+    return polyline.map((point, pointIndex) => (
+        `${pointIndex === 0 ? "M" : "L"} ${point.x.toFixed(3)} ${point.y.toFixed(3)}`
+    )).join(" ");
 }
+
 
 function buildMsegMorphSurfacePaths(
     shapeAPoints: Array<{ x: number; y: number; curvePower: number }> | null | undefined,
@@ -450,37 +423,6 @@ function buildMsegMorphSurfacePaths(
     } catch {
         return null;
     }
-}
-
-function polylineToSvgPath(polyline: Array<{ x: number; y: number }>) {
-    if (polyline.length === 0) {
-        return "";
-    }
-
-    return polyline.map((point, pointIndex) => (
-        `${pointIndex === 0 ? "M" : "L"} ${point.x.toFixed(3)} ${point.y.toFixed(3)}`
-    )).join(" ");
-}
-
-function buildMsegSegmentPath(
-    points: Array<{ x: number; y: number; curvePower: number }>,
-    segmentIndex: number,
-    width: number,
-    height: number,
-    options: {
-        orientation?: MsegSurfaceOrientation;
-        pointRadius?: number;
-        horizontalPadding?: number;
-        verticalPadding?: number;
-    } = {},
-) {
-    return polylineToSvgPath(sampleMsegSegmentEditorPolyline(
-        { points },
-        segmentIndex,
-        width,
-        height,
-        options,
-    ));
 }
 
 function SelectChevron({ className }: { className?: string }) {
@@ -923,245 +865,37 @@ export function EditableMsegSurface({
     const size = useResizeObserver(surfaceRef);
     const emphasizedSegmentIndex = activeSegmentIndex >= 0 ? activeSegmentIndex : hoveredSegmentIndex;
     const hasEmphasizedSegment = emphasizedSegmentIndex >= 0;
-    const timeAxisTicks = timeAxisScale === undefined ? [] : createMsegTimeAxisTicks(timeAxisScale);
-
     useLayoutEffect(() => {
-        const nextOrientation = resolveMsegSurfaceOrientation(size.width, size.height, orientation);
-        if (nextOrientation !== orientation) {
-            onOrientationChange?.(nextOrientation);
-        }
+        const next = resolveMsegSurfaceOrientation(size.width, size.height, orientation);
+        if (next !== orientation) onOrientationChange?.(next);
     }, [onOrientationChange, orientation, size.height, size.width]);
-
-    const {
-        curvePath,
-        fillPath,
-        referenceCurvePath,
-        referenceFillPath,
-        morphCurvePath,
-        highlightedSegmentPath,
-        metrics,
-    } = useMemo(() => {
-        const basePaths = buildMsegSurfacePaths(points, size.width, size.height, {
-            orientation,
-        });
-        const referencePaths = referencePoints
-            ? buildMsegSurfacePaths(referencePoints, size.width, size.height, { orientation })
-            : null;
-        const effectiveMorphPaths = buildMsegMorphSurfacePaths(
-            morphShapeAPoints,
-            morphShapeBPoints,
-            morphValue,
-            size.width,
-            size.height,
-            { orientation },
-        );
-        const nextHighlightedSegmentPath = emphasizedSegmentIndex >= 0
-            ? buildMsegSegmentPath(points, emphasizedSegmentIndex, size.width, size.height, { orientation })
-            : "";
-
-        return {
-            ...basePaths,
-            referenceCurvePath: referencePaths?.curvePath ?? "",
-            referenceFillPath: referencePaths?.fillPath ?? "",
-            morphCurvePath: effectiveMorphPaths?.curvePath ?? "",
-            highlightedSegmentPath: nextHighlightedSegmentPath,
-        };
-    }, [emphasizedSegmentIndex, morphShapeAPoints, morphShapeBPoints, morphValue, orientation, points, referencePoints, size.height, size.width]);
-
-    return (
-        <svg
-            ref={surfaceRef}
-            data-role={dataRole}
-            data-time-axis={orientation}
-            data-morph-presentation={realizedMorphEmphasis === "active" ? "morph-active" : "edit-shape"}
-            data-edit-shape={editShapeIndex === 0 ? "a" : "b"}
-            className={joinClasses(
-                "h-full w-full touch-none overflow-hidden rounded-[20px] bg-white/[0.03]",
-                className,
-            )}
-            viewBox={`0 0 ${size.width} ${size.height}`}
-            onPointerDown={onPointerDown}
-            onPointerMove={onPointerMove}
-            onPointerLeave={onPointerLeave}
-            onPointerUp={onPointerUp}
-            onPointerCancel={onPointerUp}
-            onLostPointerCapture={onPointerUp}
-        >
-            <g>
-                {MSEG_GRID_STEPS.map((step) => (
-                    <line
-                        key={`editable-h-${step}`}
-                        className="cosimo-grid-line"
-                        x1={metrics.plotLeft}
-                        y1={metrics.plotTop + (metrics.plotHeight * (1 - step))}
-                        x2={metrics.plotRight}
-                        y2={metrics.plotTop + (metrics.plotHeight * (1 - step))}
-                    />
-                ))}
-                {MSEG_GRID_STEPS.map((step) => (
-                    <line
-                        key={`editable-v-${step}`}
-                        className="cosimo-grid-line"
-                        x1={metrics.plotLeft + (metrics.plotWidth * step)}
-                        y1={metrics.plotTop}
-                        x2={metrics.plotLeft + (metrics.plotWidth * step)}
-                        y2={metrics.plotBottom}
-                    />
-                ))}
-            </g>
-            {referenceFillPath ? (
-                <path
-                    data-role="mseg-reference-fill"
-                    data-shape-identity={editShapeIndex === 0 ? "b" : "a"}
-                    className={editShapeIndex === 0
-                        ? "cosimo-reference-curve-fill cosimo-mseg-shape-b-fill"
-                        : "cosimo-reference-curve-fill cosimo-mseg-shape-a-fill"}
-                    d={referenceFillPath}
-                />
-            ) : null}
-            {referenceCurvePath ? (
-                <path
-                    data-role="mseg-reference-curve"
-                    data-shape-identity={editShapeIndex === 0 ? "b" : "a"}
-                    className={editShapeIndex === 0
-                        ? "cosimo-reference-curve-line cosimo-mseg-shape-b-curve-line"
-                        : "cosimo-reference-curve-line cosimo-mseg-shape-a-curve-line"}
-                    d={referenceCurvePath}
-                />
-            ) : null}
-            <path
-                data-role="mseg-base-fill"
-                data-shape-identity={editShapeIndex === 0 ? "a" : "b"}
-                className={joinClasses(
-                    "cosimo-curve-fill",
-                    editShapeIndex === 0 ? "cosimo-mseg-shape-a-fill" : "cosimo-mseg-shape-b-fill",
-                    hasEmphasizedSegment && "cosimo-curve-fill-muted",
-                )}
-                d={fillPath}
-            />
-            <path
-                data-role="mseg-base-curve"
-                data-shape-identity={editShapeIndex === 0 ? "a" : "b"}
-                className={joinClasses(
-                    "cosimo-curve-line",
-                    editShapeIndex === 0 ? "cosimo-mseg-shape-a-curve-line" : "cosimo-mseg-shape-b-curve-line",
-                    hasEmphasizedSegment && "cosimo-curve-line-muted",
-                )}
-                d={curvePath}
-            />
-            {morphCurvePath ? (
-                <path
-                    data-role="mseg-effective-curve"
-                    className={joinClasses(
-                        "cosimo-mseg-effective-curve-line",
-                        realizedMorphEmphasis === "active" && "is-active",
-                    )}
-                    d={morphCurvePath}
-                />
-            ) : null}
-            {highlightedSegmentPath ? (
-                <path
-                    data-role="mseg-highlight-segment"
-                    data-segment-index={String(emphasizedSegmentIndex)}
-                    className={joinClasses(
-                        "cosimo-curve-line cosimo-curve-line-highlight",
-                        editShapeIndex === 0 ? "cosimo-mseg-shape-a-curve-line" : "cosimo-mseg-shape-b-curve-line",
-                    )}
-                    d={highlightedSegmentPath}
-                />
-            ) : null}
-            <g
-                data-role="mseg-edit-points"
-                data-shape-identity={editShapeIndex === 0 ? "a" : "b"}
-            >
-                {points.map((point, pointIndex) => {
-                    const coordinates = pointToMsegEditorCoordinates(point, size.width, size.height, {
-                        orientation,
-                    });
-                    const isSelected = pointIndex === selectedPointIndex;
-                    const isEmphasizedSegmentEndpoint =
-                        hasEmphasizedSegment &&
-                        (pointIndex === emphasizedSegmentIndex || pointIndex === emphasizedSegmentIndex + 1);
-                    const pointState = hasEmphasizedSegment
-                        ? isEmphasizedSegmentEndpoint
-                            ? "highlighted"
-                            : "muted"
-                        : isSelected
-                            ? "selected"
-                            : "default";
-                    const radius = pointState === "selected"
-                        ? MSEG_SELECTED_POINT_RADIUS_PX
-                        : MSEG_POINT_RADIUS_PX;
-                    const pointClassName = pointState === "selected"
-                        ? "cosimo-mseg-point-selected"
-                        : pointState === "highlighted"
-                            ? "cosimo-mseg-point-highlight"
-                            : pointState === "muted"
-                                ? "cosimo-mseg-point-muted"
-                                : "cosimo-mseg-point-default";
-
-                    return (
-                        <circle
-                            key={`point-${pointIndex}-${point.x}-${point.y}`}
-                            data-role="mseg-point"
-                            data-point-index={String(pointIndex)}
-                            data-point-state={pointState}
-                            cx={coordinates.x}
-                            cy={coordinates.y}
-                            r={radius}
-                            className={pointClassName}
-                            vectorEffect="non-scaling-stroke"
-                        />
-                    );
-                })}
-            </g>
-            {timeAxisTicks.length === 0 ? null : (
-                <g
-                    data-role="mseg-time-axis"
-                    data-time-unit={timeAxisScale?.kind}
-                    className="cosimo-mseg-time-axis"
-                    aria-hidden="true"
-                >
-                    {timeAxisTicks.map((tick) => {
-                        const isVerticalTime = orientation === "vertical";
-                        const axisX = isVerticalTime
-                            ? metrics.plotLeft
-                            : metrics.plotLeft + (metrics.plotWidth * tick.fraction);
-                        const axisY = isVerticalTime
-                            ? metrics.plotTop + (metrics.plotHeight * tick.fraction)
-                            : metrics.plotBottom;
-                        const labelX = isVerticalTime ? axisX + 9 : axisX;
-                        const labelY = isVerticalTime ? axisY : axisY - 9;
-
-                        return (
-                            <g key={`mseg-time-${tick.fraction}`}>
-                                <line
-                                    data-role="mseg-time-tick"
-                                    data-axis-fraction={String(tick.fraction)}
-                                    className="cosimo-mseg-time-tick"
-                                    x1={axisX}
-                                    y1={axisY}
-                                    x2={isVerticalTime ? axisX + 6 : axisX}
-                                    y2={isVerticalTime ? axisY : axisY - 6}
-                                />
-                                <text
-                                    data-role="mseg-time-label"
-                                    data-axis-fraction={String(tick.fraction)}
-                                    className="cosimo-mseg-time-label"
-                                    x={labelX}
-                                    y={labelY}
-                                    textAnchor={isVerticalTime ? "start" : "middle"}
-                                    dominantBaseline={isVerticalTime ? "middle" : undefined}
-                                >
-                                    {tick.label}
-                                </text>
-                            </g>
-                        );
-                    })}
-                </g>
-            )}
-        </svg>
-    );
+    const reference = referencePoints ? buildMsegSurfacePaths(referencePoints, size.width, size.height, { orientation }) : null;
+    const morph = buildMsegMorphSurfacePaths(morphShapeAPoints, morphShapeBPoints, morphValue, size.width, size.height, { orientation });
+    const shape = editShapeIndex === 0 ? "a" : "b";
+    const other = editShapeIndex === 0 ? "b" : "a";
+    return <MsegEditorSurface
+        surfaceRef={surfaceRef} points={points} width={size.width} height={size.height}
+        selectedPointIndex={selectedPointIndex} hoveredSegmentIndex={hoveredSegmentIndex}
+        activeSegmentIndex={activeSegmentIndex} orientation={orientation} timeAxisScale={timeAxisScale}
+        onPointerDown={onPointerDown} onPointerMove={onPointerMove} onPointerLeave={onPointerLeave} onPointerUp={onPointerUp}
+        className={joinClasses("h-full w-full touch-none overflow-hidden rounded-[20px] bg-white/[0.03]", className)}
+        dataRole={dataRole} curveIdentity={shape}
+        attributes={{ "data-morph-presentation": realizedMorphEmphasis === "active" ? "morph-active" : "edit-shape", "data-edit-shape": shape }}
+        classes={{
+            grid: "cosimo-grid-line",
+            fill: joinClasses("cosimo-curve-fill", `cosimo-mseg-shape-${shape}-fill`, hasEmphasizedSegment && "cosimo-curve-fill-muted"),
+            curve: joinClasses("cosimo-curve-line", `cosimo-mseg-shape-${shape}-curve-line`, hasEmphasizedSegment && "cosimo-curve-line-muted"),
+            highlight: `cosimo-curve-line cosimo-curve-line-highlight cosimo-mseg-shape-${shape}-curve-line`,
+            pointSelected: "cosimo-mseg-point-selected", pointHighlighted: "cosimo-mseg-point-highlight",
+            pointMuted: "cosimo-mseg-point-muted", point: "cosimo-mseg-point-default",
+            timeAxis: "cosimo-mseg-time-axis", timeTick: "cosimo-mseg-time-tick", timeLabel: "cosimo-mseg-time-label",
+        }}
+        underlay={reference ? <>
+            <path data-role="mseg-reference-fill" data-shape-identity={other} className={`cosimo-reference-curve-fill cosimo-mseg-shape-${other}-fill`} d={reference.fillPath}/>
+            <path data-role="mseg-reference-curve" data-shape-identity={other} className={`cosimo-reference-curve-line cosimo-mseg-shape-${other}-curve-line`} d={reference.curvePath}/>
+        </> : null}
+        overlay={morph ? <path data-role="mseg-effective-curve" className={joinClasses("cosimo-mseg-effective-curve-line", realizedMorphEmphasis === "active" && "is-active")} d={morph.curvePath}/> : null}
+    />;
 }
 
 export function RangeField({

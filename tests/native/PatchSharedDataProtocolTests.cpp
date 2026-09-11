@@ -44,6 +44,39 @@ int main()
 {
     try
     {
+        {
+            Data direct (1, 48);
+            Data::Replies replies;
+            auto reservation = direct.reserve (0, 16, scope(), replies);
+            direct.commit (reservation.id, scope());
+            expect (direct.drain().empty(), "direct submission reported audio adoption");
+            direct.store.beginBlock();
+            expect (direct.drain().empty(), "direct resource acknowledged before endBlock");
+            direct.store.endBlock();
+            const auto applied = direct.drain();
+            expect (replyIs (applied, "applied"), "direct adoption did not emit receipt");
+            expect (applied[0]["id"].get<uint64_t>() == reservation.id
+                    && applied[0]["input"].get<int>() == 0 && applied[0]["scope"]["owner"].toString() == "worker"
+                    && applied[0]["generation"].get<uint64_t>() == reservation.id
+                    && applied[0]["serial"].get<uint64_t>() > 0, "direct receipt lost correlation");
+            expect (direct.drain().empty(), "direct adoption reported twice");
+            reservation = direct.reserve (0, 16, scope(), replies);
+            direct.commit (reservation.id, scope());
+            direct.cancel (reservation.id);
+            direct.store.beginBlock(); direct.store.endBlock();
+            expect (direct.drain().empty(), "cancelled direct resource acknowledged");
+            reservation = direct.reserve (0, 16, scope(), replies);
+            direct.commit (reservation.id, scope());
+            expect (replyIs (direct.revoke(), "failed", "stale-scope"), "revoked direct submission left waiter unresolved");
+            direct.store.beginBlock(); direct.store.endBlock();
+            expect (direct.drain().empty(), "revoked direct resource acknowledged");
+            reservation = direct.reserve (0, 16, scope(), replies);
+            direct.commit (reservation.id, scope());
+            replies.clear();
+            direct.reserve (0, 16, scope(), replies);
+            expect (replyIs (replies, "failed", "superseded"), "superseded direct submission left waiter unresolved");
+            direct.stop();
+        }
         Data data (2, 32);
         expect (replyIs (data.handle ({}, false), "failed", "invalid-request"), "missing body did not fail cleanly");
         expect (replyIs (data.handle (Value (42), false), "failed", "invalid-request"), "primitive body did not fail cleanly");

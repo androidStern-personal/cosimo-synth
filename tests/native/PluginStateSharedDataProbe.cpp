@@ -2,6 +2,31 @@
 #include "cmajor/helpers/cmaj_Patch.h"
 #include "cmajor/helpers/cmaj_PatchWorker_QuickJS.h"
 #include "choc/gui/choc_MessageLoop.h"
+#if defined(COSIMO_SHARED_STATE_AOT)
+ #include "cmajor/helpers/cmaj_GeneratedCppEngine.h"
+ #define cmaj__data__read(...) ::cmaj::PatchSharedData::read (__VA_ARGS__)
+ #define cmaj__data__readInt32(...) ::cmaj::PatchSharedData::readInt32 (__VA_ARGS__)
+ #define cmaj__data__size(...) ::cmaj::PatchSharedData::size (__VA_ARGS__)
+ #include "SharedStateDSP.h"
+ #include "PluginState.h"
+ #undef cmaj__data__read
+ #undef cmaj__data__readInt32
+ #undef cmaj__data__size
+
+// This wrapper observes the generated author-facing native getter at the same
+// real Patch audio scope as the compiled DSP, without installing another store.
+thread_local auto observedSettings = PluginState::settings.readForAudioBlock();
+thread_local std::uint64_t settingsReadCount = 0;
+struct ObservedSharedStateDSP : SharedStateDSP
+{
+    void advance (std::int32_t frames)
+    {
+        observedSettings = PluginState::settings.readForAudioBlock();
+        ++settingsReadCount;
+        SharedStateDSP::advance (frames);
+    }
+};
+#endif
 #include <array>
 #include <chrono>
 #include <future>
@@ -100,7 +125,14 @@ struct Fixture
         onLoop ([&]
         {
             patch = std::make_unique<cmaj::Patch>();
-            patch->createEngine = [] { return cmaj::Engine::create(); };
+            patch->createEngine = []
+            {
+               #if defined(COSIMO_SHARED_STATE_AOT)
+                return cmaj::createEngineForGeneratedCppProgram<ObservedSharedStateDSP>();
+               #else
+                return cmaj::Engine::create();
+               #endif
+            };
             cmaj::enableQuickJSPatchWorker (*patch);
             patch->handleOutputEvent = [] (auto, auto, auto) {};
             patch->statusChanged = [this] (const cmaj::Patch::Status& status)
@@ -183,7 +215,7 @@ struct Fixture
 
 Value shape (bool descending)
 {
-    return choc::json::create ("format", "cosimo.mseg.shape", "version", 1, "name", "MSEG 1", "globalSmooth", false,
+    return choc::json::create ("format", "mseg.shape", "version", 1, "name", "MSEG 1", "globalSmooth", false,
         "points", choc::value::createArray (2, [&] (uint32_t index)
         {
             return choc::json::create ("x", static_cast<int32_t> (index),
@@ -195,7 +227,7 @@ bool matchesShape (const View& value, bool descending)
 {
     if (! value.isObject()) return false;
     const auto points = value["points"];
-    return value["format"].toString() == "cosimo.mseg.shape" && value["version"].getWithDefault<int> (0) == 1
+    return value["format"].toString() == "mseg.shape" && value["version"].getWithDefault<int> (0) == 1
         && value["name"].toString() == "MSEG 1" && value["globalSmooth"].isBool() && ! value["globalSmooth"].get<bool>()
         && points.isArray() && points.size() == 2
         && points[0]["x"].getWithDefault<double> (-1) == 0 && points[1]["x"].getWithDefault<double> (-1) == 1
@@ -257,6 +289,36 @@ Value checkpoint (Fixture& fixture, const char* name, bool descending, float gai
     });
 }
 
+Value settingsCheckpoint (Fixture& fixture, const char* name, float amount, bool enabled, bool warm)
+{
+    fixture.waitFor ([&]
+    {
+        const auto state = fixture.view->state();
+        const auto field = state["fields"]["settings"];
+        const auto value = field["value"];
+        const bool editableMatches = value["amount"].getWithDefault<float> (-1) == amount
+            && value["enabled"].isBool() && value["enabled"].get<bool>() == enabled
+            && value["mode"].toString() == (warm ? "warm" : "clean")
+            && field["application"]["kind"].toString() == "acknowledged";
+       #if defined(COSIMO_SHARED_STATE_AOT)
+        return editableMatches && settingsReadCount > 0 && observedSettings.amount == amount
+            && observedSettings.enabled == enabled
+            && observedSettings.mode == (warm ? decltype(observedSettings.mode)::warm : decltype(observedSettings.mode)::clean);
+       #else
+        return editableMatches;
+       #endif
+    }, "generated native setting did not reach its declared application and reader");
+    return fixture.onLoop ([&]
+    {
+        auto result = choc::json::create ("name", name, "field", fixture.view->state()["fields"]["settings"]);
+       #if defined(COSIMO_SHARED_STATE_AOT)
+        result.addMember ("compiledNativeValue", choc::json::create ("amount", observedSettings.amount,
+            "enabled", observedSettings.enabled, "mode", observedSettings.mode == decltype(observedSettings.mode)::warm ? "warm" : "clean"));
+       #endif
+        return result;
+    });
+}
+
 void exercise (Fixture& fixture, const char* manifest)
 {
     auto checkpoints = choc::value::createEmptyArray();
@@ -307,8 +369,21 @@ void exercise (Fixture& fixture, const char* manifest)
               != reopened["state"]["fields"]["shape"]["application"]["engineSession"].toString(),
              "Performer reset reused old application evidence");
     checkpoints.addArrayElement (reset);
+    auto settings = choc::value::createEmptyArray();
+    settings.addArrayElement (settingsCheckpoint (fixture, "settings-hydrated-after-reset", 1, true, false));
+    fixture.edit ("settings", choc::json::create ("amount", 1.5f, "enabled", false, "mode", "warm"));
+    settings.addArrayElement (settingsCheckpoint (fixture, "settings-edited", 1.5f, false, true));
+    fixture.command (choc::json::create ("kind", "undo"));
+    settings.addArrayElement (settingsCheckpoint (fixture, "settings-undone", 1, true, false));
+    fixture.command (choc::json::create ("kind", "redo"));
+    settings.addArrayElement (settingsCheckpoint (fixture, "settings-redone", 1.5f, false, true));
+   #if defined(COSIMO_SHARED_STATE_AOT)
+    const char* renderer = "actual compiled native Cmajor";
+   #else
+    const char* renderer = "actual native Cmajor JIT";
+   #endif
     std::cout << "RESULT " << choc::json::toString (choc::json::create ("checkpoints", checkpoints,
-        "verifiedSamples", 9 * 2054, "worker", "actual generated QuickJS", "renderer", "actual native Cmajor JIT")) << '\n';
+        "verifiedSamples", 9 * 2054, "worker", "actual generated QuickJS", "renderer", renderer, "settings", settings)) << '\n';
 }
 }
 

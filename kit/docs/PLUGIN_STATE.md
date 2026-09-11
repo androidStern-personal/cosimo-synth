@@ -1,242 +1,103 @@
-# Shared plugin state
+# Plugin state
 
-This opt-in API keeps editable values and Undo history alive when the plugin
-window closes. React controls use the same API for host parameters and structured
-values. The framework builds and owns the state worker.
+Declare a value once. The kit owns saving, shared Undo, GUI reconnection and delivery to the engine. Your component owns what the value means and how sound uses it.
 
-It requires the Cmajor `kit_state` channel extension in both the native wrapper
-and browser runtime. An older runtime cannot run it: startup reports failure
-instead of silently keeping a separate GUI-only state. The framework does not
-change how existing plugins work unless they opt in.
-
-## Author code
-
-Put a default-exported definition in `fx/<plugin>/state.ts`. Import the public
-API from `../../kit/index`:
+## Start here
 
 ```ts
-import { definePluginState, parameter, storedValue, eventValue } from "../../kit/index";
-import { curveCodec, initialCurve, renderCurve } from "./curve";
+// PLUGIN AUTHOR: fx/my_plugin/state.ts.
+// Imported as definitions; importing does not start a worker.
+import { definePluginState, parameter, storedValue, Mseg, nativeValue, Native } from "../../kit/index";
+import { panelCodec } from "./panel";
 
 export default definePluginState({
-    cutoff: parameter("cutoff"),
-    envelope: storedValue({
-        initial: initialCurve,
-        codec: curveCodec,
-        engine: eventValue("envelopeSamples", renderCurve),
+    gain: parameter("gain"),                 // Existing automatable DSP parameter.
+    envelope: Mseg.state(),                   // Editable curve + direct shared samples.
+    panel: storedValue({                      // Survives closing the GUI; not in presets.
+        codec: panelCodec, initial: "envelope", lifetime: "instance", history: false,
     }),
-});
-```
-
-`cutoff` and `envelopeSamples` must exist in the DSP. A parameter gets its current
-value, range, step and default from the host; the definition does not introduce
-another default. A stored field uses its definition key (`envelope` here) as its
-native storage key.
-
-The author supplies the domain codec and renderer. The codec has three methods:
-
-- `parse(unknown)` returns `{ kind: "ok", value }` or `{ kind: "error", message }`.
-  A successful value must be immutable and independent of the input.
-- `encode(value)` returns JSON suitable for saving and restoring that value.
-- `equals(left, right)` compares domain values, independent of object allocation.
-
-A missing saved value uses the declared initial value. Invalid saved data reports
-a failed field; it is not overwritten with a default.
-
-An explicit `setValue(validValue)` can repair an invalid stored field. The first
-valid value establishes a new baseline without adding an Undo entry for the
-invalid data; other fields' Undo and Redo entries remain intact. Concurrent repair
-requests cannot replace a baseline already accepted from another client. Normal
-editing and gesture grouping resume after that repair is accepted.
-
-The renderer receives the accepted value and returns the payload for the DSP
-event. It may return a promise and numeric typed arrays. It must not depend on
-React, DOM globals or a view remaining open. Preparation runs outside audio
-processing; the framework converts the payload and sends it through the selected
-engine binding. The event path is bounded by the native channel's JSON limits;
-it is not an arbitrary-size asset transport.
-
-If rendering depends on a host parameter, declare that dependency explicitly:
-
-```ts
-engine: eventValue("envelopeSamples", (curve, { parameters, signal }) =>
-    renderCurve(curve, parameters.rate, signal),
-    { dependencies: ["rate"] }),
-```
-
-`rate` is the key of a `parameter(...)` in the same definition. The renderer gets
-captured values for exactly those dependencies. Changes to the field or its
-declared dependencies, and project restores, supersede obsolete preparation.
-A renderer can use `signal.aborted` and `signal.onAbort(callback)` to stop work
-cooperatively. Late results cannot authorize another framework send after
-cancellation; cancellation cannot recall an event already sent to the engine.
-
-Set `"stateSource": "fx/<plugin>/state.ts"` in the plugin's `.plugin.json`.
-The normal build generates the worker. Do not also set `workerSource`.
-
-For a value that needs multiple packets and confirmation from the engine, use
-`preparedState` with `engineData`:
-
-```ts
-import { preparedState, engineData } from "../../kit/index";
-
-const envelope = preparedState({
-    schema: curveCodec,
-    initial: initialCurve,
-    prepare: renderPackedCurve,
-    engine: engineData({
-        endpoints: {
-            begin: "curveBegin", chunk: "curveChunk", commit: "curveCommit",
-            query: "curveQuery", receipt: "curveReceipt",
-        },
-        wordCapacity: 8192,
-        chunkCapacity: 256,
+    settings: nativeValue({                   // Typed values for your native C++ component.
+        codec: Native.record({
+            enabled: Native.boolean(),
+            amount: Native.number({ min: 0, max: 2 }),
+            mode: Native.choice(["clean", "warm"]),
+        }),
+        initial: { enabled: true, amount: 1, mode: "clean" },
     }),
-});
+}, { historyLimit: 100, memoryBudgetBytes: 64 * 1024 });
 ```
 
-`schema` is the same full codec described above. Editable curves are saved and
-recorded in history; `renderPackedCurve` returns a separate `Int32Array` or array
-of signed 32-bit words for the DSP. Preparation never creates a worker or sends
-messages. The named endpoints must be wired to a matching
-`kit::engine_data` receiver in the authored Cmajor processor. Its finite word and
-packet capacities must match this declaration. The receiver manages staging,
-activation and held readers; the component's DSP interprets the packed words.
-The framework does not infer a custom DSP layout from a JavaScript object.
-
-The stock sender owns chunking, reply correlation, cancellation and bounded
-recovery. A lost reply triggers a receiver query; a packet is replayed only when
-the query proves it made no progress. Success requires a real receiver report
-that the complete requested version is current. Capacity refusal preserves the
-current value and held readers. Unresolved delivery reports uncertainty; it does
-not assume that a possibly completed activation was rolled back.
-
-For a different protocol, supply a `PluginStateDelivery<Payload>` as `engine`.
-Its inert `create()` returns `apply(payload, context)` and `stop()`. The context
-allows sends to declared input endpoints, subscriptions to declared output
-endpoints, and cancellation. The generated worker constructs and owns this
-delivery automatically; authors do not compose a worker service. Output listeners
-and pending sends are released when the delivery finishes, is superseded, or
-the document is replaced. The default replacement policy supersedes old work;
-`replacement: "finish"` permits an already applying value to finish before the
-newest queued value in the same document. Reset and shutdown always cancel it.
-
-The view entry composes an ordinary React component:
+Set `"stateSource": "fx/my_plugin/state.ts"` in the plugin's `.plugin.json`.
+The normal `fx:build` creates the worker and named `PluginState.cmajor` / `PluginState.h` readers. Do not also declare `workerSource`. The memory budget is a shared ceiling, not a preallocation per field. [Shared data details](SHARED_DATA.md).
 
 ```tsx
-import { createStatefulPatchView, usePluginState, usePluginHistory } from "../../../kit/index";
+// PLUGIN AUTHOR: fx/my_plugin/view/source.tsx. Runs in the GUI.
+import { createStatefulPatchView, usePluginState, usePluginHistory, Mseg } from "../../../kit/index";
 import definition from "../state";
 
 function View() {
-    const cutoff = usePluginState(definition.cutoff);
+    const envelope = usePluginState(definition.envelope);
     const history = usePluginHistory();
-    if (cutoff.state.kind !== "ready") return <p>{cutoff.state.kind}</p>;
+    if (envelope.state.kind !== "ready") return <p>{envelope.state.kind}</p>;
 
     return <>
-        <input type="range"
-            min={cutoff.state.metadata?.min}
-            max={cutoff.state.metadata?.max}
-            step={(cutoff.state.metadata?.step ?? 0) > 0 ? cutoff.state.metadata?.step : "any"}
-            value={cutoff.state.value}
-            onPointerDown={() => { void cutoff.beginGesture(); }}
-            onChange={event => { void cutoff.setValue(Number(event.target.value)); }}
-            onPointerUp={() => { void cutoff.endGesture(); }}
-            onPointerCancel={() => { void cutoff.endGesture(); }} />
+        <Mseg.Editor value={envelope.state.value}
+            onGestureStart={() => { void envelope.beginGesture(); }}
+            onChange={value => { void envelope.setValue(value); }}
+            onGestureEnd={() => { void envelope.endGesture(); }} />
         <button disabled={!history.canUndo} onClick={() => { void history.undo(); }}>Undo</button>
+        <button disabled={!history.canRedo} onClick={() => { void history.redo(); }}>Redo</button>
+        {envelope.error && <p>{envelope.error.message}</p>}
+        {envelope.retry && <button onClick={() => { void envelope.retry?.(); }}>Retry</button>}
     </>;
 }
-
 export default createStatefulPatchView({ definition, View });
 ```
 
-Use the same hook with `definition.envelope` and pass its value and edit calls to
-your curve editor. Control unmount ends its gesture; window removal releases the
-GUI client. Reopening attaches a fresh client to the surviving state owner.
+The wrapper reconnects the GUI automatically. Opening the window does not recreate the state or reinstall its audio data. `Mseg.Editor` edits one curve; it does not require a drawer or A/B morphing. `Mseg.Surface` supplies geometry and appearance with underlay/overlay slots for a composed editor.
 
-## What an edit means
+## Values, errors and Undo
 
-The control draws its draft immediately. `setValue` resolves with acceptance,
-rejection, or an interruption that says whether acceptance remains unknown.
-Acceptance does not mean audio has necessarily changed. `state.pending` means
-this view still has edits awaiting acceptance. `state.application` separately
-reports preparation, delivery or failure.
+| API | Meaning |
+|---|---|
+| `control.state` | Connecting, ready, failed or closed. Ready includes the editable `value`. |
+| `control.setValue(value)` | Draws immediately, then resolves to accepted, rejected or interrupted. An old render's setter cannot overwrite a newer accepted edit. |
+| `control.state.pending` | This GUI is waiting for its edit to be accepted. |
+| `control.state.application` | Engine progress. `acknowledged` means the engine confirmed this version; `sent` means only the stated handoff is proven. |
+| `control.error` | This field's readiness, saving or application error; otherwise `null`. |
+| `control.retry` | Retry the captured failure; otherwise `null`. Does not create another edit or Undo entry, or replay a superseded value. |
+| `beginGesture` / `endGesture` | Many drag updates, one Undo entry. A net-zero drag adds none. |
+| `usePluginHistory()` | Shared latest-first Undo/Redo. Values are restored through the same engine path as edits. |
 
-An accepted `setValue` result includes `changed`: whether the accepted value
-actually changed after validation and parameter rounding. A valid no-op returns
-`false`. This describes the edit, independently of engine delivery.
+A codec has `parse(unknown)`, `encode(value)` and `equals(a,b)`. Parsing returns `{kind:"ok",value}` or `{kind:"error",message}`. Accepted values must be immutable and independent of the input. Invalid saved data stays visibly failed until a valid edit repairs it; it is not silently replaced by a default.
 
-The built-in event binding reports `sent` with
-`proof: "native-publication-processed"`. That means the native channel processed
-the publication, not that the DSP sent an acknowledgement. An adapter may report
-`acknowledged` only when its actual engine protocol provides that evidence.
-Incoming host parameter values start as `unconfirmed`; an observation is not
-invented proof of a particular GUI write.
+Return `preparationFailure("Could not load this file")` for an expected resource failure. The failed field and its Undo remain usable; unrelated fields continue. Unexpected throws represent programming defects and close the state service. Source files needed by future Undo remain the author's responsibility.
 
-## Shared editing rules
+Project state is saved and participates in history by default. `lifetime:"instance"` retains a value through GUI closure and project loads but excludes it from serialized project state; a new plugin instance starts from its default. `history:false` excludes a field from history without destroying unrelated Redo. Ephemeral hover/selection state can remain ordinary React state.
 
-- A gesture groups its accepted changes into one Undo entry. Net-zero gestures
-  do not add entries. History retains the latest 100 completed entries.
-- An active gesture protects that field from another GUI or agent writer.
-  Other fields remain editable. Host automation retains host authority.
-- GUI edits and edits from another framework client share Undo history. An agent
-  integration can use that same client protocol; this module does not itself
-  install an MCP server. Automation updates the current value without making
-  Undo entries or echoing another write to the host.
-- Undo and Redo are unavailable while any gesture is active.
-- A changed one-shot edit or a nonempty gesture end returns `historyEntry`.
-  Keep that opaque reference when a control should undo only its own last edit.
-  `history.undo(entry)` and `history.redo(entry)` act only if that entry is still
-  the corresponding history head; otherwise they return `stale-history` without
-  changing anything. `history.undoEntry` and `history.redoEntry` expose those
-  heads for button availability, alongside `canUndo` and `canRedo`. References
-  expire when the document is replaced. Do not construct references or infer
-  ordering from them. Calling Undo/Redo without a reference retains global LIFO
-  behavior; this API does not support selectively undoing an older entry.
-- `history.canUndoEntry(entry)` and `history.canRedoEntry(entry)` test whether a
-  remembered entry is currently eligible. Use these for an editor's button state;
-  comparing opaque objects with `===` is not an eligibility test. Guarded
-  `undo(entry)` and `redo(entry)` still recheck eligibility when the command runs.
-- Control/window removal through the view wrapper, or native client detachment,
-  ends that client's gestures. A full project restore replaces the document,
-  clears history and rejects old commands and delivery completions.
-- A legacy direct write to an owned stored key also replaces the document and
-  clears history. If that write makes stored data invalid, the previous valid
-  value may remain visible, but the field reports failure and cannot send that
-  display value to the engine until explicitly repaired. A full project restore
-  does not carry display values over from the previous project.
-- A lost connection never automatically replays an edit whose acceptance is
-  unknown. Callers receive that uncertainty rather than a fabricated rejection.
+## Concurrent editing
 
-## Framework responsibilities
+The hook captures the accepted field version behind each setter. Stale edits return a conflict. Queued updates from the same active gesture remain valid; another GUI or agent cannot write that field during the gesture. Other fields remain usable. Host automation retains authority and is not recorded as a user edit. Undo/Redo restore the recorded user values, including when automation subsequently changed them.
 
-The definition and React hooks are the author-facing surface. Internally, the
-session owns accepted values, history and conflict rules. The GUI client owns
-temporary drafts and correlates replies. Each uses Jotai for local reactivity.
-The Cmajor adapter carries commands and snapshots between those owners. Native
-views and the worker have separate JavaScript environments; the browser currently
-hosts the worker facade in the main browser realm, separately from the AudioWorklet.
-Engine bindings own preparation, cancellation and delivery evidence.
-The view wrapper and generated worker own startup and cleanup.
+Undo/Redo are unavailable during gestures that participate in history; calls return a busy rejection. A full project replacement clears history, rejects old commands and cancels old delivery. A legacy direct write to an owned saved-state key also replaces the project document; use the state API for normal editing. Unknown acceptance after a lost connection is reported, never automatically replayed.
 
-For a framework integration with an existing engine protocol,
-`createCmajorPluginStateService` also accepts `bindings`. Each factory declares
-one stored field, its scalar dependencies, and its permitted event/host-effect
-names, then returns `replace`, `cancel` and `stop`. The factory receives a scoped
-publisher and target-status callback. It owns its engine protocol; the framework
-owns accepted state, history, native request correlation and document lifetime.
-Factories construct inert ports and acquire external resources on first replace.
+The optional opaque `historyEntry` in an edit result supports a component's guarded Undo button: `history.canUndoEntry(entry)` and `history.undo(entry)` only target the current history head. Unguarded `history.undo()` always uses global latest-first order.
 
-The custom publisher calls the connection synchronously and returns a separate
-native-completion promise. Replaced documents and shutdown cancel pending work.
-A raw send exception returns uncertain transport failure so a protocol with its
-own serial/probe recovery can resolve it; it does not claim that the event was
-rejected or automatically replay it. A custom computation defect explicitly
-closes the service. This advanced recovery policy does not change `eventValue`.
-Declared host effects require a corresponding host handler; an unavailable
-handler is a visible delivery failure, without discarding accepted state or Undo.
-Neither a native receipt nor a successful host callback proves audio application.
+## Framework building blocks
 
-`kit/package.json` marks unused library modules as removable when bundling the
-worker from the public entry point. Actual preview/dev-tool entry effects and CSS
-remain marked as side effects. A new module that performs work at import time
-must preserve that behavior explicitly, or move it into an owned startup function.
+| Module | Where it runs | Responsibility |
+|---|---|---|
+| Definition + `usePluginState` | Author declaration / GUI | Typed fields, immediate visual edits, read/error/retry API. |
+| State session + Jotai | Persistent plugin worker | Accepted values, gesture ownership, stale-edit checks; installs state and history together. |
+| `UndoHistory<Entry>` | Any JavaScript environment | Independent immutable bounded Undo/Redo bookkeeping; no Cmajor, React or delivery knowledge. |
+| Engine binding | Persistent plugin worker | Preparation, cancellation and current-version delivery status. |
+| Shared-data port + native/browser store | Control side and audio reader | Final allocation, publication, block adoption and safe reclamation. |
+| Generated readers / component DSP | Audio processing | Named access; component interprets the layout and produces sound. |
+
+An edit updates the session and history together. The engine binding prepares that accepted value. The store exposes it at the next audio block, then reports adoption. Jotai updates the GUI as acceptance and engine status arrive. Closing the GUI disposes only its client.
+
+For an existing specialized protocol, `preparedState({codec,initial,prepare,engine})` also accepts a `PluginStateDelivery<Payload>`. It declares permitted event/output endpoints, saved keys, host effects and shared-data inputs. Its `create(document)` factory is owned by the generated worker. It returns `apply(payload,delivery)` and `stop()`; no author-created worker is needed. The document context supplies bounded `send`, `listen`, `readStored`, `subscribeStored`, direct `prepareData`, and status/failure reporting. These resources survive one successful application and are revoked on project replacement or shutdown. Per-application listeners and cancellation end with that application. `replacement:"finish"` supports a protocol that must finish its current application before sending the newest queued value.
+
+`eventValue` remains useful for ordinary small DSP events. `engineData` retains the older acknowledged packet protocol for a component that already uses it; it is not needed for new shared-memory readers. Custom host effects require a matching registered native handler; the framework cannot invent the handler's product behavior.
+
+The current worker owns state independently of the GUI, but is not a promise of a dedicated CPU thread. Native uses the Cmajor message loop; browser control code runs outside the AudioWorklet. Heavy preparation should account for that existing execution model.

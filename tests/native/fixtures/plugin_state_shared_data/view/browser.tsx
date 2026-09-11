@@ -1,7 +1,6 @@
 // PLUGIN GUI: only the public state controls and shared Undo are used here.
-import { createStatefulPatchView, usePluginState, usePluginHistory } from "../../../kit/index";
+import { createStatefulPatchView, usePluginState, usePluginHistory, Mseg } from "../../../kit/index";
 import definition from "../state";
-import { moveMsegPoint } from "../../../ui/shared/mseg";
 // Test inspection uses the framework client as a second, independent GUI.
 import { createCmajorPluginStateClient } from "../../../kit/ui/plugin-state-cmajor";
 export const outcomes: unknown[] = [];
@@ -12,9 +11,10 @@ function View() {
     const gain = usePluginState(definition.gain);
     const history = usePluginHistory();
     const edit = (y: number) => {
-        if (shape.state.kind === "ready") record(shape.setValue(moveMsegPoint(shape.state.value, 1, 1, y)));
+        if (shape.state.kind === "ready") record(shape.setValue(Mseg.movePoint(shape.state.value, 1, 1, y)));
     };
     return <>
+        {shape.state.kind === "ready" ? <Mseg.Editor value={shape.state.value} onChange={value => record(shape.setValue(value))} onGestureStart={() => record(shape.beginGesture())} onGestureEnd={() => record(shape.endGesture())}/> : null}
         <output data-testid="shape">{JSON.stringify(shape.state)}</output>
         <output data-testid="gain">{JSON.stringify(gain.state)}</output>
         <output data-testid="history">{JSON.stringify({ canUndo: history.canUndo, canRedo: history.canRedo })}</output>

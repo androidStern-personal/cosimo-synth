@@ -28,7 +28,8 @@ export async function waitForModulation(predicate, describe = () => "") {
 
 /** Only native saved storage is substituted. The real channel/service/client
  * hydrate, validate, accept, publish, restore and record every edit. No engine
- * binding is attached: these retain the GUI module's no-direct-upload oracle. */
+ * receiver is supplied: the declared engine reports unavailable while these
+ * retain the GUI module's no-direct-upload oracle. */
 export async function createModulationFixture(t, connection) {
     const [{ createMockPluginStateHost }, { createModulationStateClient }, { createCmajorPluginStateClient }, { synthPluginState }] = await modules;
     const defects = [];

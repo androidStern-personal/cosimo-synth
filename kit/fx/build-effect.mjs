@@ -4,6 +4,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import react from "@vitejs/plugin-react";
 import { build } from "vite";
+import { buildPluginState } from "./build-plugin-state.mjs";
 
 const scriptDir = path.dirname(fileURLToPath(import.meta.url));
 export const repoRoot = path.resolve(scriptDir, "../..");
@@ -1204,6 +1205,14 @@ export async function buildPlugin(pluginName, { environment = process.env, strip
     await rm(runtimeRoot, { recursive: true, force: true });
     await mkdir(runtimeViewRoot, { recursive: true });
 
+    if (plugin.stateSource) {
+        const state = await buildPluginState({ source: plugin.stateSource, runtimeRoot, repoRoot });
+        if (state.source.length) {
+            if (manifest.sharedData) throw new Error("State declarations own sharedData configuration; remove the manual manifest setting.");
+            manifest.source = [...(Array.isArray(manifest.source) ? manifest.source : [manifest.source]), ...state.source];
+            manifest.sharedData = state.sharedData;
+        }
+    }
     await writeRuntimePatchManifest(manifest, plugin, runtimeRoot, patchPath, {
         stripDevModule,
     });

@@ -1,69 +1,54 @@
-# Shared-data runtime verification
+# State and shared-data verification
 
-Work lives on `codex/shared-data-runtime` in the kit repo and authored Cmajor
-checkout. The production pin and installed plugins are unchanged. This is a
-native-JIT and Chrome integration slice, not a complete Cosimo migration or a
-multisampler performance qualification.
+Current source is on `codex/shared-data-runtime`. The kit pins Cmajor
+`7816a2984c98c7d0bed03954de023d3a8ead29a5`, including the generated embedded
+assets. Installed plugins and published release artifacts are separate from this
+source qualification.
 
-Verified Cmajor implementation: `ebd03cb` plus the embedded-archive correction
-`69a5847`. Existing state regression: **194/194**;
-new JavaScript module tests: **17/17**; compiler/archive tests: **4/4**; TypeScript
-typecheck passed. Native integration checked **18,486 samples across 9 checkpoints**.
-Chrome verified public MSEG editing/Undo and nine disposed connections sharing one
-AudioContext across two compiled memory layouts. Main-memory weak references were
-collected and the worklet acknowledged releasing its runtime; this does not claim
-immediate all-process backing-store reclamation.
+## Evidence
 
-| Boundary | Failure / invariant | Test |
+| Boundary | What is checked | Evidence |
 |---|---|---|
-| Native storage | Concurrent replacement, shared resource accounting, delayed retirement, no audio allocation/free/lock, stop/reset | `tests/native/SharedDataStoreTests.cpp` (normal, ASan/UBSan, TSan) |
-| Native worker protocol | Old scopes, incomplete/invalid chunks, budget exhaustion, missing ready reply cleanup, cancellation, exact adoption reply | `tests/native/PatchSharedDataProtocolTests.cpp` |
-| Native JIT externals | Real read/size external resolution, additional external provider preserved, bounded reads | `tests/native/PatchSharedDataNativeProbe.cpp` |
-| Compiler | Stock and shared output, supplied compiled modules, malformed imports, growth, reset/snapshot isolation | Cmajor `tests/shared_memory_codegen` |
-| Browser storage | Actual Worker/Wasm reads, shared allocations, reuse, growth, bounds, stale tickets, exact cancellation, empty clear | `tests/test_shared_data_memory.mjs`, `tests/test_shared_data_concurrent.mjs` |
-| Framework port | Real browser bridge, lost ready/written/applied replies, wrong acknowledgements, cleanup, subsequent recovery | `kit/tests/test_plugin_state_shared_data.mjs` |
-| Browser connection | Actual AudioWorklet startup/audio, worker-only access, suspended disposal | `tests/test_shared_data_worklet_browser.mjs` |
-| Public state + native JIT | Generated QuickJS worker, real Cosimo MSEG renderer, every sample against independent oracle, state/Undo/Redo/reopen/reset | `tests/native/PluginStateSharedDataProbe.cpp` |
-| Public state + Chrome | Generated worker, public React hooks, actual Cmajor audio, editable-state persistence, shared Undo/Redo/reopen/reset | `tests/test_shared_mseg_browser.mjs` |
+| Public state/history | Stale setters, own queued gestures, automation, exact Undo/Redo, instance-only state, field errors and guarded retry | `npm run test:plugin-state` (205 assertions at extraction) |
+| Direct preparation + real shared store | Old audio survives partial failed writes, cancellation through adoption, budget refusal/reuse, per-input receipts, retry without extra history | `tests/test_plugin_state_direct_data.mjs`, `tests/test_shared_data_preparation.mjs` |
+| Storage/native readers | Concurrency, complete block snapshots, bounded reads, reclamation and invalid native settings under sanitizers | `tests/native/PatchSharedDataProtocolTests.cpp`, `tests/native/NativeValueTests.cpp`, shared-store tests |
+| Normal author build | Named resources, generated nested C++ types, record defaults/validation, keyword/type collisions | `tests/test_native_value_codegen.mjs` (native ASan/UBSan, generated Wasm in Node and Chromium) |
+| Public API in real native DSP | Generated QuickJS worker; 18,486 MSEG samples across nine state/history/reopen/restore checkpoints in JIT and compiled native; generated C++ settings getter during audio processing | `tests/native/PluginStateSharedDataProbe.cpp` |
+| Public API in browser audio | Generated worker, React controls, actual Cmajor AudioWorklet audio, saving, Undo/Redo, reopen and project replacement | `tests/test_shared_mseg_browser.mjs` |
+| Bundled editor and DSP | Add/move/bend/delete/cancel; curve timing/interpolation, held replacement, looping and note-off | `kit/tests/test_mseg_editor_browser.mjs`, `tests/test_mseg_dsp.mjs` |
+| Cosimo integration | Exact amount-only delta, persistent runtime refresh, obsolete replies, headless saved-state restoration and bounded recovery | `tests/test_synth_modulation_binding*.mjs`, `tests/test_wavetable_worker.mjs` |
+| Actual Cosimo audio/performance | Shared wavetable loading and held-note MSEG updates; six byte-identical JIT/AOT/Wasm audio comparisons against `2bcff19d`; CPU −0.67% to +0.99%, unchanged DSP memory | `docs/benchmarks/cosimo-shared-mseg/extraction-results.json` |
 
-The last two tests use a small test plugin with Cosimo's actual MSEG renderer.
-They do not replace Cosimo's modulation bank, articulation delivery or wavetable
-engine. Initial defaults can have `persistence.kind = "not-written"`; real edits
-must be persisted and independently verified. Tests preserve that distinction.
+The control tests explicitly model native saved-state storage and domain DSP ACKs.
+They do not claim that recording a send proves audio processing. Native and browser
+DSP runs provide that evidence separately. Application-signal and stale-reply
+regressions were independently reviewed; removing the stale-observer guard was
+also shown to make its regression fail.
 
 ## Run
 
-Set `COSIMO_PLUGIN_STATE_CMAJOR_SOURCE` to the authored Cmajor checkout containing
-this change. Native scripts also require a compatible Cmajor JIT library path.
-No installed plugin, default build directory or globally selected toolchain is
-changed by these probes.
+Set `COSIMO_PLUGIN_STATE_CMAJOR_SOURCE` to the authored/pinned Cmajor source.
+The existing isolated compiler is selected with `CMAJOR_SHARED_GENERATOR`.
 
 ```sh
-npm run test:shared-data:modules
-npm run test:shared-data:browser
 npm run test:plugin-state
+npm run test:shared-data
+npm run test:shared-data:browser
 npm run typecheck
 node tests/helpers/build_shared_mseg_fixture.mjs
-# Use the manifest path printed above:
+# Use the generated manifest printed by the build; this is the real author build.
 tests/native/run_plugin_state_shared_data_probe.sh "$COSIMO_PLUGIN_STATE_CMAJOR_SOURCE" "$CMAJOR_RUNTIME_LIBRARY" "$GENERATED_MANIFEST"
+tests/native/run_plugin_state_shared_data_probe.sh "$COSIMO_PLUGIN_STATE_CMAJOR_SOURCE" "$CMAJOR_RUNTIME_LIBRARY" "$GENERATED_MANIFEST" aot
 ```
 
-The browser tests use `CMAJOR_SHARED_GENERATOR`, defaulting to the isolated
-`build/shared_data_codegen/source/shared_memory_generator` executable built from
-Cmajor's `tests/shared_memory_codegen` CMake project. This calls the real compiler
-API; the tests do not rewrite generated code or substitute a fake DSP.
+The legacy packet-port test remains intact as
+`kit/tests/plugin_state_shared_data_native.test.mjs` and runs in the explicit
+platform gate. It needs Cmajor source, so it is excluded from the customer's
+ordinary unit-test discovery, using the existing native-gate filename convention.
+No assertions were removed or skipped to make customer tests pass.
 
-The original packet-delivery tests are retained unchanged. They cover an existing
-adapter, and passing them does not establish the new shared-data path. Existing
-state tests must run against the authored Cmajor source: the older production pin
-also lacks earlier state-channel changes that were already on the state branch.
-
-## Limits to keep explicit
-
-- The public buffer ownership rule is contractual: preparation must not keep
-  mutating its returned buffer. JavaScript cannot freeze typed-array elements.
-- Browser storage grows and reuses space; it cannot shrink a live Wasm memory.
-- The reader adopts versions at block boundaries. Per-note historical resources
-  and arbitrary packed integer layouts are not supplied by this stock adapter.
-- Native dedicated/AOT plugins, Safari, Firefox, mobile, large multisamplers and
-  production audio deadline qualification remain separate work.
+The final storage writer is synchronous and may not retain its writable view.
+Browser memory retains its high-water allocation until disposal. Shared block
+reads do not imply per-note historical resource retention, and source assets for
+Undo remain the author's responsibility. These are source/runtime checks, not an
+installed DAW, physical-device, listening or release qualification.

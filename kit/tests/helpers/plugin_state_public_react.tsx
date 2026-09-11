@@ -5,11 +5,12 @@ import { createPluginStateClient, type PluginStateClientEvent } from "../../ui/p
 import { createPluginStateSession } from "../../ui/plugin-state-session";
 import type { EngineApplication, EngineTarget } from "../../ui/plugin-state-engine";
 
-const definition = definePluginState({ gain: storedValue({ initial: 1, codec: {
+const numberCodec = {
     parse(value: unknown) { return typeof value === "number" && Number.isFinite(value)
         ? { kind: "ok" as const, value } : { kind: "error" as const, message: "Expected a number." }; },
     encode: (value: number) => value, equals: (left: number, right: number) => left === right,
-} }) });
+};
+const definition = definePluginState({ gain: storedValue({ initial: 1, codec: numberCodec }), other: storedValue({ initial: 0, codec: numberCodec }) });
 
 /** Actual owner/client/history; only engine status is supplied at its external port. */
 export async function mount(element: HTMLElement) {
@@ -19,6 +20,9 @@ export async function mount(element: HTMLElement) {
     let target: EngineTarget | undefined;
     let latest: { control: ReturnType<typeof usePluginState<typeof definition.gain>>; history: ReturnType<typeof usePluginHistory> } | undefined;
     const jobs: Promise<unknown>[] = [];
+    const held: (() => Promise<unknown>)[] = [];
+    let hold = false;
+    let otherSequence = 0;
     const owner = createPluginStateSession(definition, {
         bindings: [{ key: "gain", dependencies: [], replace(_input, next) { target = next; }, cancel() {}, async stop() {} }],
         native: { publish() {}, close() {}, update(state, receipt) {
@@ -32,7 +36,10 @@ export async function mount(element: HTMLElement) {
             if (message.kind === "attach") {
                 const state = owner.getSnapshot();
                 receive?.({ kind: "attached", request: message.request, scope, client: 8, revision: state.revision, state });
-            } else jobs.push(owner.dispatch({ kind: "command", address: { ...message.scope, client: message.client, sequence: message.sequence }, command: message.command }));
+            } else {
+                const send = () => owner.dispatch({ kind: "command", address: { ...message.scope, client: message.client, sequence: message.sequence }, command: message.command });
+                if (hold) held.push(send); else jobs.push(send());
+            }
         },
     }, onDefect: error => defects.push(error) });
     function Controls() {
@@ -45,6 +52,12 @@ export async function mount(element: HTMLElement) {
     root.render(<PluginStateProvider definition={definition} client={client}><Controls /></PluginStateProvider>);
     return {
         current() { if (!latest) throw new Error("Control has not mounted."); return latest; },
+        holdCommands() { hold = true; },
+        async releaseCommands() { hold = false; for (const send of held.splice(0)) await send(); },
+        async competingEdit(value: number, key = "gain") {
+            return owner.dispatch({ kind: "command", address: { ...scope, client: 9, sequence: ++otherSequence }, command: { kind: "edit", key, value } });
+        },
+        accepted() { return owner.getSnapshot(); },
         async status(status: EngineApplication) {
             if (!target) throw new Error("The actual owner has not requested an engine target.");
             await owner.dispatch({ kind: "engine", target, status });

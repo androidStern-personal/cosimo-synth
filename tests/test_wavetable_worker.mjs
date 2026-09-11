@@ -4,12 +4,15 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
 import { stageCmajorWebRuntime } from "../kit/fx/vite.shared.mjs";
-import { createPluginStateTestPlatform } from "./helpers/plugin_state_test_platform.mjs";
 
-const stateRuntime = stageCmajorWebRuntime(path.resolve(import.meta.dirname, ".."), {
+const stateRuntime = process.env.COSIMO_PLUGIN_STATE_CMAJOR_SOURCE
+    ? path.join(process.env.COSIMO_PLUGIN_STATE_CMAJOR_SOURCE, "javascript/cmaj_api")
+    : stageCmajorWebRuntime(path.resolve(import.meta.dirname, ".."), {
     buildDirectory: path.resolve(import.meta.dirname, "../build/cmajor_web_runtime-worker-state-tests"),
 });
 const { PluginStateChannel } = await import(pathToFileURL(path.join(stateRuntime, "cmaj-plugin-state-channel.js")));
+const { createSharedDataMemory, createSharedDataPreparation, createSharedDataReader } = await import(
+    pathToFileURL(path.join(stateRuntime, "cmaj-shared-data.js")));
 
 import runWavetableWorker, {
     WAVETABLE_RUNTIME_STATE_SYNC_SERIAL,
@@ -574,13 +577,17 @@ class FakePatchConnection {
 
 class FakeWorkerPatchConnection {
     constructor(storedState = {}) {
-        // This existing worker test now also hosts the real state service. Only
-        // its external native parameter storage is simulated here.
-        this.statePlatform = createPluginStateTestPlatform(PluginStateChannel, { parameters: [
+        // Real state channel and shared-memory producer/reader. Only the native
+        // parameter store and DSP's domain ACK/frontier are modeled here.
+        this.parameters = [
             { endpoint: "playMode", value: 0, min: 0, max: 2, step: 1, defaultValue: 0 },
             { endpoint: "glideTime", value: 0.15, min: 0, max: 2, step: 0, defaultValue: 0.15 },
             { endpoint: "globalTune", value: 0, min: -24, max: 24, step: 0, defaultValue: 0 },
-        ] });
+        ];
+        this.stateListeners = new Set();
+        this.dataListeners = new Set();
+        this.preparedCurves = [];
+        this.closed = false;
         this.storedState = { ...storedState };
         this.endpointListeners = new Map();
         this.storedStateListeners = new Set();
@@ -590,11 +597,74 @@ class FakeWorkerPatchConnection {
         this.acceptedModulationSerial = 0;
         this.acceptedArticulationSerial = 0;
         this.rejectionsRemainingByEndpoint = new Map();
+        this.channel = new PluginStateChannel(this, async request => {
+            if (request.kind === "open" || request.kind === "restore") {
+                this.scope = request.scope;
+                if (request.kind === "restore") this.preparation.revoke();
+                return { parameters: this.parameters };
+            }
+            if (request.kind === "read") return { value: this.parameters.find(parameter => parameter.endpoint === request.endpoint)?.value };
+            if (request.kind === "effect") {
+                assert.equal(request.operation.kind, "event");
+                this.sendEventOrValue(request.operation.endpoint, request.operation.value, undefined, 0);
+                return {};
+            }
+            if (request.kind === "close") return {};
+            assert.fail(`Unexpected headless native request ${request.kind}`);
+        }, keys => Object.fromEntries(keys.filter(key => Object.hasOwn(this.storedState, key)).map(key => [key, this.storedState[key]])),
+        (key, value) => { this.storedState[key] = value; this.storedWrites.push({ key, value }); }, () => new Set(),
+        (name, value) => name === "cosimo.articulation-trigger-config" && typeof value === "string");
+        this.memory = new WebAssembly.Memory({ initial: 4, maximum: 16, shared: true });
+        this.storage = createSharedDataMemory({ memory: this.memory, programBytes: 65536, inputCount: 9, maxRetainedBytes: 131072 });
+        this.reader = createSharedDataReader(this.storage.readerConfiguration);
+        this.preparation = createSharedDataPreparation(this.storage, 9, {
+            scope: () => this.scope,
+            reply: body => { for (const listener of [...this.dataListeners]) listener(body); },
+        });
+        this.sharedData = {
+            reserve: (input, byteLength) => this.preparation.api.reserve(input, byteLength),
+            cancel: id => this.preparation.api.cancel(id),
+            commit: async id => {
+                const receipt = await this.preparation.api.commit(id);
+                queueMicrotask(() => this.renderSharedBlock());
+                return receipt;
+            },
+        };
     }
 
-    addEventListener(type, listener) { this.statePlatform.worker.addEventListener(type, listener); }
-    removeEventListener(type, listener) { this.statePlatform.worker.removeEventListener(type, listener); }
-    sendMessageToServer(envelope) { this.statePlatform.worker.sendMessageToServer(envelope); }
+    renderSharedBlock() {
+        if (this.closed) return;
+        this.reader.beginBlock();
+        for (let input = 3; input < 9; input++) {
+            const size = this.reader.size(input);
+            if (size === 0) continue;
+            const address = this.reader.address(input);
+            const words = new Int32Array(this.memory.buffer, address, 4);
+            assert.equal(words[0], 0x4d534547); assert.equal(words[1], 0);
+            assert.equal(size, (words[3] + 4) * 4);
+            if (words[2] <= this.acceptedModulationSerial) continue;
+            assert.equal(words[2], this.acceptedModulationSerial + 1, "shared curve adoption preserves the ordered modulation frontier");
+            const samples = Array.from(new Float32Array(this.memory.buffer, address + 16, words[3]));
+            assert.ok(samples.every(Number.isFinite));
+            this.preparedCurves.push({ input, samples });
+            this.acceptedModulationSerial = words[2];
+            this.emitRuntimeInstallAck(0);
+        }
+        this.reader.endBlock();
+        this.preparation.drain();
+    }
+
+    close() {
+        this.closed = true;
+        this.channel.close(); this.preparation.stop(); this.storage.stop();
+        assert.equal(this.storage.retainedBytes, 0);
+        assert.equal(this.dataListeners.size, 0, "worker stop releases the actual direct-data listener");
+    }
+
+    addEventListener(type, listener) { (type === "kit_data" ? this.dataListeners : this.stateListeners).add(listener); }
+    removeEventListener(type, listener) { (type === "kit_data" ? this.dataListeners : this.stateListeners).delete(listener); }
+    deliverMessageFromServer(envelope) { for (const listener of [...this.stateListeners]) listener(envelope.message); }
+    sendMessageToServer(envelope) { assert.equal(envelope.type, "kit_state"); this.channel.receive(this, envelope.message); }
 
     addEndpointListener(endpointID, listener) {
         const listeners = this.endpointListeners.get(endpointID) ?? [];
@@ -631,10 +701,10 @@ class FakeWorkerPatchConnection {
     }
 
     emitStoredStateValue(key, value) {
-        this.storedState[key] = value;
-        for (const listener of this.storedStateListeners) {
-            listener({ key, value });
-        }
+        assert.equal(this.channel.replaceStoredValue(key, () => {
+            this.storedState[key] = value;
+            for (const listener of this.storedStateListeners) listener({ key, value });
+        }), true);
     }
 
     sendEventOrValue(endpointID, value, _rampFrames, timeoutMilliseconds) {
@@ -771,6 +841,9 @@ test("headless worker restore installs 101 stored mappings without opening an ed
         const programUpload = connection.sentEvents.find(({ endpointID }) => endpointID === "modulationProgram");
 
         assert.equal(programUpload.value.voiceRouteCount, 101);
+        assert.deepEqual(connection.preparedCurves.map(curve => curve.input), [3, 4, 5, 6, 7, 8]);
+        assert.equal(connection.sentEvents.some(({ endpointID }) => endpointID === "modulationMsegBuffer"), false,
+            "headless production restoration prepares curves directly, without sample events");
         assert.equal(new Set(programUpload.value.voiceRouteCells.slice(0, 101)).size, 101);
         assert.deepEqual(programUpload.value.voiceRouteCells.slice(0, 4), [0, 1, 2, 3]);
         assert.equal(programUpload.value.voiceRouteAmounts[100], 0.5);
@@ -797,6 +870,7 @@ test("headless worker restore installs 101 stored mappings without opening an ed
         assert.deepEqual(connection.storedWrites, []);
     } finally {
         await host.stop();
+        connection.close();
     }
 });
 
@@ -818,6 +892,7 @@ test("headless worker rejects malformed modulation state without installing defa
         );
     } finally {
         await malformedHost.stop();
+        malformedConnection.close();
     }
 
     const validState = createDefaultModulationState();
@@ -852,6 +927,7 @@ test("headless worker rejects malformed modulation state without installing defa
         assert.equal(installedPrograms().length, 1, "invalid live state retains the installed program");
     } finally {
         await host.stop();
+        connection.close();
     }
 });
 
@@ -899,6 +975,7 @@ test("a rejected modulation batch gets one guarded full-state recovery", async (
         assert.equal(connection.rejectionsRemainingByEndpoint.get("modulationProgram"), 0);
     } finally {
         await host.stop();
+        connection.close();
         console.error = originalConsoleError;
     }
 });
@@ -958,6 +1035,7 @@ test("a repeatedly rejected modulation image does not enter a recovery loop", as
         assert.equal(programs.at(-1).value.voiceRouteCells[0], 1);
     } finally {
         await host.stop();
+        connection.close();
         console.error = originalConsoleError;
     }
 });

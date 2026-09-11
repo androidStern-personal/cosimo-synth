@@ -1,7 +1,7 @@
 import { definePluginState, preparedState, engineData, type PluginStateCodec } from "../../kit/index";
 
 type Shape = { readonly base: number; readonly step: number };
-const schema: PluginStateCodec<Shape> = {
+const codec: PluginStateCodec<Shape> = {
     parse(value) {
         if (value === null || typeof value !== "object" || !("base" in value) || !("step" in value)
             || typeof value.base !== "number" || typeof value.step !== "number"

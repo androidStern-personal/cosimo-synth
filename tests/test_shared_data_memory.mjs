@@ -176,3 +176,28 @@ test('Wasm data reads reject invalid input, index and descriptor bounds without 
         descriptor.set(values);assert.equal(reader.read(0,0),0);assert.equal(reader.size(0),0);
     }
 });
+
+test('direct-byte Wasm readers expose word counts and never read past the allocation',()=>{
+    const memory=new WebAssembly.Memory({initial:1,maximum:2,shared:true});
+    const base=64,descriptor=new Uint32Array(memory.buffer,base,2);
+    const reader=new WebAssembly.Instance(readerModule,{env:{memory,
+        descriptorBase:new WebAssembly.Global({value:'i32',mutable:true},base),
+        inputCount:new WebAssembly.Global({value:'i32',mutable:true},1),
+    }}).exports;
+    descriptor.set([128,8]);new Float32Array(memory.buffer,128,3).set([0.25,0.75,123]);
+    assert.equal(reader.sizeBytes(0),2);
+    assert.equal(reader.byteSize(0),8);
+    assert.equal(reader.readBytes(0,1),0.75);
+    assert.equal(reader.readInt32Bytes(0,1),new Int32Array(memory.buffer,128,2)[1]);
+    for(const input of [-1,1,2147483647]) {
+        assert.equal(reader.readBytes(input,0),0);assert.equal(reader.readInt32Bytes(input,0),0);assert.equal(reader.sizeBytes(input),0);
+    }
+    for(const index of [-1,2,3,7,2147483647]) {
+        assert.equal(reader.readBytes(0,index),0);assert.equal(reader.readInt32Bytes(0,index),0);
+    }
+    for(const values of [[129,8],[65532,8],[128,7],[0xffffffff,4],[128,0xffffffff]]) {
+        descriptor.set(values);assert.equal(reader.readBytes(0,0),0);assert.equal(reader.readInt32Bytes(0,0),0);assert.equal(reader.sizeBytes(0),0);
+    }
+    descriptor.set([128,2]);
+    assert.equal(reader.readInt32(0,1),new Int32Array(memory.buffer,128,2)[1],'legacy int reader retains sample-count descriptors');
+});

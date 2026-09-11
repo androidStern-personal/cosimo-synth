@@ -12,7 +12,6 @@ import {
 } from "./lane-state-v2";
 import { getLaneSlotId, getLaneSlotParamIndex } from "./lane-slot-params";
 import { getRackParameterDescriptor } from "./rack-parameter-descriptors";
-import { createSynthModulationBinding } from "../worker/synth-modulation-binding";
 import { allTargetDescriptors } from "./target-descriptor";
 import {
     OSCILLATOR_BINDING_CONTRACTS,
@@ -878,7 +877,21 @@ export class MockPatchConnection implements PatchConnectionLike {
                 write: (key, value) => this.applyStoredValue(key, value),
             },
             engine: {
-                bindings: [createSynthModulationBinding(this)],
+                resources: {
+                    addEndpointListener: (endpoint, listener) => this.addEndpointListener(endpoint, listener),
+                    removeEndpointListener: (endpoint, listener) => this.removeEndpointListener(endpoint, listener),
+                    addStoredStateValueListener: listener => this.addStoredStateValueListener(listener),
+                    removeStoredStateValueListener: listener => this.removeStoredStateValueListener(listener),
+                    requestFullStoredState: callback => this.requestFullStoredState(callback),
+                },
+                installSharedData: (input, destination) => {
+                    const words = new Int32Array(destination.buffer, destination.byteOffset, 4);
+                    if (input < 3 || input > 8 || words[0] !== 0x4d534547 || words[1] !== this.runtimeState.dspSessionId
+                        || words[2] !== this.acceptedModulationSerial + 1 || (words[3] + 4) * 4 !== destination.byteLength)
+                        throw new Error("Invalid development modulation shared resource.");
+                    this.acceptedModulationSerial = words[2];
+                    queueMicrotask(() => this.emitRuntimeInstallAck(0));
+                },
                 sendEvent: (endpoint, value) => this.sendEventOrValue(endpoint, value),
                 handleHostEffect: (name, value) => {
                     if (name !== "cosimo.articulation-trigger-config" || typeof value !== "string") return false;

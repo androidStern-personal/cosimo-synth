@@ -9,6 +9,7 @@ const modules = Promise.all([
     loadUIModule(repoRoot, "ui/worker/synth-modulation-binding.ts"),
     loadUIModule(repoRoot, "ui/shared/modulation.ts"),
     loadUIModule(repoRoot, "ui/shared/articulation-image.ts"),
+    loadUIModule(repoRoot, "kit/ui/plugin-state-engine.ts"),
 ]);
 
 async function flushWork() {
@@ -74,19 +75,20 @@ class ScopedRuntime {
     }
     publish = (scope, effect) => {
         this.publications.push({ scope: structuredClone(scope), effect: structuredClone(effect) });
-        if (effect.kind === "event") {
-            if (effect.endpoint === this.uncertainHandoffEndpoint) {
+        if (effect.kind === "event" || effect.kind === "data") {
+            const endpoint = effect.kind === "data" ? effect.input : effect.endpoint;
+            if (endpoint === this.uncertainHandoffEndpoint) {
                 this.uncertainHandoffEndpoint = undefined;
                 return { kind: "failed", error: { kind: "transport", message: "The runtime handoff could not be confirmed." } };
             }
-            if (effect.endpoint === this.refuseEndpoint) return { kind: "failed", error: { kind: "engine-rejected", message: "Invalid declared runtime payload." } };
-            if (effect.endpoint === this.nativeRefuseEndpoint) return { kind: "submitted", completion: Promise.resolve({ kind: "failed", error: { kind: "transport", message: "Native runtime publication refused." } }) };
+            if (endpoint === this.refuseEndpoint) return { kind: "failed", error: { kind: "engine-rejected", message: "Invalid declared runtime payload." } };
+            if (endpoint === this.nativeRefuseEndpoint) return { kind: "submitted", completion: Promise.resolve({ kind: "failed", error: { kind: "transport", message: "Native runtime publication refused." } }) };
             if (effect.endpoint === "runtimeSyncRequest") {
                 if (this.respondRuntimeToSync) queueMicrotask(() => this.emitEndpoint("runtimeState", { dspSessionId: this.dspSessionId }));
                 queueMicrotask(() => this.acknowledge(effect.value));
             } else {
                 const serial = effect.value.deliverySerial;
-                if (effect.endpoint === this.rejectNextEndpoint) {
+                if (endpoint === this.rejectNextEndpoint) {
                     this.rejectNextEndpoint = undefined;
                     this.rejections.push({ endpoint: effect.endpoint, serial });
                     queueMicrotask(() => this.acknowledge(0, serial));
@@ -99,8 +101,8 @@ class ScopedRuntime {
                     if (serial !== this.modulationSerial + 1) this.protocolFailures.push({ expected: this.modulationSerial + 1, serial });
                     this.modulationSerial = serial;
                 }
-                if (effect.endpoint === "modulationMsegBuffer") this.installedBuffers.set(`${effect.value.slot}:${effect.value.shapeIndex}`, effect.value.buffer);
-                if (effect.endpoint === this.holdInputEndpoint) this.heldInputAcks.push(() => this.acknowledge());
+                if (effect.kind === "data") this.installedBuffers.set(`${effect.value.slot}:${effect.value.shapeIndex}`, effect.value.buffer);
+                if (endpoint === this.holdInputEndpoint) this.heldInputAcks.push(() => this.acknowledge());
                 else queueMicrotask(() => this.acknowledge());
             }
         }
@@ -136,6 +138,69 @@ class ScopedRuntime {
     }
 }
 
+// Exercise the public document delivery through the real framework scheduler.
+// Only native publication/adoption is recorded; neither audio nor the platform
+// resource allocator is simulated as engine proof by this unit seam.
+async function createDeliveryBinding(delivery, runtime, context = runtime.bindingContext()) {
+    const [, , , { createEngineBinding }] = await modules;
+    let document;
+    let activeTarget;
+    const closeDocument = () => { document?.stop(); document = undefined; };
+    const binding = createEngineBinding({
+        replacement: delivery.replacement,
+        prepare: input => ({ kind: "ok", value: input }),
+        transport: {
+            apply({ value, target }, permit) {
+                activeTarget = target;
+                if (!document || JSON.stringify(document.scope) !== JSON.stringify(target.scope)) {
+                    closeDocument();
+                    const scope = target.scope;
+                    const engine = delivery.create({
+                        signal: permit.signal,
+                        send: effect => runtime.publish(scope, effect),
+                        listen(endpoint, listener) {
+                            runtime.addEndpointListener(endpoint, listener);
+                            return () => runtime.removeEndpointListener(endpoint, listener);
+                        },
+                        readStored: key => new Promise(resolve => runtime.requestFullStoredState(state => resolve(state.values[key]))),
+                        subscribeStored(key, listener) {
+                            const receive = event => { if (event.key === key) listener(event.value); };
+                            runtime.addStoredStateValueListener(receive);
+                            return () => runtime.removeStoredStateValueListener(receive);
+                        },
+                        async prepareData(input, byteLength, writer, signal) {
+                            if (signal?.aborted) return { kind: "cancelled" };
+                            const buffer = new ArrayBuffer(byteLength);
+                            writer({ buffer, byteOffset: 0, byteLength });
+                            const header = new Int32Array(buffer, 0, 4);
+                            assert.equal(header[0], 0x4d534547);
+                            assert.equal(header[3], 2051);
+                            assert.equal(byteLength, 16 + 2051 * 4);
+                            const submission = runtime.publish(scope, { kind: "data", input,
+                                value: { slot: Math.floor((input - 3) / 2) + 1, shapeIndex: (input - 3) % 2,
+                                    dspSessionId: header[1], deliverySerial: header[2],
+                                    buffer: new Float32Array(buffer, 16, 2051) } });
+                            return submission.kind === "submitted" ? submission.completion : submission;
+                        },
+                        report: status => context.onStatus(activeTarget, status),
+                        fail(error) { context.onDefect(error); void binding.stop(); },
+                    });
+                    document = { ...engine, scope };
+                }
+                return document.apply(value, { signal: permit.signal });
+            },
+            stop: closeDocument,
+        },
+        onStatus: context.onStatus,
+        onDefect: context.onDefect,
+    });
+    return {
+        replace(input, target) { binding.replace({ ...input, target }, target); },
+        cancel() { binding.cancel(); closeDocument(); },
+        stop: binding.stop,
+    };
+}
+
 test("framework modulation waits for articulation hydration and uses only document-scoped runtime publication", async () => {
     const [bindingModule, modulation, articulations] = await modules;
     const runtime = new ScopedRuntime();
@@ -145,27 +210,30 @@ test("framework modulation waits for articulation hydration and uses only docume
     const parsed = modulation.parseModulationState(modulation.serializeModulationState(state));
     assert.equal(parsed._tag, "ok");
     const target = { scope: { owner: "worker-a", document: 7 }, key: modulation.MODULATION_STATE_KEY, generation: 1 };
-    const binding = bindingModule.createSynthModulationBinding(runtime).create(runtime.bindingContext());
+    const binding = await createDeliveryBinding(bindingModule.synthModulationDelivery, runtime);
     try {
         binding.replace({ value: parsed.value, parameters: {} }, target);
         await flushWork();
         assert.deepEqual(runtime.publications, [], "no delivery before coherent hydration");
         assert.equal(runtime.bootRequests.length, 1, "articulation hydration starts from the actual connection");
+        await flushWork();
         runtime.bootRequests.shift()({ values: {
             [modulation.MODULATION_STATE_KEY]: "malformed native modulation must not override accepted input",
             [articulations.ARTICULATIONS_V4_STATE_KEY]: articulations.createEmptyArticulationsState(),
         } });
         await flushWork();
         assert.deepEqual(runtime.publications, [{ scope: target.scope, effect: { kind: "event", endpoint: "runtimeSyncRequest", value: 0 } }], "only discovery may be sent before the runtime session is known");
+        await flushWork();
         runtime.emitEndpoint("runtimeState", { dspSessionId: runtime.dspSessionId });
         await runtime.waitForStatus(({ status }) => status.kind === "sent");
 
-        const uploaded = runtime.publications.filter(({ effect }) => effect.kind === "event" && effect.endpoint !== "runtimeSyncRequest");
+        const uploaded = runtime.publications.filter(({ effect }) => (effect.kind === "event" || effect.kind === "data") && effect.endpoint !== "runtimeSyncRequest");
         assert.deepEqual(uploaded.map(({ effect }) => {
             const { dspSessionId, deliverySerial, ...value } = effect.value;
             assert.equal(dspSessionId, runtime.dspSessionId);
             assert.ok(deliverySerial > 0);
-            return { endpointID: effect.endpoint, value };
+            return { endpointID: effect.kind === "data" ? "modulationMsegBuffer" : effect.endpoint,
+                value: effect.kind === "data" ? { ...value, buffer: Array.from(value.buffer) } : value };
         }), modulation.buildModulationRuntimeEvents(parsed.value, null));
         assert.ok(uploaded.length > 0);
         assert.ok(runtime.publications.every(({ scope }) => JSON.stringify(scope) === JSON.stringify(target.scope)));
@@ -193,12 +261,14 @@ test("modulation, dependent articulation and the final host receipt remain seria
     }] });
     const scope = { owner: "worker-ordered", document: 1 };
     const target = generation => ({ scope, key: modulation.MODULATION_STATE_KEY, generation });
-    const binding = bindingModule.createSynthModulationBinding(runtime).create(runtime.bindingContext());
-    runtime.holdInputEndpoint = "modulationMsegBuffer";
+    const binding = await createDeliveryBinding(bindingModule.synthModulationDelivery, runtime);
+    runtime.holdInputEndpoint = 3;
     runtime.holdHostReceipts = true;
     try {
         binding.replace({ value: stateA, parameters: {} }, target(1));
+        await flushWork();
         runtime.bootRequests.shift()({ values: { [articulations.ARTICULATIONS_V4_STATE_KEY]: bank(0.2) } });
+        await flushWork();
         runtime.emitEndpoint("runtimeState", { dspSessionId: runtime.dspSessionId });
         await flushWork();
         assert.equal(runtime.heldInputAcks.length, 1, "a modulation packet has physically reached the receiver");
@@ -238,10 +308,12 @@ test("a rejected partial bank invalidates the delta baseline before Undo restore
     stateB.msegSlots[0].playback.holdFinalValue = !stateA.msegSlots[0].playback.holdFinalValue;
     const scope = { owner: "worker-partial", document: 1 };
     const target = generation => ({ scope, key: modulation.MODULATION_STATE_KEY, generation });
-    const binding = bindingModule.createSynthModulationBinding(runtime).create(runtime.bindingContext());
+    const binding = await createDeliveryBinding(bindingModule.synthModulationDelivery, runtime);
     try {
         binding.replace({ value: stateA, parameters: {} }, target(1));
+        await flushWork();
         runtime.bootRequests.shift()({ values: { [articulations.ARTICULATIONS_V4_STATE_KEY]: articulations.createEmptyArticulationsState() } });
+        await flushWork();
         runtime.emitEndpoint("runtimeState", { dspSessionId: runtime.dspSessionId });
         await runtime.waitForStatus(({ target, status }) => target.generation === 1 && status.kind === "sent");
         const bankA = runtime.installedBuffers.get("1:0");
@@ -263,12 +335,14 @@ test("a rejected partial bank invalidates the delta baseline before Undo restore
 test("a definite publication refusal fails the target instead of retrying it as a dropped DSP input", async () => {
     const [bindingModule, modulation, articulations] = await modules;
     const runtime = new ScopedRuntime();
-    runtime.refuseEndpoint = "modulationMsegBuffer";
+    runtime.refuseEndpoint = 3;
     const target = { scope: { owner: "worker-refused", document: 1 }, key: modulation.MODULATION_STATE_KEY, generation: 1 };
-    const binding = bindingModule.createSynthModulationBinding(runtime).create(runtime.bindingContext());
+    const binding = await createDeliveryBinding(bindingModule.synthModulationDelivery, runtime);
     try {
         binding.replace({ value: modulation.createDefaultModulationState(), parameters: {} }, target);
+        await flushWork();
         runtime.bootRequests.shift()({ values: { [articulations.ARTICULATIONS_V4_STATE_KEY]: articulations.createEmptyArticulationsState() } });
+        await flushWork();
         runtime.emitEndpoint("runtimeState", { dspSessionId: runtime.dspSessionId });
         const failed = await runtime.waitForStatus(({ status }) => status.kind === "failed");
         assert.deepEqual(failed, { target, status: { kind: "failed", error: { kind: "engine-rejected", message: "Invalid declared runtime payload." } } });
@@ -276,7 +350,7 @@ test("a definite publication refusal fails the target instead of retrying it as 
         runtime.acknowledge();
         await flushWork();
         assert.equal(runtime.publications.length, count, "late output cannot revive the refused delivery");
-        assert.equal(runtime.publications.filter(({ effect }) => effect.endpoint === "modulationMsegBuffer").length, 1);
+        assert.equal(runtime.publications.filter(({ effect }) => effect.kind === "data").length, 1);
         assert.equal(runtime.publications.some(({ effect }) => effect.kind === "host-effect"), false);
         assert.deepEqual(runtime.defects, []);
     } finally { await binding.stop(); }
@@ -291,11 +365,13 @@ test("cancelled document work cannot finish or corrupt a reopened document throu
     const stateC = structuredClone(stateB);
     stateC.msegSlots[0].shapeA.points[0].y = 0.64;
     const target = (document, generation) => ({ scope: { owner: "worker-cancel", document }, key: modulation.MODULATION_STATE_KEY, generation });
-    const binding = bindingModule.createSynthModulationBinding(runtime).create(runtime.bindingContext());
+    const binding = await createDeliveryBinding(bindingModule.synthModulationDelivery, runtime);
     runtime.holdHostReceipts = true;
     try {
         binding.replace({ value: stateA, parameters: {} }, target(1, 1));
+        await flushWork();
         runtime.bootRequests.shift()({ values: { [articulations.ARTICULATIONS_V4_STATE_KEY]: articulations.createEmptyArticulationsState() } });
+        await flushWork();
         runtime.emitEndpoint("runtimeState", { dspSessionId: runtime.dspSessionId });
         await flushWork();
         assert.equal(runtime.heldHostReceipts.length, 1);
@@ -307,7 +383,9 @@ test("cancelled document work cannot finish or corrupt a reopened document throu
 
         runtime.holdHostReceipts = false;
         binding.replace({ value: stateB, parameters: {} }, target(2, 1));
+        await flushWork();
         runtime.bootRequests.shift()({ values: { [articulations.ARTICULATIONS_V4_STATE_KEY]: articulations.createEmptyArticulationsState() } });
+        await flushWork();
         runtime.emitEndpoint("runtimeState", { dspSessionId: runtime.dspSessionId });
         await runtime.waitForStatus(({ target, status }) => target.scope.document === 2 && status.kind === "sent");
         const currentFrontier = runtime.modulationSerial;
@@ -320,7 +398,7 @@ test("cancelled document work cannot finish or corrupt a reopened document throu
 
         binding.replace({ value: stateC, parameters: {} }, target(2, 2));
         await runtime.waitForStatus(({ target, status }) => target.scope.document === 2 && target.generation === 2 && status.kind === "sent");
-        const nextPacket = runtime.publications.slice(count).find(({ effect }) => effect.endpoint === "modulationMsegBuffer");
+        const nextPacket = runtime.publications.slice(count).find(({ effect }) => effect.kind === "data");
         assert.equal(nextPacket.effect.value.deliverySerial, currentFrontier + 1, "late ACK cannot rewind the new document's physical frontier");
         assert.deepEqual(runtime.protocolFailures, []);
         assert.deepEqual(runtime.rawSends, []);
@@ -330,22 +408,26 @@ test("cancelled document work cannot finish or corrupt a reopened document throu
 test("native publication failure settles without a DSP ACK and a later edit can reopen delivery", async () => {
     const [bindingModule, modulation, articulations] = await modules;
     const runtime = new ScopedRuntime();
-    runtime.nativeRefuseEndpoint = "modulationMsegBuffer";
+    runtime.nativeRefuseEndpoint = 3;
     const scope = { owner: "worker-native-refusal", document: 1 };
     const target = generation => ({ scope, key: modulation.MODULATION_STATE_KEY, generation });
-    const binding = bindingModule.createSynthModulationBinding(runtime).create(runtime.bindingContext());
+    const binding = await createDeliveryBinding(bindingModule.synthModulationDelivery, runtime);
     try {
         binding.replace({ value: modulation.createDefaultModulationState(), parameters: {} }, target(1));
+        await flushWork();
         runtime.bootRequests.shift()({ values: { [articulations.ARTICULATIONS_V4_STATE_KEY]: articulations.createEmptyArticulationsState() } });
+        await flushWork();
         runtime.emitEndpoint("runtimeState", { dspSessionId: runtime.dspSessionId });
         const failure = await runtime.waitForStatus(({ status }) => status.kind === "failed");
         assert.deepEqual(failure, { target: target(1), status: { kind: "failed", error: { kind: "transport", message: "Native runtime publication refused." } } });
         assert.equal(runtime.installedBuffers.size, 0);
-        assert.equal(runtime.publications.filter(({ effect }) => effect.endpoint === "modulationMsegBuffer").length, 1);
+        assert.equal(runtime.publications.filter(({ effect }) => effect.kind === "data").length, 1);
 
         runtime.nativeRefuseEndpoint = undefined;
         binding.replace({ value: modulation.createDefaultModulationState(), parameters: {} }, target(2));
+        await flushWork();
         runtime.bootRequests.shift()({ values: { [articulations.ARTICULATIONS_V4_STATE_KEY]: articulations.createEmptyArticulationsState() } });
+        await flushWork();
         runtime.emitEndpoint("runtimeState", { dspSessionId: runtime.dspSessionId });
         await runtime.waitForStatus(({ target, status }) => target.generation === 2 && status.kind === "sent");
         assert.equal(runtime.installedBuffers.size, 6);
@@ -356,12 +438,14 @@ test("native publication failure settles without a DSP ACK and a later edit can 
 test("a current DSP rejection reports failed application for its captured target", async () => {
     const [bindingModule, modulation, articulations] = await modules;
     const runtime = new ScopedRuntime();
-    runtime.rejectNextEndpoint = "modulationMsegBuffer";
+    runtime.rejectNextEndpoint = 3;
     const target = { scope: { owner: "worker-dsp-refusal", document: 1 }, key: modulation.MODULATION_STATE_KEY, generation: 1 };
-    const binding = bindingModule.createSynthModulationBinding(runtime).create(runtime.bindingContext());
+    const binding = await createDeliveryBinding(bindingModule.synthModulationDelivery, runtime);
     try {
         binding.replace({ value: modulation.createDefaultModulationState(), parameters: {} }, target);
+        await flushWork();
         runtime.bootRequests.shift()({ values: { [articulations.ARTICULATIONS_V4_STATE_KEY]: articulations.createEmptyArticulationsState() } });
+        await flushWork();
         runtime.emitEndpoint("runtimeState", { dspSessionId: runtime.dspSessionId });
         const failed = await runtime.waitForStatus(({ status }) => status.kind === "failed");
         assert.deepEqual(failed.target, target);
@@ -378,9 +462,10 @@ test("a newly attached binding queries the real runtime endpoint instead of requ
     runtime.respondRuntimeToSync = true;
     runtime.emitEndpoint("runtimeState", { dspSessionId: runtime.dspSessionId });
     const target = { scope: { owner: "worker-late-start", document: 1 }, key: modulation.MODULATION_STATE_KEY, generation: 1 };
-    const binding = bindingModule.createSynthModulationBinding(runtime).create(runtime.bindingContext());
+    const binding = await createDeliveryBinding(bindingModule.synthModulationDelivery, runtime);
     try {
         binding.replace({ value: modulation.createDefaultModulationState(), parameters: {} }, target);
+        await flushWork();
         runtime.bootRequests.shift()({ values: { [articulations.ARTICULATIONS_V4_STATE_KEY]: articulations.createEmptyArticulationsState() } });
         await runtime.waitForStatus(({ status }) => status.kind === "sent");
         assert.deepEqual(runtime.publications[0], { scope: target.scope, effect: { kind: "event", endpoint: "runtimeSyncRequest", value: 0 } });
@@ -396,7 +481,7 @@ test("a reentrant status observer may stop the binding before it starts boot wor
     const context = runtime.bindingContext();
     let stopping;
     let binding;
-    binding = bindingModule.createSynthModulationBinding(runtime).create({ ...context,
+    binding = await createDeliveryBinding(bindingModule.synthModulationDelivery, runtime, { ...context,
         onStatus(target, status) {
             context.onStatus(target, status);
             if (status.kind === "preparing") stopping = binding.stop();
@@ -422,9 +507,10 @@ test("runtime discovery recovers from an uncertain first handoff through the exi
     runtime.respondRuntimeToSync = true;
     runtime.uncertainHandoffEndpoint = "runtimeSyncRequest";
     const target = { scope: { owner: "worker-discovery-loss", document: 1 }, key: modulation.MODULATION_STATE_KEY, generation: 1 };
-    const binding = bindingModule.createSynthModulationBinding(runtime).create(runtime.bindingContext());
+    const binding = await createDeliveryBinding(bindingModule.synthModulationDelivery, runtime);
     try {
         binding.replace({ value: modulation.createDefaultModulationState(), parameters: {} }, target);
+        await flushWork();
         runtime.bootRequests.shift()({ values: { [articulations.ARTICULATIONS_V4_STATE_KEY]: articulations.createEmptyArticulationsState() } });
         await flushWork();
         assert.equal(runtime.publications.length, 1, "the first discovery attempt actually reached the external handoff seam");
@@ -448,10 +534,12 @@ test("an unexpected final host completion rejection closes delivery and preserve
     const defect = new Error("Unexpected native receipt decoder defect");
     runtime.hostCompletionError = defect;
     const target = { scope: { owner: "worker-host-defect", document: 1 }, key: modulation.MODULATION_STATE_KEY, generation: 1 };
-    const binding = bindingModule.createSynthModulationBinding(runtime).create(runtime.bindingContext());
+    const binding = await createDeliveryBinding(bindingModule.synthModulationDelivery, runtime);
     try {
         binding.replace({ value: modulation.createDefaultModulationState(), parameters: {} }, target);
+        await flushWork();
         runtime.bootRequests.shift()({ values: { [articulations.ARTICULATIONS_V4_STATE_KEY]: articulations.createEmptyArticulationsState() } });
+        await flushWork();
         runtime.emitEndpoint("runtimeState", { dspSessionId: runtime.dspSessionId });
         await flushWork();
         assert.equal(runtime.publications.filter(({ effect }) => effect.kind === "host-effect").length, 1, "both lanes completed before the actual final host submission rejected");
@@ -465,5 +553,50 @@ test("an unexpected final host completion rejection closes delivery and preserve
         await flushWork();
         assert.equal(runtime.publications.length, count, "a programming defect does not start a recovery loop");
         assert.equal(runtime.defects.length, 1);
+    } finally { await binding.stop(); }
+});
+
+
+test("an amount edit during a runtime refresh waits for its own delta and host receipt without preparing curves again", async () => {
+    const [bindingModule, modulation, articulations] = await modules;
+    const runtime = new ScopedRuntime();
+    const route = modulation.createDefaultRoute({ id: "amount-route", sourceKind: "mseg", sourceSlot: 1, targetKind: "oscB.wavetablePosition", amount: 0.1 });
+    const initial = { ...modulation.createDefaultModulationState(), routes: [route] };
+    const edited = { ...initial, routes: [{ ...route, amount: 0.8 }] };
+    const scope = { owner: "worker-refresh", document: 1 };
+    const target = generation => ({ scope, key: modulation.MODULATION_STATE_KEY, generation });
+    const binding = await createDeliveryBinding(bindingModule.synthModulationDelivery, runtime);
+    try {
+        binding.replace({ value: initial, parameters: {} }, target(1));
+        await flushWork();
+        runtime.bootRequests.shift()({ values: { [articulations.ARTICULATIONS_V4_STATE_KEY]: articulations.createEmptyArticulationsState() } });
+        await flushWork();
+        runtime.emitEndpoint("runtimeState", { dspSessionId: runtime.dspSessionId });
+        await runtime.waitForStatus(({ target, status }) => target.generation === 1 && status.kind === "sent");
+        await flushWork();
+
+        runtime.holdHostReceipts = true;
+        runtime.dspSessionId += 1;
+        runtime.modulationSerial = 0;
+        runtime.articulationSerial = 0;
+        runtime.emitEndpoint("runtimeState", { dspSessionId: runtime.dspSessionId });
+        await flushWork();
+        assert.equal(runtime.heldHostReceipts.length, 1, "the refreshed session is waiting for its previous-value host receipt");
+        const count = runtime.publications.length;
+        binding.replace({ value: edited, parameters: {} }, target(2));
+        await flushWork();
+        assert.equal(runtime.statuses.some(({ target, status }) => target.generation === 2 && status.kind === "sent"), false);
+        runtime.heldHostReceipts.shift()({ kind: "sent", proof: "native-publication-processed" });
+        await flushWork();
+        const changes = runtime.publications.slice(count);
+        assert.equal(changes.some(({ effect }) => effect.kind === "data"), false, "amount-only changes never prepare MSEG curves");
+        assert.equal(changes.filter(({ effect }) => effect.endpoint === "modulationAmount").length, 1);
+        assert.equal(changes.some(({ effect }) => effect.endpoint === "modulationProgram"), false, "amount-only changes retain the compiled route layout");
+        assert.equal(runtime.heldHostReceipts.length, 1, "the edited value has its own final host publication");
+        assert.equal(runtime.statuses.some(({ target, status }) => target.generation === 2 && status.kind === "sent"), false, "the old refresh receipt cannot complete the newer target");
+        runtime.heldHostReceipts.shift()({ kind: "sent", proof: "native-publication-processed" });
+        await runtime.waitForStatus(({ target, status }) => target.generation === 2 && status.kind === "sent");
+        assert.deepEqual(runtime.protocolFailures, []);
+        assert.deepEqual(runtime.defects, []);
     } finally { await binding.stop(); }
 });

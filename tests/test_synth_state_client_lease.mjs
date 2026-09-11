@@ -125,12 +125,19 @@ test("last lease release detaches and seals accepted modulation when its final e
         return result;
     };
     const worker = port(true), first = port(), second = port();
+    const outputs = new Map(), storedListeners = new Set();
+    worker.addEndpointListener = (endpoint, listener) => outputs.set(listener, endpoint);
+    worker.removeEndpointListener = (_endpoint, listener) => outputs.delete(listener);
+    worker.addStoredStateValueListener = listener => storedListeners.add(listener);
+    worker.removeStoredStateValueListener = listener => storedListeners.delete(listener);
+    worker.requestFullStoredState = callback => queueMicrotask(() => callback({ values: Object.fromEntries(stored) }));
     channel = new PluginStateChannel(worker, async request => {
         if (request.kind === "open") return { parameters: request.parameters.map(endpoint => ({
             endpoint, value: 0, min: endpoint === "globalTune" ? -24 : 0,
             max: endpoint === "globalTune" ? 24 : 2, step: endpoint === "playMode" ? 1 : 0, defaultValue: 0,
         })) };
         if (request.kind === "close") return {};
+        if (request.kind === "effect") return { error: "This storage/lease fixture has no audio engine." };
         throw new Error(`Unexpected native request ${request.kind}`);
     }, keys => Object.fromEntries(keys.filter(key => stored.has(key)).map(key => [key, stored.get(key)])),
     (key, value) => { stored.set(key, value); writes.push({ key, value }); }, () => views);

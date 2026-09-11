@@ -1,117 +1,118 @@
-import type { CmajorStateBindingFactory, CmajorStateEffect, CmajorStatePublicationOutcome } from "../../kit/ui/plugin-state-cmajor";
-import type { EngineTarget } from "../../kit/ui/plugin-state-engine";
-import type { PatchConnectionLike } from "../shared/cmajor-react";
-import { MODULATION_STATE_KEY, parseModulationState } from "../shared/modulation";
+import type { PluginStateDelivery, PluginStateDeliveryOutcome, PluginStateSubmission, PatchConnectionLike } from "../../kit/index";
+import { ARTICULATIONS_V4_STATE_KEY } from "../shared/articulation-image";
 import { serializeArticulationTriggerConfig } from "../shared/articulations";
+import type { ModulationState } from "../shared/modulation";
+import { MSEG_PADDED_SAMPLES, renderMsegShapeInto } from "../shared/mseg";
+import { SHARED_MSEG_BYTES, SHARED_MSEG_FIRST_INPUT } from "../shared/shared-mseg";
 import { ModulationArticulationWorkerService } from "./modulation-articulation-worker-service";
-import type { SharedDataConnection } from "../../kit/ui/prepared-shared-data";
-import { sharedMsegCommand } from "../shared/shared-mseg";
 
-/** Adapt the synth's dependent runtime lanes to framework-owned modulation. */
-export function createSynthModulationBinding(connection: PatchConnectionLike & SharedDataConnection): CmajorStateBindingFactory {
-    return {
-        key: MODULATION_STATE_KEY,
-        eventEndpoints: ["modulationMsegBuffer", "modulationMsegPlayback", "modulationProgram", "modulationAmount", "articulationSnapshot", "runtimeSyncRequest"],
-        hostEffects: ["cosimo.articulation-trigger-config"],
-        create(context) {
-            let stopped = false;
-            let operation = 0;
-            type Document = {
-                readonly scope: EngineTarget["scope"];
-                readonly service: ModulationArticulationWorkerService;
-                readonly closed: boolean;
-                setTarget(target: EngineTarget): void;
-                close(): void;
-            };
-            let document: Document | undefined;
+/** One declared bank retains the synth's existing ordered modulation/articulation protocol. */
+export const synthModulationDelivery: PluginStateDelivery<ModulationState> = {
+    eventEndpoints: ["modulationMsegPlayback", "modulationProgram", "modulationAmount", "articulationSnapshot", "runtimeSyncRequest"],
+    outputEndpoints: ["runtimeState", "runtimeInstallAck"],
+    storedKeys: [ARTICULATIONS_V4_STATE_KEY],
+    hostEffects: ["cosimo.articulation-trigger-config"],
+    dataInputs: [3, 4, 5, 6, 7, 8],
+    replacement: "finish",
+    create(document) {
+        let coordinator = createCoordinator(document);
+        return {
+            apply(value, context) {
+                if (coordinator.closed) coordinator = createCoordinator(document);
+                return coordinator.apply(value, context);
+            },
+            stop() { coordinator.stop(); },
+        };
+    },
+};
 
-            function openDocument(target: EngineTarget): Document {
-                const scope = Object.freeze({ ...target.scope });
-                let active = true;
-                let desiredTarget = target;
-                const pending = new Set<Promise<CmajorStatePublicationOutcome>>();
-                function close() { if (!active) return; active = false; pending.clear(); service.stop(); }
-                function onDefect(error: unknown) {
-                    if (!active) return;
-                    close();
-                    context.onDefect(error);
+function createCoordinator(document: Parameters<PluginStateDelivery<ModulationState>["create"]>[0]) {
+        let stopped = false;
+        let delivery = 0;
+        let finish: ((outcome: PluginStateDeliveryOutcome) => void) | undefined;
+        const pending = new Set<Promise<PluginStateDeliveryOutcome>>();
+        const endpointRemovals = new Map<string, Map<(value: unknown) => void, () => void>>();
+        const storedRemovals = new Map<(value: unknown) => void, () => void>();
+        function report(outcome: PluginStateDeliveryOutcome) {
+            const complete = finish; finish = undefined;
+            if (complete) complete(outcome);
+            else if (outcome.kind !== "cancelled") document.report(outcome);
+        }
+        function stop() {
+            if (stopped) return;
+            stopped = true;
+            service.stop();
+            report({ kind: "cancelled" });
+            pending.clear();
+        }
+        function own(submission: PluginStateSubmission) {
+            if (submission.kind !== "submitted") {
+                if (submission.kind === "failed" && submission.error.kind !== "transport") {
+                    report(submission); stop();
                 }
-                const publish = (effect: CmajorStateEffect) => {
-                    if (!active) return { kind: "cancelled" } as const;
-                    return context.publish(scope, effect);
-                };
-                const scopedConnection: PatchConnectionLike = {
-                    addEndpointListener: (endpoint, listener) => connection.addEndpointListener?.(endpoint, listener),
-                    removeEndpointListener: (endpoint, listener) => connection.removeEndpointListener?.(endpoint, listener),
-                    addStoredStateValueListener: listener => connection.addStoredStateValueListener?.(listener),
-                    removeStoredStateValueListener: listener => connection.removeStoredStateValueListener?.(listener),
-                    requestFullStoredState: connection.requestFullStoredState?.bind(connection),
-                    requestStoredStateValue: connection.requestStoredStateValue?.bind(connection),
-                    sendEventOrValue(endpoint, value) {
-                        const submission = publish({ kind: "event", endpoint, value });
-                        if (submission.kind === "submitted") {
-                            pending.add(submission.completion);
-                            // Native refusal may produce no DSP ACK at all.
-                            // Own the receipt immediately so the lane can stop
-                            // waiting, and keep this distinct from raw handoff loss.
-                            void submission.completion.then(outcome => {
-                                pending.delete(submission.completion);
-                                if (!active || outcome.kind === "sent") return;
-                                close();
-                                if (outcome.kind === "failed") context.onStatus(desiredTarget, outcome);
-                            }, error => {
-                                pending.delete(submission.completion);
-                                onDefect(error);
-                            });
-                        }
-                        // The lane's frontier recovery remains authoritative for
-                        // an uncertain raw send. A definite preflight refusal
-                        // cannot be repaired by repeatedly replaying the packet.
-                        if (submission.kind === "failed" && submission.error.kind !== "transport") {
-                            close();
-                            context.onStatus(desiredTarget, submission);
-                        }
-                    },
-                };
-                const service = new ModulationArticulationWorkerService(scopedConnection, {
-                    onDefect,
-                    curveCommand: (slot, shape, value) => sharedMsegCommand(connection, slot, shape, value),
-                    async publishTriggerConfig(config) {
-                        const publications = await Promise.all(pending);
-                        pending.clear();
-                        const failed = publications.find(outcome => outcome.kind !== "sent");
-                        if (failed) return failed;
-                        const submission = publish({ kind: "host-effect", name: "cosimo.articulation-trigger-config", value: serializeArticulationTriggerConfig(config) });
-                        return submission.kind === "submitted" ? submission.completion : submission;
-                    },
-                });
-                return { scope, service, get closed() { return !active; }, setTarget(next) { desiredTarget = next; }, close };
+                return;
             }
-
-            return {
-                replace(input, target) {
-                    if (stopped) return;
-                    const currentOperation = ++operation;
-                    const parsed = parseModulationState(input.value);
-                    if (parsed._tag === "err") {
-                        context.onStatus(target, { kind: "failed", error: { kind: "engine-rejected", message: "Invalid modulation engine value." } });
-                        return;
-                    }
-                    if (!document || document.closed || document.scope.owner !== target.scope.owner || document.scope.document !== target.scope.document) {
-                        document?.close();
-                        document = openDocument(target);
-                    }
-                    const currentDocument = document;
-                    currentDocument.setTarget(target);
-                    context.onStatus(target, { kind: "preparing" });
-                    if (stopped || currentOperation !== operation || currentDocument.closed) return;
-                    currentDocument.service.replaceModulation(parsed.value, status => context.onStatus(target, status));
-                    if (stopped || currentOperation !== operation || currentDocument.closed) return;
-                    currentDocument.service.start();
+            pending.add(submission.completion);
+            void submission.completion.then(outcome => {
+                pending.delete(submission.completion);
+                if (stopped || outcome.kind === "sent") return;
+                report(outcome); stop();
+            }, error => { if (!stopped) { stop(); document.fail(error); } });
+        }
+        const connection: PatchConnectionLike = {
+            addEndpointListener(endpoint, listener) {
+                const listeners = endpointRemovals.get(endpoint) ?? new Map();
+                listeners.set(listener, document.listen(endpoint, listener)); endpointRemovals.set(endpoint, listeners);
+            },
+            removeEndpointListener(endpoint, listener) { endpointRemovals.get(endpoint)?.get(listener)?.(); endpointRemovals.get(endpoint)?.delete(listener); },
+            addStoredStateValueListener(listener) {
+                storedRemovals.set(listener, document.subscribeStored(ARTICULATIONS_V4_STATE_KEY,
+                    value => listener({ key: ARTICULATIONS_V4_STATE_KEY, value })));
+            },
+            removeStoredStateValueListener(listener) { storedRemovals.get(listener)?.(); storedRemovals.delete(listener); },
+            requestFullStoredState(callback) {
+                void document.readStored(ARTICULATIONS_V4_STATE_KEY).then(value => {
+                    if (!stopped) callback({ values: { [ARTICULATIONS_V4_STATE_KEY]: value } });
+                }, error => document.fail(error));
+            },
+            sendEventOrValue(endpoint, value) { if (!stopped) own(document.send({ kind: "event", endpoint, value })); },
+        };
+        const service = new ModulationArticulationWorkerService(connection, {
+            onDefect(error) { stop(); document.fail(error); },
+            curveCommand: (slotIndex, shapeIndex, shape) => ({
+                async submit({ dspSessionId, deliverySerial, signal }) {
+                    const outcome = await document.prepareData(SHARED_MSEG_FIRST_INPUT + slotIndex * 2 + shapeIndex,
+                        SHARED_MSEG_BYTES, destination => {
+                            new Int32Array(destination.buffer, destination.byteOffset, 4)
+                                .set([0x4d534547, dspSessionId, deliverySerial, MSEG_PADDED_SAMPLES]);
+                            renderMsegShapeInto(shape, new Float32Array(destination.buffer, destination.byteOffset + 16, MSEG_PADDED_SAMPLES));
+                        }, signal);
+                    if (outcome.kind === "failed") { report(outcome); stop(); }
                 },
-                cancel() { operation += 1; document?.close(); document = undefined; },
-                async stop() { if (stopped) return; stopped = true; operation += 1; document?.close(); document = undefined; },
-            };
-        },
-    };
+            }),
+            async publishTriggerConfig(config) {
+                const publications = await Promise.all(pending);
+                const failed = publications.find(outcome => outcome.kind !== "sent");
+                if (failed) return failed.kind === "failed" ? failed : { kind: "cancelled" };
+                if (stopped) return { kind: "cancelled" };
+                const submission = document.send({ kind: "host-effect", name: "cosimo.articulation-trigger-config", value: serializeArticulationTriggerConfig(config) });
+                return submission.kind === "submitted" ? submission.completion : submission;
+            },
+        });
+        return {
+            get closed() { return stopped; },
+            apply(value: ModulationState, context: Parameters<ReturnType<PluginStateDelivery<ModulationState>["create"]>["apply"]>[1]): Promise<PluginStateDeliveryOutcome> {
+                if (stopped || context.signal.aborted) return Promise.resolve({ kind: "cancelled" });
+                const currentDelivery = ++delivery;
+                return new Promise(resolve => {
+                    const removeAbort = context.signal.onAbort(() => { report({ kind: "cancelled" }); stop(); });
+                    finish = outcome => { removeAbort(); resolve(outcome); };
+                    service.replaceModulation(value, status => {
+                        if (currentDelivery === delivery && status.kind !== "preparing") report(status);
+                    });
+                    service.start();
+                });
+            },
+            stop,
+        };
 }

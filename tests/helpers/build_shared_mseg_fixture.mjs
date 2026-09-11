@@ -12,13 +12,13 @@ export async function buildSharedMsegFixture() {
     await Promise.all([
         cp(path.join(root,'kit/fx'),path.join(staging,'kit/fx'),{recursive:true}),
         cp(path.join(root,'kit/ui'),path.join(staging,'kit/ui'),{recursive:true}),
+        cp(path.join(root,'kit/native'),path.join(staging,'kit/native'),{recursive:true}),
+        cp(path.join(root,'kit/cmajor'),path.join(staging,'kit/cmajor'),{recursive:true}),
         ...['index.ts','package.json','kit.json'].map(file=>cp(path.join(root,'kit',file),path.join(staging,'kit',file))),
         cp(path.join(root,'tests/native/fixtures/plugin_state_shared_data'),path.join(staging,'fx/shared_mseg'),{recursive:true}),
-        mkdir(path.join(staging,'ui/shared'),{recursive:true}),
         symlink(path.join(root,'node_modules'),path.join(staging,'node_modules')),
         writeFile(path.join(staging,'package.json'),JSON.stringify({private:true,type:'module'})),
     ]);
-    await cp(path.join(root,'ui/shared/mseg.ts'),path.join(staging,'ui/shared/mseg.ts'));
     execFileSync(process.execPath,['kit/fx/build-effect.mjs','shared-mseg'],{cwd:staging,stdio:'pipe',timeout:30000});
     const manifest=path.join(staging,'build/fx/shared_mseg_runtime/SharedMseg.cmajorpatch');
     const config=JSON.parse(await readFile(manifest,'utf8'));

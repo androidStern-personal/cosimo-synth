@@ -86,9 +86,15 @@ int main (int argc, char** argv)
             const char* functionName,
             choc::span<choc::value::Type> parameterTypes) -> void*
         {
-            require (cosimo::three_osc::bridge::matchesExternalFunction (
+            const auto name = functionName != nullptr ? std::string_view (functionName) : std::string_view {};
+            const auto allInt32 = std::all_of (parameterTypes.begin(), parameterTypes.end(),
+                                               [] (const auto& type) { return type.isInt32(); });
+            const auto sharedDataFunction = allInt32
+                && ((name == "cmaj::data::size" && parameterTypes.size() == 1)
+                    || ((name == "cmaj::data::read" || name == "cmaj::data::readInt32") && parameterTypes.size() == 2));
+            require (sharedDataFunction || cosimo::three_osc::bridge::matchesExternalFunction (
                          functionName, parameterTypes),
-                     "external renderer name or signature mismatch");
+                     "external function name or signature mismatch");
 
             // Code generation needs the external declaration resolved but does not call this
             // sentinel. The generated C++ deliberately retains a link-time renderer symbol.

@@ -38,6 +38,66 @@ async function close(page) {
     assert.deepEqual(browserErrors.get(page), [], "no uncaught browser or React errors");
 }
 
+test("public edit closures reject ABA and reset while queued edits in their own gesture remain accepted", async () => {
+    const page=await browser.newPage();browserErrors.set(page,[]);
+    page.on('pageerror',error=>browserErrors.get(page).push(error.message));
+    await page.goto(`${server.baseUrl}/kit/tests/helpers/module_test_shell.html`);
+    await page.evaluate(async()=>{const {mount}=await import('/kit/tests/helpers/plugin_state_public_react.tsx');window.publicState=await mount(document.getElementById('mount'));});
+    try {
+        await page.waitForFunction(()=>document.querySelector('[data-testid="public-control"]')?.textContent.includes('ready'));
+        const unrelated=await page.evaluate(async()=>{
+            const edit=window.publicState.current().control.setValue;
+            await window.publicState.competingEdit(9,'other');
+            return edit(2);
+        });
+        assert.equal(unrelated.kind,'accepted','unrelated accepted fields cannot stale this edit closure');
+        await page.evaluate(async()=>{
+            window.oldEdit=window.publicState.current().control.setValue;
+            await window.publicState.competingEdit(5);await window.publicState.competingEdit(2);
+        });
+        assert.deepEqual(await page.evaluate(()=>window.oldEdit(8)),{kind:'rejected',reason:'stale-version'});
+        assert.equal(await page.evaluate(()=>window.publicState.accepted().fields.gain.value),2);
+        await page.waitForFunction(()=>JSON.parse(document.querySelector('[data-testid="public-control"]').textContent).value===2);
+        const results=await page.evaluate(async()=>{
+            const control=window.publicState.current().control;
+            await control.beginGesture();window.publicState.holdCommands();
+            const jobs=[control.setValue(3),control.setValue(4),control.setValue(6)];
+            await window.publicState.releaseCommands();
+            return [...await Promise.all(jobs),await control.endGesture()];
+        });
+        assert.ok(results.every(result=>result.kind==='accepted'),JSON.stringify(results));
+        assert.equal(await page.evaluate(()=>window.publicState.accepted().fields.gain.value),6);
+        await page.evaluate(async()=>{window.beforeReset=window.publicState.current().control.setValue;await window.publicState.reset();});
+        assert.deepEqual(await page.evaluate(()=>window.beforeReset(13)),{kind:'rejected',reason:'stale-scope'});
+        assert.equal(await page.evaluate(()=>window.publicState.accepted().fields.gain.value),9);
+    } finally {await page.evaluate(()=>window.publicState.dispose());await close(page);}
+});
+
+test("a public field failure exposes one guarded retry without adding editable history", async () => {
+    const page=await browser.newPage();browserErrors.set(page,[]);
+    page.on('pageerror',error=>browserErrors.get(page).push(error.message));
+    await page.goto(`${server.baseUrl}/kit/tests/helpers/module_test_shell.html`);
+    await page.evaluate(async()=>{const {mount}=await import('/kit/tests/helpers/plugin_state_public_react.tsx');window.publicState=await mount(document.getElementById('mount'));});
+    try {
+        await page.waitForFunction(()=>document.querySelector('[data-testid="public-control"]')?.textContent.includes('ready'));
+        assert.equal(await page.evaluate(()=>window.publicState.current().control.retry),null);
+        await page.evaluate(()=>window.publicState.status({kind:'failed',error:{kind:'resource',message:'Memory budget exhausted'}}));
+        await page.waitForFunction(()=>window.publicState.current().control.retry!==null);
+        assert.deepEqual(await page.evaluate(()=>window.publicState.current().control.error),{kind:'application',message:'Memory budget exhausted'});
+        const result=await page.evaluate(async()=>{
+            const before=window.publicState.accepted();window.oldRetry=window.publicState.current().control.retry;
+            const result=await window.oldRetry();const after=window.publicState.accepted();
+            return {result,beforeVersion:before.fields.gain.version,afterVersion:after.fields.gain.version,beforeHistory:before.history,afterHistory:after.history};
+        });
+        assert.equal(result.result.kind,'accepted');assert.equal(result.beforeVersion,result.afterVersion);assert.deepEqual(result.beforeHistory,result.afterHistory);
+        assert.deepEqual(await page.evaluate(()=>window.oldRetry()),{kind:'rejected',reason:'stale-version'});
+        await page.evaluate(()=>window.publicState.status({kind:'acknowledged',engineSession:'private',operation:'new'}));
+        await page.waitForFunction(()=>window.publicState.current().control.error===null);
+        assert.equal(await page.evaluate(()=>window.publicState.current().control.retry),null);
+        assert.deepEqual(await page.evaluate(()=>window.oldRetry()),{kind:'rejected',reason:'stale-version'});
+    } finally {await page.evaluate(()=>window.publicState.dispose());await close(page);}
+});
+
 test("public hook results hide transport identities while opaque history references retain guarded eligibility", async () => {
     const page = await browser.newPage();
     const errors = [];
@@ -239,7 +299,7 @@ test("React reads the real client's Jotai projection: host hydration, immediate 
         assert.equal(state.value, 7);
         assert.equal(state.pending, true);
         assert.deepEqual((await messages(page)).sent.slice(1).map(message => message.command), [
-            { kind: "edit", key: "gain", value: 4 }, { kind: "edit", key: "gain", value: 7 },
+            { kind: "edit", key: "gain", value: 4, expectedVersion: 0 }, { kind: "edit", key: "gain", value: 7, expectedVersion: 0 },
         ]);
         await deliver(page, { kind: "update", scope, revision: 1, state: snapshot(4, 1, 1),
             receipt: { address: { ...scope, client: 2, sequence: 1 }, result: { kind: "accepted", revision: 1, version: 1 } } });
@@ -267,8 +327,8 @@ test("removing a control ends its own drag once, while document replacement disc
         let commands = (await messages(page)).sent.filter(message => message.kind === "command");
         assert.deepEqual(commands.map(message => message.command), [
             { kind: "begin", key: "gain", gesture: 1 },
-            { kind: "edit", key: "gain", value: 4, gesture: 1 },
-            { kind: "edit", key: "gain", value: 7, gesture: 1 },
+            { kind: "edit", key: "gain", value: 4, expectedVersion: 0, gesture: 1 },
+            { kind: "edit", key: "gain", value: 7, expectedVersion: 0, gesture: 1 },
             { kind: "end", key: "gain", gesture: 1 },
         ]);
         await page.getByText("Toggle control", { exact: true }).click();
@@ -286,7 +346,7 @@ test("removing a control ends its own drag once, while document replacement disc
         commands = (await messages(page)).sent.filter(message => message.kind === "command");
         assert.deepEqual(commands.slice(-3), [
             { kind: "command", scope: nextScope, client: 2, sequence: 1, command: { kind: "begin", key: "gain", gesture: 3 } },
-            { kind: "command", scope: nextScope, client: 2, sequence: 2, command: { kind: "edit", key: "gain", value: 4, gesture: 3 } },
+            { kind: "command", scope: nextScope, client: 2, sequence: 2, command: { kind: "edit", key: "gain", value: 4, expectedVersion: 0, gesture: 3 } },
             { kind: "command", scope: nextScope, client: 2, sequence: 3, command: { kind: "end", key: "gain", gesture: 3 } },
         ]);
         assert.deepEqual((await messages(page)).defects, []);
@@ -336,7 +396,7 @@ test("the public view factory owns mounting, drag cleanup, fresh attachment on r
         assert.deepEqual(traffic.trace, ["subscribe", "send:attach", "send:begin", "send:edit", "send:end", "send:detach", "unsubscribe"]);
         assert.deepEqual(traffic.sent.slice(1, -1).map(message => message.message.command), [
             { kind: "begin", key: "gain", gesture: 1 },
-            { kind: "edit", key: "gain", value: 4, gesture: 1 },
+            { kind: "edit", key: "gain", value: 4, expectedVersion: 0, gesture: 1 },
             { kind: "end", key: "gain", gesture: 1 },
         ]);
         assert.deepEqual(traffic.sent.at(-1).message, { kind: "detach", scope, client: 2 });
@@ -348,7 +408,7 @@ test("the public view factory owns mounting, drag cleanup, fresh attachment on r
         assert.equal(JSON.parse(await page.getByTestId("wrapped").textContent()).value, 5);
         await page.getByText("Wrapped seven", { exact: true }).click();
         assert.deepEqual((await viewMessages()).sent.at(-1).message, {
-            kind: "command", scope, client: 3, sequence: 1, command: { kind: "edit", key: "gain", value: 7 },
+            kind: "command", scope, client: 3, sequence: 1, command: { kind: "edit", key: "gain", value: 7, expectedVersion: 1 },
         });
         await page.evaluate(() => { window.viewHarness.remove(); window.viewHarness.createSecond(); window.viewHarness.append(); });
         await page.getByText("Second configured view", { exact: true }).waitFor({ state: "visible" });

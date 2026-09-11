@@ -22,7 +22,6 @@ import {
     type ResourceClientInput,
 } from "../shared/resource-client";
 import { startPatchWorkerServices } from "../shared/patch-worker-services";
-import { createSynthModulationBinding } from "./synth-modulation-binding";
 import { createRackStateWorkerService } from "./rack-state-worker-service";
 import { prepareSharedData, type SharedDataConnection } from "../../kit/ui/prepared-shared-data";
 import { PACKED_WAVETABLE_BYTES, preparePackedWavetable } from "../shared/packed-wavetable";
@@ -1681,7 +1680,6 @@ export default async function runWavetableWorker(connection: PatchConnectionLike
         createRackStateWorkerService,
         () => createWavetableWorkerController(connection, { ...options, delivery: "shared" }),
         () => createCmajorPluginStateService(synthPluginState, connection, {
-            bindings: [createSynthModulationBinding(connection)],
             onDefect: error => console.error("Cosimo state failed", describeErrorDetail(error)),
         }),
     ]);

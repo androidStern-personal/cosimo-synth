@@ -45,3 +45,21 @@ These are headless engine and live-browser qualifications. No installed DAW, aud
 TypeScript checking and 68 existing runtime-lane, MSEG, and capture-plan checks passed. Native shared-block checks passed with AddressSanitizer and UndefinedBehaviorSanitizer, including interpolation, nested renderer scopes, replacement, retirement, and lookup counts. Independent review reproduced cancellation through the real shared runtime: stopping or replacing the session revoked a submitted curve before audio adopted it.
 
 Five broader failures also reproduce with untouched baseline source and the saved old engine: three modulation bridge cases call an absent `replaceStoredValue` on their runtime fixture; Bounce's pad-tail assertion and recursive legacy-wavetable recipe fail unchanged. No assertions were weakened. The existing browser test server omits the cross-origin isolation headers, so the actual live-browser proof above used a server with those required headers.
+
+
+## Reusable module extraction regression
+
+The subsequent kit extraction was compared with commit `2bcff19d917a474cb1245c59a622e5d362455204`, which already uses shared MSEG storage. All six baseline/candidate pairs produced byte-identical audio: 131,072 finite, nonzero float32 samples each, with one or eight held notes through A/B morph, curve replacement and loop changes. The saved baseline Cmajor sources and native shared reader were checked against that commit before replay.
+
+| Engine / held notes | Baseline µs/block | Extracted µs/block | Change |
+|---|---:|---:|---:|
+| Native JIT / 1 | 162.00 | 162.68 | +0.42% |
+| Native JIT / 8 | 579.33 | 575.45 | −0.67% |
+| Compiled native / 1 | 179.10 | 179.90 | +0.45% |
+| Compiled native / 8 | 581.59 | 584.30 | +0.47% |
+| Offline Wasm / 1 | 272.55 | 275.24 | +0.99% |
+| Offline Wasm / 8 | 646.30 | 644.60 | −0.26% |
+
+The same 48 kHz / 128-frame / nine-group harness ran serially with builds idle. These small mixed differences do not establish a speedup or a material playback regression. DSP memory requirements remain 1,308 pages / 85,721,088 bytes. Production Wasm curve preparation and submission together measured 93.37 → 91.46 µs with one note and 127.67 → 125.21 µs with eight notes.
+
+[Extraction results and timing distributions](extraction-results.json) retain settings and hashes. Exact candidate binaries, web modules, raw captures and replay scripts remain under `build/mseg-extraction-proof/`; the older migration baseline remains untouched. This is automated headless engine evidence, separate from live-browser, installed-host and listening acceptance.

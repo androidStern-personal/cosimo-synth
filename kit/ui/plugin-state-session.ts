@@ -1,4 +1,5 @@
 import { atom, createStore } from "jotai/vanilla";
+import { UndoHistory } from "./undo-history";
 import type { EngineApplication, EngineTarget } from "./plugin-state-engine";
 import type { PluginStateFields, PluginStateFieldValue, PluginStateJson } from "./plugin-state-definition";
 
@@ -61,6 +62,8 @@ export type PluginStateFieldSnapshot<Value> = (
     }) & {
         readonly application?: PluginStateApplication;
         readonly target?: EngineTarget;
+        /** Correlates only the current failed save; hidden by public controls. */
+        readonly persistenceRequest?: number;
     };
 
 /** Requested application progress remains distinct from native persistence. */
@@ -111,6 +114,13 @@ export type PluginStateCommand = {
     readonly key: string;
     readonly value: unknown;
     readonly expectedVersion: 0;
+} | {
+    /** Retry only the current failed application or save; no editable-state mutation. */
+    readonly kind: "retry";
+    readonly key: string;
+    readonly expectedVersion: number;
+    readonly expectedGeneration: number | null;
+    readonly expectedPersistenceRequest: number | null;
 } | { readonly kind: "begin"; readonly key: string; readonly gesture: number; readonly label?: string }
   | { readonly kind: "end"; readonly key: string; readonly gesture: number }
   | { readonly kind: "undo"; readonly expectedEntry?: PluginStateHistoryEntry }
@@ -190,11 +200,10 @@ export interface PluginStateSession<Fields extends PluginStateFields> {
 type RuntimeField = PluginStateFieldSnapshot<unknown>;
 type RuntimeSnapshot = PluginStateSnapshot<PluginStateFields>;
 type HistoryEntry = { readonly key: string; readonly before: unknown; readonly after: unknown; readonly order: number };
-type Gesture = PluginStateGestureOwner & { readonly before: unknown; readonly after: unknown; readonly order: number };
+type Gesture = PluginStateGestureOwner & { readonly before: unknown; readonly after: unknown; readonly order: number; readonly guardFloorVersion: number };
 type Model = {
     readonly snapshot: RuntimeSnapshot;
-    readonly past: readonly HistoryEntry[];
-    readonly future: readonly HistoryEntry[];
+    readonly history: UndoHistory<HistoryEntry>;
     readonly gestures: ReadonlyMap<string, Gesture>;
     readonly editOrder: number;
     readonly detached: ReadonlySet<number>;
@@ -217,8 +226,8 @@ function validParameter(parameter: PluginStateNativeParameter): boolean {
         && parameter.defaultValue >= parameter.min && parameter.defaultValue <= parameter.max;
 }
 
-function readyField(value: unknown, persistence: PluginStatePersistence, version = 0, metadata?: Omit<PluginStateNativeParameter, "endpoint" | "value">, gesture?: PluginStateGestureOwner, application?: PluginStateApplication): RuntimeField {
-    return Object.freeze({ readiness: Object.freeze({ kind: "ready" as const }), value, version, persistence: Object.freeze(persistence), ...(metadata ? { metadata } : {}), ...(gesture ? { gesture } : {}), ...(application ? { application: Object.freeze(application) } : {}) });
+function readyField(value: unknown, persistence: PluginStatePersistence, version = 0, metadata?: Omit<PluginStateNativeParameter, "endpoint" | "value">, gesture?: PluginStateGestureOwner, application?: PluginStateApplication, persistenceRequest?: number): RuntimeField {
+    return Object.freeze({ readiness: Object.freeze({ kind: "ready" as const }), value, version, persistence: Object.freeze(persistence), ...(metadata ? { metadata } : {}), ...(gesture ? { gesture } : {}), ...(application ? { application: Object.freeze(application) } : {}), ...(persistenceRequest === undefined ? {} : { persistenceRequest }) });
 }
 
 /** Create a patch-lifetime state owner with explicit native effects and Jotai reactivity. */
@@ -227,6 +236,7 @@ export function createPluginStateSession<const Fields extends PluginStateFields>
     ports: {
         readonly native: PluginStateNativePort<Fields>;
         readonly bindings?: readonly PluginStateEnginePort[];
+        readonly historyLimit?: number;
         /** Retain an unexpected cause for diagnostics. Must not throw. */
         readonly onDefect: (error: unknown) => void;
     },
@@ -236,7 +246,7 @@ export function createPluginStateSession<const Fields extends PluginStateFields>
     for (const key of Object.keys(definition)) initialFields[key] = Object.freeze({ readiness: Object.freeze({ kind: "pending" }) });
     const state = atom<Model>({
         snapshot: Object.freeze({ scope: null, revision: 0, fields: Object.freeze(initialFields), history: Object.freeze({ canUndo: false, canRedo: false }) }),
-        past: [], future: [], gestures: new Map(), editOrder: 0, detached: new Set<number>(), parameters: new Map(), publications: new Map(),
+        history: new UndoHistory<HistoryEntry>({ limit: ports.historyLimit, compare: (a, b) => a.order - b.order }), gestures: new Map(), editOrder: 0, detached: new Set<number>(), parameters: new Map(), publications: new Map(),
     });
     const snapshotAtom = atom((get) => get(state).snapshot);
     let stopped = false;
@@ -252,20 +262,24 @@ export function createPluginStateSession<const Fields extends PluginStateFields>
         // comes from that exact field's typed codec; parameter fields hold numbers.
         return store.get(snapshotAtom) as PluginStateSnapshot<Fields>;
     };
-    const publishSnapshot = (model: Model, fields: Readonly<Record<string, RuntimeField>>, past = model.past, future = model.future): Model => ({
-        ...model,
-        past: past.slice(-100), future,
-        snapshot: Object.freeze({
-            ...model.snapshot, revision: model.snapshot.revision + 1, fields: Object.freeze(fields),
-            history: Object.freeze({
-                canUndo: !stopped && model.gestures.size === 0 && past.length > 0 && fields[past[past.length - 1]?.key ?? ""]?.readiness.kind === "ready",
-                canRedo: !stopped && model.gestures.size === 0 && future.length > 0 && fields[future[future.length - 1]?.key ?? ""]?.readiness.kind === "ready",
-                ...(model.snapshot.scope && past.length > 0 ? { undoEntry: historyReference(model.snapshot.scope, past[past.length - 1]!) } : {}),
-                ...(model.snapshot.scope && future.length > 0 ? { redoEntry: historyReference(model.snapshot.scope, future[future.length - 1]!) } : {}),
+    const historyParticipates = (key: string) => definition[key]?.history !== false;
+    const historyBusy = (model: Model) => [...model.gestures.keys()].some(historyParticipates);
+    const publishSnapshot = (model: Model, fields: Readonly<Record<string, RuntimeField>>, history = model.history): Model => {
+        const undo = history.undoEntry, redo = history.redoEntry;
+        return {
+            ...model, history,
+            snapshot: Object.freeze({
+                ...model.snapshot, revision: model.snapshot.revision + 1, fields: Object.freeze(fields),
+                history: Object.freeze({
+                    canUndo: !stopped && !historyBusy(model) && undo !== undefined && fields[undo.key]?.readiness.kind === "ready",
+                    canRedo: !stopped && !historyBusy(model) && redo !== undefined && fields[redo.key]?.readiness.kind === "ready",
+                    ...(model.snapshot.scope && undo ? { undoEntry: historyReference(model.snapshot.scope, undo) } : {}),
+                    ...(model.snapshot.scope && redo ? { redoEntry: historyReference(model.snapshot.scope, redo) } : {}),
+                }),
             }),
-        }),
-    });
-    const commit = (next: Model) => {
+        };
+    };
+    const commit = (next: Model, retryKey?: string) => {
         const previous = store.get(state);
         if (next.snapshot === previous.snapshot) { store.set(state, next); return; }
         const scope = next.snapshot.scope;
@@ -276,7 +290,7 @@ export function createPluginStateSession<const Fields extends PluginStateFields>
             if (!field) continue;
             const old = previous.snapshot.fields[binding.key];
             const reset = !previous.snapshot.scope || !sameScope(scope, previous.snapshot.scope);
-            const changed = reset || !old || old.readiness.kind !== field.readiness.kind
+            const changed = reset || binding.key === retryKey || !old || old.readiness.kind !== field.readiness.kind
                 || ("value" in field && (!('value' in old) || !Object.is(field.value, old.value)))
                 || binding.dependencies.some(key => {
                     const before = previous.snapshot.fields[key];
@@ -308,14 +322,14 @@ export function createPluginStateSession<const Fields extends PluginStateFields>
         }
         store.set(state, { ...next, snapshot: Object.freeze({ ...next.snapshot, fields: Object.freeze(fields) }) });
     };
-    const sealGesture = (past: readonly HistoryEntry[], key: string, gesture: Gesture): readonly HistoryEntry[] => {
+    const sealGesture = (history: UndoHistory<HistoryEntry>, key: string, gesture: Gesture): UndoHistory<HistoryEntry> => {
+        if (!historyParticipates(key)) return history;
         const field = definition[key];
         const equal = field?.kind === "stored" ? field.codec.equals(gesture.before, gesture.after)
             : Object.is(gesture.before, gesture.after);
-        return equal ? past : [...past, { key, before: gesture.before, after: gesture.after, order: gesture.order }]
-            .sort((left, right) => left.order - right.order);
+        return equal ? history : history.record({ key, before: gesture.before, after: gesture.after, order: gesture.order });
     };
-    const applyValue = (model: Model, key: string, value: unknown, past: readonly HistoryEntry[], future: readonly HistoryEntry[], cause: "edit" | "history" | "recover"): PluginStateResult => {
+    const applyValue = (model: Model, key: string, value: unknown, history: UndoHistory<HistoryEntry>, cause: "edit" | "history" | "recover"): PluginStateResult => {
         const field = definition[key];
         const previous = model.snapshot.fields[key];
         if (!field || !previous || !model.snapshot.scope) {
@@ -332,19 +346,19 @@ export function createPluginStateSession<const Fields extends PluginStateFields>
                 : [{ kind: "gesture-start", endpoint: field.endpoint },
                     { kind: "parameter", endpoint: field.endpoint, value },
                     { kind: "gesture-end", endpoint: field.endpoint }];
-        } else operations = [{ kind: "stored", key, value: field.codec.encode(value) }];
+        } else operations = field.lifetime === "instance" ? [] : [{ kind: "stored", key, value: field.codec.encode(value) }];
         const version = (baseline?.version ?? 0) + 1;
-        const request = ++nextPublication;
-        const publications = new Map(model.publications).set(request, { key, version });
-        const next = publishSnapshot(model, { ...model.snapshot.fields, [key]: readyField(value, { kind: field.kind === "parameter" ? "host-managed" : "pending" }, version, baseline?.metadata, baseline?.gesture, field.kind === "parameter" ? { kind: "pending" } : undefined) }, past, future);
+        const request = operations.length ? ++nextPublication : 0;
+        const publications = operations.length ? new Map(model.publications).set(request, { key, version }) : model.publications;
+        const next = publishSnapshot(model, { ...model.snapshot.fields, [key]: readyField(value, { kind: field.kind === "parameter" ? "host-managed" : field.lifetime === "instance" ? "not-written" : "pending" }, version, baseline?.metadata, baseline?.gesture, field.kind === "parameter" ? { kind: "pending" } : undefined) }, history);
         const result: PluginStateResult = { kind: "accepted", revision: next.snapshot.revision, version,
             ...(cause !== "history" ? { changed: true } : {}),
-            ...(cause === "edit" && !model.gestures.has(key) && past.length > 0
-                ? { historyEntry: historyReference(model.snapshot.scope, past[past.length - 1]!) } : {}),
+            ...(cause === "edit" && historyParticipates(key) && !model.gestures.has(key) && history.undoEntry
+                ? { historyEntry: historyReference(model.snapshot.scope, history.undoEntry) } : {}),
         };
         accepted = result;
         commit({ ...next, publications });
-        if (stopped) return result;
+        if (stopped || !operations.length) return result;
         ports.native.publish({ request, scope: model.snapshot.scope, operations });
         return result;
     };
@@ -364,7 +378,12 @@ export function createPluginStateSession<const Fields extends PluginStateFields>
                         fields[key] = readyField(parameter.value, { kind: "host-managed" }, 0, Object.freeze({ min, max, step, defaultValue }), undefined, { kind: "unconfirmed" });
                     } else fields[key] = Object.freeze({ readiness: Object.freeze({ kind: "failed", reason: parameter ? "invalid-state" : "missing-parameter" }) });
                 } else {
-                    const present = Object.hasOwn(event.native.values, key);
+                    const before = model.snapshot.fields[key];
+                    if (field.lifetime === "instance" && event.kind === "replaced" && before && "value" in before) {
+                        fields[key] = readyField(before.value, { kind: "not-written" }, before.version);
+                        continue;
+                    }
+                    const present = field.lifetime !== "instance" && Object.hasOwn(event.native.values, key);
                     const parsed = present ? field.codec.parse(event.native.values[key]) : field.initial;
                     if (parsed.kind === "ok") fields[key] = readyField(parsed.value, { kind: present ? "observed-in-native-state" : "not-written" });
                     else {
@@ -376,30 +395,59 @@ export function createPluginStateSession<const Fields extends PluginStateFields>
                     }
                 }
             }
-            const next = publishSnapshot(model, fields, [], []);
+            const next = publishSnapshot(model, fields, model.history.clear());
             commit({ ...next, gestures: new Map(), publications: new Map(), editOrder: 0, parameters, snapshot: Object.freeze({ ...next.snapshot, scope: Object.freeze({ ...event.scope }) }) });
         } else if (event.kind === "command") {
             if (!model.snapshot.scope) return { kind: "rejected", reason: "not-ready" };
             if (!sameScope(event.address, model.snapshot.scope)) return { kind: "rejected", reason: "stale-scope" };
             if (model.detached.has(event.address.client)) return { kind: "rejected", reason: "service-closed" };
             if (event.command.kind === "undo" || event.command.kind === "redo") {
-                if (model.gestures.size > 0) return { kind: "rejected", reason: "busy" };
+                if (historyBusy(model)) return { kind: "rejected", reason: "busy" };
                 const undo = event.command.kind === "undo";
-                const source = undo ? model.past : model.future;
-                const entry = source[source.length - 1];
+                const entry = undo ? model.history.undoEntry : model.history.redoEntry;
                 const expected = event.command.expectedEntry;
                 if (expected && (!entry || !sameScope(expected.scope, model.snapshot.scope) || expected.id !== entry.order))
                     return { kind: "rejected", reason: "stale-history" };
                 if (!entry) return { kind: "accepted", revision: model.snapshot.revision };
                 return applyValue(model, entry.key, undo ? entry.before : entry.after,
-                    undo ? model.past.slice(0, -1) : [...model.past, entry],
-                    undo ? [...model.future, entry] : model.future.slice(0, -1), "history");
+                    undo ? model.history.undo() : model.history.redo(), "history");
             }
             const { key } = event.command;
             if (!Object.hasOwn(definition, key)) return { kind: "rejected", reason: "invalid-command" };
             const field = definition[key];
             const current = model.snapshot.fields[key];
             if (!field || !current) return { kind: "rejected", reason: "invalid-command" };
+            if (event.command.kind === "retry") {
+                if (!("value" in current) || current.readiness.kind !== "ready") return { kind: "rejected", reason: "not-ready" };
+                if (event.command.expectedVersion !== current.version
+                    || event.command.expectedGeneration !== (current.target?.generation ?? null)) return { kind: "rejected", reason: "stale-version" };
+                const failedSave = current.persistence.kind === "failed" && current.persistenceRequest !== undefined;
+                if (event.command.expectedPersistenceRequest !== (failedSave ? current.persistenceRequest : null))
+                    return { kind: "rejected", reason: "stale-version" };
+                if (failedSave) {
+                    const operations: readonly PluginStateOperation[] = field.kind === "parameter"
+                        ? [{ kind: "parameter", endpoint: field.endpoint, value: Number(current.value) }]
+                        : [{ kind: "stored", key, value: field.codec.encode(current.value) }];
+                    const request = ++nextPublication;
+                    const publications = new Map(model.publications).set(request, { key, version: current.version });
+                    const next = publishSnapshot(model, { ...model.snapshot.fields, [key]: Object.freeze({ ...current,
+                        persistence: Object.freeze({ kind: "pending" as const }),
+                        ...(field.kind === "parameter" ? { application: Object.freeze({ kind: "pending" as const }) } : {}),
+                    }) });
+                    const result: PluginStateResult = { kind: "accepted", revision: next.snapshot.revision, version: current.version, changed: false };
+                    accepted = result;
+                    commit({ ...next, publications });
+                    if (!stopped) ports.native.publish({ request, scope: model.snapshot.scope, operations });
+                    return result;
+                }
+                if (current.application?.kind !== "failed" || !ports.bindings?.some(binding => binding.key === key))
+                    return { kind: "rejected", reason: "not-ready" };
+                const next = publishSnapshot(model, model.snapshot.fields);
+                const result: PluginStateResult = { kind: "accepted", revision: next.snapshot.revision, version: current.version, changed: false };
+                accepted = result;
+                commit(next, key);
+                return result;
+            }
             if (event.command.kind === "recover") {
                 if (event.command.expectedVersion !== 0 || Object.hasOwn(event.command, "gesture")) return { kind: "rejected", reason: "invalid-command" };
                 if (field.kind !== "stored") return { kind: "rejected", reason: "not-ready" };
@@ -407,7 +455,7 @@ export function createPluginStateSession<const Fields extends PluginStateFields>
                 if (current.readiness.kind !== "failed" || current.readiness.reason !== "invalid-state") return { kind: "rejected", reason: "not-ready" };
                 const parsed = field.codec.parse(event.command.value);
                 if (parsed.kind === "error") return { kind: "rejected", reason: "invalid-value" };
-                return applyValue(model, key, parsed.value, model.past, model.future, "recover");
+                return applyValue(model, key, parsed.value, model.history, "recover");
             }
             if (!("value" in current) || current.readiness.kind !== "ready") return { kind: "rejected", reason: "not-ready" };
             const previous = current;
@@ -420,21 +468,21 @@ export function createPluginStateSession<const Fields extends PluginStateFields>
                 const begin = event.command.kind === "begin";
                 if (begin === Boolean(activeGesture)) return { kind: "accepted", revision: model.snapshot.revision, version: previous.version };
                 const gestures = new Map(model.gestures);
-                let past = model.past;
+                let history = model.history;
                 let gestureOwner: PluginStateGestureOwner | undefined;
                 let historyEntry: PluginStateHistoryEntry | undefined;
                 if (begin) {
                     gestureOwner = Object.freeze({ client: event.address.client, gesture });
                     const baseline = previous.value;
-                    gestures.set(key, { ...gestureOwner, before: baseline, after: baseline, order: 0 });
+                    gestures.set(key, { ...gestureOwner, before: baseline, after: baseline, order: 0, guardFloorVersion: previous.version });
                 } else if (activeGesture) {
                     gestures.delete(key);
-                    past = sealGesture(past, key, activeGesture);
-                    if (past !== model.past) historyEntry = historyReference(model.snapshot.scope, { key, ...activeGesture });
+                    history = sealGesture(history, key, activeGesture);
+                    if (history !== model.history && history.undoEntry) historyEntry = historyReference(model.snapshot.scope, { key, ...activeGesture });
                 }
                 const next = publishSnapshot({ ...model, gestures }, { ...model.snapshot.fields,
-                    [key]: readyField(previous.value, previous.persistence, previous.version, previous.metadata, gestureOwner, previous.application),
-                }, past);
+                    [key]: readyField(previous.value, previous.persistence, previous.version, previous.metadata, gestureOwner, previous.application, previous.persistenceRequest),
+                }, history);
                 const result: PluginStateResult = { kind: "accepted", revision: next.snapshot.revision, version: previous.version,
                     ...(historyEntry ? { historyEntry } : {}),
                 };
@@ -451,7 +499,9 @@ export function createPluginStateSession<const Fields extends PluginStateFields>
                 return { kind: "rejected", reason: "invalid-command" };
             }
             if (activeGesture && event.command.gesture === undefined) return { kind: "rejected", reason: "invalid-command" };
-            if (expectedVersion !== undefined && expectedVersion !== previous.version) return { kind: "rejected", reason: "stale-version" };
+            if (expectedVersion !== undefined && expectedVersion !== previous.version
+                && !(activeGesture && expectedVersion >= activeGesture.guardFloorVersion && expectedVersion <= previous.version))
+                return { kind: "rejected", reason: "stale-version" };
             let nextValue: unknown;
             if (field.kind === "parameter") {
                 const metadata = model.parameters.get(key);
@@ -471,11 +521,10 @@ export function createPluginStateSession<const Fields extends PluginStateFields>
             const editOrder = model.editOrder + 1;
             if (activeGesture) {
                 const gestures = new Map(model.gestures).set(key, { ...activeGesture, after: nextValue, order: editOrder });
-                return applyValue({ ...model, gestures, editOrder }, key, nextValue, model.past, [], "edit");
+                return applyValue({ ...model, gestures, editOrder }, key, nextValue, historyParticipates(key) ? model.history.clearRedo() : model.history, "edit");
             }
-            return applyValue({ ...model, editOrder }, key, nextValue, [
-                ...model.past, { key, before: previous.value, after: nextValue, order: editOrder },
-            ], [], "edit");
+            return applyValue({ ...model, editOrder }, key, nextValue, historyParticipates(key)
+                ? model.history.record({ key, before: previous.value, after: nextValue, order: editOrder }) : model.history, "edit");
         } else if (event.kind === "engine") {
             const field = model.snapshot.fields[event.target.key];
             if (!field?.target || !sameScope(field.target.scope, event.target.scope)
@@ -489,17 +538,17 @@ export function createPluginStateSession<const Fields extends PluginStateFields>
             const gestures = new Map(model.gestures);
             const fields = { ...model.snapshot.fields };
             const operations: PluginStateOperation[] = [];
-            let past = model.past;
+            let history = model.history;
             for (const [key, gesture] of model.gestures) {
                 if (gesture.client !== event.client) continue;
                 gestures.delete(key);
-                past = sealGesture(past, key, gesture);
+                history = sealGesture(history, key, gesture);
                 const current = fields[key];
-                if (current && "value" in current) fields[key] = readyField(current.value, current.persistence, current.version, current.metadata, undefined, current.application);
+                if (current && "value" in current) fields[key] = readyField(current.value, current.persistence, current.version, current.metadata, undefined, current.application, current.persistenceRequest);
                 const field = definition[key];
                 if (field?.kind === "parameter") operations.push({ kind: "gesture-end", endpoint: field.endpoint });
             }
-            const next = gestures.size === model.gestures.size ? model : publishSnapshot({ ...model, gestures }, fields, past);
+            const next = gestures.size === model.gestures.size ? model : publishSnapshot({ ...model, gestures }, fields, history);
             accepted = { kind: "accepted", revision: next.snapshot.revision };
             commit({ ...next, gestures, detached: new Set(model.detached).add(event.client) });
             if (!stopped && operations.length > 0) ports.native.publish({ request: ++nextPublication, scope: model.snapshot.scope, operations });
@@ -514,7 +563,10 @@ export function createPluginStateSession<const Fields extends PluginStateFields>
                 const next = Object.is(field.value, event.value) ? model : publishSnapshot(model, {
                     ...model.snapshot.fields, [key]: readyField(event.value, { kind: "host-managed" }, field.version + 1, field.metadata, field.gesture, { kind: "unconfirmed" }),
                 });
-                commit(next);
+                const active = model.gestures.get(key);
+                const gestures = active && next !== model
+                    ? new Map(model.gestures).set(key, { ...active, guardFloorVersion: field.version + 1 }) : model.gestures;
+                commit({ ...next, gestures });
             }
         } else {
             if (!model.snapshot.scope || !sameScope(event.scope, model.snapshot.scope)) return { kind: "rejected", reason: "stale-scope" };
@@ -531,7 +583,9 @@ export function createPluginStateSession<const Fields extends PluginStateFields>
                         ? event.result.kind === "observed" ? { kind: "sent" as const, proof: "native-publication-processed" as const }
                             : { kind: "failed" as const, error: Object.freeze({ kind: "transport" as const, message: event.result.reason }) }
                         : field.application;
-                    const next = publishSnapshot(model, { ...model.snapshot.fields, [publication.key]: readyField(field.value, persistence, field.version, field.metadata, field.gesture, application) });
+                    const next = publishSnapshot(model, { ...model.snapshot.fields, [publication.key]: Object.freeze({ ...readyField(field.value, persistence, field.version, field.metadata, field.gesture, application),
+                        ...(event.result.kind === "failed" ? { persistenceRequest: event.request } : {}),
+                    }) });
                     commit({ ...next, publications });
                 } else commit({ ...model, publications });
             }

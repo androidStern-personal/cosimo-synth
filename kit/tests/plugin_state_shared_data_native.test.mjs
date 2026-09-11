@@ -104,7 +104,7 @@ test('a custom delivery cannot leave background data work alive after its apply 
     };
     let background;
     const codec={parse:value=>({kind:'ok',value:Object.freeze([...value])}),encode:value=>[...value],equals:(a,b)=>JSON.stringify(a)===JSON.stringify(b)};
-    const definition=definePluginState({shape:preparedState({schema:codec,initial:[0,1],prepare:value=>new Float32Array(value),engine:{
+    const definition=definePluginState({shape:preparedState({codec,initial:[0,1],prepare:value=>new Float32Array(value),engine:{
         eventEndpoints:[],dataInputs:[0],create:()=>({
             async apply(samples,context){background=context.replaceData(0,samples);return {kind:'unconfirmed'};},stop(){},
         }),

@@ -1,0 +1,114 @@
+/** One curve is a padded 2,051-float resource prepared by Mseg.state().
+    Include the generated PluginState.cmajor alongside this module. */
+namespace kit::mseg
+{
+    let bodySamples = 2048;
+    let paddedSamples = 2051;
+
+    float32 catmullRom (float32 p0, float32 p1, float32 p2, float32 p3, float32 t)
+    {
+        return p1 + 0.5f * t * ((p2 - p0) + t * ((2.0f * p0 - 5.0f * p1 + 4.0f * p2 - p3)
+               + t * (-p0 + 3.0f * p1 - 3.0f * p2 + p3)));
+    }
+
+    /** Read one adopted curve at normalized time. Missing curves produce silence. */
+    float32 sample (int32 inputIndex, float32 position)
+    {
+        if (cmaj::data::size (inputIndex) != paddedSamples)
+            return 0.0f;
+        let scaled = std::intrinsics::clamp (position, 0.0f, 1.0f) * float32 (bodySamples - 1);
+        let index = int32 (std::intrinsics::floor (scaled));
+        return catmullRom (cmaj::data::read (inputIndex, index), cmaj::data::read (inputIndex, index + 1),
+                          cmaj::data::read (inputIndex, index + 2), cmaj::data::read (inputIndex, index + 3),
+                          scaled - float32 (index));
+    }
+
+    /** Playback policy independent of any host parameter or UI presentation. */
+    struct Playback
+    {
+        bool holdFinalValue;
+        bool loopEnabled;
+        float32 loopStart;
+        float32 loopEnd;
+        bool ignoreNoteOff;
+        bool legatoRestarts;
+    }
+
+    /** Single-curve playback; instantiate with PluginState::fieldName::inputIndex.
+        Shared data is adopted by the host, so held notes see curve edits without a sample upload. */
+    processor Reader (int32 sharedInput)
+    {
+        input event Playback playback;
+        input event int32 trigger;
+        input event int32 legatoTrigger;
+        input event int32 noteOff;
+        input value float32 durationSeconds;
+        output stream float32 out;
+        output stream float32 progressOut;
+
+        bool active, loopEnabled, stopFutureWraps, ignoreNoteOff, legatoRestarts;
+        bool holdFinalValue = true;
+        float32 progress = 1.0f;
+        float32 currentValue;
+        float32 loopStart, loopEnd;
+
+        event playback (Playback config)
+        {
+            holdFinalValue = config.holdFinalValue;
+            let start = std::intrinsics::clamp (config.loopStart, 0.0f, 1.0f);
+            let end = std::intrinsics::clamp (config.loopEnd, 0.0f, 1.0f);
+            loopStart = std::intrinsics::min (start, end);
+            loopEnd = std::intrinsics::max (start, end);
+            loopEnabled = config.loopEnabled && loopEnd - loopStart > 0.000001f;
+            ignoreNoteOff = config.ignoreNoteOff;
+            legatoRestarts = config.legatoRestarts;
+        }
+
+        void restart()
+        {
+            active = true;
+            progress = 0.0f;
+            currentValue = sample (sharedInput, 0.0f);
+            stopFutureWraps = false;
+        }
+        event trigger (int32 unused) { restart(); }
+        event legatoTrigger (int32 unused) { if (legatoRestarts) restart(); }
+        event noteOff (int32 unused)
+        {
+            if (active && loopEnabled && ! ignoreNoteOff)
+                stopFutureWraps = true;
+        }
+
+        float32 advanceProgress()
+        {
+            let duration = std::intrinsics::max (durationSeconds, 1.0f / float32 (processor.frequency));
+            let next = progress + 1.0f / (duration * float32 (processor.frequency));
+            if (! loopEnabled || stopFutureWraps)
+                return std::intrinsics::min (next, 1.0f);
+            if (next <= loopEnd + 0.000001f)
+                return std::intrinsics::min (next, loopEnd);
+            let width = loopEnd - loopStart;
+            let remainder = next - loopEnd;
+            return loopStart + (remainder - std::intrinsics::floor (remainder / width) * width);
+        }
+
+        void main()
+        {
+            loop
+            {
+                let displayedProgress = std::intrinsics::clamp (progress, 0.0f, 1.0f);
+                if (active)
+                {
+                    currentValue = sample (sharedInput, progress);
+                    if ((! loopEnabled || stopFutureWraps) && progress >= 1.0f)
+                        active = false;
+                    else
+                        progress = advanceProgress();
+                }
+                out <- holdFinalValue || active ? currentValue : 0.0f;
+                progressOut <- displayedProgress;
+                advance();
+            }
+        }
+    }
+}

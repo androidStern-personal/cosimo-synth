@@ -8,10 +8,10 @@ const workerSource = await readFile(
 );
 
 test("production worker has one owner for ordered modulation then articulation restore", () => {
-    assert.match(workerSource, /createCmajorPluginStateService\(synthPluginState, connection,\s*\{\s*bindings:\s*\[createSynthModulationBinding\(connection\)\]/);
+    assert.match(workerSource, /createCmajorPluginStateService\(synthPluginState, connection,\s*\{\s*onDefect:/);
     assert.doesNotMatch(workerSource, /\bcreateModulationArticulationWorkerService\s*,/);
     assert.doesNotMatch(workerSource, /\bcreateModulationWorkerService\s*,/);
     assert.doesNotMatch(workerSource, /\bcreateArticulationWorkerService\s*,/);
     assert.match(workerSource, /\bcreateRackStateWorkerService\s*,/);
-    assert.match(workerSource, /createWavetableWorkerController\(connection, options\)/);
+    assert.match(workerSource, /createWavetableWorkerController\(connection, \{ \.\.\.options, delivery: "shared" \}\)/);
 });

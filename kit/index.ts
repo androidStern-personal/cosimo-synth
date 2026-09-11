@@ -25,11 +25,15 @@ export * from "./ui/patch-worker-services";
 
 // Plugin-owned values and shared history; worker and message details stay inside
 // the framework-generated state service.
-export { definePluginState, parameter, storedValue, eventValue, preparedState } from "./ui/plugin-state-definition";
-export type { PluginStateCodec, PluginStatePrepareContext, PluginStateDelivery, PluginStateDeliveryContext,
-    PluginStateEffect, PluginStateSubmission, PluginStateDeliveryOutcome } from "./ui/plugin-state-definition";
+export { definePluginState, parameter, storedValue, eventValue, preparedState, preparationFailure } from "./ui/plugin-state-definition";
+export type { PluginStateCodec, PluginStatePrepareContext, PluginStateDelivery, PluginStateDeliveryContext, PluginStateDocumentContext,
+    PluginStateEffect, PluginStateSubmission, PluginStateDeliveryOutcome, PluginStatePreparationFailure, PluginStateOptions } from "./ui/plugin-state-definition";
+export * as Mseg from "./ui/mseg-module";
+export { nativeValue } from "./ui/native-value";
+export * as Native from "./ui/native-value-codecs";
+export { UndoHistory } from "./ui/undo-history";
 export type { PluginStateControlState, PluginStateControl, PluginStateHistory, PluginStateHistoryEntry,
-    PluginStateEditResult, PluginStateRejectionReason, PluginStateApplicationState } from "./ui/plugin-state-react";
+    PluginStateEditResult, PluginStateRejectionReason, PluginStateApplicationState, PluginStateControlError } from "./ui/plugin-state-react";
 export { usePluginState, usePluginHistory } from "./ui/plugin-state-react";
 export { createStatefulPatchView } from "./ui/plugin-state-view";
 export { engineData } from "./ui/engine-data-delivery";

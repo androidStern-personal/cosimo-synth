@@ -400,6 +400,7 @@ test("editing one MSEG slot persists modulation.v6 without runtime uploading", a
         ],
     });
 
+    await waitForModulation(() => patchConnection.storedWrites.length > 0);
     assert.equal(patchConnection.storedWrites.some(({ key }) => key === MODULATION_STATE_KEY), true);
     const savedState = deserializeModulationState(patchConnection.storedWrites.at(-1).value);
     assert.equal(savedState.version, 6);
@@ -429,6 +430,7 @@ test("editing shape B only changes shape B and edit focus does not persist a mor
         ],
     });
 
+    await waitForModulation(() => patchConnection.storedWrites.length > 0);
     const savedState = deserializeModulationState(patchConnection.storedWrites.at(-1).value);
     assert.equal(savedState.msegSlots[0].shapeA.points[0].y, 0);
     assert.equal(savedState.msegSlots[0].shapeB.points[0].y, 0.95);
@@ -465,6 +467,7 @@ test("replacing routes preserves signed amounts and compiles only active mapping
         },
     ]);
 
+    await waitForModulation(() => patchConnection.storedWrites.length > 0);
     assert.equal(patchConnection.storedWrites.length, 1);
     const savedState = deserializeModulationState(patchConnection.storedWrites[0].value);
     assert.deepEqual(savedState.routes.map(routeSummary), [

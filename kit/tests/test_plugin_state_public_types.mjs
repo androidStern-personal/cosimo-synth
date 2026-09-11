@@ -12,7 +12,7 @@ test("normal component result and history types are public and do not expose nat
     try {
         await symlink(path.join(root, "node_modules"), path.join(directory, "node_modules"));
         await writeFile(path.join(directory, "fixture.ts"), `
-import { usePluginState, usePluginHistory, parameter, type PluginStateControl,
+import { usePluginState, usePluginHistory, parameter, preparedState, sharedData, Native, type PluginStateControl,
     type PluginStateControlState, type PluginStateHistory, type PluginStateHistoryEntry,
     type PluginStateEditResult, type PluginStateApplicationState, type PluginStateRejectionReason } from ${JSON.stringify(path.join(root, "kit/index"))};
 const control: PluginStateControl<number> = usePluginState(parameter("gain"));
@@ -20,6 +20,21 @@ const history: PluginStateHistory = usePluginHistory();
 const state: PluginStateControlState<number> = control.state;
 const application: PluginStateApplicationState = {kind:"acknowledged"};
 const reason: PluginStateRejectionReason = "stale-history";
+const floats = preparedState({ codec: Native.number(), initial: 1,
+    engine: sharedData({ type: "float32", length: (value: number) => value * 4 }),
+    prepare(value, destination) {
+        const samples: Float32Array = destination;
+        // @ts-expect-error Float resources must not infer the byte writer API.
+        const bytes: Uint8Array = destination;
+        samples.fill(value);
+    },
+});
+preparedState({ codec: Native.number(), initial: 1,
+    engine: sharedData({ type: "bytes", length: 4 }),
+    prepare(value, destination) { const bytes: Uint8Array = destination; bytes[0] = value; },
+});
+// @ts-expect-error A shared writer cannot retain its reservation across an await.
+preparedState({ codec: Native.number(), initial: 1, engine: sharedData({ type: "float32", length: 4 }), prepare: async () => {} });
 // @ts-expect-error Native acknowledgement correlation does not belong to component authors.
 application.engineSession;
 // @ts-expect-error Native operation identities do not belong to component authors.

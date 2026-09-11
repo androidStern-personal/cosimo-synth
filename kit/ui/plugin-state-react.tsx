@@ -21,6 +21,12 @@ export type PluginStateEditResult =
 export type PluginStateApplicationState = Exclude<PluginStateApplication, { kind: "acknowledged" }>
     | { readonly kind: "acknowledged" };
 
+/** A diagnostic belongs to this field and never exposes native correlation identities. */
+export type PluginStateControlError = {
+    readonly kind: "readiness" | "persistence" | "application";
+    readonly message: string;
+};
+
 function projectApplication(application: PluginStateApplication): PluginStateApplicationState {
     switch (application.kind) {
         case "failed": return { kind: "failed", error: { kind: application.error.kind, message: application.error.message } };
@@ -83,6 +89,9 @@ export type PluginStateControlState<Value> =
 /** One editable control with framework-owned gestures and asynchronous results. */
 export interface PluginStateControl<Value> {
     readonly state: PluginStateControlState<Value>;
+    readonly error: PluginStateControlError | null;
+    /** Retry the captured failure without creating an edit or an Undo entry. */
+    readonly retry: (() => Promise<PluginStateEditResult>) | null;
     beginGesture(): Promise<PluginStateEditResult>;
     setValue(value: Value): Promise<PluginStateEditResult>;
     endGesture(): Promise<PluginStateEditResult> | undefined;
@@ -136,6 +145,12 @@ export function usePluginState<Field extends PluginStateParameter | PluginStateS
         };
     }), [client, key]);
     const state = useClientValue(client, selected);
+    // The private accepted version changes even for ABA edits whose value is
+    // equal again. React must renew its edit closure for those observations.
+    const source = useClientValue(client, client.reactivity.snapshot);
+    const renderedScope = source.kind === "ready" ? source.state.scope : null;
+    const renderedField = source.kind === "ready" ? source.state.fields[key] : undefined;
+    const renderedVersion = renderedField && "version" in renderedField ? renderedField.version : undefined;
     const actions = useMemo(() => {
         let active: { readonly scope: PluginStateScope; readonly gesture: number } | undefined;
         const currentGesture = () => {
@@ -159,13 +174,13 @@ export function usePluginState<Field extends PluginStateParameter | PluginStateS
                 });
             },
             /** Show a draft immediately and request the edit through the state client. */
-            setValue(value: PluginStateFieldValue<Field>): Promise<PluginStateEditResult> {
+            edit(value: PluginStateFieldValue<Field>, expectedVersion?: number): Promise<PluginStateEditResult> {
                 const gesture = currentGesture()?.gesture;
                 const snapshot = client.getSnapshot();
                 const field = snapshot.kind === "ready" ? snapshot.state.fields[key] : undefined;
                 if (definition[key]?.kind === "stored" && field?.readiness.kind === "failed" && field.readiness.reason === "invalid-state")
                     return client.dispatch({ kind: "recover", key, value, expectedVersion: 0 }).then(projection.result);
-                return client.dispatch({ kind: "edit", key, value, ...(gesture === undefined ? {} : { gesture }) }).then(projection.result);
+                return client.dispatch({ kind: "edit", key, value, expectedVersion, ...(gesture === undefined ? {} : { gesture }) }).then(projection.result);
             },
             /** Finish the current group; safe to call again after pointer cancellation. */
             endGesture(): Promise<PluginStateEditResult> | undefined {
@@ -176,7 +191,32 @@ export function usePluginState<Field extends PluginStateParameter | PluginStateS
         };
     }, [client, key, definition, projection]);
     useEffect(() => () => { void actions.endGesture(); }, [actions]);
-    return { state, ...actions };
+    const currentScopeMatches = () => {
+        const current = client.getSnapshot();
+        return renderedScope !== null && current.kind === "ready" && current.state.scope?.owner === renderedScope.owner
+            && current.state.scope.document === renderedScope.document;
+    };
+    const setValue = (value: PluginStateFieldValue<Field>): Promise<PluginStateEditResult> => {
+        if (!currentScopeMatches()) return Promise.resolve({ kind: "rejected", reason: "stale-scope" });
+        return actions.edit(value, renderedVersion);
+    };
+    const persistence = renderedField && "persistence" in renderedField ? renderedField.persistence : undefined;
+    const application = renderedField?.application;
+    const error: PluginStateControlError | null = renderedField?.readiness.kind === "failed"
+        ? { kind: "readiness", message: renderedField.readiness.reason }
+        : persistence?.kind === "failed" ? { kind: "persistence", message: persistence.reason }
+            : application?.kind === "failed" ? { kind: "application", message: application.error.message } : null;
+    const canRetry = renderedField?.readiness.kind === "ready" && renderedVersion !== undefined
+        && ((persistence?.kind === "failed" && renderedField.persistenceRequest !== undefined)
+            || (application?.kind === "failed" && application.error.kind !== "defect" && renderedField.target !== undefined));
+    const retry = canRetry ? (): Promise<PluginStateEditResult> => {
+        if (!currentScopeMatches()) return Promise.resolve({ kind: "rejected", reason: "stale-scope" });
+        return client.dispatch({ kind: "retry", key, expectedVersion: renderedVersion,
+            expectedGeneration: renderedField.target?.generation ?? null,
+            expectedPersistenceRequest: persistence?.kind === "failed" ? renderedField.persistenceRequest ?? null : null,
+        }).then(projection.result);
+    } : null;
+    return { state, error, retry, setValue, beginGesture: actions.beginGesture, endGesture: actions.endGesture };
 }
 
 /** Read and invoke the plugin's shared Undo history. */
