@@ -67,6 +67,9 @@ constexpr std::int32_t noteBatchDrainRemainingOffset
     = unisonStackModeOffset + voiceOscillatorCount;
 constexpr std::int32_t packedIntCount
     = noteBatchDrainRemainingOffset + noteBatchCount;
+constexpr std::int32_t sharedTableGenerationOffset = packedIntCount;
+constexpr std::int32_t sharedTableIndexOffset = sharedTableGenerationOffset + 3;
+constexpr std::int32_t sharedPackedIntCount = sharedTableIndexOffset + 3;
 
 constexpr std::int32_t samplesPerPackedFrameSet = 12811;
 constexpr std::int32_t maximumFrameCount = 256;
@@ -77,6 +80,15 @@ constexpr std::int32_t tableChunkSampleCount
     = (tableSlotSampleCount + tableChunkCountPerSlot - 1) / tableChunkCountPerSlot;
 constexpr std::int32_t tablePoolChunkCount = 4 * tableChunkCountPerSlot;
 using TableChunkSlices = std::array<Slice<std::int32_t>, tablePoolChunkCount>;
+
+// The host owns these immutable bytes for the entire render block. The renderer
+// reads the exact allocation prepared by JavaScript, without retaining it.
+struct SharedDataView { const void* data; std::size_t byteSize; };
+using SharedDataReader = SharedDataView (*) (std::int32_t input) noexcept;
+std::int32_t updateSharedTables (std::int32_t dspSession, Slice<std::int32_t> packedInts,
+                                 SharedDataReader read) noexcept;
+std::int32_t renderShared (Slice<float> packedFloats, Slice<std::int32_t> packedInts,
+                           SharedDataReader read) noexcept;
 
 std::int32_t renderAllChunks (Slice<float> packedFloats,
                               Slice<std::int32_t> packedInts,

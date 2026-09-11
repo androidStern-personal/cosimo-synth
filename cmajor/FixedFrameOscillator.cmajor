@@ -1577,7 +1577,8 @@ namespace wt
 
     processor SharedVoiceEngine (int voiceCount,
                                  float32 previewFrequencyHz = 440.0f,
-                                 int wavetableFrameCapacity = maxFramesPerTable)
+                                 int wavetableFrameCapacity = maxFramesPerTable,
+                                 bool sharedWavetables = false)
     {
         input event (std::notes::NoteOn,
                      std::notes::NoteOff,
@@ -1961,7 +1962,9 @@ namespace wt
         int32 acceptedModulationProgramSerial;
         int32 acceptedArticulationSerial;
         float32[rendererPackedFloatCount] rendererFloats;
-        int32[rendererPackedIntCount] rendererInts;
+        let rendererSharedGenerationOffset = rendererPackedIntCount;
+        let rendererSharedTableIndexOffset = rendererSharedGenerationOffset + oscillatorCount;
+        int32[rendererPackedIntCount + (sharedWavetables ? oscillatorCount * 2 : 0)] rendererInts;
 
         // BounceBankStore residency seam. Callers only address install,
         // commit and read operations; the chunked arrays are a Path B detail.
@@ -2004,8 +2007,8 @@ namespace wt
         int32 sourceModeFadeDirection = 0;
         float32 sourceModeFadeGain = 1.0f;
 
-        // Active slots are immutable while visible. Uploads write into the one
-        // spare slot and publish only after every mip/frame has arrived.
+        // The legacy event receiver owns these arrays. The shared-memory build
+        // has no table payload here: its renderer reads host-owned allocations.
         static_assert (wavetableFrameCapacity > 0 && wavetableFrameCapacity <= maxFramesPerTable);
         static_assert (voiceCount > 0 && voiceCount <= 16);
         static_assert (wavetableFrameCapacity == maxFramesPerTable);
@@ -2014,22 +2017,22 @@ namespace wt
                                               / packedWavetableChunkCount;
         static_assert (wavetableFrameCapacity != maxFramesPerTable
                        || packedWavetableChunkSampleCount == 819904);
-        int32[packedWavetableChunkSampleCount] packedSlot0Chunk0;
-        int32[packedWavetableChunkSampleCount] packedSlot0Chunk1;
-        int32[packedWavetableChunkSampleCount] packedSlot0Chunk2;
-        int32[packedWavetableChunkSampleCount] packedSlot0Chunk3;
-        int32[packedWavetableChunkSampleCount] packedSlot1Chunk0;
-        int32[packedWavetableChunkSampleCount] packedSlot1Chunk1;
-        int32[packedWavetableChunkSampleCount] packedSlot1Chunk2;
-        int32[packedWavetableChunkSampleCount] packedSlot1Chunk3;
-        int32[packedWavetableChunkSampleCount] packedSlot2Chunk0;
-        int32[packedWavetableChunkSampleCount] packedSlot2Chunk1;
-        int32[packedWavetableChunkSampleCount] packedSlot2Chunk2;
-        int32[packedWavetableChunkSampleCount] packedSlot2Chunk3;
-        int32[packedWavetableChunkSampleCount] packedSlot3Chunk0;
-        int32[packedWavetableChunkSampleCount] packedSlot3Chunk1;
-        int32[packedWavetableChunkSampleCount] packedSlot3Chunk2;
-        int32[packedWavetableChunkSampleCount] packedSlot3Chunk3;
+        int32[sharedWavetables ? 1 : packedWavetableChunkSampleCount] packedSlot0Chunk0;
+        int32[sharedWavetables ? 1 : packedWavetableChunkSampleCount] packedSlot0Chunk1;
+        int32[sharedWavetables ? 1 : packedWavetableChunkSampleCount] packedSlot0Chunk2;
+        int32[sharedWavetables ? 1 : packedWavetableChunkSampleCount] packedSlot0Chunk3;
+        int32[sharedWavetables ? 1 : packedWavetableChunkSampleCount] packedSlot1Chunk0;
+        int32[sharedWavetables ? 1 : packedWavetableChunkSampleCount] packedSlot1Chunk1;
+        int32[sharedWavetables ? 1 : packedWavetableChunkSampleCount] packedSlot1Chunk2;
+        int32[sharedWavetables ? 1 : packedWavetableChunkSampleCount] packedSlot1Chunk3;
+        int32[sharedWavetables ? 1 : packedWavetableChunkSampleCount] packedSlot2Chunk0;
+        int32[sharedWavetables ? 1 : packedWavetableChunkSampleCount] packedSlot2Chunk1;
+        int32[sharedWavetables ? 1 : packedWavetableChunkSampleCount] packedSlot2Chunk2;
+        int32[sharedWavetables ? 1 : packedWavetableChunkSampleCount] packedSlot2Chunk3;
+        int32[sharedWavetables ? 1 : packedWavetableChunkSampleCount] packedSlot3Chunk0;
+        int32[sharedWavetables ? 1 : packedWavetableChunkSampleCount] packedSlot3Chunk1;
+        int32[sharedWavetables ? 1 : packedWavetableChunkSampleCount] packedSlot3Chunk2;
+        int32[sharedWavetables ? 1 : packedWavetableChunkSampleCount] packedSlot3Chunk3;
         int32[wavetableSlotCount * mipLevelCount * wavetableFrameCapacity] packedReadyFrameFlags;
         int32[wavetableSlotCount * mipLevelCount] packedLoadedFrameCounts;
         int32[oscillatorCount * mipLevelCount] oscillatorRequestedGenerationByMip;
@@ -4292,6 +4295,28 @@ namespace wt
             tableStagingLastFrameIndexF = 0.0f;
         }
 
+        void adoptSharedWavetables()
+        {
+            // The framework adopts all finished allocations before this block.
+            // Their metadata and packed samples are in the same allocation.
+            let changed = CosimoThreeOscillatorRenderer::updateSharedTables (currentDspSessionId, rendererInts);
+            for (int32 oscillator = 0; oscillator < oscillatorCount; ++oscillator)
+            {
+                if ((changed & (1 << oscillator)) == 0) continue;
+                tableStagingOscillatorIndex = oscillator;
+                tableStagingSlotIndex = oscillator;
+                tableStagingGeneration = rendererInts.at (rendererSharedGenerationOffset + oscillator);
+                tableStagingTableIndex = rendererInts.at (rendererSharedTableIndexOffset + oscillator);
+                tableStagingFrameCount = rendererInts.at (rendererFrameCountOffset + oscillator);
+                tableStagingLastFrameIndex = tableStagingFrameCount - 1;
+                tableStagingLastFrameIndexF = float32 (tableStagingLastFrameIndex);
+                oscillatorGenerationFrontier.at (oscillator) = tableStagingGeneration;
+                for (int32 mip = 0; mip < mipLevelCount; ++mip)
+                    packedLoadedFrameCounts.at (packedSlotMipIndex (oscillator, mip)) = tableStagingFrameCount;
+                commitPackedStagingTable();
+            }
+        }
+
         void commitPackedStagingTable()
         {
             let oscillator = tableStagingOscillatorIndex;
@@ -6014,13 +6039,15 @@ namespace wt
 
         event oscillatorWavetableLoadBeginIn (OscillatorWavetableLoadBegin request)
         {
-            beginWavetableLoad (request.dspSessionId, request.oscillatorIndex,
+            if const (! sharedWavetables)
+                beginWavetableLoad (request.dspSessionId, request.oscillatorIndex,
                                 request.generation, request.tableIndex, request.frameCount);
         }
 
         event oscillatorWavetableMipFrameIn (OscillatorWavetableMipFrame frame)
         {
-            receiveWavetableMipBatch (frame.dspSessionId, frame.oscillatorIndex,
+            if const (! sharedWavetables)
+                receiveWavetableMipBatch (frame.dspSessionId, frame.oscillatorIndex,
                                       frame.generation, frame.tableIndex, frame.mipIndex,
                                       frame.frameIndexBase, frame.frameCount, frame.samples);
         }
@@ -6124,6 +6151,8 @@ namespace wt
 
             loop
             {
+                if const (sharedWavetables)
+                    adoptSharedWavetables();
                 glideTimeSecondsState = std::intrinsics::max (0.0f, glideTimeIn);
                 currentAmpAttackSeconds = ampAttackIn > 0.0f
                     ? std::intrinsics::clamp (ampAttackIn, 0.001f, 10.0f)
@@ -6456,18 +6485,23 @@ namespace wt
                 int32 rendererSucceeded = 0;
                 if (! isBounceSource)
                 {
-                    rendererSucceeded = CosimoThreeOscillatorRenderer::renderAll (
-                        rendererFloats,
-                        rendererInts,
-                        packedSlot0Chunk0, packedSlot0Chunk1,
-                        packedSlot0Chunk2, packedSlot0Chunk3,
-                        packedSlot1Chunk0, packedSlot1Chunk1,
-                        packedSlot1Chunk2, packedSlot1Chunk3,
-                        packedSlot2Chunk0, packedSlot2Chunk1,
-                        packedSlot2Chunk2, packedSlot2Chunk3,
-                        packedSlot3Chunk0, packedSlot3Chunk1,
-                        packedSlot3Chunk2, packedSlot3Chunk3
-                    );
+                    if const (sharedWavetables)
+                        rendererSucceeded = CosimoThreeOscillatorRenderer::renderShared (rendererFloats, rendererInts);
+                    else
+                    {
+                        rendererSucceeded = CosimoThreeOscillatorRenderer::renderAll (
+                            rendererFloats,
+                            rendererInts,
+                            packedSlot0Chunk0, packedSlot0Chunk1,
+                            packedSlot0Chunk2, packedSlot0Chunk3,
+                            packedSlot1Chunk0, packedSlot1Chunk1,
+                            packedSlot1Chunk2, packedSlot1Chunk3,
+                            packedSlot2Chunk0, packedSlot2Chunk1,
+                            packedSlot2Chunk2, packedSlot2Chunk3,
+                            packedSlot3Chunk0, packedSlot3Chunk1,
+                            packedSlot3Chunk2, packedSlot3Chunk3
+                        );
+                    }
                 }
 
                 for (wrap<voiceCount> voice)

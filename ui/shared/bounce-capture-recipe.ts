@@ -1,4 +1,4 @@
-import { createBounceCaptureSnapshot } from "../../bounce/capture-plan.mjs";
+import { createBounceCaptureSnapshot, type BounceWavetableSource } from "../../bounce/capture-plan.mjs";
 import {
     bounceBankInstallMessages,
     validateInstallableBounceBank,
@@ -11,10 +11,7 @@ import {
     loadFactoryBankCatalog,
 } from "./wavetable-bank";
 import {
-    DEFAULT_MIP_LEVEL_COUNT,
     DEFAULT_SAMPLES_PER_FRAME,
-    buildFrameSpectrum,
-    buildMipFrameFromSpectrum,
     extractSourceFramesFromSamples,
 } from "./wavetable-mip";
 import {
@@ -35,8 +32,6 @@ import {
 } from "./articulation-image";
 import { getModulationArticulationCellIndex } from "./modulation-runtime-program";
 
-const WAVETABLE_LOAD_BEGIN_ENDPOINT_ID = "wavetableLoadBegin";
-const WAVETABLE_MIP_FRAME_ENDPOINT_ID = "wavetableMipFrame";
 const ARTICULATION_NOTE_META_ENDPOINT_ID = "articulationNoteMeta";
 const WAVETABLE_MIP_FRAME_BATCH_SIZE = 3;
 const WAVETABLE_BATCH_SAMPLE_COUNT = WAVETABLE_MIP_FRAME_BATCH_SIZE * DEFAULT_SAMPLES_PER_FRAME;
@@ -102,17 +97,10 @@ async function yieldPreparationTurn() {
     await new Promise<void>((resolve) => setTimeout(resolve, 0));
 }
 
-type WavetableBatchTemplate = {
-    readonly mipIndex: number;
-    readonly frameIndexBase: number;
-    readonly frameCount: number;
-    readonly samples: Float32Array;
-};
-
 type WavetableTemplate = {
     readonly tableIndex: number;
     readonly frameCount: number;
-    readonly batches: ReadonlyArray<WavetableBatchTemplate>;
+    readonly frames: ReadonlyArray<Float32Array>;
 };
 
 async function buildWavetableTemplates(
@@ -147,99 +135,21 @@ async function buildWavetableTemplates(
     }));
     throwIfAborted(signal);
 
-    // Count source FFTs as well as mip synthesis so the progress bar and
-    // cancellation both remain alive during the expensive first phase.
-    const totalUnits = loadedSources.reduce(
-        (sum, table) => sum + (table.frameCount * (DEFAULT_MIP_LEVEL_COUNT + 1)),
-        0,
-    );
-    let completedUnits = 0;
+    // Capture decoded sources once. Each offline renderer computes final packed
+    // mips directly into its own resource allocation after the snapshot is cloned.
     const templateByIndex = new Map<number, WavetableTemplate>();
+    let completedUnits = 0;
     for (const table of loadedSources) {
-        const spectra = [];
-        for (let frameIndex = 0; frameIndex < table.frameCount; frameIndex += 1) {
-            throwIfAborted(signal);
-            spectra.push(buildFrameSpectrum(table.frames[frameIndex]));
-            completedUnits += 1;
-            onProgress?.({ completedUnits, totalUnits, tableIndex: table.tableIndex });
-            if ((frameIndex + 1) % 8 === 0) await yieldPreparationTurn();
-        }
-        const batches: WavetableBatchTemplate[] = [];
-        for (let mipIndex = 0; mipIndex < DEFAULT_MIP_LEVEL_COUNT; mipIndex += 1) {
-            for (let frameIndexBase = 0;
-                frameIndexBase < table.frameCount;
-                frameIndexBase += WAVETABLE_MIP_FRAME_BATCH_SIZE) {
-                throwIfAborted(signal);
-                const frameCount = Math.min(
-                    WAVETABLE_MIP_FRAME_BATCH_SIZE,
-                    table.frameCount - frameIndexBase,
-                );
-                const samples = new Float32Array(WAVETABLE_BATCH_SAMPLE_COUNT);
-                for (let batchOffset = 0; batchOffset < frameCount; batchOffset += 1) {
-                    const mip = buildMipFrameFromSpectrum(
-                        spectra[frameIndexBase + batchOffset],
-                        mipIndex,
-                    );
-                    samples.set(mip, batchOffset * DEFAULT_SAMPLES_PER_FRAME);
-                }
-                batches.push({ mipIndex, frameIndexBase, frameCount, samples });
-                completedUnits += frameCount;
-                onProgress?.({ completedUnits, totalUnits, tableIndex: table.tableIndex });
-                // FFT preparation is finite but substantial for large factory
-                // tables. Let paint/input run between small batches.
-                if (batches.length % 8 === 0) await yieldPreparationTurn();
-            }
-        }
-        templateByIndex.set(table.tableIndex, {
-            tableIndex: table.tableIndex,
-            frameCount: table.frameCount,
-            batches,
-        });
+        throwIfAborted(signal);
+        templateByIndex.set(table.tableIndex, table);
+        onProgress?.({completedUnits:++completedUnits,totalUnits:loadedSources.length,tableIndex:table.tableIndex});
+        await yieldPreparationTurn();
     }
     return normalizedIndices.map((tableIndex) => {
         const template = templateByIndex.get(tableIndex);
         if (!template) throw new Error(`Factory table ${tableIndex} was not prepared`);
         return template;
     });
-}
-
-function wavetableSetupEvents(templates: ReadonlyArray<WavetableTemplate>) {
-    const events: SetupEvent[] = [];
-    templates.forEach((template, oscillatorIndex) => {
-        events.push({
-            endpointID: WAVETABLE_LOAD_BEGIN_ENDPOINT_ID,
-            sessionScoped: true,
-            advanceFrames: 1,
-            value: {
-                dspSessionId: 0,
-                oscillatorIndex,
-                generation: 1,
-                tableIndex: template.tableIndex,
-                frameCount: template.frameCount,
-            },
-        });
-        for (const batch of template.batches) {
-            events.push({
-                endpointID: WAVETABLE_MIP_FRAME_ENDPOINT_ID,
-                sessionScoped: true,
-                advanceFrames: 1,
-                value: {
-                    dspSessionId: 0,
-                    oscillatorIndex,
-                    generation: 1,
-                    tableIndex: template.tableIndex,
-                    mipIndex: batch.mipIndex,
-                    frameIndexBase: batch.frameIndexBase,
-                    frameCount: batch.frameCount,
-                    // Templates are deliberately shared across oscillators
-                    // that selected the same table. capture-plan preserves
-                    // this alias while cloning the immutable wire recipe.
-                    samples: batch.samples,
-                },
-            });
-        }
-    });
-    return events;
 }
 
 function recursiveBankSetupEvents(bankInput: BounceBankLike, generation: number) {
@@ -388,6 +298,7 @@ export async function createProductBounceCaptureSnapshot({
         : null;
 
     let sourceSetupEvents: SetupEvent[];
+    let wavetableSources: BounceWavetableSource[] = [];
     if (sourceMode === 1) {
         if (sourceDocument === null) {
             throw new Error("Recursive Bounce requires the current bounce.v1 reference");
@@ -408,7 +319,8 @@ export async function createProductBounceCaptureSnapshot({
             signal,
             onProgress,
         });
-        sourceSetupEvents = wavetableSetupEvents(templates);
+        sourceSetupEvents = [];
+        wavetableSources = templates.map((table,input) => ({input,tableIndex:table.tableIndex,generation:1,frames:table.frames}));
     }
     throwIfAborted(signal);
     const structured = structuredRuntimeSetupEvents(patchDocument);
@@ -417,6 +329,7 @@ export async function createProductBounceCaptureSnapshot({
             sampleRate: Math.round(sampleRate),
             tempoBpm,
             parameters: patchDocument.parameters,
+            wavetableSources,
             setupEvents: [
                 ...sourceSetupEvents,
                 ...structured.events,

@@ -92,28 +92,42 @@ function performerWasmMemoryPages(performer) {
 
 async function preparePerformer(CmajorClass, plan, job) {
     invariant(typeof CmajorClass === "function", "Offline engine module has no performer class");
-    const performer = new CmajorClass();
+    const runtime = CmajorClass.createOfflinePerformer
+        ? await CmajorClass.createOfflinePerformer(job.sessionID, plan.snapshot.sampleRate)
+        : {performer:new CmajorClass(),dispose() {}};
+    const performer = runtime.performer;
+    invariant(!performer.getMemoryRequirements?.().shared || CmajorClass.createOfflinePerformer,
+        "Shared offline engine must supply its resource lifecycle factory");
     invariant(typeof performer.initialise === "function", "Offline performer has no initialise() method");
-    await performer.initialise(job.sessionID, plan.snapshot.sampleRate);
+    if (!CmajorClass.createOfflinePerformer) await performer.initialise(job.sessionID, plan.snapshot.sampleRate);
+    try {
 
-    for (const parameter of plan.snapshot.parameters) {
-        invariant(typeof parameter.value === "number",
-            `Cmajor value endpoint ${parameter.endpointID} must receive a number`);
-        endpointMethod(performer, "setInputValue", parameter.endpointID)(parameter.value, 0);
-    }
+        for (const parameter of plan.snapshot.parameters) {
+            invariant(typeof parameter.value === "number",
+                `Cmajor value endpoint ${parameter.endpointID} must receive a number`);
+            endpointMethod(performer, "setInputValue", parameter.endpointID)(parameter.value, 0);
+        }
 
-    endpointMethod(performer, "sendInputEvent", "tempo")({ bpm: plan.snapshot.tempoBpm });
-    advanceDiscard(performer, 1, plan.blockFrames);
+        endpointMethod(performer, "sendInputEvent", "tempo")({ bpm: plan.snapshot.tempoBpm });
+        advanceDiscard(performer, 1, plan.blockFrames);
 
-    for (const event of plan.snapshot.setupEvents) {
-        const value = event.sessionScoped
-            ? { ...event.value, dspSessionId: job.sessionID }
-            : event.value;
-        endpointMethod(performer, "sendInputEvent", event.endpointID)(value);
-        advanceDiscard(performer, event.advanceFrames, plan.blockFrames);
-    }
-    advanceDiscard(performer, plan.snapshot.settleFrames, plan.blockFrames);
-    return performer;
+        if (plan.snapshot.wavetableSources.length > 0) {
+            invariant(typeof runtime.prepareWavetables === "function", "Offline engine does not support direct wavetable preparation");
+            await runtime.prepareWavetables(plan.snapshot.wavetableSources);
+            advanceDiscard(performer, 1, plan.blockFrames);
+        }
+        for (const event of plan.snapshot.setupEvents) {
+            invariant(!CmajorClass.createOfflinePerformer || (event.endpointID !== "wavetableLoadBegin" && event.endpointID !== "wavetableMipFrame"),
+                "Shared offline engine requires source-frame capture recipes");
+            const value = event.sessionScoped
+                ? { ...event.value, dspSessionId: job.sessionID }
+                : event.value;
+            endpointMethod(performer, "sendInputEvent", event.endpointID)(value);
+            advanceDiscard(performer, event.advanceFrames, plan.blockFrames);
+        }
+        advanceDiscard(performer, plan.snapshot.settleFrames, plan.blockFrames);
+        return runtime;
+    } catch(error) {runtime.dispose();throw error;}
 }
 
 /** Render one root using a fresh generated performer. This function is worker-safe. */
@@ -124,64 +138,67 @@ export async function renderBounceRoot(CmajorClass, planInput, jobInput) {
         "Bounce worker received a job outside its plan");
 
     const startedAt = globalThis.performance?.now?.() ?? Date.now();
-    const performer = await preparePerformer(CmajorClass, plan, job);
-    const totalRenderFrames = plan.holdFrames + plan.tailCapFrames;
-    const rendered = new Float32Array(totalRenderFrames * 2);
+    const runtime = await preparePerformer(CmajorClass, plan, job);
+    const performer = runtime.performer;
+    try {
+        const totalRenderFrames = plan.holdFrames + plan.tailCapFrames;
+        const rendered = new Float32Array(totalRenderFrames * 2);
 
-    for (const event of plan.snapshot.rootSetupEvents) {
-        const value = {
-            ...event.value,
-            [event.rootNoteField]: job.rootNote,
-            ...(event.sessionScoped ? { dspSessionId: job.sessionID } : {}),
+        for (const event of plan.snapshot.rootSetupEvents) {
+            const value = {
+                ...event.value,
+                [event.rootNoteField]: job.rootNote,
+                ...(event.sessionScoped ? { dspSessionId: job.sessionID } : {}),
+            };
+            endpointMethod(performer, "sendInputEvent", event.endpointID)(value);
+            advanceDiscard(performer, event.advanceFrames, plan.blockFrames);
+        }
+        endpointMethod(performer, "sendInputEvent", "midiIn")({
+            message: packMidi(0x90, job.rootNote, plan.captureVelocity),
+        });
+        renderInto(performer, rendered, 0, plan.holdFrames, plan.blockFrames);
+        endpointMethod(performer, "sendInputEvent", "midiIn")({
+            message: packMidi(0x80, job.rootNote, 0),
+        });
+        renderInto(
+            performer,
+            rendered,
+            plan.holdFrames,
+            plan.tailCapFrames,
+            plan.blockFrames,
+        );
+
+        const retainedFrameCount = findTailEndFrame(rendered, plan.holdFrames, plan);
+        const peak = peakAbsolute(rendered, retainedFrameCount);
+        invariant(peak >= plan.silenceThresholdLinear,
+            `Bounce root ${job.rootNote} captured silence`);
+        const samples = new Int16Array(retainedFrameCount * 2);
+        for (let index = 0; index < samples.length; index += 1) {
+            samples[index] = quantizeFloatToInt16(rendered[index]);
+        }
+        const elapsedMilliseconds = (globalThis.performance?.now?.() ?? Date.now()) - startedAt;
+
+        return {
+            rootIndex: job.rootIndex,
+            rootNote: job.rootNote,
+            noteOffFrameOffset: plan.holdFrames,
+            frameCount: retainedFrameCount,
+            tailFrameCount: retainedFrameCount - plan.holdFrames,
+            peak,
+            samples,
+            metrics: {
+                renderedFrameCount: totalRenderFrames,
+                elapsedMilliseconds,
+                realtimeMultiplier: elapsedMilliseconds > 0
+                    ? totalRenderFrames / (elapsedMilliseconds * plan.snapshot.sampleRate / 1000)
+                    : null,
+                // Generated Cmajor performers have fixed-size wasm memory. The
+                // page count is reported before the short-lived worker exits so
+                // browser soak tests can prove recursion does not grow an engine.
+                wasmMemoryPages: performerWasmMemoryPages(performer),
+            },
         };
-        endpointMethod(performer, "sendInputEvent", event.endpointID)(value);
-        advanceDiscard(performer, event.advanceFrames, plan.blockFrames);
-    }
-    endpointMethod(performer, "sendInputEvent", "midiIn")({
-        message: packMidi(0x90, job.rootNote, plan.captureVelocity),
-    });
-    renderInto(performer, rendered, 0, plan.holdFrames, plan.blockFrames);
-    endpointMethod(performer, "sendInputEvent", "midiIn")({
-        message: packMidi(0x80, job.rootNote, 0),
-    });
-    renderInto(
-        performer,
-        rendered,
-        plan.holdFrames,
-        plan.tailCapFrames,
-        plan.blockFrames,
-    );
-
-    const retainedFrameCount = findTailEndFrame(rendered, plan.holdFrames, plan);
-    const peak = peakAbsolute(rendered, retainedFrameCount);
-    invariant(peak >= plan.silenceThresholdLinear,
-        `Bounce root ${job.rootNote} captured silence`);
-    const samples = new Int16Array(retainedFrameCount * 2);
-    for (let index = 0; index < samples.length; index += 1) {
-        samples[index] = quantizeFloatToInt16(rendered[index]);
-    }
-    const elapsedMilliseconds = (globalThis.performance?.now?.() ?? Date.now()) - startedAt;
-
-    return {
-        rootIndex: job.rootIndex,
-        rootNote: job.rootNote,
-        noteOffFrameOffset: plan.holdFrames,
-        frameCount: retainedFrameCount,
-        tailFrameCount: retainedFrameCount - plan.holdFrames,
-        peak,
-        samples,
-        metrics: {
-            renderedFrameCount: totalRenderFrames,
-            elapsedMilliseconds,
-            realtimeMultiplier: elapsedMilliseconds > 0
-                ? totalRenderFrames / (elapsedMilliseconds * plan.snapshot.sampleRate / 1000)
-                : null,
-            // Generated Cmajor performers have fixed-size wasm memory. The
-            // page count is reported before the short-lived worker exits so
-            // browser soak tests can prove recursion does not grow an engine.
-            wasmMemoryPages: performerWasmMemoryPages(performer),
-        },
-    };
+    } finally {runtime.dispose();}
 }
 
 export const bounceOfflineRenderInternals = Object.freeze({

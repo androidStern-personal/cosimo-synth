@@ -8,6 +8,7 @@ class_name="${3:-WavetableSynth}"
 metadata_path=""
 max_frames_per_block="512"
 target="cpp"
+shared_memory_args=()
 build_jobs="${COSIMO_CMAJOR_BUILD_JOBS:-4}"
 if (( $# >= 3 )); then
   shift 3
@@ -23,6 +24,10 @@ while (( $# > 0 )); do
       ;;
     --max-frames-per-block)
       max_frames_per_block="${2:?--max-frames-per-block requires a value}"
+      shift 2
+      ;;
+    --shared-memory-maximum-pages)
+      shared_memory_args=(--shared-memory-maximum-pages "${2:?maximum pages required}")
       shift 2
       ;;
     --target)
@@ -71,10 +76,10 @@ if [[ -n "$metadata_path" ]]; then
     "$patch_path" "$output_path" "$class_name" \
     --metadata "$metadata_path" \
     --max-frames-per-block "$max_frames_per_block" \
-    --target "$target"
+    --target "$target" "${shared_memory_args[@]}"
 else
   "$build_dir/cosimo_cmajor_external_codegen" \
     "$patch_path" "$output_path" "$class_name" \
     --max-frames-per-block "$max_frames_per_block" \
-    --target "$target"
+    --target "$target" "${shared_memory_args[@]}"
 fi

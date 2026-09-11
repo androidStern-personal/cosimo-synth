@@ -1,39 +1,39 @@
-function R(e) {
-  const n = Number.isFinite(e) ? e : 0, r = Math.max(-1, Math.min(1, n));
-  return Math.max(-32768, Math.min(32767, Math.round(r * 32768)));
+function z(e) {
+  const n = Number.isFinite(e) ? e : 0, o = Math.max(-1, Math.min(1, n));
+  return Math.max(-32768, Math.min(32767, Math.round(o * 32768)));
 }
-const D = "cosimo.bounce-capture-snapshot", y = 1, M = "cosimo.bounce-capture-plan", S = 1, B = Object.freeze(
+const _ = "cosimo.bounce-capture-snapshot", A = 1, D = "cosimo.bounce-capture-plan", M = 1, B = Object.freeze(
   Array.from({ length: 19 }, (e, n) => 24 + n * 4)
-), O = 100, L = 3, N = 6, U = -80, j = 10 ** (U / 20), z = 0.05, T = 0.1, v = 128;
+), F = 100, L = 3, y = 6, U = -80, P = 10 ** (U / 20), T = 0.05, j = 0.1, S = 128;
 function i(e, n) {
   if (!e) throw new Error(n);
 }
-function w(e) {
+function C(e) {
   if (typeof e != "object" || e === null || Array.isArray(e)) return !1;
   const n = Object.getPrototypeOf(e);
   return n === Object.prototype || n === null;
 }
-function g(e, n = "value", r = /* @__PURE__ */ new WeakMap()) {
+function E(e, n = "value", o = /* @__PURE__ */ new WeakMap()) {
   if (e === null || typeof e == "boolean" || typeof e == "string") return e;
   if (typeof e == "number")
     return i(Number.isFinite(e), `${n} must be finite`), e;
   if (ArrayBuffer.isView(e)) {
     i(!(e instanceof DataView), `${n} cannot be a DataView`);
-    const t = r.get(e);
+    const t = o.get(e);
     if (t !== void 0) return t;
-    const o = e.slice();
-    return r.set(e, o), o;
+    const r = e.slice();
+    return o.set(e, r), r;
   }
   if (e instanceof ArrayBuffer) {
-    const t = r.get(e);
+    const t = o.get(e);
     if (t !== void 0) return t;
-    const o = e.slice(0);
-    return r.set(e, o), o;
+    const r = e.slice(0);
+    return o.set(e, r), r;
   }
-  return Array.isArray(e) ? e.map((t, o) => g(t, `${n}[${o}]`, r)) : (i(w(e), `${n} must be structured-clone data`), Object.fromEntries(
+  return Array.isArray(e) ? e.map((t, r) => E(t, `${n}[${r}]`, o)) : (i(C(e), `${n} must be structured-clone data`), Object.fromEntries(
     Object.keys(e).sort().map((t) => [
       t,
-      g(e[t], `${n}.${t}`, r)
+      E(e[t], `${n}.${t}`, o)
     ])
   ));
 }
@@ -43,58 +43,72 @@ function $(e, n) {
     `${n} must be a Cmajor endpoint ID`
   ), e;
 }
-function P(e) {
-  const r = (Array.isArray(e) ? e.map((t) => [t?.endpointID, t?.value]) : Object.entries(e ?? {})).map(([t, o], s) => ({
-    endpointID: $(t, `parameters[${s}].endpointID`),
-    value: g(o, `parameters.${t}`)
+function x(e) {
+  const o = (Array.isArray(e) ? e.map((t) => [t?.endpointID, t?.value]) : Object.entries(e ?? {})).map(([t, r], a) => ({
+    endpointID: $(t, `parameters[${a}].endpointID`),
+    value: E(r, `parameters.${t}`)
   }));
-  r.sort((t, o) => t.endpointID.localeCompare(o.endpointID));
-  for (let t = 1; t < r.length; t += 1)
+  o.sort((t, r) => t.endpointID.localeCompare(r.endpointID));
+  for (let t = 1; t < o.length; t += 1)
     i(
-      r[t - 1].endpointID !== r[t].endpointID,
-      `Duplicate capture parameter ${r[t].endpointID}`
+      o[t - 1].endpointID !== o[t].endpointID,
+      `Duplicate capture parameter ${o[t].endpointID}`
     );
-  return r;
+  return o;
 }
-function _(e, {
+function v(e, {
   fieldName: n = "setupEvents",
-  rootScoped: r = !1
+  rootScoped: o = !1
 } = {}) {
   i(Array.isArray(e), `${n} must be an array`);
   const t = /* @__PURE__ */ new WeakMap();
-  return e.map((o, s) => {
-    const a = o?.advanceFrames ?? 1, c = o?.sessionScoped ?? !1;
+  return e.map((r, a) => {
+    const s = r?.advanceFrames ?? 1, c = r?.sessionScoped ?? !1;
     i(
-      Number.isInteger(a) && a >= 0,
-      `${n}[${s}].advanceFrames must be a non-negative integer`
+      Number.isInteger(s) && s >= 0,
+      `${n}[${a}].advanceFrames must be a non-negative integer`
     ), i(
       typeof c == "boolean",
-      `${n}[${s}].sessionScoped must be boolean`
+      `${n}[${a}].sessionScoped must be boolean`
     );
     const u = {
-      endpointID: $(o?.endpointID, `${n}[${s}].endpointID`),
-      value: g(o?.value, `${n}[${s}].value`, t),
-      advanceFrames: a,
+      endpointID: $(r?.endpointID, `${n}[${a}].endpointID`),
+      value: E(r?.value, `${n}[${a}].value`, t),
+      advanceFrames: s,
       sessionScoped: c
     };
-    return r ? (i(
-      typeof o?.rootNoteField == "string" && /^[A-Za-z_][A-Za-z0-9_]*$/.test(o.rootNoteField),
-      `${n}[${s}].rootNoteField must be a field name`
+    return o ? (i(
+      typeof r?.rootNoteField == "string" && /^[A-Za-z_][A-Za-z0-9_]*$/.test(r.rootNoteField),
+      `${n}[${a}].rootNoteField must be a field name`
     ), i(
-      w(u.value),
-      `${n}[${s}].value must be an object`
-    ), { ...u, rootNoteField: o.rootNoteField }) : u;
+      C(u.value),
+      `${n}[${a}].value must be an object`
+    ), { ...u, rootNoteField: r.rootNoteField }) : u;
   });
 }
-function x({
+function k(e) {
+  i(Array.isArray(e) && e.length <= 3, "Invalid wavetable source list");
+  const n = /* @__PURE__ */ new Set(), o = /* @__PURE__ */ new WeakMap();
+  return e.map((t) => {
+    i(Number.isInteger(t.input) && t.input >= 0 && t.input < 3 && !n.has(t.input), "Invalid wavetable source input"), n.add(t.input), i(Number.isInteger(t.tableIndex) && t.tableIndex >= 0 && Number.isInteger(t.generation) && t.generation > 0, "Invalid wavetable source identity"), i(Array.isArray(t.frames) && t.frames.length >= 1 && t.frames.length <= 256, "Invalid wavetable source frames");
+    const r = t.frames.map((a) => {
+      i(a instanceof Float32Array && a.length === 2048 && a.every(Number.isFinite), "Invalid wavetable source frame");
+      let s = o.get(a);
+      return s || (s = a.slice(), o.set(a, s)), s;
+    });
+    return Object.freeze({ input: t.input, tableIndex: t.tableIndex, generation: t.generation, frames: Object.freeze(r) });
+  });
+}
+function W({
   sampleRate: e,
   tempoBpm: n = 120,
-  parameters: r = {},
+  parameters: o = {},
   setupEvents: t = [],
-  rootSetupEvents: o = [],
-  settleFrames: s = v,
-  sourceGeneration: a = 0,
-  sourceBankDigest: c = null
+  wavetableSources: r = [],
+  rootSetupEvents: a = [],
+  settleFrames: s = S,
+  sourceGeneration: c = 0,
+  sourceBankDigest: u = null
 } = {}) {
   return i(
     Number.isInteger(e) && e >= 8e3 && e <= 384e3,
@@ -106,99 +120,100 @@ function x({
     Number.isInteger(s) && s >= 1,
     "Capture settleFrames must be a positive integer"
   ), i(
-    Number.isInteger(a) && a >= 0,
+    Number.isInteger(c) && c >= 0,
     "Capture sourceGeneration must be a non-negative integer"
   ), i(
-    c === null || typeof c == "string",
+    u === null || typeof u == "string",
     "Capture sourceBankDigest must be null or a string"
   ), Object.freeze({
-    format: D,
-    version: y,
+    format: _,
+    version: A,
     sampleRate: e,
     tempoBpm: n,
-    parameters: Object.freeze(P(r).map(Object.freeze)),
-    setupEvents: Object.freeze(_(t).map(Object.freeze)),
+    parameters: Object.freeze(x(o).map(Object.freeze)),
+    setupEvents: Object.freeze(v(t).map(Object.freeze)),
+    wavetableSources: Object.freeze(k(r)),
     // Root-scoped events receive the worker job's note immediately before
     // MIDI note-on. They remain part of the immutable press-time recipe.
-    rootSetupEvents: Object.freeze(_(o, {
+    rootSetupEvents: Object.freeze(v(a, {
       fieldName: "rootSetupEvents",
       rootScoped: !0
     }).map(Object.freeze)),
     settleFrames: s,
-    sourceGeneration: a,
-    sourceBankDigest: c
+    sourceGeneration: c,
+    sourceBankDigest: u
   });
 }
-function k(e) {
+function V(e) {
   return i(
-    e?.format === D && e?.version === y,
+    e?.format === _ && e?.version === A,
     "Unsupported Bounce capture snapshot"
-  ), x(e);
+  ), W(e);
 }
-function W(e) {
+function q(e) {
   i(
     Array.isArray(e) && e.length > 0 && e.length <= 19,
     "Capture roots must contain 1 to 19 MIDI notes"
   );
   let n = -1;
-  return e.map((r, t) => (i(
-    Number.isInteger(r) && r >= 0 && r <= 127,
+  return e.map((o, t) => (i(
+    Number.isInteger(o) && o >= 0 && o <= 127,
     `Capture root ${t} is not a MIDI note`
-  ), i(r > n, "Capture roots must be strictly ascending"), n = r, r));
+  ), i(o > n, "Capture roots must be strictly ascending"), n = o, o));
 }
-function V(e, {
+function H(e, {
   roots: n = B,
-  holdSeconds: r = L,
-  tailCapSeconds: t = N,
-  captureVelocity: o = O,
-  blockFrames: s = v
+  holdSeconds: o = L,
+  tailCapSeconds: t = y,
+  captureVelocity: r = F,
+  blockFrames: a = S
 } = {}) {
-  const a = k(e), c = W(n);
+  const s = V(e), c = q(n);
   i(
-    typeof r == "number" && Number.isFinite(r) && r > 0,
+    typeof o == "number" && Number.isFinite(o) && o > 0,
     "Capture holdSeconds must be positive and finite"
   ), i(
-    typeof t == "number" && Number.isFinite(t) && t > 0 && t <= N,
-    `Capture tailCapSeconds must be in (0, ${N}]`
+    typeof t == "number" && Number.isFinite(t) && t > 0 && t <= y,
+    `Capture tailCapSeconds must be in (0, ${y}]`
   ), i(
-    Number.isInteger(o) && o === O,
-    `Bounce V1 captures at velocity ${O}`
+    Number.isInteger(r) && r === F,
+    `Bounce V1 captures at velocity ${F}`
   ), i(
-    Number.isInteger(s) && s >= 1 && s <= 128,
+    Number.isInteger(a) && a >= 1 && a <= 128,
     "Offline blockFrames must be from 1 to 128"
   );
-  const u = Math.max(1, Math.round(r * a.sampleRate)), m = Math.max(1, Math.round(t * a.sampleRate)), p = Math.max(
+  const u = Math.max(1, Math.round(o * s.sampleRate)), m = Math.max(1, Math.round(t * s.sampleRate)), p = Math.max(
     1,
-    Math.round(z * a.sampleRate)
-  ), h = Math.max(
+    Math.round(T * s.sampleRate)
+  ), g = Math.max(
     p,
-    Math.round(T * a.sampleRate)
-  ), b = c.map((f, E) => Object.freeze({
-    rootIndex: E,
-    rootNote: f,
+    Math.round(j * s.sampleRate)
+  ), b = c.map((h, f) => Object.freeze({
+    rootIndex: f,
+    rootNote: h,
     // Stable across identical bounces, while remaining distinct per root.
-    sessionID: 4341760 + E
+    sessionID: 4341760 + f
   }));
   return Object.freeze({
-    format: M,
-    version: S,
-    snapshot: a,
+    format: D,
+    version: M,
+    snapshot: s,
     roots: Object.freeze(c),
-    captureVelocity: o,
+    captureVelocity: r,
     holdFrames: u,
     tailCapFrames: m,
-    silenceThresholdLinear: j,
+    silenceThresholdLinear: P,
     silenceWindowFrames: p,
-    tailPaddingFrames: h,
-    blockFrames: s,
+    tailPaddingFrames: g,
+    blockFrames: a,
     jobs: Object.freeze(b)
   });
 }
-function q(e) {
+function Z(e) {
   return i(
-    e?.format === M && e?.version === S,
+    e?.format === D && e?.version === M,
     "Unsupported Bounce capture plan"
-  ), V(e.snapshot, {
+  ), H(e.snapshot, {
     roots: e.roots,
     holdSeconds: e.holdFrames / e.snapshot.sampleRate,
     tailCapSeconds: e.tailCapFrames / e.snapshot.sampleRate,
@@ -206,165 +221,182 @@ function q(e) {
     blockFrames: e.blockFrames
   });
 }
-function d(e, n) {
+function l(e, n) {
   if (!e) throw new Error(n);
 }
-function C(e, n, r) {
-  return (e & 255) << 16 | (n & 127) << 8 | r & 127;
+function N(e, n, o) {
+  return (e & 255) << 16 | (n & 127) << 8 | o & 127;
 }
-function l(e, n, r) {
-  const t = `${n}_${r}`, o = e[t];
-  return d(typeof o == "function", `Offline performer is missing ${t}()`), o.bind(e);
+function d(e, n, o) {
+  const t = `${n}_${o}`, r = e[t];
+  return l(typeof r == "function", `Offline performer is missing ${t}()`), r.bind(e);
 }
-function F(e, n, r) {
+function I(e, n, o) {
   let t = n;
   for (; t > 0; ) {
-    const o = Math.min(r, t);
-    e.advance(o), t -= o;
+    const r = Math.min(o, t);
+    e.advance(r), t -= r;
   }
 }
-function A(e, n, r, t, o) {
-  const s = new Float32Array(o), a = new Float32Array(o);
+function w(e, n, o, t, r) {
+  const a = new Float32Array(r), s = new Float32Array(r);
   let c = 0;
   for (; c < t; ) {
-    const u = Math.min(o, t - c);
-    e.advance(u), e.getOutputFrames_audioOut([s, a], u, 0);
+    const u = Math.min(r, t - c);
+    e.advance(u), e.getOutputFrames_audioOut([a, s], u, 0);
     for (let m = 0; m < u; m += 1) {
-      const p = (r + c + m) * 2;
-      n[p] = s[m], n[p + 1] = a[m];
+      const p = (o + c + m) * 2;
+      n[p] = a[m], n[p + 1] = s[m];
     }
     c += u;
   }
 }
-function H(e, n, r) {
+function K(e, n, o) {
   let t = 0;
-  const o = Math.min(e.length / 2, n + r), s = Math.max(0, o - n);
-  if (s === 0) return 0;
-  for (let a = n; a < o; a += 1) {
-    const c = a * 2, u = e[c], m = e[c + 1];
+  const r = Math.min(e.length / 2, n + o), a = Math.max(0, r - n);
+  if (a === 0) return 0;
+  for (let s = n; s < r; s += 1) {
+    const c = s * 2, u = e[c], m = e[c + 1];
     t += (u * u + m * m) * 0.5;
   }
-  return Math.sqrt(t / s);
+  return Math.sqrt(t / a);
 }
-function Z(e, n, r) {
+function Y(e, n, o) {
   const t = e.length / 2;
-  let o = n;
-  for (let s = n; s < t; s += r.silenceWindowFrames) {
-    const a = Math.min(r.silenceWindowFrames, t - s);
-    H(e, s, a) >= r.silenceThresholdLinear && (o = s + a);
+  let r = n;
+  for (let a = n; a < t; a += o.silenceWindowFrames) {
+    const s = Math.min(o.silenceWindowFrames, t - a);
+    K(e, a, s) >= o.silenceThresholdLinear && (r = a + s);
   }
   return Math.min(t, Math.max(
     n + 4,
-    o + r.tailPaddingFrames
+    r + o.tailPaddingFrames
   ));
 }
-function K(e, n = e.length / 2) {
-  let r = 0;
+function G(e, n = e.length / 2) {
+  let o = 0;
   for (let t = 0; t < n * 2; t += 1)
-    r = Math.max(r, Math.abs(e[t]));
-  return r;
+    o = Math.max(o, Math.abs(e[t]));
+  return o;
 }
-function Y(e) {
+function J(e) {
   const n = e?.memoryDataView?.buffer?.byteLength ?? e?.byteMemory?.byteLength ?? null;
   return Number.isInteger(n) && n > 0 ? n / 65536 : null;
 }
-async function G(e, n, r) {
-  d(typeof e == "function", "Offline engine module has no performer class");
-  const t = new e();
-  d(typeof t.initialise == "function", "Offline performer has no initialise() method"), await t.initialise(r.sessionID, n.snapshot.sampleRate);
-  for (const o of n.snapshot.parameters)
-    d(
-      typeof o.value == "number",
-      `Cmajor value endpoint ${o.endpointID} must receive a number`
-    ), l(t, "setInputValue", o.endpointID)(o.value, 0);
-  l(t, "sendInputEvent", "tempo")({ bpm: n.snapshot.tempoBpm }), F(t, 1, n.blockFrames);
-  for (const o of n.snapshot.setupEvents) {
-    const s = o.sessionScoped ? { ...o.value, dspSessionId: r.sessionID } : o.value;
-    l(t, "sendInputEvent", o.endpointID)(s), F(t, o.advanceFrames, n.blockFrames);
+async function Q(e, n, o) {
+  l(typeof e == "function", "Offline engine module has no performer class");
+  const t = e.createOfflinePerformer ? await e.createOfflinePerformer(o.sessionID, n.snapshot.sampleRate) : { performer: new e(), dispose() {
+  } }, r = t.performer;
+  l(
+    !r.getMemoryRequirements?.().shared || e.createOfflinePerformer,
+    "Shared offline engine must supply its resource lifecycle factory"
+  ), l(typeof r.initialise == "function", "Offline performer has no initialise() method"), e.createOfflinePerformer || await r.initialise(o.sessionID, n.snapshot.sampleRate);
+  try {
+    for (const a of n.snapshot.parameters)
+      l(
+        typeof a.value == "number",
+        `Cmajor value endpoint ${a.endpointID} must receive a number`
+      ), d(r, "setInputValue", a.endpointID)(a.value, 0);
+    d(r, "sendInputEvent", "tempo")({ bpm: n.snapshot.tempoBpm }), I(r, 1, n.blockFrames), n.snapshot.wavetableSources.length > 0 && (l(typeof t.prepareWavetables == "function", "Offline engine does not support direct wavetable preparation"), await t.prepareWavetables(n.snapshot.wavetableSources), I(r, 1, n.blockFrames));
+    for (const a of n.snapshot.setupEvents) {
+      l(
+        !e.createOfflinePerformer || a.endpointID !== "wavetableLoadBegin" && a.endpointID !== "wavetableMipFrame",
+        "Shared offline engine requires source-frame capture recipes"
+      );
+      const s = a.sessionScoped ? { ...a.value, dspSessionId: o.sessionID } : a.value;
+      d(r, "sendInputEvent", a.endpointID)(s), I(r, a.advanceFrames, n.blockFrames);
+    }
+    return I(r, n.snapshot.settleFrames, n.blockFrames), t;
+  } catch (a) {
+    throw t.dispose(), a;
   }
-  return F(t, n.snapshot.settleFrames, n.blockFrames), t;
 }
-async function J(e, n, r) {
-  const t = q(n), o = t.jobs.find((f) => f.rootIndex === r?.rootIndex);
-  d(
-    o !== void 0 && o.rootNote === r?.rootNote,
+async function X(e, n, o) {
+  const t = Z(n), r = t.jobs.find((u) => u.rootIndex === o?.rootIndex);
+  l(
+    r !== void 0 && r.rootNote === o?.rootNote,
     "Bounce worker received a job outside its plan"
   );
-  const s = globalThis.performance?.now?.() ?? Date.now(), a = await G(e, t, o), c = t.holdFrames + t.tailCapFrames, u = new Float32Array(c * 2);
-  for (const f of t.snapshot.rootSetupEvents) {
-    const E = {
-      ...f.value,
-      [f.rootNoteField]: o.rootNote,
-      ...f.sessionScoped ? { dspSessionId: o.sessionID } : {}
-    };
-    l(a, "sendInputEvent", f.endpointID)(E), F(a, f.advanceFrames, t.blockFrames);
-  }
-  l(a, "sendInputEvent", "midiIn")({
-    message: C(144, o.rootNote, t.captureVelocity)
-  }), A(a, u, 0, t.holdFrames, t.blockFrames), l(a, "sendInputEvent", "midiIn")({
-    message: C(128, o.rootNote, 0)
-  }), A(
-    a,
-    u,
-    t.holdFrames,
-    t.tailCapFrames,
-    t.blockFrames
-  );
-  const m = Z(u, t.holdFrames, t), p = K(u, m);
-  d(
-    p >= t.silenceThresholdLinear,
-    `Bounce root ${o.rootNote} captured silence`
-  );
-  const h = new Int16Array(m * 2);
-  for (let f = 0; f < h.length; f += 1)
-    h[f] = R(u[f]);
-  const b = (globalThis.performance?.now?.() ?? Date.now()) - s;
-  return {
-    rootIndex: o.rootIndex,
-    rootNote: o.rootNote,
-    noteOffFrameOffset: t.holdFrames,
-    frameCount: m,
-    tailFrameCount: m - t.holdFrames,
-    peak: p,
-    samples: h,
-    metrics: {
-      renderedFrameCount: c,
-      elapsedMilliseconds: b,
-      realtimeMultiplier: b > 0 ? c / (b * t.snapshot.sampleRate / 1e3) : null,
-      // Generated Cmajor performers have fixed-size wasm memory. The
-      // page count is reported before the short-lived worker exits so
-      // browser soak tests can prove recursion does not grow an engine.
-      wasmMemoryPages: Y(a)
+  const a = globalThis.performance?.now?.() ?? Date.now(), s = await Q(e, t, r), c = s.performer;
+  try {
+    const u = t.holdFrames + t.tailCapFrames, m = new Float32Array(u * 2);
+    for (const f of t.snapshot.rootSetupEvents) {
+      const R = {
+        ...f.value,
+        [f.rootNoteField]: r.rootNote,
+        ...f.sessionScoped ? { dspSessionId: r.sessionID } : {}
+      };
+      d(c, "sendInputEvent", f.endpointID)(R), I(c, f.advanceFrames, t.blockFrames);
     }
-  };
+    d(c, "sendInputEvent", "midiIn")({
+      message: N(144, r.rootNote, t.captureVelocity)
+    }), w(c, m, 0, t.holdFrames, t.blockFrames), d(c, "sendInputEvent", "midiIn")({
+      message: N(128, r.rootNote, 0)
+    }), w(
+      c,
+      m,
+      t.holdFrames,
+      t.tailCapFrames,
+      t.blockFrames
+    );
+    const p = Y(m, t.holdFrames, t), g = G(m, p);
+    l(
+      g >= t.silenceThresholdLinear,
+      `Bounce root ${r.rootNote} captured silence`
+    );
+    const b = new Int16Array(p * 2);
+    for (let f = 0; f < b.length; f += 1)
+      b[f] = z(m[f]);
+    const h = (globalThis.performance?.now?.() ?? Date.now()) - a;
+    return {
+      rootIndex: r.rootIndex,
+      rootNote: r.rootNote,
+      noteOffFrameOffset: t.holdFrames,
+      frameCount: p,
+      tailFrameCount: p - t.holdFrames,
+      peak: g,
+      samples: b,
+      metrics: {
+        renderedFrameCount: u,
+        elapsedMilliseconds: h,
+        realtimeMultiplier: h > 0 ? u / (h * t.snapshot.sampleRate / 1e3) : null,
+        // Generated Cmajor performers have fixed-size wasm memory. The
+        // page count is reported before the short-lived worker exits so
+        // browser soak tests can prove recursion does not grow an engine.
+        wasmMemoryPages: J(c)
+      }
+    };
+  } finally {
+    s.dispose();
+  }
 }
-async function Q(e, n) {
+async function ee(e, n) {
   if (e?.type !== "render-root")
     throw new Error("Bounce worker received an unsupported message");
-  const t = await import(new URL(e.engineModuleURL, n).href), o = t.default ?? t.WavetableSynth, s = await J(o, e.plan, e.job);
+  const t = await import(new URL(e.engineModuleURL, n).href), r = t.default ?? t.WavetableSynth, a = await X(r, e.plan, e.job);
   return {
     type: "render-root-complete",
     requestID: e.requestID,
-    result: s
+    result: a
   };
 }
-function X(e) {
+function te(e) {
   return {
     name: e instanceof Error ? e.name : "Error",
     message: e instanceof Error ? e.message : String(e),
     stack: e instanceof Error ? e.stack : void 0
   };
 }
-const I = self;
-I.addEventListener("message", (e) => {
+const O = self;
+O.addEventListener("message", (e) => {
   const n = e.data;
-  Q(n, I.location.href).then((r) => {
-    I.postMessage(r, [r.result.samples.buffer]);
-  }).catch((r) => {
-    I.postMessage({
+  ee(n, O.location.href).then((o) => {
+    O.postMessage(o, [o.result.samples.buffer]);
+  }).catch((o) => {
+    O.postMessage({
       type: "render-root-failed",
       requestID: n?.requestID,
-      error: X(r)
+      error: te(o)
     }, []);
   });
 });

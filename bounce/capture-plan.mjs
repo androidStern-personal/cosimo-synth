@@ -112,6 +112,25 @@ function normalizeSetupEvents(events, {
     });
 }
 
+function normalizeWavetableSources(sources) {
+    invariant(Array.isArray(sources) && sources.length <= 3, "Invalid wavetable source list");
+    const seen = new Set(), clones = new WeakMap();
+    return sources.map(source => {
+        invariant(Number.isInteger(source.input) && source.input >= 0 && source.input < 3 && !seen.has(source.input), "Invalid wavetable source input");
+        seen.add(source.input);
+        invariant(Number.isInteger(source.tableIndex) && source.tableIndex >= 0
+            && Number.isInteger(source.generation) && source.generation > 0, "Invalid wavetable source identity");
+        invariant(Array.isArray(source.frames) && source.frames.length >= 1 && source.frames.length <= 256, "Invalid wavetable source frames");
+        const frames = source.frames.map(frame => {
+            invariant(frame instanceof Float32Array && frame.length === 2048 && frame.every(Number.isFinite), "Invalid wavetable source frame");
+            let clone = clones.get(frame);
+            if (!clone) { clone = frame.slice(); clones.set(frame, clone); }
+            return clone;
+        });
+        return Object.freeze({input:source.input,tableIndex:source.tableIndex,generation:source.generation,frames:Object.freeze(frames)});
+    });
+}
+
 /**
  * Capture snapshots are immutable recipes, not references to the live patch.
  * Every parameter and structured runtime event is cloned at button-press time,
@@ -122,6 +141,7 @@ export function createBounceCaptureSnapshot({
     tempoBpm = 120,
     parameters = {},
     setupEvents = [],
+    wavetableSources = [],
     rootSetupEvents = [],
     settleFrames = BOUNCE_OFFLINE_BLOCK_FRAMES,
     sourceGeneration = 0,
@@ -145,6 +165,7 @@ export function createBounceCaptureSnapshot({
         tempoBpm,
         parameters: Object.freeze(normalizeParameters(parameters).map(Object.freeze)),
         setupEvents: Object.freeze(normalizeSetupEvents(setupEvents).map(Object.freeze)),
+        wavetableSources: Object.freeze(normalizeWavetableSources(wavetableSources)),
         // Root-scoped events receive the worker job's note immediately before
         // MIDI note-on. They remain part of the immutable press-time recipe.
         rootSetupEvents: Object.freeze(normalizeSetupEvents(rootSetupEvents, {

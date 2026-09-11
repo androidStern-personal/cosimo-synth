@@ -43,6 +43,7 @@ try {
         path.resolve(patchPath),
         rawJavascript,
         className,
+        "--shared-memory-maximum-pages", "32768",
     ]);
 
     const cmajorSource = await fs.readFile(rawJavascript, "utf8");
@@ -55,7 +56,7 @@ try {
     ]);
 
     const rendererBytes = await fs.readFile(rendererWasm);
-    const connectedSource = connectCanonicalRendererWasm(cmajorSource, rendererBytes);
+    const connectedSource = connectCanonicalRendererWasm(cmajorSource, rendererBytes, className);
     await fs.mkdir(path.dirname(path.resolve(outputPath)), { recursive: true });
     await fs.writeFile(path.resolve(outputPath), connectedSource);
 } finally {

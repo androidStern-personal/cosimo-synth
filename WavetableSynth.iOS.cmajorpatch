@@ -35,6 +35,7 @@
     "cmajor/WavetableSynth.cmajor"
   ],
   "worker": "patch_gui/wavetable-worker.js",
+  "sharedData": { "format": "bytes", "inputCount": 3, "maxRetainedBytes": 52473984 },
   "resources": [],
   "view": {
     "src": "patch_gui/index.ios.js",

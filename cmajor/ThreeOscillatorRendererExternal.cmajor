@@ -1,5 +1,7 @@
 namespace CosimoThreeOscillatorRenderer
 {
+    external int32 updateSharedTables (int32 dspSession, int32[] packedInts);
+    external int32 renderShared (float32[] packedFloats, int32[] packedInts);
     external int32 renderAll (float32[] packedFloats,
                               int32[] packedInts,
                               int32[] slot0Chunk0,

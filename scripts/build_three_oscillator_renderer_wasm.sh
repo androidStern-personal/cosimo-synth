@@ -84,7 +84,8 @@ fi
 # LLVM 18 defaults to placing the stack after data and only exposes the
 # positive --stack-first switch. Newer Homebrew linkers also accept the
 # explicit negative spelling used by the original macOS build.
-if "$llvm_root/bin/wasm-ld" --help 2>&1 | grep -q -- '--no-stack-first'; then
+renderer_linker="$("$llvm_root/bin/clang++" -print-prog-name=wasm-ld)"
+if "$renderer_linker" --help 2>&1 | grep -q -- '--no-stack-first'; then
   linker_args+=(-Wl,--no-stack-first)
 fi
 
@@ -92,7 +93,7 @@ mkdir -p "$(dirname "$output_path")"
 "$llvm_root/bin/clang++" \
   "${compiler_args[@]}" \
   -mexec-model=reactor \
-  -std=c++17 -O3 -ffast-math -flto -msimd128 \
+  -std=c++17 -O3 -ffast-math -flto -msimd128 -matomics -mbulk-memory \
   -fignore-exceptions -fno-rtti -nostdlib++ \
   -isystem "$wasi_cxx_include" \
   "${wasi_c_header_args[@]}" \
@@ -101,9 +102,13 @@ mkdir -p "$(dirname "$output_path")"
   "$renderer_dir/RendererWasmExports.cpp" \
   "$renderer_dir/RendererBridge.cpp" \
   "$renderer_dir/WarpRenderer.cpp" \
-  -Wl,--import-memory \
+  -Wl,--import-memory -Wl,--shared-memory -Wl,--max-memory=2147483648 -Wl,--no-check-features \
   "${linker_args[@]}" \
   -Wl,--export=CosimoThreeOscillatorRenderer__renderAll \
+  -Wl,--export-if-defined=CosimoThreeOscillatorRenderer__renderShared \
+  -Wl,--export-if-defined=CosimoThreeOscillatorRenderer__updateSharedTables \
+  -Wl,--allow-undefined \
+  -Wl,--export=__heap_base \
   -Wl,--export=__stack_pointer \
   -Wl,--strip-all -Wl,--gc-sections \
   -Wl,--global-base="$memory_base" \

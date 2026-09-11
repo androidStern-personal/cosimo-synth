@@ -8,4 +8,5 @@ exec "$repo_root/scripts/generate_cmajor_cpp_with_externals.sh" \
   "${2:?output JavaScript path is required}" \
   "${3:-WavetableSynth}" \
   --target javascript \
-  --max-frames-per-block "${COSIMO_CMAJOR_JAVASCRIPT_MAX_FRAMES:-128}"
+  --max-frames-per-block "${COSIMO_CMAJOR_JAVASCRIPT_MAX_FRAMES:-128}" \
+  "${@:4}"

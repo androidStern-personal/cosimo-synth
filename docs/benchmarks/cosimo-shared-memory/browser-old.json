@@ -1,0 +1,168 @@
+{
+  "mode": "old",
+  "tableIndex": 3,
+  "selectionToActiveMs": 900.4249999970198,
+  "desiredObservedToActiveMs": 893.8299999982119,
+  "observedFinishedMs": 905.0049999952316,
+  "state": [
+    {
+      "dspSessionId": 256258843,
+      "oscillatorIndex": 0,
+      "desiredIntentSerial": 2,
+      "desiredTableIndex": 3,
+      "generationFrontier": 2,
+      "serviceState": 2,
+      "hasActive": 1,
+      "activeTableIndex": 3,
+      "activeGeneration": 2,
+      "hasLoading": 0,
+      "loadingTableIndex": 0,
+      "loadingGeneration": 0,
+      "hasFailure": 0,
+      "failedTableIndex": 0,
+      "failedGeneration": 0,
+      "failureScope": 0,
+      "failurePhase": 0,
+      "failureReasonCode": 0
+    },
+    {
+      "dspSessionId": 256258843,
+      "oscillatorIndex": 1,
+      "desiredIntentSerial": 1,
+      "desiredTableIndex": 35,
+      "generationFrontier": 1,
+      "serviceState": 2,
+      "hasActive": 1,
+      "activeTableIndex": 35,
+      "activeGeneration": 1,
+      "hasLoading": 0,
+      "loadingTableIndex": 0,
+      "loadingGeneration": 0,
+      "hasFailure": 0,
+      "failedTableIndex": 0,
+      "failedGeneration": 0,
+      "failureScope": 0,
+      "failurePhase": 0,
+      "failureReasonCode": 0
+    },
+    {
+      "dspSessionId": 256258843,
+      "oscillatorIndex": 2,
+      "desiredIntentSerial": 1,
+      "desiredTableIndex": 35,
+      "generationFrontier": 1,
+      "serviceState": 2,
+      "hasActive": 1,
+      "activeTableIndex": 35,
+      "activeGeneration": 1,
+      "hasLoading": 0,
+      "loadingTableIndex": 0,
+      "loadingGeneration": 0,
+      "hasFailure": 0,
+      "failedTableIndex": 0,
+      "failedGeneration": 0,
+      "failureScope": 0,
+      "failurePhase": 0,
+      "failureReasonCode": 0
+    }
+  ],
+  "sharedMemory": {
+    "ownedBytes": 0,
+    "retainedSampleBytes": 0,
+    "memoryObjectAlive": false,
+    "readerReleased": true
+  },
+  "messages": {
+    "wavetableLoadBegin": {
+      "count": 1,
+      "jsonBytes": 92
+    },
+    "wavetableMipFrame": {
+      "count": 154,
+      "jsonBytes": 18482132
+    }
+  },
+  "jsonInstrumentationMs": 17.094999998807907,
+  "callback": [
+    {
+      "type": "cosimo-perf",
+      "epoch": 2,
+      "sampleRateHz": 48000,
+      "renderQuantumFrames": 128,
+      "quantizedAverageLoad": 0.2841796875,
+      "quantizedMaxLoad": 0.75,
+      "quantizedOverBudgetBlocks": 0,
+      "definiteDeadlineMissBlocks": 0,
+      "clockSource": "Date.now",
+      "processMultiplier": 1,
+      "callbackGapBlocks": 92,
+      "maxCallbackGapLoad": 2.25,
+      "frameDiscontinuityBlocks": 0,
+      "markedEventCount": 0,
+      "eventAdjacentBlockCount": 0,
+      "eventAdjacentGapLoadSum": 0,
+      "eventAdjacentLateBlocks": 0,
+      "eventAdjacentMaxGapLoad": 0,
+      "eventAdjacentCoalescedEvents": 0,
+      "blockCount": 256
+    },
+    {
+      "type": "cosimo-perf",
+      "epoch": 2,
+      "sampleRateHz": 48000,
+      "renderQuantumFrames": 128,
+      "quantizedAverageLoad": 0.28857421875,
+      "quantizedMaxLoad": 0.75,
+      "quantizedOverBudgetBlocks": 0,
+      "definiteDeadlineMissBlocks": 0,
+      "clockSource": "Date.now",
+      "processMultiplier": 1,
+      "callbackGapBlocks": 85,
+      "maxCallbackGapLoad": 2.25,
+      "frameDiscontinuityBlocks": 0,
+      "markedEventCount": 0,
+      "eventAdjacentBlockCount": 0,
+      "eventAdjacentGapLoadSum": 0,
+      "eventAdjacentLateBlocks": 0,
+      "eventAdjacentMaxGapLoad": 0,
+      "eventAdjacentCoalescedEvents": 0,
+      "blockCount": 256
+    },
+    {
+      "type": "cosimo-perf",
+      "epoch": 2,
+      "sampleRateHz": 48000,
+      "renderQuantumFrames": 128,
+      "quantizedAverageLoad": 0.28564453125,
+      "quantizedMaxLoad": 0.75,
+      "quantizedOverBudgetBlocks": 0,
+      "definiteDeadlineMissBlocks": 0,
+      "clockSource": "Date.now",
+      "processMultiplier": 1,
+      "callbackGapBlocks": 89,
+      "maxCallbackGapLoad": 2.25,
+      "frameDiscontinuityBlocks": 0,
+      "markedEventCount": 0,
+      "eventAdjacentBlockCount": 0,
+      "eventAdjacentGapLoadSum": 0,
+      "eventAdjacentLateBlocks": 0,
+      "eventAdjacentMaxGapLoad": 0,
+      "eventAdjacentCoalescedEvents": 0,
+      "blockCount": 256
+    }
+  ],
+  "audio": [
+    {
+      "rms": 0.07041839604531198,
+      "samples": 88576,
+      "nonfinite": 0
+    },
+    {
+      "rms": 0.019871795205590095,
+      "samples": 192512,
+      "nonfinite": 0
+    }
+  ],
+  "errors": [],
+  "browser": "147.0.7727.15"
+}

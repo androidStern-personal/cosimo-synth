@@ -28,6 +28,14 @@ export type BounceRootSetupEvent = BounceSetupEvent & {
     readonly rootNoteField: string;
 };
 
+/** Decoded source frames; final packed mip preparation belongs to each renderer. */
+export type BounceWavetableSource = {
+    readonly input: number;
+    readonly tableIndex: number;
+    readonly generation: number;
+    readonly frames: ReadonlyArray<Float32Array>;
+};
+
 /** Immutable state captured at the instant Bounce begins. */
 export type BounceCaptureSnapshot = {
     readonly format: "cosimo.bounce-capture-snapshot";
@@ -36,6 +44,7 @@ export type BounceCaptureSnapshot = {
     readonly tempoBpm: number;
     readonly parameters: ReadonlyArray<BounceCaptureParameter>;
     readonly setupEvents: ReadonlyArray<BounceSetupEvent>;
+    readonly wavetableSources: ReadonlyArray<BounceWavetableSource>;
     readonly rootSetupEvents: ReadonlyArray<BounceRootSetupEvent>;
     readonly settleFrames: number;
     readonly sourceGeneration: number;
@@ -142,6 +151,7 @@ export function createBounceCaptureSnapshot(options: {
     readonly parameters?: Readonly<Record<string, BounceWireValue>>
         | ReadonlyArray<BounceCaptureParameter>;
     readonly setupEvents?: ReadonlyArray<BounceSetupEventInput>;
+    readonly wavetableSources?: ReadonlyArray<BounceWavetableSource>;
     readonly rootSetupEvents?: ReadonlyArray<BounceRootSetupEventInput>;
     readonly settleFrames?: number;
     readonly sourceGeneration?: number;

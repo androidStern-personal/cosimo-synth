@@ -12,7 +12,7 @@ import { comparePeakNormalizedRms } from "../bounce/quality.mjs";
 const sampleRate = 48_000;
 const blockFrames = 128;
 const fixtureRoots = Object.freeze([48, 60, 72]);
-const engineModuleURL = pathToFileURL(path.resolve("build/web/cmaj_Cosimo_Synth.offline.js")).href;
+const engineModuleURL = pathToFileURL(path.resolve(process.env.COSIMO_BOUNCE_ENGINE_MODULE ?? "build/web/cmaj_Cosimo_Synth.offline.js")).href;
 const nodeWorkerURL = new URL("../bounce/node-render-worker.mjs", import.meta.url);
 
 function packMidi(status, note, velocity) {
@@ -33,35 +33,8 @@ function syntheticMipSamples(mipIndex) {
     return samples;
 }
 
-function wavetableSetupEvents() {
-    const events = [{
-        endpointID: "wavetableLoadBegin",
-        sessionScoped: true,
-        value: {
-            dspSessionId: -1,
-            oscillatorIndex: 0,
-            generation: 1,
-            tableIndex: 0,
-            frameCount: 1,
-        },
-    }];
-    for (let mipIndex = 0; mipIndex < 11; mipIndex += 1) {
-        events.push({
-            endpointID: "wavetableMipFrame",
-            sessionScoped: true,
-            value: {
-                dspSessionId: -1,
-                oscillatorIndex: 0,
-                generation: 1,
-                tableIndex: 0,
-                mipIndex,
-                frameIndexBase: 0,
-                frameCount: 1,
-                samples: syntheticMipSamples(mipIndex),
-            },
-        });
-    }
-    return events;
+function wavetableSources() {
+    return [{input:0,generation:1,tableIndex:0,frames:[syntheticMipSamples(10).slice(0,2048)]}];
 }
 
 function laneEvents(kind) {
@@ -134,7 +107,8 @@ function fixtureSnapshot(kind) {
             playMode: 0,
             glideTime: 0,
         },
-        setupEvents: [...wavetableSetupEvents(), ...laneEvents(kind)],
+        wavetableSources: wavetableSources(),
+        setupEvents: laneEvents(kind),
     });
 }
 

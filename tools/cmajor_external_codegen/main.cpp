@@ -36,6 +36,7 @@ int main (int argc, char** argv)
     std::filesystem::path metadataPath;
     auto maxFramesPerBlock = 512;
     auto target = std::string { "cpp" };
+    int sharedMaximumPages = 0;
     for (auto index = 4; index < argc; ++index)
     {
         const auto option = std::string_view (argv[index]);
@@ -45,6 +46,8 @@ int main (int argc, char** argv)
             metadataPath = argv[++index];
         else if (option == "--max-frames-per-block")
             maxFramesPerBlock = std::stoi (argv[++index]);
+        else if (option == "--shared-memory-maximum-pages")
+            sharedMaximumPages = std::stoi (argv[++index]);
         else if (option == "--target")
             target = argv[++index];
         else
@@ -133,7 +136,14 @@ int main (int argc, char** argv)
         if (target == "cpp")
             options.addMember ("classname", std::string (argv[3]));
         else
+        {
             options.addMember ("SIMD", "simd-only");
+            if (sharedMaximumPages != 0)
+            {
+                require (sharedMaximumPages > 0 && sharedMaximumPages <= 65536, "Invalid shared memory maximum pages");
+                options.addMember ("sharedMemory", choc::value::createObject ("", "maximumPages", sharedMaximumPages));
+            }
+        }
         const auto generated = engine.generateCode (
             target, choc::json::toString (options, false).c_str());
         require (! generated.messages.hasErrors(), generated.messages.toString());

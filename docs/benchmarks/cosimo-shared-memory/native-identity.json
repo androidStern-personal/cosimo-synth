@@ -1,0 +1,45 @@
+{
+  "baselineSynthCommit": "343c54772ec7be6b88889cf3b2443d4c400be700",
+  "baselineCmajorHeaders": "69a5847a3b95c54330193e16032d661f18166d6b",
+  "currentSynthHead": "343c54772ec7be6b88889cf3b2443d4c400be700",
+  "currentCmajorHead": "69a5847a3b95c54330193e16032d661f18166d6b",
+  "sha256": {
+    "build/native_plugin_state_runtime/lib/libCmajPerformer.dylib": "adfca46e61a2df33912a987002af9d91ceb760c0ca489dc46e174e9db60344f4",
+    "build/shared_data_codegen/direct/cosimo_cmajor_external_codegen": "5ca3f4e28b3ac5609032ce3afc04cc29599e4bf8a1a09f9ec8729c1587fc6e92",
+    "build/cosimo_shared_memory_baseline/CosimoBaseline.cpp": "55accafd01eb64e1658853efeeb50c7fa1db209a3ff2a13df795b84ccf522d43",
+    "build/cosimo_shared_memory_baseline/MeasuredWorker.h": "9d4b77faff342bbc6fa0211f7e3839f22e390276ca320ba3eb1a08f53532edd6",
+    "build/cosimo_shared_memory_baseline/current/MeasuredWorker.h": "a8a2a7e309db86deeaf99b9ad5055b67db47f30031ed48daf6de88cea92e2195",
+    "build/cosimo_shared_memory_baseline/CosimoBaselineDSP.h": "5d5ac3ae0dbe52572560cdb1f52ad33a2b6986b4051cb53a6118dbb2ff78c9ec",
+    "build/cosimo_shared_memory_baseline/current/CosimoCurrentDSP.h": "b372aa98586d40ca8f51d1b69d64b72b9e3084bf12950e33b58fde80e411d148",
+    "build/cosimo_shared_memory_baseline/runtime/wavetable-worker.js": "f24179dc8b7e6d15403601a61325dd1e30a5b8dc707de467357d7ae6c4d55622",
+    "build/cosimo_shared_memory_baseline/current/runtime/wavetable-worker.js": "bdc28bbc457899858e639640333f47b476d3d9f6f6a0a6444f1c421bbe550486",
+    "build/cosimo_shared_memory_baseline/current/RendererSharedDataProvider.h": "696a513a75592f17144b33e3c4b59e98189057588a060e9fad5fab6107b38179",
+    "build/cosimo_shared_memory_baseline/CosimoBaseline": "6c908d601b5164a2004062249264410bd61a34192c4867c0f74312c752e51fef",
+    "build/cosimo_shared_memory_baseline/current/CosimoCurrent": "090b4516e635e78c075322f003852350a93a3e76de15d380951ce408be6392cb",
+    "build/cosimo_shared_memory_baseline/CosimoBaselineAot": "d93da6afd3bbd1a17328a147e1a9316b63411384887eada429a57621edeba47a",
+    "build/cosimo_shared_memory_baseline/current/CosimoCurrentAot": "01d7a580dfd80e8ed74ec29c549dad125fdc9a8e08ff58f9ca382d9f850611ee"
+  },
+  "timestampUTC": "2026-09-11T06:52:42Z",
+  "compiler": "Same hashed AOT codegenerator for baseline/current. JIT uses same hashed prebuilt dylib; its exact compiled commit is unavailable.",
+  "capture": "Actual full Cosimo, factory Acid index3 40frames,48kHz128frameblocks,real QuickJS worker,MIDI60velocity100,all3bootedbefore A change.",
+  "archivedSourceEvidence": "build/cosimo_shared_memory_baseline/final/source-after-run.json",
+  "fullLogsAudioAndSourceSnapshots": "build/cosimo_shared_memory_baseline/final/",
+  "observer": {
+    "hostSource": "native-host.cpp",
+    "hostSourceSha256": "55accafd01eb64e1658853efeeb50c7fa1db209a3ff2a13df795b84ccf522d43",
+    "workerHeaderRecipe": "instrument-worker.py",
+    "changes": [
+      "Copy actual QuickJS worker header; rename enableQuickJSPatchWorker to enableMeasuredQuickJSPatchWorker; preserve native WorkerContext identity.",
+      "Before the real send callback, benchmarkSent counts JSON envelopes and measures its own extra serialization time.",
+      "Immediately after actual reserveSharedData, benchmarkReserved records the original allocation pointer and requested byte length before JS_NewArrayBuffer.",
+      "Benchmark-only RendererSharedDataProvider copy invokes benchmarkRead with PatchSharedData::data/byteSize before returning the unchanged view."
+    ],
+    "productionFixIncluded": "QuickJS external ArrayBuffer free callback ignores data==nullptr on post-detachment finalization; observer preserves that fix."
+  },
+  "dependencies": {
+    "nativeHost": "macOS C++17, -O2 -g0, Accelerate/AudioToolbox/Cocoa/CoreAudio/CoreMIDI/Foundation/IOKit, Cmajor headers and their pinned choc submodule, existing renderer sources/xsimd",
+    "worker": "Actual archived/current wavetable-worker.ts built with existing Vite config; worker path relocated and GUI view omitted from otherwise production manifest",
+    "aot": "cmaj::createEngineForGeneratedCppProgram with the complete generated Cosimo DSP and native renderer functions; same hashed codegenerator for both sides",
+    "jit": "Same hashed prebuilt libCmajPerformer.dylib; exact compiler revision is not proven"
+  }
+}

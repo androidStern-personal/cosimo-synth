@@ -10,30 +10,9 @@ static_assert (tableChunkCountPerSlot == static_cast<std::int32_t> (tableSlotChu
 static_assert (noteBatchCount
                == static_cast<std::int32_t> (::cosimo::three_osc::noteBatchCount));
 
-std::int32_t renderAllChunks (Slice<float> packedFloats,
-                              Slice<std::int32_t> packedInts,
-                              const TableChunkSlices& tableChunks) noexcept
+static std::int32_t renderSources (Slice<float> packedFloats, Slice<std::int32_t> packedInts,
+    const std::array<TablePoolLayout::PackedSourceSlice, tableSlotCount>& slots) noexcept
 {
-    if (packedFloats.elements == nullptr || packedFloats.size < packedFloatCount
-        || packedInts.elements == nullptr || packedInts.size < packedIntCount)
-        return 0;
-
-    std::array<TablePoolLayout::PackedSourceSlice, tableSlotCount> slots {};
-    for (std::size_t slot = 0; slot < tableSlotCount; ++slot)
-    {
-        auto& source = slots[slot];
-        source.size = tableSlotSampleCount;
-        source.chunkSampleCount = tableChunkSampleCount;
-        for (std::size_t chunk = 0; chunk < tableSlotChunkCount; ++chunk)
-        {
-            const auto& chunkSlice = tableChunks[slot * tableSlotChunkCount + chunk];
-            if (chunkSlice.elements == nullptr || chunkSlice.size < tableChunkSampleCount)
-                return 0;
-
-            source.chunkSamples[chunk] = chunkSlice.elements;
-            source.chunkSizes[chunk] = chunkSlice.size;
-        }
-    }
     const WarpRendererStateView state {
         packedFloats.elements + phaseOffset,
         packedFloats.elements + historyOffset,
@@ -105,6 +84,84 @@ std::int32_t renderAllChunks (Slice<float> packedFloats,
     }
 
     return 1;
+}
+
+std::int32_t renderAllChunks (Slice<float> packedFloats,
+                              Slice<std::int32_t> packedInts,
+                              const TableChunkSlices& tableChunks) noexcept
+{
+    if (packedFloats.elements == nullptr || packedFloats.size < packedFloatCount
+        || packedInts.elements == nullptr || packedInts.size < packedIntCount)
+        return 0;
+
+    std::array<TablePoolLayout::PackedSourceSlice, tableSlotCount> slots {};
+    for (std::size_t slot = 0; slot < tableSlotCount; ++slot)
+    {
+        auto& source = slots[slot];
+        source.size = tableSlotSampleCount;
+        source.chunkSampleCount = tableChunkSampleCount;
+        for (std::size_t chunk = 0; chunk < tableSlotChunkCount; ++chunk)
+        {
+            const auto& chunkSlice = tableChunks[slot * tableSlotChunkCount + chunk];
+            if (chunkSlice.elements == nullptr || chunkSlice.size < tableChunkSampleCount)
+                return 0;
+
+            source.chunkSamples[chunk] = chunkSlice.elements;
+            source.chunkSizes[chunk] = chunkSlice.size;
+        }
+    }
+    return renderSources (packedFloats, packedInts, slots);
+}
+
+namespace
+{
+constexpr std::int32_t sharedHeaderWords = 8;
+const std::int32_t* tableWords (SharedDataView view) noexcept
+{
+    if (view.data == nullptr
+        || view.byteSize != static_cast<std::size_t> (tableSlotSampleCount + sharedHeaderWords) * sizeof (std::int32_t))
+        return nullptr;
+    const auto* words = static_cast<const std::int32_t*> (view.data);
+    if (words[0] != 0x5754424c || words[1] != 1 || words[3] <= 0 || words[4] < 0
+        || words[5] <= 0 || words[5] > maximumFrameCount || words[6] != 11 || words[7] != maximumFrameCount)
+        return nullptr;
+    return words;
+}
+}
+
+std::int32_t updateSharedTables (std::int32_t dspSession, Slice<std::int32_t> packedInts,
+                                 SharedDataReader read) noexcept
+{
+    if (packedInts.elements == nullptr || packedInts.size < sharedPackedIntCount || read == nullptr) return 0;
+    std::int32_t changed = 0;
+    for (std::int32_t oscillator = 0; oscillator < 3; ++oscillator)
+    {
+        const auto* words = tableWords (read (oscillator));
+        if (words == nullptr || words[2] != dspSession
+            || words[3] == packedInts.elements[sharedTableGenerationOffset + oscillator]) continue;
+        packedInts.elements[sharedTableGenerationOffset + oscillator] = words[3];
+        packedInts.elements[sharedTableIndexOffset + oscillator] = words[4];
+        packedInts.elements[frameCountOffset + oscillator] = words[5];
+        changed |= 1 << oscillator;
+    }
+    return changed;
+}
+
+std::int32_t renderShared (Slice<float> packedFloats, Slice<std::int32_t> packedInts,
+                           SharedDataReader read) noexcept
+{
+    if (packedFloats.elements == nullptr || packedFloats.size < packedFloatCount
+        || packedInts.elements == nullptr || packedInts.size < sharedPackedIntCount || read == nullptr) return 0;
+    std::array<TablePoolLayout::PackedSourceSlice, tableSlotCount> slots {};
+    for (std::int32_t oscillator = 0; oscillator < 3; ++oscillator)
+    {
+        const auto* words = tableWords (read (oscillator));
+        if (words == nullptr || words[3] != packedInts.elements[sharedTableGenerationOffset + oscillator]) continue;
+        auto& source = slots[oscillator];
+        source.samples = words + sharedHeaderWords;
+        source.size = tableSlotSampleCount;
+    }
+    return renderSources (packedFloats, packedInts, slots);
 }
 
 std::int32_t renderAll (
