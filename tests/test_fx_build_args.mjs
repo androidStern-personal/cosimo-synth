@@ -790,6 +790,7 @@ test("every shipped plugin uses one <Name>.plugin.json and only enhancer_lite ca
     const { buildModule } = await loadBuildModules();
     const plugin = buildModule.effectPlugins["enhancer-lite"];
     const owner = buildModule.readProductOwner();
+    const patch = JSON.parse(await readFile(path.join(repoRoot, plugin.patch), "utf8"));
 
     assert.deepEqual(owner.owner, {
         manufacturer: "Cosimo",
@@ -802,12 +803,12 @@ test("every shipped plugin uses one <Name>.plugin.json and only enhancer_lite ca
         ID: "dev.cosimo.enhancer-lite",
         name: "Enhance That",
         manufacturer: "Cosimo",
-        version: "0.1.0",
+        version: patch.version,
         plugin: { pluginCode: "CsEL", manufacturerCode: "Cosi" },
     });
     assert.equal(plugin.productName, "EnhanceThat");
     assert.equal(plugin.cmakeTarget, "EnhanceThat");
-    assert.equal(plugin.product.wordmark, undefined, "the rejected wordmark no longer ships");
+    assert.equal(plugin.product.wordmark, "brand/logo.png", "the approved wordmark is declared in the product config");
     assert.equal(plugin.product.supportUrl, owner.owner.supportUrl, "the support URL is inherited from product-owner.json");
 
     // Every other plugin keeps manifest-only identity (no product object

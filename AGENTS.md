@@ -9,6 +9,8 @@
 
 ## Read when relevant
 
+- Enhance That branding: `fx/enhancer_lite/brand/README.md`. The master is in the Song Machines website repository's `brand/` directory; never edit the plugin's pinned copy independently.
+
 - Effect plug-in creation, UI/DSP changes, builds, tests, JIT loading, or production install: [`kit/AGENTS.md`](kit/AGENTS.md).
 - Delegated implementation or integration: [`docs/AGENT_COORDINATION.md`](docs/AGENT_COORDINATION.md).
 - Desktop synth UI, native wrapper, HMR, generated UI, or installed synth plug-in: [`docs/DESKTOP_NATIVE_WORKFLOW.md`](docs/DESKTOP_NATIVE_WORKFLOW.md).

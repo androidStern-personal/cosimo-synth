@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import test, { after, before } from "node:test";
 import path from "node:path";
@@ -1073,20 +1074,25 @@ test("the editor enables live analysis only while its view is connected", async 
     }
 });
 
-test("the product heading is plain text and no wordmark asset ships", async () => {
-    const source = await readFile(sourcePath, "utf8");
-    assert.doesNotMatch(source, /wordmark/i);
-    assert.match(source, /<h1>Enhance That<\/h1>/);
-
+test("the approved product wordmark loads in editable and packaged views", async () => {
+    const brandRoot = path.join(repoRoot, "fx/enhancer_lite/brand");
+    const provenance = JSON.parse(await readFile(path.join(brandRoot, "source.json"), "utf8"));
+    assert.equal(createHash("sha256").update(await readFile(path.join(brandRoot, "logo.png"))).digest("hex"), provenance.sha256);
     for (const modulePath of [
         "/fx/enhancer_lite/view/source.ts",
         "/build/fx/enhancer_lite_runtime/view/app.js",
     ]) {
         const page = await openEnhancerLite(modulePath);
         try {
-            assert.equal(await shadow(page, ".shell h1").textContent(), "Enhance That");
-            assert.equal(await shadow(page, ".shell h1 img").count(), 0);
-            assert.equal(await shadow(page, ".shell img").count(), 0, "the view loads no image assets");
+            const logo = shadow(page, ".shell h1 img");
+            assert.equal(await logo.getAttribute("alt"), "Enhance That");
+            await logo.evaluate(image => image.decode());
+            const dimensions = await logo.evaluate(image => ({ width: image.naturalWidth, height: image.naturalHeight, src: image.src }));
+            assert.equal(dimensions.width, 2169);
+            assert.equal(dimensions.height, 725);
+            if (modulePath.includes("/build/")) {
+                assert.match(dimensions.src, /^data:image\/png;base64,/, "packaged artwork must work offline without a separate request");
+            }
         } finally {
             await page.close();
         }

@@ -1004,6 +1004,7 @@ class EnhancerLiteView extends HTMLElement {
                 .shell { min-height: 520px; padding: 20px; background: #000000; }
                 .topline { display: flex; align-items: flex-end; justify-content: space-between; gap: 20px; margin-bottom: 14px; }
                 h1 { margin: 0; color: #ffffff; font-size: 26px; font-weight: 700; letter-spacing: 0.16em; text-transform: uppercase; line-height: 1; }
+                .product-wordmark { display: block; width: 160px; height: auto; aspect-ratio: 2169 / 725; object-fit: contain; }
                 .tag { margin-top: 7px; color: #00f0ff; font-size: 9px; letter-spacing: 0.14em; text-transform: uppercase; }
                 .engine-label { color: #b7ff27; font-size: 9px; letter-spacing: 0.12em; text-transform: uppercase; }
                 .response-panel { border: 1px solid #123b43; border-radius: 12px; padding: 12px 12px 5px; background: #000000; box-shadow: 0 0 22px rgba(0,240,255,0.08); }
@@ -1077,7 +1078,7 @@ class EnhancerLiteView extends HTMLElement {
             <main class="shell">
                 <header class="topline">
                     <div>
-                        <h1>Enhance That</h1>
+                        <h1><img class="product-wordmark" src="${new URL('../brand/logo.png', import.meta.url).href}" width="2169" height="725" alt="Enhance That"></h1>
                         <div class="tag">ONE BAND // STEREO + M/S</div>
                     </div>
                     <div class="engine-label">4X IIR // FAST CURVE</div>
