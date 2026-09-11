@@ -88,9 +88,12 @@ try {
         const url = new URL(request.url);
         if (url.pathname === "/" || url.pathname === "/favicon.ico") {
             url.pathname = url.pathname === "/" ? "/index.html" : "/favicon.svg";
-            return env.ASSETS.fetch(new Request(url, request));
         }
-        return env.ASSETS.fetch(request);
+        const asset = await env.ASSETS.fetch(new Request(url, request));
+        const response = new Response(asset.body, asset);
+        response.headers.set("Cross-Origin-Opener-Policy", "same-origin");
+        response.headers.set("Cross-Origin-Embedder-Policy", "require-corp");
+        return response;
     },
 };
 
