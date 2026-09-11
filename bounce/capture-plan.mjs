@@ -102,6 +102,11 @@ function normalizeSetupEvents(events, {
             advanceFrames,
             sessionScoped,
         };
+        if (entry.preparation !== undefined) {
+            invariant(entry.preparation === "mseg" && entry.endpointID === "modulationMsegBuffer",
+                `${fieldName}[${index}] has unsupported preparation`);
+            normalized.preparation = "mseg";
+        }
         if (!rootScoped) return normalized;
         invariant(typeof entry?.rootNoteField === "string"
             && /^[A-Za-z_][A-Za-z0-9_]*$/.test(entry.rootNoteField),

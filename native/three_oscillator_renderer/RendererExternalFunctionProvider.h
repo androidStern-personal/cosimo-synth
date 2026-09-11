@@ -22,6 +22,11 @@ inline bool matchesExternalFunction (
     try
     {
         const auto name = std::string_view (functionName);
+        if (name == "CosimoThreeOscillatorRenderer::sharedMsegSerial")
+            return parameterTypes.size() == 2 && parameterTypes[0].isInt32() && parameterTypes[1].isInt32();
+        if (name == "CosimoThreeOscillatorRenderer::sampleSharedMseg")
+            return parameterTypes.size() == 4 && parameterTypes[0].isInt32() && parameterTypes[1].isInt32()
+                && parameterTypes[2].isInt32() && parameterTypes[3].isFloat32();
         if (parameterTypes.size() == 2)
         {
             const auto& first = parameterTypes[0];
@@ -57,6 +62,10 @@ inline cmaj::Engine::ExternalFunctionProviderFn createExternalFunctionProvider()
                choc::span<choc::value::Type> parameterTypes) -> void*
     {
         if (! matchesExternalFunction (functionName, parameterTypes)) return nullptr;
+        if (std::string_view (functionName) == "CosimoThreeOscillatorRenderer::sharedMsegSerial")
+            return reinterpret_cast<void*> (&sharedMsegSerialNative);
+        if (std::string_view (functionName) == "CosimoThreeOscillatorRenderer::sampleSharedMseg")
+            return reinterpret_cast<void*> (&sampleSharedMsegNative);
         if (functionName != nullptr && parameterTypes.size() == 2)
         {
             const auto name = std::string_view (functionName);

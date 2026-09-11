@@ -2,6 +2,7 @@
 
 #include <array>
 #include <cstdint>
+#include "../../kit/native/shared_data/SharedInputBlock.h"
 
 namespace cosimo::three_osc::bridge
 {
@@ -83,8 +84,8 @@ using TableChunkSlices = std::array<Slice<std::int32_t>, tablePoolChunkCount>;
 
 // The host owns these immutable bytes for the entire render block. The renderer
 // reads the exact allocation prepared by JavaScript, without retaining it.
-struct SharedDataView { const void* data; std::size_t byteSize; };
-using SharedDataReader = SharedDataView (*) (std::int32_t input) noexcept;
+using SharedDataView = builder_kit::shared_data::View;
+using SharedDataReader = builder_kit::shared_data::Reader;
 // Borrowed only for one host render scope. Refresh before rendering a new scope;
 // sample rendering never calls back into shared-storage lookup or validation.
 class SharedTableBlock
@@ -100,7 +101,23 @@ private:
         const std::int32_t* samples = nullptr;
         std::int32_t session = 0, generation = 0, index = 0, frames = 0;
     };
-    std::array<Table, 3> tables {};
+    builder_kit::shared_data::InputBlock<Table, 3> tables;
+};
+
+class SharedMsegBlock
+{
+public:
+    void refresh (SharedDataReader) noexcept;
+    std::int32_t serial (std::int32_t input, std::int32_t session) const noexcept;
+    float sample (std::int32_t input, std::int32_t session, std::int32_t serial, float position) const noexcept;
+
+private:
+    struct Curve
+    {
+        const std::int32_t* samples = nullptr;
+        std::int32_t session = 0, serial = 0;
+    };
+    builder_kit::shared_data::InputBlock<Curve, 6> curves;
 };
 
 std::int32_t renderAllChunks (Slice<float> packedFloats,

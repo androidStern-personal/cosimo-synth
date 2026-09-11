@@ -11,20 +11,41 @@ inline SharedDataView readNativeSharedData (std::int32_t input) noexcept
              static_cast<std::size_t> (cmaj::PatchSharedData::byteSize (input)) };
 }
 
-inline const SharedTableBlock& nativeSharedTableBlock() noexcept
+struct NativeSharedBlock
+{
+    SharedTableBlock tables;
+    SharedMsegBlock msegs;
+};
+
+inline const NativeSharedBlock& nativeSharedBlock() noexcept
 {
     // Every access checks the active scope before touching borrowed pointers.
     // A->B->A nested rendering refreshes on both switches, even when both
     // instances use identical table generations or reuse a memory address.
-    thread_local SharedTableBlock block;
+    thread_local NativeSharedBlock block;
     thread_local std::uint64_t cachedScope = 0;
     const auto scope = cmaj::PatchSharedData::readScopeToken();
     if (scope != cachedScope)
     {
-        block.refresh (scope != 0 ? readNativeSharedData : nullptr);
+        const auto read = scope != 0 ? readNativeSharedData : nullptr;
+        block.tables.refresh (read);
+        block.msegs.refresh (read);
         cachedScope = scope;
     }
     return block;
+}
+
+inline const SharedTableBlock& nativeSharedTableBlock() noexcept { return nativeSharedBlock().tables; }
+
+inline std::int32_t sharedMsegSerialNative (std::int32_t input, std::int32_t session) noexcept
+{
+    return nativeSharedBlock().msegs.serial (input, session);
+}
+
+inline float sampleSharedMsegNative (std::int32_t input, std::int32_t session,
+                                     std::int32_t serial, float position) noexcept
+{
+    return nativeSharedBlock().msegs.sample (input, session, serial, position);
 }
 
 inline std::int32_t renderSharedNative (Slice<float> floats, Slice<std::int32_t> ints) noexcept

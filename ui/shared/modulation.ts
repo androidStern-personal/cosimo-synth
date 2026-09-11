@@ -1076,23 +1076,27 @@ function msegPlaybackPoliciesEqual(left: Omit<MsegPlayback, "rate">, right: Omit
         && JSON.stringify(left.loop) === JSON.stringify(right.loop);
 }
 
-export function buildModulationRuntimeEvents(
+export function buildModulationRuntimeEvents(state: ModulationState, previousState?: ModulationState | null): ModulationRuntimeEvent[];
+export function buildModulationRuntimeEvents<T>(state: ModulationState, previousState: ModulationState | null,
+    curveCommand: (slotIndex: number, shapeIndex: number, shape: MsegShape) => T): Array<ModulationRuntimeEvent | T>;
+export function buildModulationRuntimeEvents<T>(
     state: ModulationState,
     previousState: ModulationState | null = null,
-): ModulationRuntimeEvent[] {
-    const events: ModulationRuntimeEvent[] = [];
+    curveCommand?: (slotIndex: number, shapeIndex: number, shape: MsegShape) => T,
+): Array<ModulationRuntimeEvent | T> {
+    const events: Array<ModulationRuntimeEvent | T> = [];
 
     for (let slotIndex = 0; slotIndex < MODULATION_MSEG_SLOT_COUNT; slotIndex += 1) {
         const slot = state.msegSlots[slotIndex];
         const previousSlot = previousState?.msegSlots[slotIndex];
         if (previousSlot === undefined || !msegShapesEqual(previousSlot.shapeA, slot.shapeA)) {
-            events.push({
+            events.push(curveCommand ? curveCommand(slotIndex, 0, slot.shapeA) : {
                 endpointID: MODULATION_MSEG_BUFFER_ENDPOINT_ID,
                 value: toMsegBufferUpload(slotIndex, 0, slot.shapeA),
             });
         }
         if (previousSlot === undefined || !msegShapesEqual(previousSlot.shapeB, slot.shapeB)) {
-            events.push({
+            events.push(curveCommand ? curveCommand(slotIndex, 1, slot.shapeB) : {
                 endpointID: MODULATION_MSEG_BUFFER_ENDPOINT_ID,
                 value: toMsegBufferUpload(slotIndex, 1, slot.shapeB),
             });

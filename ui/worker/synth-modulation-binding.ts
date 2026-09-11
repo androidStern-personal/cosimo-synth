@@ -4,9 +4,11 @@ import type { PatchConnectionLike } from "../shared/cmajor-react";
 import { MODULATION_STATE_KEY, parseModulationState } from "../shared/modulation";
 import { serializeArticulationTriggerConfig } from "../shared/articulations";
 import { ModulationArticulationWorkerService } from "./modulation-articulation-worker-service";
+import type { SharedDataConnection } from "../../kit/ui/prepared-shared-data";
+import { sharedMsegCommand } from "../shared/shared-mseg";
 
 /** Adapt the synth's dependent runtime lanes to framework-owned modulation. */
-export function createSynthModulationBinding(connection: PatchConnectionLike): CmajorStateBindingFactory {
+export function createSynthModulationBinding(connection: PatchConnectionLike & SharedDataConnection): CmajorStateBindingFactory {
     return {
         key: MODULATION_STATE_KEY,
         eventEndpoints: ["modulationMsegBuffer", "modulationMsegPlayback", "modulationProgram", "modulationAmount", "articulationSnapshot", "runtimeSyncRequest"],
@@ -73,6 +75,7 @@ export function createSynthModulationBinding(connection: PatchConnectionLike): C
                 };
                 const service = new ModulationArticulationWorkerService(scopedConnection, {
                     onDefect,
+                    curveCommand: (slot, shape, value) => sharedMsegCommand(connection, slot, shape, value),
                     async publishTriggerConfig(config) {
                         const publications = await Promise.all(pending);
                         pending.clear();

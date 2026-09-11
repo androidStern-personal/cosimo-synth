@@ -1578,7 +1578,8 @@ namespace wt
     processor SharedVoiceEngine (int voiceCount,
                                  float32 previewFrequencyHz = 440.0f,
                                  int wavetableFrameCapacity = maxFramesPerTable,
-                                 bool sharedWavetables = false)
+                                 bool sharedWavetables = false,
+                                 bool sharedMsegs = false)
     {
         input event (std::notes::NoteOn,
                      std::notes::NoteOff,
@@ -1688,9 +1689,9 @@ namespace wt
         }
 
         node ampEnvelopes = wt::RetriggerableAmpAdsr[voiceCount];
-        node mseg1 = wt::MsegReader[voiceCount];
-        node mseg2 = wt::MsegReader[voiceCount];
-        node mseg3 = wt::MsegReader[voiceCount];
+        node mseg1 = wt::MsegReader (sharedMsegs ? 3 : -1)[voiceCount];
+        node mseg2 = wt::MsegReader (sharedMsegs ? 5 : -1)[voiceCount];
+        node mseg3 = wt::MsegReader (sharedMsegs ? 7 : -1)[voiceCount];
         node modEnv1 = wt::RetriggerableAdsr[voiceCount];
         node modEnv2 = wt::RetriggerableAdsr[voiceCount];
         node modEnv3 = wt::RetriggerableAdsr[voiceCount];
@@ -4295,6 +4296,29 @@ namespace wt
             tableStagingLastFrameIndexF = 0.0f;
         }
 
+        void adoptSharedMsegs()
+        {
+            // Curves use the same ordered installation serial as other modulation
+            // commands. Only complete shared resources are visible in this block.
+            for (int32 inputIndex = 3; inputIndex < 9; ++inputIndex)
+            {
+                let serial = CosimoThreeOscillatorRenderer::sharedMsegSerial (inputIndex, currentDspSessionId);
+                if (serial != acceptedModulationSerial + 1) continue;
+                if (beginModulationRuntimeInstall (currentDspSessionId, serial) == 0) continue;
+                wt::MsegSharedBufferUpload upload;
+                upload.shapeIndex = (inputIndex - 3) % 2;
+                upload.dspSessionId = currentDspSessionId;
+                upload.deliveryToken = serial;
+                for (wrap<voiceCount> voice)
+                {
+                    if (inputIndex < 5) mseg1[voice].sharedBufferUpload <- upload;
+                    else if (inputIndex < 7) mseg2[voice].sharedBufferUpload <- upload;
+                    else mseg3[voice].sharedBufferUpload <- upload;
+                }
+                completeModulationRuntimeInstall (serial);
+            }
+        }
+
         void adoptSharedWavetables()
         {
             // The framework adopts all finished allocations before this block.
@@ -5642,6 +5666,13 @@ namespace wt
             let installKind = beginModulationRuntimeInstall (upload.dspSessionId, upload.deliverySerial);
             if (installKind == 0)
                 return;
+            if const (sharedMsegs)
+            {
+                // A legacy sample event cannot update a shared reader. Never
+                // acknowledge a curve that the voices did not actually adopt.
+                rejectRuntimeInstall (upload.deliverySerial);
+                return;
+            }
             if (upload.slot < 1 || upload.slot > modulationMsegSlotCount
                 || upload.shapeIndex < 0 || upload.shapeIndex > 1)
             {
@@ -6153,6 +6184,8 @@ namespace wt
             {
                 if const (sharedWavetables)
                     adoptSharedWavetables();
+                if const (sharedMsegs)
+                    adoptSharedMsegs();
                 glideTimeSecondsState = std::intrinsics::max (0.0f, glideTimeIn);
                 currentAmpAttackSeconds = ampAttackIn > 0.0f
                     ? std::intrinsics::clamp (ampAttackIn, 0.001f, 10.0f)

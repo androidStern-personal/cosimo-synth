@@ -1485,7 +1485,7 @@ graph WavetableSynth [[ main ]]
 
     node mpe   = std::midi::MPEConverter;
     node noteDispatcher = wt::NoteDispatcher (voiceCount);
-    node sharedEngine = wt::SharedVoiceEngine (voiceCount, 440.0f, wt::maxFramesPerTable, true);
+    node sharedEngine = wt::SharedVoiceEngine (voiceCount, 440.0f, wt::maxFramesPerTable, true, true);
     node trim = wt::StereoTrim (0.18f);
     // The editable, zero-latency lane ends here. Polish is a separate permanent
     // boundary: it is fixed after whole-lane Mix/Bypass and owns the only

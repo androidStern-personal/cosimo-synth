@@ -1,4 +1,5 @@
 import type { PatchConnectionLike } from "./cmajor-react";
+import type { SharedDataCancellation } from "../../kit/ui/prepared-shared-data";
 
 export const RUNTIME_INSTALL_ACK_ENDPOINT_ID = "runtimeInstallAck";
 export const RUNTIME_SYNC_REQUEST_ENDPOINT_ID = "runtimeSyncRequest";
@@ -10,6 +11,13 @@ export type RuntimeInstallLaneKind = "modulation" | "articulation";
 export type RuntimeInstallCommand = {
     readonly endpointID: string;
     readonly value: unknown;
+} | {
+    /** Prepare/publish outside the audio event queue; the same DSP acknowledgement closes the command. */
+    readonly submit: (address: {
+        readonly dspSessionId: number;
+        readonly deliverySerial: number;
+        readonly signal: SharedDataCancellation;
+    }) => Promise<void>;
 };
 
 export type RuntimeInstallAck = {
@@ -170,6 +178,7 @@ export class RuntimeInstallLane {
     readonly #probeDelaysMilliseconds: number[];
     readonly #healthTimeoutMilliseconds: number;
     #activeBatch = false;
+    readonly #preparationCancels = new Set<() => void>();
     #currentDspSessionId: number | null = null;
     #baselineDspSessionId: number | null = null;
     readonly #pendingBaselineSyncSerials = new Set<number>();
@@ -223,6 +232,7 @@ export class RuntimeInstallLane {
         }
 
         this.#started = false;
+        for (const cancel of this.#preparationCancels) cancel();
         this.#connection.removeEndpointListener?.(RUNTIME_INSTALL_ACK_ENDPOINT_ID, this.#handleAckBound);
         releaseLaneOwnership(this.#connection, this.#laneKind);
         this.#rejectionsBySerial.clear();
@@ -237,6 +247,7 @@ export class RuntimeInstallLane {
             return;
         }
 
+        for (const cancel of this.#preparationCancels) cancel();
         this.#currentDspSessionId = nextSessionId;
         this.#baselineDspSessionId = null;
         this.#pendingBaselineSyncSerials.clear();
@@ -397,80 +408,112 @@ export class RuntimeInstallLane {
         lifecycleEpoch: number,
     ) {
         const deliverySerial = this.#createNextSerial();
-        const payload = withDeliveryAddress(command.value, dspSessionId, deliverySerial);
-        let probeIndex = 0;
-        let payloadReplayCount = 0;
-        let commandAckFloor = this.#latestAckVersion;
-
-        this.#sendPayload(command.endpointID, payload);
-
-        while (true) {
-            const interruption = this.#readInterruption(dspSessionId, lifecycleEpoch);
-            if (interruption) {
-                return interruption;
+        const listeners = new Set<() => void>();
+        let aborted = false;
+        const cancel = () => {
+            aborted = true;
+            for (const listener of listeners) listener();
+            listeners.clear();
+        };
+        const signal: SharedDataCancellation = {
+            get aborted() { return aborted; },
+            onAbort(listener) {
+                if (aborted) listener();
+                else listeners.add(listener);
+                return () => { listeners.delete(listener); };
+            },
+        };
+        this.#preparationCancels.add(cancel);
+        const submit = async () => {
+            if (this.#readInterruption(dspSessionId, lifecycleEpoch)) return;
+            if ("submit" in command) {
+                await command.submit({ dspSessionId, deliverySerial, signal });
+            } else {
+                this.#sendPayload(command.endpointID, withDeliveryAddress(command.value, dspSessionId, deliverySerial));
             }
-            const terminal = this.#readTerminalState(dspSessionId, deliverySerial, commandAckFloor);
-            if (terminal !== null) {
-                return terminal;
-            }
-            const directAckVersion = this.#stateVersion;
-            await this.#waitForStateChange(
-                directAckVersion,
-                this.#probeDelay(probeIndex),
-            );
-            const afterDirectWait = this.#readTerminalState(
-                dspSessionId,
-                deliverySerial,
-                commandAckFloor,
-            );
-            if (afterDirectWait !== null) {
-                return afterDirectWait;
-            }
+        };
+        try {
+            let probeIndex = 0;
+            let payloadReplayCount = 0;
+            let commandAckFloor = this.#latestAckVersion;
 
-            let syncVersion = this.#stateVersion;
-            this.#requestSync(deliverySerial);
+            await submit();
+
             while (true) {
-                const syncInterruption = this.#readInterruption(dspSessionId, lifecycleEpoch);
-                if (syncInterruption) {
-                    return syncInterruption;
+                const interruption = this.#readInterruption(dspSessionId, lifecycleEpoch);
+                if (interruption) {
+                    return interruption;
                 }
-                const changed = await this.#waitForStateChange(
-                    syncVersion,
+                const terminal = this.#readTerminalState(dspSessionId, deliverySerial, commandAckFloor);
+                if (terminal !== null) {
+                    return terminal;
+                }
+                const directAckVersion = this.#stateVersion;
+                await this.#waitForStateChange(
+                    directAckVersion,
                     this.#probeDelay(probeIndex),
                 );
-                const afterSync = this.#readTerminalState(
+                const afterDirectWait = this.#readTerminalState(
                     dspSessionId,
                     deliverySerial,
                     commandAckFloor,
                 );
-                if (afterSync !== null) {
-                    return afterSync;
+                if (afterDirectWait !== null) {
+                    return afterDirectWait;
                 }
 
-                if (changed
-                    && this.#latestAck?.dspSessionId === dspSessionId
-                    && this.#latestAck.syncSerial === deliverySerial) {
-                    if (payloadReplayCount >= 1) {
-                        return transportTimeoutOutcome;
+                let syncVersion = this.#stateVersion;
+                this.#requestSync(deliverySerial);
+                while (true) {
+                    const syncInterruption = this.#readInterruption(dspSessionId, lifecycleEpoch);
+                    if (syncInterruption) {
+                        return syncInterruption;
                     }
-                    commandAckFloor = this.#latestAckVersion;
-                    this.#sendPayload(command.endpointID, payload);
-                    payloadReplayCount += 1;
-                    probeIndex += 1;
-                    break;
-                }
+                    const changed = await this.#waitForStateChange(
+                        syncVersion,
+                        this.#probeDelay(probeIndex),
+                    );
+                    const afterSync = this.#readTerminalState(
+                        dspSessionId,
+                        deliverySerial,
+                        commandAckFloor,
+                    );
+                    if (afterSync !== null) {
+                        return afterSync;
+                    }
 
-                if (changed) {
-                    syncVersion = this.#stateVersion;
-                    continue;
-                }
+                    if (changed
+                        && this.#latestAck?.dspSessionId === dspSessionId
+                        && this.#latestAck.syncSerial === deliverySerial) {
+                        if (payloadReplayCount >= 1) {
+                            return transportTimeoutOutcome;
+                        }
+                        commandAckFloor = this.#latestAckVersion;
+                        await submit();
+                        payloadReplayCount += 1;
+                        probeIndex += 1;
+                        break;
+                    }
 
-                if (!changed) {
-                    probeIndex += 1;
-                    syncVersion = this.#stateVersion;
-                    this.#requestSync(deliverySerial);
+                    if (changed) {
+                        syncVersion = this.#stateVersion;
+                        continue;
+                    }
+
+                    if (!changed) {
+                        probeIndex += 1;
+                        syncVersion = this.#stateVersion;
+                        this.#requestSync(deliverySerial);
+                    }
                 }
             }
+        } catch (error: unknown) {
+            const interrupted = this.#readInterruption(dspSessionId, lifecycleEpoch);
+            if (interrupted) return interrupted;
+            throw error;
+        } finally {
+            cancel();
+            this.#preparationCancels.delete(cancel);
         }
     }
 

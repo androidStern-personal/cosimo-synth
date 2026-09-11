@@ -11,11 +11,11 @@ export async function buildOfflineRendererModule({outputDirectory,generatedClass
             rollupOptions:{output:{inlineDynamicImports:true}}}});
     const source=`// Cosimo offline performer: shared storage and preparation stay on this worker.\n`
         + `import {initialiseSharedDataPerformer} from './cmaj_api/cmaj-offline-shared-data.js';\n`
-        + `import {prepareOfflineWavetables} from './cosimo-offline-preparation.js';\n`
+        + `import {prepareOfflineWavetables,prepareOfflineMseg} from './cosimo-offline-preparation.js';\n`
         + generatedClass
         + `\nWavetableSynth.createOfflinePerformer = async (sessionID,frequency) => {\n`
         + `  const runtime=await initialiseSharedDataPerformer(new WavetableSynth(),sessionID,frequency,${JSON.stringify(sharedData)});\n`
-        + `  return {...runtime,prepareWavetables:sources=>prepareOfflineWavetables(runtime,sources,sessionID)};\n`
+        + `  return {...runtime,prepareWavetables:sources=>prepareOfflineWavetables(runtime,sources,sessionID),prepareMseg:source=>prepareOfflineMseg(runtime,source)};\n`
         + `};\nexport {WavetableSynth};\nexport default WavetableSynth;\n`;
     await fs.writeFile(path.join(outputDirectory,'cmaj_Cosimo_Synth.offline.js'),source);
 }

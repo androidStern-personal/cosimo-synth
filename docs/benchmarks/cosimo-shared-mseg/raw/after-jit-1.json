@@ -1,0 +1,422 @@
+{
+  "mode": "after",
+  "voices": 1,
+  "samples": 131072,
+  "rms": 0.01126456414220946,
+  "stereoDifference": 12.802262741446688,
+  "medianBlockUs": 172.1060380859375,
+  "cpuPercent": 6.453976428141981,
+  "repetitionsUs": [
+    172.7744140625,
+    169.131388671875,
+    169.73486328125,
+    169.76180078125,
+    169.67744921875,
+    175.8054609375,
+    172.1060380859375,
+    172.725830078125,
+    173.7103671875
+  ],
+  "edits": [
+    {
+      "deliveryUs": 11.583,
+      "adoptionUs": 186.417
+    },
+    {
+      "deliveryUs": 7.167,
+      "adoptionUs": 162.958
+    },
+    {
+      "deliveryUs": 5.625,
+      "adoptionUs": 177.625
+    },
+    {
+      "deliveryUs": 6.792,
+      "adoptionUs": 181.708
+    },
+    {
+      "deliveryUs": 5.709,
+      "adoptionUs": 177.625
+    },
+    {
+      "deliveryUs": 6.333,
+      "adoptionUs": 167.958
+    },
+    {
+      "deliveryUs": 5.583,
+      "adoptionUs": 167.667
+    },
+    {
+      "deliveryUs": 6,
+      "adoptionUs": 162
+    },
+    {
+      "deliveryUs": 5.584,
+      "adoptionUs": 180.166
+    },
+    {
+      "deliveryUs": 6,
+      "adoptionUs": 168
+    },
+    {
+      "deliveryUs": 5.5,
+      "adoptionUs": 172.167
+    },
+    {
+      "deliveryUs": 6.125,
+      "adoptionUs": 170.75
+    },
+    {
+      "deliveryUs": 5.625,
+      "adoptionUs": 170.625
+    },
+    {
+      "deliveryUs": 6.875,
+      "adoptionUs": 180.583
+    },
+    {
+      "deliveryUs": 5.375,
+      "adoptionUs": 170.708
+    },
+    {
+      "deliveryUs": 5.834,
+      "adoptionUs": 167.916
+    },
+    {
+      "deliveryUs": 5.875,
+      "adoptionUs": 167.958
+    },
+    {
+      "deliveryUs": 6.458,
+      "adoptionUs": 167.792
+    },
+    {
+      "deliveryUs": 5.75,
+      "adoptionUs": 167.875
+    },
+    {
+      "deliveryUs": 7.041,
+      "adoptionUs": 168.084
+    },
+    {
+      "deliveryUs": 5.583,
+      "adoptionUs": 167.625
+    },
+    {
+      "deliveryUs": 8.375,
+      "adoptionUs": 168.083
+    },
+    {
+      "deliveryUs": 5.5,
+      "adoptionUs": 168.125
+    },
+    {
+      "deliveryUs": 5.958,
+      "adoptionUs": 167.667
+    },
+    {
+      "deliveryUs": 5.458,
+      "adoptionUs": 167.791
+    },
+    {
+      "deliveryUs": 5.875,
+      "adoptionUs": 167.75
+    },
+    {
+      "deliveryUs": 5.625,
+      "adoptionUs": 167.792
+    },
+    {
+      "deliveryUs": 6,
+      "adoptionUs": 167.833
+    },
+    {
+      "deliveryUs": 6,
+      "adoptionUs": 167.833
+    },
+    {
+      "deliveryUs": 6.417,
+      "adoptionUs": 167.791
+    },
+    {
+      "deliveryUs": 5.5,
+      "adoptionUs": 179.625
+    },
+    {
+      "deliveryUs": 6.208,
+      "adoptionUs": 171.417
+    },
+    {
+      "deliveryUs": 5.583,
+      "adoptionUs": 175.375
+    },
+    {
+      "deliveryUs": 6.5,
+      "adoptionUs": 168.125
+    },
+    {
+      "deliveryUs": 8.792,
+      "adoptionUs": 182.833
+    },
+    {
+      "deliveryUs": 6,
+      "adoptionUs": 173.208
+    },
+    {
+      "deliveryUs": 5.958,
+      "adoptionUs": 170.083
+    },
+    {
+      "deliveryUs": 6.792,
+      "adoptionUs": 168
+    },
+    {
+      "deliveryUs": 5.75,
+      "adoptionUs": 164.333
+    },
+    {
+      "deliveryUs": 6.625,
+      "adoptionUs": 167.917
+    },
+    {
+      "deliveryUs": 5.666,
+      "adoptionUs": 167.667
+    },
+    {
+      "deliveryUs": 6.375,
+      "adoptionUs": 182.75
+    },
+    {
+      "deliveryUs": 12.708,
+      "adoptionUs": 354.458
+    },
+    {
+      "deliveryUs": 9.209,
+      "adoptionUs": 227.708
+    },
+    {
+      "deliveryUs": 8.333,
+      "adoptionUs": 190
+    },
+    {
+      "deliveryUs": 8.834,
+      "adoptionUs": 196.125
+    },
+    {
+      "deliveryUs": 7.167,
+      "adoptionUs": 193.167
+    },
+    {
+      "deliveryUs": 8.125,
+      "adoptionUs": 183.416
+    },
+    {
+      "deliveryUs": 5.792,
+      "adoptionUs": 155.208
+    },
+    {
+      "deliveryUs": 12.625,
+      "adoptionUs": 157.959
+    },
+    {
+      "deliveryUs": 5.625,
+      "adoptionUs": 174.333
+    },
+    {
+      "deliveryUs": 4.416,
+      "adoptionUs": 153.583
+    },
+    {
+      "deliveryUs": 4.416,
+      "adoptionUs": 169.167
+    },
+    {
+      "deliveryUs": 4.291,
+      "adoptionUs": 152.25
+    },
+    {
+      "deliveryUs": 4.375,
+      "adoptionUs": 151.916
+    },
+    {
+      "deliveryUs": 5.042,
+      "adoptionUs": 170.5
+    },
+    {
+      "deliveryUs": 4.916,
+      "adoptionUs": 161.708
+    },
+    {
+      "deliveryUs": 4.375,
+      "adoptionUs": 151.709
+    },
+    {
+      "deliveryUs": 5.042,
+      "adoptionUs": 168.208
+    },
+    {
+      "deliveryUs": 5.042,
+      "adoptionUs": 174.334
+    },
+    {
+      "deliveryUs": 4.292,
+      "adoptionUs": 156.959
+    },
+    {
+      "deliveryUs": 4.875,
+      "adoptionUs": 168.625
+    },
+    {
+      "deliveryUs": 4.833,
+      "adoptionUs": 161.375
+    },
+    {
+      "deliveryUs": 4.334,
+      "adoptionUs": 158.959
+    },
+    {
+      "deliveryUs": 4.791,
+      "adoptionUs": 168.834
+    },
+    {
+      "deliveryUs": 4.833,
+      "adoptionUs": 160.125
+    },
+    {
+      "deliveryUs": 4.208,
+      "adoptionUs": 160.833
+    },
+    {
+      "deliveryUs": 4.917,
+      "adoptionUs": 167.916
+    },
+    {
+      "deliveryUs": 4.791,
+      "adoptionUs": 159.375
+    },
+    {
+      "deliveryUs": 4.334,
+      "adoptionUs": 163.75
+    },
+    {
+      "deliveryUs": 4.833,
+      "adoptionUs": 167.958
+    },
+    {
+      "deliveryUs": 5.25,
+      "adoptionUs": 159
+    },
+    {
+      "deliveryUs": 4.334,
+      "adoptionUs": 164.333
+    },
+    {
+      "deliveryUs": 4.792,
+      "adoptionUs": 168.208
+    },
+    {
+      "deliveryUs": 4.667,
+      "adoptionUs": 159.75
+    },
+    {
+      "deliveryUs": 4.916,
+      "adoptionUs": 176.042
+    },
+    {
+      "deliveryUs": 4.708,
+      "adoptionUs": 184.75
+    },
+    {
+      "deliveryUs": 4.833,
+      "adoptionUs": 166.917
+    },
+    {
+      "deliveryUs": 4.458,
+      "adoptionUs": 204.167
+    },
+    {
+      "deliveryUs": 5.5,
+      "adoptionUs": 173.917
+    },
+    {
+      "deliveryUs": 4.334,
+      "adoptionUs": 160.416
+    },
+    {
+      "deliveryUs": 4.959,
+      "adoptionUs": 184.333
+    },
+    {
+      "deliveryUs": 4.917,
+      "adoptionUs": 174
+    },
+    {
+      "deliveryUs": 4.375,
+      "adoptionUs": 172.917
+    },
+    {
+      "deliveryUs": 4.958,
+      "adoptionUs": 168.333
+    },
+    {
+      "deliveryUs": 4.834,
+      "adoptionUs": 160.25
+    },
+    {
+      "deliveryUs": 4.541,
+      "adoptionUs": 167.958
+    },
+    {
+      "deliveryUs": 5.125,
+      "adoptionUs": 167.875
+    },
+    {
+      "deliveryUs": 4.792,
+      "adoptionUs": 279.958
+    },
+    {
+      "deliveryUs": 12.791,
+      "adoptionUs": 297.875
+    },
+    {
+      "deliveryUs": 5.583,
+      "adoptionUs": 207.292
+    },
+    {
+      "deliveryUs": 6.209,
+      "adoptionUs": 180.625
+    },
+    {
+      "deliveryUs": 4.625,
+      "adoptionUs": 193.5
+    },
+    {
+      "deliveryUs": 4.25,
+      "adoptionUs": 180.084
+    },
+    {
+      "deliveryUs": 4.75,
+      "adoptionUs": 173.833
+    },
+    {
+      "deliveryUs": 6.125,
+      "adoptionUs": 166.25
+    },
+    {
+      "deliveryUs": 4.875,
+      "adoptionUs": 185.792
+    },
+    {
+      "deliveryUs": 5.459,
+      "adoptionUs": 171.583
+    },
+    {
+      "deliveryUs": 6.625,
+      "adoptionUs": 181.916
+    },
+    {
+      "deliveryUs": 5,
+      "adoptionUs": 184
+    }
+  ]
+}

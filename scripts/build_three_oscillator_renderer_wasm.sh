@@ -108,6 +108,8 @@ mkdir -p "$(dirname "$output_path")"
   -Wl,--export-if-defined=CosimoThreeOscillatorRenderer__renderShared \
   -Wl,--export-if-defined=CosimoThreeOscillatorRenderer__updateSharedTables \
   -Wl,--export=CosimoThreeOscillatorRenderer__beginSharedBlock \
+  -Wl,--export=CosimoThreeOscillatorRenderer__sharedMsegSerial \
+  -Wl,--export=CosimoThreeOscillatorRenderer__sampleSharedMseg \
   -Wl,--allow-undefined \
   -Wl,--export=__heap_base \
   -Wl,--export=__stack_pointer \

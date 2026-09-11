@@ -2584,14 +2584,18 @@ Object.fromEntries(
 Object.fromEntries(
   Ma.map((e, t) => [e, 2 ** t])
 );
-async function Da(e, t, n) {
-  const i = e.sharedData;
-  if (!i) throw new Error("This patch host does not support direct shared-data preparation.");
-  const r = i.reserve(t.input, t.byteLength);
+async function Da(e, t, n, i = {}) {
+  const r = e.sharedData;
+  if (!r) throw new Error("This patch host does not support direct shared-data preparation.");
+  if (i.signal?.aborted) throw new Error("Shared preparation cancelled.");
+  const a = r.reserve(t.input, t.byteLength), o = i.signal?.onAbort(() => r.cancel(a.id));
   try {
-    n(r), await i.commit(r.id);
-  } catch (a) {
-    throw i.cancel(r.id), a;
+    if (n(a), i.signal?.aborted) throw new Error("Shared preparation cancelled.");
+    return await r.commit(a.id), { cancel: () => r.cancel(a.id) };
+  } catch (l) {
+    throw r.cancel(a.id), l;
+  } finally {
+    o?.();
   }
 }
 const te = 256, W = 2048, cn = 8, Oa = 12811, _e = (cn + te * Oa) * 4;

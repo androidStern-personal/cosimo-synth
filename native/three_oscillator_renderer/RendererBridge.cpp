@@ -3,6 +3,9 @@
 #include "WarpRenderer.h"
 
 #include <array>
+#include <algorithm>
+#include <cmath>
+#include <cstring>
 
 namespace cosimo::three_osc::bridge
 {
@@ -131,11 +134,44 @@ const std::int32_t* tableWords (SharedDataView view) noexcept
 
 void SharedTableBlock::refresh (SharedDataReader read) noexcept
 {
-    tables = {};
-    if (read == nullptr) return;
-    for (std::int32_t oscillator = 0; oscillator < 3; ++oscillator)
-        if (const auto* words = tableWords (read (oscillator)))
-            tables[oscillator] = { words + sharedHeaderWords, words[2], words[3], words[4], words[5] };
+    tables.refresh (read, 0, [] (SharedDataView view) -> Table
+    {
+        if (const auto* words = tableWords (view))
+            return { words + sharedHeaderWords, words[2], words[3], words[4], words[5] };
+        return {};
+    });
+}
+
+void SharedMsegBlock::refresh (SharedDataReader read) noexcept
+{
+    curves.refresh (read, 3, [] (SharedDataView view) -> Curve
+    {
+        if (view.data == nullptr || view.byteSize != (2051 + 4) * sizeof (std::int32_t)) return {};
+        const auto* words = static_cast<const std::int32_t*> (view.data);
+        if (words[0] != 0x4d534547 || words[2] <= 0 || words[3] != 2051) return {};
+        return { words + 4, words[1], words[2] };
+    });
+}
+
+std::int32_t SharedMsegBlock::serial (std::int32_t input, std::int32_t session) const noexcept
+{
+    if (input < 3 || input >= 9) return 0;
+    const auto& curve = curves[input - 3];
+    return curve.samples != nullptr && curve.session == session ? curve.serial : 0;
+}
+
+float SharedMsegBlock::sample (std::int32_t input, std::int32_t session, std::int32_t deliverySerial,
+                             float position) const noexcept
+{
+    if (deliverySerial <= 0 || serial (input, session) != deliverySerial) return 0.5f;
+    const auto* samples = curves[input - 3].samples;
+    const float scaled = std::clamp (position, 0.0f, 1.0f) * 2047.0f;
+    const auto index = static_cast<std::int32_t> (std::floor (scaled));
+    const float t = scaled - static_cast<float> (index);
+    float p[4];
+    std::memcpy (p, samples + index, sizeof (p));
+    return p[1] + 0.5f * t * ((p[2] - p[0]) + t * ((2.0f * p[0] - 5.0f * p[1] + 4.0f * p[2] - p[3])
+           + t * (-p[0] + 3.0f * p[1] - 3.0f * p[2] + p[3])));
 }
 
 std::int32_t SharedTableBlock::update (std::int32_t dspSession, Slice<std::int32_t> packedInts) const noexcept

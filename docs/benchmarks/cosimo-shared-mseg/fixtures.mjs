@@ -1,0 +1,14 @@
+import fs from 'node:fs/promises';
+import {createDefaultMsegShape,renderMsegShape} from '../../../build/shared-mseg-proof/before/patch_gui/mseg.js';
+import {compileModulationRuntimeProgram} from '../../../build/shared-mseg-proof/before/patch_gui/modulation-runtime-program.js';
+import Program from '../../../build/shared-mseg-proof/before/web/cmaj_Cosimo_Synth.offline.js';
+import {initialiseSharedDataPerformer} from '../../../build/shared-mseg-proof/before/web/cmaj_api/cmaj-offline-shared-data.js';
+import {prepareOfflineWavetables} from '../../../build/shared-mseg-proof/before/web/cosimo-offline-preparation.js';
+const root='build/shared-mseg-proof/fixtures';await fs.mkdir(root,{recursive:true});
+const p=new Program(),r=await initialiseSharedDataPerformer(p,13579,48000,{format:'bytes',inputCount:3,maxRetainedBytes:52473984});
+const reservations=new Map(),reserve=r.sharedData.reserve.bind(r.sharedData),commit=r.sharedData.commit.bind(r.sharedData);
+const sharedData={...r.sharedData};sharedData.reserve=(input,bytes)=>{const dest=reserve(input,bytes);reservations.set(dest.id,{input,dest});return dest;};
+sharedData.commit=async id=>{const {input,dest}=reservations.get(id);await fs.writeFile(`${root}/table${input}.bin`,new Uint8Array(dest.buffer,dest.byteOffset,dest.byteLength));return commit(id);};
+const sine=Float32Array.from({length:2048},(_,i)=>Math.sin(2*Math.PI*i/2048));await prepareOfflineWavetables({sharedData},[0,1,2].map(input=>({input,tableIndex:35,generation:1,frames:[sine]})),13579);r.dispose();
+const shape=(index,edit=0)=>({...createDefaultMsegShape(),points:[{x:0,y:index?.85:.1,curvePower:0},{x:.4,y:Math.min(.95,.25+edit*.01),curvePower:.4},{x:1,y:index?.15:.9,curvePower:0}]});
+await fs.writeFile(`${root}/data.json`,JSON.stringify({program:compileModulationRuntimeProgram([{id:'proof',sourceKind:'mseg',sourceSlot:1,targetKind:'oscA.pan',enabled:true,polarity:'bipolar',amount:.8}]),curves:[...Array(50)].map((_,i)=>[0,1].map(index=>Array.from(renderMsegShape(shape(index,i))))),playback:{slot:1,holdFinalValue:true,rateKind:0,loopEnabled:true,loopStart:.1,loopEnd:.9,noteOffPolicy:0,legatoRestarts:false}}));

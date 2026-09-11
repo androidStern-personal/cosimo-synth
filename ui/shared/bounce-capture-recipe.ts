@@ -57,6 +57,7 @@ type SetupEvent = {
     readonly value: unknown;
     readonly advanceFrames?: number;
     readonly sessionScoped?: boolean;
+    readonly preparation?: "mseg";
 };
 
 type BounceBankLike = {
@@ -213,7 +214,14 @@ function structuredRuntimeSetupEvents(document: PatchDocumentLike) {
     if (laneResult._tag === "err") throw new Error(laneResult.message);
 
     let modulationSerial = 0;
-    const modulationEvents: SetupEvent[] = buildModulationRuntimeEvents(modulation, null).map((event) => ({
+    const modulationCommands = buildModulationRuntimeEvents(modulation, null,
+        (slotIndex, shapeIndex, shape): SetupEvent => ({
+            endpointID: "modulationMsegBuffer",
+            preparation: "mseg",
+            value: { slotIndex, shapeIndex, shape },
+        }));
+    const modulationEvents: SetupEvent[] = modulationCommands.map((event) => ({
+        ...event,
         endpointID: event.endpointID,
         sessionScoped: true,
         advanceFrames: 1,

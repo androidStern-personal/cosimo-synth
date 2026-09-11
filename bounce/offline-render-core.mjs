@@ -122,7 +122,12 @@ async function preparePerformer(CmajorClass, plan, job) {
             const value = event.sessionScoped
                 ? { ...event.value, dspSessionId: job.sessionID }
                 : event.value;
-            endpointMethod(performer, "sendInputEvent", event.endpointID)(value);
+            if (event.preparation === "mseg") {
+                invariant(typeof runtime.prepareMseg === "function", "Offline engine does not support direct MSEG preparation");
+                await runtime.prepareMseg(value);
+            } else {
+                endpointMethod(performer, "sendInputEvent", event.endpointID)(value);
+            }
             advanceDiscard(performer, event.advanceFrames, plan.blockFrames);
         }
         advanceDiscard(performer, plan.snapshot.settleFrames, plan.blockFrames);

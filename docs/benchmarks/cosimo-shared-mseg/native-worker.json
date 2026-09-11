@@ -1,0 +1,58 @@
+[
+  {
+    "runtime": "jit",
+    "productionWorker": true,
+    "productionPreparation": "prepareOfflineMseg alias of prepareSharedMseg",
+    "submittedSerial": 11,
+    "acknowledgedSerial": 11,
+    "finalEditReservationAddress": "0x87133b000",
+    "finalEditReadAddress": "0x87133b000",
+    "sameAllocation": true,
+    "allocationBytes": 8220,
+    "nonfinite": 0,
+    "steadyRms": 0.019592726492944596,
+    "observations": [
+      "MSEG_JS_RESERVED input=3 address=0x87132c000 bytes=8220",
+      "MSEG_JS_RESERVED input=4 address=0x87132e800 bytes=8220",
+      "MSEG_JS_RESERVED input=4 address=0x871331000 bytes=8220",
+      "MSEG_DSP_READ address=0x87132c000 bytes=8220",
+      "MSEG_JS_RESERVED input=5 address=0x871331000 bytes=8220",
+      "MSEG_JS_RESERVED input=6 address=0x871333800 bytes=8220",
+      "MSEG_JS_RESERVED input=7 address=0x871336000 bytes=8220",
+      "MSEG_JS_RESERVED input=8 address=0x871338800 bytes=8220",
+      "MSEG_JS_RESERVED input=3 address=0x87133b000 bytes=8220",
+      "MSEG_JS_PROOF_SUBMITTED 11",
+      "MSEG_DSP_READ address=0x87133b000 bytes=8220",
+      "MSEG_JS_PROOF_ACK 11",
+      "MSEG_JS_PROOF_ACK 11"
+    ]
+  },
+  {
+    "runtime": "aot",
+    "productionWorker": true,
+    "productionPreparation": "prepareOfflineMseg alias of prepareSharedMseg",
+    "submittedSerial": 11,
+    "acknowledgedSerial": 11,
+    "finalEditReservationAddress": "0xad8a54000",
+    "finalEditReadAddress": "0xad8a54000",
+    "sameAllocation": true,
+    "allocationBytes": 8220,
+    "nonfinite": 0,
+    "steadyRms": 0.01959269956446901,
+    "observations": [
+      "MSEG_JS_RESERVED input=3 address=0xad8a6d000 bytes=8220",
+      "MSEG_JS_RESERVED input=3 address=0xad8a6f800 bytes=8220",
+      "MSEG_JS_RESERVED input=4 address=0xad8a6f800 bytes=8220",
+      "MSEG_JS_RESERVED input=5 address=0xad8480000 bytes=8220",
+      "MSEG_DSP_READ address=0xad8a6d000 bytes=8220",
+      "MSEG_JS_RESERVED input=6 address=0xad8482800 bytes=8220",
+      "MSEG_JS_RESERVED input=7 address=0xad8485000 bytes=8220",
+      "MSEG_JS_RESERVED input=8 address=0xad8487800 bytes=8220",
+      "MSEG_JS_RESERVED input=3 address=0xad8a54000 bytes=8220",
+      "MSEG_JS_PROOF_SUBMITTED 11",
+      "MSEG_DSP_READ address=0xad8a54000 bytes=8220",
+      "MSEG_JS_PROOF_ACK 11",
+      "MSEG_JS_PROOF_ACK 11"
+    ]
+  }
+]

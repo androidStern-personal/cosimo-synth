@@ -4,6 +4,7 @@
 #include <algorithm>
 #include <array>
 #include <cmath>
+#include <cstring>
 #include <iostream>
 #include <stdexcept>
 #include <vector>
@@ -30,9 +31,9 @@ Store::ByteResource table (float sample, int generation = 1, int tableSession = 
     return result;
 }
 
-void submit (PatchData& data, Store::ByteResource bytes)
+void submit (PatchData& data, Store::ByteResource bytes, int input = 0)
 {
-    const auto request = data.store.beginRequest (0, 1);
+    const auto request = data.store.beginRequest (input, 1);
     expect (request.status == Store::RequestStatus::ready, "request rejected");
     expect (data.store.submitBytes (request.ticket, std::move (bytes)) == Store::SubmitResult::accepted,
             "submission rejected");
@@ -208,6 +209,78 @@ void testLookupCountAndConstantAudio()
         expect (reads == 3, "per-sample update/render repeated shared-data lookups");
     });
 }
+
+Store::ByteResource mseg (int serial, bool descending = false)
+{
+    auto result = std::make_shared<std::vector<int32_t>> (2051 + 4);
+    const int32_t header[] { 0x4d534547, session, serial, 2051 };
+    std::copy (std::begin (header), std::end (header), result->begin());
+    for (int i = 0; i < 2051; ++i)
+    {
+        const float ascending = std::clamp (static_cast<float> (i - 1) / 2047.0f, 0.0f, 1.0f);
+        const float value = descending ? 1.0f - ascending : ascending;
+        std::memcpy (result->data() + 4 + i, &value, sizeof (value));
+    }
+    return result;
+}
+
+void testSharedMsegScopesInterpolationAndRetirement()
+{
+    constexpr size_t curveBytes = (2051 + 4) * sizeof (int32_t);
+    PatchData data (9, curveBytes * 3), nested (9, curveBytes * 2);
+    auto initial = mseg (1);
+    std::weak_ptr<std::vector<int32_t>> retired = initial;
+    submit (data, std::move (initial), 3);
+    submit (nested, mseg (1, true), 3);
+    block (data, [&]
+    {
+        SharedMsegBlock snapshot;
+        reads = 0;
+        snapshot.refresh (countedReader);
+        expect (reads == 6, "MSEG snapshot must resolve each curve once");
+        expect (sharedMsegSerialNative (3, session) == 1, "MSEG serial not adopted");
+        expect (sharedMsegSerialNative (3, session + 1) == 0, "MSEG accepted stale session");
+        expect (sharedMsegSerialNative (2, session) == 0, "MSEG accepted wavetable input");
+        expect (sharedMsegSerialNative (9, session) == 0, "MSEG accepted out-of-range input");
+        for (int i = 0; i <= 100; ++i)
+        {
+            const float x = static_cast<float> (i) / 100.0f;
+            expect (std::abs (snapshot.sample (3, session, 1, x) - x) < 1.0e-6f,
+                    "MSEG interpolation differs from padded linear curve");
+        }
+        expect (reads == 6, "MSEG sample repeated storage lookup");
+        expect (snapshot.sample (3, session, 2, 0.25f) == 0.5f, "MSEG accepted stale serial");
+        expect (snapshot.sample (4, session, 1, 0.25f) == 0.5f, "missing MSEG lacks initial value");
+        block (nested, [&]
+        {
+            expect (std::abs (sampleSharedMsegNative (3, session, 1, 0.25f) - 0.75f) < 1.0e-6f,
+                    "nested MSEG scope borrowed outer curve");
+        });
+        expect (std::abs (sampleSharedMsegNative (3, session, 1, 0.25f) - 0.25f) < 1.0e-6f,
+                "outer MSEG scope not restored");
+        submit (data, mseg (2, true), 3);
+        expect (std::abs (sampleSharedMsegNative (3, session, 1, 0.25f) - 0.25f) < 1.0e-6f,
+                "MSEG changed allocation inside block");
+    });
+    block (data, [&]
+    {
+        expect (sharedMsegSerialNative (3, session) == 2, "replacement MSEG serial not adopted");
+        expect (std::abs (sampleSharedMsegNative (3, session, 2, 0.25f) - 0.75f) < 1.0e-6f,
+                "replacement MSEG retained old pointer");
+        expect (! retired.expired(), "MSEG retired during render block");
+    });
+    expect (retired.expired(), "MSEG allocation not reclaimed after block");
+    expect (sharedMsegSerialNative (3, session) == 0, "MSEG metadata leaked outside render scope");
+    expect (sampleSharedMsegNative (3, session, 2, 0.25f) == 0.5f, "MSEG pointer leaked outside render scope");
+    auto invalid = mseg (3);
+    (*invalid)[3] = 2048;
+    submit (data, std::move (invalid), 3);
+    block (data, [&]
+    {
+        expect (sharedMsegSerialNative (3, session) == 0, "MSEG accepted invalid sample count");
+        expect (sampleSharedMsegNative (3, session, 2, 0.25f) == 0.5f, "MSEG retained invalidated pointer");
+    });
+}
 }
 
 int main()
@@ -217,7 +290,8 @@ int main()
         testInstancesAndNestedScopes();
         testReplacementRetirementAndSessionReset();
         testLookupCountAndConstantAudio();
-        std::cout << "PASS shared table block: instance isolation, nested scopes, retirement, reset, lookup count and constant audio\n";
+        testSharedMsegScopesInterpolationAndRetirement();
+        std::cout << "PASS shared table and MSEG blocks: instance isolation, nested scopes, retirement, reset, lookup count, interpolation and constant audio\n";
     }
     catch (const std::exception& error)
     {

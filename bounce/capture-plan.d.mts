@@ -15,12 +15,14 @@ export type BounceCaptureParameter = {
     readonly value: BounceWireValue;
 };
 
-/** One runtime event captured for offline rendering. */
+/** One runtime event or direct preparation captured for offline rendering. */
 export type BounceSetupEvent = {
     readonly endpointID: string;
     readonly value: BounceWireValue;
     readonly advanceFrames: number;
     readonly sessionScoped: boolean;
+    /** Prepare a source shape in shared memory instead of sending its samples. */
+    readonly preparation?: "mseg";
 };
 
 /** A setup event whose note field is filled from the current root job. */
@@ -101,6 +103,7 @@ export type BounceSetupEventInput = {
     readonly value: unknown;
     readonly advanceFrames?: number;
     readonly sessionScoped?: boolean;
+    readonly preparation?: "mseg";
 };
 
 /** Input shape accepted for a root-scoped setup event. */

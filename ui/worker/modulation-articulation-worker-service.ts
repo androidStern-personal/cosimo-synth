@@ -24,6 +24,7 @@ import {
     parseModulationState,
     type ModulationState,
 } from "../shared/modulation";
+import type { MsegShape } from "../shared/mseg";
 import { getModulationArticulationCellIndex } from "../shared/modulation-runtime-program";
 import {
     RUNTIME_STATE_ENDPOINT_ID,
@@ -34,6 +35,7 @@ import {
     RUNTIME_SYNC_REQUEST_ENDPOINT_ID,
     RUNTIME_INSTALL_SEND_TIMEOUT_MS,
     type RuntimeInstallOutcome,
+    type RuntimeInstallCommand,
 } from "../shared/runtime-install-channel";
 
 const runtimeRecoveryDelayMilliseconds = 1_000;
@@ -43,6 +45,7 @@ const bootStoredStateKeys = [MODULATION_STATE_KEY, ARTICULATIONS_V4_STATE_KEY] a
 export type FrameworkModulationInput = {
     readonly publishTriggerConfig: (config: ArticulationTriggerConfig) => Promise<CmajorStatePublicationOutcome>;
     readonly onDefect: (error: unknown) => void;
+    readonly curveCommand?: (slotIndex: number, shapeIndex: number, shape: MsegShape) => RuntimeInstallCommand;
 };
 
 type StoredStateMessage = { key?: unknown; value?: unknown };
@@ -366,10 +369,10 @@ export class ModulationArticulationWorkerService {
         const capturedArticulations = this.articulationBank;
         const capturedObserver = this.deliveryObserver;
         const modulationSessionRefresh = this.lastAppliedModulationGeneration !== capturedGeneration;
-        const modulationEvents = buildModulationRuntimeEvents(
-            capturedModulation,
-            modulationSessionRefresh ? null : this.lastAppliedModulationState,
-        );
+        const previous = modulationSessionRefresh ? null : this.lastAppliedModulationState;
+        const modulationEvents = this.frameworkInput?.curveCommand
+            ? buildModulationRuntimeEvents(capturedModulation, previous, this.frameworkInput.curveCommand)
+            : buildModulationRuntimeEvents(capturedModulation, previous);
         const modulationOutcome = await this.modulationLane.sendBatch(modulationEvents);
         if (!this.started || capturedLifecycle !== this.lifecycleEpoch) return;
         if (!this.acceptOutcome("modulation", modulationOutcome, capturedModulation)) {

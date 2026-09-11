@@ -16,10 +16,24 @@ static cosimo::three_osc::bridge::SharedDataView readSharedData (std::int32_t in
 
 // This storage belongs to the companion Wasm instance in one synth's memory.
 static cosimo::three_osc::bridge::SharedTableBlock sharedTableBlock;
+static cosimo::three_osc::bridge::SharedMsegBlock sharedMsegBlock;
 
 extern "C" void CosimoThreeOscillatorRenderer__beginSharedBlock() noexcept
 {
     sharedTableBlock.refresh (readSharedData);
+    sharedMsegBlock.refresh (readSharedData);
+}
+
+extern "C" std::int32_t CosimoThreeOscillatorRenderer__sharedMsegSerial (
+    std::int32_t input, std::int32_t session) noexcept
+{
+    return sharedMsegBlock.serial (input, session);
+}
+
+extern "C" float CosimoThreeOscillatorRenderer__sampleSharedMseg (
+    std::int32_t input, std::int32_t session, std::int32_t serial, float position) noexcept
+{
+    return sharedMsegBlock.sample (input, session, serial, position);
 }
 
 extern "C" std::int32_t CosimoThreeOscillatorRenderer__renderShared (

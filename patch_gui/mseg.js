@@ -413,18 +413,22 @@ function catmullRom(p0, p1, p2, p3, t) {
     return p1 + (0.5 * t * ((p2 - p0) + (t * (((2.0 * p0) - (5.0 * p1) + (4.0 * p2) - p3) + (t * (-p0 + (3.0 * p1) - (3.0 * p2) + p3))))));
 }
 export function renderMsegShape(shape) {
+    const padded = new Float32Array(MSEG_PADDED_SAMPLES);
+    renderMsegShapeInto(shape, padded);
+    return padded;
+}
+/** Render directly into the caller's destination, including interpolation padding. */
+export function renderMsegShapeInto(shape, padded) {
+    if (padded.length !== MSEG_PADDED_SAMPLES)
+        throw new Error("Invalid MSEG destination length.");
     const normalizedShape = normalizeMsegShape(shape);
-    const body = new Float32Array(MSEG_BODY_SAMPLES);
     for (let sampleIndex = 0; sampleIndex < MSEG_BODY_SAMPLES; sampleIndex += 1) {
         const x = sampleIndex / (MSEG_BODY_SAMPLES - 1);
-        body[sampleIndex] = evaluateMsegShape(normalizedShape, x);
+        padded[sampleIndex + 1] = evaluateMsegShape(normalizedShape, x);
     }
-    const padded = new Float32Array(MSEG_PADDED_SAMPLES);
-    padded[0] = body[0];
-    padded.set(body, 1);
-    padded[MSEG_BODY_SAMPLES + 1] = body[MSEG_BODY_SAMPLES - 1];
-    padded[MSEG_BODY_SAMPLES + 2] = body[MSEG_BODY_SAMPLES - 1];
-    return padded;
+    padded[0] = padded[1];
+    padded[MSEG_BODY_SAMPLES + 1] = padded[MSEG_BODY_SAMPLES];
+    padded[MSEG_BODY_SAMPLES + 2] = padded[MSEG_BODY_SAMPLES];
 }
 export function sampleRenderedMsegBuffer(paddedBuffer, x) {
     if (!(paddedBuffer instanceof Float32Array) || paddedBuffer.length !== MSEG_PADDED_SAMPLES) {

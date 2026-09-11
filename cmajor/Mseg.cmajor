@@ -1,3 +1,9 @@
+namespace CosimoThreeOscillatorRenderer
+{
+    external int32 sharedMsegSerial (int32 inputIndex, int32 dspSession);
+    external float32 sampleSharedMseg (int32 inputIndex, int32 dspSession, int32 deliveryToken, float32 position);
+}
+
 namespace wt
 {
     let msegBodySamples = 2048;
@@ -27,6 +33,13 @@ namespace wt
     {
         int32 shapeIndex;
         float32[msegPaddedSamples] buffer;
+    }
+
+    struct MsegSharedBufferUpload
+    {
+        int32 shapeIndex;
+        int32 dspSessionId;
+        int32 deliveryToken;
     }
 
     struct EffectiveWavetablePositionMonitor
@@ -213,9 +226,10 @@ namespace wt
         }
     }
 
-    processor MsegReader
+    processor MsegReader (int sharedInputBase = -1)
     {
         input event MsegBufferUpload bufferUpload;
+        input event MsegSharedBufferUpload sharedBufferUpload;
         input event MsegPlaybackConfig playbackUpload;
         input event int32 triggerIn;
         // A legato pitch change: restarts playback only when the uploaded
@@ -228,8 +242,11 @@ namespace wt
         output stream float32 outB;
         output stream float32 progressOut;
 
-        float32[msegPaddedSamples] bufferA;
-        float32[msegPaddedSamples] bufferB;
+        float32[sharedInputBase < 0 ? msegPaddedSamples : 1] bufferA;
+        float32[sharedInputBase < 0 ? msegPaddedSamples : 1] bufferB;
+        int32[2] sharedSessions;
+        int32[2] sharedTokens;
+        bool[2] pendingSharedUpload;
         float32 currentValueA = 0.5f;
         float32 currentValueB = 0.5f;
         float32 progress = 1.0f;
@@ -247,14 +264,16 @@ namespace wt
 
         void initialiseBufferA()
         {
-            for (int32 i = 0; i < msegPaddedSamples; ++i)
-                bufferA.at (i) = 0.5f;
+            if const (sharedInputBase < 0)
+                for (int32 i = 0; i < msegPaddedSamples; ++i)
+                    bufferA.at (i) = 0.5f;
         }
 
         void initialiseBufferB()
         {
-            for (int32 i = 0; i < msegPaddedSamples; ++i)
-                bufferB.at (i) = 0.5f;
+            if const (sharedInputBase < 0)
+                for (int32 i = 0; i < msegPaddedSamples; ++i)
+                    bufferB.at (i) = 0.5f;
         }
 
         float32 currentProgressIncrement()
@@ -304,6 +323,10 @@ namespace wt
 
         float32 sampleBufferAAt (float32 normalizedX)
         {
+            if const (sharedInputBase >= 0)
+                return CosimoThreeOscillatorRenderer::sampleSharedMseg (
+                    sharedInputBase, sharedSessions[0], sharedTokens[0], normalizedX);
+
             let clampedX = std::intrinsics::clamp (normalizedX, 0.0f, 1.0f);
             let scaled = clampedX * float32 (msegBodySamples - 1);
             let sampleIndex = int32 (std::intrinsics::floor (scaled));
@@ -320,6 +343,10 @@ namespace wt
 
         float32 sampleBufferBAt (float32 normalizedX)
         {
+            if const (sharedInputBase >= 0)
+                return CosimoThreeOscillatorRenderer::sampleSharedMseg (
+                    sharedInputBase + 1, sharedSessions[1], sharedTokens[1], normalizedX);
+
             let clampedX = std::intrinsics::clamp (normalizedX, 0.0f, 1.0f);
             let scaled = clampedX * float32 (msegBodySamples - 1);
             let sampleIndex = int32 (std::intrinsics::floor (scaled));
@@ -355,21 +382,36 @@ namespace wt
 
         event bufferUpload (MsegBufferUpload upload)
         {
-            if (upload.shapeIndex == 1)
+            if const (sharedInputBase < 0)
             {
+                if (upload.shapeIndex == 1)
+                {
+                    for (int32 i = 0; i < msegPaddedSamples; ++i)
+                        bufferB.at (i) = upload.buffer.at (i);
+
+                    hasUploadedBufferB = true;
+                    currentValueB = bufferB.at (1);
+                    return;
+                }
+
                 for (int32 i = 0; i < msegPaddedSamples; ++i)
-                    bufferB.at (i) = upload.buffer.at (i);
+                    bufferA.at (i) = upload.buffer.at (i);
 
-                hasUploadedBufferB = true;
-                currentValueB = bufferB.at (1);
-                return;
+                hasUploadedBufferA = true;
+                currentValueA = bufferA.at (1);
             }
+        }
 
-            for (int32 i = 0; i < msegPaddedSamples; ++i)
-                bufferA.at (i) = upload.buffer.at (i);
-
-            hasUploadedBufferA = true;
-            currentValueA = bufferA.at (1);
+        event sharedBufferUpload (MsegSharedBufferUpload upload)
+        {
+            if const (sharedInputBase >= 0)
+            {
+                if (upload.shapeIndex < 0 || upload.shapeIndex > 1 || upload.deliveryToken <= 0)
+                    return;
+                sharedSessions.at (upload.shapeIndex) = upload.dspSessionId;
+                sharedTokens.at (upload.shapeIndex) = upload.deliveryToken;
+                pendingSharedUpload.at (upload.shapeIndex) = true;
+            }
         }
 
         event playbackUpload (MsegPlaybackConfig config)
@@ -422,6 +464,21 @@ namespace wt
 
             loop
             {
+                if const (sharedInputBase >= 0)
+                {
+                    // Uploads reset the held value to the curve's first sample,
+                    // while an active voice continues at its existing progress.
+                    if (pendingSharedUpload[0])
+                    {
+                        currentValueA = sampleBufferAAt (0.0f);
+                        pendingSharedUpload[0] = false;
+                    }
+                    if (pendingSharedUpload[1])
+                    {
+                        currentValueB = sampleBufferBAt (0.0f);
+                        pendingSharedUpload[1] = false;
+                    }
+                }
                 let displayedProgress = std::intrinsics::clamp (progress, 0.0f, 1.0f);
 
                 if (active)
