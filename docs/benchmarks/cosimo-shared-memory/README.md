@@ -33,3 +33,13 @@ The full web product build and both TypeScript checks passed. Offline Bounce now
 This implementation requires the patched Cmajor/CHOC branches. The published Builder Kit dependency pin and installed plug-ins were not updated. JIT/AOT and web use the same packing algorithm and host-supplied destination API; general plugin-state API completion is outside this transport change.
 
 Patched runtime commits: Cmajor `b9c1e3c` (branch `codex/shared-data-runtime`), CHOC `506c9db`. Final full-product rebuild was rechecked in Chrome: [result](browser-final-product-check.json); zero payload uploads, finite nonzero audio, no reported errors.
+
+## Follow-up: cache table lookups for each audio block
+
+The renderer now resolves and validates each table once per render block. Native render-scope tokens prevent cached pointers leaking between instances; the Wasm companion refreshes before each `advance`. Cheap generation/session comparisons remain per sample to preserve mid-block reset behavior. No new locks or allocations occur during playback.
+
+The real generated Cosimo Wasm probe made **384 address lookups and 384 length lookups**, down from **98,304 of each**, over 128 blocks of 128 frames. Its 32,768 output samples were byte-identical before/after. Native JIT and compiled-native captures were also byte-identical to their respective pre-fix recordings. This is a lookup-count reduction, not a measured CPU speedup. [Results and audio hashes](block-cache-results.json).
+
+Replay after the full web build: `node docs/benchmarks/cosimo-shared-memory/block-cache-check.mjs build/web build/block-cache-check`. This uses the real preparation, storage, generated DSP and readers; the pre-fix build fails its lookup assertion. Native lifecycle tests use actual storage and the actual renderer: `bash tests/native/run_shared_table_block_tests.sh CMAJOR_SOURCE_DIR`. ASan/UBSan passed, including nested instances, retired storage, invalid replacement and session reset. Independent review found no actionable defects; deliberately breaking scope isolation or cache clearing made those tests fail.
+
+The full web build passed and a live Chrome AudioWorklet switched to Acid while holding a note, with finite audio and no page errors. Cmajor now requires commit `bb471ab` for render-scope identity; CHOC is unchanged. The public Builder Kit pin and installed plug-ins remain unchanged.

@@ -129,36 +129,43 @@ const std::int32_t* tableWords (SharedDataView view) noexcept
 }
 }
 
-std::int32_t updateSharedTables (std::int32_t dspSession, Slice<std::int32_t> packedInts,
-                                 SharedDataReader read) noexcept
+void SharedTableBlock::refresh (SharedDataReader read) noexcept
 {
-    if (packedInts.elements == nullptr || packedInts.size < sharedPackedIntCount || read == nullptr) return 0;
+    tables = {};
+    if (read == nullptr) return;
+    for (std::int32_t oscillator = 0; oscillator < 3; ++oscillator)
+        if (const auto* words = tableWords (read (oscillator)))
+            tables[oscillator] = { words + sharedHeaderWords, words[2], words[3], words[4], words[5] };
+}
+
+std::int32_t SharedTableBlock::update (std::int32_t dspSession, Slice<std::int32_t> packedInts) const noexcept
+{
+    if (packedInts.elements == nullptr || packedInts.size < sharedPackedIntCount) return 0;
     std::int32_t changed = 0;
     for (std::int32_t oscillator = 0; oscillator < 3; ++oscillator)
     {
-        const auto* words = tableWords (read (oscillator));
-        if (words == nullptr || words[2] != dspSession
-            || words[3] == packedInts.elements[sharedTableGenerationOffset + oscillator]) continue;
-        packedInts.elements[sharedTableGenerationOffset + oscillator] = words[3];
-        packedInts.elements[sharedTableIndexOffset + oscillator] = words[4];
-        packedInts.elements[frameCountOffset + oscillator] = words[5];
+        const auto& table = tables[oscillator];
+        if (table.samples == nullptr || table.session != dspSession
+            || table.generation == packedInts.elements[sharedTableGenerationOffset + oscillator]) continue;
+        packedInts.elements[sharedTableGenerationOffset + oscillator] = table.generation;
+        packedInts.elements[sharedTableIndexOffset + oscillator] = table.index;
+        packedInts.elements[frameCountOffset + oscillator] = table.frames;
         changed |= 1 << oscillator;
     }
     return changed;
 }
 
-std::int32_t renderShared (Slice<float> packedFloats, Slice<std::int32_t> packedInts,
-                           SharedDataReader read) noexcept
+std::int32_t SharedTableBlock::render (Slice<float> packedFloats, Slice<std::int32_t> packedInts) const noexcept
 {
     if (packedFloats.elements == nullptr || packedFloats.size < packedFloatCount
-        || packedInts.elements == nullptr || packedInts.size < sharedPackedIntCount || read == nullptr) return 0;
+        || packedInts.elements == nullptr || packedInts.size < sharedPackedIntCount) return 0;
     std::array<TablePoolLayout::PackedSourceSlice, tableSlotCount> slots {};
     for (std::int32_t oscillator = 0; oscillator < 3; ++oscillator)
     {
-        const auto* words = tableWords (read (oscillator));
-        if (words == nullptr || words[3] != packedInts.elements[sharedTableGenerationOffset + oscillator]) continue;
+        const auto& table = tables[oscillator];
+        if (table.samples == nullptr || table.generation != packedInts.elements[sharedTableGenerationOffset + oscillator]) continue;
         auto& source = slots[oscillator];
-        source.samples = words + sharedHeaderWords;
+        source.samples = table.samples;
         source.size = tableSlotSampleCount;
     }
     return renderSources (packedFloats, packedInts, slots);

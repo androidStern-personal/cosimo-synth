@@ -85,10 +85,23 @@ using TableChunkSlices = std::array<Slice<std::int32_t>, tablePoolChunkCount>;
 // reads the exact allocation prepared by JavaScript, without retaining it.
 struct SharedDataView { const void* data; std::size_t byteSize; };
 using SharedDataReader = SharedDataView (*) (std::int32_t input) noexcept;
-std::int32_t updateSharedTables (std::int32_t dspSession, Slice<std::int32_t> packedInts,
-                                 SharedDataReader read) noexcept;
-std::int32_t renderShared (Slice<float> packedFloats, Slice<std::int32_t> packedInts,
-                           SharedDataReader read) noexcept;
+// Borrowed only for one host render scope. Refresh before rendering a new scope;
+// sample rendering never calls back into shared-storage lookup or validation.
+class SharedTableBlock
+{
+public:
+    void refresh (SharedDataReader) noexcept;
+    std::int32_t update (std::int32_t dspSession, Slice<std::int32_t> packedInts) const noexcept;
+    std::int32_t render (Slice<float> packedFloats, Slice<std::int32_t> packedInts) const noexcept;
+
+private:
+    struct Table
+    {
+        const std::int32_t* samples = nullptr;
+        std::int32_t session = 0, generation = 0, index = 0, frames = 0;
+    };
+    std::array<Table, 3> tables {};
+};
 
 std::int32_t renderAllChunks (Slice<float> packedFloats,
                               Slice<std::int32_t> packedInts,

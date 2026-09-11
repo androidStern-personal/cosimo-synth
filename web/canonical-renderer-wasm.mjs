@@ -72,12 +72,20 @@ export function connectCanonicalRendererWasm(cmajorSource, rendererWasm, classNa
             cmaj_sharedDataAddress: options.sharedDataAddress ?? (() => 0),
             cmaj_sharedDataSize: options.sharedDataSize ?? (() => 0)}});
         renderer.exports._initialize?.();
+        this._beginSharedBlock = renderer.exports.CosimoThreeOscillatorRenderer__beginSharedBlock;
+        if (typeof this._beginSharedBlock !== 'function') throw new Error('Renderer block reader is unavailable');
         const module = options.module ?? await this.compile();
         const externalFunctions = {...options.externalFunctions};
         for (const imported of WebAssembly.Module.imports(module))
             if (imported.kind === 'function' && typeof renderer.exports[imported.name] === 'function')
                 externalFunctions[imported.name] = renderer.exports[imported.name];
         return super.initialise(sessionID, frequency, {...options,memory,module,externalFunctions});
+    }
+    advance(numFrames) {
+        // Realtime and offline hosts adopt shared data before invoking advance.
+        // Its allocation cannot change until this entire render call returns.
+        this._beginSharedBlock();
+        return super.advance(numFrames);
     }
 }\n`;
 }
