@@ -6,7 +6,7 @@ Recommended version: **0.2.0**. This is a proposal, not a version bump or a publ
 
 1. Resolve the historical personal-identifier issue without breaking customer Git updates. Keep the current clean export boundary; inspect history and final archives too.
 2. Stamp one version and one published Cmajor pin. Use the existing release command to construct a staged candidate with verified tools; do not assemble ad hoc downloads.
-3. Install that candidate as a customer, build its unchanged example, and verify its packaged browser/audio path. Update from each supported old feed with a local plugin edit present. The existing release guards remain enabled.
+3. Install that candidate as a customer, build its unchanged example, and verify its packaged browser/audio path. Identify which download/update URLs were actually given to customers, then update from those installations with a local plugin edit present. Older live URLs alone do not prove customer impact. The existing release guards remain enabled.
 4. Publish the release and make it discoverable to existing owners. Publish the changelog at a stable public URL, then send its factual delivery notice and make the social announcement.
 
 ## Changelog

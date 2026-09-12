@@ -4,25 +4,35 @@ Not published. Use after the release audit clears and existing owners can fetch 
 
 ## Short post
 
-State management for audio plugins, built into Builder Kit.
+Changing a wavetable should be as easy as turning a knob.
 
-Parameters, envelopes and wavetable changes can share one Undo history. State survives closing the UI. Prepared audio data goes into shared memory.
+Builder Kit gives both the same React state API and Undo history—across your UI and audio engine.
 
-Built for Cmajor + React. Editable source included.
+Saving, restoring and safe data delivery included. Built for Cmajor.
 
 ## Longer post
 
-The next Builder Kit update handles a part of audio-plugin development that usually spreads through the whole project: state.
+Change a knob. Edit an envelope. Load a wavetable. Undo any of them.
 
-You declare the values. The kit handles saving, shared Undo/Redo, reconnecting the GUI, and getting prepared data into the audio engine.
+Those should feel like ordinary state changes, even when the data has to cross from a WebView to the audio engine.
 
-A gain control and an editable envelope can use the same history. A wavetable can be prepared directly into shared storage, with the handoff to audio handled underneath.
+The next Builder Kit update gives Cmajor plugins one state system and a React hook: `usePluginState()`.
 
-The MSEG editor is included. The source is yours to change.
+Declare your values and how to prepare your audio data. The framework coordinates saving, restoring, shared Undo and safe delivery to DSP—including preparation directly into shared memory.
 
-Built for Cmajor and React. Included for existing Builder Kit owners.
+Your interface can treat a curve or wavetable selection like another editable value. The framework handles the different lifetimes and delivery paths underneath.
+
+The MSEG editor is included. The source is yours to change. Included for existing Builder Kit owners.
 
 [Attach actual candidate recording and code excerpts. Insert the public release-note URL only after publication.]
+
+## The hook and its proof
+
+Positioning: **a state library for your whole audio plugin**. The useful promise is coherent editing across GUI, saved state and audio execution, with the difficult coordination handled underneath.
+
+Demonstrate that promise with the same state hook for a simple parameter and a complex curve, followed by Undo reversing both. `usePluginState` is the kit's own hook; `usePluginHistory` exposes the shared history. Explain custom preparation and DSP interpretation in the linked guide.
+
+The Zustand comparison can help explain the product verbally: familiar state-library ergonomics extended to audio-plugin lifetimes and data delivery. Keep the post focused on the concrete result. It is not a claim that this is built on Zustand or that it replaces arbitrary DSP code.
 
 ## Two-image code carousel
 
@@ -51,6 +61,8 @@ await history.undo();
 Caption: “Undo restores the last user action through the same engine connection.”
 
 These are API excerpts within a configured plugin, not complete standalone programs. The gain endpoint and envelope DSP routing are supplied by the plugin. A carousel should show the small API; the linked guide supplies setup and sound wiring.
+
+Use [Carbon](https://carbon.now.sh/) for the syntax-highlighted screenshots. Its [official project](https://github.com/carbon-app/carbon) supports theme, font, background, padding and shadow customization. Use the same TypeScript theme and scale on both cards, a dark background with the Song Machines lime accent, and only the code above. Keep the text legible on a phone. Export images for review; do not use its sharing action to publish.
 
 ## Release-day sequence
 
