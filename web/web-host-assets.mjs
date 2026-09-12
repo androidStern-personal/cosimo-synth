@@ -6,6 +6,8 @@ const DESKTOP_APP_HASH_TOKEN = "__COSIMO_DESKTOP_APP_HASH__";
 
 export const WEB_HOST_ASSET_ENTRIES = Object.freeze([
     { source: "index.html", target: "index.html" },
+    { source: "index.html", target: "synth.html" },
+    { source: "phone-shell.js", target: "phone-shell.js" },
     { source: "favicon.svg", target: "favicon.svg" },
     { source: "cosimo-web-host.js", target: "cosimo-web-host.js" },
     { source: "cosimo-midi.mjs", target: "cosimo-midi.mjs" },

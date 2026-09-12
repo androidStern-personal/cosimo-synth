@@ -18,6 +18,10 @@ Run the end-to-end proof, including a real MIDI note and non-silent WebAssembly 
 npm run test:web:poc
 ```
 
+The public page keeps the instrument in a phone-width viewport (430px maximum),
+with a gradient backdrop and desktop-only phone recommendation. `synth.html` is
+the bare instrument host; the public shell and bare host both receive audio checks.
+
 The generated application lives under `build/web/` and is intentionally not committed.
 
 ## Vercel hosting

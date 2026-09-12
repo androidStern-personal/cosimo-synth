@@ -50692,8 +50692,13 @@ function VF({
   location: t = globalThis.location
 } = {}) {
   try {
-    const n = new URL(t.href);
-    return n.hash = "", e.replaceState(e.state, "", n), { ok: !0, value: void 0 };
+    const n = t.href, r = new URL(n);
+    if (r.hash = "", e.replaceState(e.state, "", r), e === globalThis.history && typeof window < "u" && window.parent !== window)
+      try {
+        window.parent.location.href === n && window.parent.history.replaceState(window.parent.history.state, "", r);
+      } catch {
+      }
+    return { ok: !0, value: void 0 };
   } catch (n) {
     return na(new gn(
       "HistoryUpdateFailed",

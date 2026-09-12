@@ -35,8 +35,8 @@ await fs.writeFile(path.join(output, ".vercelignore"), ".env*\n.gitignore\n.verc
 
 // Exercise the exact packaged site, including the real keyboard and audio,
 // before either preview or production upload. No repository-root deployment.
-run(process.execPath, ["--test", "--test-name-pattern=generated browser proof keeps the real keyboard",
-    "tests/test_web_poc_browser.mjs"], { ...process.env, COSIMO_WEB_ROOT: output, COSIMO_WEB_BROWSER: "chromium", COSIMO_WEB_BASE_URL: "" });
+run(process.execPath, ["--test", "--test-name-pattern=generated browser proof keeps the real keyboard|web shell keeps the actual phone UI",
+    "tests/test_web_poc_browser.mjs", "tests/test_web_phone_shell_browser.mjs"], { ...process.env, COSIMO_WEB_ROOT: output, COSIMO_WEB_BROWSER: "chromium", COSIMO_WEB_BASE_URL: "" });
 if (args.includes("--dry-run")) {
     console.log(`Verified static synth: ${output}. Nothing deployed.`);
 } else {

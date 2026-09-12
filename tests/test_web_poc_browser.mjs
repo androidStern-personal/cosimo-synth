@@ -1172,9 +1172,11 @@ async function openStartedMobileRackPage({ simulateWebKitZeroTouchButtons = fals
     return page;
 }
 
+// Instrument-host coverage stays on the bare host; test_web_phone_shell_browser
+// exercises the public framed page, responsive layout and actual audio.
 before(async () => {
     if (remoteBaseUrl) {
-        baseUrl = new URL("/", remoteBaseUrl).href;
+        baseUrl = new URL("/synth.html", remoteBaseUrl).href;
         browser = browserEngine === "webkit"
             ? await webkit.launch({
                 executablePath: process.env.COSIMO_WEBKIT_EXECUTABLE_PATH,
@@ -1192,7 +1194,7 @@ before(async () => {
         server.listen(0, "127.0.0.1", () => {
             const address = server.address();
             assert.ok(address && typeof address === "object");
-            baseUrl = `http://127.0.0.1:${address.port}/`;
+            baseUrl = `http://127.0.0.1:${address.port}/synth.html`;
             resolve();
         });
     });

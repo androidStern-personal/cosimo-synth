@@ -273,9 +273,21 @@ export function stripSoundShareFragment({
     readonly location?: Location;
 } = {}): SoundShareResult<undefined> {
     try {
-        const cleanURL = new URL(location.href);
+        const originalURL = location.href;
+        const cleanURL = new URL(originalURL);
         cleanURL.hash = "";
         history.replaceState(history.state, "", cleanURL);
+        // The web phone shell embeds this same URL. Clear the consumed link
+        // there too, so refreshing cannot reapply it over subsequent edits.
+        if (history === globalThis.history && typeof window !== "undefined" && window.parent !== window) {
+            try {
+                if (window.parent.location.href === originalURL) {
+                    window.parent.history.replaceState(window.parent.history.state, "", cleanURL);
+                }
+            } catch {
+                // An unrelated cross-origin embedding owns its own address bar.
+            }
+        }
         return { ok: true, value: undefined };
     } catch (cause) {
         return errorResult(new SoundShareError(

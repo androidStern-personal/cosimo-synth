@@ -892,6 +892,8 @@ test("web host packaging includes every runtime-owned module", async (context) =
     const fixtureFiles = [
         "index.html",
         "favicon.svg",
+        "phone-shell.js",
+        "cosimo-midi.mjs",
         "cosimo-web-host.js",
         "browser-audio-lifecycle.mjs",
         "browser-patch-state.mjs",
@@ -917,6 +919,8 @@ test("web host packaging includes every runtime-owned module", async (context) =
 
     await Promise.all([
         fs.access(path.join(outputDirectory, "index.html")),
+        fs.access(path.join(outputDirectory, "synth.html")),
+        fs.access(path.join(outputDirectory, "phone-shell.js")),
         fs.access(path.join(outputDirectory, "favicon.svg")),
         fs.access(path.join(outputDirectory, "cosimo-web-host.js")),
         fs.access(path.join(outputDirectory, "browser-audio-lifecycle.mjs")),
