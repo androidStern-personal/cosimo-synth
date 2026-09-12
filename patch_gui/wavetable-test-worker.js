@@ -1267,220 +1267,6 @@ function To(t) {
     buildRuntimeEvents: ({ state: e }) => [...Ti(e)]
   });
 }
-const Eo = new Set("alignas alignof and and_eq asm atomic_cancel atomic_commit atomic_noexcept auto bitand bitor bool break case catch char char8_t char16_t char32_t class compl concept const consteval constexpr constinit const_cast continue co_await co_return co_yield decltype default delete do double dynamic_cast else enum explicit export extern external false float float32 float64 for friend goto graph if import inline input int int32 int64 let long loop mutable namespace new node noexcept not not_eq nullptr operator or or_eq output parameter private processor protected public register reinterpret_cast requires return short signed sizeof static static_assert static_cast string struct switch template this thread_local throw true try typedef typeid typename union unsigned using value virtual void volatile wchar_t while xor xor_eq".split(" "));
-function Ao(t) {
-  return /^[A-Za-z][A-Za-z0-9_]*$/.test(t) && !t.includes("__") && !Eo.has(t);
-}
-function h(t, e = {}) {
-  return Object.freeze({ kind: "parameter", endpoint: t, ...e });
-}
-function Ai(t) {
-  const e = Object.freeze({ ...t.codec });
-  return Object.freeze({
-    kind: "stored",
-    initial: e.parse(t.initial),
-    codec: e,
-    ...t.lifetime ? { lifetime: t.lifetime } : {},
-    ...t.history !== void 0 ? { history: t.history } : {},
-    ...t.engine ? { engine: t.engine } : {}
-  });
-}
-function ln(t) {
-  const e = Ai({ codec: t.codec, initial: t.initial, lifetime: t.lifetime, history: t.history }), n = Object.freeze([...t.dependencies ?? []]);
-  if ("kind" in t.engine && t.engine.kind === "shared-data") {
-    const o = t.prepare, a = t.engine;
-    return Object.freeze({ ...e, engine: Object.freeze({
-      kind: "shared-prepared",
-      dependencies: n,
-      storage: Object.freeze({ type: a.type, fixedLength: typeof a.length == "number" ? a.length : null }),
-      measure(s, l) {
-        return typeof a.length == "number" ? a.length : a.length(s, l);
-      },
-      prepare: o
-    }) });
-  }
-  const i = t.prepare, r = t.engine;
-  return Object.freeze({ ...e, engine: Object.freeze({
-    kind: "prepared",
-    dependencies: n,
-    prepare: i,
-    delivery: r
-  }) });
-}
-const Ro = /* @__PURE__ */ Symbol.for("builder-kit.plugin-state.options");
-function xo(t) {
-  return Object.keys(t).filter((e) => t[e]?.kind === "stored" && t[e].engine?.kind === "shared-prepared").sort().map((e, n) => ({ key: e, input: n }));
-}
-function Mo(t, e = {}) {
-  if (e.historyLimit !== void 0 && (!Number.isSafeInteger(e.historyLimit) || e.historyLimit < 0))
-    throw new Error("historyLimit must be a non-negative integer.");
-  const n = xo(t);
-  if (n.length && (!Number.isSafeInteger(e.memoryBudgetBytes) || (e.memoryBudgetBytes ?? 0) < 4))
-    throw new Error("Shared state requires an explicit positive memoryBudgetBytes.");
-  if (n.some(({ key: i }) => !Ao(i) || i === "Data"))
-    throw new Error("Shared state names must be valid Cmajor identifiers.");
-  return Object.freeze(Object.defineProperty({ ...t }, Ro, { value: Object.freeze({ ...e }) }));
-}
-const X = 2048, Ee = X + 3, cn = 20, Ri = "MSEG 1", Do = 0, Y = 2;
-function Ae(t) {
-  return t !== null && typeof t == "object" ? t : {};
-}
-function Ut(t, e, n) {
-  return Math.min(Math.max(t, e), n);
-}
-function me(t, e, n = 1e-12) {
-  return Math.abs(t - e) <= n;
-}
-function Oo(t) {
-  return Ut(Number.isFinite(t) ? t : 0, -cn, cn);
-}
-function ne(t) {
-  return Ut(Number.isFinite(t) ? t : 0, 0, 1);
-}
-function xi(t = Ri) {
-  return {
-    format: "mseg.shape",
-    version: 1,
-    name: t,
-    globalSmooth: !1,
-    points: [
-      { x: 0, y: 0, curvePower: 0 },
-      { x: 1, y: 1, curvePower: 0 }
-    ]
-  };
-}
-function Mi() {
-  return {
-    format: "mseg.playback",
-    version: 1,
-    rate: {
-      kind: "seconds",
-      seconds: 1
-    },
-    loop: { startX: 0, endX: 1 },
-    noteOffPolicy: "finish_loop",
-    legatoRestarts: !1,
-    holdFinalValue: !0
-  };
-}
-function ko(t) {
-  const e = Number(t);
-  return Ut(
-    Number.isFinite(e) ? e : 1,
-    Do,
-    Y
-  );
-}
-function _o(t) {
-  if (!t || typeof t != "object")
-    return null;
-  const e = Ae(t), n = ne(Number(e.startX)), i = ne(Number(e.endX));
-  return me(n, i) ? null : i < n ? {
-    startX: i,
-    endX: n
-  } : { startX: n, endX: i };
-}
-function wo(t = Mi()) {
-  const e = Ae(t), n = Ae(e.rate), i = Number(n.seconds), r = e.noteOffPolicy, o = r === "finish_loop" || r === "immediate" || r === "ignore" ? r : "finish_loop";
-  return {
-    format: "mseg.playback",
-    version: 1,
-    rate: {
-      kind: "seconds",
-      seconds: ko(Number.isFinite(i) ? i : 1)
-    },
-    loop: _o(e.loop),
-    noteOffPolicy: o,
-    legatoRestarts: !!e.legatoRestarts,
-    holdFinalValue: e.holdFinalValue !== !1
-  };
-}
-function Lo(t, e, n) {
-  const i = Ae(t);
-  let r = Number(i.x);
-  return Number.isFinite(r) || (r = e === 0 ? 0 : e === n - 1 ? 1 : 0), e !== 0 && e !== n - 1 && (r = ne(r)), {
-    x: r,
-    y: ne(Number(i.y)),
-    curvePower: Oo(Number(i.curvePower))
-  };
-}
-function Ye(t = xi()) {
-  const e = Ae(t), n = Array.isArray(e.points) ? e.points : [];
-  if (n.length < 2)
-    throw new Error("MSEG shapes require at least two points");
-  const i = n.map((r, o) => Lo(r, o, n.length));
-  if (!me(i[0].x, 0) || !me(i[i.length - 1].x, 1))
-    throw new Error("MSEG shapes must start at x = 0 and end at x = 1");
-  for (let r = 1; r < i.length; r += 1)
-    if (i[r].x < i[r - 1].x)
-      throw new Error("MSEG shape points must stay in non-decreasing x order");
-  return {
-    format: "mseg.shape",
-    version: 1,
-    name: typeof e.name == "string" && e.name.trim() ? e.name : Ri,
-    globalSmooth: !!e.globalSmooth,
-    points: i
-  };
-}
-function un(t) {
-  return JSON.stringify(Ye(t));
-}
-function No(t, e) {
-  if (Math.abs(e) < 0.01)
-    return t;
-  const n = Math.exp(e * t) - 1, i = Math.exp(e) - 1;
-  return n / i;
-}
-function Co(t, e) {
-  if (e <= t[0].x)
-    return { from: t[0], to: t[0], laterPointWins: !1 };
-  for (let n = 0; n < t.length - 1; n += 1) {
-    const i = t[n], r = t[n + 1];
-    if (e < r.x)
-      return { from: i, to: r, laterPointWins: !1 };
-    if (me(e, r.x)) {
-      let o = n + 1;
-      for (; o + 1 < t.length && me(t[o + 1].x, e); )
-        o += 1;
-      return {
-        from: t[o],
-        to: t[o],
-        laterPointWins: !0
-      };
-    }
-  }
-  return {
-    from: t[t.length - 1],
-    to: t[t.length - 1],
-    laterPointWins: !1
-  };
-}
-function Po(t, e) {
-  const n = ne(Number(e)), i = Co(t, n);
-  if (i.laterPointWins || me(i.from.x, i.to.x))
-    return i.to.y;
-  const r = i.to.x - i.from.x, o = r <= 0 ? 1 : (n - i.from.x) / r, a = ne(No(o, i.from.curvePower));
-  return i.from.y + (i.to.y - i.from.y) * a;
-}
-function Fo(t, e) {
-  return Po(Ye(t).points, e);
-}
-function Ko(t) {
-  const e = new Float32Array(Ee);
-  return Di(t, e), e;
-}
-function Di(t, e) {
-  if (e.length !== Ee) throw new Error("Invalid MSEG destination length.");
-  const n = Ye(t);
-  for (let i = 0; i < X; i += 1) {
-    const r = i / (X - 1);
-    e[i + 1] = Fo(n, r);
-  }
-  e[0] = e[1], e[X + 1] = e[X], e[X + 2] = e[X];
-}
-function dn(t, e) {
-  return un(t) === un(e);
-}
 function K(t, e) {
   if (!t)
     throw new Error(e);
@@ -1491,13 +1277,13 @@ function tt(t, e, n) {
     i += String.fromCharCode(t.getUint8(e + r));
   return i;
 }
-function Uo(t) {
+function Eo(t) {
   return /^[a-zA-Z][a-zA-Z\d+.-]*:/.test(t);
 }
 function At(t) {
   return typeof TextEncoder == "function" ? new TextEncoder().encode(t) : Uint8Array.from(t, (e) => e.charCodeAt(0));
 }
-function Oi(t) {
+function Ai(t) {
   if (t === null)
     return "null";
   if (t === void 0)
@@ -1508,7 +1294,7 @@ function Oi(t) {
   const i = Object.keys(t).slice(0, 6), r = i.length > 0 ? ` keys=${i.join(",")}` : "";
   return n ? `${e}:${n}${r}` : `${e}${r}`;
 }
-function Bo() {
+function Ao() {
   const t = globalThis.location?.href;
   if (typeof t == "string" && t.length > 0)
     return new URL("/", t);
@@ -1516,18 +1302,18 @@ function Bo() {
   return n.includes("/patch_gui/desktop/") ? (e.pathname = n.replace(/\/patch_gui\/desktop\/[^/]+$/, "/"), e) : n.includes("/patch_gui/") ? (e.pathname = n.replace(/\/patch_gui\/[^/]+$/, "/"), e) : n.includes("/ui/shared/") ? (e.pathname = n.replace(/\/ui\/shared\/[^/]+$/, "/"), e) : (e.pathname = n.replace(/\/[^/]+$/, "/"), e);
 }
 function nt(t, e) {
-  const n = Bo();
+  const n = Ao();
   if (e instanceof URL)
     return e;
   if (typeof e == "string" && e.length > 0) {
-    if (Uo(e))
+    if (Eo(e))
       return new URL(e);
     const i = e.startsWith("/") ? e.slice(1) : e;
     return new URL(i, n);
   }
   return new URL(t, n);
 }
-async function fn(t) {
+async function ln(t) {
   if (typeof t == "string")
     return t;
   if (t && typeof t.text == "function")
@@ -1542,9 +1328,9 @@ async function fn(t) {
     const e = Uint8Array.from(t);
     return typeof TextDecoder == "function" ? new TextDecoder().decode(e) : String.fromCharCode(...e);
   }
-  throw new Error(`Unsupported text resource payload (${Oi(t)})`);
+  throw new Error(`Unsupported text resource payload (${Ai(t)})`);
 }
-function Vo(t) {
+function Ro(t) {
   if (t instanceof ArrayBuffer)
     return new Uint8Array(t.slice(0));
   if (ArrayBuffer.isView(t))
@@ -1553,9 +1339,9 @@ function Vo(t) {
     return Uint8Array.from(t);
   if (typeof t == "string")
     return At(t);
-  throw new Error(`Unsupported binary resource payload (${Oi(t)})`);
+  throw new Error(`Unsupported binary resource payload (${Ai(t)})`);
 }
-function $o(t) {
+function xo(t) {
   const e = t?.frames;
   K(
     Array.isArray(e) || ArrayBuffer.isView(e),
@@ -1580,7 +1366,7 @@ function $o(t) {
     samples: i
   };
 }
-function ki(t) {
+function Ri(t) {
   const e = new DataView(t);
   K(tt(e, 0, 4) === "RIFF", "Expected a RIFF wave file"), K(tt(e, 8, 4) === "WAVE", "Expected a WAVE file");
   let n = null, i = null, r = null, o = null, a = null, s = null, l = null, u = 12;
@@ -1608,7 +1394,7 @@ function ki(t) {
     samples: c
   };
 }
-async function mn(t) {
+async function cn(t) {
   K(typeof fetch == "function", `Could not fetch ${t}: global fetch is unavailable`);
   const e = await fetch(t.toString());
   return K(e.ok, `Failed to fetch resource from ${t}`), e.arrayBuffer();
@@ -1616,66 +1402,66 @@ async function mn(t) {
 function Rt(t) {
   return typeof TextDecoder == "function" ? new TextDecoder().decode(t) : String.fromCharCode(...t);
 }
-function _i(t) {
-  const e = new Uint8Array(t).buffer, n = ki(e);
+function xi(t) {
+  const e = new Uint8Array(t).buffer, n = Ri(e);
   return {
     sampleRate: n.sampleRate,
     samples: n.samples
   };
 }
-function zo(t, {
+function Mo(t, {
   textPreference: e = "bridge",
   audioPreference: n = "url"
 } = {}) {
   const i = async (l) => (K(typeof t.readResource == "function", `Resource bridge cannot read ${l}`), t.readResource(l)), r = async (l) => {
     K(typeof t.readResourceAsAudioData == "function", `Audio resource bridge cannot read ${l}`);
     const u = await t.readResourceAsAudioData(l);
-    return $o(u);
+    return xo(u);
   }, o = (l) => {
     const u = t.getResourceAddress?.(l);
     return u ?? null;
   }, a = async (l, u = t.getResourceAddress?.(l)) => {
-    const c = nt(l, u), m = await mn(c), d = ki(m);
+    const c = nt(l, u), m = await cn(c), d = Ri(m);
     return {
       sampleRate: d.sampleRate,
       samples: d.samples
     };
   }, s = async (l, u = t.getResourceAddress?.(l)) => {
     const c = nt(l, u);
-    return new Uint8Array(await mn(c));
+    return new Uint8Array(await cn(c));
   };
   return {
     async readText(l) {
       if (e === "bridge" && typeof t.readResource == "function")
-        return fn(await i(l));
+        return ln(await i(l));
       const u = o(l);
-      return e === "url" && u !== null ? Rt(await s(l, u)) : typeof t.readResource == "function" ? fn(await i(l)) : Rt(await s(l, u));
+      return e === "url" && u !== null ? Rt(await s(l, u)) : typeof t.readResource == "function" ? ln(await i(l)) : Rt(await s(l, u));
     },
     async readJSON(l) {
       return JSON.parse(await this.readText(l));
     },
     async readBytes(l) {
-      return typeof t.readResource == "function" ? Vo(await i(l)) : s(l);
+      return typeof t.readResource == "function" ? Ro(await i(l)) : s(l);
     },
     async readAudio(l) {
       if (n === "bridge" && typeof t.readResourceAsAudioData == "function")
         return r(l);
       const u = o(l);
-      return n === "url" && u !== null ? a(l, u) : typeof t.readResourceAsAudioData == "function" ? r(l) : _i(await this.readBytes(l));
+      return n === "url" && u !== null ? a(l, u) : typeof t.readResourceAsAudioData == "function" ? r(l) : xi(await this.readBytes(l));
     },
     getURL(l) {
       return nt(l, t.getResourceAddress?.(l));
     }
   };
 }
-function jo(t) {
+function Do(t) {
   const e = t ?? {}, n = !!e.prefersAudioResourceReadBridge;
-  return zo(e, {
+  return Mo(e, {
     textPreference: "bridge",
     audioPreference: n ? "bridge" : "url"
   });
 }
-function Ho(t) {
+function Oo(t) {
   const e = typeof t.readText == "function" ? t.readText.bind(t) : null, n = typeof t.readJSON == "function" ? t.readJSON.bind(t) : null, i = typeof t.readBytes == "function" ? t.readBytes.bind(t) : null, r = typeof t.readAudio == "function" ? t.readAudio.bind(t) : null, o = typeof t.getURL == "function" ? t.getURL.bind(t) : null;
   return {
     async readText(a) {
@@ -1700,18 +1486,232 @@ function Ho(t) {
       throw new Error(`Resource client cannot read bytes ${a}`);
     },
     async readAudio(a) {
-      return r ? r(a) : _i(await this.readBytes(a));
+      return r ? r(a) : xi(await this.readBytes(a));
     },
     getURL(a) {
       return o ? o(a) : null;
     }
   };
 }
-function Wo(t) {
+function ko(t) {
   return typeof t?.readText == "function" || typeof t?.readJSON == "function" || typeof t?.readBytes == "function" || typeof t?.readAudio == "function";
 }
+function _o(t) {
+  return ko(t) ? Oo(t) : Do(t);
+}
+const wo = new Set("alignas alignof and and_eq asm atomic_cancel atomic_commit atomic_noexcept auto bitand bitor bool break case catch char char8_t char16_t char32_t class compl concept const consteval constexpr constinit const_cast continue co_await co_return co_yield decltype default delete do double dynamic_cast else enum explicit export extern external false float float32 float64 for friend goto graph if import inline input int int32 int64 let long loop mutable namespace new node noexcept not not_eq nullptr operator or or_eq output parameter private processor protected public register reinterpret_cast requires return short signed sizeof static static_assert static_cast string struct switch template this thread_local throw true try typedef typeid typename union unsigned using value virtual void volatile wchar_t while xor xor_eq".split(" "));
+function Lo(t) {
+  return /^[A-Za-z][A-Za-z0-9_]*$/.test(t) && !t.includes("__") && !wo.has(t);
+}
+function h(t, e = {}) {
+  return Object.freeze({ kind: "parameter", endpoint: t, ...e });
+}
+function Mi(t) {
+  const e = Object.freeze({ ...t.codec });
+  return Object.freeze({
+    kind: "stored",
+    initial: e.parse(t.initial),
+    codec: e,
+    ...t.lifetime ? { lifetime: t.lifetime } : {},
+    ...t.history !== void 0 ? { history: t.history } : {},
+    ...t.engine ? { engine: t.engine } : {}
+  });
+}
+function un(t) {
+  const e = Mi({ codec: t.codec, initial: t.initial, lifetime: t.lifetime, history: t.history }), n = Object.freeze([...t.dependencies ?? []]);
+  if ("kind" in t.engine && t.engine.kind === "shared-data") {
+    const o = t.engine, a = t.prepare, s = t.prepare, l = o.length;
+    return Object.freeze({ ...e, engine: Object.freeze({
+      kind: "shared-prepared",
+      dependencies: n,
+      storage: Object.freeze({ type: o.type, fixedLength: l ?? null }),
+      prepare: l === void 0 ? s : (u, c) => ({
+        length: l,
+        write: (m) => a(u, m, c)
+      })
+    }) });
+  }
+  const i = t.prepare, r = t.engine;
+  return Object.freeze({ ...e, engine: Object.freeze({
+    kind: "prepared",
+    dependencies: n,
+    prepare: i,
+    delivery: r
+  }) });
+}
+const No = /* @__PURE__ */ Symbol.for("builder-kit.plugin-state.options");
+function Co(t) {
+  return Object.keys(t).filter((e) => t[e]?.kind === "stored" && t[e].engine?.kind === "shared-prepared").sort().map((e, n) => ({ key: e, input: n }));
+}
+function Po(t, e = {}) {
+  if (e.historyLimit !== void 0 && (!Number.isSafeInteger(e.historyLimit) || e.historyLimit < 0))
+    throw new Error("historyLimit must be a non-negative integer.");
+  const n = Co(t);
+  if (n.length && (!Number.isSafeInteger(e.memoryBudgetBytes) || (e.memoryBudgetBytes ?? 0) < 4))
+    throw new Error("Shared state requires an explicit positive memoryBudgetBytes.");
+  if (n.some(({ key: i }) => !Lo(i) || i === "Data"))
+    throw new Error("Shared state names must be valid Cmajor identifiers.");
+  return Object.freeze(Object.defineProperty({ ...t }, No, { value: Object.freeze({ ...e }) }));
+}
+const X = 2048, Ee = X + 3, dn = 20, Di = "MSEG 1", Fo = 0, Y = 2;
+function Ae(t) {
+  return t !== null && typeof t == "object" ? t : {};
+}
+function Ut(t, e, n) {
+  return Math.min(Math.max(t, e), n);
+}
+function me(t, e, n = 1e-12) {
+  return Math.abs(t - e) <= n;
+}
+function Ko(t) {
+  return Ut(Number.isFinite(t) ? t : 0, -dn, dn);
+}
+function ne(t) {
+  return Ut(Number.isFinite(t) ? t : 0, 0, 1);
+}
+function Oi(t = Di) {
+  return {
+    format: "mseg.shape",
+    version: 1,
+    name: t,
+    globalSmooth: !1,
+    points: [
+      { x: 0, y: 0, curvePower: 0 },
+      { x: 1, y: 1, curvePower: 0 }
+    ]
+  };
+}
+function ki() {
+  return {
+    format: "mseg.playback",
+    version: 1,
+    rate: {
+      kind: "seconds",
+      seconds: 1
+    },
+    loop: { startX: 0, endX: 1 },
+    noteOffPolicy: "finish_loop",
+    legatoRestarts: !1,
+    holdFinalValue: !0
+  };
+}
+function Uo(t) {
+  const e = Number(t);
+  return Ut(
+    Number.isFinite(e) ? e : 1,
+    Fo,
+    Y
+  );
+}
+function Bo(t) {
+  if (!t || typeof t != "object")
+    return null;
+  const e = Ae(t), n = ne(Number(e.startX)), i = ne(Number(e.endX));
+  return me(n, i) ? null : i < n ? {
+    startX: i,
+    endX: n
+  } : { startX: n, endX: i };
+}
+function Vo(t = ki()) {
+  const e = Ae(t), n = Ae(e.rate), i = Number(n.seconds), r = e.noteOffPolicy, o = r === "finish_loop" || r === "immediate" || r === "ignore" ? r : "finish_loop";
+  return {
+    format: "mseg.playback",
+    version: 1,
+    rate: {
+      kind: "seconds",
+      seconds: Uo(Number.isFinite(i) ? i : 1)
+    },
+    loop: Bo(e.loop),
+    noteOffPolicy: o,
+    legatoRestarts: !!e.legatoRestarts,
+    holdFinalValue: e.holdFinalValue !== !1
+  };
+}
+function $o(t, e, n) {
+  const i = Ae(t);
+  let r = Number(i.x);
+  return Number.isFinite(r) || (r = e === 0 ? 0 : e === n - 1 ? 1 : 0), e !== 0 && e !== n - 1 && (r = ne(r)), {
+    x: r,
+    y: ne(Number(i.y)),
+    curvePower: Ko(Number(i.curvePower))
+  };
+}
+function Ye(t = Oi()) {
+  const e = Ae(t), n = Array.isArray(e.points) ? e.points : [];
+  if (n.length < 2)
+    throw new Error("MSEG shapes require at least two points");
+  const i = n.map((r, o) => $o(r, o, n.length));
+  if (!me(i[0].x, 0) || !me(i[i.length - 1].x, 1))
+    throw new Error("MSEG shapes must start at x = 0 and end at x = 1");
+  for (let r = 1; r < i.length; r += 1)
+    if (i[r].x < i[r - 1].x)
+      throw new Error("MSEG shape points must stay in non-decreasing x order");
+  return {
+    format: "mseg.shape",
+    version: 1,
+    name: typeof e.name == "string" && e.name.trim() ? e.name : Di,
+    globalSmooth: !!e.globalSmooth,
+    points: i
+  };
+}
+function fn(t) {
+  return JSON.stringify(Ye(t));
+}
+function zo(t, e) {
+  if (Math.abs(e) < 0.01)
+    return t;
+  const n = Math.exp(e * t) - 1, i = Math.exp(e) - 1;
+  return n / i;
+}
+function jo(t, e) {
+  if (e <= t[0].x)
+    return { from: t[0], to: t[0], laterPointWins: !1 };
+  for (let n = 0; n < t.length - 1; n += 1) {
+    const i = t[n], r = t[n + 1];
+    if (e < r.x)
+      return { from: i, to: r, laterPointWins: !1 };
+    if (me(e, r.x)) {
+      let o = n + 1;
+      for (; o + 1 < t.length && me(t[o + 1].x, e); )
+        o += 1;
+      return {
+        from: t[o],
+        to: t[o],
+        laterPointWins: !0
+      };
+    }
+  }
+  return {
+    from: t[t.length - 1],
+    to: t[t.length - 1],
+    laterPointWins: !1
+  };
+}
+function Ho(t, e) {
+  const n = ne(Number(e)), i = jo(t, n);
+  if (i.laterPointWins || me(i.from.x, i.to.x))
+    return i.to.y;
+  const r = i.to.x - i.from.x, o = r <= 0 ? 1 : (n - i.from.x) / r, a = ne(zo(o, i.from.curvePower));
+  return i.from.y + (i.to.y - i.from.y) * a;
+}
+function Wo(t, e) {
+  return Ho(Ye(t).points, e);
+}
 function qo(t) {
-  return Wo(t) ? Ho(t) : jo(t);
+  const e = new Float32Array(Ee);
+  return _i(t, e), e;
+}
+function _i(t, e) {
+  if (e.length !== Ee) throw new Error("Invalid MSEG destination length.");
+  const n = Ye(t);
+  for (let i = 0; i < X; i += 1) {
+    const r = i / (X - 1);
+    e[i + 1] = Wo(n, r);
+  }
+  e[0] = e[1], e[X + 1] = e[X], e[X + 2] = e[X];
+}
+function mn(t, e) {
+  return fn(t) === fn(e);
 }
 const E = ["A", "B", "C"], Bt = [
   "wavetablePosition",
@@ -1909,16 +1909,16 @@ function Vi(t) {
   return e > Ui ? null : e * Ze + Ki(jt(t));
 }
 function la(...t) {
-  return { ...xi(...t), format: "cosimo.mseg.shape" };
+  return { ...Oi(...t), format: "cosimo.mseg.shape" };
 }
 function hn(...t) {
   return { ...Ye(...t), format: "cosimo.mseg.shape" };
 }
 function pn(...t) {
-  return { ...Mi(...t), format: "cosimo.mseg.playback" };
+  return { ...ki(...t), format: "cosimo.mseg.playback" };
 }
 function ca(...t) {
-  return { ...wo(...t), format: "cosimo.mseg.playback" };
+  return { ...Vo(...t), format: "cosimo.mseg.playback" };
 }
 const it = "modulationProgram", ua = "modulationAmount", $i = ie.filter((t) => t.group === "voice").length, zi = ie.filter((t) => t.group === "macro").length, ze = Ni, da = Ze, je = da + oa, Z = $i * ze, ae = zi * ze, fa = $i * je, ma = zi * je, Q = 512, oe = 256, ji = Z + ae;
 function ha(t) {
@@ -2823,7 +2823,7 @@ function Tn(t, e, n) {
   return {
     slot: t + 1,
     shapeIndex: e,
-    buffer: Array.from(Ko(n))
+    buffer: Array.from(qo(n))
   };
 }
 function Ps(t, e) {
@@ -2833,10 +2833,10 @@ function En(t, e = null, n) {
   const i = [];
   for (let r = 0; r < Me; r += 1) {
     const o = t.msegSlots[r], a = e?.msegSlots[r];
-    (a === void 0 || !dn(a.shapeA, o.shapeA)) && i.push(n ? n(r, 0, o.shapeA) : {
+    (a === void 0 || !mn(a.shapeA, o.shapeA)) && i.push(n ? n(r, 0, o.shapeA) : {
       endpointID: Sn,
       value: Tn(r, 0, o.shapeA)
-    }), (a === void 0 || !dn(a.shapeB, o.shapeB)) && i.push(n ? n(r, 1, o.shapeB) : {
+    }), (a === void 0 || !mn(a.shapeB, o.shapeB)) && i.push(n ? n(r, 1, o.shapeB) : {
       endpointID: Sn,
       value: Tn(r, 1, o.shapeB)
     }), (a === void 0 || !Ps(a.playback, o.playback)) && i.push({
@@ -4392,7 +4392,7 @@ function Kn(t) {
           vl + d * 2 + f,
           Sl,
           (b) => {
-            new Int32Array(b.buffer, b.byteOffset, 4).set([1297302855, y, g, Ee]), Di(p, new Float32Array(b.buffer, b.byteOffset + 16, Ee));
+            new Int32Array(b.buffer, b.byteOffset, 4).set([1297302855, y, g, Ee]), _i(p, new Float32Array(b.buffer, b.byteOffset + 16, Ee));
           },
           v
         );
@@ -4573,17 +4573,17 @@ const Pl = {
   polishCompressionClipBypass: h("polishCompressionClipBypass"),
   polishOutputTrimBypass: h("polishOutputTrimBypass")
 });
-Mo({
+Po({
   ...Fl,
-  [le]: ln({ initial: We(), codec: Fs, prepare: (t) => t, engine: wl }),
-  [li]: ln({
+  [le]: un({ initial: We(), codec: Fs, prepare: (t) => t, engine: wl }),
+  [li]: un({
     initial: vi(),
     codec: Ll,
     dependencies: Zn(),
     prepare: (t, { parameters: e }) => ho(t, e),
     engine: Pl
   }),
-  [P]: Ai({ initial: Yt(), codec: Nl })
+  [P]: Mi({ initial: Yt(), codec: Nl })
 });
 const Ke = 2048;
 function ye(t, e) {
@@ -4898,7 +4898,7 @@ class Sc {
   tableCacheBytes = 0;
   cacheUseSerial = 1;
   constructor(e, n = {}) {
-    this.connection = e, this.delivery = n.delivery ?? "events", this.resourceClient = qo(n.resourceClient ?? e), this.catalogPath = n.catalogPath ?? rc, this.maxBatchesInFlight = Wn(
+    this.connection = e, this.delivery = n.delivery ?? "events", this.resourceClient = _o(n.resourceClient ?? e), this.catalogPath = n.catalogPath ?? rc, this.maxBatchesInFlight = Wn(
       n.maxFramesInFlight,
       oc
     ), this.mipLevelCount = n.mipLevelCount ?? Qe, this.cacheBudgetBytes = Math.max(0, Math.round(Number(n.cacheBudgetBytes ?? mc) || 0)), this.serviceLoadTimeoutMs = Wn(n.serviceLoadTimeoutMs, fc), this.setTimeoutFn = typeof n.setTimeoutFn == "function" ? n.setTimeoutFn : globalThis.setTimeout?.bind(globalThis) ?? null, this.clearTimeoutFn = typeof n.clearTimeoutFn == "function" ? n.clearTimeoutFn : globalThis.clearTimeout?.bind(globalThis) ?? null, this.handleRuntimeState = this.handleRuntimeState.bind(this), this.handleUploadAck = this.handleUploadAck.bind(this), this.handleMipRequest = this.handleMipRequest.bind(this), this.handlePrewarmRequest = this.handlePrewarmRequest.bind(this);

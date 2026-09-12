@@ -5,7 +5,7 @@ import { setImmediate } from "node:timers/promises";
 import { loadUIModule } from "./helpers/load_ui_module.mjs";
 
 const root = path.resolve(import.meta.dirname, "../..");
-const { definePluginState, parameter, storedValue, eventValue } = await loadUIModule(root, "kit/ui/plugin-state-definition.ts");
+const { definePluginState, parameter, storedValue, preparedState, eventValue } = await loadUIModule(root, "kit/ui/plugin-state-definition.ts");
 const { createCmajorPluginStateService } = await loadUIModule(root, "kit/ui/plugin-state-cmajor.ts");
 
 const samplesCodec = {
@@ -46,45 +46,29 @@ function replyPublished(connection, publication) {
 }
 
 test("custom binding receives hydrated inputs, submits synchronously, and reports only native sent evidence alongside eventValue", { timeout: 5000 }, async () => {
+    const connection = new RawConnection();
+    const defects = [], inputs = [], submissions = [], outcomes = [], work = [];
+    let stopped = 0;
     const definition = definePluginState({
         gain: parameter("hostGain"),
-        curve: storedValue({ initial: [0, 1], codec: samplesCodec }),
+        curve: preparedState({ initial: [0, 1], codec: samplesCodec, dependencies: ["gain"],
+            prepare(value, context) { inputs.push({ value, parameters: context.parameters }); return value.map(sample => sample * context.parameters.gain); },
+            engine: { eventEndpoints: ["curveEvent"], create() { return {
+                async apply(samples, context) {
+                    const count = connection.messages("publish").length;
+                    const submission = context.send({ kind: "event", endpoint: "curveEvent", value: { samples: new Float32Array(samples) } });
+                    submissions.push({ submission, countBefore: count, countAfter: connection.messages("publish").length });
+                    if (submission.kind !== "submitted") return submission;
+                    const completion = submission.completion.then(outcome => { outcomes.push(outcome); return outcome; });
+                    work.push(completion); return completion;
+                }, stop() { stopped++; },
+            }; } },
+        }),
         preview: storedValue({ initial: [0, 1], codec: samplesCodec,
-            engine: eventValue("previewEvent", (value, context) => ({ samples: new Float32Array(value.map(sample => sample * context.parameters.gain)) }),
-                { dependencies: ["gain"] }),
+            engine: eventValue("previewEvent", (value, context) => ({ samples: new Float32Array(value.map(sample => sample * context.parameters.gain)) }), { dependencies: ["gain"] }),
         }),
     });
-    const connection = new RawConnection();
-    const defects = [];
-    const inputs = [];
-    const submissions = [];
-    const outcomes = [];
-    const work = [];
-    let stopped = 0;
-    const service = createCmajorPluginStateService(definition, connection, {
-        onDefect: error => defects.push(error),
-        bindings: [{
-            key: "curve", dependencies: ["gain"], eventEndpoints: ["curveEvent"],
-            create(context) {
-                return {
-                    replace(input, target) {
-                        inputs.push({ input, target });
-                        const count = connection.messages("publish").length;
-                        const submission = context.publish(target.scope, { kind: "event", endpoint: "curveEvent",
-                            value: { samples: new Float32Array(input.value.map(sample => sample * input.parameters.gain)) },
-                        });
-                        submissions.push({ submission, countBefore: count, countAfter: connection.messages("publish").length });
-                        if (submission.kind === "submitted") work.push(submission.completion.then(outcome => {
-                            outcomes.push(outcome);
-                            if (outcome.kind !== "cancelled") context.onStatus(target, outcome);
-                        }));
-                    },
-                    cancel() {},
-                    async stop() { stopped++; await Promise.all(work); },
-                };
-            },
-        }],
-    });
+    const service = createCmajorPluginStateService(definition, connection, { onDefect: error => defects.push(error) });
     try {
         const starting = service.start();
         const open = connection.messages("open")[0];
@@ -95,8 +79,7 @@ test("custom binding receives hydrated inputs, submits synchronously, and report
         await starting;
         await setImmediate();
         assert.equal(inputs.length, 1, "custom binding must receive the actual hydrated bank rather than being ignored");
-        assert.deepEqual(inputs[0], { input: { value: [0.2, 0.8], parameters: { gain: 2.5 } },
-            target: { scope, key: "curve", generation: 0 } });
+        assert.deepEqual(inputs[0], { value: [0.2, 0.8], parameters: { gain: 2.5 } });
         assert.deepEqual([...open.eventEndpoints].sort(), ["curveEvent", "previewEvent"]);
         assert.deepEqual(open.storedKeys, ["curve", "preview"]);
         assert.equal(submissions[0].submission.kind, "submitted");
@@ -130,18 +113,8 @@ test("custom binding receives hydrated inputs, submits synchronously, and report
     assert.equal(connection.listeners.size, 0);
 });
 
-test("custom descriptors are all validated before any factory is constructed or native channel opened", async t => {
-    const definition = definePluginState({
-        gain: parameter("hostGain"),
-        first: storedValue({ initial: [0, 1], codec: samplesCodec }),
-        curve: storedValue({ initial: [0, 1], codec: samplesCodec }),
-        preview: storedValue({ initial: [0, 1], codec: samplesCodec, engine: eventValue("previewEvent", value => value) }),
-    });
+test("custom declarations are all validated before any factory is constructed or native channel opened", async t => {
     const invalid = [
-        ["unknown field", { key: "absent" }],
-        ["scalar field", { key: "gain" }],
-        ["duplicate custom field", { key: "first" }],
-        ["eventValue collision", { key: "preview" }],
         ["stored dependency", { dependencies: ["first"] }],
         ["unknown dependency", { dependencies: ["absent"] }],
         ["empty event name", { eventEndpoints: [""] }],
@@ -149,54 +122,39 @@ test("custom descriptors are all validated before any factory is constructed or 
         ["non-array event names", { eventEndpoints: "curveEvent" }],
         ["empty host effect name", { hostEffects: [""] }],
         ["non-array dependencies", { dependencies: "gain" }],
+        ["invalid factory", { create: null }],
+        ["invalid replacement", { replacement: "sometimes" }],
     ];
     for (const [name, override] of invalid) await t.test(name, async () => {
-        const connection = new RawConnection();
-        const constructed = [];
-        const defects = [];
-        const descriptor = key => ({ key, eventEndpoints: ["sharedEvent"], create() {
-            constructed.push(key);
-            return { replace() {}, cancel() {}, async stop() {} };
-        } });
-        const service = createCmajorPluginStateService(definition, connection, {
-            onDefect: error => defects.push(error),
-            bindings: [descriptor("first"), { ...descriptor("curve"), ...override }],
-        });
-        const starting = service.start();
-        // Attach a rejection observer immediately, including the failing
-        // implementation's cleanup path, so this test cannot leak a rejection.
-        const started = starting.then(() => ({ kind: "ready" }), error => ({ kind: "failed", error }));
+        const connection = new RawConnection(), constructed = [], defects = [];
+        const engine = { eventEndpoints: ["sharedEvent"], create() { constructed.push("created"); return { async apply() { return {kind:"unconfirmed"}; }, stop() {} }; } };
+        const field = preparedState({initial:[0,1],codec:samplesCodec,prepare:value=>value,engine});
+        // Malformed declarations model JavaScript consumers too; do not let an invalid later field open the first one.
+        const definition = definePluginState({gain:parameter("hostGain"),first:field,curve:{...field,engine:{...field.engine,
+            ...(override.dependencies === undefined ? {} : {dependencies:override.dependencies}), delivery:{...engine,...override}}}});
+        const service = createCmajorPluginStateService(definition,connection,{onDefect:error=>defects.push(error)});
+        const started = service.start().then(()=>({kind:"ready"}),error=>({kind:"failed",error}));
         try {
-            assert.deepEqual(constructed, [], `${name}: validate the complete descriptor list before constructing an earlier valid factory`);
+            assert.deepEqual(constructed, [], `${name}: validate every declaration before constructing a factory`);
             assert.deepEqual(connection.sent, [], `${name}: invalid configuration must not open or publish`);
-            const result = await started;
-            assert.equal(result.kind, "failed");
-            assert.ok(result.error instanceof Error);
-            assert.equal(connection.listeners.size, 0);
-        } finally {
-            await service.stop();
-            await started;
-        }
+            const result = await started; assert.equal(result.kind,"failed"); assert.ok(result.error instanceof Error);
+            assert.equal(connection.listeners.size,0);
+        } finally {await service.stop();await started;}
     });
 });
 
 async function openPublisher(currentScope = scope, hostEffects = []) {
-    const connection = new RawConnection();
-    const defects = [];
-    const replacements = [];
+    const connection = new RawConnection(), defects = [], replacements = [];
     let context;
-    const service = createCmajorPluginStateService(definePluginState({ curve: storedValue({ initial: [0, 1], codec: samplesCodec }) }), connection, {
-        onDefect: error => defects.push(error),
-        bindings: [{ key: "curve", eventEndpoints: ["curveEvent"], hostEffects, create(value) {
-            context = value;
-            return { replace(input, target) { replacements.push({ input, target }); }, cancel() {}, async stop() {} };
-        } }],
-    });
-    const starting = service.start();
-    connection.deliver({ kind: "opened", request: connection.messages("open")[0].request,
-        scope: currentScope, native: { parameters: [], values: { curve: [0.2, 0.8] } } });
-    await starting;
-    return { service, connection, context, defects, replacements };
+    const definition = definePluginState({curve:preparedState({initial:[0,1],codec:samplesCodec,
+        prepare(value, captured) { replacements.push({value,parameters:captured.parameters});return value; },
+        engine:{eventEndpoints:["curveEvent"],hostEffects,create(document){context=document;return {async apply(){return {kind:"unconfirmed"};},stop(){}};}},
+    })});
+    const service = createCmajorPluginStateService(definition,connection,{onDefect:error=>defects.push(error)});
+    const starting=service.start();
+    connection.deliver({kind:"opened",request:connection.messages("open")[0].request,scope:currentScope,native:{parameters:[],values:{curve:[0.2,0.8]}}});
+    await starting; await setImmediate();
+    return {service,connection,get context(){return context;},defects,replacements};
 }
 
 test("rejected old-document and wrong-owner replacements cannot cancel a current custom publication", async t => {
@@ -205,7 +163,7 @@ test("rejected old-document and wrong-owner replacements cannot cancel a current
         const fixture = await openPublisher(current);
         const { service, connection, context, defects } = fixture;
         try {
-            const submission = context.publish(current, { kind: "event", endpoint: "curveEvent", value: [0.2, 0.8] });
+            const submission = context.send({ kind: "event", endpoint: "curveEvent", value: [0.2, 0.8] });
             assert.equal(submission.kind, "submitted");
             const publication = connection.messages("publish").at(-1);
             let outcome;
@@ -232,21 +190,19 @@ test("custom class-instance lifecycle methods retain their receiver through hydr
     const received = [];
     class Port {
         stopped = 0;
-        replace(input, target) { received.push({ receiver: this, input, target }); }
-        cancel() {}
+        async apply(value) { received.push({ receiver: this, input: {value} }); return {kind:"unconfirmed"}; }
         async stop() { this.stopped++; }
     }
     const port = new Port();
-    const service = createCmajorPluginStateService(definePluginState({ curve: storedValue({ initial: [0, 1], codec: samplesCodec }) }), connection, {
-        onDefect: error => defects.push(error),
-        bindings: [{ key: "curve", eventEndpoints: ["curveEvent"], create() { return port; } }],
-    });
+    const service = createCmajorPluginStateService(definePluginState({ curve: preparedState({ initial: [0, 1], codec: samplesCodec,
+        prepare:value=>value,engine:{eventEndpoints:["curveEvent"],create(){return port;}} }) }), connection, {onDefect:error=>defects.push(error)});
     try {
         const starting = service.start();
         const started = starting.then(() => "ready", error => error);
         connection.deliver({ kind: "opened", request: connection.messages("open")[0].request,
             scope, native: { parameters: [], values: { curve: [0.3, 0.7] } } });
         assert.equal(await started === "ready", true, "a class-instance port must hydrate successfully");
+        await setImmediate();
         assert.equal(received.length, 1);
         assert.strictEqual(received[0].receiver, port);
         assert.deepEqual(received[0].input.value, [0.3, 0.7]);
@@ -261,19 +217,20 @@ test("a factory that reports a synchronous defect before returning cannot reopen
     const problem = new Error("custom construction encountered an unexpected defect");
     const defects = [];
     let stopped = 0;
-    const service = createCmajorPluginStateService(definePluginState({ curve: storedValue({ initial: [0, 1], codec: samplesCodec }) }), connection, {
-        onDefect: error => defects.push(error),
-        bindings: [{ key: "curve", eventEndpoints: ["curveEvent"], create(context) {
-            context.onDefect(problem);
-            return { replace() {}, cancel() {}, async stop() { stopped++; } };
-        } }],
-    });
+    const service = createCmajorPluginStateService(definePluginState({curve:preparedState({initial:[0,1],codec:samplesCodec,prepare:value=>value,
+        engine:{eventEndpoints:["curveEvent"],create(context){
+            context.fail(problem);return {async apply(){return {kind:"unconfirmed"};},async stop(){stopped++;}};
+        }},
+    })}),connection,{onDefect:error=>defects.push(error)});
     const started = service.start().then(() => ({ kind: "ready" }), error => ({ kind: "failed", error }));
+    const opened = connection.messages("open")[0];
+    connection.deliver({kind:"opened",request:opened.request,scope,native:{parameters:[],values:{curve:[0.2,0.8]}}});
     try {
         const result = await started;
         assert.equal(result.kind, "failed");
         await service.stop();
-        assert.deepEqual(connection.messages("open"), [], "a synchronously closed owner must not continue native startup");
+        assert.equal(connection.messages("open").length,1,"document factory failure must not reopen the already requested owner");
+        assert.equal(connection.messages("close").length,1);
         assert.equal(stopped, 1, "the port returned after closure still belongs to the failed construction");
         assert.equal(connection.listeners.size, 0);
         assert.deepEqual(defects, [problem]);
@@ -281,10 +238,10 @@ test("a factory that reports a synchronous defect before returning cannot reopen
 });
 
 test("custom publication captures its scope before the caller reuses a mutable scope object", async () => {
-    const { service, connection, context } = await openPublisher();
+    const callerScope = { ...scope };
+    const { service, connection, context } = await openPublisher(callerScope);
     try {
-        const callerScope = { ...scope };
-        const submission = context.publish(callerScope, { kind: "event", endpoint: "curveEvent", value: [0.2, 0.8] });
+        const submission = context.send({ kind: "event", endpoint: "curveEvent", value: [0.2, 0.8] });
         assert.equal(submission.kind, "submitted");
         const publication = connection.messages("publish").at(-1);
         assert.deepEqual(publication.scope, scope);
@@ -303,19 +260,19 @@ test("custom pending publications settle on accepted reset and stop while late r
     const fixture = await openPublisher();
     const { service, connection, context, defects } = fixture;
     try {
-        const old = context.publish(scope, { kind: "event", endpoint: "curveEvent", value: [0.2, 0.8] });
+        const old = context.send({ kind: "event", endpoint: "curveEvent", value: [0.2, 0.8] });
         assert.equal(old.kind, "submitted");
         const oldPublication = connection.messages("publish").at(-1);
         const current = { ...scope, document: 1 };
         connection.deliver({ kind: "replaced", scope: current, native: { parameters: [], values: { curve: [0.6, 0.4] } } });
         assert.deepEqual(await old.completion, { kind: "cancelled" });
         await setImmediate();
-        assert.deepEqual(fixture.replacements.at(-1).target.scope, current);
-        assert.deepEqual(fixture.replacements.at(-1).input.value, [0.6, 0.4]);
+        assert.deepEqual(connection.messages("update").at(-1).scope, current);
+        assert.deepEqual(fixture.replacements.at(-1).value, [0.6, 0.4]);
         const beforeStale = connection.sent.length;
-        assert.deepEqual(context.publish(scope, { kind: "event", endpoint: "curveEvent", value: [9, 9] }), { kind: "cancelled" });
+        assert.deepEqual(context.send({ kind: "event", endpoint: "curveEvent", value: [9, 9] }), { kind: "cancelled" });
         assert.equal(connection.sent.length, beforeStale);
-        const next = context.publish(current, { kind: "event", endpoint: "curveEvent", value: [0.6, 0.4] });
+        const next = fixture.context.send({ kind: "event", endpoint: "curveEvent", value: [0.6, 0.4] });
         assert.equal(next.kind, "submitted");
         const nextPublication = connection.messages("publish").at(-1);
         let nextOutcome;
@@ -326,13 +283,13 @@ test("custom pending publications settle on accepted reset and stop while late r
         replyPublished(connection, nextPublication);
         await completed;
         assert.deepEqual(nextOutcome, { kind: "sent", proof: "native-publication-processed" });
-        const pending = context.publish(current, { kind: "event", endpoint: "curveEvent", value: [0.7, 0.3] });
+        const pending = fixture.context.send({ kind: "event", endpoint: "curveEvent", value: [0.7, 0.3] });
         assert.equal(pending.kind, "submitted");
         const late = connection.messages("publish").at(-1);
         await service.stop();
         assert.deepEqual(await pending.completion, { kind: "cancelled" });
         const afterStop = connection.sent.length;
-        assert.deepEqual(context.publish(current, { kind: "event", endpoint: "curveEvent", value: [8, 8] }), { kind: "cancelled" });
+        assert.deepEqual(context.send({ kind: "event", endpoint: "curveEvent", value: [8, 8] }), { kind: "cancelled" });
         replyPublished(connection, late);
         await setImmediate();
         assert.equal(connection.sent.length, afterStop);
@@ -358,12 +315,12 @@ test("custom effects validate before sending and declared host receipts distingu
         const before = connection.sent.length;
         for (const effect of invalid) {
             let result;
-            assert.doesNotThrow(() => { result = context.publish(scope, effect); });
+            assert.doesNotThrow(() => { result = context.send(effect); });
             assert.equal(result.kind, "failed", `invalid ${effect.kind} must fail before handoff`);
             assert.equal(result.error.kind, "engine-rejected");
             assert.equal(connection.sent.length, before);
         }
-        const unsupported = context.publish(scope, { kind: "host-effect", name: "hostControl", value: { selector: 3 } });
+        const unsupported = context.send({ kind: "host-effect", name: "hostControl", value: { selector: 3 } });
         assert.equal(unsupported.kind, "submitted");
         const first = connection.messages("publish").at(-1);
         assert.equal(first.request, connection.messages("open")[0].request + 1, "invalid effects allocate no publication request IDs");
@@ -372,7 +329,7 @@ test("custom effects validate before sending and declared host receipts distingu
         assert.deepEqual(await unsupported.completion, { kind: "failed", error: { kind: "resource", message: "unsupported-host-effect" } });
         assert.equal(connection.listeners.size, 1, "missing host capability must not close the accepted-state owner");
         assert.deepEqual(connection.messages("close"), []);
-        const supported = context.publish(scope, { kind: "host-effect", name: "hostControl", value: { selector: 4 } });
+        const supported = context.send({ kind: "host-effect", name: "hostControl", value: { selector: 4 } });
         assert.equal(supported.kind, "submitted");
         const second = connection.messages("publish").at(-1);
         assert.equal(second.request, first.request + 1, "invalid effects allocate no publication request IDs");
@@ -386,7 +343,7 @@ test("native stale-scope or closed refusal cancels a custom request before its r
     for (const reason of ["stale-scope", "closed"]) await t.test(reason, async () => {
         const { service, connection, context, defects } = await openPublisher();
         try {
-            const submission = context.publish(scope, { kind: "event", endpoint: "curveEvent", value: [0.2, 0.8] });
+            const submission = context.send({ kind: "event", endpoint: "curveEvent", value: [0.2, 0.8] });
             assert.equal(submission.kind, "submitted");
             const publication = connection.messages("publish").at(-1);
             connection.deliver({ kind: "published", request: publication.request, scope, result: { kind: "failed", reason } });
@@ -409,22 +366,18 @@ test("a later factory throw rejects startup and awaits cleanup of the already co
     let release;
     const cleanup = new Promise(resolve => { release = resolve; });
     const definition = definePluginState({
-        curve: storedValue({ initial: [0, 1], codec: samplesCodec }),
-        other: storedValue({ initial: [0, 1], codec: samplesCodec }),
+        curve:preparedState({initial:[0,1],codec:samplesCodec,prepare:value=>value,engine:{eventEndpoints:["sharedEvent"],create(){
+            return {async apply(){return {kind:"unconfirmed"};},async stop(){stopped++;await cleanup;}};
+        }}}),
+        other:preparedState({initial:[0,1],codec:samplesCodec,prepare:value=>value,engine:{eventEndpoints:["sharedEvent"],create(){throw problem;}}}),
     });
-    const service = createCmajorPluginStateService(definition, connection, {
-        onDefect: error => defects.push(error),
-        bindings: [
-            { key: "curve", eventEndpoints: ["sharedEvent"], create() {
-                return { replace() {}, cancel() {}, async stop() { stopped++; await cleanup; } };
-            } },
-            { key: "other", eventEndpoints: ["sharedEvent"], create() { throw problem; } },
-        ],
-    });
+    const service=createCmajorPluginStateService(definition,connection,{onDefect:error=>defects.push(error)});
     try {
-        const failed = await service.start().then(() => undefined, error => error);
-        assert.strictEqual(failed, problem);
-        assert.deepEqual(connection.sent, []);
+        const starting=service.start().then(()=>undefined,error=>error);
+        const open=connection.messages("open")[0];
+        connection.deliver({kind:"opened",request:open.request,scope,native:{parameters:[],values:{curve:[0.2,0.8],other:[0.3,0.7]}}});
+        assert.ok(await starting instanceof Error);
+        assert.deepEqual(connection.messages("publish"),[],"a failed document construction must not publish an engine update");
         assert.equal(stopped, 1, "the returned first port must actually enter cleanup");
         let finished = false;
         const stopping = service.stop().then(() => { finished = true; });
@@ -443,17 +396,11 @@ test("two custom bindings may share native endpoint declarations without losing 
     const contexts = new Map();
     const replacements = [];
     const defects = [];
-    const definition = definePluginState({
-        curve: storedValue({ initial: [0, 1], codec: samplesCodec }),
-        other: storedValue({ initial: [0, 1], codec: samplesCodec }),
-    });
-    const service = createCmajorPluginStateService(definition, connection, {
-        onDefect: error => defects.push(error),
-        bindings: ["curve", "other"].map(key => ({ key, eventEndpoints: ["sharedEvent"], hostEffects: ["sharedHost"], create(context) {
-            contexts.set(key, context);
-            return { replace(input, target) { replacements.push({ key, input, target }); }, cancel() {}, async stop() {} };
-        } })),
-    });
+    const definition = definePluginState(Object.fromEntries(["curve","other"].map(key=>[key,preparedState({
+        initial:[0,1],codec:samplesCodec,prepare(value){replacements.push({key,input:{value}});return value;},
+        engine:{eventEndpoints:["sharedEvent"],hostEffects:["sharedHost"],create(context){contexts.set(key,context);return {async apply(){return {kind:"unconfirmed"};},stop(){}};}},
+    })])));
+    const service=createCmajorPluginStateService(definition,connection,{onDefect:error=>defects.push(error)});
     try {
         const starting = service.start();
         const open = connection.messages("open")[0];
@@ -464,8 +411,8 @@ test("two custom bindings may share native endpoint declarations without losing 
         } });
         await starting;
         assert.deepEqual(replacements.map(item => [item.key, item.input.value]), [["curve", [0.2, 0.8]], ["other", [0.3, 0.7]]]);
-        const left = contexts.get("curve").publish(scope, { kind: "event", endpoint: "sharedEvent", value: [0.2, 0.8] });
-        const right = contexts.get("other").publish(scope, { kind: "event", endpoint: "sharedEvent", value: [0.3, 0.7] });
+        const left = contexts.get("curve").send({ kind: "event", endpoint: "sharedEvent", value: [0.2, 0.8] });
+        const right = contexts.get("other").send({ kind: "event", endpoint: "sharedEvent", value: [0.3, 0.7] });
         assert.equal(left.kind, "submitted");
         assert.equal(right.kind, "submitted");
         const [first, second] = connection.messages("publish");

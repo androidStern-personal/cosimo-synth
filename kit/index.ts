@@ -27,12 +27,12 @@ export * from "./ui/patch-worker-services";
 // the framework-generated state service.
 export { definePluginState, parameter, storedValue, eventValue, preparedState, preparationFailure } from "./ui/plugin-state-definition";
 export type { PluginStateCodec, PluginStatePrepareContext, PluginStateDelivery, PluginStateDeliveryContext, PluginStateDocumentContext,
-    PluginStateEffect, PluginStateSubmission, PluginStateDeliveryOutcome, PluginStatePreparationFailure, PluginStateOptions } from "./ui/plugin-state-definition";
+    PluginStateEffect, PluginStateSubmission, PluginStateDeliveryOutcome, PluginStatePreparationFailure, PluginStateSharedPlan, PluginStateOptions } from "./ui/plugin-state-definition";
 export * as Mseg from "./ui/mseg-module";
 export { nativeValue } from "./ui/native-value";
 export * as Native from "./ui/native-value-codecs";
 export { UndoHistory } from "./ui/undo-history";
-export type { PluginStateControlState, PluginStateControl, PluginStateHistory, PluginStateHistoryEntry,
+export type { PluginStateControlState, PluginStateControl, PluginStateChanges, PluginStateEditor, PluginStateHistory, PluginStateHistoryEntry,
     PluginStateEditResult, PluginStateRejectionReason, PluginStateApplicationState, PluginStateControlError } from "./ui/plugin-state-react";
 export { usePluginState, usePluginHistory } from "./ui/plugin-state-react";
 export { createStatefulPatchView } from "./ui/plugin-state-view";

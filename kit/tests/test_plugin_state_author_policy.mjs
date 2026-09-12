@@ -92,6 +92,27 @@ test('a failed save retry preserves value version/history and cannot retry again
     } finally {await f.close();}
 });
 
+test('a preparation defect cannot be retried through the command channel and leaves other fields usable',async()=>{
+    const replacements=[];
+    const f=await open(definePluginState({broken:field(),other:field()}),{bindings:[{
+        key:'broken',dependencies:[],replace(input,target){replacements.push({input,target});},cancel(){},stop(){},
+    }]});
+    try {
+        const target=replacements.at(-1).target;
+        await f.owner.dispatch({kind:'engine',target,status:{kind:'failed',error:{kind:'defect',message:'Decoder malfunctioned'}}});
+        const before=f.owner.getSnapshot(),count=replacements.length;
+        const retry=await f.command({kind:'retry',key:'broken',expectedVersion:before.fields.broken.version,
+            expectedGeneration:target.generation,expectedPersistenceRequest:null});
+        assert.deepEqual(retry,{kind:'rejected',reason:'not-ready'});
+        assert.equal(replacements.length,count,'retry must not invoke the faulty preparation again');
+        assert.deepEqual(f.owner.getSnapshot(),before,'rejected retry changes neither accepted values nor history');
+        assert.equal((await f.command({kind:'edit',key:'other',value:7})).kind,'accepted');
+        assert.equal(f.owner.getSnapshot().fields.other.value,7);
+        assert.equal((await f.command({kind:'undo'})).kind,'accepted');
+        assert.equal(f.owner.getSnapshot().fields.other.value,0);
+    } finally {await f.close();}
+});
+
 test('own queued gesture versions remain valid until actual host automation advances their floor',async()=>{
     const definition=definePluginState({gain:parameter('gain')});
     const publications=[],scope={owner:'automation-guard',document:0};

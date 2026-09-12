@@ -494,7 +494,8 @@ export function createPluginStateSession<const Fields extends PluginStateFields>
                     if (!stopped) ports.native.publish({ request, scope: model.snapshot.scope, operations });
                     return result;
                 }
-                if (current.application?.kind !== "failed" || !ports.bindings?.some(binding => binding.key === key))
+                if (current.application?.kind !== "failed" || current.application.error.kind === "defect"
+                    || !ports.bindings?.some(binding => binding.key === key))
                     return { kind: "rejected", reason: "not-ready" };
                 const next = publishSnapshot(model, model.snapshot.fields);
                 const result: PluginStateResult = { kind: "accepted", revision: next.snapshot.revision, version: current.version, changed: false };

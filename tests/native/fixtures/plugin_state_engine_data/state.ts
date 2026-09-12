@@ -1,3 +1,4 @@
+import { wordCapacity, chunkCapacity } from "./fixture-config";
 import { definePluginState, preparedState, engineData, type PluginStateCodec } from "../../kit/index";
 
 type Shape = { readonly base: number; readonly step: number };
@@ -17,9 +18,9 @@ const codec: PluginStateCodec<Shape> = {
 // Author code supplies layout and editable state. The generated worker owns
 // transfer; the compiled Cmajor fixture below owns storage and DSP reads.
 export default definePluginState({ shape: preparedState({
-    schema, initial: { base: 100, step: 1 },
-    prepare: shape => Int32Array.from({ length: 257 }, (_, index) => shape.base + index * shape.step),
-    engine: engineData({ wordCapacity: 257, chunkCapacity: 32,
+    codec, initial: { base: 100, step: 1 },
+    prepare: shape => Int32Array.from({ length: wordCapacity }, (_, index) => shape.base + index * shape.step),
+    engine: engineData({ wordCapacity, chunkCapacity,
         endpoints: { begin: "begin", chunk: "chunk", commit: "commit", query: "query", receipt: "receipt" },
     }),
 }) });

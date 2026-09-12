@@ -11,6 +11,7 @@
 #include <vector>
 
 #include "cmajor/helpers/cmaj_Patch.h"
+#include "NativeMessageLoop.h"
 #include "cmajor/helpers/cmaj_PatchWorker_QuickJS.h"
 #include "choc/gui/choc_MessageLoop.h"
 
@@ -108,12 +109,7 @@ struct Fixture
 {
     template <typename Fn> auto onLoop (Fn run)
     {
-        using Result = std::invoke_result_t<Fn>;
-        auto task = std::make_shared<std::packaged_task<Result()>> (std::move (run));
-        auto result = task->get_future();
-        choc::messageloop::postMessage ([task] { (*task)(); });
-        require (result.wait_for (deadline) == std::future_status::ready, "native message-loop operation timed out");
-        return result.get();
+        return native_test::onMessageLoop (std::move (run), deadline, "native message-loop operation timed out");
     }
 
     void waitFor (std::function<bool()> condition, const char* failure)

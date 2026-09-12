@@ -3863,60 +3863,6 @@ function ml(t) {
     buildRuntimeEvents: ({ state: e }) => [...rn(e)]
   });
 }
-const hl = new Set("alignas alignof and and_eq asm atomic_cancel atomic_commit atomic_noexcept auto bitand bitor bool break case catch char char8_t char16_t char32_t class compl concept const consteval constexpr constinit const_cast continue co_await co_return co_yield decltype default delete do double dynamic_cast else enum explicit export extern external false float float32 float64 for friend goto graph if import inline input int int32 int64 let long loop mutable namespace new node noexcept not not_eq nullptr operator or or_eq output parameter private processor protected public register reinterpret_cast requires return short signed sizeof static static_assert static_cast string struct switch template this thread_local throw true try typedef typeid typename union unsigned using value virtual void volatile wchar_t while xor xor_eq".split(" "));
-function pl(t) {
-  return /^[A-Za-z][A-Za-z0-9_]*$/.test(t) && !t.includes("__") && !hl.has(t);
-}
-function p(t, e = {}) {
-  return Object.freeze({ kind: "parameter", endpoint: t, ...e });
-}
-function gr(t) {
-  const e = Object.freeze({ ...t.codec });
-  return Object.freeze({
-    kind: "stored",
-    initial: e.parse(t.initial),
-    codec: e,
-    ...t.lifetime ? { lifetime: t.lifetime } : {},
-    ...t.history !== void 0 ? { history: t.history } : {},
-    ...t.engine ? { engine: t.engine } : {}
-  });
-}
-function Bn(t) {
-  const e = gr({ codec: t.codec, initial: t.initial, lifetime: t.lifetime, history: t.history }), n = Object.freeze([...t.dependencies ?? []]);
-  if ("kind" in t.engine && t.engine.kind === "shared-data") {
-    const o = t.prepare, a = t.engine;
-    return Object.freeze({ ...e, engine: Object.freeze({
-      kind: "shared-prepared",
-      dependencies: n,
-      storage: Object.freeze({ type: a.type, fixedLength: typeof a.length == "number" ? a.length : null }),
-      measure(s, l) {
-        return typeof a.length == "number" ? a.length : a.length(s, l);
-      },
-      prepare: o
-    }) });
-  }
-  const i = t.prepare, r = t.engine;
-  return Object.freeze({ ...e, engine: Object.freeze({
-    kind: "prepared",
-    dependencies: n,
-    prepare: i,
-    delivery: r
-  }) });
-}
-const gl = /* @__PURE__ */ Symbol.for("builder-kit.plugin-state.options");
-function Il(t) {
-  return Object.keys(t).filter((e) => t[e]?.kind === "stored" && t[e].engine?.kind === "shared-prepared").sort().map((e, n) => ({ key: e, input: n }));
-}
-function yl(t, e = {}) {
-  if (e.historyLimit !== void 0 && (!Number.isSafeInteger(e.historyLimit) || e.historyLimit < 0))
-    throw new Error("historyLimit must be a non-negative integer.");
-  const n = Il(t);
-  if (n.length && (!Number.isSafeInteger(e.memoryBudgetBytes) || (e.memoryBudgetBytes ?? 0) < 4))
-    throw new Error("Shared state requires an explicit positive memoryBudgetBytes.");
-  if (n.some(({ key: i }) => !pl(i) || i === "Data"))
-    throw new Error("Shared state names must be valid Cmajor identifiers.");
-  return Object.freeze(Object.defineProperty({ ...t }, gl, { value: Object.freeze({ ...e }) }));
-}
 function U(t, e) {
   if (!t)
     throw new Error(e);
@@ -3927,13 +3873,13 @@ function It(t, e, n) {
     i += String.fromCharCode(t.getUint8(e + r));
   return i;
 }
-function Sl(t) {
+function hl(t) {
   return /^[a-zA-Z][a-zA-Z\d+.-]*:/.test(t);
 }
 function Dt(t) {
   return typeof TextEncoder == "function" ? new TextEncoder().encode(t) : Uint8Array.from(t, (e) => e.charCodeAt(0));
 }
-function Ir(t) {
+function gr(t) {
   if (t === null)
     return "null";
   if (t === void 0)
@@ -3944,7 +3890,7 @@ function Ir(t) {
   const i = Object.keys(t).slice(0, 6), r = i.length > 0 ? ` keys=${i.join(",")}` : "";
   return n ? `${e}:${n}${r}` : `${e}${r}`;
 }
-function vl() {
+function pl() {
   const t = globalThis.location?.href;
   if (typeof t == "string" && t.length > 0)
     return new URL("/", t);
@@ -3952,18 +3898,18 @@ function vl() {
   return n.includes("/patch_gui/desktop/") ? (e.pathname = n.replace(/\/patch_gui\/desktop\/[^/]+$/, "/"), e) : n.includes("/patch_gui/") ? (e.pathname = n.replace(/\/patch_gui\/[^/]+$/, "/"), e) : n.includes("/ui/shared/") ? (e.pathname = n.replace(/\/ui\/shared\/[^/]+$/, "/"), e) : (e.pathname = n.replace(/\/[^/]+$/, "/"), e);
 }
 function yt(t, e) {
-  const n = vl();
+  const n = pl();
   if (e instanceof URL)
     return e;
   if (typeof e == "string" && e.length > 0) {
-    if (Sl(e))
+    if (hl(e))
       return new URL(e);
     const i = e.startsWith("/") ? e.slice(1) : e;
     return new URL(i, n);
   }
   return new URL(t, n);
 }
-async function $n(t) {
+async function Bn(t) {
   if (typeof t == "string")
     return t;
   if (t && typeof t.text == "function")
@@ -3978,9 +3924,9 @@ async function $n(t) {
     const e = Uint8Array.from(t);
     return typeof TextDecoder == "function" ? new TextDecoder().decode(e) : String.fromCharCode(...e);
   }
-  throw new Error(`Unsupported text resource payload (${Ir(t)})`);
+  throw new Error(`Unsupported text resource payload (${gr(t)})`);
 }
-function bl(t) {
+function gl(t) {
   if (t instanceof ArrayBuffer)
     return new Uint8Array(t.slice(0));
   if (ArrayBuffer.isView(t))
@@ -3989,9 +3935,9 @@ function bl(t) {
     return Uint8Array.from(t);
   if (typeof t == "string")
     return Dt(t);
-  throw new Error(`Unsupported binary resource payload (${Ir(t)})`);
+  throw new Error(`Unsupported binary resource payload (${gr(t)})`);
 }
-function Tl(t) {
+function Il(t) {
   const e = t?.frames;
   U(
     Array.isArray(e) || ArrayBuffer.isView(e),
@@ -4016,7 +3962,7 @@ function Tl(t) {
     samples: i
   };
 }
-function yr(t) {
+function Ir(t) {
   const e = new DataView(t);
   U(It(e, 0, 4) === "RIFF", "Expected a RIFF wave file"), U(It(e, 8, 4) === "WAVE", "Expected a WAVE file");
   let n = null, i = null, r = null, o = null, a = null, s = null, l = null, u = 12;
@@ -4044,7 +3990,7 @@ function yr(t) {
     samples: c
   };
 }
-async function Vn(t) {
+async function $n(t) {
   U(typeof fetch == "function", `Could not fetch ${t}: global fetch is unavailable`);
   const e = await fetch(t.toString());
   return U(e.ok, `Failed to fetch resource from ${t}`), e.arrayBuffer();
@@ -4052,66 +3998,66 @@ async function Vn(t) {
 function kt(t) {
   return typeof TextDecoder == "function" ? new TextDecoder().decode(t) : String.fromCharCode(...t);
 }
-function Sr(t) {
-  const e = new Uint8Array(t).buffer, n = yr(e);
+function yr(t) {
+  const e = new Uint8Array(t).buffer, n = Ir(e);
   return {
     sampleRate: n.sampleRate,
     samples: n.samples
   };
 }
-function El(t, {
+function yl(t, {
   textPreference: e = "bridge",
   audioPreference: n = "url"
 } = {}) {
   const i = async (l) => (U(typeof t.readResource == "function", `Resource bridge cannot read ${l}`), t.readResource(l)), r = async (l) => {
     U(typeof t.readResourceAsAudioData == "function", `Audio resource bridge cannot read ${l}`);
     const u = await t.readResourceAsAudioData(l);
-    return Tl(u);
+    return Il(u);
   }, o = (l) => {
     const u = t.getResourceAddress?.(l);
     return u ?? null;
   }, a = async (l, u = t.getResourceAddress?.(l)) => {
-    const c = yt(l, u), m = await Vn(c), d = yr(m);
+    const c = yt(l, u), m = await $n(c), d = Ir(m);
     return {
       sampleRate: d.sampleRate,
       samples: d.samples
     };
   }, s = async (l, u = t.getResourceAddress?.(l)) => {
     const c = yt(l, u);
-    return new Uint8Array(await Vn(c));
+    return new Uint8Array(await $n(c));
   };
   return {
     async readText(l) {
       if (e === "bridge" && typeof t.readResource == "function")
-        return $n(await i(l));
+        return Bn(await i(l));
       const u = o(l);
-      return e === "url" && u !== null ? kt(await s(l, u)) : typeof t.readResource == "function" ? $n(await i(l)) : kt(await s(l, u));
+      return e === "url" && u !== null ? kt(await s(l, u)) : typeof t.readResource == "function" ? Bn(await i(l)) : kt(await s(l, u));
     },
     async readJSON(l) {
       return JSON.parse(await this.readText(l));
     },
     async readBytes(l) {
-      return typeof t.readResource == "function" ? bl(await i(l)) : s(l);
+      return typeof t.readResource == "function" ? gl(await i(l)) : s(l);
     },
     async readAudio(l) {
       if (n === "bridge" && typeof t.readResourceAsAudioData == "function")
         return r(l);
       const u = o(l);
-      return n === "url" && u !== null ? a(l, u) : typeof t.readResourceAsAudioData == "function" ? r(l) : Sr(await this.readBytes(l));
+      return n === "url" && u !== null ? a(l, u) : typeof t.readResourceAsAudioData == "function" ? r(l) : yr(await this.readBytes(l));
     },
     getURL(l) {
       return yt(l, t.getResourceAddress?.(l));
     }
   };
 }
-function Al(t) {
+function Sl(t) {
   const e = t ?? {}, n = !!e.prefersAudioResourceReadBridge;
-  return El(e, {
+  return yl(e, {
     textPreference: "bridge",
     audioPreference: n ? "bridge" : "url"
   });
 }
-function Rl(t) {
+function vl(t) {
   const e = typeof t.readText == "function" ? t.readText.bind(t) : null, n = typeof t.readJSON == "function" ? t.readJSON.bind(t) : null, i = typeof t.readBytes == "function" ? t.readBytes.bind(t) : null, r = typeof t.readAudio == "function" ? t.readAudio.bind(t) : null, o = typeof t.getURL == "function" ? t.getURL.bind(t) : null;
   return {
     async readText(a) {
@@ -4136,18 +4082,72 @@ function Rl(t) {
       throw new Error(`Resource client cannot read bytes ${a}`);
     },
     async readAudio(a) {
-      return r ? r(a) : Sr(await this.readBytes(a));
+      return r ? r(a) : yr(await this.readBytes(a));
     },
     getURL(a) {
       return o ? o(a) : null;
     }
   };
 }
-function xl(t) {
+function bl(t) {
   return typeof t?.readText == "function" || typeof t?.readJSON == "function" || typeof t?.readBytes == "function" || typeof t?.readAudio == "function";
 }
-function Ml(t) {
-  return xl(t) ? Rl(t) : Al(t);
+function Tl(t) {
+  return bl(t) ? vl(t) : Sl(t);
+}
+const El = new Set("alignas alignof and and_eq asm atomic_cancel atomic_commit atomic_noexcept auto bitand bitor bool break case catch char char8_t char16_t char32_t class compl concept const consteval constexpr constinit const_cast continue co_await co_return co_yield decltype default delete do double dynamic_cast else enum explicit export extern external false float float32 float64 for friend goto graph if import inline input int int32 int64 let long loop mutable namespace new node noexcept not not_eq nullptr operator or or_eq output parameter private processor protected public register reinterpret_cast requires return short signed sizeof static static_assert static_cast string struct switch template this thread_local throw true try typedef typeid typename union unsigned using value virtual void volatile wchar_t while xor xor_eq".split(" "));
+function Al(t) {
+  return /^[A-Za-z][A-Za-z0-9_]*$/.test(t) && !t.includes("__") && !El.has(t);
+}
+function p(t, e = {}) {
+  return Object.freeze({ kind: "parameter", endpoint: t, ...e });
+}
+function Sr(t) {
+  const e = Object.freeze({ ...t.codec });
+  return Object.freeze({
+    kind: "stored",
+    initial: e.parse(t.initial),
+    codec: e,
+    ...t.lifetime ? { lifetime: t.lifetime } : {},
+    ...t.history !== void 0 ? { history: t.history } : {},
+    ...t.engine ? { engine: t.engine } : {}
+  });
+}
+function Vn(t) {
+  const e = Sr({ codec: t.codec, initial: t.initial, lifetime: t.lifetime, history: t.history }), n = Object.freeze([...t.dependencies ?? []]);
+  if ("kind" in t.engine && t.engine.kind === "shared-data") {
+    const o = t.engine, a = t.prepare, s = t.prepare, l = o.length;
+    return Object.freeze({ ...e, engine: Object.freeze({
+      kind: "shared-prepared",
+      dependencies: n,
+      storage: Object.freeze({ type: o.type, fixedLength: l ?? null }),
+      prepare: l === void 0 ? s : (u, c) => ({
+        length: l,
+        write: (m) => a(u, m, c)
+      })
+    }) });
+  }
+  const i = t.prepare, r = t.engine;
+  return Object.freeze({ ...e, engine: Object.freeze({
+    kind: "prepared",
+    dependencies: n,
+    prepare: i,
+    delivery: r
+  }) });
+}
+const Rl = /* @__PURE__ */ Symbol.for("builder-kit.plugin-state.options");
+function xl(t) {
+  return Object.keys(t).filter((e) => t[e]?.kind === "stored" && t[e].engine?.kind === "shared-prepared").sort().map((e, n) => ({ key: e, input: n }));
+}
+function Ml(t, e = {}) {
+  if (e.historyLimit !== void 0 && (!Number.isSafeInteger(e.historyLimit) || e.historyLimit < 0))
+    throw new Error("historyLimit must be a non-negative integer.");
+  const n = xl(t);
+  if (n.length && (!Number.isSafeInteger(e.memoryBudgetBytes) || (e.memoryBudgetBytes ?? 0) < 4))
+    throw new Error("Shared state requires an explicit positive memoryBudgetBytes.");
+  if (n.some(({ key: i }) => !Al(i) || i === "Data"))
+    throw new Error("Shared state names must be valid Cmajor identifiers.");
+  return Object.freeze(Object.defineProperty({ ...t }, Rl, { value: Object.freeze({ ...e }) }));
 }
 function vr(t) {
   if (!(t === null || typeof t != "object")) {
@@ -4574,17 +4574,17 @@ const zl = {
   polishCompressionClipBypass: p("polishCompressionClipBypass"),
   polishOutputTrimBypass: p("polishOutputTrimBypass")
 });
-yl({
+Ml({
   ...Hl,
-  [ee]: Bn({ initial: je(), codec: Ol, prepare: (t) => t, engine: Kl }),
-  [nn]: Bn({
+  [ee]: Vn({ initial: je(), codec: Ol, prepare: (t) => t, engine: Kl }),
+  [nn]: Vn({
     initial: lr(),
     codec: Bl,
     dependencies: ai(),
     prepare: (t, { parameters: e }) => js(t, e),
     engine: zl
   }),
-  [P]: gr({ initial: Yt(), codec: $l })
+  [P]: Sr({ initial: Yt(), codec: $l })
 });
 const Be = 2048;
 function ye(t, e) {
@@ -4899,7 +4899,7 @@ class Mc {
   tableCacheBytes = 0;
   cacheUseSerial = 1;
   constructor(e, n = {}) {
-    this.connection = e, this.delivery = n.delivery ?? "events", this.resourceClient = Ml(n.resourceClient ?? e), this.catalogPath = n.catalogPath ?? dc, this.maxBatchesInFlight = Xn(
+    this.connection = e, this.delivery = n.delivery ?? "events", this.resourceClient = Tl(n.resourceClient ?? e), this.catalogPath = n.catalogPath ?? dc, this.maxBatchesInFlight = Xn(
       n.maxFramesInFlight,
       fc
     ), this.mipLevelCount = n.mipLevelCount ?? Ye, this.cacheBudgetBytes = Math.max(0, Math.round(Number(n.cacheBudgetBytes ?? vc) || 0)), this.serviceLoadTimeoutMs = Xn(n.serviceLoadTimeoutMs, Sc), this.setTimeoutFn = typeof n.setTimeoutFn == "function" ? n.setTimeoutFn : globalThis.setTimeout?.bind(globalThis) ?? null, this.clearTimeoutFn = typeof n.clearTimeoutFn == "function" ? n.clearTimeoutFn : globalThis.clearTimeout?.bind(globalThis) ?? null, this.handleRuntimeState = this.handleRuntimeState.bind(this), this.handleUploadAck = this.handleUploadAck.bind(this), this.handleMipRequest = this.handleMipRequest.bind(this), this.handlePrewarmRequest = this.handlePrewarmRequest.bind(this);

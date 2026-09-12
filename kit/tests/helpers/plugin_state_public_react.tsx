@@ -1,6 +1,7 @@
 import { createRoot } from "react-dom/client";
 import { PluginStateProvider } from "../../ui/plugin-state-react";
-import { definePluginState, storedValue, usePluginState, usePluginHistory } from "../../index";
+import { definePluginState, storedValue, usePluginState, usePluginHistory,
+    type PluginStateControl, type PluginStateEditor, type PluginStateHistory } from "../../index";
 import { createPluginStateClient, type PluginStateClientEvent } from "../../ui/plugin-state-client";
 import { createPluginStateSession } from "../../ui/plugin-state-session";
 import type { EngineApplication, EngineTarget } from "../../ui/plugin-state-engine";
@@ -16,17 +17,22 @@ const definition = definePluginState({ gain: storedValue({ initial: 1, codec: nu
 export async function mount(element: HTMLElement) {
     let scope = { owner: "private-owner", document: 0 };
     const defects: unknown[] = [];
+    const publications: unknown[] = [];
     let receive: ((event: PluginStateClientEvent<typeof definition>) => void) | undefined;
     let target: EngineTarget | undefined;
-    let latest: { control: ReturnType<typeof usePluginState<typeof definition.gain>>; history: ReturnType<typeof usePluginHistory> } | undefined;
+    let latest: { control: PluginStateControl<number>; other: PluginStateControl<number>;
+        editor: PluginStateEditor<typeof definition>; history: PluginStateHistory } | undefined;
     const jobs: Promise<unknown>[] = [];
     const held: (() => Promise<unknown>)[] = [];
     let hold = false;
+    let holdReceipts = false;
+    const receipts: PluginStateClientEvent<typeof definition>[] = [];
     let otherSequence = 0;
     const owner = createPluginStateSession(definition, {
         bindings: [{ key: "gain", dependencies: [], replace(_input, next) { target = next; }, cancel() {}, async stop() {} }],
-        native: { publish() {}, close() {}, update(state, receipt) {
-            receive?.({ kind: "update", scope, revision: state.revision, state, ...(receipt ? { receipt } : {}) });
+        native: { publish(publication) { publications.push(publication); }, close() {}, update(state, receipt) {
+            receive?.({ kind: "update", scope, revision: state.revision, state, ...(receipt && !holdReceipts ? { receipt } : {}) });
+            if (receipt && holdReceipts) receipts.push({ kind: "receipt", ...receipt });
         } }, onDefect: error => defects.push(error),
     });
     await owner.dispatch({ kind: "opened", scope, native: { values: { gain: 2 }, parameters: [] } });
@@ -44,8 +50,10 @@ export async function mount(element: HTMLElement) {
     }, onDefect: error => defects.push(error) });
     function Controls() {
         const control = usePluginState(definition.gain);
+        const other = usePluginState(definition.other);
+        const editor = usePluginState(definition);
         const history = usePluginHistory();
-        latest = { control, history };
+        latest = { control, other, editor, history };
         return <output data-testid="public-control">{JSON.stringify(control.state)}</output>;
     }
     const root = createRoot(element);
@@ -53,11 +61,14 @@ export async function mount(element: HTMLElement) {
     return {
         current() { if (!latest) throw new Error("Control has not mounted."); return latest; },
         holdCommands() { hold = true; },
+        holdReceipts() { holdReceipts = true; },
+        releaseReceipts() { holdReceipts = false; for (const receipt of receipts.splice(0)) receive?.(receipt); },
         async releaseCommands() { hold = false; for (const send of held.splice(0)) await send(); },
         async competingEdit(value: number, key = "gain") {
             return owner.dispatch({ kind: "command", address: { ...scope, client: 9, sequence: ++otherSequence }, command: { kind: "edit", key, value } });
         },
         accepted() { return owner.getSnapshot(); },
+        publicationCount: () => publications.length,
         async status(status: EngineApplication) {
             if (!target) throw new Error("The actual owner has not requested an engine target.");
             await owner.dispatch({ kind: "engine", target, status });

@@ -9,6 +9,7 @@ const record = (promise: Promise<unknown> | undefined) => { void promise?.then(r
 function View() {
     const shape = usePluginState(definition.shape);
     const gain = usePluginState(definition.gain);
+    const loaded = usePluginState(definition.loaded);
     const history = usePluginHistory();
     const edit = (y: number) => {
         if (shape.state.kind === "ready") record(shape.setValue(Mseg.movePoint(shape.state.value, 1, 1, y)));
@@ -17,6 +18,8 @@ function View() {
         {shape.state.kind === "ready" ? <Mseg.Editor value={shape.state.value} onChange={value => record(shape.setValue(value))} onGestureStart={() => record(shape.beginGesture())} onGestureEnd={() => record(shape.endGesture())}/> : null}
         <output data-testid="shape">{JSON.stringify(shape.state)}</output>
         <output data-testid="gain">{JSON.stringify(gain.state)}</output>
+        <output data-testid="loaded">{JSON.stringify(loaded.state)}</output>
+        <button onClick={() => record(loaded.setValue("descending.json"))}>Load file</button>
         <output data-testid="history">{JSON.stringify({ canUndo: history.canUndo, canRedo: history.canRedo })}</output>
         <button onClick={() => record(shape.beginGesture())}>Begin</button>
         <button onClick={() => edit(0.25)}>Low</button>

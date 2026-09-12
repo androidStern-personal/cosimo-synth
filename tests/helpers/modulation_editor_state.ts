@@ -1,27 +1,20 @@
 import { createPluginStateClient, type PluginStateClientEvent } from "../../kit/ui/plugin-state-client";
-import { createPluginStateSession } from "../../kit/ui/plugin-state-session";
+import { createPluginStateSession, type PluginStateNativeParameter } from "../../kit/ui/plugin-state-session";
 import { definePluginState, parameter, storedValue } from "../../kit/ui/plugin-state-definition";
 import { createDefaultModulationState } from "../../ui/shared/modulation";
 import { modulationStateCodec } from "../../ui/shared/synth-modulation-state";
 import { createModulationStateClient } from "../../ui/shared/modulation-client";
 import type { MsegShape } from "../../ui/shared/mseg";
 import { createMockPluginStateHost } from "../../ui/shared/mock-plugin-state-host";
-import { GLOBAL_TUNE_INITIAL_SEMITONES, GLOBAL_TUNE_MIN_SEMITONES, GLOBAL_TUNE_MAX_SEMITONES } from "../../ui/shared/global-tune";
 
 /** UI-only native storage fixture; the staged channel and actual service own state/history. */
-export async function createModulationProjectionHost(values: Record<string, unknown>) {
+export async function createModulationProjectionHost(values: Record<string, unknown>, parameters: readonly PluginStateNativeParameter[]) {
     const stored = new Map(Object.entries(values));
     const writes: Array<{ key: string; value: unknown }> = [];
     const events: Array<{ endpointID: string; value: unknown }> = [];
     const counts = { added: 0, removed: 0, attached: 0, listeners: 0 };
-    // Existing development-native Voice metadata. This fixture has no engine
-    // binding, so it cannot stand in for DSP or worker runtime-install evidence.
-    const parameters = [
-        { endpoint: "playMode", value: 0, min: 0, max: 2, defaultValue: 0, step: 0 },
-        { endpoint: "glideTime", value: 0, min: 0, max: 2, defaultValue: 0, step: 0 },
-        { endpoint: "globalTune", value: GLOBAL_TUNE_INITIAL_SEMITONES, min: GLOBAL_TUNE_MIN_SEMITONES,
-            max: GLOBAL_TUNE_MAX_SEMITONES, defaultValue: GLOBAL_TUNE_INITIAL_SEMITONES, step: 0 },
-    ];
+    // Metadata comes from the authored DSP annotations via the Node fixture.
+    // No engine model is installed: these records only support UI projection.
     const host = createMockPluginStateHost({
         async readParameter(endpoint) {
             const parameter = parameters.find(candidate => candidate.endpoint === endpoint);

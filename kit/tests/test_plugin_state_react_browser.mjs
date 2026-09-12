@@ -38,6 +38,80 @@ async function close(page) {
     assert.deepEqual(browserErrors.get(page), [], "no uncaught browser or React errors");
 }
 
+test("public compound edits remain pending until receipt and one Undo restores both fields", async () => {
+    const page = await browser.newPage();
+    browserErrors.set(page, []);
+    page.on("pageerror", error => browserErrors.get(page).push(error.message));
+    try {
+        await page.goto(`${server.baseUrl}/kit/tests/helpers/module_test_shell.html`);
+        await page.evaluate(async () => {
+            const { mount } = await import("/kit/tests/helpers/plugin_state_public_react.tsx");
+            window.publicState = await mount(document.getElementById("mount"));
+        });
+        await page.waitForFunction(() => window.publicState.current().control.state.kind === "ready", undefined, { timeout: 2000 });
+        await page.evaluate(() => {
+            window.publicState.holdCommands();
+            window.publicState.holdReceipts();
+            window.compoundResult = window.publicState.current().editor.edit({ gain: 4, other: 7 });
+        });
+        await page.waitForFunction(() => window.publicState.current().control.state.pending && window.publicState.current().other.state.pending);
+        assert.deepEqual(await page.evaluate(() => {
+            const { control, other } = window.publicState.current();
+            return [control.state.value, other.state.value];
+        }), [2, 0], "compound edits do not expose partial optimistic values");
+        await page.evaluate(() => window.publicState.releaseCommands());
+        await page.waitForFunction(() => window.publicState.current().control.state.value === 4 && window.publicState.current().other.state.value === 7);
+        assert.deepEqual(await page.evaluate(() => {
+            const { control, other } = window.publicState.current();
+            return [control.state.pending, other.state.pending];
+        }), [true, true], "an owner snapshot cannot substitute for the command receipt");
+        await page.evaluate(() => window.publicState.releaseReceipts());
+        assert.deepEqual(await page.evaluate(() => window.compoundResult), { kind: "accepted", changed: true, historyEntry: {} });
+        await page.waitForFunction(() => !window.publicState.current().control.state.pending && !window.publicState.current().other.state.pending);
+        assert.deepEqual(await page.evaluate(() => window.publicState.current().history.undo()), { kind: "accepted" });
+        await page.waitForFunction(() => window.publicState.current().control.state.value === 2 && window.publicState.current().other.state.value === 0);
+        assert.equal(await page.evaluate(() => window.publicState.current().history.canUndo), false, "the pair created exactly one Undo entry");
+        assert.deepEqual(await page.evaluate(() => window.publicState.defects()), []);
+    } finally { await page.evaluate(() => window.publicState?.dispose()); await close(page); }
+});
+
+test("public compound edit closures reject one stale field atomically and cannot cross a document reset", async () => {
+    const page = await browser.newPage();
+    browserErrors.set(page, []);
+    page.on("pageerror", error => browserErrors.get(page).push(error.message));
+    try {
+        await page.goto(`${server.baseUrl}/kit/tests/helpers/module_test_shell.html`);
+        await page.evaluate(async () => {
+            const { mount } = await import("/kit/tests/helpers/plugin_state_public_react.tsx");
+            window.publicState = await mount(document.getElementById("mount"));
+        });
+        await page.waitForFunction(() => window.publicState.current().control.state.kind === "ready");
+        const conflict = await page.evaluate(async () => {
+            window.oldCompoundEdit = window.publicState.current().editor.edit;
+            window.publicState.holdCommands();
+            const pending = window.oldCompoundEdit({ gain: 4, other: 7 });
+            await window.publicState.competingEdit(3, "other");
+            const before = window.publicState.accepted();
+            const publications = window.publicState.publicationCount();
+            await window.publicState.releaseCommands();
+            return { result: await pending, before, after: window.publicState.accepted(), publications,
+                afterPublications: window.publicState.publicationCount() };
+        });
+        assert.deepEqual(conflict.result, { kind: "rejected", reason: "stale-version" });
+        assert.deepEqual(conflict.after, conflict.before, "a conflict in the second field cannot edit the first or create history");
+        assert.equal(conflict.afterPublications, conflict.publications, "no persistence or engine effects escape a rejected pair");
+        await page.waitForFunction(() => !window.publicState.current().control.state.pending && !window.publicState.current().other.state.pending);
+        await page.evaluate(() => window.publicState.competingEdit(0, "other"));
+        assert.deepEqual(await page.evaluate(() => window.oldCompoundEdit({ gain: 4, other: 7 })),
+            { kind: "rejected", reason: "stale-version" }, "returning to the captured value cannot bypass its version guard");
+        assert.equal((await page.evaluate(() => window.oldCompoundEdit({ gain: 4 }))).kind, "accepted", "only edited fields participate in the guard");
+        await page.evaluate(() => window.publicState.reset());
+        assert.deepEqual(await page.evaluate(() => window.oldCompoundEdit({ gain: 4, other: 7 })), { kind: "rejected", reason: "stale-scope" });
+        assert.equal(await page.evaluate(() => window.publicState.accepted().fields.gain.value), 9);
+        assert.deepEqual(await page.evaluate(() => window.publicState.defects()), []);
+    } finally { await page.evaluate(() => window.publicState?.dispose()); await close(page); }
+});
+
 test("public edit closures reject ABA and reset while queued edits in their own gesture remain accepted", async () => {
     const page=await browser.newPage();browserErrors.set(page,[]);
     page.on('pageerror',error=>browserErrors.get(page).push(error.message));

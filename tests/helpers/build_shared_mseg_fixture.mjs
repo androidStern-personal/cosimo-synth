@@ -1,28 +1,15 @@
-import { cp, mkdir, mkdtemp, symlink, writeFile, readFile } from 'node:fs/promises';
-import { execFileSync } from 'node:child_process';
+import { writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
+
+import { stageCustomerStateFixture, buildCustomerStateFixture } from "./build_customer_state_fixture.mjs";
 
 const root=path.resolve(import.meta.dirname,'../..');
 export async function buildSharedMsegFixture() {
     const buildRoot=path.join(root,'build/shared_mseg');
-    await mkdir(buildRoot,{recursive:true});
-    const staging=await mkdtemp(path.join(buildRoot,'fixture-'));
-    await mkdir(path.join(staging,'kit'));
-    await Promise.all([
-        cp(path.join(root,'kit/fx'),path.join(staging,'kit/fx'),{recursive:true}),
-        cp(path.join(root,'kit/ui'),path.join(staging,'kit/ui'),{recursive:true}),
-        cp(path.join(root,'kit/native'),path.join(staging,'kit/native'),{recursive:true}),
-        cp(path.join(root,'kit/cmajor'),path.join(staging,'kit/cmajor'),{recursive:true}),
-        ...['index.ts','package.json','kit.json'].map(file=>cp(path.join(root,'kit',file),path.join(staging,'kit',file))),
-        cp(path.join(root,'tests/native/fixtures/plugin_state_shared_data'),path.join(staging,'fx/shared_mseg'),{recursive:true}),
-        symlink(path.join(root,'node_modules'),path.join(staging,'node_modules')),
-        writeFile(path.join(staging,'package.json'),JSON.stringify({private:true,type:'module'})),
-    ]);
-    execFileSync(process.execPath,['kit/fx/build-effect.mjs','shared-mseg'],{cwd:staging,stdio:'pipe',timeout:30000});
-    const manifest=path.join(staging,'build/fx/shared_mseg_runtime/SharedMseg.cmajorpatch');
-    const config=JSON.parse(await readFile(manifest,'utf8'));
-    if(config.worker!=='worker.js')throw Error('Production builder did not create the state worker');
+    const staging = await stageCustomerStateFixture(buildRoot, 'plugin_state_shared_data', 'shared_mseg');
+    const { manifestPath: manifest } = await buildCustomerStateFixture(staging, 'shared-mseg',
+        'build/fx/shared_mseg_runtime/SharedMseg.cmajorpatch');
     await writeFile(path.join(buildRoot,'manifest-path.txt'),manifest+'\n');
     return {staging,manifest,runtime:path.dirname(manifest)};
 }

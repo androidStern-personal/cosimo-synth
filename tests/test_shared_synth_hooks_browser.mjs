@@ -1,3 +1,4 @@
+import { createSynthParameterFixture, synthParameterEndpoints } from "./helpers/synth_parameter_fixture.mjs";
 import test, { after, before } from "node:test";
 import assert from "node:assert/strict";
 
@@ -9,6 +10,9 @@ import {
 } from "../patch_gui/mseg.js";
 
 import { startDesktopHarnessServer } from "./helpers/desktop_harness_browser.mjs";
+
+const parameterFixture = createSynthParameterFixture();
+const nativeParameters = synthParameterEndpoints.map(endpoint => parameterFixture.readParameter(endpoint));
 
 let server;
 let browser;
@@ -327,7 +331,7 @@ test("route amount binding presents the canonical bridge value before the full m
     const page = await openModulePage();
 
     try {
-        await installHarness(page, "installModulationRouteAmountBindingHarness");
+        await installHarness(page, "installModulationRouteAmountBindingHarness", nativeParameters);
         await page.waitForFunction(() => {
             const snapshot = window.__COSIMO_DESKTOP_MODULE_HARNESS__?.getSnapshot?.();
             return snapshot?.bindingValue === 0 && snapshot?.parentAmount === 0;
@@ -585,14 +589,14 @@ test("host readiness blocks ambiguous parameter writes and stale stored-state hy
         await hydrationPage.waitForFunction(() => (
             window.__COSIMO_DESKTOP_MODULE_HARNESS__?.getSnapshot?.().pendingRequests.second > 0
         ));
-        await invokeHarness(hydrationPage, "releaseFullStoredState", "first");
+        await invokeHarness(hydrationPage, "releaseStateOwner", "first");
         hydrationSnapshot = await getHarnessSnapshot(hydrationPage);
-        assert.equal(hydrationSnapshot.hasHydrated, false, "the disconnected callback cannot hydrate the active editor");
+        assert.equal(hydrationSnapshot.hasHydrated, false, "the disconnected owner cannot hydrate the active editor");
         assert.equal(hydrationSnapshot.canCapture, false);
         assert.equal(hydrationSnapshot.captureDisabled, true);
-        assert.equal(hydrationSnapshot.slotCount, 0, "the disconnected callback cannot replace the visible bank");
+        assert.equal(hydrationSnapshot.slotCount, 0, "the disconnected owner cannot replace the visible bank");
 
-        await invokeHarness(hydrationPage, "releaseFullStoredState", "second");
+        await invokeHarness(hydrationPage, "releaseStateOwner", "second");
         await hydrationPage.waitForFunction(() => {
             const snapshot = window.__COSIMO_DESKTOP_MODULE_HARNESS__?.getSnapshot?.();
             return snapshot?.hasHydrated === true && snapshot?.slotCount === 2;
@@ -614,7 +618,7 @@ test("discarded articulation undo is owned by one exact patch connection", async
         await page.waitForFunction(() => (
             window.__COSIMO_DESKTOP_MODULE_HARNESS__?.getSnapshot?.().pendingRequests.first > 0
         ));
-        await invokeHarness(page, "releaseFullStoredState", "first");
+        await invokeHarness(page, "releaseStateOwner", "first");
         await page.waitForFunction(() => {
             const snapshot = window.__COSIMO_DESKTOP_MODULE_HARNESS__?.getSnapshot?.();
             return snapshot?.hasHydrated === true && snapshot?.slotCount === 2;
@@ -653,7 +657,7 @@ test("discarded articulation undo is owned by one exact patch connection", async
             "a stale Undo cannot persist the old articulation bank into the new connection",
         );
 
-        await invokeHarness(page, "releaseFullStoredState", "second");
+        await invokeHarness(page, "releaseStateOwner", "second");
         await page.waitForFunction(() => (
             window.__COSIMO_DESKTOP_MODULE_HARNESS__?.getSnapshot?.().hasHydrated === true
         ));
@@ -665,11 +669,11 @@ test("discarded articulation undo is owned by one exact patch connection", async
     }
 });
 
-test("request-by-key articulation hydration accepts empty and valid replies and rejects stale reconnects", async () => {
+test("owner articulation hydration accepts empty and valid saved values and rejects stale reconnects", async () => {
     const page = await openModulePage();
 
     try {
-        await installHarness(page, "installArticulationKeyHydrationHarness");
+        await installHarness(page, "installArticulationOwnerHydrationHarness");
         await page.waitForFunction(() => (
             window.__COSIMO_DESKTOP_MODULE_HARNESS__?.getSnapshot?.().pendingRequests.undefined === 1
         ));
@@ -677,7 +681,7 @@ test("request-by-key articulation hydration accepts empty and valid replies and 
         assert.equal(snapshot.hasHydrated, false);
         assert.equal(snapshot.captureDisabled, true);
 
-        await invokeHarness(page, "releaseArticulationState", "undefined");
+        await invokeHarness(page, "releaseStateOwner", "undefined");
         await page.waitForFunction(() => (
             window.__COSIMO_DESKTOP_MODULE_HARNESS__?.getSnapshot?.().hasHydrated === true
         ));
@@ -690,18 +694,33 @@ test("request-by-key articulation hydration accepts empty and valid replies and 
             window.__COSIMO_DESKTOP_MODULE_HARNESS__?.getSnapshot?.().pendingRequests.malformed === 1
         ));
         assert.equal((await getHarnessSnapshot(page)).hasHydrated, false);
-        await invokeHarness(page, "releaseArticulationState", "malformed");
+        await invokeHarness(page, "releaseStateOwner", "malformed");
+        await page.waitForFunction(() => (
+            window.__COSIMO_DESKTOP_MODULE_HARNESS__?.getSnapshot?.().articulationReadiness.kind === "failed"
+        ));
+        snapshot = await getHarnessSnapshot(page);
+        // The state owner preserves invalid saved data for explicit repair;
+        // unlike the former GUI parser, it must not silently replace it with defaults.
+        assert.deepEqual(snapshot.articulationReadiness, { kind: "failed", reason: "invalid-state" });
+        assert.equal(snapshot.hasHydrated, false);
+        assert.equal(snapshot.canCapture, false);
+        assert.equal(snapshot.captureDisabled, true);
+        assert.deepEqual(snapshot.malformedStoredValue, { kind: "not-articulations" });
+        const repair = await invokeHarness(page, "repairArticulations");
+        assert.equal(repair.kind, "accepted");
         await page.waitForFunction(() => (
             window.__COSIMO_DESKTOP_MODULE_HARNESS__?.getSnapshot?.().hasHydrated === true
         ));
         snapshot = await getHarnessSnapshot(page);
-        assert.equal(snapshot.slotCount, 0, "a malformed initial value completes hydration with the default empty bank");
+        assert.equal(snapshot.articulationReadiness.kind, "ready");
+        assert.equal(snapshot.slotCount, 0, "an explicit valid public edit repairs the bank");
+        assert.equal(snapshot.captureDisabled, false);
 
         await invokeHarness(page, "selectConnection", "valid");
         await page.waitForFunction(() => (
             window.__COSIMO_DESKTOP_MODULE_HARNESS__?.getSnapshot?.().pendingRequests.valid === 1
         ));
-        await invokeHarness(page, "releaseArticulationState", "valid");
+        await invokeHarness(page, "releaseStateOwner", "valid");
         await page.waitForFunction(() => (
             window.__COSIMO_DESKTOP_MODULE_HARNESS__?.getSnapshot?.().slotCount === 1
         ));
@@ -717,11 +736,11 @@ test("request-by-key articulation hydration accepts empty and valid replies and 
         await page.waitForFunction(() => (
             window.__COSIMO_DESKTOP_MODULE_HARNESS__?.getSnapshot?.().pendingRequests.reconnectNew === 1
         ));
-        await invokeHarness(page, "releaseArticulationState", "reconnectOld");
+        await invokeHarness(page, "releaseStateOwner", "reconnectOld");
         snapshot = await getHarnessSnapshot(page);
-        assert.equal(snapshot.hasHydrated, false, "the old key response cannot hydrate a newly selected connection");
+        assert.equal(snapshot.hasHydrated, false, "the old owner response cannot hydrate a newly selected connection");
         assert.equal(snapshot.captureDisabled, true);
-        await invokeHarness(page, "releaseArticulationState", "reconnectNew");
+        await invokeHarness(page, "releaseStateOwner", "reconnectNew");
         await page.waitForFunction(() => (
             window.__COSIMO_DESKTOP_MODULE_HARNESS__?.getSnapshot?.().slotCount === 2
                 && window.__COSIMO_DESKTOP_MODULE_HARNESS__?.getSnapshot?.().hasHydrated === true
@@ -1052,7 +1071,7 @@ test("useMsegState attaches once, requests the owner snapshot for UI only, and d
     const page = await openModulePage();
 
     try {
-        await installHarness(page, "installMsegStateHookHarness");
+        await installHarness(page, "installMsegStateHookHarness", nativeParameters);
         await page.waitForFunction(() => {
             const snapshot = window.__COSIMO_DESKTOP_MODULE_HARNESS__?.getSnapshot?.();
             return snapshot?.requestStateAttachCount === 1 && snapshot?.lastRender?.shape?.points?.length === 2;
@@ -1556,6 +1575,51 @@ test("the Note-key replay suppresses edits without replacing chord memory", asyn
         ]);
     } finally {
         await page.close();
+    }
+});
+
+test("both MSEG surfaces ignore subthreshold movement and preserve accepted edits on cancellation", async () => {
+    for (const harness of ["installMsegEditorInteractionsHookHarness", "installStockMsegEditorHarness"]) {
+        const page = await openModulePage();
+        const errors = [];
+        page.on("pageerror", error => errors.push(String(error)));
+        try {
+            await installHarness(page, harness);
+            const before = (await getHarnessSnapshot(page)).points;
+            const point = await invokeHarness(page, "getPointCoordinates", 1);
+            const pointer = {pointerId: 71, button: 0, clientX: point.x, clientY: point.y};
+            await invokeHarness(page, "dispatchPointer", "pointerdown", pointer);
+            const secondPoint = await invokeHarness(page, "getPointCoordinates", 2);
+            const secondTouch = {pointerId: 73, pointerType: "touch", button: 0, clientX: secondPoint.x, clientY: secondPoint.y};
+            await invokeHarness(page, "dispatchPointer", "pointerdown", secondTouch);
+            await invokeHarness(page, "dispatchPointer", "pointermove", {...secondTouch, clientY: secondPoint.y + 35});
+            assert.deepEqual((await getHarnessSnapshot(page)).points, before, `${harness}: another touch cannot steal the active edit`);
+            await invokeHarness(page, "dispatchPointer", "pointercancel", secondTouch);
+            await invokeHarness(page, "dispatchPointer", "pointermove", {...pointer, clientX: point.x + 4});
+            assert.deepEqual((await getHarnessSnapshot(page)).points, before, `${harness}: below 8px must not edit`);
+            await invokeHarness(page, "dispatchPointer", "pointercancel", pointer);
+            assert.deepEqual((await getHarnessSnapshot(page)).points, before, `${harness}: cancel must not delete a click candidate`);
+            await invokeHarness(page, "dispatchPointer", "pointerdown", pointer);
+            await invokeHarness(page, "dispatchPointer", "pointermove", {...pointer, clientX: point.x + 35, clientY: point.y - 25});
+            await page.waitForFunction(initial => JSON.stringify(window.__COSIMO_DESKTOP_MODULE_HARNESS__.getSnapshot().points) !== JSON.stringify(initial), before);
+            const moved = (await getHarnessSnapshot(page)).points;
+            await invokeHarness(page, "dispatchPointer", "pointercancel", pointer);
+            assert.deepEqual((await getHarnessSnapshot(page)).points, moved, `${harness}: cancel preserves the accepted prefix`);
+            await invokeHarness(page, "dispatchPointer", "pointerup", pointer);
+            assert.deepEqual((await getHarnessSnapshot(page)).points, moved, `${harness}: late release is inert`);
+            await invokeHarness(page, "setCurveEditMode", "hold-or-drag");
+            await invokeHarness(page, "setCurveEditHoldDelayMs", 30);
+            const start = await invokeHarness(page, "getPointCoordinates", 0);
+            const end = await invokeHarness(page, "getPointCoordinates", 1);
+            const touch = {pointerId: 72, pointerType: "touch", button: 0,
+                clientX: (start.x + end.x) / 2, clientY: (start.y + end.y) / 2};
+            await invokeHarness(page, "dispatchPointer", "pointerdown", touch);
+            await invokeHarness(page, "dispatchPointer", "pointercancel", touch);
+            await page.waitForTimeout(60);
+            assert.deepEqual((await getHarnessSnapshot(page)).points, moved, `${harness}: cancelled pending touch cannot insert a point`);
+            assert.deepEqual((await getHarnessSnapshot(page)).hapticLog, [], `${harness}: cancelled hold cannot activate later`);
+            assert.deepEqual(errors, []);
+        } finally { await page.close(); }
     }
 });
 

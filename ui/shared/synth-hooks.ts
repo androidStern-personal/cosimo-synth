@@ -1,3 +1,4 @@
+import { useMsegGestures } from "../../kit/ui/mseg-gestures";
 import { createSynthDocumentClient } from "./synth-document-client";
 import {
     useCallback,
@@ -38,6 +39,7 @@ import { createPreviewStrategyEngine } from "./auto-preview-strategies";
 import { PERF_TUNING_AVAILABLE, getPerfTuningState, subscribePerfTuning } from "./perf-tuning";
 import { createPreviewNoteMemory } from "./preview-note-memory";
 import { clearUiTimeout, uiTimeout } from "./ui-timers";
+const msegGestureTimers = { setTimeout: uiTimeout, clearTimeout: clearUiTimeout };
 import {
     AUTO_PREVIEW_SYNC_CONFIG,
     quantizeStrikeTime,
@@ -45,11 +47,7 @@ import {
     type LoopSyncSource,
 } from "./auto-preview-sync";
 import {
-    deriveMsegSegmentCurvePower,
     clampMsegRateSeconds,
-    findMsegPointHitIndex,
-    findMsegSegmentHitIndex,
-    msegEditorCoordinatesToPoint,
     type MsegSurfaceOrientation,
     type MsegState,
 } from "./mseg";
@@ -255,7 +253,7 @@ export const EFFECTIVE_UNISON_STATE_ENDPOINT_ID = "effectiveUnisonState";
 export const EFFECTIVE_FILTER_STATE_ENDPOINT_ID = "effectiveFilterState";
 export const FILTER_SPECTRUM_ENDPOINT_ID = "filterSpectrum";
 export const DISPLAY_SWIPE_THRESHOLD_PX = 2;
-export const MSEG_DRAG_THRESHOLD_PX = 8;
+export { MSEG_DRAG_THRESHOLD_PX } from "../../kit/ui/mseg-gestures";
 const FILTER_MODE_ENDPOINT_ID = "filterMode";
 const FILTER_CUTOFF_ENDPOINT_ID = "filterCutoff";
 const FILTER_CUTOFF_KEY_TRACK_ENABLED_ENDPOINT_ID = "filterCutoffKeyTrackEnabled";
@@ -317,35 +315,6 @@ export const GLIDE_TIME_MIN_SECONDS = 0;
 export const GLIDE_TIME_MAX_SECONDS = 2;
 export const GLIDE_TIME_STEP_SECONDS = 0.001;
 
-type ActiveMsegPointPointerState = {
-    kind: "point-drag";
-    pointerId: number;
-    pointIndex: number;
-    startClientX: number;
-    startClientY: number;
-    moved: boolean;
-    deleteOnRelease: boolean;
-};
-
-type ActiveMsegPendingSegmentPointerState = {
-    kind: "pending-segment";
-    pointerId: number;
-    segmentIndex: number;
-    startClientX: number;
-    startClientY: number;
-    holdTimeoutId: number | null;
-};
-
-type ActiveMsegCurvePointerState = {
-    kind: "curve-drag";
-    pointerId: number;
-    segmentIndex: number;
-};
-
-type ActiveMsegPointerState =
-    | ActiveMsegPointPointerState
-    | ActiveMsegPendingSegmentPointerState
-    | ActiveMsegCurvePointerState;
 
 export type CatalogLoadState = {
     catalog: FactoryBankCatalog | null;
@@ -1933,121 +1902,28 @@ export function useMsegEditorInteractions({
     onCurveEditHoldActivated?: (() => void) | null;
 }) {
     const [isOpen, setIsOpen] = useState(false);
-    const [selectedPointIndex, setSelectedPointIndex] = useState(0);
-    const [hoveredSegmentIndex, setHoveredSegmentIndex] = useState(-1);
-    const [activeSegmentIndex, setActiveSegmentIndex] = useState(-1);
     const history = useMsegEditorHistory(owner, msegState?.editShapeIndex ?? 0);
-    const activePointerRef = useRef<ActiveMsegPointerState | null>(null);
-
-    const clearPendingSegmentTimer = useCallback((pointerState: ActiveMsegPointerState | null) => {
-        if (pointerState?.kind === "pending-segment" && pointerState.holdTimeoutId !== null) {
-            clearUiTimeout(pointerState.holdTimeoutId);
-            pointerState.holdTimeoutId = null;
-        }
-    }, []);
-
-    const cancelActivePointer = useCallback((pointerId?: number) => {
-        const activePointer = activePointerRef.current;
-        if (!activePointer || (pointerId !== undefined && activePointer.pointerId !== pointerId)) {
-            return;
-        }
-
-        activePointerRef.current = null;
-        clearPendingSegmentTimer(activePointer);
-        void history.finishGesture(true);
-        try {
-            if (surfaceRef.current?.hasPointerCapture(activePointer.pointerId)) {
-                surfaceRef.current.releasePointerCapture(activePointer.pointerId);
-            }
-        } catch {
-            // Capture may already be gone after cancellation, blur, or unmount.
-        }
-        setHoveredSegmentIndex(-1);
-        setActiveSegmentIndex(-1);
-    }, [clearPendingSegmentTimer, surfaceRef, history.finishGesture]);
-
-    useEffect(() => {
-        if (!msegState) {
-            return;
-        }
-
-        setSelectedPointIndex((previousIndex) => clamp(
-            previousIndex,
-            0,
-            Math.max(0, msegState.shape.points.length - 1),
-        ));
-    }, [msegState]);
-
-    const resolvePointerLocation = useCallback((clientX: number, clientY: number) => {
-        if (!msegState || !surfaceRef.current) {
-            return null;
-        }
-
-        const bounds = surfaceRef.current.getBoundingClientRect();
-        const localX = clientX - bounds.left;
-        const localY = clientY - bounds.top;
-        const currentShape = msegController.current?.getState()?.shape ?? msegState.shape;
-        const pointIndex = findMsegPointHitIndex(
-            currentShape,
-            localX,
-            localY,
-            bounds.width,
-            bounds.height,
-            undefined,
-            { orientation },
-        );
-        const segmentIndex = pointIndex >= 0
-            ? -1
-            : findMsegSegmentHitIndex(
-                currentShape,
-                localX,
-                localY,
-                bounds.width,
-                bounds.height,
-                undefined,
-                { orientation },
-            );
-
+    const controller = useMemo(() => ({ get current() {
+        const current = msegController.current;
+        if (!current) return null;
+        // Capture the same controller as the queued edit, not a later ref value.
         return {
-            bounds,
-            localX,
-            localY,
-            pointIndex,
-            segmentIndex,
+            getShape: () => current.getState()?.shape,
+            addPoint: (x: number, y: number) => current.addPoint(x, y),
+            movePoint: (index: number, x: number, y: number) => current.movePoint(index, x, y),
+            deletePoint: (index: number) => current.deletePoint(index),
+            setSegmentCurvePower: (index: number, power: number) => current.setSegmentCurvePower(index, power),
         };
-    }, [msegController, msegState, orientation, surfaceRef]);
-
-    const updateHoveredSegmentIndex = useCallback((clientX: number, clientY: number) => {
-        const pointerLocation = resolvePointerLocation(clientX, clientY);
-        setHoveredSegmentIndex(pointerLocation?.segmentIndex ?? -1);
-        return pointerLocation;
-    }, [resolvePointerLocation]);
-
+    } }), [msegController]);
+    const gestures = useMsegGestures({ shape: msegState?.shape ?? null, controller, surfaceRef,
+        edit: history.edit, finishGesture: history.finishGesture, orientation,
+        curveEditActivationMode, curveEditHoldDelayMs, onCurveEditHoldActivated, timers: msegGestureTimers });
+    const cancelActivePointer = gestures.cancelGesture;
     useEffect(() => {
-        const handleEscapeKey = (event: KeyboardEvent) => {
-            if (event.key === "Escape") {
-                setIsOpen(false);
-                cancelActivePointer();
-            }
-        };
-        const handleBlur = () => cancelActivePointer();
-        const handleVisibilityChange = () => {
-            if (document.visibilityState !== "visible") {
-                cancelActivePointer();
-            }
-        };
-
-        window.addEventListener("keydown", handleEscapeKey);
-        window.addEventListener("blur", handleBlur);
-        document.addEventListener("visibilitychange", handleVisibilityChange);
-        return () => {
-            window.removeEventListener("keydown", handleEscapeKey);
-            window.removeEventListener("blur", handleBlur);
-            document.removeEventListener("visibilitychange", handleVisibilityChange);
-            cancelActivePointer();
-        };
-    }, [cancelActivePointer, isOpen]);
-
+        const closeOnEscape = (event: KeyboardEvent) => { if (event.key === "Escape") setIsOpen(false); };
+        window.addEventListener("keydown", closeOnEscape);
+        return () => window.removeEventListener("keydown", closeOnEscape);
+    }, []);
     const beginEditorSession = useCallback(() => {
         history.beginSession();
         cancelActivePointer();
@@ -2071,322 +1947,8 @@ export function useMsegEditorInteractions({
 
     const undoLastEdit = history.undo;
 
-    const applyCurveEditFromClientCoordinates = useCallback((segmentIndex: number, clientX: number, clientY: number) => {
-        if (!surfaceRef.current || !msegController.current) {
-            return;
-        }
-
-        const currentShape = msegController.current.getState()?.shape ?? msegState?.shape;
-        if (!currentShape) {
-            return;
-        }
-
-        const bounds = surfaceRef.current.getBoundingClientRect();
-        const point = msegEditorCoordinatesToPoint(
-            clientX - bounds.left,
-            clientY - bounds.top,
-            bounds.width,
-            bounds.height,
-            { orientation },
-        );
-        const curvePower = deriveMsegSegmentCurvePower(currentShape, segmentIndex, point.x, point.y);
-        const controller = msegController.current;
-        history.edit(() => controller?.setSegmentCurvePower(segmentIndex, curvePower), true);
-    }, [history.edit, msegController, msegState?.shape, orientation, surfaceRef]);
-
-    const addPoint = useCallback((x: number, y: number) => {
-        const controller = msegController.current;
-        if (!controller) return;
-        history.edit(() => {
-            const result = controller.addPoint(x, y);
-            const points = controller.getState()?.shape.points ?? [];
-            const index = points.findIndex(point => Math.abs(point.x - x) <= 1e-6 && Math.abs(point.y - y) <= 1e-6);
-            if (index >= 0) setSelectedPointIndex(index);
-            return result;
-        });
-    }, [history.edit, msegController]);
-
-    const handlePointerDown = useCallback((event: ReactPointerEvent<SVGSVGElement>) => {
-        if (event.button !== 0 || !msegState || !surfaceRef.current) {
-            return;
-        }
-
-        const pointerLocation = updateHoveredSegmentIndex(event.clientX, event.clientY);
-        if (!pointerLocation) {
-            return;
-        }
-
-        if (pointerLocation.pointIndex >= 0) {
-            setSelectedPointIndex(pointerLocation.pointIndex);
-            setActiveSegmentIndex(-1);
-            activePointerRef.current = {
-                kind: "point-drag",
-                pointerId: event.pointerId,
-                pointIndex: pointerLocation.pointIndex,
-                startClientX: event.clientX,
-                startClientY: event.clientY,
-                moved: false,
-                deleteOnRelease:
-                    pointerLocation.pointIndex > 0 &&
-                    pointerLocation.pointIndex < msegState.shape.points.length - 1,
-            };
-            try {
-                event.currentTarget.setPointerCapture(event.pointerId);
-            } catch {
-                // Window-level termination still owns unsupported or synthetic pointers.
-            }
-            event.preventDefault();
-            return;
-        }
-
-        if (pointerLocation.segmentIndex >= 0) {
-                setActiveSegmentIndex(pointerLocation.segmentIndex);
-            setHoveredSegmentIndex(pointerLocation.segmentIndex);
-            if (curveEditActivationMode === "immediate") {
-                activePointerRef.current = {
-                    kind: "curve-drag",
-                    pointerId: event.pointerId,
-                    segmentIndex: pointerLocation.segmentIndex,
-                };
-            } else {
-                const holdTimeoutId = uiTimeout(() => {
-                    const activePointer = activePointerRef.current;
-                    if (
-                        !activePointer
-                        || activePointer.kind !== "pending-segment"
-                        || activePointer.pointerId !== event.pointerId
-                    ) {
-                        return;
-                    }
-
-                    activePointerRef.current = {
-                        kind: "curve-drag",
-                        pointerId: activePointer.pointerId,
-                        segmentIndex: activePointer.segmentIndex,
-                    };
-                    setActiveSegmentIndex(activePointer.segmentIndex);
-                    setHoveredSegmentIndex(activePointer.segmentIndex);
-                    onCurveEditHoldActivated?.();
-                }, curveEditHoldDelayMs);
-
-                activePointerRef.current = {
-                    kind: "pending-segment",
-                    pointerId: event.pointerId,
-                    segmentIndex: pointerLocation.segmentIndex,
-                    startClientX: event.clientX,
-                    startClientY: event.clientY,
-                    holdTimeoutId,
-                };
-            }
-
-            try {
-                event.currentTarget.setPointerCapture(event.pointerId);
-            } catch {
-                // Window-level termination still owns unsupported or synthetic pointers.
-            }
-            event.preventDefault();
-            return;
-        }
-
-        const point = msegEditorCoordinatesToPoint(
-            pointerLocation.localX,
-            pointerLocation.localY,
-            pointerLocation.bounds.width,
-            pointerLocation.bounds.height,
-            { orientation },
-        );
-        addPoint(point.x, point.y);
-
-        setActiveSegmentIndex(-1);
-        event.preventDefault();
-    }, [
-        addPoint,
-        curveEditActivationMode,
-        history.edit,
-        curveEditHoldDelayMs,
-        msegController,
-        msegState,
-        onCurveEditHoldActivated,
-        orientation,
-        surfaceRef,
-        updateHoveredSegmentIndex,
-    ]);
-
-    const handlePointerMove = useCallback((event: ReactPointerEvent<SVGSVGElement>) => {
-        const activePointer = activePointerRef.current;
-        if (!activePointer || activePointer.pointerId !== event.pointerId || !surfaceRef.current) {
-            updateHoveredSegmentIndex(event.clientX, event.clientY);
-            return;
-        }
-
-        if (activePointer.kind === "curve-drag") {
-            applyCurveEditFromClientCoordinates(activePointer.segmentIndex, event.clientX, event.clientY);
-            setActiveSegmentIndex(activePointer.segmentIndex);
-            setHoveredSegmentIndex(activePointer.segmentIndex);
-            event.preventDefault();
-            return;
-        }
-
-        if (activePointer.kind === "pending-segment") {
-            const movementDistance = Math.hypot(
-                event.clientX - activePointer.startClientX,
-                event.clientY - activePointer.startClientY,
-            );
-
-            if (movementDistance < MSEG_DRAG_THRESHOLD_PX) {
-                return;
-            }
-
-            clearPendingSegmentTimer(activePointer);
-            activePointerRef.current = {
-                kind: "curve-drag",
-                pointerId: activePointer.pointerId,
-                segmentIndex: activePointer.segmentIndex,
-            };
-            setActiveSegmentIndex(activePointer.segmentIndex);
-            setHoveredSegmentIndex(activePointer.segmentIndex);
-            applyCurveEditFromClientCoordinates(activePointer.segmentIndex, event.clientX, event.clientY);
-            event.preventDefault();
-            return;
-        }
-
-        const movementDistance = Math.hypot(
-            event.clientX - activePointer.startClientX,
-            event.clientY - activePointer.startClientY,
-        );
-
-        if (!activePointer.moved && movementDistance < MSEG_DRAG_THRESHOLD_PX) {
-            return;
-        }
-
-        const bounds = surfaceRef.current.getBoundingClientRect();
-        const point = msegEditorCoordinatesToPoint(
-            event.clientX - bounds.left,
-            event.clientY - bounds.top,
-            bounds.width,
-            bounds.height,
-            { orientation },
-        );
-        if (!activePointer.moved) {
-            activePointerRef.current = {
-                ...activePointer,
-                moved: true,
-            };
-        }
-        const controller = msegController.current;
-        history.edit(() => controller?.movePoint(activePointer.pointIndex, point.x, point.y), true);
-        setSelectedPointIndex(activePointer.pointIndex);
-        setHoveredSegmentIndex(-1);
-        setActiveSegmentIndex(-1);
-        event.preventDefault();
-    }, [
-        applyCurveEditFromClientCoordinates,
-        history.edit,
-        clearPendingSegmentTimer,
-        msegController,
-        orientation,
-        surfaceRef,
-        updateHoveredSegmentIndex,
-    ]);
-
-    const handlePointerLeave = useCallback((event: ReactPointerEvent<SVGSVGElement>) => {
-        if (activePointerRef.current?.pointerId === event.pointerId) {
-            return;
-        }
-
-        setHoveredSegmentIndex(-1);
-    }, []);
-
-    const handlePointerUp = useCallback((event: ReactPointerEvent<SVGSVGElement>) => {
-        const activePointer = activePointerRef.current;
-        if (!activePointer || activePointer.pointerId !== event.pointerId) {
-            return;
-        }
-
-        if (event.type !== "pointerup") {
-            cancelActivePointer(event.pointerId);
-            event.preventDefault();
-            return;
-        }
-
-        void history.finishGesture();
-        const pointerState = activePointer;
-        activePointerRef.current = null;
-        setActiveSegmentIndex(-1);
-        try {
-            if (event.currentTarget.hasPointerCapture(event.pointerId)) {
-                event.currentTarget.releasePointerCapture(event.pointerId);
-            }
-        } catch {
-            // Capture may already be gone after a platform cancellation.
-        }
-
-        if (pointerState.kind === "pending-segment") {
-            clearPendingSegmentTimer(pointerState);
-            if (surfaceRef.current) {
-                const bounds = surfaceRef.current.getBoundingClientRect();
-                const point = msegEditorCoordinatesToPoint(
-                    event.clientX - bounds.left,
-                    event.clientY - bounds.top,
-                    bounds.width,
-                    bounds.height,
-                    { orientation },
-                );
-                addPoint(point.x, point.y);
-            }
-            event.preventDefault();
-            setHoveredSegmentIndex(resolvePointerLocation(event.clientX, event.clientY)?.segmentIndex ?? -1);
-            return;
-        }
-
-        if (pointerState.kind === "curve-drag") {
-            setHoveredSegmentIndex(resolvePointerLocation(event.clientX, event.clientY)?.segmentIndex ?? -1);
-            event.preventDefault();
-            return;
-        }
-
-        if (!pointerState.moved && pointerState.deleteOnRelease && msegController.current) {
-            const controller = msegController.current;
-            history.edit(() => {
-                const result = controller.deletePoint(pointerState.pointIndex);
-                const pointCount = controller.getState()?.shape.points.length ?? 0;
-                setSelectedPointIndex(clamp(pointerState.pointIndex - 1, 0, Math.max(0, pointCount - 1)));
-                return result;
-            });
-        }
-
-        setHoveredSegmentIndex(resolvePointerLocation(event.clientX, event.clientY)?.segmentIndex ?? -1);
-        event.preventDefault();
-    }, [
-        addPoint,
-        cancelActivePointer,
-        history.edit,
-        history.finishGesture,
-        clearPendingSegmentTimer,
-        msegController,
-        orientation,
-        resolvePointerLocation,
-        surfaceRef,
-    ]);
-
-    return {
-        isOpen,
-        selectedPointIndex,
-        hoveredSegmentIndex,
-        activeSegmentIndex,
-        canUndo: history.canUndo,
-        beginEditorSession,
-        openEditor,
-        resumeEditorSession,
-        closeEditor,
-        undoLastEdit,
-        cancelGesture: cancelActivePointer,
-        finishGesture: history.finishGesture,
-        handlePointerDown,
-        handlePointerMove,
-        handlePointerLeave,
-        handlePointerUp,
-    };
+    return { ...gestures, isOpen, canUndo: history.canUndo, beginEditorSession, openEditor,
+        resumeEditorSession, closeEditor, undoLastEdit, finishGesture: history.finishGesture };
 }
 
 function useStableArrowTarget(targetID: string, onArrowStep: (direction: ArrowStepDirection) => void) {

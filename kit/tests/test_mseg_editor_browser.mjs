@@ -28,7 +28,8 @@ function View(){const [shape,setShape]=useState(createDefaultMsegShape());window
     shape=await page.evaluate(()=>window.shape);assert.ok(Math.abs(shape.points[0].curvePower)>.1);
     bounds=await point.boundingBox();await page.mouse.click(bounds.x+bounds.width/2,bounds.y+bounds.height/2);await page.waitForFunction(()=>window.shape.points.length===2);
     const original=await page.evaluate(()=>window.shape);bounds=await page.locator('[data-point-index="1"]').boundingBox();await page.mouse.move(bounds.x+bounds.width/2,bounds.y+bounds.height/2);await page.mouse.down();await page.mouse.move(box.x+380,box.y+90,{steps:3});
-    await svg.dispatchEvent('pointercancel',{pointerId:1});await page.mouse.up();assert.deepEqual(await page.evaluate(()=>window.shape),original);
+    const accepted=await page.evaluate(()=>window.shape);assert.notDeepEqual(accepted,original);
+    await svg.dispatchEvent('pointercancel',{pointerId:1});await page.mouse.up();assert.deepEqual(await page.evaluate(()=>window.shape),accepted, 'cancellation preserves accepted movement and never applies a release-only edit');
     assert.ok((await page.evaluate(()=>window.gestures)).includes('cancel'));assert.deepEqual(errors,[]);
     console.log('MSEG single-curve editor: add, move, curve bend, delete, cancel passed; no product UI or page errors.');
 } finally {await browser?.close();if(server)await new Promise(resolve=>server.close(resolve));await rm(directory,{recursive:true,force:true});}

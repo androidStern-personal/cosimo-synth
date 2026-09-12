@@ -1,5 +1,6 @@
 #define CMAJOR_DLL 1
 #include "cmajor/helpers/cmaj_Patch.h"
+#include "NativeMessageLoop.h"
 #include "cmajor/helpers/cmaj_PatchWorker_QuickJS.h"
 #include "choc/gui/choc_MessageLoop.h"
 #if defined(COSIMO_SHARED_STATE_AOT)
@@ -30,6 +31,8 @@ struct ObservedSharedStateDSP : SharedStateDSP
 #include <array>
 #include <chrono>
 #include <future>
+#include <fstream>
+#include <iterator>
 #include <iostream>
 #include <memory>
 #include <stdexcept>
@@ -86,12 +89,7 @@ struct Fixture
 {
     template <typename Fn> auto onLoop (Fn run)
     {
-        using Result = std::invoke_result_t<Fn>;
-        auto task = std::make_shared<std::packaged_task<Result()>> (std::move (run));
-        auto result = task->get_future();
-        choc::messageloop::postMessage ([task] { (*task)(); });
-        require (result.wait_for (deadline) == std::future_status::ready, "native message loop timed out");
-        return result.get();
+        return native_test::onMessageLoop (std::move (run), deadline, "native message loop timed out");
     }
 
     std::array<float, 3> render()
@@ -319,6 +317,101 @@ Value settingsCheckpoint (Fixture& fixture, const char* name, float amount, bool
     });
 }
 
+void expectLoaded (Fixture& fixture, const char* file, std::initializer_list<float> samples)
+{
+    fixture.waitFor ([&] {
+        const auto state = fixture.view->state();
+        const auto field = state["fields"]["loaded"];
+        return field["value"].toString() == file && field["application"]["kind"].toString() == "acknowledged";
+    }, "custom prepared file did not become audible");
+    fixture.onLoop ([&] {
+        require (fixture.patch->sendEventOrValueToPatch (cmaj::EndpointID::create (std::string ("readLoaded")), Value (true), 0, 0), "reader mode rejected");
+        const std::vector<float> values (samples);
+        for (int32_t index = -1; index <= static_cast<int32_t> (values.size()); ++index) {
+            fixture.endpoint ("readIndex", index);
+            const auto output = fixture.render();
+            const float expected = index >= 0 && index < static_cast<int32_t> (values.size()) ? values[index] : 0;
+            require (output[0] == expected && output[1] == values.size(), "loaded file sample or variable size mismatch");
+        }
+        require (fixture.patch->sendEventOrValueToPatch (cmaj::EndpointID::create (std::string ("readLoaded")), Value (false), 0, 0), "reader mode reset rejected");
+        fixture.endpoint ("readIndex", 1025);
+        fixture.render();
+    });
+}
+
+#if ! defined(COSIMO_SHARED_STATE_AOT)
+void expectCompileFailureRecovery (Fixture& fixture)
+{
+    const auto sourcePath = fixture.onLoop ([&] {
+        return fixture.patch->getManifest()->getFullPathForFile ("SharedMseg.cmajor");
+    });
+    require (sourcePath.find ("/fixture-") != std::string::npos
+             && sourcePath.find ("/build/fx/shared_mseg_runtime/") != std::string::npos,
+             "rebuild proof may only edit its isolated generated fixture");
+    struct RestoreSource
+    {
+        std::string path, original;
+        bool restored = false;
+        explicit RestoreSource (std::string file) : path (std::move (file))
+        {
+            std::ifstream input (path, std::ios::binary);
+            require (input.good(), "could not read generated fixture source");
+            original.assign (std::istreambuf_iterator<char> (input), std::istreambuf_iterator<char>());
+        }
+        void write (const std::string& content)
+        {
+            std::ofstream output (path, std::ios::binary | std::ios::trunc);
+            output.write (content.data(), static_cast<std::streamsize> (content.size()));
+            output.flush();
+            require (output.good(), "could not write generated fixture source");
+        }
+        void restore() { write (original); restored = true; }
+        ~RestoreSource()
+        {
+            if (! restored) try { restore(); }
+            catch (const std::exception& error) { std::cerr << "SOURCE RESTORE FAIL: " << error.what() << '\n'; }
+        }
+    } source (sourcePath);
+    const auto oldScope = fixture.onLoop ([&] { return fixture.view->scope; });
+    source.write (source.original + "\nprocessor BrokenCompileProbe { nonsense }\n");
+    fixture.onLoop ([&] {
+        fixture.patch->rebuild (true);
+        require (! fixture.workerError.empty() && fixture.workerError.find ("SharedMseg.cmajor") != std::string::npos,
+                 "invalid source did not produce a real compiler diagnostic");
+    });
+    source.restore();
+    fixture.onLoop ([&] {
+        fixture.workerError.clear(); // The expected compile diagnostic was asserted above.
+        fixture.patch->rebuild (true);
+        require (fixture.workerError.empty() && fixture.patch->isPlayable(), "corrected source did not rebuild");
+    });
+    fixture.waitFor ([&] {
+        const auto opened = fixture.view->last ("owner-changed");
+        return opened.isObject() && opened["scope"]["owner"].toString() != oldScope["owner"].toString();
+    }, "successful recompilation did not create a fresh state owner");
+    fixture.attach();
+    expectLoaded (fixture, "descending.json", {1, 0.75f, 0.5f, 0.25f, 0});
+    fixture.edit ("loaded", Value ("ascending.json"));
+    expectLoaded (fixture, "ascending.json", {0.125f, 0.25f, 0.5f});
+    const auto sequence = fixture.onLoop ([&] {
+        const auto sequence = ++fixture.view->sequence;
+        require (fixture.patch->handleClientMessage (*fixture.view, envelope (choc::json::create (
+            "kind", "command", "scope", oldScope, "client", fixture.view->client, "sequence", sequence,
+            "command", choc::json::create ("kind", "edit", "key", "loaded", "value", "descending.json")))),
+            "native channel did not handle old-scope command");
+        return sequence;
+    });
+    fixture.waitFor ([&] { return fixture.view->receipt (sequence).isObject(); }, "old-scope command did not settle");
+    fixture.onLoop ([&] {
+        const auto receipt = fixture.view->receipt (sequence);
+        require (receipt["kind"].toString() == "rejected" && receipt["reason"].toString() == "stale-scope",
+                 "recompiled owner accepted an old-scope command");
+    });
+    expectLoaded (fixture, "ascending.json", {0.125f, 0.25f, 0.5f});
+    std::cout << "PASS actual JIT compile failure, corrected-source rebuild, fresh owner and stale-scope rejection\n";
+}
+#endif
+
 void exercise (Fixture& fixture, const char* manifest)
 {
     auto checkpoints = choc::value::createEmptyArray();
@@ -377,9 +470,26 @@ void exercise (Fixture& fixture, const char* manifest)
     settings.addArrayElement (settingsCheckpoint (fixture, "settings-undone", 1, true, false));
     fixture.command (choc::json::create ("kind", "redo"));
     settings.addArrayElement (settingsCheckpoint (fixture, "settings-redone", 1.5f, false, true));
+    expectLoaded (fixture, "ascending.json", {0.125f, 0.25f, 0.5f});
+    fixture.edit ("loaded", Value ("descending.json"));
+    expectLoaded (fixture, "descending.json", {1, 0.75f, 0.5f, 0.25f, 0});
+    fixture.onLoop ([&] {
+        require (fixture.patch->getFullStoredState()["values"]["loaded"].toString() == "descending.json", "file selection was not saved");
+    });
+    fixture.edit ("gain", Value (0.75f));
+    fixture.command (choc::json::create ("kind", "undo"));
+    expectLoaded (fixture, "descending.json", {1, 0.75f, 0.5f, 0.25f, 0});
+    fixture.command (choc::json::create ("kind", "undo"));
+    expectLoaded (fixture, "ascending.json", {0.125f, 0.25f, 0.5f});
+    fixture.command (choc::json::create ("kind", "redo"));
+    expectLoaded (fixture, "descending.json", {1, 0.75f, 0.5f, 0.25f, 0});
+    fixture.onLoop ([&] { fixture.view.reset(); fixture.render(); });
+    fixture.attach();
+    expectLoaded (fixture, "descending.json", {1, 0.75f, 0.5f, 0.25f, 0});
    #if defined(COSIMO_SHARED_STATE_AOT)
     const char* renderer = "actual compiled native Cmajor";
    #else
+    expectCompileFailureRecovery (fixture);
     const char* renderer = "actual native Cmajor JIT";
    #endif
     std::cout << "RESULT " << choc::json::toString (choc::json::create ("checkpoints", checkpoints,

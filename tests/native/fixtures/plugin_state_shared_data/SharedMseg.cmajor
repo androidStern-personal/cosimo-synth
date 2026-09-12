@@ -2,12 +2,15 @@ processor SharedMseg
 {
     input value float gain [[ name: "Gain", min: 0, max: 2, init: 1 ]];
     input value int readIndex [[ name: "Read index", min: -1, max: 2052, init: 1025 ]];
+    input value bool readLoaded;
     output stream float<3> out;
     void main()
     {
         loop
         {
-            out <- float<3> (PluginState::shape::read (readIndex), float (PluginState::shape::size()), gain);
+            if (readLoaded)
+                out <- float<3> (PluginState::loaded::read (readIndex), float (PluginState::loaded::size()), gain);
+            else out <- float<3> (PluginState::shape::read (readIndex), float (PluginState::shape::size()), gain);
             advance();
         }
     }

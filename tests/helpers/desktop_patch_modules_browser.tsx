@@ -1,3 +1,8 @@
+import type { PluginStateNativeParameter } from "../../kit/ui/plugin-state-session";
+import { usePluginState } from "../../kit/ui/plugin-state-react";
+import { synthPluginState } from "../../ui/shared/synth-plugin-state";
+import { MsegEditor } from "../../kit/ui/mseg-editor";
+import { createDefaultMsegShape as defaultKitCurve, addMsegPoint as addKitPoint } from "../../kit/ui/mseg";
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { createModulationEditorFixture, createModulationProjectionHost } from "./modulation_editor_state";
 import { createRoot, type Root } from "react-dom/client";
@@ -1479,7 +1484,7 @@ export async function installFoldedAnalyzerActivityHarness(target: HTMLElement) 
     await waitForMicrotask();
 }
 
-export async function installModulationRouteAmountBindingHarness(target: HTMLElement) {
+export async function installModulationRouteAmountBindingHarness(target: HTMLElement, parameters: readonly PluginStateNativeParameter[]) {
     const routeId = "fine-grained-route-amount";
     const initialRoute = createDefaultRoute({
         id: routeId,
@@ -1496,7 +1501,7 @@ export async function installModulationRouteAmountBindingHarness(target: HTMLEle
     let bindingValue = 0;
     let parentAmount: number | null = null;
 
-    const native = await createModulationProjectionHost({ [MODULATION_STATE_KEY]: serializeModulationState(initialState) });
+    const native = await createModulationProjectionHost({ [MODULATION_STATE_KEY]: serializeModulationState(initialState) }, parameters);
     const patchConnection = native.connection;
     const mounted = mountHarness(target, (root) => {
         function Reader() {
@@ -1920,46 +1925,57 @@ export async function installPatchParameterHostBaselineHarness(target: HTMLEleme
     await waitForMicrotask();
 }
 
-export async function installArticulationReconnectHydrationHarness(target: HTMLElement) {
-    class DeferredFullStatePatchConnection extends MockPatchConnection {
-        private pendingFullStateCallbacks: Array<(state: Record<string, unknown>) => void> | undefined;
-        private responseState: Record<string, unknown> = {};
+// Delay the real owner bootstrap, which now owns articulation hydration. GUI
+// storage callbacks no longer determine readiness or supply the initial bank.
+class DeferredArticulationOwnerConnection extends MockPatchConnection {
+    private readonly attached: Promise<void>;
+    private readonly opening: { pending: boolean; release(): void };
 
-        constructor(label: string, slotCount: number) {
-            super({ name: label });
-            let articulations = createEmptyArticulationsState();
-            for (let slotIndex = 0; slotIndex < slotCount; slotIndex += 1) {
-                articulations = addCapturedArticulationV4(articulations, {
-                    overrides: {},
-                    routeAmounts: {},
-                });
-            }
-            this.responseState = {
-                [MODULATION_STATE_KEY]: serializeModulationState(createDefaultModulationState()),
-                [ARTICULATIONS_V4_STATE_KEY]: serializeArticulationsV4(articulations),
+    constructor(label: string, articulationValue: unknown) {
+        let release!: () => void;
+        const ready = new Promise<void>((resolve) => { release = resolve; });
+        const opening = { pending: true, release() { opening.pending = false; release(); } };
+        super({ name: label }, {
+            loadStateChannel: async () => {
+                await ready;
+                const moduleURL = "/cmaj_api/cmaj-plugin-state-channel.js";
+                return import(/* @vite-ignore */ moduleURL);
+            },
+        });
+        this.opening = opening;
+        this.attached = new Promise<void>((resolve) => {
+            const observe = (message: unknown) => {
+                if (message === null || typeof message !== "object" || !("kind" in message) || message.kind !== "attached") return;
+                this.removeEventListener("kit_state", observe);
+                resolve();
             };
-        }
-
-        override requestFullStoredState(callback: (state: Record<string, unknown>) => void) {
-            const callbacks = this.pendingFullStateCallbacks ?? [];
-            callbacks.push(callback);
-            this.pendingFullStateCallbacks = callbacks;
-        }
-
-        releaseFullStoredState() {
-            const callbacks = this.pendingFullStateCallbacks ?? [];
-            this.pendingFullStateCallbacks = [];
-            callbacks.forEach((callback) => callback(cloneValue(this.responseState)));
-        }
-
-        get pendingFullStateRequestCount() {
-            return this.pendingFullStateCallbacks?.length ?? 0;
-        }
+            this.addEventListener("kit_state", observe);
+        });
+        this.sendStoredStateValue(MODULATION_STATE_KEY, serializeModulationState(createDefaultModulationState()));
+        this.sendStoredStateValue(ARTICULATIONS_V4_STATE_KEY, articulationValue);
     }
 
+    async releaseStateOwner() {
+        this.opening.release();
+        // Wait for the actual old-view response even when React has detached it.
+        // This observer adds no client lease and cannot keep that view alive.
+        await this.attached;
+    }
+    get pendingStateOwnerCount() { return this.opening.pending ? 1 : 0; }
+}
+
+function articulationBankWithSlots(slotCount: number) {
+    let state = createEmptyArticulationsState();
+    for (let slotIndex = 0; slotIndex < slotCount; slotIndex += 1) {
+        state = addCapturedArticulationV4(state, { overrides: {}, routeAmounts: {} });
+    }
+    return serializeArticulationsV4(state);
+}
+
+export async function installArticulationReconnectHydrationHarness(target: HTMLElement) {
     const connections = {
-        first: new DeferredFullStatePatchConnection("Old articulation connection", 2),
-        second: new DeferredFullStatePatchConnection("New articulation connection", 2),
+        first: new DeferredArticulationOwnerConnection("Old articulation connection", articulationBankWithSlots(2)),
+        second: new DeferredArticulationOwnerConnection("New articulation connection", articulationBankWithSlots(2)),
     } as const;
     let synthView: ReturnType<typeof useSynthPatchViewModel> | null = null;
     let selectConnection: ((connectionID: keyof typeof connections) => void) | null = null;
@@ -2079,8 +2095,8 @@ export async function installArticulationReconnectHydrationHarness(target: HTMLE
             await waitForMicrotask();
             await waitForMicrotask();
         },
-        async releaseFullStoredState(connectionID: keyof typeof connections) {
-            connections[connectionID].releaseFullStoredState();
+        async releaseStateOwner(connectionID: keyof typeof connections) {
+            await connections[connectionID].releaseStateOwner();
             await waitForMicrotask();
             await waitForMicrotask();
         },
@@ -2129,8 +2145,8 @@ export async function installArticulationReconnectHydrationHarness(target: HTMLE
                     second: cloneValue(connections.second.getDebugSnapshot()),
                 },
                 pendingRequests: {
-                    first: connections.first.pendingFullStateRequestCount,
-                    second: connections.second.pendingFullStateRequestCount,
+                    first: connections.first.pendingStateOwnerCount,
+                    second: connections.second.pendingStateOwnerCount,
                 },
             };
         },
@@ -2143,68 +2159,25 @@ export async function installArticulationReconnectHydrationHarness(target: HTMLE
     await waitForStateReaderMounted(() => synthView !== null);
 }
 
-export async function installArticulationKeyHydrationHarness(target: HTMLElement) {
-    class DeferredKeyStatePatchConnection {
-        private pendingArticulationRequests = 0;
-        private readonly native: MockPatchConnection;
-        readonly gui: PatchConnectionLike;
-
-        constructor(label: string, private readonly articulationResponse: unknown) {
-            this.native = new MockPatchConnection({ name: label });
-            const methods = new Map<PropertyKey, unknown>();
-            // The real owner reads through the native connection. Only the GUI
-            // connection lacks full-state reads and defers its key response.
-            this.gui = new Proxy(this.native, {
-                get: (native, key) => {
-                    if (key === "requestFullStoredState") return undefined;
-                    if (key === "requestStoredStateValue") return this.requestStoredStateValue;
-                    const value = Reflect.get(native, key, native);
-                    if (typeof value !== "function") return value;
-                    if (!methods.has(key)) methods.set(key, value.bind(native));
-                    return methods.get(key);
-                },
-            });
-        }
-
-        private requestStoredStateValue = (key: string) => {
-            if (key !== ARTICULATIONS_V4_STATE_KEY) {
-                this.native.requestStoredStateValue(key);
-                return;
-            }
-            this.pendingArticulationRequests += 1;
-        };
-
-        releaseArticulationState() {
-            if (this.pendingArticulationRequests <= 0) return;
-            this.pendingArticulationRequests -= 1;
-            this.native.setStoredStateValue(ARTICULATIONS_V4_STATE_KEY, cloneValue(this.articulationResponse));
-        }
-
-        get pendingArticulationRequestCount() {
-            return this.pendingArticulationRequests;
-        }
-    }
-
-    const stateWithSlots = (slotCount: number) => {
-        let state = createEmptyArticulationsState();
-        for (let slotIndex = 0; slotIndex < slotCount; slotIndex += 1) {
-            state = addCapturedArticulationV4(state, { overrides: {}, routeAmounts: {} });
-        }
-        return serializeArticulationsV4(state);
-    };
+export async function installArticulationOwnerHydrationHarness(target: HTMLElement) {
     const connections = {
-        undefined: new DeferredKeyStatePatchConnection("Undefined key response", undefined),
-        malformed: new DeferredKeyStatePatchConnection("Malformed key response", { kind: "not-articulations" }),
-        valid: new DeferredKeyStatePatchConnection("Valid key response", stateWithSlots(1)),
-        reconnectOld: new DeferredKeyStatePatchConnection("Disconnected key response", stateWithSlots(1)),
-        reconnectNew: new DeferredKeyStatePatchConnection("Current key response", stateWithSlots(2)),
+        undefined: new DeferredArticulationOwnerConnection("Undefined saved value", undefined),
+        malformed: new DeferredArticulationOwnerConnection("Malformed saved value", { kind: "not-articulations" }),
+        valid: new DeferredArticulationOwnerConnection("Valid saved value", articulationBankWithSlots(1)),
+        reconnectOld: new DeferredArticulationOwnerConnection("Disconnected saved value", articulationBankWithSlots(1)),
+        reconnectNew: new DeferredArticulationOwnerConnection("Current saved value", articulationBankWithSlots(2)),
     } as const;
     type ConnectionID = keyof typeof connections;
+    let articulationReadiness: unknown = null;
+    let repairArticulations: (() => Promise<unknown>) | null = null;
     let synthView: ReturnType<typeof useSynthPatchViewModel> | null = null;
     let selectConnection: ((connectionID: ConnectionID) => void) | null = null;
 
     const mounted = mountHarness(target, (root) => {
         function Reader() {
+            const articulation = usePluginState(synthPluginState[ARTICULATIONS_V4_STATE_KEY]);
+            articulationReadiness = articulation.state;
+            repairArticulations = () => articulation.setValue(createEmptyArticulationsState());
             const stageRef = useRef<HTMLDivElement | null>(null);
             const msegEditorSurfaceRef = useRef<SVGSVGElement | null>(null);
             const keyboardRef = useRef(null);
@@ -2220,7 +2193,7 @@ export async function installArticulationKeyHydrationHarness(target: HTMLElement
             return (
                 <button
                     type="button"
-                    data-role="key-hydration-capture"
+                    data-role="owner-hydration-capture"
                     disabled={!synthView.canCaptureArticulation}
                 >
                     Capture
@@ -2232,8 +2205,8 @@ export async function installArticulationKeyHydrationHarness(target: HTMLElement
             const [connectionID, setConnectionID] = useState<ConnectionID>("undefined");
             selectConnection = setConnectionID;
             return (
-                <PatchConnectionProvider patchConnection={connections[connectionID].gui}>
-                    <SynthStateProvider patchConnection={connections[connectionID].gui}>
+                <PatchConnectionProvider patchConnection={connections[connectionID]}>
+                    <SynthStateProvider patchConnection={connections[connectionID]}>
                         <Reader />
                     </SynthStateProvider>
                 </PatchConnectionProvider>
@@ -2245,7 +2218,7 @@ export async function installArticulationKeyHydrationHarness(target: HTMLElement
 
     const requireSynthView = () => {
         if (synthView === null) {
-            throw new Error("Articulation key hydration harness is not ready.");
+            throw new Error("Articulation owner hydration harness is not ready.");
         }
         return synthView;
     };
@@ -2256,20 +2229,26 @@ export async function installArticulationKeyHydrationHarness(target: HTMLElement
             await waitForMicrotask();
             await waitForMicrotask();
         },
-        async releaseArticulationState(connectionID: ConnectionID) {
-            connections[connectionID].releaseArticulationState();
+        async releaseStateOwner(connectionID: ConnectionID) {
+            await connections[connectionID].releaseStateOwner();
             await waitForMicrotask();
             await waitForMicrotask();
+        },
+        async repairArticulations() {
+            if (!repairArticulations) throw new Error("The articulation control is not mounted.");
+            return repairArticulations();
         },
         getSnapshot() {
             const currentSynthView = requireSynthView();
             return {
+                articulationReadiness: cloneValue(articulationReadiness),
+                malformedStoredValue: cloneValue(connections.malformed.getDebugSnapshot().storedState[ARTICULATIONS_V4_STATE_KEY]),
                 hasHydrated: currentSynthView.hasHydratedArticulations,
                 canCapture: currentSynthView.canCaptureArticulation,
                 slotCount: currentSynthView.articulationSlots.length,
-                captureDisabled: (target.querySelector('[data-role="key-hydration-capture"]') as HTMLButtonElement | null)?.disabled ?? null,
+                captureDisabled: (target.querySelector('[data-role="owner-hydration-capture"]') as HTMLButtonElement | null)?.disabled ?? null,
                 pendingRequests: Object.fromEntries(Object.entries(connections).map(([connectionID, connection]) => (
-                    [connectionID, connection.pendingArticulationRequestCount]
+                    [connectionID, connection.pendingStateOwnerCount]
                 ))),
             };
         },
@@ -2347,7 +2326,7 @@ export async function installPrecisionOptimisticEchoHarness(target: HTMLElement)
     await waitForMicrotask();
 }
 
-export async function installMsegStateHookHarness(target: HTMLElement) {
+export async function installMsegStateHookHarness(target: HTMLElement, parameters: readonly PluginStateNativeParameter[]) {
     const renderLog: Array<MsegState | null> = [];
 
     const bootModulationState = createDefaultModulationState();
@@ -2369,7 +2348,7 @@ export async function installMsegStateHookHarness(target: HTMLElement) {
     const bootState = {
         [MODULATION_STATE_KEY]: serializeModulationState(bootModulationState),
     };
-    const native = await createModulationProjectionHost(bootState);
+    const native = await createModulationProjectionHost(bootState, parameters);
     const patchConnection = native.connection;
     const mounted = mountHarness(target, (root) => {
         function Reader() {
@@ -2496,6 +2475,43 @@ export async function installStagePositionDragHookHarness(target: HTMLElement) {
         },
     };
 
+    await waitForMicrotask();
+}
+
+/** Actual customer editor with its ordinary controlled-value seam. */
+export async function installStockMsegEditorHarness(target: HTMLElement) {
+    let current = addKitPoint(defaultKitCurve(), .5, .35);
+    let setMode: (mode: "immediate" | "hold-or-drag") => void;
+    let setDelay: (delay: number) => void;
+    const hapticLog: string[] = [];
+    const mounted = mountHarness(target, root => {
+        function Harness() {
+            const [shape, setShape] = useState(current);
+            current = shape;
+            const [mode, updateMode] = useState<"immediate" | "hold-or-drag">("immediate");
+            const [delay, updateDelay] = useState(350);
+            setMode = updateMode; setDelay = updateDelay;
+            return <MsegEditor value={shape} onChange={setShape} style={{height: 180}} curveEditActivationMode={mode}
+                curveEditHoldDelayMs={delay} onCurveEditHoldActivated={() => hapticLog.push("light")} />;
+        }
+        root.render(<Harness />);
+    });
+    window.__COSIMO_DESKTOP_MODULE_HARNESS__ = {
+        getSnapshot() { return {points: cloneValue(current.points), hapticLog: [...hapticLog]}; },
+        async setCurveEditMode(mode: "immediate" | "hold-or-drag") { setMode(mode); await waitForMicrotask(); },
+        async setCurveEditHoldDelayMs(delay: number) { setDelay(delay); await waitForMicrotask(); },
+        getPointCoordinates(index: number) {
+            const {bounds} = readSurfaceBounds('[data-role="mseg-editor"]');
+            const point = pointToMsegEditorCoordinates(current.points[index], bounds.width, bounds.height);
+            return {x: bounds.left + point.x, y: bounds.top + point.y};
+        },
+        async dispatchPointer(type: string, init: PointerEventInit) {
+            const {surface} = readSurfaceBounds('[data-role="mseg-editor"]');
+            surface.dispatchEvent(new PointerEvent(type, {bubbles: true, ...init}));
+            await waitForMicrotask();
+        },
+        async unmount() { mounted.unmount(); await waitForMicrotask(); },
+    };
     await waitForMicrotask();
 }
 

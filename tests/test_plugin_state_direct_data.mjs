@@ -65,7 +65,7 @@ test('budget refusal preserves audio and frees staging so a smaller subsequent e
     } finally {f.close();}
 });
 
-test('public stock writer failure retains audio; retry adds no edit, while a thrown writer stays a defect',async()=>{
+for (const preparationKind of ['fixed', 'loaded']) test(`public ${preparationKind} preparation preserves audio, retries expected failures and isolates author defects`,async()=>{
     const root=path.resolve(import.meta.dirname,'..');
     const [{definePluginState,preparedState,preparationFailure,parameter},{sharedData},{createCmajorPluginStateService,createCmajorPluginStateClient},{PluginStateChannel}]=await Promise.all([
         loadUIModule(root,'kit/ui/plugin-state-definition.ts'),loadUIModule(root,'kit/ui/shared-data-delivery.ts'),
@@ -103,15 +103,22 @@ test('public stock writer failure retains audio; retry adds no edit, while a thr
     (key,value)=>{saved.set(key,value);writes.push({key,value});},()=>views);
     const thrown=new Error('writer invariant violated');
     const codec={parse:value=>typeof value==='number'&&Number.isFinite(value)?{kind:'ok',value}:{kind:'error',message:'number required'},encode:value=>value,equals:Object.is};
-    const definition=definePluginState({gain:parameter('gain'),curve:preparedState({codec,initial:1,engine:sharedData({type:'float32',length:4}),
-        prepare(value,destination){
+    const held = new Map(), loadedWrites = [];
+    function write(value,destination){
             assert.equal(destination.buffer,memory.buffer,'public writer must borrow the exact host allocation');
             destination[0]=value; // A partial write must never leak into the active resource on failure.
             if(mode==='missing')return preparationFailure('Source disappeared');
             if(mode==='throw')throw thrown;
             destination.fill(value);
-        },
-    })},{memoryBudgetBytes:64});
+    }
+    const preparationOptions = preparationKind === 'fixed'
+        ? {engine:sharedData({type:'float32',length:4}),prepare:write}
+        : {engine:sharedData({type:'float32'}),async prepare(value,context){
+            const metadata = await (mode==='held' ? new Promise(resolve=>held.set(value,{resolve,signal:context.signal})) : Promise.resolve({length:4,value}));
+            if(mode==='load-throw')throw thrown;
+            return {length:metadata.length,write(destination){loadedWrites.push(metadata.value);return write(metadata.value,destination);}};
+        }};
+    const definition=definePluginState({gain:parameter('gain'),curve:preparedState({codec,initial:1,...preparationOptions})},{memoryBudgetBytes:64});
     const service=createCmajorPluginStateService(definition,worker,{onDefect:error=>defects.push(error)});
     let client;
     const field=()=>client.getSnapshot().kind==='ready'?client.getSnapshot().state.fields.curve:undefined;
@@ -135,8 +142,25 @@ test('public stock writer failure retains audio; retry adds no edit, while a thr
         assert.equal((await client.dispatch(retry)).kind,'rejected','obsolete retry cannot publish again');
         assert.equal((await client.dispatch({kind:'edit',key:'gain',value:3})).kind,'accepted','resource failure did not close the state owner');
         mode='throw';assert.equal((await client.dispatch({kind:'edit',key:'curve',value:4})).kind,'accepted');
-        await until(()=>client.getSnapshot().kind==='closed');
-        assert.deepEqual(defects,[thrown],'unexpected writer failure closes the owner with its original diagnostic');
+        await until(()=>field()?.application?.kind==='failed'&&field()?.application?.error.kind==='defect');
+        assert.deepEqual(defects,[thrown],'unexpected writer failure retains its original diagnostic');
+        assert.equal(client.getSnapshot().kind,'ready','an author preparation defect does not close unrelated fields');
+        assert.equal((await client.dispatch({kind:'edit',key:'gain',value:5})).kind,'accepted');
+        assert.equal((await client.dispatch({kind:'retry',key:'curve',expectedVersion:field().version,
+            expectedGeneration:field().target.generation,expectedPersistenceRequest:null})).kind,'rejected','a preparation defect cannot be automatically retried');
         assert.deepEqual(render(),[2,2,2,2]);assert.equal(host.retainedBytes,16);
+        if(preparationKind==='loaded'){
+            mode='load-throw';assert.equal((await client.dispatch({kind:'edit',key:'curve',value:6})).kind,'accepted');
+            await until(()=>field()?.application?.kind==='failed'&&defects.length===2);
+            assert.deepEqual(defects,[thrown,thrown]);assert.equal(field().application.error.kind,'defect');
+            mode='held';assert.equal((await client.dispatch({kind:'edit',key:'curve',value:7})).kind,'accepted');await until(()=>held.has(7));
+            assert.equal((await client.dispatch({kind:'edit',key:'curve',value:8})).kind,'accepted');await until(()=>held.has(8));
+            assert.equal(held.get(7).signal.aborted,true,'superseded source work owns a revoked lifetime');
+            mode='ok';held.get(8).resolve({length:4,value:8});await setImmediate();
+            assert.deepEqual(render(),[8,8,8,8]);await until(()=>field()?.application?.kind==='acknowledged');
+            const count=loadedWrites.length;held.get(7).resolve({length:4,value:7});await setImmediate();
+            assert.equal(loadedWrites.length,count,'a late source must never receive a final allocation');
+            assert.deepEqual(render(),[8,8,8,8]);assert.equal(host.retainedBytes,16);
+        }
     } finally {client?.stop();await service.stop();channel.close();preparation.stop();host.stop();assert.equal(host.retainedBytes,0);}
 });

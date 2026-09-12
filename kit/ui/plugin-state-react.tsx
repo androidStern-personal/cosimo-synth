@@ -100,6 +100,18 @@ export interface PluginStateControl<Value> {
     endGesture(): Promise<PluginStateEditResult> | undefined;
 }
 
+/** Declared values to accept together as one edit and one Undo entry. */
+export type PluginStateChanges<Fields extends PluginStateFields> = {
+    readonly [Key in keyof Fields]?: PluginStateFieldValue<Fields[Key]>;
+};
+
+/** Edit several fields together, guarded by the values observed in this render. */
+export interface PluginStateEditor<Fields extends PluginStateFields> {
+    edit<Changes extends PluginStateChanges<Fields>>(
+        changes: Changes & { readonly [Key in Exclude<keyof Changes, keyof Fields>]: never },
+    ): Promise<PluginStateEditResult>;
+}
+
 /** Shared history with optional opaque guards for an editor's remembered entry. */
 export interface PluginStateHistory {
     readonly canUndo: boolean;
@@ -125,11 +137,45 @@ export function PluginStateProvider(props: { definition: PluginStateFields; clie
     return <Context.Provider value={value}>{props.children}</Context.Provider>;
 }
 
-/** Read and edit one declared field; control code never sends worker messages. */
-export function usePluginState<Field extends PluginStateParameter | PluginStateStored<unknown>>(declaration: Field): PluginStateControl<PluginStateFieldValue<Field>> {
-    const control = useOptionalPluginState(declaration);
-    if (!control) throw new Error("PluginStateProvider is missing.");
-    return control;
+/** Read one field, or edit several fields together through their definition. */
+export function usePluginState<Field extends PluginStateParameter | PluginStateStored<unknown>>(declaration: Field): PluginStateControl<PluginStateFieldValue<Field>>;
+export function usePluginState<Fields extends PluginStateFields>(definition: Fields): PluginStateEditor<Fields>;
+export function usePluginState(declaration: PluginStateParameter | PluginStateStored<unknown> | PluginStateFields): PluginStateControl<unknown> | PluginStateEditor<PluginStateFields> {
+    const control = useOptionalPluginState(isStateField(declaration) ? declaration : null);
+    const editor = useDefinitionEditor(isStateField(declaration) ? null : declaration);
+    if (control) return control;
+    if (editor) return editor;
+    throw new Error("PluginStateProvider is missing.");
+}
+
+function isStateField(declaration: PluginStateParameter | PluginStateStored<unknown> | PluginStateFields): declaration is PluginStateParameter | PluginStateStored<unknown> {
+    return declaration.kind === "parameter" || declaration.kind === "stored";
+}
+
+function useDefinitionEditor(definition: PluginStateFields | null): PluginStateEditor<PluginStateFields> | null {
+    const context = useContext(Context);
+    const client = definition && context ? context.client : null;
+    const source = useClientValue(client, client?.reactivity.snapshot ?? null, connectingClient);
+    if (!client || !definition) return null;
+    if (definition !== context?.definition) throw new Error("The definition does not belong to this plugin state provider.");
+    const projection = projectionFor(client);
+    return {
+        edit(changes) {
+            const current = client.getSnapshot();
+            if (source.kind !== "ready" || !source.state.scope) return Promise.resolve({ kind: "rejected", reason: "not-ready" });
+            if (current.kind !== "ready" || current.state.scope?.owner !== source.state.scope.owner
+                || current.state.scope.document !== source.state.scope.document)
+                return Promise.resolve({ kind: "rejected", reason: "stale-scope" });
+            const edits = [];
+            for (const [key, value] of Object.entries(changes)) {
+                if (!Object.hasOwn(definition, key)) return Promise.resolve({ kind: "rejected", reason: "invalid-command" });
+                const field = source.state.fields[key];
+                if (!field || field.readiness.kind !== "ready" || !("version" in field)) return Promise.resolve({ kind: "rejected", reason: "not-ready" });
+                edits.push({ key, value, expectedVersion: field.version });
+            }
+            return client.dispatch({ kind: "edit-many", edits }).then(projection.result);
+        },
+    };
 }
 
 /** Internal adapter seam: absence is explicit; an unready declared field still returns its control. */

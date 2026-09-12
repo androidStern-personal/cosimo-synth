@@ -6,7 +6,7 @@ import { loadUIModule } from "../kit/tests/helpers/load_ui_module.mjs";
 
 const root = path.resolve(import.meta.dirname, "..");
 const { RuntimeInstallLane } = await loadUIModule(root, "ui/shared/runtime-install-channel.ts");
-const { definePluginState, storedValue } = await loadUIModule(root, "kit/ui/plugin-state-definition.ts");
+const { definePluginState, preparedState } = await loadUIModule(root, "kit/ui/plugin-state-definition.ts");
 const { createCmajorPluginStateService } = await loadUIModule(root, "kit/ui/plugin-state-cmajor.ts");
 const scope = { owner: "runtime-lane-owner", document: 0 };
 const codec = {
@@ -74,18 +74,17 @@ test("actual custom publisher preserves an uncertain raw throw so RuntimeInstall
     const nativeOutcomes = [];
     let delivery;
     let lane;
-    const definition = definePluginState({ bank: storedValue({ initial: 1, codec }) });
-    const service = createCmajorPluginStateService(definition, connection, {
-        onDefect: error => defects.push(error),
-        bindings: [{ key: "bank", eventEndpoints: ["program", "runtimeSyncRequest"], create(context) {
+    const definition = definePluginState({ bank: preparedState({ initial: 1, codec, prepare: value => value,
+        engine: { eventEndpoints: ["program", "runtimeSyncRequest"], outputEndpoints: ["runtimeInstallAck"], create() {
             return {
-                replace(input, target) {
+                async apply(value, context) {
                     const completions = [];
+                    const listeners = new Map();
                     lane = new RuntimeInstallLane({
-                        addEndpointListener: connection.addEndpointListener.bind(connection),
-                        removeEndpointListener: connection.removeEndpointListener.bind(connection),
+                        addEndpointListener(endpoint, listener) { listeners.set(listener, context.listen(endpoint, listener)); },
+                        removeEndpointListener(_endpoint, listener) { listeners.get(listener)?.(); listeners.delete(listener); },
                         sendEventOrValue(endpoint, value) {
-                            const submission = context.publish(target.scope, { kind: "event", endpoint, value });
+                            const submission = context.send({ kind: "event", endpoint, value });
                             if (submission.kind === "failed") {
                                 immediateFailures.push(submission);
                                 // Existing lane contract treats a synchronous
@@ -102,22 +101,25 @@ test("actual custom publisher preserves an uncertain raw throw so RuntimeInstall
                     }, { laneKind: "modulation", probeDelaysMilliseconds: [1], healthTimeoutMilliseconds: 500 });
                     lane.start();
                     lane.observeRuntime(7);
-                    delivery = lane.sendBatch([{ endpointID: "program", value: { routeCount: input.value } }]).then(async result => {
+                    delivery = lane.sendBatch([{ endpointID: "program", value: { routeCount: value } }]).then(async result => {
                         await Promise.all(completions);
                         return result;
                     });
+                    const result = await delivery;
+                    return result._tag === "accepted" ? { kind: "acknowledged", engineSession: "7", operation: "1" } : { kind: "cancelled" };
                 },
-                cancel() { lane?.stop(); },
-                async stop() { lane?.stop(); await delivery; },
+                stop() { lane?.stop(); },
             };
-        } }],
-    });
+        } },
+    }) });
+    const service = createCmajorPluginStateService(definition, connection, { onDefect: error => defects.push(error) });
     try {
         const starting = service.start();
         const open = connection.messages.find(message => message.kind === "open");
         assert.ok(open);
         connection.deliver({ kind: "opened", request: open.request, scope, native: { parameters: [], values: { bank: 100 } } });
         await starting;
+        await setImmediate();
         assert.ok(delivery, "the actual service must start the configured runtime lane");
         assert.deepEqual(await delivery, { _tag: "accepted" });
         assert.deepEqual(immediateFailures.map(result => result.error.kind), ["transport"]);

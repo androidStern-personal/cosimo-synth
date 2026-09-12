@@ -7,5 +7,9 @@
   "view": {
     "src": "view/index.js",
     "devModule": "/fx/shared_mseg/view/source.ts"
-  }
+  },
+  "resources": [
+    "ascending.json",
+    "descending.json"
+  ]
 }

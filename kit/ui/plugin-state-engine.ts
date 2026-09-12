@@ -1,3 +1,5 @@
+import { createStateLifetime } from "./plugin-state-lifetime";
+
 /** A prepared engine update's identity, independent of GUI lifetime. */
 export type EngineTarget = {
     readonly scope: { readonly owner: string; readonly document: number };
@@ -51,7 +53,7 @@ export interface SendPermit {
 export interface EngineTransport<T> {
     apply(payload: T, permit: SendPermit): Promise<EngineOutcome>;
     /** Release protocol resources; must not throw. */
-    stop(): void;
+    stop(): void | Promise<void>;
 }
 
 /** Dependencies for one preparation/application lifetime. onStatus must not throw. */
@@ -66,29 +68,6 @@ export type EngineBindingOptions<I, P> = {
 };
 
 type AwaitedJob<T> = { readonly kind: "value"; readonly value: T } | { readonly kind: "cancelled" };
-
-function cancellationScope() {
-    let aborted = false;
-    const listeners = new Set<() => void>();
-    const signal: EngineCancellation = {
-        get aborted() { return aborted; },
-        onAbort(listener) {
-            if (aborted) listener();
-            else listeners.add(listener);
-            return () => { listeners.delete(listener); };
-        },
-    };
-    return {
-        signal,
-        cancel() {
-            if (aborted) return;
-            aborted = true;
-            const pending = [...listeners];
-            listeners.clear();
-            for (const listener of pending) listener();
-        },
-    };
-}
 
 // Cancelling releases our task even if an external operation ignores the signal.
 // The attached rejection handler still consumes that operation's late rejection.
@@ -109,7 +88,9 @@ function whileActive<T>(operation: T | Promise<T>, signal: EngineCancellation): 
 /** Owns preparing and applying the latest requested value; no editable history. */
 export function createEngineBinding<I, P>(options: EngineBindingOptions<I, P>) {
     let stopped = false;
-    type Job = ReturnType<typeof cancellationScope> & { applying: boolean; readonly target: EngineTarget };
+    let stopping: Promise<void> | undefined;
+    const stopTransport = () => stopping ??= Promise.resolve(options.transport.stop());
+    type Job = ReturnType<typeof createStateLifetime> & { applying: boolean; readonly target: EngineTarget };
     let current: Job | undefined;
     let queued: { readonly input: I; readonly target: EngineTarget } | undefined;
     const tasks = new Set<Promise<void>>();
@@ -136,7 +117,7 @@ export function createEngineBinding<I, P>(options: EngineBindingOptions<I, P>) {
             if (!signal.aborted) {
                 stopped = true;
                 current?.cancel();
-                options.transport.stop();
+                void stopTransport();
                 options.onDefect(error);
                 options.onStatus(target, {
                     kind: "failed", error: { kind: "defect", message: "Engine transport failed unexpectedly." },
@@ -151,7 +132,7 @@ export function createEngineBinding<I, P>(options: EngineBindingOptions<I, P>) {
     function start(input: I, target: EngineTarget): void {
         queued = undefined;
         const previous = current;
-        const job: Job = { ...cancellationScope(), applying: false, target };
+        const job: Job = { ...createStateLifetime(), applying: false, target };
         current = job;
         previous?.cancel();
         if (stopped || job.signal.aborted) return;
@@ -193,9 +174,9 @@ export function createEngineBinding<I, P>(options: EngineBindingOptions<I, P>) {
                 stopped = true;
                 queued = undefined;
                 current?.cancel();
-                options.transport.stop();
+                void stopTransport();
             }
-            await Promise.all(tasks);
+            await Promise.all([...tasks, stopping]);
         },
     };
 }

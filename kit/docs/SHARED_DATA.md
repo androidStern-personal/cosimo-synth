@@ -19,9 +19,36 @@ export default definePluginState({
 }, { memoryBudgetBytes: 64 * 1024 });
 ```
 
-Use `Mseg.state()` for the bundled curve codec, renderer and 2,051-sample padded representation. For other data, `length` may be a function of the accepted value and declared parameter dependencies; it may return a promise or `preparationFailure(message)`. Float32 lengths count samples. `type:"bytes"` lengths count bytes and must be multiples of four.
+Use `Mseg.state()` for the bundled curve codec, renderer and 2,051-sample padded representation. For a known fixed size, supply numeric `length`. When loading or measuring data first, omit `length` and return a preparation plan as below. Float32 lengths count samples. `type:"bytes"` lengths count bytes and must be multiples of four.
 
 The writer is synchronous and must not retain or mutate its destination after returning. It may return `preparationFailure(message)` before publication. This keeps cancelled storage safe to reclaim; source loading can happen before the write. An advanced delivery can use document-scoped `prepareData` when it needs a longer-running protocol. There is no second full prepared buffer and no sample data in upload messages.
+
+## Load once, then write
+
+```ts
+// PLUGIN AUTHOR: this callback runs outside audio processing.
+// The framework supplies the same resource reader in native and browser builds.
+preparedState({
+    codec: sampleFileCodec,
+    initial: "sample.wav",
+    engine: sharedData({ type: "float32" }),
+    async prepare(file, { resources }) {
+        const audio = await resources.readAudio(file);
+        const channel = audio.samples;
+        return {
+            length: channel.length,
+            write(destination) {
+                // Or perform your own conversion directly into destination.
+                destination.set(channel);
+            },
+        };
+    },
+});
+```
+
+`resources` is the existing kit resource client (`readText`, `readBytes`, `readAudio`). Loading may be asynchronous; the final writer is synchronous. The loaded source belongs to this operation's closure, not an author-managed shared cache. The framework measures the plan, reserves final storage, calls its writer and publishes only when complete. A superseded load cannot write or publish after finishing late. Return `preparationFailure(...)` for a recoverable loading error; an unexpected throw becomes a non-retryable field error.
+
+The old `sharedData({input})` completed-buffer overload and `replaceData` upload helper were removed. New declarations have one direct-memory behavior. A specialized component can still select an explicit `PluginStateDelivery`; the older `engineData` protocol remains explicit for DSP components that actually use it.
 
 ## Size and DSP access
 

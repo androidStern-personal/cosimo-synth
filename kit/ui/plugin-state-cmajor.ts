@@ -1,14 +1,15 @@
+import { createPatchConnectionResourceClient, type PatchConnectionResourceSource } from "./resource-client";
 import { createEngineBinding, type EngineApplication, type EngineFailure, type EngineOutcome, type EngineTarget } from "./plugin-state-engine";
 import { createPluginStateClient } from "./plugin-state-client";
-import { createSharedDataPort } from "./plugin-state-shared-data-port";
-import { getDefinitionOptions, isPreparationFailure, sharedStateResources, type PluginStateDocumentContext, type PluginStateFields, type PluginStateJson } from "./plugin-state-definition";
+import { createStateLifetime } from "./plugin-state-lifetime";
+import { getDefinitionOptions, isPreparationFailure, sharedStateResources, type PluginStateDocumentContext, type PluginStateFields, type PluginStateJson, type PluginStatePreparedValue } from "./plugin-state-definition";
 import type { SharedDataConnection } from "./prepared-shared-data";
 import { createDirectDataPort } from "./plugin-state-direct-data";
 import { createPluginStateSession, type PluginStateScope, type PluginStateEnginePort, type PluginStateEngineInput, type PluginStateSession } from "./plugin-state-session";
 import { encodeEventPayload, encodeStateSnapshot, isBoundedStateJson, isRecord, parseClientMessage, parseClientReceipt, parseServiceMessage } from "./plugin-state-protocol";
 
 /** Existing Cmajor message transport, supplied by a native or browser connection. */
-export interface CmajorStateConnection extends SharedDataConnection {
+export interface CmajorStateConnection extends SharedDataConnection, PatchConnectionResourceSource {
     /** Listen to raw state-channel bodies delivered by the connection. */
     addEventListener(type: "kit_state" | "kit_data", listener: (body: unknown) => void): void;
     /** Release a previously installed state-channel listener. */
@@ -40,74 +41,51 @@ export type CmajorStateEffect =
     | { readonly kind: "event"; readonly endpoint: string; readonly value: unknown }
     | { readonly kind: "host-effect"; readonly name: string; readonly value: unknown };
 
-/** Advanced worker composition; ordinary plugin authors use eventValue. */
-export interface CmajorStateBindingFactory {
-    readonly key: string;
-    readonly dependencies?: readonly string[];
-    readonly eventEndpoints: readonly string[];
-    readonly hostEffects?: readonly string[];
-    /** Construct an inert port; external resources begin with the first replace. */
-    create(context: {
-        /** Submit using the immutable document captured by replace, never a mutable latest scope. */
-        publish(scope: PluginStateScope, effect: CmajorStateEffect): CmajorStateSubmission;
-        /** Report evidence for the exact target that produced it. */
-        onStatus(target: EngineTarget, status: EngineApplication): void;
-        /** Diagnose a programming defect and close the owning service. */
-        onDefect(error: unknown): void;
-    }): Pick<PluginStateEnginePort, "replace" | "cancel" | "stop">;
-}
-
 const handshakeDeadlineMs = 5000;
-
-type StateBindingDeclaration = CmajorStateBindingFactory & { readonly outputEndpoints?: readonly string[]; readonly storedKeys?: readonly string[] };
 
 function sameScope(left: PluginStateScope | null, right: PluginStateScope): boolean {
     return left !== null && left.owner === right.owner && left.document === right.document;
 }
 
-function captureBindingDeclarations(definition: PluginStateFields, declarations: readonly StateBindingDeclaration[]): readonly StateBindingDeclaration[] {
+type PreparedField = { readonly key: string; readonly declaration: PluginStatePreparedValue<unknown> };
+
+/** Validate all declarations before any field acquires external resources. */
+function preparedFields(definition: PluginStateFields): readonly PreparedField[] {
     const validNames = (names: readonly string[]) => Array.isArray(names) && names.every(value => {
         if (typeof value !== "string" || value.length === 0) return false;
-        // encodeURIComponent counts valid UTF-8 here without requiring TextEncoder
-        // in native QuickJS. It rejects unmatched surrogate halves.
         try { return encodeURIComponent(value).replace(/%[0-9A-F]{2}/g, "x").length <= 256; }
         catch { return false; }
     });
-    if (!Array.isArray(declarations)) throw new Error("Invalid custom engine binding declarations.");
-    const keys = new Set<string>();
-    for (const descriptor of declarations) {
-        if (!descriptor || typeof descriptor !== "object" || typeof descriptor.create !== "function"
-            || !validNames([descriptor.key]) || !Object.hasOwn(definition, descriptor.key))
-            throw new Error("Invalid custom engine binding key or factory.");
-        const field = definition[descriptor.key];
-        if (field?.kind !== "stored" || field.engine?.kind === "event-value" || keys.has(descriptor.key))
-            throw new Error("A stored field must have exactly one engine binding.");
-        keys.add(descriptor.key);
-        const dependencies: readonly string[] = descriptor.dependencies ?? [];
-        if (!validNames(dependencies) || dependencies.some(key => !Object.hasOwn(definition, key) || definition[key]?.kind !== "parameter")
-            || !validNames(descriptor.eventEndpoints) || !validNames(descriptor.hostEffects ?? []) || !validNames(descriptor.outputEndpoints ?? []) || !validNames(descriptor.storedKeys ?? []))
-            throw new Error("Invalid custom engine binding dependency or effect declaration.");
-    }
-    return Object.freeze(declarations.map(descriptor => Object.freeze({
-        key: descriptor.key,
-        dependencies: Object.freeze([...(descriptor.dependencies ?? [])]),
-        eventEndpoints: Object.freeze([...descriptor.eventEndpoints]),
-        hostEffects: Object.freeze([...(descriptor.hostEffects ?? [])]),
-        outputEndpoints: Object.freeze([...(descriptor.outputEndpoints ?? [])]),
-        storedKeys: Object.freeze([...(descriptor.storedKeys ?? [])]),
-        create: (context: Parameters<CmajorStateBindingFactory["create"]>[0]) => descriptor.create(context),
-    })));
+    return Object.entries(definition).flatMap(([key, field]) => {
+        if (field.kind !== "stored" || field.engine?.kind !== "prepared") return [];
+        const declaration = field.engine, delivery = declaration.delivery;
+        if (!validNames([key]) || !delivery || typeof delivery.create !== "function"
+            || (delivery.replacement !== undefined && delivery.replacement !== "supersede" && delivery.replacement !== "finish")
+            || !validNames(declaration.dependencies) || declaration.dependencies.some(name => definition[name]?.kind !== "parameter")
+            || !validNames(delivery.eventEndpoints) || !validNames(delivery.hostEffects ?? [])
+            || !validNames(delivery.outputEndpoints ?? []) || !validNames(delivery.storedKeys ?? [])
+            || !Array.isArray(delivery.dataInputs ?? [])
+            || delivery.dataInputs?.some(input => !Number.isSafeInteger(input) || input < 0 || input > 0x7fffffff))
+            throw new Error("Invalid prepared delivery declaration.");
+        return [{ key, declaration: { ...declaration, delivery: Object.freeze({ ...delivery,
+            create: delivery.create.bind(delivery),
+            eventEndpoints: Object.freeze([...delivery.eventEndpoints]),
+            outputEndpoints: Object.freeze([...(delivery.outputEndpoints ?? [])]),
+            storedKeys: Object.freeze([...(delivery.storedKeys ?? [])]),
+            hostEffects: Object.freeze([...(delivery.hostEffects ?? [])]),
+            dataInputs: Object.freeze([...(delivery.dataInputs ?? [])]),
+        }) } }];
+    });
 }
 
 /** Compose a patch-lifetime edit service using Cmajor's raw connection seam. */
 export function createCmajorPluginStateService<const Fields extends PluginStateFields>(
     definition: Fields,
     connection: CmajorStateConnection,
-    options: { readonly onDefect: (error: unknown) => void; readonly bindings?: readonly CmajorStateBindingFactory[] },
+    options: { readonly onDefect: (error: unknown) => void },
 ) {
     let started = false;
     let stopped = false;
-    let dataPort: ReturnType<typeof createSharedDataPort> | undefined;
     let directData: ReturnType<typeof createDirectDataPort> | undefined;
     let nextRequest = 0;
     let openRequest = 0;
@@ -122,35 +100,50 @@ export function createCmajorPluginStateService<const Fields extends PluginStateF
         connection.sendMessageToServer({ type: "kit_state", message: body });
     };
     const enginePublications = new Map<number, { readonly kind: "event-value" | "custom"; readonly key: string; readonly scope: PluginStateScope; readonly finish: (outcome: CmajorStatePublicationOutcome) => void }>();
-    const releasePublications = new WeakMap<Promise<CmajorStatePublicationOutcome>, () => void>();
     const bindings: PluginStateEnginePort[] = [];
+    const resources = createPatchConnectionResourceClient(connection);
+    function authorWrite(write: () => void | import("./plugin-state-definition").PluginStatePreparationFailure) {
+        try { return write(); }
+        catch (error) {
+            options.onDefect(error);
+            return { kind: "failed" as const, error: { kind: "defect" as const, message: "Data preparation failed unexpectedly." } };
+        }
+    }
+    async function authorPreparation<Value>(prepare: () => Value | Promise<Value>): Promise<import("./plugin-state-engine").Prepared<Value>> {
+        try { return { kind: "ok", value: await prepare() }; }
+        catch (error) {
+            options.onDefect(error);
+            return { kind: "error", error: { kind: "defect", message: "Preparation failed unexpectedly." } };
+        }
+    }
     for (const { key, input: resourceInput } of sharedStateResources(definition)) {
         const field = definition[key];
         if (field?.kind !== "stored" || field.engine?.kind !== "shared-prepared") continue;
         const declaration = field.engine;
         const binding = createEngineBinding<PluginStateEngineInput & { readonly target: EngineTarget }, {
-            readonly value: unknown; readonly context: Parameters<typeof declaration.prepare>[2]; readonly target: EngineTarget; readonly length: number;
+            readonly plan: import("./plugin-state-definition").PluginStateSharedPlan; readonly target: EngineTarget;
         }>({
             async prepare(input, signal) {
-                const context = { parameters: input.parameters, signal };
-                const length = await declaration.measure(input.value, context);
-                if (isPreparationFailure(length)) return { kind: "error", error: length.error };
-                if (!Number.isSafeInteger(length) || length <= 0)
-                    return { kind: "error", error: { kind: "resource", message: "Prepared data has an invalid size." } };
-                return { kind: "ok", value: { value: input.value, context, target: input.target, length } };
+                const prepared = await authorPreparation(() => declaration.prepare(input.value, { resources, parameters: input.parameters, signal }));
+                if (prepared.kind === "error") return prepared;
+                const plan = prepared.value;
+                if (isPreparationFailure(plan)) return { kind: "error", error: plan.error };
+                if (!plan || !Number.isSafeInteger(plan.length) || plan.length <= 0 || typeof plan.write !== "function")
+                    return { kind: "error", error: { kind: "resource", message: "Prepared data has an invalid size or writer." } };
+                return { kind: "ok", value: { plan, target: input.target } };
             },
             transport: {
                 apply(payload, permit) {
                     if (permit.signal.aborted || !sameScope(session.getSnapshot().scope, payload.target.scope))
                         return Promise.resolve({ kind: "cancelled" });
                     directData ??= createDirectDataPort(connection);
-                    const bytes = declaration.storage.type === "float32" ? payload.length * 4 : payload.length;
+                    const bytes = declaration.storage.type === "float32" ? payload.plan.length * 4 : payload.plan.length;
                     return directData.prepare({ input: resourceInput, byteLength: bytes }, payload.target, permit.signal, destination => {
                         const view = declaration.storage.type === "float32"
-                            ? new Float32Array(destination.buffer, destination.byteOffset, payload.length)
-                            : new Uint8Array(destination.buffer, destination.byteOffset, payload.length);
-                        const result = declaration.prepare(payload.value, view, payload.context);
-                        if (isPreparationFailure(result)) return result;
+                            ? new Float32Array(destination.buffer, destination.byteOffset, payload.plan.length)
+                            : new Uint8Array(destination.buffer, destination.byteOffset, payload.plan.length);
+                        const result = authorWrite(() => payload.plan.write(view));
+                        if (result) return result;
                         if (view instanceof Float32Array && !view.every(Number.isFinite))
                             return { kind: "preparation-error", error: { kind: "resource", message: "Prepared samples must be finite." } };
                     });
@@ -169,7 +162,9 @@ export function createCmajorPluginStateService<const Fields extends PluginStateF
         const declaration = field.engine;
         const binding = createEngineBinding<PluginStateEngineInput & { readonly target: EngineTarget }, { readonly target: EngineTarget; readonly value: PluginStateJson }>({
             async prepare(input, signal) {
-                const payload = await declaration.prepare(input.value, { parameters: input.parameters, signal });
+                const prepared = await authorPreparation(() => declaration.prepare(input.value, { resources, parameters: input.parameters, signal }));
+                if (prepared.kind === "error") return prepared;
+                const payload = prepared.value;
                 if (isPreparationFailure(payload)) return { kind: "error", error: payload.error };
                 const parsed = encodeEventPayload(payload);
                 return parsed.kind === "ok" ? { kind: "ok", value: { target: input.target, value: parsed.value } }
@@ -230,7 +225,6 @@ export function createCmajorPluginStateService<const Fields extends PluginStateF
             },
             close(reason) {
                 stopped = true;
-                dataPort?.stop();
                 directData?.stop();
                 for (const pending of enginePublications.values()) pending.finish({ kind: "cancelled" });
                 failStart(new Error("State service closed before native initialization completed."));
@@ -326,211 +320,147 @@ export function createCmajorPluginStateService<const Fields extends PluginStateF
         stopping = session.stop();
         return stopping;
     };
-    const preparedDeclarations = (): StateBindingDeclaration[] => Object.entries(definition).flatMap(([key, field]) => {
-        if (field.kind !== "stored" || field.engine?.kind !== "prepared") return [];
-        const declaration = field.engine;
+    function fail(error: unknown) { options.onDefect(error); void stop(); }
+    function preparedPort({ key, declaration }: PreparedField): PluginStateEnginePort {
         const delivery = declaration.delivery;
-        if (!delivery || typeof delivery.create !== "function"
-            || (delivery.replacement !== undefined && delivery.replacement !== "supersede" && delivery.replacement !== "finish"))
-            throw new Error("Invalid prepared delivery factory or replacement policy.");
-        const create = delivery.create.bind(delivery);
-        const replacement = delivery.replacement;
-        const dataInputs = Object.freeze([...(delivery.dataInputs ?? [])]);
-        if (dataInputs.some(input => !Number.isSafeInteger(input) || input < 0 || input > 0x7fffffff))
-            throw new Error("Invalid shared-data input declaration.");
-        const outputEndpoints = Array.isArray(delivery.outputEndpoints) ? Object.freeze([...delivery.outputEndpoints]) : delivery.outputEndpoints;
-        const storedKeys = Array.isArray(delivery.storedKeys) ? Object.freeze([...delivery.storedKeys]) : delivery.storedKeys;
-        return [{ key, storedKeys, dependencies: declaration.dependencies, eventEndpoints: delivery.eventEndpoints,
-            hostEffects: delivery.hostEffects, outputEndpoints,
-            create(context) {
-                let document: { readonly scope: PluginStateScope; readonly binding: ReturnType<typeof openDocument>["binding"]; close(): Promise<void> } | undefined;
-                let closed = false;
-                const closing = new Set<Promise<void>>();
-                function closeDocument() {
-                    const old = document; document = undefined;
-                    if (!old) return;
-                    const work = old.close(); closing.add(work);
-                    void work.then(() => closing.delete(work), error => { closing.delete(work); context.onDefect(error); });
-                }
-                function openDocument(target: EngineTarget) {
-                    const scope = Object.freeze({ ...target.scope });
-                    let active = true, currentTarget = target;
-                    const releases = new Set<() => void>();
-                    const signal = {
-                        get aborted() { return !active; },
-                        onAbort(listener: () => void) {
-                            if (!active) listener(); else releases.add(listener);
-                            return () => { releases.delete(listener); };
-                        },
-                    };
-                    const resources: PluginStateDocumentContext = {
-                        signal,
-                        send(effect) {
-                            if (!active) return { kind: "cancelled" };
-                            const submission = context.publish(scope, effect);
-                            if (submission.kind === "submitted") {
-                                const release = releasePublications.get(submission.completion);
-                                if (release) { releases.add(release); void submission.completion.then(() => releases.delete(release)); }
-                            }
-                            return submission;
-                        },
-                        listen(endpoint, listener) {
-                            if (!outputEndpoints?.includes(endpoint)) throw new Error("Undeclared engine output endpoint.");
-                            if (!active) return () => {};
-                            let listening = true;
-                            const receive = (value: unknown) => {
-                                if (!active || !listening) return;
-                                try { listener(value); } catch (error) { context.onDefect(error); }
-                            };
-                            const remove = () => { if (!listening) return; listening = false; releases.delete(remove); connection.removeEndpointListener?.(endpoint, receive); };
-                            releases.add(remove); connection.addEndpointListener?.(endpoint, receive);
-                            return remove;
-                        },
-                        readStored(key) {
-                            if (!storedKeys?.includes(key)) throw new Error("Undeclared stored-state input.");
-                            if (!active) return Promise.resolve(undefined);
-                            return new Promise(resolve => {
-                                const cancel = () => resolve(undefined); releases.add(cancel);
-                                connection.requestFullStoredState?.(state => {
-                                    releases.delete(cancel);
-                                    const values = isRecord(state) && isRecord(state.values) ? state.values : state;
-                                    resolve(active && isRecord(values) ? values[key] : undefined);
-                                });
-                            });
-                        },
-                        subscribeStored(key, listener) {
-                            if (!storedKeys?.includes(key)) throw new Error("Undeclared stored-state input.");
-                            if (!active) return () => {};
-                            let listening = true;
-                            const receive = (message: unknown) => {
-                                if (!active || !listening || !isRecord(message) || message.key !== key) return;
-                                try { listener(message.value); } catch (error) { context.onDefect(error); }
-                            };
-                            const remove = () => { if (!listening) return; listening = false; releases.delete(remove); connection.removeStoredStateValueListener?.(receive); };
-                            releases.add(remove); connection.addStoredStateValueListener?.(receive);
-                            return remove;
-                        },
-                        async prepareData(input, byteLength, writer, requestSignal) {
-                            if (!dataInputs.includes(input)) return { kind: "failed", error: { kind: "engine-rejected", message: "Undeclared shared-data input." } };
-                            if (!active || requestSignal?.aborted) return { kind: "cancelled" };
-                            const combined = {
-                                get aborted() { return !active || !!requestSignal?.aborted; },
-                                onAbort(listener: () => void) {
-                                    const first = signal.onAbort(listener), second = requestSignal?.onAbort(listener);
-                                    return () => { first(); second?.(); };
-                                },
-                            };
-                            directData ??= createDirectDataPort(connection);
-                            return directData.prepare({ input, byteLength }, { ...currentTarget, scope }, combined, writer);
-                        },
-                        report(status) { if (active) context.onStatus(currentTarget, status); },
-                        fail(error) { if (active) context.onDefect(error); },
-                    };
-                    let transport: ReturnType<typeof create>;
-                    try { transport = create(resources); }
-                    catch (error) {
-                        active = false;
-                        for (const release of [...releases]) release();
-                        releases.clear();
-                        throw error;
-                    }
-                    let transportStopped = false;
-                    const binding = createEngineBinding<PluginStateEngineInput & { readonly target: EngineTarget }, { readonly value: unknown; readonly target: EngineTarget }>({
-                    replacement,
-                    async prepare(input, signal) {
-                        const value = await declaration.prepare(input.value, { parameters: input.parameters, signal });
-                        if (isPreparationFailure(value)) return { kind: "error", error: value.error };
-                        return { kind: "ok", value: { value, target: input.target } };
-                    },
-                    transport: {
-                        async apply(payload, permit) {
-                            currentTarget = payload.target;
-                            let delivering = true;
-                            const removals = new Set<() => void>();
-                            const cleanup = () => {
-                                const pending = [...removals];
-                                removals.clear();
-                                for (const remove of pending) remove();
-                            };
-                            const removeAbort = permit.signal.onAbort(cleanup);
-                            const deliverySignal = {
-                                get aborted() { return !delivering || permit.signal.aborted; },
-                                onAbort(listener: () => void) {
-                                    if (!delivering || permit.signal.aborted) listener();
-                                    else removals.add(listener);
-                                    return () => { removals.delete(listener); };
-                                },
-                            };
-                            try {
-                                return await transport.apply(payload.value, {
-                                    signal: deliverySignal,
-                                    replaceData(input, samples) {
-                                        if (!dataInputs.includes(input)) return Promise.resolve({ kind: "failed", error: { kind: "engine-rejected", message: "Undeclared shared-data input." } });
-                                        if (!delivering || permit.signal.aborted || !sameScope(session.getSnapshot().scope, payload.target.scope))
-                                            return Promise.resolve({ kind: "cancelled" });
-                                        dataPort ??= createSharedDataPort(connection);
-                                        return dataPort.replace(input, samples, payload.target, deliverySignal);
-                                    },
-                                    send(effect) {
-                                        if (!delivering || permit.signal.aborted) return { kind: "cancelled" };
-                                        const submission = context.publish(payload.target.scope, effect);
-                                        if (submission.kind === "submitted") {
-                                            const release = releasePublications.get(submission.completion);
-                                            if (release) {
-                                                removals.add(release);
-                                                void submission.completion.then(() => removals.delete(release));
-                                            }
-                                        }
-                                        return submission;
-                                    },
-                                    listen(endpoint, listener) {
-                                        if (!outputEndpoints?.includes(endpoint)) throw new Error("Undeclared engine output endpoint.");
-                                        if (!delivering || permit.signal.aborted) return () => {};
-                                        let active = true;
-                                        const receive = (value: unknown) => {
-                                            if (!active || permit.signal.aborted) return;
-                                            try { listener(value); }
-                                            catch (error) { context.onDefect(error); }
-                                        };
-                                        const remove = () => {
-                                            if (!active) return;
-                                            active = false;
-                                            removals.delete(remove);
-                                            connection.removeEndpointListener?.(endpoint, receive);
-                                        };
-                                        removals.add(remove);
-                                        connection.addEndpointListener?.(endpoint, receive);
-                                        return remove;
-                                    },
-                                });
-                            } finally { delivering = false; removeAbort(); cleanup(); }
-                        },
-                        stop() { if (transportStopped) return; transportStopped = true; transport.stop(); },
-                    },
-                    onStatus: context.onStatus, onDefect: context.onDefect,
+        let document: ReturnType<typeof openDocument> | undefined;
+        let closed = false;
+        const closing = new Set<Promise<void>>();
+        function closeDocument() {
+            const old = document; document = undefined;
+            if (!old) return;
+            const work = old.close(); closing.add(work);
+            void work.then(() => closing.delete(work), error => { closing.delete(work); fail(error); });
+        }
+        function openDocument(target: EngineTarget) {
+            const scope = Object.freeze({ ...target.scope });
+            const lifetime = createStateLifetime();
+            const signal = lifetime.signal;
+            let currentTarget = target;
+            function publish(owner: ReturnType<typeof createStateLifetime>, effect: CmajorStateEffect): CmajorStateSubmission {
+                if (owner.signal.aborted || stopped || !sameScope(session.getSnapshot().scope, scope)) return { kind: "cancelled" };
+                if (!effect || typeof effect !== "object" || (effect.kind !== "event" && effect.kind !== "host-effect"))
+                    return { kind: "failed", error: { kind: "engine-rejected", message: "Invalid engine effect." } };
+                const allowed = effect.kind === "event" ? delivery.eventEndpoints.includes(effect.endpoint) : delivery.hostEffects?.includes(effect.name);
+                if (!allowed) return { kind: "failed", error: { kind: "engine-rejected", message: "Undeclared engine effect." } };
+                const payload = encodeEventPayload(effect.value);
+                if (payload.kind !== "ok") return { kind: "failed", error: { kind: "engine-rejected", message: payload.message } };
+                const operation = effect.kind === "event" ? { kind: "event", endpoint: effect.endpoint, value: payload.value }
+                    : { kind: "host-effect", name: effect.name, value: payload.value };
+                const body = { kind: "publish", request: nextRequest + 1, scope, operations: [operation] };
+                if (!isBoundedStateJson(body)) return { kind: "failed", error: { kind: "engine-rejected", message: "Engine effect exceeds the native JSON contract." } };
+                const request = ++nextRequest;
+                let finish = (_outcome: CmajorStatePublicationOutcome) => {};
+                const completion = new Promise<CmajorStatePublicationOutcome>(resolve => {
+                    let remove = () => {};
+                    finish = outcome => { if (!enginePublications.delete(request)) return; remove(); resolve(outcome); };
+                    enginePublications.set(request, { kind: "custom", key, scope, finish });
+                    remove = owner.signal.onAbort(() => finish({ kind: "cancelled" }));
                 });
-                    return { scope, binding,
-                        close() {
-                            active = false;
-                            for (const release of [...releases]) release();
-                            releases.clear();
-                            return binding.stop();
-                        },
-                    };
+                try { connection.sendMessageToServer({ type: "kit_state", message: body }); }
+                catch (error) {
+                    const failure = { kind: "failed" as const, error: { kind: "transport" as const, message: "Engine effect handoff is uncertain." } };
+                    finish(failure); options.onDefect(error); return failure;
                 }
-                return {
-                    replace(input, target) {
-                        if (closed) return;
-                        if (!document || !sameScope(document.scope, target.scope)) { closeDocument(); document = openDocument(target); }
-                        if (closed) { closeDocument(); return; }
-                        document.binding.replace({ ...input, target }, target);
-                    },
-                    cancel() { closeDocument(); },
-                    async stop() { closed = true; closeDocument(); await Promise.all(closing); },
+                return { kind: "submitted", completion };
+            }
+            function listen(owner: ReturnType<typeof createStateLifetime>, endpoint: string, listener: (value: unknown) => void) {
+                if (!delivery.outputEndpoints?.includes(endpoint)) throw new Error("Undeclared engine output endpoint.");
+                if (owner.signal.aborted) return () => {};
+                let listening = true, detach = () => {};
+                const receive = (value: unknown) => {
+                    if (!listening || owner.signal.aborted) return;
+                    try { listener(value); } catch (error) { fail(error); }
                 };
+                const remove = () => {
+                    if (!listening) return;
+                    listening = false; detach(); connection.removeEndpointListener?.(endpoint, receive);
+                };
+                detach = owner.signal.onAbort(remove);
+                connection.addEndpointListener?.(endpoint, receive);
+                return remove;
+            }
+            const preparationResources = resources;
+            const documentResources: PluginStateDocumentContext = {
+                signal, send: effect => publish(lifetime, effect), listen: (endpoint, listener) => listen(lifetime, endpoint, listener),
+                readStored(name) {
+                    if (!delivery.storedKeys?.includes(name)) throw new Error("Undeclared stored-state input.");
+                    if (signal.aborted) return Promise.resolve(undefined);
+                    return new Promise(resolve => {
+                        const remove = signal.onAbort(() => resolve(undefined));
+                        connection.requestFullStoredState?.(state => {
+                            remove();
+                            const values = isRecord(state) && isRecord(state.values) ? state.values : state;
+                            resolve(!signal.aborted && isRecord(values) ? values[name] : undefined);
+                        });
+                    });
+                },
+                subscribeStored(name, listener) {
+                    if (!delivery.storedKeys?.includes(name)) throw new Error("Undeclared stored-state input.");
+                    if (signal.aborted) return () => {};
+                    let listening = true, detach = () => {};
+                    const receive = (message: unknown) => {
+                        if (!listening || signal.aborted || !isRecord(message) || message.key !== name) return;
+                        try { listener(message.value); } catch (error) { fail(error); }
+                    };
+                    const remove = () => {
+                        if (!listening) return;
+                        listening = false; detach(); connection.removeStoredStateValueListener?.(receive);
+                    };
+                    detach = signal.onAbort(remove); connection.addStoredStateValueListener?.(receive);
+                    return remove;
+                },
+                async prepareData(input, byteLength, writer, requestSignal) {
+                    if (!delivery.dataInputs?.includes(input)) return { kind: "failed", error: { kind: "engine-rejected", message: "Undeclared shared-data input." } };
+                    const operation = requestSignal ? createStateLifetime(signal, requestSignal) : createStateLifetime(signal);
+                    try {
+                        directData ??= createDirectDataPort(connection);
+                        return await directData.prepare({ input, byteLength }, { ...currentTarget, scope }, operation.signal, destination => authorWrite(() => writer(destination)));
+                    } finally { operation.cancel(); }
+                },
+                report(status) { if (!signal.aborted) void session.dispatch({ kind: "engine", target: currentTarget, status }); },
+                fail(error) { if (!signal.aborted) fail(error); },
+            };
+            let transport: ReturnType<typeof delivery.create>;
+            try { transport = delivery.create(documentResources); }
+            catch (error) { lifetime.cancel(); throw error; }
+            const binding = createEngineBinding<PluginStateEngineInput & { readonly target: EngineTarget }, { readonly value: unknown; readonly target: EngineTarget }>({
+                replacement: delivery.replacement,
+                async prepare(input, cancellation) {
+                    const prepared = await authorPreparation(() => declaration.prepare(input.value, { resources: preparationResources, parameters: input.parameters, signal: cancellation }));
+                    if (prepared.kind === "error") return prepared;
+                    const value = prepared.value;
+                    return isPreparationFailure(value) ? { kind: "error", error: value.error } : { kind: "ok", value: { value, target: input.target } };
+                },
+                transport: {
+                    async apply(payload, permit) {
+                        currentTarget = payload.target;
+                        const application = createStateLifetime(signal, permit.signal);
+                        try {
+                            return await transport.apply(payload.value, {
+                                signal: application.signal, send: effect => publish(application, effect),
+                                listen: (endpoint, listener) => listen(application, endpoint, listener),
+                            });
+                        } finally { application.cancel(); }
+                    },
+                    stop() { return transport.stop(); },
+                },
+                onStatus(next, status) { void session.dispatch({ kind: "engine", target: next, status }); }, onDefect: fail,
+            });
+            return { scope, binding, close() { lifetime.cancel(); return binding.stop(); } };
+        }
+        return {
+            key, dependencies: declaration.dependencies,
+            replace(input, target) {
+                if (closed) return;
+                if (!document || !sameScope(document.scope, target.scope)) { closeDocument(); document = openDocument(target); }
+                if (closed) { closeDocument(); return; }
+                document.binding.replace({ ...input, target }, target);
             },
-        }];
-    });
+            cancel: closeDocument,
+            async stop() { closed = true; closeDocument(); await Promise.all(closing); },
+        };
+    }
     return {
         /** Open declared native state before making the worker service ready. */
         start(): Promise<void> {
@@ -546,62 +476,16 @@ export function createCmajorPluginStateService<const Fields extends PluginStateF
                 failStart = reason => { clearTimeout(openDeadline); reject(reason); };
             });
             try {
-                const descriptors = captureBindingDeclarations(definition, [...preparedDeclarations(), ...(options.bindings ?? [])]);
-                if (descriptors.some(descriptor => descriptor.outputEndpoints?.length)
+                if ("bindings" in options) throw new Error("Declare engine delivery with preparedState instead of service bindings.");
+                const fields = preparedFields(definition);
+                if (fields.some(({ declaration }) => declaration.delivery.outputEndpoints?.length)
                     && (typeof connection.addEndpointListener !== "function" || typeof connection.removeEndpointListener !== "function"))
                     throw new Error("Declared engine output listeners are unavailable.");
-                if (descriptors.some(descriptor => descriptor.storedKeys?.length)
+                if (fields.some(({ declaration }) => declaration.delivery.storedKeys?.length)
                     && (typeof connection.addStoredStateValueListener !== "function" || typeof connection.removeStoredStateValueListener !== "function"
                         || typeof connection.requestFullStoredState !== "function"))
                     throw new Error("Declared stored-state inputs are unavailable.");
-                for (const descriptor of descriptors) {
-                    const port = descriptor.create({
-                        publish(requestedScope, effect) {
-                            if (stopped || !sameScope(session.getSnapshot().scope, requestedScope)) return { kind: "cancelled" };
-                            const scope = Object.freeze({ owner: requestedScope.owner, document: requestedScope.document });
-                            if (!effect || typeof effect !== "object" || (effect.kind !== "event" && effect.kind !== "host-effect"))
-                                return { kind: "failed", error: { kind: "engine-rejected", message: "Invalid engine effect." } };
-                            const allowed = effect.kind === "event" ? descriptor.eventEndpoints.includes(effect.endpoint)
-                                : descriptor.hostEffects?.includes(effect.name);
-                            if (!allowed) return { kind: "failed", error: { kind: "engine-rejected", message: "Undeclared engine effect." } };
-                            const payload = encodeEventPayload(effect.value);
-                            if (payload.kind !== "ok") return { kind: "failed", error: { kind: "engine-rejected", message: payload.message } };
-                            const operation = effect.kind === "event"
-                                ? { kind: "event", endpoint: effect.endpoint, value: payload.value }
-                                : { kind: "host-effect", name: effect.name, value: payload.value };
-                            const body = { kind: "publish", request: nextRequest + 1, scope, operations: [operation] };
-                            if (!isBoundedStateJson(body)) return { kind: "failed", error: { kind: "engine-rejected", message: "Engine effect exceeds the native JSON contract." } };
-                            const request = ++nextRequest;
-                            let finish = (_outcome: CmajorStatePublicationOutcome) => {};
-                            const completion = new Promise<CmajorStatePublicationOutcome>(resolve => {
-                                finish = outcome => { enginePublications.delete(request); releasePublications.delete(completion); resolve(outcome); };
-                            });
-                            releasePublications.set(completion, () => finish({ kind: "cancelled" }));
-                            enginePublications.set(request, { kind: "custom", key: descriptor.key, scope, finish });
-                            try { connection.sendMessageToServer({ type: "kit_state", message: body }); }
-                            catch (error: unknown) {
-                                const failure = { kind: "failed" as const, error: { kind: "transport" as const, message: "Engine effect handoff is uncertain." } };
-                                finish(failure);
-                                options.onDefect(error);
-                                return failure;
-                            }
-                            return { kind: "submitted", completion };
-                        },
-                        onStatus(target, status) { void session.dispatch({ kind: "engine", target, status }); },
-                        onDefect(error) { options.onDefect(error); void stop(); },
-                    });
-                    if (stopped) {
-                        // A factory may report a synchronous defect before returning
-                        // its port. The already-closed session never acquired it.
-                        const cleanup = Promise.resolve().then(() => port.stop()).catch(options.onDefect);
-                        stopping = Promise.all([stopping, cleanup]).then(() => {});
-                        return starting;
-                    }
-                    bindings.push({ key: descriptor.key, dependencies: descriptor.dependencies ?? [],
-                        replace: (input, target) => port.replace(input, target),
-                        cancel: () => port.cancel(), stop: () => port.stop(),
-                    });
-                }
+                for (const field of fields) bindings.push(preparedPort(field));
                 started = true;
                 connection.addEventListener("kit_state", receive);
                 openRequest = ++nextRequest;
@@ -614,10 +498,10 @@ export function createCmajorPluginStateService<const Fields extends PluginStateF
                     storedKeys: Object.keys(definition).filter(key => definition[key]?.kind === "stored" && definition[key].lifetime !== "instance"),
                     eventEndpoints: [...new Set([
                         ...Object.values(definition).flatMap(field => field.kind === "stored" && field.engine?.kind === "event-value" ? [field.engine.endpoint] : []),
-                        ...descriptors.flatMap(binding => binding.eventEndpoints),
+                        ...fields.flatMap(field => field.declaration.delivery.eventEndpoints),
                     ])],
-                    ...(descriptors.some(binding => binding.hostEffects?.length) ? {
-                        hostEffects: [...new Set(descriptors.flatMap(binding => binding.hostEffects ?? []))],
+                    ...(fields.some(field => field.declaration.delivery.hostEffects?.length) ? {
+                        hostEffects: [...new Set(fields.flatMap(field => field.declaration.delivery.hostEffects ?? []))],
                     } : {}),
                 });
             } catch (error) {

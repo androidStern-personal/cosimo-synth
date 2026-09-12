@@ -11,28 +11,15 @@ static void expect (bool condition, const char* reason)
 }
 
 static Value scope (int document = 0) { return choc::json::create ("owner", "worker", "document", document); }
-static Value message (const char* kind, int request = 1, int document = 0)
+template <typename Fn> static bool rejects (Fn run)
 {
-    return choc::json::create ("kind", kind, "request", request, "scope", scope (document));
+    try { run(); } catch (const std::runtime_error&) { return true; }
+    return false;
 }
-static Value begin (int input, int count, int generation = 1)
+static void fill (Data::Reservation& reservation, std::initializer_list<float> samples)
 {
-    auto value = message ("begin");
-    value.addMember ("input", input, "sampleCount", count, "generation", generation);
-    return value;
-}
-static Value transferMessage (const char* kind, int64_t transfer, int request = 2, int document = 0)
-{
-    auto value = message (kind, request, document);
-    value.addMember ("transfer", transfer);
-    return value;
-}
-static Value write (int64_t transfer, int offset, std::initializer_list<float> samples)
-{
-    auto value = transferMessage ("write", transfer);
-    auto data = choc::value::createArray (static_cast<uint32_t> (samples.size()), [&] (uint32_t i) { return samples.begin()[i]; });
-    value.addMember ("offset", offset, "samples", data);
-    return value;
+    expect (reservation.bytes->size() * sizeof(int32_t) == samples.size() * sizeof(float), "reservation has wrong byte size");
+    std::memcpy (reservation.bytes->data(), samples.begin(), samples.size() * sizeof(float));
 }
 static bool replyIs (const Data::Replies& replies, const char* kind, const char* reason = nullptr)
 {
@@ -78,18 +65,20 @@ int main()
             direct.stop();
         }
         Data data (2, 32);
-        expect (replyIs (data.handle ({}, false), "failed", "invalid-request"), "missing body did not fail cleanly");
-        expect (replyIs (data.handle (Value (42), false), "failed", "invalid-request"), "primitive body did not fail cleanly");
-        expect (replyIs (data.handle (begin (0, 4), false), "failed", "stale-scope"), "unauthorised begin");
-        auto ready = data.handle (begin (0, 4), true);
-        expect (replyIs (ready, "ready"), "begin did not stage resource");
-        auto transfer = ready[0]["transfer"].get<int64_t>();
-        expect (replyIs (data.handle (write (transfer, 0, { 1, 2 }), false), "failed", "stale-scope"), "unauthorised write");
-        expect (replyIs (data.handle (write (transfer, 1, { 1, 2 }), true), "failed", "invalid-chunk"), "out of order write");
-        expect (replyIs (data.handle (write (transfer, 0, { 1, 2 }), true), "written"), "valid first chunk");
-        expect (replyIs (data.handle (transferMessage ("commit", transfer), true), "failed", "incomplete-transfer"), "partial resource committed");
-        expect (replyIs (data.handle (write (transfer, 2, { 3, 4 }), true), "written"), "valid second chunk");
-        expect (data.handle (transferMessage ("commit", transfer, 9), true).empty(), "commit acknowledged before rendering");
+        Data::Replies replies;
+        expect (rejects ([&] { data.reserve (2, 16, scope(), replies); }), "invalid resource input accepted");
+        expect (rejects ([&] { data.reserve (0, 3, scope(), replies); }), "unaligned resource accepted");
+        auto reservation = data.reserve (0, 16, scope(), replies);
+        fill (reservation, {1, 2, 3, 4});
+        data.store.beginBlock();
+        expect (data.store.size (0) == 0, "an unpublished writer became audible");
+        data.store.endBlock();
+        expect (rejects ([&] { data.commit (reservation.id, scope (1)); }), "wrong scope committed a reservation");
+        int detached = 0;
+        data.setReservationDetach (reservation.id, [&] { ++detached; });
+        auto receipt = data.commit (reservation.id, scope());
+        expect (detached == 1, "commit did not synchronously detach the writer alias");
+        expect (rejects ([&] { data.commit (reservation.id, scope()); }), "reservation committed twice");
         expect (data.drain().empty(), "drain acknowledged unadopted data");
         data.store.beginBlock();
         {
@@ -106,51 +95,33 @@ int main()
         expect (data.drain().empty(), "applied preceded endBlock");
         data.store.endBlock();
         auto applied = data.drain();
-        expect (replyIs (applied, "applied") && applied[0]["request"].get<int>() == 9,
-                "receipt lost commit correlation");
-        expect (replyIs (data.handle (begin (1, 5), true), "failed", "budget-exceeded"), "staging ignored retained budget");
-        ready = data.handle (begin (1, 4), true);
-        expect (replyIs (ready, "ready"), "available staging budget rejected");
-        auto second = ready[0]["transfer"].get<int64_t>();
-        expect (replyIs (data.handle (begin (0, 1), true), "failed", "budget-exceeded"), "simultaneous staging not charged");
-        expect (replyIs (data.handle (transferMessage ("cancel", second, 3, 1), false), "failed", "stale-scope"), "foreign scope cancelled resource");
-        expect (replyIs (data.handle (transferMessage ("cancel", second), false), "cancelled"), "exact stale scope could not release transfer");
-        expect (replyIs (data.handle (transferMessage ("cancel", second), false), "cancelled"), "cancel was not idempotent");
-        ready = data.handle (begin (1, 4), true);
-        second = ready[0]["transfer"].get<int64_t>();
-        data.handle (write (second, 0, { 5, 6, 7, 8 }), true);
-        data.handle (transferMessage ("commit", second, 11), true);
+        expect (replyIs (applied, "applied") && applied[0]["id"].get<uint64_t>() == reservation.id
+                && applied[0]["serial"].get<uint64_t>() == receipt.serial, "receipt lost commit correlation");
+        expect (rejects ([&] { data.reserve (1, 20, scope(), replies); }), "staging ignored retained budget");
+        auto second = data.reserve (1, 16, scope(), replies);
+        expect (rejects ([&] { data.reserve (0, 4, scope(), replies); }), "simultaneous staging not charged");
+        int cancelledDetach = 0;
+        data.setReservationDetach (second.id, [&] { ++cancelledDetach; });
+        data.cancel (second.id); data.cancel (second.id);
+        expect (cancelledDetach == 1, "cancellation was not idempotent");
+        expect (rejects ([&] { data.commit (second.id, scope()); }), "cancelled reservation committed");
+        auto next = data.reserve (1, 16, scope(), replies);
+        data.cancel (second.id);
+        fill (next, {5, 6, 7, 8}); data.commit (next.id, scope());
         expect (replyIs (data.revoke(), "failed", "stale-scope"), "revoke did not settle pending commit");
         data.store.beginBlock();
         expect (data.store.size (1) == 0 && data.store.read (0, 3) == 4, "revoked pending data adopted or current was lost");
         data.store.endBlock();
         expect (data.drain().empty(), "revoked data acknowledged");
-        expect (replyIs (data.handle (write (second, 0, { 9 }), false), "failed", "stale-scope"), "revoked write accepted");
-        auto oversized = write (second, 0, { 1 });
-        oversized.setMember ("samples", choc::value::createArray (8193, [] (uint32_t) { return 1.0f; }));
-        ready = data.handle (begin (1, 1), true);
-        oversized.setMember ("transfer", ready[0]["transfer"]);
-        expect (replyIs (data.handle (oversized, true), "failed", "invalid-chunk"), "unbounded chunk accepted");
+        expect (rejects ([&] { data.commit (next.id, scope()); }), "revoked reservation committed");
         expect (Data::create ({}).get() == nullptr, "absent manifest option enabled shared data");
-        bool invalid = false;
-        try { Data::create (choc::json::create ("inputCount", 0, "maxRetainedBytes", 32)); }
-        catch (const std::runtime_error&) { invalid = true; }
-        expect (invalid, "invalid manifest accepted");
-        Data lostReady (1, 16);
-        auto lost = lostReady.handle (begin (0, 4), true);
-        const auto lostTransfer = lost[0]["transfer"].get<int64_t>();
-        auto cancelByBegin = message ("cancel", 100, 1);
-        cancelByBegin.addMember ("beginRequest", 1);
-        expect (replyIs (lostReady.handle (cancelByBegin, false), "cancelled"), "unknown begin cancellation not idempotent");
-        expect (replyIs (lostReady.handle (write (lostTransfer, 0, { 1, 2 }), true), "written"),
-                "another document cancelled a matching begin request id");
-        cancelByBegin.setMember ("scope", scope());
-        expect (replyIs (lostReady.handle (cancelByBegin, false), "cancelled"), "lost-ready cancellation failed");
-        expect (replyIs (lostReady.handle (cancelByBegin, false), "cancelled"), "lost-ready cancellation not idempotent");
-        expect (replyIs (lostReady.handle (write (lostTransfer, 2, { 3, 4 }), true), "failed", "invalid-transfer"),
-                "cancelled begin request still owned staging");
-        expect (replyIs (lostReady.handle (begin (0, 4), true), "ready"), "lost-ready cancellation leaked staging budget");
-        lostReady.stop();
+        expect (rejects ([&] { Data::create (choc::json::create ("inputCount", 0, "maxRetainedBytes", 32)); }), "invalid manifest accepted");
+        auto reclaimed = data.reserve (1, 16, scope (1), replies);
+        fill (reclaimed, {9, 10, 11, 12});
+        data.commit (reclaimed.id, scope (1));
+        data.store.beginBlock();
+        expect (data.store.read (1, 3) == 12, "revocation leaked staging or old cancellation damaged its replacement");
+        data.store.endBlock(); data.drain();
         data.stop();
         expect (data.store.retainedBytes() == 0 && data.store.size (0) == 0 && data.drain().empty(),
                 "quiesced stop retained current payload or a pending receipt");

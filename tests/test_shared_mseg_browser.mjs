@@ -72,6 +72,31 @@ async function expect(y,gain) {
     assert.equal(saved.values.shape.points[1].y,y);
     assert.deepEqual(await page.evaluate(()=>window.fixture.defects),[]);assert.deepEqual(errors,[]);
 }
+async function expectLoaded(file, values) {
+    await page.waitForFunction(file => {
+        const f = window.fixture.agent.getSnapshot();
+        return f.kind === 'ready' && f.state.fields.loaded.value === file
+            && f.state.fields.loaded.application?.kind === 'acknowledged';
+    }, file);
+    await page.evaluate(() => window.fixture.connection.sendEventOrValue('readLoaded', true));
+    for (let index = -1; index <= values.length; index++) {
+        await page.evaluate(index => window.fixture.connection.sendEventOrValue('readIndex', index), index);
+        const baseline = await page.evaluate(() => window.fixture.blocks);
+        await page.waitForFunction(({baseline, sample, length}) => {
+            const f = window.fixture;
+            return f.blocks > baseline + 3 && f.audio[0].every(v => v === sample)
+                && f.audio[1].every(v => v === length);
+        }, {baseline, sample: values[index] ?? 0, length: values.length});
+    }
+    const field = JSON.parse(await page.getByTestId('loaded').textContent());
+    assert.equal(field.value, file); assert.equal(field.application.kind, 'acknowledged');
+    assert.deepEqual(await page.evaluate(() => window.fixture.defects), []);
+    assert.deepEqual(errors, []);
+    await page.evaluate(() => {
+        window.fixture.connection.sendEventOrValue('readLoaded', false);
+        window.fixture.connection.sendEventOrValue('readIndex', 1025);
+    });
+}
 try {
     await page.goto(`http://127.0.0.1:${server.address().port}`);await page.click('#start');
     await page.waitForFunction(()=>window.fixture||window.failure,null,{timeout:15000});
@@ -97,8 +122,22 @@ try {
     assert.equal(next.document,old.document+1);
     assert.equal(JSON.parse(await page.getByTestId('history').textContent()).canUndo,false);
     assert.ok((await page.evaluate(()=>window.fixture.outcomes)).every(r=>r.kind==='accepted'));
+    await expectLoaded('ascending.json', [0.125,0.25,0.5]);
+    await page.getByText('Load file', {exact:true}).click();
+    await expectLoaded('descending.json', [1,0.75,0.5,0.25,0]);
+    const savedLoaded = await page.evaluate(() => new Promise(resolve => window.fixture.connection.requestFullStoredState(resolve)));
+    assert.equal(savedLoaded.values.loaded, 'descending.json');
+    await page.getByText('Gain', {exact:true}).click(); await expect(1,1.5);
+    await page.getByText('Undo', {exact:true}).click(); await expect(1,0.5);
+    await expectLoaded('descending.json', [1,0.75,0.5,0.25,0]);
+    await page.getByText('Undo', {exact:true}).click();
+    await expectLoaded('ascending.json', [0.125,0.25,0.5]);
+    await page.getByText('Redo', {exact:true}).click();
+    await expectLoaded('descending.json', [1,0.75,0.5,0.25,0]);
+    await page.evaluate(() => { window.fixture.close(); window.fixture.open(); });
+    await expectLoaded('descending.json', [1,0.75,0.5,0.25,0]);
     await page.evaluate(()=>window.fixture.dispose());
-    console.log('PASS real Cosimo MSEG renderer, generated state worker, public React edit/Undo/Redo, saved values, actual 3-channel Cmajor audio, GUI reopen and full restore.');
+    console.log('PASS real Cosimo MSEG renderer, generated state worker, public React edit/Undo/Redo, saved values, actual 3-channel Cmajor audio, GUI reopen, full restore, and custom async file loading with variable storage and mixed Undo.');
 } catch(error) {
     console.error('Fixture diagnostics:',await page.evaluate(()=>({failure:window.failure,errors:window.fixture?.defects,state:window.fixture?.agent.getSnapshot(),audio:window.fixture?.audio})));
     throw error;

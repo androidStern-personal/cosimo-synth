@@ -730,8 +730,9 @@ test("an unexpected event handoff defect closes the shared service instead of ac
     }
     const owner = await openEventService(value => ({ samples: new Float32Array(value) }), {}, new BrokenEventConnection());
     t.after(() => owner.service.stop());
-    const queued = owner.connection.queued;
     await new Promise(setImmediate);
+    const queued = owner.connection.queued;
+    assert.equal(typeof queued, "function", "capture the listener from the actual failing event handoff");
     assert.deepEqual(owner.defects, [problem]);
     assert.equal(owner.connection.bodies("close").length, 1, "shared native connection damage must terminate the edit service");
     assert.equal(owner.connection.listeners.get("kit_state").size, 0);

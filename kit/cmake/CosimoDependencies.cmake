@@ -17,7 +17,7 @@ include("${CMAKE_CURRENT_LIST_DIR}/dependency-sources.cmake")
 
 # The pinned Cmajor fork commit. Both packages below pin the same commit; they
 # differ only in how much of the fork's submodule tree they check out.
-set(COSIMO_CMAJOR_PINNED_COMMIT "e4463747e6635fdeb0b0eefcd534af51c77e8d74")
+set(COSIMO_CMAJOR_PINNED_COMMIT "e2efddc2ce047a796b68ec9349501a983a8916d9")
 
 function(cosimo_add_juce_dependency)
     CPMAddPackage(

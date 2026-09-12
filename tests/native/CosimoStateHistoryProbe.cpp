@@ -1,5 +1,6 @@
 #define CMAJOR_DLL 1
 #include "cmajor/helpers/cmaj_Patch.h"
+#include "NativeMessageLoop.h"
 #include "cmajor/helpers/cmaj_PatchWorker_QuickJS.h"
 #include "choc/javascript/choc_javascript_Timer.h"
 #include "RendererExternalFunctionProvider.h"
@@ -62,12 +63,7 @@ struct Fixture
 {
     template <typename Fn> auto onLoop (Fn run)
     {
-        using Result = std::invoke_result_t<Fn>;
-        auto task = std::make_shared<std::packaged_task<Result()>> (std::move(run));
-        auto result = task->get_future();
-        choc::messageloop::postMessage ([task] { (*task)(); });
-        require (result.wait_for (std::chrono::seconds(120)) == std::future_status::ready, "native message loop timed out");
-        return result.get();
+        return native_test::onMessageLoop (std::move (run), std::chrono::seconds(120), "native message loop timed out");
     }
     void render()
     {

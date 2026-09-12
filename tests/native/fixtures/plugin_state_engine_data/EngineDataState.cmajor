@@ -1,5 +1,5 @@
-namespace Data = kit::engine_data (257, 3, 2, 32);
-namespace Budget = kit::engine_data_budget (32, 64);
+namespace Data = kit::engine_data (Fixture::wordCapacity, 3, 2, Fixture::chunkCapacity);
+namespace Budget = kit::engine_data_budget (Fixture::chunkCapacity, 64);
 
 processor EngineDataState [[ main ]]
 {

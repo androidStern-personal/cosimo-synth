@@ -1,5 +1,6 @@
-import { addMsegPoint, deleteMsegPoint, deriveMsegSegmentCurvePower, findMsegPointHitIndex, findMsegSegmentHitIndex, moveMsegPoint, msegEditorCoordinatesToPoint, resolveMsegSurfaceOrientation, setMsegSegmentCurvePower, type MsegShape } from "./mseg";
-import { useLayoutEffect, useRef, useState, type CSSProperties, type PointerEvent as ReactPointerEvent, type ReactNode, type RefObject } from "react";
+import { useMsegGestures } from "./mseg-gestures";
+import { addMsegPoint, deleteMsegPoint, moveMsegPoint, resolveMsegSurfaceOrientation, setMsegSegmentCurvePower, type MsegShape } from "./mseg";
+import { useCallback, useLayoutEffect, useRef, useState, type CSSProperties, type PointerEvent as ReactPointerEvent, type ReactNode, type RefObject } from "react";
 import { MSEG_POINT_RADIUS_PX, MSEG_SELECTED_POINT_RADIUS_PX, createMsegTimeAxisTicks, pointToMsegEditorCoordinates, type MsegPoint, type MsegSurfaceOrientation, type MsegTimeAxisScale } from "./mseg";
 import { buildMsegSurfacePaths, buildMsegSegmentPath } from "./mseg-editor-geometry";
 
@@ -104,6 +105,9 @@ export type MsegEditorProps = {
   onGestureStart?: () => void;
   onGestureEnd?: (cancelled: boolean) => void;
   timeAxisScale?: MsegTimeAxisScale;
+  curveEditActivationMode?: "immediate" | "hold-or-drag";
+  curveEditHoldDelayMs?: number;
+  onCurveEditHoldActivated?: () => void;
   className?: string;
   style?: CSSProperties;
   ariaLabel?: string;
@@ -115,6 +119,9 @@ export function MsegEditor({
   onGestureStart,
   onGestureEnd,
   timeAxisScale,
+  curveEditActivationMode,
+  curveEditHoldDelayMs,
+  onCurveEditHoldActivated,
   className,
   style,
   ariaLabel = "MSEG curve"
@@ -125,133 +132,56 @@ export function MsegEditor({
     height: 1
   });
   const [orientation, setOrientation] = useState<MsegSurfaceOrientation>("horizontal");
-  const [selected, setSelected] = useState(0),
-    [hovered, setHovered] = useState(-1),
-    [activeSegment, setActiveSegment] = useState(-1);
   const current = useRef(value);
   current.current = value;
-  const callbacks = useRef({
-    onChange,
-    onGestureEnd
+  const callbacks = useRef({onChange, onGestureStart, onGestureEnd});
+  callbacks.current = {onChange, onGestureStart, onGestureEnd};
+  const publish = useCallback((shape: MsegShape) => {
+    current.current = shape;
+    callbacks.current.onChange(shape);
+  }, []);
+  const controller = useRef({
+    getShape: () => current.current,
+    addPoint: (x: number, y: number) => publish(addMsegPoint(current.current, x, y)),
+    movePoint: (index: number, x: number, y: number) => publish(moveMsegPoint(current.current, index, x, y)),
+    deletePoint: (index: number) => publish(deleteMsegPoint(current.current, index)),
+    setSegmentCurvePower: (index: number, power: number) => publish(setMsegSegmentCurvePower(current.current, index, power)),
   });
-  callbacks.current = {
-    onChange,
-    onGestureEnd
-  };
-  const drag = useRef<{
-    pointerId: number;
-    kind: "point" | "segment";
-    index: number;
-    startX: number;
-    startY: number;
-    moved: boolean;
-    original: MsegShape;
-  } | null>(null);
-  const finish = (cancelled = false, pointerId?: number) => {
-    const active = drag.current;
-    if (!active || pointerId !== undefined && active.pointerId !== pointerId) return;
-    drag.current = null;
-    setActiveSegment(-1);
-    if (cancelled) {
-      current.current = active.original;
-      callbacks.current.onChange(active.original);
-    }
+  const editing = useRef(false);
+  const finishGesture = useCallback((cancelled = false) => {
+    if (!editing.current) return;
+    editing.current = false;
     callbacks.current.onGestureEnd?.(cancelled);
-    if (surfaceRef.current?.hasPointerCapture(active.pointerId)) surfaceRef.current.releasePointerCapture(active.pointerId);
-  };
-  const finishRef = useRef(finish);
-  finishRef.current = finish;
+  }, []);
+  const edit = useCallback((action: () => void, grouped = false) => {
+    if (!editing.current) {
+      editing.current = true;
+      callbacks.current.onGestureStart?.();
+    }
+    action();
+    if (!grouped) finishGesture();
+  }, [finishGesture]);
+  const gestures = useMsegGestures({shape: value, controller, surfaceRef, edit, finishGesture, orientation,
+    curveEditActivationMode, curveEditHoldDelayMs, onCurveEditHoldActivated});
   useLayoutEffect(() => {
     const surface = surfaceRef.current;
     if (!surface) return;
     const resize = () => {
       const bounds = surface.getBoundingClientRect();
-      const next = {
-        width: Math.max(1, bounds.width),
-        height: Math.max(1, bounds.height)
-      };
+      const next = {width: Math.max(1, bounds.width), height: Math.max(1, bounds.height)};
       setSize(next);
       setOrientation(previous => resolveMsegSurfaceOrientation(next.width, next.height, previous));
     };
     const observer = new ResizeObserver(resize);
     observer.observe(surface);
     resize();
-    const cancel = () => finishRef.current(true);
-    window.addEventListener("blur", cancel);
-    return () => {
-      observer.disconnect();
-      window.removeEventListener("blur", cancel);
-      finishRef.current(true);
-    };
+    return () => observer.disconnect();
   }, []);
-  const publish = (shape: MsegShape) => {
-    current.current = shape;
-    onChange(shape);
-  };
-  const location = (event: ReactPointerEvent<SVGSVGElement>) => {
-    const bounds = event.currentTarget.getBoundingClientRect(),
-      x = event.clientX - bounds.left,
-      y = event.clientY - bounds.top;
-    const options = {
-      orientation
-    };
-    const point = findMsegPointHitIndex(current.current, x, y, bounds.width, bounds.height, undefined, options);
-    return {
-      point,
-      segment: point >= 0 ? -1 : findMsegSegmentHitIndex(current.current, x, y, bounds.width, bounds.height, undefined, options),
-      position: msegEditorCoordinatesToPoint(x, y, bounds.width, bounds.height, options)
-    };
-  };
-  return <div className={className} style={{
-    height: 180,
-    color: "#67e8f9",
-    ...style
-  }} role="group" aria-label={ariaLabel}>
-        <MsegEditorSurface surfaceRef={surfaceRef} points={value.points} width={size.width} height={size.height} selectedPointIndex={selected} hoveredSegmentIndex={hovered} activeSegmentIndex={activeSegment} orientation={orientation} timeAxisScale={timeAxisScale} dataRole="mseg-editor" onPointerDown={event => {
-      if (event.button !== 0 || drag.current) return;
-      const hit = location(event);
-      onGestureStart?.();
-      if (hit.point < 0 && hit.segment < 0) {
-        const next = addMsegPoint(current.current, hit.position.x, hit.position.y);
-        publish(next);
-        setSelected(next.points.findIndex(p => p.x === hit.position.x && p.y === hit.position.y));
-        onGestureEnd?.(false);
-        event.preventDefault();
-        return;
-      }
-      drag.current = {
-        pointerId: event.pointerId,
-        kind: hit.point >= 0 ? "point" : "segment",
-        index: hit.point >= 0 ? hit.point : hit.segment,
-        startX: event.clientX,
-        startY: event.clientY,
-        moved: false,
-        original: current.current
-      };
-      if (hit.point >= 0) setSelected(hit.point);else setActiveSegment(hit.segment);
-      event.currentTarget.setPointerCapture(event.pointerId);
-      event.preventDefault();
-    }} onPointerMove={event => {
-      const hit = location(event),
-        active = drag.current;
-      if (!active || active.pointerId !== event.pointerId) {
-        setHovered(hit.segment);
-        return;
-      }
-      if (Math.hypot(event.clientX - active.startX, event.clientY - active.startY) > 3) active.moved = true;
-      if (active.kind === "point") publish(moveMsegPoint(current.current, active.index, hit.position.x, hit.position.y));else publish(setMsegSegmentCurvePower(current.current, active.index, deriveMsegSegmentCurvePower(current.current, active.index, hit.position.x, hit.position.y)));
-      event.preventDefault();
-    }} onPointerLeave={() => {
-      if (!drag.current) setHovered(-1);
-    }} onPointerUp={event => {
-      const active = drag.current;
-      if (!active || active.pointerId !== event.pointerId) return;
-      const cancelled = event.type !== "pointerup";
-      if (!cancelled && active.kind === "point" && !active.moved && active.index > 0 && active.index < current.current.points.length - 1) {
-        publish(deleteMsegPoint(current.current, active.index));
-        setSelected(Math.max(0, active.index - 1));
-      }
-      finish(cancelled, event.pointerId);
-    }} />
-    </div>;
+  return <div className={className} style={{height: 180, color: "#67e8f9", ...style}} role="group" aria-label={ariaLabel}>
+    <MsegEditorSurface surfaceRef={surfaceRef} points={value.points} width={size.width} height={size.height}
+      selectedPointIndex={gestures.selectedPointIndex} hoveredSegmentIndex={gestures.hoveredSegmentIndex}
+      activeSegmentIndex={gestures.activeSegmentIndex} orientation={orientation} timeAxisScale={timeAxisScale}
+      dataRole="mseg-editor" onPointerDown={gestures.handlePointerDown} onPointerMove={gestures.handlePointerMove}
+      onPointerLeave={gestures.handlePointerLeave} onPointerUp={gestures.handlePointerUp} />
+  </div>;
 }

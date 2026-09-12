@@ -71,9 +71,22 @@ The wrapper reconnects the GUI automatically. Opening the window does not recrea
 
 A codec has `parse(unknown)`, `encode(value)` and `equals(a,b)`. Parsing returns `{kind:"ok",value}` or `{kind:"error",message}`. Accepted values must be immutable and independent of the input. Invalid saved data stays visibly failed until a valid edit repairs it; it is not silently replaced by a default.
 
-Return `preparationFailure("Could not load this file")` for an expected resource failure. The failed field and its Undo remain usable; unrelated fields continue. Unexpected throws represent programming defects and close the state service. Source files needed by future Undo remain the author's responsibility.
+Return `preparationFailure("Could not load this file")` for an expected resource failure. The failed field and its Undo remain usable; unrelated fields continue. A throw from your preparation function or synchronous writer becomes a non-retryable error on that field; its previous audio remains active. A later deliberate edit can recover. Unexpected framework or delivery-callback defects still close the service because continuing may be unsafe. A transport can report a recoverable handoff failure through its explicit protocol. Source files needed by future Undo remain the author's responsibility.
 
 Project state is saved and participates in history by default. `lifetime:"instance"` retains a value through GUI closure and project loads but excludes it from serialized project state; a new plugin instance starts from its default. `history:false` excludes a field from history without destroying unrelated Redo. Ephemeral hover/selection state can remain ordinary React state.
+
+## Change related fields together
+
+```tsx
+// PLUGIN AUTHOR: GUI. One accepted change and one Undo entry.
+const editor = usePluginState(definition);
+const result = await editor.edit({ gain: 0.5, envelope: nextCurve });
+if (result.kind === "rejected") {
+    // The pair was not applied. Handle the reported conflict or invalid value.
+}
+```
+
+Only included fields participate. Each value is validated and encoded by its codec. The hook captures their versions when rendered: if either field changed meanwhile, the whole edit is rejected. Field controls report `pending` until the compound command settles, even though it has no optimistic preview. There is no second history manager.
 
 ## Concurrent editing
 

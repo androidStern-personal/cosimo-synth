@@ -34,8 +34,6 @@ export interface PluginStateDeliveryContext {
     send(effect: PluginStateEffect): PluginStateSubmission;
     /** Listen only to a declared output; automatically removed when delivery ends. */
     listen(endpoint: string, listener: (value: unknown) => void): () => void;
-    /** Install a complete sample resource on one declared shared-data input. */
-    replaceData(input: number, samples: Float32Array): Promise<PluginStateDeliveryOutcome>;
 }
 
 /** Capabilities retained by one field delivery until its project document closes. */
@@ -65,7 +63,7 @@ export interface PluginStateDelivery<Payload> {
     readonly replacement?: "supersede" | "finish";
     create(document: PluginStateDocumentContext): {
         apply(payload: Payload, context: PluginStateDeliveryContext): Promise<PluginStateDeliveryOutcome>;
-        stop(): void;
+        stop(): void | Promise<void>;
     };
 }
 
@@ -100,6 +98,7 @@ export interface PluginStateParameter {
 
 /** Captured scalar inputs and portable cancellation for pure event preparation. */
 export interface PluginStatePrepareContext {
+    readonly resources: import("./resource-client").ResourceClient;
     readonly parameters: Readonly<Record<string, number>>;
     readonly signal: EngineCancellation;
 }
@@ -121,14 +120,19 @@ export interface PluginStatePreparedValue<Value, Payload = unknown> {
     readonly delivery: PluginStateDelivery<Payload>;
 }
 
+/** Per-operation loaded source stays captured by a synchronous final-allocation writer. */
+export interface PluginStateSharedPlan<Format extends SharedDataFormat = SharedDataFormat> {
+    readonly length: number;
+    readonly write: (destination: SharedDataView<Format>) => void | PluginStatePreparationFailure;
+}
+
 /** The writer owns the supplied view only until its synchronous return. */
 export interface PluginStateSharedValue<Value> {
     readonly kind: "shared-prepared";
     readonly dependencies: readonly string[];
     readonly storage: { readonly type: SharedDataFormat; readonly fixedLength: number | null };
     readonly native?: { readonly layout: import("./native-value").NativeLayout; readonly initial: PluginStateJson };
-    measure(value: Value, context: PluginStatePrepareContext): number | PluginStatePreparationFailure | Promise<number | PluginStatePreparationFailure>;
-    prepare(value: Value, destination: Float32Array | Uint8Array, context: PluginStatePrepareContext): void | PluginStatePreparationFailure;
+    prepare(value: Value, context: PluginStatePrepareContext): PluginStateSharedPlan | PluginStatePreparationFailure | Promise<PluginStateSharedPlan | PluginStatePreparationFailure>;
 }
 
 /** Declare an event endpoint and the parameter field keys captured by preparation. */
@@ -184,8 +188,13 @@ interface PreparedStateOptions<Value> {
 
 /** Write the final shared allocation; the framework supplies named DSP wiring. */
 export function preparedState<Value, Format extends SharedDataFormat>(options: PreparedStateOptions<Value> & {
-    readonly engine: SharedDataDefinition<Value, Format>;
+    readonly engine: SharedDataDefinition<Format, number>;
     readonly prepare: (value: Value, destination: SharedDataView<Format>, context: PluginStatePrepareContext) => void | PluginStatePreparationFailure;
+}): PluginStateStored<Value>;
+/** Load outside audio processing, then describe one final-allocation write. */
+export function preparedState<Value, Format extends SharedDataFormat>(options: PreparedStateOptions<Value> & {
+    readonly engine: SharedDataDefinition<Format, undefined>;
+    readonly prepare: (value: Value, context: PluginStatePrepareContext) => PluginStateSharedPlan<Format> | PluginStatePreparationFailure | Promise<PluginStateSharedPlan<Format> | PluginStatePreparationFailure>;
 }): PluginStateStored<Value>;
 /** Custom delivery stays available beneath the same editing and history API. */
 export function preparedState<Value, Payload>(options: PreparedStateOptions<Value> & {
@@ -193,20 +202,23 @@ export function preparedState<Value, Payload>(options: PreparedStateOptions<Valu
     readonly prepare: (value: Value, context: PluginStatePrepareContext) => Payload | PluginStatePreparationFailure | Promise<Payload | PluginStatePreparationFailure>;
 }): PluginStateStored<Value, Payload>;
 export function preparedState<Value, Payload>(options: PreparedStateOptions<Value> & {
-    readonly engine: PluginStateDelivery<Payload> | SharedDataDefinition<Value, SharedDataFormat>;
-    readonly prepare: ((value: Value, context: PluginStatePrepareContext) => Payload | PluginStatePreparationFailure | Promise<Payload | PluginStatePreparationFailure>)
+    readonly engine: PluginStateDelivery<Payload> | SharedDataDefinition<SharedDataFormat>;
+    readonly prepare: ((value: Value, context: PluginStatePrepareContext) => Payload | PluginStateSharedPlan | PluginStatePreparationFailure | Promise<Payload | PluginStateSharedPlan | PluginStatePreparationFailure>)
         | ((value: Value, destination: Float32Array | Uint8Array, context: PluginStatePrepareContext) => void | PluginStatePreparationFailure);
 }): PluginStateStored<Value, Payload> {
     const stored = storedValue({ codec: options.codec, initial: options.initial, lifetime: options.lifetime, history: options.history });
     const dependencies = Object.freeze([...(options.dependencies ?? [])]);
     if ("kind" in options.engine && options.engine.kind === "shared-data") {
-        // SAFETY: the shared-data overload pairs the format with its writable view.
-        const prepare = options.prepare as PluginStateSharedValue<Value>["prepare"];
         const declaration = options.engine;
+        // SAFETY: the overload uses a synchronous writer exactly when the declaration has a fixed length.
+        const write = options.prepare as (value: Value, destination: Float32Array | Uint8Array, context: PluginStatePrepareContext) => void | PluginStatePreparationFailure;
+        const plan = options.prepare as PluginStateSharedValue<Value>["prepare"];
+        const length = declaration.length;
         return Object.freeze({ ...stored, engine: Object.freeze({ kind: "shared-prepared", dependencies,
-            storage: Object.freeze({ type: declaration.type, fixedLength: typeof declaration.length === "number" ? declaration.length : null }),
-            measure(value: Value, context: PluginStatePrepareContext) { return typeof declaration.length === "number" ? declaration.length : declaration.length(value, context); },
-            prepare,
+            storage: Object.freeze({ type: declaration.type, fixedLength: length ?? null }),
+            prepare: length === undefined ? plan : (value: Value, context: PluginStatePrepareContext): PluginStateSharedPlan => ({
+                length, write: destination => write(value, destination, context),
+            }),
         }) });
     }
     // SAFETY: the other overload pairs preparation with this delivery's payload.

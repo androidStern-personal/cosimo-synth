@@ -5,7 +5,7 @@ import { isRecord } from "./plugin-state-protocol";
 import type { SharedDataDestination } from "./prepared-shared-data";
 
 type Request = { readonly input: number; readonly byteLength: number };
-type Writer = (destination: SharedDataDestination) => void | PluginStatePreparationFailure;
+type Writer = (destination: SharedDataDestination) => void | PluginStatePreparationFailure | Extract<EngineOutcome, { readonly kind: "failed" }>;
 type Pending = {
     readonly input: number;
     readonly target: EngineTarget;
@@ -52,6 +52,7 @@ export function createDirectDataPort(connection: CmajorStateConnection, options:
             try {
                 if (destination.byteLength !== request.byteLength) return failure("The host supplied a differently sized shared allocation.");
                 const result = write(destination);
+                if (result?.kind === "failed") return result;
                 if (isPreparationFailure(result)) return { kind: "failed", error: result.error };
                 if (signal.aborted || stopped) return { kind: "cancelled" };
                 const completion = new Promise<EngineOutcome>(resolve => {
@@ -74,7 +75,12 @@ export function createDirectDataPort(connection: CmajorStateConnection, options:
                 try {
                     // Native is synchronous; the browser's control handoff is async.
                     // Both return before audio adoption. The receipt resolves completion.
-                    const receipt = await storage.commit(destination.id);
+                    const submission = await Promise.race([
+                        Promise.resolve(storage.commit(destination.id)).then(receipt => ({ kind: "submitted" as const, receipt })),
+                        completion.then(outcome => ({ kind: "finished" as const, outcome })),
+                    ]);
+                    if (submission.kind === "finished") return submission.outcome;
+                    const receipt = submission.receipt;
                     committed = true;
                     const job = pending.get(destination.id);
                     if (job) {
