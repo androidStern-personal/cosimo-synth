@@ -16,13 +16,15 @@ export type ServiceMessage =
     | { readonly kind: "open-failed"; readonly request: number; readonly reason: string }
     | { readonly kind: "opened"; readonly request: number; readonly scope: PluginStateScope; readonly native: PluginStateNativeSnapshot }
     | { readonly kind: "replaced"; readonly scope: PluginStateScope; readonly native: PluginStateNativeSnapshot; readonly changedStoredKey?: string }
-    | { readonly kind: "parameter"; readonly scope: PluginStateScope; readonly endpoint: string; readonly value: number }
+    | { readonly kind: "parameter"; readonly scope: PluginStateScope; readonly endpoint: string; readonly value: number;
+        readonly intent: number; readonly origin: "owner" | "external"; readonly observation: number }
     | { readonly kind: "attached-client"; readonly request: number; readonly scope: PluginStateScope; readonly client: number }
     | { readonly kind: "detach"; readonly scope: PluginStateScope; readonly client: number; readonly routedThrough: number }
     | { readonly kind: "command"; readonly address: PluginStateAddress; readonly command: PluginStateCommand }
     | { readonly kind: "invalid-command"; readonly address: PluginStateAddress }
     | { readonly kind: "published"; readonly request: number; readonly scope: PluginStateScope;
-        readonly result: { readonly kind: "observed" } | { readonly kind: "failed"; readonly reason: string } };
+        readonly result: { readonly kind: "observed" } | { readonly kind: "failed"; readonly reason: string };
+        readonly observations?: readonly { readonly endpoint: string; readonly observation: number }[] };
 
 /** Restrict object input to JSON records, excluding arrays and executable prototypes. */
 export function isRecord(value: unknown): value is Readonly<Record<string, unknown>> {
@@ -185,8 +187,10 @@ export function parseServiceMessage(input: unknown): ProtocolResult<ServiceMessa
                 ...(input.changedStoredKey === undefined ? {} : { changedStoredKey: input.changedStoredKey }),
             } };
     }
-    if (input.kind === "parameter" && parsedScope && name(input.endpoint) && typeof input.value === "number")
-        return { kind: "ok", value: { kind: "parameter", scope: parsedScope, endpoint: input.endpoint, value: input.value } };
+    if (input.kind === "parameter" && parsedScope && name(input.endpoint) && typeof input.value === "number"
+        && counter(input.intent, false) && counter(input.observation, false) && (input.origin === "owner" || input.origin === "external"))
+        return { kind: "ok", value: { kind: "parameter", scope: parsedScope, endpoint: input.endpoint, value: input.value,
+            intent: input.intent, origin: input.origin, observation: input.observation } };
     if (input.kind === "detach" && parsedScope && counter(input.client) && counter(input.routedThrough, false)) {
         return { kind: "ok", value: { kind: "detach", scope: parsedScope, client: input.client, routedThrough: input.routedThrough } };
     }
@@ -202,9 +206,21 @@ export function parseServiceMessage(input: unknown): ProtocolResult<ServiceMessa
         }
     }
     if (input.kind === "published" && parsedScope && counter(input.request) && isRecord(input.result)) {
+        const observations: { endpoint: string; observation: number }[] = [];
+        if (input.observations !== undefined) {
+            if (!Array.isArray(input.observations)) return { kind: "invalid", message: "Invalid publication observation barrier." };
+            const endpoints = new Set<string>();
+            for (const observation of input.observations) {
+                if (!isRecord(observation) || !name(observation.endpoint) || !counter(observation.observation, false) || endpoints.has(observation.endpoint))
+                    return { kind: "invalid", message: "Invalid publication observation barrier." };
+                endpoints.add(observation.endpoint);
+                observations.push({ endpoint: observation.endpoint, observation: observation.observation });
+            }
+        }
         if (input.result.kind === "observed") return { kind: "ok", value: { kind: "published", scope: parsedScope, request: input.request, result: { kind: "observed" } } };
         if (input.result.kind === "failed" && name(input.result.reason)) return { kind: "ok", value: {
             kind: "published", scope: parsedScope, request: input.request, result: { kind: "failed", reason: input.result.reason },
+            ...(input.observations === undefined ? {} : { observations }),
         } };
     }
     return { kind: "invalid", message: "Unrecognized or malformed state-channel message." };

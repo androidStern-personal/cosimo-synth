@@ -4,7 +4,7 @@ import path from "node:path";
 import { loadUIModule } from "./helpers/load_ui_module.mjs";
 
 const root = path.resolve(import.meta.dirname, "../..");
-const { isBoundedStateJson, parseClientMessage, encodeEventPayload } = await loadUIModule(root, "kit/ui/plugin-state-protocol.ts");
+const { isBoundedStateJson, parseClientMessage, parseServiceMessage, encodeEventPayload } = await loadUIModule(root, "kit/ui/plugin-state-protocol.ts");
 const { definePluginState, storedValue } = await loadUIModule(root, "kit/ui/plugin-state-definition.ts");
 
 test("the shared JSON boundary accounts for UTF-8, each node and nesting before transport", () => {
@@ -75,4 +75,21 @@ test("accepted edit evidence retains booleans and refuses malformed changed flag
     }
     const nonEdit = { kind: "receipt", address, result: { kind: "accepted", revision: 2 } };
     assert.deepEqual(parseClientMessage(definition, nonEdit), { kind: "ok", value: nonEdit });
+});
+
+
+test("parameter observations require explicit native intent, origin and monotonic order fields", () => {
+    const body = { kind: "parameter", scope: { owner: "native", document: 0 }, endpoint: "gain", value: 2,
+        intent: 7, origin: "owner", observation: 12 };
+    assert.deepEqual(parseServiceMessage(body), { kind: "ok", value: body });
+    const external = { ...body, intent: 0, origin: "external", observation: 0 };
+    assert.deepEqual(parseServiceMessage(external), { kind: "ok", value: external }, "cold native observations may start at zero");
+    for (const key of ["intent", "origin", "observation"]) {
+        const missing = Object.fromEntries(Object.entries(body).filter(([name]) => name !== key));
+        assert.equal(parseServiceMessage(missing).kind, "invalid", `missing ${key} cannot become automation`);
+    }
+    for (const invalid of [{ intent: -1 }, { intent: 1.5 }, { observation: -1 }, { observation: 1.5 },
+        { intent: Number.MAX_SAFE_INTEGER + 1 }, { observation: Number.MAX_SAFE_INTEGER + 1 }, { origin: "guessed" }]) {
+        assert.equal(parseServiceMessage({ ...body, ...invalid }).kind, "invalid", JSON.stringify(invalid));
+    }
 });

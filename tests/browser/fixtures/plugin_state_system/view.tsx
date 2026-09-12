@@ -22,6 +22,11 @@ function View() {
         <button onClick={() => record(gain.beginGesture())}>Begin gain</button>
         <button onClick={() => record(gain.endGesture())}>End gain</button>
         <button onClick={() => record(gain.setValue(5.5))}>Gain five</button>
+        <button onClick={() => {
+            record(gain.beginGesture());
+            for (let value = 3; value <= 11.5; value += 0.5) record(gain.setValue(value));
+            record(gain.endGesture());
+        }}>Rapid gain drag</button>
         <button onClick={() => record(history.undo())}>Undo</button>
         <button onClick={() => record(history.redo())}>Redo</button>
     </>;

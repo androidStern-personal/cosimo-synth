@@ -100,6 +100,19 @@ const receipt = (sequence, result, client = 3, addressScope = scope) => ({
     address: { ...addressScope, client, sequence }, result,
 });
 
+test("one accepted update clears its draft and pending status in one observable transition", async () => {
+    const channel = new ControlledChannel();
+    const client = createPluginStateClient(definition, { channel, onDefect: error => assert.fail(String(error)) });
+    channel.deliver(attached());
+    const pending = client.dispatch({ kind: "edit", key: "curve", value: [1, 0] });
+    const observed = [];
+    const remove = client.subscribe(state => observed.push({ value: state.state.fields.curve.value, pending: state.pendingFields }));
+    channel.deliver({ kind: "update", scope, revision: 2, state: snapshot(2, [1, 0]), receipt: receipt(1, { kind: "accepted", revision: 2 }) });
+    assert.equal((await pending).kind, "accepted");
+    assert.deepEqual(observed, [{ value: [1, 0], pending: [] }]);
+    remove(); client.stop();
+});
+
 test("compound edits mark every affected field pending without optimistic values until their receipt arrives", async t => {
     const channel = new ControlledChannel();
     const client = createPluginStateClient(definition, { channel, onDefect: error => assert.fail(String(error)) });

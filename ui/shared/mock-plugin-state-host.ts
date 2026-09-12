@@ -11,7 +11,7 @@ type NativeRequest =
     | { readonly kind: "restore"; readonly scope: PluginStateScope }
     | { readonly kind: "read"; readonly scope: PluginStateScope; readonly endpoint: string }
     | { readonly kind: "effect"; readonly scope: PluginStateScope; readonly operation:
-        | { readonly kind: "parameter"; readonly endpoint: string; readonly value: number }
+        | { readonly kind: "parameter"; readonly endpoint: string; readonly value: number; readonly intent: number }
         | { readonly kind: "event"; readonly endpoint: string; readonly value: unknown } }
     | { readonly kind: "close" };
 interface Channel {
@@ -55,6 +55,15 @@ export function createMockPluginStateHost(options: {
     let stopping: Promise<void> | undefined;
     const pending: Envelope[] = [];
     const gestures = new Set<string>();
+    type Observation = { readonly intent: number; readonly origin: "owner" | "external"; readonly observation: number };
+    const observations = new Map<string, Observation>();
+    let writingParameter: string | undefined;
+    const initialObservation: Observation = { intent: 0, origin: "external", observation: 0 };
+    const observe = (endpoint: string, intent?: number) => {
+        const previous = observations.get(endpoint) ?? initialObservation;
+        observations.set(endpoint, { intent: intent ?? previous.intent, origin: intent === undefined ? "external" : "owner",
+            observation: previous.observation + 1 });
+    };
     const stored = new Map<string, unknown>();
     const storedValues = options.storedValues ?? { read: (key: string) => stored.get(key), write: (key: string, value: unknown) => { stored.set(key, value); } };
     let parameterEndpoints: readonly string[] = [];
@@ -155,20 +164,30 @@ export function createMockPluginStateHost(options: {
                 case "open":
                     scope = request.scope;
                     parameterEndpoints = request.parameters;
+                    observations.clear();
                     return { parameters: await Promise.all(request.parameters.map(endpoint => options.readParameter(endpoint, reads.signal))) };
                 case "restore":
                     scope = request.scope;
                     allocations.clear();
+                    observations.clear();
                     finishGestures();
                     return { parameters: await Promise.all(parameterEndpoints.map(endpoint => options.readParameter(endpoint, reads.signal))) };
-                case "read": return { value: (await options.readParameter(request.endpoint, reads.signal)).value };
+                case "read": {
+                    // Capture provenance before the asynchronous native read. A
+                    // later write must not relabel a previously requested value.
+                    const observation = observations.get(request.endpoint) ?? initialObservation;
+                    return { value: (await options.readParameter(request.endpoint, reads.signal)).value, ...observation };
+                }
                 case "effect":
                     if (request.operation.kind === "event") {
                         if (!options.engine) return { error: "Development engine event receiver is missing." };
                         options.engine.sendEvent(request.operation.endpoint, request.operation.value);
                         return {};
                     }
-                    options.writeParameter(request.operation.endpoint, request.operation.value);
+                    observe(request.operation.endpoint, request.operation.intent);
+                    writingParameter = request.operation.endpoint;
+                    try { options.writeParameter(request.operation.endpoint, request.operation.value); }
+                    finally { writingParameter = undefined; }
                     channel?.observeParameter(request.scope, request.operation.endpoint);
                     return {};
                 case "close": finishGestures(); return {};
@@ -211,7 +230,13 @@ export function createMockPluginStateHost(options: {
         removeEventListener: view.removeEventListener,
         sendMessageToServer: view.sendMessageToServer,
         ready,
-        observeParameter(endpoint: string) { if (scope && !stopped) channel?.observeParameter(scope, endpoint); },
+        observeParameter(endpoint: string) {
+            if (!scope || stopped) return;
+            // The mock connection synchronously notifies during our own write;
+            // that callback observes the owner marker already assigned above.
+            if (writingParameter !== endpoint) observe(endpoint);
+            channel?.observeParameter(scope, endpoint);
+        },
         replaceStoredValue(key: string, write: () => void) { return !stopped && (channel?.replaceStoredValue(key, write) ?? false); },
         stop: () => stop("owner-removed"),
     };

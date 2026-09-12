@@ -118,12 +118,13 @@ test('own queued gesture versions remain valid until actual host automation adva
     const publications=[],scope={owner:'automation-guard',document:0};
     const owner=createPluginStateSession(definition,{native:{publish:p=>publications.push(p),update(){},close(){}},onDefect:error=>assert.fail(String(error))});
     let sequence=0;
+    const intent=()=>publications.filter(publication=>publication.operations.some(operation=>operation.kind==='parameter')).at(-1).request;
     const command=command=>owner.dispatch({kind:'command',address:{...scope,client:1,sequence:++sequence},command});
     try {
         await owner.dispatch({kind:'opened',scope,native:{values:{},parameters:[{endpoint:'gain',value:1,min:0,max:10,step:1,defaultValue:1}]}});
         await command({kind:'begin',key:'gain',gesture:1});
         for(const value of [2,3])assert.equal((await command({kind:'edit',key:'gain',gesture:1,value,expectedVersion:0})).kind,'accepted');
-        for(const value of [7,3])await owner.dispatch({kind:'parameter',scope,endpoint:'gain',value});
+        for(const [index,value] of [7,3].entries())await owner.dispatch({kind:'parameter',scope,endpoint:'gain',value,intent:intent(),origin:'external',observation:index+3});
         const count=publications.length;
         assert.deepEqual(await command({kind:'edit',key:'gain',gesture:1,value:9,expectedVersion:0}),{kind:'rejected',reason:'stale-version'});
         assert.equal(publications.length,count);
@@ -132,7 +133,7 @@ test('own queued gesture versions remain valid until actual host automation adva
         await command({kind:'end',key:'gain',gesture:1});
         await command({kind:'begin',key:'gain',gesture:2});
         await command({kind:'edit',key:'gain',gesture:2,value:6});
-        await owner.dispatch({kind:'parameter',scope,endpoint:'gain',value:9});
+        await owner.dispatch({kind:'parameter',scope,endpoint:'gain',value:9,intent:intent(),origin:'external',observation:7});
         await command({kind:'end',key:'gain',gesture:2});
         assert.equal(owner.getSnapshot().fields.gain.value,9);
         await command({kind:'undo'});assert.equal(owner.getSnapshot().fields.gain.value,8);

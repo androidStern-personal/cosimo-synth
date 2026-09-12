@@ -142,3 +142,32 @@ test("client stop seals its accepted gesture while its native view survives, bef
     assert.deepEqual(current.scope, previous.scope);
     assert.notEqual(current.client, previous.client);
 });
+
+test("public GUI burst stays monotonic through actual worklet reports, then automation, reopen and Undo still work", { timeout: 15000 }, async () => {
+    await page.evaluate(() => window.fixture.connection.sendFullStoredState({ parameters: [{ name: "gain", value: 2.5 }], values: { curve: { points: [0, 0.25, 1] } } }));
+    await expectValues(2.5, [0, 0.25, 1]);
+    await page.evaluate(() => {
+        window.gainTrace = [2.5];
+        window.removeGainTrace = window.fixture.agent.subscribe(snapshot => {
+            if (snapshot.kind === "ready") window.gainTrace.push(snapshot.state.fields.gain.value);
+        });
+        window.outcomeStart = window.fixture.outcomes.length;
+    });
+    await page.getByText("Rapid gain drag", { exact: true }).click();
+    await page.waitForFunction(() => window.fixture.outcomes.length === window.outcomeStart + 20);
+    await expectValues(11.5, [0, 0.25, 1]);
+    const result = await page.evaluate(() => {
+        window.removeGainTrace();
+        return { values: window.gainTrace, outcomes: window.fixture.outcomes.slice(window.outcomeStart) };
+    });
+    assert.ok(result.outcomes.every(outcome => outcome.kind === "accepted"), JSON.stringify(result.outcomes));
+    assert.deepEqual(result.values.filter((value, index) => index && value < result.values[index - 1]), [], "own worklet reports never rewind the accepted drag");
+    await page.evaluate(() => window.fixture.connection.sendEventOrValue("gain", 4.5));
+    await expectValues(4.5, [0, 0.25, 1]);
+    await page.evaluate(() => { window.fixture.closeViews(); window.fixture.openViews(); });
+    await expectValues(4.5, [0, 0.25, 1]);
+    await accepted({ kind: "undo" });
+    await expectValues(2.5, [0, 0.25, 1]);
+    await accepted({ kind: "redo" });
+    await expectValues(11.5, [0, 0.25, 1]);
+});

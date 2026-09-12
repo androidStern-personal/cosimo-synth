@@ -204,7 +204,7 @@ test("raw gesture boundaries, detach, Undo and Redo use the same service history
     send(8, 4, { kind: "edit", key: "gain", gesture: 5, value: 3 });
     send(8, 5, { kind: "end", key: "gain", gesture: 5 });
     assert.deepEqual(connection.bodies("publish").flatMap(item => item.operations).filter(operation => operation.endpoint === "hostGain"), [
-        { kind: "gesture-start", endpoint: "hostGain" }, { kind: "parameter", endpoint: "hostGain", value: 3 },
+        { kind: "gesture-start", endpoint: "hostGain" }, { kind: "parameter", endpoint: "hostGain", value: 3, intent: 5 },
         { kind: "gesture-end", endpoint: "hostGain" },
     ]);
     assert.deepEqual(defects, []);
@@ -333,11 +333,11 @@ test("raw replacement resets GUI tickets, hydrates the new document and fences o
     assert.deepEqual(restored.scope, scope);
     assert.deepEqual(restored.state.history, { canUndo: false, canRedo: false });
     owner.connection.deliver({ kind: "published", scope: owner.scope, request: oldPublication.request, result: { kind: "observed" } });
-    owner.connection.deliver({ kind: "parameter", scope: owner.scope, endpoint: "hostGain", value: 10 });
+    owner.connection.deliver({ kind: "parameter", scope: owner.scope, endpoint: "hostGain", value: 10, intent: 0, origin: "external", observation: 1 });
     assert.strictEqual(owner.connection.bodies("update").at(-1), restored);
     connection.deliver({ kind: "attached", request: 2, scope, client: 8, revision: restored.revision, state: restored.state });
     assert.equal(client.getSnapshot().state.fields.gain.value, -2);
-    owner.connection.deliver({ kind: "parameter", scope, endpoint: "hostGain", value: -1.5 });
+    owner.connection.deliver({ kind: "parameter", scope, endpoint: "hostGain", value: -1.5, intent: 0, origin: "external", observation: 1 });
     connection.deliver(owner.connection.bodies("update").at(-1));
     assert.equal(client.getSnapshot().state.fields.gain.value, -1.5);
     assert.equal(client.getSnapshot().state.fields.gain.version, 1);
@@ -670,10 +670,10 @@ test("only declared scalar dependencies create new event targets and native even
     t.after(() => owner.service.stop());
     await new Promise(setImmediate);
     assert.equal(owner.events().length, 1);
-    owner.connection.deliver({ kind: "parameter", scope: owner.scope, endpoint: "otherGain", value: 3 });
+    owner.connection.deliver({ kind: "parameter", scope: owner.scope, endpoint: "otherGain", value: 3, intent: 0, origin: "external", observation: 1 });
     assert.equal(owner.connection.bodies("update").at(-1).state.fields.other.value, 3, "unrelated host observation was processed");
     assert.equal(owner.events().length, 1);
-    owner.connection.deliver({ kind: "parameter", scope: owner.scope, endpoint: "hostGain", value: 3 });
+    owner.connection.deliver({ kind: "parameter", scope: owner.scope, endpoint: "hostGain", value: 3, intent: 0, origin: "external", observation: 1 });
     await new Promise(setImmediate);
     const event = owner.events().at(-1);
     assert.equal(owner.events().length, 2);

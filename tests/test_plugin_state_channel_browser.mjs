@@ -149,7 +149,7 @@ test("worker publication crosses the real worklet barrier into stored state and 
     const forged = await page.evaluate(() => {
         const { a, first } = window.fixture.clients;
         const scope = first.find(body => body.kind === "attached").scope;
-        const operations = [{ kind: "gesture-start", endpoint: "gain" }, { kind: "parameter", endpoint: "gain", value: 3.5 },
+        const operations = [{ kind: "gesture-start", endpoint: "gain" }, { kind: "parameter", endpoint: "gain", value: 3.5, intent: 21 },
             { kind: "gesture-end", endpoint: "gain" }, { kind: "stored", key: "curve", value: { points: [0, 0.5, 1] } },
             { kind: "event", endpoint: "curveBuffer", value: 0.75 }];
         const rejected = a.sendMessageToServer({ type: "kit_state", message: { kind: "publish", scope, request: 21, operations, role: "worker" }});
@@ -161,10 +161,14 @@ test("worker publication crosses the real worklet barrier into stored state and 
     await page.waitForFunction(() => window.fixture.worker.messages.some(body => body.kind === "published" && body.request === 21), null, { timeout: 5_000 });
     const result = await page.evaluate(async () => ({
         published: window.fixture.worker.messages.find(body => body.kind === "published" && body.request === 21),
+        observation: window.fixture.worker.messages.findLast(body => body.kind === "parameter" && body.endpoint === "gain"),
         state: window.fixture.connection.cachedState.curve,
         output: await window.fixture.readOutput(),
     }));
     assert.deepEqual(result.published.result, { kind: "observed" });
+    assert.equal(result.observation.intent, 21, "the actual worklet echoes the publication intent");
+    assert.equal(result.observation.origin, "owner");
+    assert.ok(result.observation.observation > 0, "the observation carries a native monotonic order");
     assert.deepEqual(result.state, { points: [0, 0.5, 1] });
     assert.ok(Math.abs(result.output.min - 4.25) < 0.001 && Math.abs(result.output.max - 4.25) < 0.001, JSON.stringify(result.output));
     assert.deepEqual(errors, []);
@@ -234,10 +238,10 @@ test("actual full-state restore fences queued effects and pairs current worklet 
         }});
         send(4, { kind: "probe-late-after-replace", request: 52, operations: [
             { kind: "stored", key: "curve", value: { points: [99] } },
-            { kind: "parameter", endpoint: "gain", value: 9 }, { kind: "event", endpoint: "curveBuffer", value: 20 },
+            { kind: "parameter", endpoint: "gain", value: 9, intent: 52 }, { kind: "event", endpoint: "curveBuffer", value: 20 },
         ] });
         send(5, { kind: "probe-publish", request: 53, operations: [
-            { kind: "parameter", endpoint: "gain", value: 9 }, { kind: "event", endpoint: "curveBuffer", value: 20 },
+            { kind: "parameter", endpoint: "gain", value: 9, intent: 53 }, { kind: "event", endpoint: "curveBuffer", value: 20 },
         ] });
         // The real publication starts its first port handoff in a microtask;
         // no port response can run until this JavaScript turn has completed.
@@ -334,7 +338,7 @@ test("only the actual worker can close its owner and terminal closure fences pen
             kind: "command", scope: attached.scope, client: attached.client, sequence, command
         }});
         send(3, { kind: "probe-publish", request: 80, operations: [
-            { kind: "parameter", endpoint: "gain", value: -2 }, { kind: "event", endpoint: "curveBuffer", value: 20 },
+            { kind: "parameter", endpoint: "gain", value: -2, intent: 80 }, { kind: "event", endpoint: "curveBuffer", value: 20 },
         ] });
         await Promise.resolve();
         send(4, { kind: "probe-close" });
@@ -439,7 +443,7 @@ test("private worker facade preserves actual legacy parameter and stored-state r
         const result = await legacyPage.evaluate(() => window.fixture.worker.legacy);
         assert.ok(result.parameters.includes(3));
         assert.deepEqual(result.stored.at(-1), { key: "curve", value: { points: [0.3, 0.7] } });
-        assert.deepEqual(result.full.at(-1), { parameters: [{ name: "gain", value: 3 }], values: { curve: { points: [0.3, 0.7] } } });
+        assert.deepEqual(result.full.at(-1), { parameters: [{ name: "gain", value: 3 }, { name: "resetPeer", value: 1 }], values: { curve: { points: [0.3, 0.7] } } });
         assert.deepEqual(legacyErrors, []);
     } finally {
         await legacyPage.evaluate(async () => { try { await window.fixture?.connection.dispose(); } finally { await window.fixture?.context.close(); } });
@@ -603,14 +607,14 @@ test("raw owned stored replacements fence actual worklet effects while preservin
                 kind: "command", scope: attached.scope, client: attached.client, sequence: 1,
                 command: { kind: "probe-late-after-replace", request: 202, operations: [
                     { kind: "stored", key: "curve", value: { points: [99] } },
-                    { kind: "parameter", endpoint: "gain", value: 9 },
+                    { kind: "parameter", endpoint: "gain", value: 9, intent: 202 },
                     { kind: "event", endpoint: "curveBuffer", value: 20 },
                 ] },
             }});
             connection.sendMessageToServer({ type: "kit_state", message: {
                 kind: "command", scope: attached.scope, client: attached.client, sequence: 2,
                 command: { kind: "probe-publish", request: 205, operations: [
-                    { kind: "parameter", endpoint: "gain", value: 6 },
+                    { kind: "parameter", endpoint: "gain", value: 6, intent: 205 },
                     { kind: "event", endpoint: "curveBuffer", value: 20 },
                 ] },
             }});
@@ -710,7 +714,7 @@ test("raw owned stored replacements fence actual worklet effects while preservin
                 command: { kind: "probe-publish", request: 204, operations: [
                     { kind: "stored", key: "curve", value: { points: [0.5, 0.5] } },
                     { kind: "stored", key: "shape", value: { points: [99] } },
-                    { kind: "parameter", endpoint: "gain", value: 9 },
+                    { kind: "parameter", endpoint: "gain", value: 9, intent: 204 },
                     { kind: "event", endpoint: "curveBuffer", value: 20 },
                 ] },
             }});

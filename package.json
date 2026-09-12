@@ -153,7 +153,7 @@
     "test:plugin-state:browser-platform": "node --test --test-concurrency=1 tests/test_plugin_state_channel_browser.mjs tests/test_plugin_state_system_browser.mjs tests/test_plugin_state_reset_browser.mjs",
     "test:plugin-state:native-data": "node --test tests/test_plugin_state_engine_data_runtime.mjs",
     "test:plugin-state:native-synth": "node --test tests/test_synth_plugin_state_native.mjs",
-    "test:plugin-state:browser": "node --test kit/tests/test_plugin_state_react_browser.mjs",
+    "test:plugin-state:browser": "node --test kit/tests/test_plugin_state_react_browser.mjs kit/tests/test_plugin_state_reactivity_browser.mjs",
     "test:synth:history:browser": "node --test tests/test_cosimo_state_history_browser.mjs",
     "test:synth:history:native": "bash tests/native/run_cosimo_state_history_probe.sh",
     "test:synth:plugin-state:built": "node --test --test-concurrency=1 tests/test_mock_plugin_state_host.mjs tests/test_synth_plugin_state_browser.mjs tests/test_plugin_state_legacy_browser.mjs tests/test_voice_popover_compiled_browser.mjs",

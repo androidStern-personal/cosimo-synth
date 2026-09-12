@@ -36,7 +36,7 @@ test("actual Cosimo GUI and audio restore parameter, wavetable, rack, articulati
     page.on("console", message => { if (message.type() === "error") { errors.push(message.text()); console.error(`${phase}: ${message.text()}`); } });
     page.on("response", response => { if (response.status() >= 400) errors.push(`${response.status()} ${response.url()}`); });
     try {
-        await page.goto(`http://127.0.0.1:${server.address().port}/?test=1`);
+        await page.goto(`http://127.0.0.1:${server.address().port}/synth.html?test=1`);
         await page.waitForFunction(() => window.__COSIMO_WEB_POC__?.getSnapshot().phase === "ready");
         await page.locator("#cosimo-start-overlay").click();
         await page.evaluate(async () => {

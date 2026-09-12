@@ -1,8 +1,9 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useSyncExternalStore, type ReactNode } from "react";
-import { atom, type Atom } from "jotai/vanilla";
+import type { Atom } from "jotai/vanilla";
+import { selectAtom } from "jotai/vanilla/utils";
 import type { PluginStateFields, PluginStateParameter, PluginStateStored, PluginStateFieldValue } from "./plugin-state-definition";
 import type { createPluginStateClient, PluginStateClientResult } from "./plugin-state-client";
-import type { PluginStateApplication, PluginStateNativeParameter, PluginStateScope, PluginStateHistoryEntry as NativeHistoryEntry } from "./plugin-state-session";
+import type { PluginStateApplication, PluginStateNativeParameter, PluginStateScope, PluginStateFieldSnapshot, PluginStateHistoryEntry as NativeHistoryEntry } from "./plugin-state-session";
 
 type Client = ReturnType<typeof createPluginStateClient<PluginStateFields>>;
 const Context = createContext<{ definition: PluginStateFields; client: Client } | null>(null);
@@ -178,6 +179,37 @@ function useDefinitionEditor(definition: PluginStateFields | null): PluginStateE
     };
 }
 
+type ControlSource = Exclude<ReturnType<Client["getSnapshot"]>, { kind: "ready" }> | {
+    readonly kind: "ready";
+    readonly client: number;
+    readonly scope: PluginStateScope | null;
+    readonly field: PluginStateFieldSnapshot<unknown> | undefined;
+    readonly pending: boolean;
+};
+
+// These are parsed, shallow protocol records (readiness, metadata, application,
+// target). Domain values are compared separately by their retained identity.
+function sameControlDetails(left: unknown, right: unknown): boolean {
+    if (Object.is(left, right)) return true;
+    if (!left || !right || typeof left !== "object" || typeof right !== "object") return false;
+    const keys = Object.keys(left);
+    return keys.length === Object.keys(right).length && keys.every(key => Object.hasOwn(right, key)
+        && sameControlDetails(Reflect.get(left, key), Reflect.get(right, key)));
+}
+
+function sameControlSource(left: ControlSource, right: ControlSource): boolean {
+    if (left.kind !== "ready" || right.kind !== "ready") return sameControlDetails(left, right);
+    if (left.client !== right.client || left.pending !== right.pending
+        || !sameControlDetails(left.scope, right.scope)) return false;
+    const before = left.field, after = right.field;
+    if (before === after) return true;
+    if (!before || !after) return false;
+    const keys = Object.keys(before);
+    return keys.length === Object.keys(after).length && keys.every(key => Object.hasOwn(after, key)
+        && (key === "value" ? Object.is(Reflect.get(before, key), Reflect.get(after, key))
+            : sameControlDetails(Reflect.get(before, key), Reflect.get(after, key))));
+}
+
 /** Internal adapter seam: absence is explicit; an unready declared field still returns its control. */
 export function useOptionalPluginState<Field extends PluginStateParameter | PluginStateStored<unknown>>(declaration: Field | null): PluginStateControl<PluginStateFieldValue<Field>> | null {
     const context = useContext(Context);
@@ -186,29 +218,34 @@ export function useOptionalPluginState<Field extends PluginStateParameter | Plug
     const projection = client ? projectionFor(client) : null;
     const key = definition && declaration !== null ? Object.keys(definition).find(key => definition[key] === declaration) : undefined;
     if (client && key === undefined) throw new Error("The field does not belong to this plugin state definition.");
-    const selected = useMemo(() => atom((get): PluginStateControlState<PluginStateFieldValue<Field>> => {
-        if (!client || key === undefined) return connectingControl;
-        const snapshot = get(client.reactivity.snapshot);
-        if (snapshot.kind !== "ready") return snapshot;
-        const field = snapshot.state.fields[key];
-        if (!field || field.readiness.kind === "pending") return { kind: "connecting" };
+    // Select the complete field contract, including private version/retry guards.
+    // Unrelated revisions must neither render this control nor renew its closure.
+    const selected = useMemo(() => client && key !== undefined ? selectAtom(
+        client.reactivity.snapshot,
+        (snapshot): ControlSource => snapshot.kind === "ready" ? {
+            kind: "ready", client: snapshot.client, scope: snapshot.state.scope,
+            field: snapshot.state.fields[key], pending: snapshot.pendingFields.includes(key),
+        } : snapshot,
+        sameControlSource,
+    ) : null, [client, key]);
+    const source = useClientValue(client, selected, connectingControl);
+    const state: PluginStateControlState<PluginStateFieldValue<Field>> = (() => {
+        if (source.kind !== "ready") return source;
+        const field = source.field;
+        if (!field || field.readiness.kind === "pending") return connectingControl;
         if (field.readiness.kind === "failed") return { kind: "failed", reason: field.readiness.reason };
-        if (!("value" in field)) return { kind: "connecting" };
+        if (!("value" in field)) return connectingControl;
         return {
             kind: "ready",
             // SAFETY: identity lookup above selected this exact field declaration.
             value: field.value as PluginStateFieldValue<Field>,
-            pending: snapshot.pendingFields.includes(key),
+            pending: source.pending,
             ...(field.application ? { application: projectApplication(field.application) } : {}),
             ...(field.metadata ? { metadata: field.metadata } : {}),
         };
-    }), [client, key]);
-    const state = useClientValue(client, selected, connectingControl);
-    // The private accepted version changes even for ABA edits whose value is
-    // equal again. React must renew its edit closure for those observations.
-    const source = useClientValue(client, client?.reactivity.snapshot ?? null, connectingClient);
-    const renderedScope = source.kind === "ready" ? source.state.scope : null;
-    const renderedField = source.kind === "ready" && key !== undefined ? source.state.fields[key] : undefined;
+    })();
+    const renderedScope = source.kind === "ready" ? source.scope : null;
+    const renderedField = source.kind === "ready" ? source.field : undefined;
     const renderedVersion = renderedField && "version" in renderedField ? renderedField.version : undefined;
     const actions = useMemo(() => {
         if (!client || !definition || !projection || key === undefined) return null;
@@ -284,7 +321,9 @@ export function useOptionalPluginState<Field extends PluginStateParameter | Plug
 export function usePluginHistory(): PluginStateHistory {
     const { client } = useClient();
     const projection = projectionFor(client);
-    const snapshot = useClientValue(client, client.reactivity.snapshot);
+    const selected = useMemo(() => selectAtom(client.reactivity.snapshot, snapshot => snapshot.kind === "ready"
+        ? snapshot.state.history : { canUndo: false, canRedo: false }, sameControlDetails), [client]);
+    const history = useClientValue(client, selected);
     const actions = useMemo(() => {
         const eligible = (kind: "undo" | "redo", token?: PluginStateHistoryEntry): boolean => {
             const current = client.getSnapshot();
@@ -305,7 +344,6 @@ export function usePluginHistory(): PluginStateHistory {
             canUndoEntry: (entry?: PluginStateHistoryEntry) => eligible("undo", entry), canRedoEntry: (entry?: PluginStateHistoryEntry) => eligible("redo", entry),
         };
     }, [client, projection]);
-    const history = snapshot.kind === "ready" ? snapshot.state.history : { canUndo: false, canRedo: false };
     return { canUndo: history.canUndo, canRedo: history.canRedo,
         ...(history.undoEntry ? { undoEntry: projection.reference(history.undoEntry) } : {}),
         ...(history.redoEntry ? { redoEntry: projection.reference(history.redoEntry) } : {}), ...actions };

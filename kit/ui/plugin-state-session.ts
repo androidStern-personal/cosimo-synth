@@ -180,13 +180,17 @@ export type PluginStateEvent =
         readonly changedStoredKey?: string }
     | { readonly kind: "engine"; readonly target: EngineTarget; readonly status: EngineApplication }
     | { readonly kind: "detached"; readonly scope: PluginStateScope; readonly client: number }
-    | { readonly kind: "parameter"; readonly scope: PluginStateScope; readonly endpoint: string; readonly value: number }
+    | { readonly kind: "parameter"; readonly scope: PluginStateScope; readonly endpoint: string; readonly value: number;
+        /** Native write identity and ordering, captured alongside the value. */
+        readonly intent: number; readonly origin: "owner" | "external"; readonly observation: number }
     | { readonly kind: "command"; readonly address: PluginStateAddress; readonly command: PluginStateCommand }
     | {
         readonly kind: "published";
         readonly scope: PluginStateScope;
         readonly request: number;
         readonly result: { readonly kind: "observed" } | { readonly kind: "failed"; readonly reason: string };
+        /** Native counters sampled after failure, before releasing a write fence. */
+        readonly observations?: readonly { readonly endpoint: string; readonly observation: number }[];
     };
 
 /** The sole mutable owner for one patch lifetime. */
@@ -214,6 +218,9 @@ type Model = {
     readonly detached: ReadonlySet<number>;
     readonly parameters: ReadonlyMap<string, PluginStateNativeParameter>;
     readonly publications: ReadonlyMap<number, { readonly key: string; readonly version: number }>;
+    readonly parameterIntents: ReadonlyMap<string, number>;
+    readonly parameterAppliedIntents: ReadonlyMap<string, number>;
+    readonly parameterObservations: ReadonlyMap<string, number>;
 };
 
 function sameScope(left: PluginStateScope, right: PluginStateScope): boolean {
@@ -251,7 +258,7 @@ export function createPluginStateSession<const Fields extends PluginStateFields>
     for (const key of Object.keys(definition)) initialFields[key] = Object.freeze({ readiness: Object.freeze({ kind: "pending" }) });
     const state = atom<Model>({
         snapshot: Object.freeze({ scope: null, revision: 0, fields: Object.freeze(initialFields), history: Object.freeze({ canUndo: false, canRedo: false }) }),
-        history: new UndoHistory<HistoryEntry>({ limit: ports.historyLimit, compare: (a, b) => a.order - b.order }), gestures: new Map(), editOrder: 0, detached: new Set<number>(), parameters: new Map(), publications: new Map(),
+        history: new UndoHistory<HistoryEntry>({ limit: ports.historyLimit, compare: (a, b) => a.order - b.order }), gestures: new Map(), editOrder: 0, detached: new Set<number>(), parameters: new Map(), publications: new Map(), parameterIntents: new Map(), parameterAppliedIntents: new Map(), parameterObservations: new Map(),
     });
     const snapshotAtom = atom((get) => get(state).snapshot);
     let stopped = false;
@@ -340,6 +347,7 @@ export function createPluginStateSession<const Fields extends PluginStateFields>
         // remains separately reported per field; local acceptance is one commit.
         const fields = { ...model.snapshot.fields };
         const publications = new Map(model.publications);
+        const parameterIntents = new Map(model.parameterIntents);
         const outgoing: PluginStatePublication[] = [];
         for (const { key, value } of changes) {
             const field = definition[key], previous = fields[key];
@@ -360,6 +368,7 @@ export function createPluginStateSession<const Fields extends PluginStateFields>
             if (operations.length) {
                 const request = ++nextPublication;
                 publications.set(request, { key, version });
+                if (field.kind === "parameter") parameterIntents.set(key, request);
                 outgoing.push({ request, scope: model.snapshot.scope, operations });
             }
             fields[key] = readyField(value, { kind: field.kind === "parameter" ? "host-managed" : field.lifetime === "instance" ? "not-written" : "pending" }, version, baseline?.metadata, baseline?.gesture, field.kind === "parameter" ? { kind: "pending" } : undefined);
@@ -374,7 +383,7 @@ export function createPluginStateSession<const Fields extends PluginStateFields>
                 ? { historyEntry: historyReference(model.snapshot.scope, history.undoEntry) } : {}),
         };
         accepted = result;
-        commit({ ...next, publications });
+        commit({ ...next, publications, parameterIntents });
         for (const publication of outgoing) { if (!stopped) ports.native.publish(publication); }
         return result;
     };
@@ -429,7 +438,7 @@ export function createPluginStateSession<const Fields extends PluginStateFields>
                 }
             }
             const next = publishSnapshot(model, fields, model.history.clear());
-            commit({ ...next, gestures: new Map(), publications: new Map(), editOrder: 0, parameters, snapshot: Object.freeze({ ...next.snapshot, scope: Object.freeze({ ...event.scope }) }) });
+            commit({ ...next, gestures: new Map(), publications: new Map(), parameterIntents: new Map(), parameterAppliedIntents: new Map(), parameterObservations: new Map(), editOrder: 0, parameters, snapshot: Object.freeze({ ...next.snapshot, scope: Object.freeze({ ...event.scope }) }) });
         } else if (event.kind === "command") {
             if (!model.snapshot.scope) return { kind: "rejected", reason: "not-ready" };
             if (!sameScope(event.address, model.snapshot.scope)) return { kind: "rejected", reason: "stale-scope" };
@@ -490,7 +499,8 @@ export function createPluginStateSession<const Fields extends PluginStateFields>
                     }) });
                     const result: PluginStateResult = { kind: "accepted", revision: next.snapshot.revision, version: current.version, changed: false };
                     accepted = result;
-                    commit({ ...next, publications });
+                    commit({ ...next, publications, parameterIntents: field.kind === "parameter"
+                        ? new Map(model.parameterIntents).set(key, request) : model.parameterIntents });
                     if (!stopped) ports.native.publish({ request, scope: model.snapshot.scope, operations });
                     return result;
                 }
@@ -601,6 +611,15 @@ export function createPluginStateSession<const Fields extends PluginStateFields>
             for (const [key, metadata] of model.parameters) {
                 if (metadata.endpoint !== event.endpoint) continue;
                 if (!validParameter({ ...metadata, value: event.value })) return { kind: "rejected", reason: "invalid-value" };
+                if (!Number.isSafeInteger(event.intent) || event.intent < 0 || !Number.isSafeInteger(event.observation) || event.observation < 0
+                    || (event.origin !== "owner" && event.origin !== "external")) return { kind: "rejected", reason: "invalid-command" };
+                if (event.observation <= (model.parameterObservations.get(key) ?? -1)) continue;
+                const parameterObservations = new Map(model.parameterObservations).set(key, event.observation);
+                // Own writes already supplied the desired value and history.
+                // Their delayed echo is not a competing edit or a version change.
+                if (event.origin === "owner" || event.intent < (model.parameterIntents.get(key) ?? 0)) {
+                    commit({ ...model, parameterObservations }); continue;
+                }
                 const field = model.snapshot.fields[key];
                 if (!field || !("value" in field)) continue;
                 const next = Object.is(field.value, event.value) ? model : publishSnapshot(model, {
@@ -609,7 +628,7 @@ export function createPluginStateSession<const Fields extends PluginStateFields>
                 const active = model.gestures.get(key);
                 const gestures = active && next !== model
                     ? new Map(model.gestures).set(key, { ...active, guardFloorVersion: field.version + 1 }) : model.gestures;
-                commit({ ...next, gestures });
+                commit({ ...next, gestures, parameterObservations });
             }
         } else {
             if (!model.snapshot.scope || !sameScope(event.scope, model.snapshot.scope)) return { kind: "rejected", reason: "stale-scope" };
@@ -617,6 +636,24 @@ export function createPluginStateSession<const Fields extends PluginStateFields>
             if (publication) {
                 const publications = new Map(model.publications);
                 publications.delete(event.request);
+                const parameterAppliedIntents = new Map(model.parameterAppliedIntents);
+                const parameterIntents = new Map(model.parameterIntents);
+                const parameterObservations = new Map(model.parameterObservations);
+                const declaration = definition[publication.key];
+                if (declaration?.kind === "parameter") {
+                    if (event.result.kind === "observed") parameterAppliedIntents.set(publication.key,
+                        Math.max(event.request, parameterAppliedIntents.get(publication.key) ?? 0));
+                    const barrier = event.observations?.find(item => item.endpoint === declaration.endpoint);
+                    if (barrier) parameterObservations.set(publication.key,
+                        Math.max(parameterObservations.get(publication.key) ?? -1, barrier.observation));
+                    // A failed send cannot fence out real automation forever.
+                    // Keep the fence for every still-pending or successful write.
+                    let intent = parameterAppliedIntents.get(publication.key) ?? 0;
+                    for (const [request, pending] of publications) if (pending.key === publication.key) intent = Math.max(intent, request);
+                    // Missing native evidence means the failed attempt's order is
+                    // unknown. Keep its fence until retry or authoritative restore.
+                    if (event.result.kind === "observed" || barrier) parameterIntents.set(publication.key, intent);
+                }
                 const field = model.snapshot.fields[publication.key];
                 if (field && "value" in field && field.version === publication.version) {
                     const persistence: PluginStatePersistence = event.result.kind === "observed"
@@ -629,8 +666,8 @@ export function createPluginStateSession<const Fields extends PluginStateFields>
                     const next = publishSnapshot(model, { ...model.snapshot.fields, [publication.key]: Object.freeze({ ...readyField(field.value, persistence, field.version, field.metadata, field.gesture, application),
                         ...(event.result.kind === "failed" ? { persistenceRequest: event.request } : {}),
                     }) });
-                    commit({ ...next, publications });
-                } else commit({ ...model, publications });
+                    commit({ ...next, publications, parameterIntents, parameterAppliedIntents, parameterObservations });
+                } else commit({ ...model, publications, parameterIntents, parameterAppliedIntents, parameterObservations });
             }
         }
         return { kind: "accepted", revision: store.get(state).snapshot.revision };
@@ -674,10 +711,11 @@ export function createPluginStateSession<const Fields extends PluginStateFields>
                 let result: PluginStateResult;
                 let updating = false;
                 try {
+                    const previous = store.get(state).snapshot;
                     result = stopped ? { kind: "rejected", reason: "service-closed" } : apply(item.event);
                     accepted = result;
                     for (const effect of engineEffects) { if (!stopped) effect(); }
-                    if (!stopped) {
+                    if (!stopped && (store.get(state).snapshot !== previous || item.event.kind === "command")) {
                         updating = true;
                         ports.native.update(getSnapshot(), item.event.kind === "command" ? { address: item.event.address, result } : undefined);
                     }

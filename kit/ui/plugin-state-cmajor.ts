@@ -216,7 +216,8 @@ export function createCmajorPluginStateService<const Fields extends PluginStateF
             publish(publication) {
                 const request = ++nextRequest;
                 publications.set(request, { request: publication.request, scope: publication.scope });
-                send({ kind: "publish", ...publication, request });
+                send({ kind: "publish", ...publication, request, operations: publication.operations.map(operation =>
+                    operation.kind === "parameter" ? { ...operation, intent: publication.request } : operation) });
             },
             update(snapshot, receipt) {
                 if (snapshot.scope) send({ kind: "update", scope: snapshot.scope, revision: snapshot.revision,

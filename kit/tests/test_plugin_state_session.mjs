@@ -30,6 +30,13 @@ class RecordingNativePort {
     publications = [];
     updates = [];
     closures = [];
+    observation = 0;
+
+    parameterReport(scope, endpoint, value) {
+        const intent = this.publications.filter(publication => publication.operations.some(operation => operation.kind === "parameter"
+            && operation.endpoint === endpoint && publication.scope.document === scope.document)).at(-1)?.request ?? 0;
+        return { kind: "parameter", scope, endpoint, value, intent, origin: "external", observation: ++this.observation };
+    }
 
     close(reason) { this.closures.push(reason); }
 
@@ -84,6 +91,54 @@ async function openMixedSession() {
         return session.dispatch({ kind: "command", address: { ...scope, client, sequence }, command });
     } };
 }
+
+test("delayed parameter reports cannot rewind accepted intent, but newer automation can equal an old drag value", async t => {
+    const { session, native, scope, command } = await openMixedSession();
+    t.after(() => session.stop());
+    await command({ kind: "begin", key: "gain", gesture: 1 });
+    const startVersion = session.getSnapshot().fields.gain.version;
+    await command({ kind: "edit", key: "gain", value: 4, gesture: 1, expectedVersion: startVersion });
+    const first = native.publications.at(-1).request;
+    await command({ kind: "edit", key: "gain", value: 6, gesture: 1, expectedVersion: startVersion });
+    const latest = native.publications.at(-1).request;
+    const accepted = session.getSnapshot();
+    const report = (value, intent, origin, observation) => session.dispatch({ kind: "parameter", scope, endpoint: "gain", value, intent, origin, observation });
+    await report(4, first, "owner", 1);
+    await report(2.5, 0, "external", 0); // A read made before either write, delivered late.
+    assert.equal(session.getSnapshot(), accepted, "old reads and own echoes cannot change value, version, or history");
+    assert.equal((await command({ kind: "edit", key: "gain", value: 8, gesture: 1, expectedVersion: startVersion })).kind,
+        "accepted", "our own reports must not invalidate the active drag's version");
+    const finalIntent = native.publications.at(-1).request;
+    await report(8, finalIntent, "owner", 3);
+    await report(4, finalIntent, "external", 4); // Actual later automation happens to equal our first value.
+    assert.equal(session.getSnapshot().fields.gain.value, 4, "genuine automation still wins");
+    const automated = session.getSnapshot();
+    await report(6, latest, "owner", 2);
+    await report(2.5, finalIntent, "external", 2);
+    assert.equal(session.getSnapshot(), automated, "older observations cannot overtake newer automation");
+    await command({ kind: "end", key: "gain", gesture: 1 });
+    await command({ kind: "undo" });
+    assert.equal(session.getSnapshot().fields.gain.value, 2.5);
+    await command({ kind: "redo" });
+    assert.equal(session.getSnapshot().fields.gain.value, 8, "history retains the last user edit, not an echo or automation value");
+});
+
+test("a failed parameter send preserves the edit and error without permanently blocking later automation", async t => {
+    const { session, native, scope, command } = await openMixedSession();
+    t.after(() => session.stop());
+    await command({ kind: "edit", key: "gain", value: 6 });
+    const request = native.publications.at(-1).request;
+    await session.dispatch({ kind: "parameter", scope, endpoint: "gain", value: 3, intent: 0, origin: "external", observation: 4 });
+    await session.dispatch({ kind: "published", scope, request, result: { kind: "failed", reason: "send-failed" }, observations: [{ endpoint: "gain", observation: 5 }] });
+    assert.equal(session.getSnapshot().fields.gain.value, 6);
+    assert.equal(session.getSnapshot().fields.gain.persistence.kind, "failed");
+    await session.dispatch({ kind: "parameter", scope, endpoint: "gain", value: 2.5, intent: 0, origin: "external", observation: 3 });
+    assert.equal(session.getSnapshot().fields.gain.value, 6, "failure must not resurrect a previously superseded observation");
+    await session.dispatch({ kind: "parameter", scope, endpoint: "gain", value: 3, intent: 0, origin: "external", observation: 5 });
+    assert.equal(session.getSnapshot().fields.gain.value, 6, "an unseen pre-failure report cannot erase the accepted edit and error");
+    await session.dispatch({ kind: "parameter", scope, endpoint: "gain", value: 4, intent: 0, origin: "external", observation: 6 });
+    assert.equal(session.getSnapshot().fields.gain.value, 4, "new host automation remains usable after send failure");
+});
 
 test("compound edits accept all fields together, form one Undo entry, and never publish a partial rejected operation", async t => {
     const { session, native, command } = await openMixedSession();
@@ -288,7 +343,7 @@ test("scalar edits follow host range and step while observations remain history-
         { kind: "gesture-end", endpoint: "gain" },
     ]);
     const count = native.publications.length;
-    const observe = (value) => session.dispatch({ kind: "parameter", scope, endpoint: "gain", value });
+    const observe = (value) => session.dispatch(native.parameterReport(scope, "gain", value));
     await observe(3);
     assert.strictEqual(session.getSnapshot(), edited, "matching value is neither a new value nor a provenance acknowledgment");
     await observe(4);
@@ -458,7 +513,7 @@ test("overlapping gestures undo by last accepted edit, independent of release or
         await command({ kind: "edit", key: "curve", gesture: 1, value: { points: [0, 0.3, 1] } }, 1);
         await command({ kind: "begin", key: "gain", gesture: 2 }, 2);
         await command({ kind: "edit", key: "gain", gesture: 2, value: 3, expectedVersion: 0 }, 2);
-        await session.dispatch({ kind: "parameter", scope, endpoint: "gain", value: 4 });
+        await session.dispatch(native.parameterReport(scope, "gain", 4));
         assert.deepEqual(await command({ kind: "edit", key: "gain", gesture: 2, value: 5, expectedVersion: 1 }, 2),
             { kind: "rejected", reason: "stale-version" }, "owning a gesture never bypasses a conditional version");
         await command({ kind: "edit", key: "gain", gesture: 2, value: 5 }, 2);
@@ -781,17 +836,17 @@ test("only declared engine dependencies regenerate targets and equal host observ
     ], values: {} } });
     await session.dispatch({ kind: "engine", target: replacements[0].target, status: { kind: "sent", proof: "connection-call-returned" } });
     const applied = session.getSnapshot().fields.curve;
-    await session.dispatch({ kind: "parameter", scope, endpoint: "rate", value: 3 });
+    await session.dispatch(native.parameterReport(scope, "rate", 3));
     assert.strictEqual(session.getSnapshot().fields.curve, applied);
     const beforeEqual = session.getSnapshot();
     let notifications = 0;
     const unsubscribe = session.subscribe(() => { notifications++; });
-    await session.dispatch({ kind: "parameter", scope, endpoint: "rate", value: 3 });
-    await session.dispatch({ kind: "parameter", scope, endpoint: "gain", value: 1 });
+    await session.dispatch(native.parameterReport(scope, "rate", 3));
+    await session.dispatch(native.parameterReport(scope, "gain", 1));
     assert.strictEqual(session.getSnapshot(), beforeEqual);
     assert.equal(notifications, 0);
     assert.equal(replacements.length, 1);
-    await session.dispatch({ kind: "parameter", scope, endpoint: "gain", value: 4 });
+    await session.dispatch(native.parameterReport(scope, "gain", 4));
     assert.equal(replacements.length, 2);
     assert.deepEqual(replacements[1].input.parameters, { gain: 4 });
     assert.equal(replacements[1].target.generation, 1);
@@ -973,7 +1028,7 @@ test("scalar application status separates native observations from owned send co
     const first = native.publications.at(-1).request;
     assert.deepEqual(session.getSnapshot().fields.gain.application, { kind: "pending" });
     const pending = session.getSnapshot();
-    await session.dispatch({ kind: "parameter", scope, endpoint: "gain", value: 3 });
+    await session.dispatch(native.parameterReport(scope, "gain", 3));
     assert.strictEqual(session.getSnapshot(), pending, "matching host value does not acknowledge this request");
     await session.dispatch({ kind: "published", scope, request: first, result: { kind: "observed" } });
     assert.deepEqual(session.getSnapshot().fields.gain.application, { kind: "sent", proof: "native-publication-processed" });
@@ -990,7 +1045,7 @@ test("scalar application status separates native observations from owned send co
     await command({ kind: "end", key: "gain", gesture: 1 });
     assert.equal(session.getSnapshot().fields.gain.application.kind, "failed");
     const writes = native.publications.length;
-    await session.dispatch({ kind: "parameter", scope, endpoint: "gain", value: 6 });
+    await session.dispatch(native.parameterReport(scope, "gain", 6));
     assert.deepEqual(session.getSnapshot().fields.gain.application, { kind: "unconfirmed" });
     assert.equal(native.publications.length, writes);
     await command({ kind: "undo" });

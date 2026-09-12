@@ -234,7 +234,7 @@ void testPublish (Fixture& f)
         const auto gain = f.patch->findParameter (gainID());
         gain->gestureStart = [&] { f.gestures.push_back ("begin"); };
         gain->gestureEnd = [&] { f.gestures.push_back ("end"); };
-        auto body = choc::json::parse (R"({"kind":"publish","request":21,"operations":[{"kind":"gesture-start","endpoint":"gain"},{"kind":"parameter","endpoint":"gain","value":3.5},{"kind":"gesture-end","endpoint":"gain"},{"kind":"stored","key":"curve","value":{"points":[0,0.5,1]}},{"kind":"event","endpoint":"curveBuffer","value":0.75}]})");
+        auto body = choc::json::parse (R"({"kind":"publish","request":21,"operations":[{"kind":"gesture-start","endpoint":"gain"},{"kind":"parameter","intent":1,"endpoint":"gain","value":3.5},{"kind":"gesture-end","endpoint":"gain"},{"kind":"stored","key":"curve","value":{"points":[0,0.5,1]}},{"kind":"event","endpoint":"curveBuffer","value":0.75}]})");
         body.addMember ("scope", f.scope);
         require (! f.patch->handleClientMessage (*f.a, envelope (body)), "ordinary GUI gained publication authority");
         require (gain->currentValue == 2.5f, "forged GUI publication changed native state");
@@ -260,7 +260,7 @@ void testPublicationValidation (Fixture& f)
 {
     f.onLoop ([&]
     {
-        auto body = choc::json::parse (R"({"kind":"publish","request":22,"operations":[{"kind":"stored","key":"curve","value":{"points":[99]}},{"kind":"parameter","endpoint":"notDeclared","value":3}]})");
+        auto body = choc::json::parse (R"({"kind":"publish","request":22,"operations":[{"kind":"stored","key":"curve","value":{"points":[99]}},{"kind":"parameter","intent":1,"endpoint":"notDeclared","value":3}]})");
         body.addMember ("scope", f.scope);
         f.worker->send (body);
     });
@@ -352,7 +352,7 @@ void testRestoreFence (Fixture& f)
         require (reset.isObject() && reset["scope"]["document"].getWithDefault<int64_t> (-1) == oldScope["document"].getWithDefault<int64_t> (0) + 1,
                  "actual host restore did not advance native document scope before mutation");
         f.scope = Value (reset["scope"]);
-        auto late = choc::json::parse (R"({"kind":"publish","request":32,"operations":[{"kind":"stored","key":"curve","value":{"points":[99]}},{"kind":"parameter","endpoint":"gain","value":9},{"kind":"event","endpoint":"curveBuffer","value":20}]})");
+        auto late = choc::json::parse (R"({"kind":"publish","request":32,"operations":[{"kind":"stored","key":"curve","value":{"points":[99]}},{"kind":"parameter","intent":1,"endpoint":"gain","value":9},{"kind":"event","endpoint":"curveBuffer","value":20}]})");
         late.addMember ("scope", oldScope);
         f.worker->send (late);
     });
@@ -528,7 +528,7 @@ void testTerminalServiceClose (Fixture& f)
             "command", choc::json::create ("kind", "undo"));
         require (f.patch->handleClientMessage (*f.b, envelope (body)), "terminal command was left unresolved");
         require (f.b->last ("receipt")["result"]["reason"].toString() == "closed", "terminal owner still routed user command");
-        auto late = choc::json::parse (R"({"kind":"publish","request":62,"operations":[{"kind":"parameter","endpoint":"gain","value":9}]})");
+        auto late = choc::json::parse (R"({"kind":"publish","request":62,"operations":[{"kind":"parameter","intent":1,"endpoint":"gain","value":9}]})");
         late.addMember ("scope", f.scope);
         f.worker->send (late);
         f.worker->send (choc::json::parse (R"({"kind":"open","request":63,"parameters":["gain"],"storedKeys":["curve"],"eventEndpoints":["curveBuffer"]})"));
@@ -865,7 +865,7 @@ void testExternalStoredReplacement (Fixture& f)
                  "raw replacement snapshot did not retain current native gain");
         f.scope = replaced["scope"];
     });
-    auto late = choc::json::parse (R"({"kind":"publish","request":202,"operations":[{"kind":"stored","key":"curve","value":{"points":[99]}},{"kind":"parameter","endpoint":"gain","value":9},{"kind":"event","endpoint":"curveBuffer","value":20}]})");
+    auto late = choc::json::parse (R"({"kind":"publish","request":202,"operations":[{"kind":"stored","key":"curve","value":{"points":[99]}},{"kind":"parameter","intent":1,"endpoint":"gain","value":9},{"kind":"event","endpoint":"curveBuffer","value":20}]})");
     late.addMember ("scope", original);
     f.sendWorker (late);
     f.waitFor ([&] { return f.worker->last ("published")["request"].getWithDefault<int64_t> (0) == 202; }, "old raw-replacement publication did not settle");
@@ -897,7 +897,7 @@ void testExternalStoredReplacement (Fixture& f)
             }
             f.notify();
         };
-        auto reentrant = choc::json::parse (R"({"kind":"publish","request":204,"operations":[{"kind":"stored","key":"curve","value":{"points":[0.5,0.5]}},{"kind":"stored","key":"shape","value":{"points":[99]}},{"kind":"parameter","endpoint":"gain","value":9},{"kind":"event","endpoint":"curveBuffer","value":20}]})");
+        auto reentrant = choc::json::parse (R"({"kind":"publish","request":204,"operations":[{"kind":"stored","key":"curve","value":{"points":[0.5,0.5]}},{"kind":"stored","key":"shape","value":{"points":[99]}},{"kind":"parameter","intent":1,"endpoint":"gain","value":9},{"kind":"event","endpoint":"curveBuffer","value":20}]})");
         reentrant.addMember ("scope", f.scope);
         f.worker->send (reentrant);
     });
@@ -980,7 +980,7 @@ void testHostEffects (Fixture& f)
         f.waitFor ([&] { return f.worker->last ("published")["request"].getWithDefault<int64_t> (0) == request; }, "host-effect publication did not settle");
         return f.onLoop ([&] { return Value (f.worker->last ("published")["result"]); });
     };
-    require (publish (302, R"([{"kind":"parameter","endpoint":"gain","value":3},{"kind":"event","endpoint":"curveBuffer","value":0.5},{"kind":"host-effect","name":"trigger-config","value":{"slot":7}}])", f.scope)["kind"].toString() == "observed",
+    require (publish (302, R"([{"kind":"parameter","intent":1,"endpoint":"gain","value":3},{"kind":"event","endpoint":"curveBuffer","value":0.5},{"kind":"host-effect","name":"trigger-config","value":{"slot":7}}])", f.scope)["kind"].toString() == "observed",
              "supported synchronous host callback was not accepted");
     f.onLoop ([&]
     {
@@ -992,14 +992,14 @@ void testHostEffects (Fixture& f)
     require (publish (303, R"([{"kind":"host-effect","name":"trigger-config","value":{"slot":8}},{"kind":"host-effect","name":"undeclared","value":0}])", f.scope)["reason"].toString() == "invalid-publication",
              "undeclared host effect did not reject the complete publication");
     f.onLoop ([&] { require (calls->size() == 1, "valid prefix ran before host-effect declaration validation completed"); });
-    require (publish (304, R"([{"kind":"gesture-start","endpoint":"gain"},{"kind":"host-effect","name":"trigger-config","value":{"mode":"reject"}},{"kind":"parameter","endpoint":"gain","value":10},{"kind":"gesture-end","endpoint":"gain"}])", f.scope)["reason"].toString() == "host-effect-rejected",
+    require (publish (304, R"([{"kind":"gesture-start","endpoint":"gain"},{"kind":"host-effect","name":"trigger-config","value":{"mode":"reject"}},{"kind":"parameter","intent":1,"endpoint":"gain","value":10},{"kind":"gesture-end","endpoint":"gain"}])", f.scope)["reason"].toString() == "host-effect-rejected",
              "host callback rejection was reported as successful delivery");
     f.onLoop ([&]
     {
         require (f.gestures.size() == gestureCount + 2 && f.gestures.back() == "end",
                  "host callback refusal leaked a gesture started by its publication");
     });
-    require (publish (305, R"([{"kind":"gesture-start","endpoint":"gain"},{"kind":"host-effect","name":"trigger-config","value":{"mode":"throw"}},{"kind":"parameter","endpoint":"gain","value":10},{"kind":"gesture-end","endpoint":"gain"}])", f.scope)["reason"].toString() == "host-effect-failed",
+    require (publish (305, R"([{"kind":"gesture-start","endpoint":"gain"},{"kind":"host-effect","name":"trigger-config","value":{"mode":"throw"}},{"kind":"parameter","intent":1,"endpoint":"gain","value":10},{"kind":"gesture-end","endpoint":"gain"}])", f.scope)["reason"].toString() == "host-effect-failed",
              "host callback throw escaped or was reported as successful delivery");
     f.onLoop ([&]
     {
@@ -1076,7 +1076,7 @@ void testFailedOldPublicationPreservesRestoredGesture (Fixture& f)
         });
         const auto oldScope = f.scope;
         f.sendWorker (choc::json::create ("kind", "publish", "request", request, "scope", oldScope,
-            "operations", choc::json::parse (R"([{"kind":"gesture-start","endpoint":"gain"},{"kind":"host-effect","name":"restore-and-fail","value":{}},{"kind":"parameter","endpoint":"gain","value":10}])")));
+            "operations", choc::json::parse (R"([{"kind":"gesture-start","endpoint":"gain"},{"kind":"host-effect","name":"restore-and-fail","value":{}},{"kind":"parameter","intent":1,"endpoint":"gain","value":10}])")));
         f.waitFor ([&] { return f.worker->last ("published")["request"].getWithDefault<int64_t> (0) == request; },
                    "reentrant failed publication did not settle");
         f.onLoop ([&]
@@ -1111,7 +1111,7 @@ struct ResetCallbackFailure final : std::runtime_error
     const void* identity;
 };
 
-void testResetCallbackFailure (Fixture& f, bool parameterCallback)
+void testResetCallbackFailure (Fixture& f, bool parameterCallback, bool fullState = false)
 {
     testOpen (f);
     int identity = 0;
@@ -1139,7 +1139,13 @@ void testResetCallbackFailure (Fixture& f, bool parameterCallback)
                    "actual gesture did not begin before reset failure");
     }
     bool originalEscaped = false;
-    try { f.onLoop ([&] { f.patch->resetToInitialState(); }); }
+    try { f.onLoop ([&]
+    {
+        if (fullState)
+            f.patch->setFullStoredState (choc::json::parse (R"({"parameters":[{"name":"gain","value":4}],"values":{"curve":{"points":[1,0]}}})"));
+        else
+            f.patch->resetToInitialState();
+    }); }
     catch (const ResetCallbackFailure& error) { originalEscaped = error.identity == &identity; }
     // Remove only the injected host fault before inspecting the resulting
     // lifecycle or teardown. Assertions never run inside a callback being caught.
@@ -1513,6 +1519,246 @@ void testPublicationQueueDeadline (Fixture& f)
     });
 }
 
+
+void testScalarObservationOrdering (Fixture& f)
+{
+    testOpen (f);
+    const auto publish = [&] (int64_t request, float value)
+    {
+        auto operations = choc::value::createEmptyArray();
+        operations.addArrayElement (choc::json::create ("kind", "parameter", "endpoint", "gain", "value", value, "intent", request));
+        f.worker->send (choc::json::create ("kind", "publish", "request", request, "scope", f.scope, "operations", operations));
+    };
+    f.onLoop ([&]
+    {
+        auto gain = f.patch->findParameter (gainID());
+        gain->valueChanged = [gain] (float value)
+        {
+            if (value == 3)
+                require (gain->setValue (-1, false, -1, 0), "reentrant automation failed");
+        };
+        publish (801, 3);
+        publish (802, 4);
+        gain->valueChanged = {};
+    });
+    f.waitFor ([&] { return f.worker->last ("parameter")["intent"].getWithDefault<int64_t> (-1) == 802; },
+               "ordered scalar observations did not arrive");
+    f.onLoop ([&]
+    {
+        std::vector<Value> observations;
+        for (const auto& message : f.worker->messages)
+            if (message["type"].toString() == "kit_state" && message["message"]["kind"].toString() == "parameter")
+                observations.emplace_back (message["message"]);
+        require (observations.size() == 3, "unexpected scalar observations before burst completion");
+        const std::array<float, 3> values { 3, -1, 4 };
+        const std::array<int64_t, 3> intents { 801, 801, 802 };
+        for (size_t i = 0; i < observations.size(); ++i)
+        {
+            require (observations[i]["value"].getWithDefault<float> (99) == values[i], "queued scalar value was reread or relabeled");
+            require (observations[i]["intent"].getWithDefault<int64_t> (-1) == intents[i], "scalar intent did not describe captured value");
+            require (observations[i]["origin"].toString() == (i == 1 ? "external" : "owner"), "reentrant automation inherited owner origin");
+            require (observations[i]["observation"].getWithDefault<int64_t> (-1) == static_cast<int64_t> (i + 1), "scalar observation order is not monotonic");
+        }
+        require (f.patch->findParameter (gainID())->currentValue == 4, "burst did not leave latest value in native parameter");
+        require (f.patch->findParameter (gainID())->setValue (4, false, -1, 0), "unchanged host automation failed");
+        publish (803, 4); // Same-value publication must still advance the watermark.
+        require (f.patch->findParameter (gainID())->setValue (-1, false, -1, 0), "automation equal to old drag value failed");
+    });
+    f.waitFor ([&] { return f.worker->last ("parameter")["origin"].toString() == "external"
+        && f.worker->last ("parameter")["intent"].getWithDefault<int64_t> (-1) == 803; }, "same-value write lost the external observation fence");
+    f.onLoop ([&]
+    {
+        const auto external = f.worker->last ("parameter");
+        require (external["value"].getWithDefault<float> (99) == -1 && external["observation"].getWithDefault<int64_t> (-1) == 5,
+                 "external automation equal to earlier drag value was not distinguishable");
+        auto gain = f.patch->findParameter (gainID());
+        gain->valueChanged = [&] (float value)
+        {
+            if (value == 6)
+                require (f.patch->setFullStoredState (choc::json::parse (R"({"parameters":[{"name":"gain","value":-2}],"values":{"curve":{"points":[1,0]}}})")),
+                         "restore inside scalar callback failed");
+        };
+        publish (804, 6);
+        gain->valueChanged = {};
+    });
+    f.waitFor ([&] { return f.worker->last ("published")["request"].getWithDefault<int64_t> (-1) == 804
+        && f.worker->count ("replaced") == 1; }, "reentrant scalar restore did not settle");
+    f.onLoop ([&]
+    {
+        f.scope = Value (f.worker->last ("replaced")["scope"]);
+        require (f.worker->last ("published")["result"]["reason"].toString() == "stale-scope", "reentrant scalar restore incorrectly completed old publication");
+    });
+    f.waitFor ([&] { return f.worker->last ("parameter")["scope"]["document"].getWithDefault<int64_t> (-1)
+        == f.scope["document"].getWithDefault<int64_t> (-2); }, "restored scalar observation did not arrive");
+    f.onLoop ([&]
+    {
+        const auto restored = f.worker->last ("parameter");
+        require (restored["value"].getWithDefault<float> (99) == -2 && restored["origin"].toString() == "external"
+                 && restored["intent"].getWithDefault<int64_t> (-1) == 0 && restored["observation"].getWithDefault<int64_t> (-1) == 1,
+                 "restore did not reset scalar origin, watermark and sequence");
+        for (const auto& message : f.worker->messages)
+            if (message["type"].toString() == "kit_state" && message["message"]["kind"].toString() == "parameter")
+                require (message["message"]["intent"].getWithDefault<int64_t> (-1) != 804, "old queued owner observation survived restore");
+        auto missingIntent = choc::json::parse (R"({"kind":"publish","request":805,"operations":[{"kind":"parameter","endpoint":"gain","value":9}]})");
+        missingIntent.addMember ("scope", f.scope);
+        f.worker->send (missingIntent);
+    });
+    f.waitFor ([&] { return f.worker->last ("published")["request"].getWithDefault<int64_t> (-1) == 805; }, "missing-intent publication did not settle");
+    f.onLoop ([&]
+    {
+        require (f.worker->last ("published")["result"]["reason"].toString() == "invalid-publication",
+                 "uncorrelated parameter publication was accepted");
+        require (f.patch->findParameter (gainID())->currentValue == -2, "invalid intent mutated native parameter");
+    });
+    f.onLoop ([&]
+    {
+        renderPressure (f);
+        const auto endpoint = cmaj::EndpointID::create (std::string ("curveBuffer"));
+        bool full = false;
+        for (int i = 0; i < 100000; ++i)
+            if (! f.patch->sendEventOrValueToPatch (endpoint, Value (0.75f), -1, 0))
+            {
+                full = true;
+                break;
+            }
+        require (full, "scalar retry test did not fill actual native FIFO");
+        publish (806, 9);
+    });
+    f.waitFor ([&] { return f.worker->last ("published")["request"].getWithDefault<int64_t> (-1) == 806; }, "refused scalar publication did not settle");
+    f.onLoop ([&]
+    {
+        const auto failed = f.worker->last ("published");
+        require (failed["result"]["reason"].toString() == "send-failed", "full FIFO did not reject scalar publication");
+        require (failed["observations"].size() == 1 && failed["observations"][0]["endpoint"].toString() == "gain"
+                 && failed["observations"][0]["observation"].getWithDefault<int64_t> (-1)
+                     == f.worker->last ("parameter")["observation"].getWithDefault<int64_t> (-2),
+                 "failed scalar publication omitted its native observation barrier");
+        require (f.patch->findParameter (gainID())->currentValue == -2, "refused scalar enqueue falsely changed native cache");
+        require (std::abs (renderPressure (f) + 1.25f) < 0.001f, "refused scalar enqueue changed actual DSP");
+        publish (807, 9);
+    });
+    f.waitFor ([&] { return f.worker->last ("published")["request"].getWithDefault<int64_t> (-1) == 807; }, "scalar retry did not settle");
+    f.onLoop ([&]
+    {
+        require (f.worker->last ("published")["result"]["kind"].toString() == "observed", "same-value scalar retry was refused after drain");
+        require (std::abs (renderPressure (f) - 9.75f) < 0.001f, "same-value scalar retry was acknowledged without reaching actual DSP");
+    });
+    std::cout << "PASS: actual scalar queue preserves origin/watermark through bursts, reentrant automation, same-value writes, restore and failed-enqueue retry\n";
+}
+
+
+void testConcurrentScalarObservationOrdering (Fixture& f)
+{
+    testOpen (f);
+    const auto gain = f.onLoop ([&] { renderPressure (f); return f.patch->findParameter (gainID()); });
+    std::promise<void> start;
+    auto ready = start.get_future().share();
+    std::atomic<bool> success { true };
+    std::thread owner ([&]
+    {
+        ready.wait();
+        for (uint64_t intent = 1; intent <= 100; ++intent)
+            if (! gain->setValue (static_cast<float> (intent % 10), false, -1, 100, intent)) success = false;
+    });
+    std::thread host ([&]
+    {
+        ready.wait();
+        for (int i = 0; i < 100; ++i)
+            if (! gain->setValue (static_cast<float> (-1 - i % 10), false, -1, 100)) success = false;
+    });
+    start.set_value();
+    owner.join();
+    host.join();
+    require (success, "concurrent scalar enqueue failed");
+    f.waitFor ([&] { return f.worker->count ("parameter") == 200; }, "concurrent scalar observations were lost");
+    f.onLoop ([&]
+    {
+        std::vector<Value> observations;
+        for (const auto& message : f.worker->messages)
+            if (message["type"].toString() == "kit_state" && message["message"]["kind"].toString() == "parameter")
+                observations.emplace_back (message["message"]);
+        std::sort (observations.begin(), observations.end(), [] (const auto& a, const auto& b)
+            { return a["observation"].template get<int64_t>() < b["observation"].template get<int64_t>(); });
+        int64_t latestIntent = 0;
+        for (size_t index = 0; index < observations.size(); ++index)
+        {
+            const auto& observation = observations[index];
+            require (observation["observation"].getWithDefault<int64_t> (-1) == static_cast<int64_t> (index + 1), "concurrent scalar ordering has duplicate/missing sequence");
+            const auto intent = observation["intent"].getWithDefault<int64_t> (-1);
+            const auto value = observation["value"].getWithDefault<float> (99);
+            if (observation["origin"].toString() == "owner")
+            {
+                require (intent == latestIntent + 1 && value == static_cast<float> (intent % 10), "owner scalar intent/value ordering tore");
+                latestIntent = intent;
+            }
+            else
+                require (intent == latestIntent && value < 0, "concurrent host automation inherited future/old owner watermark");
+        }
+        const auto finalValue = observations.back()["value"].get<float>();
+        require (gain->currentValue == finalValue, "latest scalar observation disagrees with native cache");
+        require (std::abs (renderPressure (f) - finalValue) < 0.001f, "latest scalar observation disagrees with actual DSP enqueue order");
+    });
+    std::cout << "PASS: concurrent owner/host scalar observations follow actual DSP queue order without torn origin or watermark\n";
+}
+
+
+void testClearStoredValues (Fixture& f)
+{
+    f.onLoop ([&]
+    {
+        f.patch->setStoredStateValue ("shape", choc::json::parse ("{\"points\":[0.2,0.8]}"));
+        f.patch->setStoredStateValue ("extra", Value ("present"));
+    });
+    f.sendWorker (choc::json::parse (R"({"kind":"open","request":901,"parameters":["gain"],"storedKeys":["curve","shape","extra"],"eventEndpoints":[]})"));
+    f.waitFor ([&] { return f.worker->count ("opened") == 1; }, "clear-stored fixture failed to open");
+    f.onLoop ([&]
+    {
+        require (f.patch->handleClientMessage (*f.a, envelope (choc::json::create ("kind", "attach", "request", 902))), "clear-stored view did not attach");
+        f.patch->clearAllStoredStateValues();
+        require (f.patch->getFullStoredState()["values"].size() == 0, "clearAllStoredStateValues skipped or invalidated a stored key");
+    });
+    f.waitFor ([&] { return f.worker->count ("replaced") == 3; }, "clearing owned stored values lost replacement notifications");
+    f.onLoop ([&]
+    {
+        require (f.a->count ("reset") == 3, "clearing owned stored values lost reset barriers");
+        require (f.worker->last ("replaced")["native"]["values"].size() == 0, "last clear replacement retained a removed key");
+    });
+    std::cout << "PASS: public clearAllStoredStateValues removes multiple owned keys and preserves reset/replacement notifications\n";
+}
+
+
+void testFullStateEnqueueFailure (Fixture& f)
+{
+    testOpen (f);
+    testAttach (f);
+    f.onLoop ([&]
+    {
+        renderPressure (f);
+        const auto endpoint = cmaj::EndpointID::create (std::string ("curveBuffer"));
+        bool full = false;
+        for (int i = 0; i < 100000; ++i)
+            if (! f.patch->sendEventOrValueToPatch (endpoint, Value (0.75f), -1, 0))
+            {
+                full = true;
+                break;
+            }
+        require (full, "full-state refusal fixture did not fill actual native queue");
+        require (! f.patch->setFullStoredState (choc::json::parse (R"({"parameters":[{"name":"gain","value":9}],"values":{"curve":{"points":[1,0]}}})")),
+                 "full state restore reported success after native parameter enqueue refusal");
+        require (f.patch->findParameter (gainID())->currentValue == 2.5f, "refused full restore changed native scalar cache");
+        require (f.patch->getFullStoredState()["values"]["curve"]["points"][0].getWithDefault<float> (-1) == 0,
+                 "refused full restore continued mutating stored state");
+        require (std::abs (renderPressure (f) - 3.25f) < 0.001f, "refused full restore changed actual DSP parameter");
+    });
+    f.waitFor ([&] { return f.a->count ("closed") > 0; }, "refused full restore stranded attached clients after reset");
+    f.onLoop ([&]
+    {
+        require (f.worker->count ("replaced") == 0 && f.a->last ("closed")["reason"].toString() == "service-closed",
+                 "refused full restore claimed replacement instead of explicit terminal failure");
+    });
+    std::cout << "PASS: full-state native enqueue refusal returns false, preserves DSP/cache, and closes affected clients\n";
+}
+
 }
 
 int main (int argc, char** argv)
@@ -1535,7 +1781,13 @@ int main (int argc, char** argv)
             if (argc == 4)
             {
                 const std::string mode (argv[3]);
-                if (mode == "--reset-gesture-failure") testResetCallbackFailure (fixture, false);
+                if (mode == "--scalar-ordering") testScalarObservationOrdering (fixture);
+                else if (mode == "--scalar-concurrency") testConcurrentScalarObservationOrdering (fixture);
+                else if (mode == "--full-state-parameter-failure") testResetCallbackFailure (fixture, true, true);
+                else if (mode == "--full-state-gesture-failure") testResetCallbackFailure (fixture, false, true);
+                else if (mode == "--clear-stored-values") testClearStoredValues (fixture);
+                else if (mode == "--full-state-enqueue-failure") testFullStateEnqueueFailure (fixture);
+                else if (mode == "--reset-gesture-failure") testResetCallbackFailure (fixture, false);
                 else if (mode == "--reset-parameter-failure") testResetCallbackFailure (fixture, true);
                 else if (mode == "--reset-unload") testUnloadInsideResetCallback (fixture);
                 else if (mode == "--reset-all-gestures") testResetFailureClosesEveryOriginalGesture (fixture);
@@ -1605,6 +1857,18 @@ int main (int argc, char** argv)
             testPublicationQueueDeadline (fixture);
             fixture.close(); fixture.load (argv[2]);
             testEmptyFragmentedQueue (fixture);
+            fixture.close(); fixture.load (argv[2]);
+            testScalarObservationOrdering (fixture);
+            fixture.close(); fixture.load (argv[2]);
+            testConcurrentScalarObservationOrdering (fixture);
+            fixture.close(); fixture.load (argv[2]);
+            testResetCallbackFailure (fixture, true, true);
+            fixture.close(); fixture.load (argv[2]);
+            testResetCallbackFailure (fixture, false, true);
+            fixture.close(); fixture.load (argv[2]);
+            testClearStoredValues (fixture);
+            fixture.close(); fixture.load (argv[2]);
+            testFullStateEnqueueFailure (fixture);
             }
             result = 0;
         }

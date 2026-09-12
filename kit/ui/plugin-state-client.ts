@@ -101,9 +101,9 @@ export function createPluginStateClient<const Fields extends PluginStateFields>(
         store.set(projection, Object.freeze({ ...base, state, pendingFields: Object.freeze([...pendingFields]) }));
     };
     const settle = (receipt: PluginStateReceipt) => {
-        if (!base || !sameScope(base.state.scope, receipt.address) || receipt.address.client !== base.client) return;
+        if (!base || !sameScope(base.state.scope, receipt.address) || receipt.address.client !== base.client) return false;
         const ticket = tickets.get(receipt.address.sequence);
-        if (!ticket?.sent) return;
+        if (!ticket?.sent) return false;
         const ownDraft = drafts.get(receipt.address.sequence);
         if (ownDraft) {
             for (const [sequence, draft] of drafts) {
@@ -113,6 +113,7 @@ export function createPluginStateClient<const Fields extends PluginStateFields>(
         tickets.delete(receipt.address.sequence);
         redraw();
         ticket.finish(receipt.result);
+        return true;
     };
     const interrupt = (reason: "reset" | "closed") => {
         const pending = [...tickets.values()];
@@ -168,11 +169,12 @@ export function createPluginStateClient<const Fields extends PluginStateFields>(
                 const pending = duringAttach.get(key);
                 if (!pending || message.revision > pending.revision) duringAttach.set(key, message);
             } else if (base && sameScope(base.state.scope, message.scope)) {
-                if (message.revision > base.state.revision) {
+                const changed = message.revision > base.state.revision;
+                if (changed) {
                     base = { ...base, state: retainValues(message.state, base.state) };
-                    redraw();
                 }
-                if (message.receipt) settle(message.receipt);
+                const settled = message.receipt && settle(message.receipt);
+                if (changed && !settled) redraw();
             }
         } else if (message.kind === "receipt") settle(message);
         else if (message.kind === "closed") close();

@@ -9,6 +9,7 @@ export function createPluginStateTestPlatform(PluginStateChannel, { parameters, 
     const views = new Set();
     const publicationRecords = [];
     const effects = [];
+    const observations = new Map();
     let scope;
     let releaseOpen = () => {};
     const openGate = holdOpen ? new Promise(resolve => { releaseOpen = resolve; }) : Promise.resolve();
@@ -49,14 +50,17 @@ export function createPluginStateTestPlatform(PluginStateChannel, { parameters, 
     channel = new PluginStateChannel(worker, async request => {
         if (request.kind === "open") {
             scope = request.scope;
+            for (const endpoint of request.parameters) observations.set(endpoint, { intent: 0, origin: "external", observation: 0 });
             await openGate;
             return { parameters: request.parameters.map(endpoint => structuredClone(values.get(endpoint))) };
         }
-        if (request.kind === "read") return { value: values.get(request.endpoint)?.value };
+        if (request.kind === "read") return { value: values.get(request.endpoint)?.value, ...observations.get(request.endpoint) };
         if (request.kind === "effect") {
             effects.push(structuredClone(request.operation));
             if (request.operation.kind === "parameter") {
                 values.get(request.operation.endpoint).value = request.operation.value;
+                const previous = observations.get(request.operation.endpoint);
+                observations.set(request.operation.endpoint, { intent: request.operation.intent, origin: "owner", observation: previous.observation + 1 });
                 channel.observeParameter(scope, request.operation.endpoint);
             }
             return {};
@@ -74,7 +78,12 @@ export function createPluginStateTestPlatform(PluginStateChannel, { parameters, 
         publications: () => structuredClone(publicationRecords),
         effects: () => structuredClone(effects),
         parameter: endpoint => values.get(endpoint)?.value,
-        automate(endpoint, value) { values.get(endpoint).value = value; channel.observeParameter(scope, endpoint); },
+        automate(endpoint, value) {
+            values.get(endpoint).value = value;
+            const previous = observations.get(endpoint);
+            observations.set(endpoint, { ...previous, origin: "external", observation: previous.observation + 1 });
+            channel.observeParameter(scope, endpoint);
+        },
         close() { channel.close(); },
     };
 }
