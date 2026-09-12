@@ -132,6 +132,10 @@ export default defineConfig(({ command }) => ({
     appType: "custom",
     root: repoRoot,
     clearScreen: false,
+    // Views are discovered through a dynamic manifest import. Prebundle their
+    // shared React runtime before the first view loads to avoid optimizer reloads.
+    optimizeDeps: { include: ["react", "react-dom/client", "react/jsx-runtime", "jotai", "jotai/utils"] },
+    resolve: { dedupe: ["react", "react-dom"] },
     define: {
         "process.env.NODE_ENV": JSON.stringify(command === "build" ? "production" : "development"),
     },

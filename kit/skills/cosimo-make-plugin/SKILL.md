@@ -91,8 +91,13 @@ npm run kit:new -- <name>
 
 It generates `fx/<name>/` with the patch manifest (`view.src` set to
 `view/index.js`), the `view/index.js` symlink to the shared loader
-(`kit/ui/effects/effect-view-loader.js`), an editable view stub, the
-per-plugin config files, and a starter test. Discovery picks the plugin up
+(`kit/ui/effects/effect-view-loader.js`), an editable `view/source.tsx`,
+`state.ts`, the per-plugin config, and a starter test. The stereo-gain example
+uses `definePluginState({ gain: parameter("gainDb") })`; its view uses
+`usePluginState`, `usePluginHistory`, and `createStatefulPatchView` from the
+public `kit/index` entry. Gain edits and grouped pointer drags use the shared
+Undo/Redo owner. Extend this declaration for your own controls; do not add a
+second parameter cache or history manager. See `kit/docs/PLUGIN_STATE.md`. Discovery picks the plugin up
 immediately — confirm with:
 
 ```bash
@@ -107,10 +112,14 @@ fail-closed:
 - `"schemaVersion": 1` is required (a version newer than `kit/kit.json`
   supports fails discovery naming the fix: update the kit).
 - Build settings: `alias`, `cmakeTarget`, `productName` (the install filename,
-  `<productName>.vst3`), `runtimeOut`, `juceOut`, `workerSource`/`workerOut`,
+  `<productName>.vst3`), `runtimeOut`, `juceOut`, `stateSource`, `workerSource`/`workerOut`,
   `includeInAll`, `disableMicrophonePermission`, `jitInstallRuntime`. Only set
   fields whose derived defaults are not right; a malformed, unknown-key, or
-  orphan config fails discovery loudly.
+  orphan config fails discovery loudly. The scaffold sets `stateSource` to
+  `fx/<name>/state.ts`; the build generates its persistent worker. Do not also
+  set `workerSource` for a state declaration. The scaffold sets `stateSource` to
+  `fx/<name>/state.ts`; the build generates its persistent worker. Do not also
+  set `workerSource` for a state declaration.
 - `product` — the plugin's identity: `productName`, `manufacturerName`,
   `bundleIdentifier`, 4-char `pluginCode`/`manufacturerCode`, `version`,
   optional `supportUrl` and wordmark/accent tokens. Every omitted key derives

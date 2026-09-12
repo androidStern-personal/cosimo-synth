@@ -5,8 +5,8 @@
  * The scaffold writes a minimal working plugin (stereo gain example): the
  * patch manifest, its DSP source, the single `<PatchName>.plugin.json` config
  * (build settings plus the `product` identity object), a `view/index.js`
- * symlink to the shared kit loader, an editable `view/source.ts` wired to the
- * createPatchView convention, and a starter node test under tests/. Discovery
+ * symlink to the shared kit loader, a `state.ts` declaration and editable `view/source.tsx` wired to the
+ * createStatefulPatchView convention, and a starter node test under tests/. Discovery
  * is scan-driven, so no shared file is edited; the new plugin is a build
  * target immediately.
  *
@@ -151,7 +151,7 @@ function createPatchManifest(plan) {
         source: [`${plan.patchBaseName}.cmajor`],
         view: {
             src: "view/index.js",
-            devModule: `/fx/${plan.directoryName}/view/source.ts`,
+            devModule: `/fx/${plan.directoryName}/view/source.tsx`,
             width: 520,
             height: 320,
             resizable: true,
@@ -173,6 +173,7 @@ function createPluginConfig(plan) {
             manufacturerCode: plan.manufacturerCode,
             version: starterVersion,
         },
+        stateSource: `fx/${plan.directoryName}/state.ts`,
         runtimeOut: `build/fx/${plan.directoryName}_runtime`,
         juceOut: `build/${plan.directoryName}_juce`,
     };
@@ -201,119 +202,57 @@ processor ${plan.patchBaseName}  [[ main ]]
 `;
 }
 
+function createStateSource() {
+    return `import { definePluginState, parameter } from "../../kit/index";
+
+// The endpoint name matches the automatable gainDb input in the DSP.
+export default definePluginState({ gain: parameter("gainDb") });
+`;
+}
+
 function createViewSource(plan) {
-    return `// ${plan.displayName} view. Served editable by \`npm run fx:dev\` (the manifest's
-// view.devModule) and bundled to view/app.js by \`npm run fx:build -- ${plan.alias}\`;
-// view/index.js stays the shared kit loader. Shared kit modules are imported
-// from "../../../kit/index" (the supported public entry).
+    return `// Editable with \`npm run fx:dev\`; bundled by \`npm run fx:build -- ${plan.alias}\`.
+import { createStatefulPatchView, usePluginState, usePluginHistory } from "../../../kit/index";
 import type { EffectParameterContract } from "../../../kit/index";
+import definition from "../state";
 
-type ParameterListener = ((value: number) => void) & { endpointID?: string };
-
-type PatchConnection = {
-    addParameterListener(endpointID: string, listener: ParameterListener): void;
-    removeParameterListener(endpointID: string, listener: ParameterListener): void;
-    requestParameterValue(endpointID: string): void;
-    sendEventOrValue(endpointID: string, value: number, rampFrames?: number): void;
-};
-
-const GAIN_ENDPOINT = "gainDb";
-const GAIN_MIN_DB = -24;
-const GAIN_MAX_DB = 24;
-const GAIN_INITIAL_DB = 0;
-
-/** Silent browser preview uses the same gain definitions as this view. */
+/** The silent preview's parameter metadata matches the DSP endpoint. */
 export const browserPreviewParameters = [{
-    endpointID: GAIN_ENDPOINT,
-    type: "number" as const,
-    min: GAIN_MIN_DB,
-    max: GAIN_MAX_DB,
-    defaultValue: GAIN_INITIAL_DB,
+    endpointID: "gainDb", type: "number", min: -24, max: 24, defaultValue: 0,
 }] satisfies EffectParameterContract[];
 
-class ${plan.patchBaseName}View extends HTMLElement {
-    private readonly gainListener: ParameterListener;
-    private readonly slider: HTMLInputElement;
-    private readonly readout: HTMLElement;
-
-    constructor(private readonly patchConnection: PatchConnection) {
-        super();
-        this.attachShadow({ mode: "open" });
-        this.shadowRoot!.innerHTML = this.getMarkup();
-        this.slider = this.shadowRoot!.querySelector("input")!;
-        this.readout = this.shadowRoot!.querySelector("[data-readout]")!;
-        this.slider.addEventListener("input", () => {
-            this.patchConnection.sendEventOrValue(GAIN_ENDPOINT, Number(this.slider.value));
-        });
-        this.gainListener = (value) => this.renderGain(value);
-        this.gainListener.endpointID = GAIN_ENDPOINT;
-    }
-
-    connectedCallback() {
-        this.patchConnection.addParameterListener(GAIN_ENDPOINT, this.gainListener);
-        this.patchConnection.requestParameterValue(GAIN_ENDPOINT);
-    }
-
-    disconnectedCallback() {
-        this.patchConnection.removeParameterListener(GAIN_ENDPOINT, this.gainListener);
-    }
-
-    private renderGain(value: number) {
-        this.slider.value = String(value);
-        this.readout.textContent = \`\${value >= 0 ? "+" : ""}\${value.toFixed(1)} dB\`;
-    }
-
-    private getMarkup(): string {
-        return \`
-            <style>
-                :host {
-                    display: block;
-                    width: 520px;
-                    min-height: 320px;
-                    box-sizing: border-box;
-                    padding: 24px;
-                    color: #f4efe6;
-                    background: linear-gradient(180deg, #17171d 0%, #0d0e13 100%);
-                    font-family: "SF Mono", Menlo, Monaco, Consolas, monospace;
-                }
-                h1 {
-                    margin: 0 0 18px;
-                    font-size: 18px;
-                    letter-spacing: 0.06em;
-                    text-transform: uppercase;
-                }
-                label {
-                    display: block;
-                    margin-bottom: 6px;
-                    font-size: 11px;
-                    letter-spacing: 0.08em;
-                    text-transform: uppercase;
-                    color: rgba(244, 239, 230, 0.74);
-                }
-                input {
-                    width: 100%;
-                }
-                [data-readout] {
-                    margin-top: 8px;
-                    font-size: 13px;
-                }
-            </style>
-            <h1>${plan.displayName}</h1>
-            <label for="gain">Gain</label>
-            <input id="gain" type="range" min="\${GAIN_MIN_DB}" max="\${GAIN_MAX_DB}" step="0.1" value="\${GAIN_INITIAL_DB}" />
-            <div data-readout>+0.0 dB</div>
-        \`;
-    }
+function View() {
+    const gain = usePluginState(definition.gain);
+    const history = usePluginHistory();
+    if (gain.state.kind !== "ready") return <p role="status">{gain.state.kind}</p>;
+    const value = gain.state.value;
+    return <main>
+        <h1>${plan.displayName}</h1>
+        <label htmlFor="gain">Gain</label>
+        <input id="gain" type="range" min={gain.state.metadata?.min ?? -24} max={gain.state.metadata?.max ?? 24} step="0.1"
+            value={value}
+            onPointerDown={event => { event.currentTarget.setPointerCapture(event.pointerId); void gain.beginGesture(); }}
+            onPointerUp={() => { void gain.endGesture(); }}
+            onPointerCancel={() => { void gain.endGesture(); }}
+            onChange={event => { void gain.setValue(Number(event.currentTarget.value)); }} />
+        <output data-readout>{value >= 0 ? "+" : ""}{value.toFixed(1)} dB</output>
+        <nav aria-label="Edit history">
+            <button disabled={!history.canUndo} onClick={() => { void history.undo(); }}>Undo</button>
+            <button disabled={!history.canRedo} onClick={() => { void history.redo(); }}>Redo</button>
+        </nav>
+        {gain.error && <p role="alert">{gain.error.message}</p>}
+        {gain.retry && <button onClick={() => { void gain.retry?.(); }}>Retry</button>}
+    </main>;
 }
 
-export default function createPatchView(patchConnection: PatchConnection): HTMLElement {
-    const elementName = "${plan.alias}-view";
-
-    if (!window.customElements.get(elementName))
-        window.customElements.define(elementName, ${plan.patchBaseName}View);
-
-    return new ${plan.patchBaseName}View(patchConnection);
-}
+export default createStatefulPatchView({ definition, View, css: \`
+    :host { color: #f4efe6; background: #17171d; font-family: monospace; }
+    main { box-sizing: border-box; min-height: 320px; padding: 24px; }
+    h1 { margin: 0 0 18px; font-size: 18px; text-transform: uppercase; }
+    label, output { display: block; margin: 8px 0; }
+    input { width: 100%; }
+    nav { display: flex; gap: 8px; margin-top: 20px; }
+\` });
 `;
 }
 
@@ -352,7 +291,7 @@ test("${plan.directoryName} keeps the kit view loader conventions", async () => 
     );
 
     assert.equal(manifest.view.src, "view/index.js");
-    assert.equal(manifest.view.devModule, "/fx/${plan.directoryName}/view/source.ts");
+    assert.equal(manifest.view.devModule, "/fx/${plan.directoryName}/view/source.tsx");
     assert.equal(
         await fs.realpath(path.join(repoRoot, "fx/${plan.directoryName}/view/index.js")),
         await fs.realpath(path.join(repoRoot, "kit/ui/effects/effect-view-loader.js")),
@@ -368,6 +307,7 @@ export function nextSteps(plan) {
     return [
         `Scaffolded fx/${plan.directoryName} (alias "${plan.alias}").`,
         "",
+        "Gain edits and pointer drags use shared Undo/Redo; extend state.ts for new controls.",
         "Next steps:",
         `  npm run fx:dev                    # live UI: http://127.0.0.1:5175/fx/${plan.directoryName}/view/harness.html`,
         `  npm run fx:build -- ${plan.alias}    # self-contained runtime under build/fx/${plan.directoryName}_runtime`,
@@ -389,7 +329,8 @@ export function scaffoldPlugin(rawName, options = {}) {
     writeJson(path.join(plan.pluginDirectory, `${plan.patchBaseName}.cmajorpatch`), createPatchManifest(plan));
     writeJson(path.join(plan.pluginDirectory, `${plan.patchBaseName}${pluginConfigSuffix}`), createPluginConfig(plan));
     fs.writeFileSync(path.join(plan.pluginDirectory, `${plan.patchBaseName}.cmajor`), createDspSource(plan), "utf8");
-    fs.writeFileSync(path.join(viewDirectory, "source.ts"), createViewSource(plan), "utf8");
+    fs.writeFileSync(path.join(plan.pluginDirectory, "state.ts"), createStateSource(), "utf8");
+    fs.writeFileSync(path.join(viewDirectory, "source.tsx"), createViewSource(plan), "utf8");
     fs.symlinkSync(kitLoaderSymlinkTarget, path.join(viewDirectory, "index.js"));
     fs.mkdirSync(path.dirname(plan.starterTestPath), { recursive: true });
     fs.writeFileSync(plan.starterTestPath, createStarterTest(plan), "utf8");

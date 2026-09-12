@@ -254,7 +254,10 @@ plugin UIs on port 5175. It also serves:
 When a plugin has no custom `view/harness.html`, this path serves the shared,
 silent UI preview. It imports the manifest's real `view.devModule` factory and
 passes the actual manifest identity with page-local parameter and stored-state
-bindings. The view exports a declarative `browserPreviewParameters` array in
+bindings. Stateful views automatically use the same session/client and shared
+Undo/Redo as the plugin, with page-local storage in place of a host. Closing
+and reopening a view retains that page's history. No author transport option
+or extra state export is needed. The view exports a declarative `browserPreviewParameters` array in
 the existing `EffectParameterContract` shape, derived from its own parameter
 definitions (see the included example and `kit:new` starter). This is only
 metadata; it starts no development behavior in the production plugin.
@@ -476,14 +479,18 @@ The name is the `fx/` directory: lowercase letters and digits with `_` or `-`
 separating words (`demo_verb`). The scaffold generates a minimal **working**
 plugin — a stereo-gain `.cmajorpatch` + `.cmajor` example, the
 `<PatchName>.plugin.json` config with its `product` object, the
-`view/index.js` symlink to the shared loader, an editable `view/source.ts`
-wired to the `createPatchView` convention, and a starter test at
+`view/index.js` symlink to the shared loader, a `state.ts` declaration, an
+editable React `view/source.tsx` using `createStatefulPatchView`, and a starter test at
 `tests/test_<name>_state.mjs` — then prints the next steps (`fx:dev`,
 `fx:build -- <alias>`, the starter test). Every identity value derives from
 the plugin name and `product-owner.json` (display name, patch base name,
 alias, pluginCode, bundle identifier, manufacturer and its code); the
 scaffold carries no manufacturer of its own and refuses to run without the
-owner file. It refuses names whose directory, alias, derived pluginCode, or
+owner file. Its `stateSource` config generates the persistent state worker.
+The view reads and edits `parameter("gainDb")` through `usePluginState` and
+uses `usePluginHistory` for Undo/Redo; pointer drags form one history entry.
+Add fields to this declaration instead of creating separate parameter caches
+or Undo stacks. See [Plugin state](PLUGIN_STATE.md). It refuses names whose directory, alias, derived pluginCode, or
 bundle identifier collides with any existing plugin. Because the registry is
 discovery-driven, no shared file changes; `fx:dev`, `fx:build`,
 `fx:prod:build`, and `fx:jit:install` all see the new plugin immediately.

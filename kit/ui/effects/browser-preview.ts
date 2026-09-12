@@ -26,6 +26,10 @@ try {
     title.textContent = `${typeof manifest.name === "string" ? manifest.name : "Plugin"} — UI preview`;
     document.title = title.textContent;
     mount.replaceChildren(view);
+    window.addEventListener("pagehide", () => {
+        view.remove();
+        void connection.value.dispose().catch(error => console.error("Could not close plugin UI preview:", error));
+    }, { once: true });
 } catch (error: unknown) {
     console.error("Could not open plugin UI preview:", error);
     if (errorView) {

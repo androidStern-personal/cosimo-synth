@@ -64,3 +64,67 @@ test("the public runtime builder bundles a declared state service that opens hos
         assert.deepEqual(sent.at(-1).message, { kind: "close", reason: "service-closed" });
     } finally { await rm(root, { recursive: true, force: true }); }
 });
+
+test("kit:new builds a stateful gain worker whose edits and Undo/Redo publish to the DSP endpoint", { timeout: 30000 }, async () => {
+    const root = await mkdtemp(path.join(os.tmpdir(), "kit-starter-state-"));
+    let service;
+    try {
+        await cp(path.join(repoRoot, "kit"), path.join(root, "kit"), { recursive: true, verbatimSymlinks: true });
+        await symlink(path.join(repoRoot, "node_modules"), path.join(root, "node_modules"));
+        await writeFile(path.join(root, "package.json"), JSON.stringify({ name: "starter-state-proof", type: "module" }));
+        await writeFile(path.join(root, "product-owner.json"), JSON.stringify({
+            manufacturer: "Example", manufacturerCode: "Exmp", pluginCodePrefix: "Ex", bundleIdentifierPrefix: "com.example",
+        }));
+        const { scaffoldPlugin } = await import(pathToFileURL(path.join(root, "kit/scripts/new_plugin.mjs")));
+        scaffoldPlugin("gain_probe");
+        await cp(path.join(root, "kit/template/root/tsconfig.json"), path.join(root, "tsconfig.json"));
+        const check = spawnSync(process.execPath, [path.join(root, "node_modules/typescript/bin/tsc"), "--noEmit"], { cwd: root, encoding: "utf8", timeout: 20000 });
+        assert.equal(check.status, 0, check.stdout + check.stderr);
+        const build = spawnSync(process.execPath, ["kit/fx/build-effect.mjs", "gain-probe"], { cwd: root, encoding: "utf8", timeout: 20000 });
+        assert.equal(build.status, 0, build.stdout + build.stderr);
+        const runtime = path.join(root, "build/fx/gain_probe_runtime");
+        const manifest = JSON.parse(await readFile(path.join(runtime, "GainProbe.cmajorpatch"), "utf8"));
+        assert.equal(manifest.worker, "worker.js");
+        assert.ok((await readFile(path.join(runtime, "view/app.js"), "utf8")).length > 0);
+        const { default: start } = await import(pathToFileURL(path.join(runtime, manifest.worker)));
+        const messages = [];
+        const listeners = new Set();
+        const connection = {
+            addEventListener(_type, listener) { listeners.add(listener); },
+            removeEventListener(_type, listener) { listeners.delete(listener); },
+            sendMessageToServer(envelope) { messages.push(structuredClone(envelope.message)); },
+        };
+        const deliver = body => { for (const listener of listeners) listener(structuredClone(body)); };
+        const starting = start(connection);
+        await Promise.resolve();
+        assert.deepEqual(messages[0].parameters, ["gainDb"], "generated definition binds the starter's real automatable DSP endpoint");
+        const scope = { owner: "starter-host", document: 0 };
+        deliver({ kind: "opened", request: messages[0].request, scope, native: {
+            values: {}, parameters: [{ endpoint: "gainDb", value: 0, min: -24, max: 24, step: 0, defaultValue: 0 }],
+        } });
+        service = await starting;
+        deliver({ kind: "attached-client", scope, client: 1, request: 1 });
+        let sequence = 0;
+        let previousIntent = 0;
+        for (const [command, value, canUndo, canRedo] of [
+            [{ kind: "edit", key: "gain", value: 6 }, 6, true, false],
+            [{ kind: "undo" }, 0, false, true],
+            [{ kind: "redo" }, 6, true, false],
+        ]) {
+            deliver({ kind: "command", address: { ...scope, client: 1, sequence: ++sequence }, command });
+            await Promise.resolve();
+            const update = messages.filter(message => message.kind === "update").at(-1);
+            assert.equal(update.receipt.result.kind, "accepted");
+            assert.equal(update.state.fields.gain.value, value);
+            assert.equal(update.state.history.canUndo, canUndo);
+            assert.equal(update.state.history.canRedo, canRedo);
+            const publication = messages.filter(message => message.kind === "publish").at(-1);
+            const parameters = publication.operations.filter(operation => operation.kind === "parameter");
+            assert.equal(parameters.length, 1);
+            const { intent, ...operation } = parameters[0];
+            assert.deepEqual(operation, { kind: "parameter", endpoint: "gainDb", value });
+            assert.ok(Number.isSafeInteger(intent) && intent > previousIntent, "successive DSP writes carry ordered owner intent");
+            previousIntent = intent;
+        }
+    } finally { await service?.stop(); await rm(root, { recursive: true, force: true }); }
+});

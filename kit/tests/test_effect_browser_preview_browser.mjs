@@ -108,7 +108,7 @@ test("documented included-example route initializes the production UI and normal
 test("ordinary kit:new starter works at its documented route without a custom harness or UI build", async () => {
     const { page, errors, requests } = await openPreview("preview_probe");
     try {
-        const view = page.locator("preview-probe-view");
+        const view = page.locator("#plugin-preview > *");
         const gain = view.locator("input[type=range]");
         assert.equal(await gain.inputValue(), "0");
         assert.equal(await view.locator("[data-readout]").textContent(), "+0.0 dB");
@@ -116,7 +116,37 @@ test("ordinary kit:new starter works at its documented route without a custom ha
         await page.keyboard.press("ArrowRight");
         assert.equal(await gain.inputValue(), "0.1");
         assert.equal(await view.locator("[data-readout]").textContent(), "+0.1 dB");
-        assert.ok(requests.includes("/fx/preview_probe/view/source.ts"));
+        await view.getByRole("button", { name: "Undo", exact: true }).click({ timeout: 2000 });
+        await page.waitForFunction(() => document.querySelector("#plugin-preview > *")?.shadowRoot?.querySelector("input")?.value === "0");
+        assert.equal(await view.locator("[data-readout]").textContent(), "+0.0 dB");
+        assert.equal(await view.getByRole("button", { name: "Undo", exact: true }).isDisabled(), true);
+        await view.getByRole("button", { name: "Redo", exact: true }).click();
+        await page.waitForFunction(() => document.querySelector("#plugin-preview > *")?.shadowRoot?.querySelector("input")?.value === "0.1");
+        assert.equal(await view.locator("[data-readout]").textContent(), "+0.1 dB");
+        assert.equal(await view.getByRole("button", { name: "Redo", exact: true }).isDisabled(), true);
+        // One physical drag spans many input events but belongs to one history entry.
+        const bounds = await gain.boundingBox();
+        assert.ok(bounds);
+        await page.mouse.move(bounds.x + bounds.width * 0.55, bounds.y + bounds.height / 2);
+        await page.mouse.down();
+        await page.mouse.move(bounds.x + bounds.width * 0.8, bounds.y + bounds.height / 2, { steps: 12 });
+        await page.mouse.up();
+        assert.ok(Number(await gain.inputValue()) > 0.1);
+        await view.getByRole("button", { name: "Undo", exact: true }).click();
+        await page.waitForFunction(() => document.querySelector("#plugin-preview > *")?.shadowRoot?.querySelector("input")?.value === "0.1");
+        // Closing the GUI releases only its client; the preview owner retains history.
+        await page.evaluate(() => {
+            const mount = document.getElementById("plugin-preview");
+            const view = mount.firstElementChild;
+            view.remove();
+            mount.append(view);
+        });
+        await gain.waitFor();
+        assert.equal(await gain.inputValue(), "0.1");
+        await view.getByRole("button", { name: "Undo", exact: true }).click();
+        await page.waitForFunction(() => document.querySelector("#plugin-preview > *")?.shadowRoot?.querySelector("input")?.value === "0");
+        assert.equal(await view.getByRole("button", { name: "Undo", exact: true }).isDisabled(), true);
+        assert.ok(requests.includes("/fx/preview_probe/view/source.tsx"));
         assert.deepEqual(errors, []);
         await saveProof(page, "generated-starter");
     } finally {

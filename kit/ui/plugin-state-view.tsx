@@ -1,3 +1,4 @@
+import { isPluginStateViewHost, pluginStateViewHost } from "./plugin-state-view-host";
 import type { ComponentType } from "react";
 import { createRoot } from "react-dom/client";
 import type { PluginStateFields } from "./plugin-state-definition";
@@ -59,9 +60,10 @@ export function createStatefulPatchView<const Fields extends PluginStateFields>(
             const mount = document.createElement("div");
             mount.style.cssText = "width:100%;height:100%";
             shadow.replaceChildren(style, mount);
-            const client = createCmajorPluginStateClient(options.definition, connection, {
-                onDefect: error => console.error(error instanceof Error ? error.stack ?? error.message : String(error)),
-            });
+            const onDefect = (error: unknown) => console.error(error instanceof Error ? error.stack ?? error.message : String(error));
+            const client = isPluginStateViewHost(connection)
+                ? connection[pluginStateViewHost](options.definition, onDefect)
+                : createCmajorPluginStateClient(options.definition, connection, { onDefect });
             const root = createRoot(mount);
             const View = options.View;
             root.render(<PatchConnectionProvider patchConnection={connection}>

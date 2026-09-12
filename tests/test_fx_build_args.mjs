@@ -955,7 +955,7 @@ test("kit:new scaffolds a plugin discovery registers, and identity validation gu
         assert.equal(plugin.patch, "fx/demo_verb/DemoVerb.cmajorpatch");
         assert.equal(plugin.productName, "DemoVerb");
         assert.equal(plugin.cmakeTarget, "DemoVerb");
-        assert.equal(plugin.devModule, "/fx/demo_verb/view/source.ts");
+        assert.equal(plugin.devModule, "/fx/demo_verb/view/source.tsx");
         assert.deepEqual(plugin.identity, {
             ID: "dev.cosimo.demo-verb",
             name: "Demo Verb",
@@ -980,12 +980,14 @@ test("kit:new scaffolds a plugin discovery registers, and identity validation gu
 
         // The starter test and view stub follow the kit conventions.
         const starterTest = await readFile(plan.starterTestPath, "utf8");
-        const viewSource = await readFile(path.join(fxRoot, "demo_verb/view/source.ts"), "utf8");
+        const viewSource = await readFile(path.join(fxRoot, "demo_verb/view/source.tsx"), "utf8");
 
         assert.equal(plan.starterTestPath, path.join(testsRoot, "test_demo_verb_state.mjs"));
         assert.match(starterTest, /effectPlugins\["demo-verb"\]/);
-        assert.match(viewSource, /export default function createPatchView/);
-        assert.match(viewSource, /"demo-verb-view"/);
+        assert.match(viewSource, /export default createStatefulPatchView/);
+        assert.match(viewSource, /<h1>Demo Verb<\/h1>/);
+        assert.equal(config.stateSource, "fx/demo_verb/state.ts");
+        await access(path.join(fxRoot, "demo_verb/state.ts"));
         await access(path.join(fxRoot, "demo_verb/DemoVerb.cmajor"));
 
         // Identity validation catches a later duplicate pluginCode.

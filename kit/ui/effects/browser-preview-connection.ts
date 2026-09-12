@@ -1,9 +1,10 @@
+import { createBrowserPreviewState } from "./browser-preview-state";
 import type { PatchConnectionLike } from "../cmajor-react";
 import { buildCanonicalPluginStateContract } from "./effect-state-contract";
 import { isPlainObject } from "./effect-utils";
 
 type Listener = (value: unknown) => void;
-type PreviewConnection = Required<Pick<PatchConnectionLike,
+type PreviewConnection = ReturnType<typeof createBrowserPreviewState>["host"] & { dispose(): Promise<void> } & Required<Pick<PatchConnectionLike,
     | "manifest"
     | "addParameterListener" | "removeParameterListener" | "requestParameterValue"
     | "sendEventOrValue" | "sendParameterGestureStart" | "sendParameterGestureEnd"
@@ -61,9 +62,24 @@ export function createBrowserPreviewConnection(manifest: unknown, parameters: un
         for (const listener of storedStateListeners) listener({ key, value: storedState.get(key) });
     }
 
+    const writeParameter = (endpointID: string, value: unknown) => {
+        values.set(endpointID, value);
+        for (const listener of parameterListeners.get(endpointID) ?? []) listener(value);
+    };
+    const state = createBrowserPreviewState({
+        snapshot: () => ({ values: Object.fromEntries(storedState), parameters: contract.parameters.map(parameter => ({
+            endpoint: parameter.endpointID, value: Number(values.get(parameter.endpointID)),
+            min: parameter.min ?? 0, max: parameter.max ?? 1, step: parameter.step ?? (parameter.type === "number" ? 0 : 1),
+            defaultValue: Number(parameter.defaultValue),
+        })) }),
+        parameter: writeParameter,
+        stored(key, value) { storedState.set(key, value); emitStoredState(key); },
+    });
     return {
         _tag: "ok",
         value: {
+            ...state.host,
+            dispose: () => state.stop(),
             manifest,
             addParameterListener(endpointID, listener) { subscribe(parameterListeners, endpointID, listener); },
             removeParameterListener(endpointID, listener) { parameterListeners.get(endpointID)?.delete(listener); },
@@ -75,8 +91,8 @@ export function createBrowserPreviewConnection(manifest: unknown, parameters: un
                 });
             },
             sendEventOrValue(endpointID, value) {
-                values.set(endpointID, value);
-                for (const listener of parameterListeners.get(endpointID) ?? []) listener(value);
+                writeParameter(endpointID, value);
+                state.observe(endpointID, Number(value));
             },
             // A silent page has neither host automation nor DSP output. Keep
             // these normal binding hooks without inventing either behavior.
@@ -97,6 +113,7 @@ export function createBrowserPreviewConnection(manifest: unknown, parameters: un
             sendStoredStateValue(key, value) {
                 storedState.set(key, value);
                 emitStoredState(key);
+                state.replace(key);
             },
             requestFullStoredState(callback) {
                 queueMicrotask(() => callback({ parameters: Object.fromEntries(values), values: Object.fromEntries(storedState) }));
