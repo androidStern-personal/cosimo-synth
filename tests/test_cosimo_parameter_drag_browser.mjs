@@ -5,7 +5,7 @@ import { chromium } from "playwright";
 import { createWebServer } from "../web/server.mjs";
 
 test("real Cosimo parameter drags never replay older values during dragging or after release", { timeout: 90000 }, async () => {
-    const remote = process.env.COSIMO_WEB_BASE_URL;
+    const remote = process.env.COSIMO_WEB_BASE_URL || undefined;
     const server = remote ? undefined : createWebServer(process.env.COSIMO_WEB_ROOT ?? "build/web");
     if (server) await new Promise(resolve => server.listen(0, "127.0.0.1", resolve));
     const browser = await chromium.launch({ args: ["--autoplay-policy=no-user-gesture-required"] });
