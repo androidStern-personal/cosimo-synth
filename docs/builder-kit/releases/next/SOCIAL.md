@@ -4,25 +4,27 @@ Not published. Use after the release audit clears and existing owners can fetch 
 
 ## Short post
 
-Changing a wavetable should be as easy as turning a knob.
+Audio-plugin state, with the ergonomics of `useQuery`.
 
-Builder Kit gives both the same React state API and Undo history—across your UI and audio engine.
+Your UI and audio engine play by different rules. Builder Kit handles the coordination, saving and Undo behind `usePluginState()`.
 
-Saving, restoring and safe data delivery included. Built for Cmajor.
+Plus shadcn-style audio UI. Editable source included.
+
+For Cmajor + React.
 
 ## Longer post
 
-Change a knob. Edit an envelope. Load a wavetable. Undo any of them.
+Think `useQuery`, for audio-plugin state.
 
-Those should feel like ordinary state changes, even when the data has to cross from a WebView to the audio engine.
+Your interface, saved project and real-time audio engine have different lifetimes and rules. Keeping them in agreement is work you should be able to hand to a framework.
 
-The next Builder Kit update gives Cmajor plugins one state system and a React hook: `usePluginState()`.
+The next Builder Kit update gives Cmajor plugins `usePluginState()`: one editing API for parameters, envelopes and wavetable selections, with saving, shared Undo and safe delivery to DSP handled underneath.
 
-Declare your values and how to prepare your audio data. The framework coordinates saving, restoring, shared Undo and safe delivery to DSP—including preparation directly into shared memory.
+Declare your values and how to prepare your audio data. The framework coordinates the rest, including preparation directly into shared memory.
 
-Your interface can treat a curve or wavetable selection like another editable value. The framework handles the different lifetimes and delivery paths underneath.
+And the UI follows a familiar idea too: shadcn-style components with editable source. An MSEG editor, filter controls, sliders, and preset/snapshot controls you can make your own.
 
-The MSEG editor is included. The source is yours to change. Included for existing Builder Kit owners.
+Included for existing Builder Kit owners. Built for Cmajor + React.
 
 [Attach actual candidate recording and code excerpts. Insert the public release-note URL only after publication.]
 
@@ -32,7 +34,9 @@ Positioning: **a state library for your whole audio plugin**. The useful promise
 
 Demonstrate that promise with the same state hook for a simple parameter and a complex curve, followed by Undo reversing both. `usePluginState` is the kit's own hook; `usePluginHistory` exposes the shared history. Explain custom preparation and DSP interpretation in the linked guide.
 
-The Zustand comparison can help explain the product verbally: familiar state-library ergonomics extended to audio-plugin lifetimes and data delivery. Keep the post focused on the concrete result. It is not a claim that this is built on Zustand or that it replaces arbitrary DSP code.
+The direct [TanStack Query comparison](https://tanstack.com/query/latest/docs/framework/react/reference/functions/useQuery) is about approachable hooks over difficult state coordination. `usePluginState` also exposes editing and shared Undo; this is our audio-plugin API, not TanStack Query integration.
+
+The [shadcn comparison](https://ui.shadcn.com/docs) is about editable source and composition. The exported kit contains the MSEG editor/surface, filter-range editor, sliders, parameter entry and preset/snapshot controls. The full composable Cosimo knob/context-menu extraction remains unfinished. Use “shadcn-style audio UI” for this release; do not imply that every Cosimo control has shipped as a polished component system.
 
 ## Two-image code carousel
 

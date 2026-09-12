@@ -57,6 +57,8 @@ The new kit supplies the state declarations, persistent owner, React controls, s
 
 The kit does not automatically migrate a customer's existing plugin. It does not infer custom DSP behavior, retain deleted external files for Undo, or supply the unfinished composable knob/context-menu package. Browser shared memory still requires cross-origin isolation. Supported customer installation remains Apple silicon with macOS 15 or newer; broader platform qualification is not established here.
 
+Follow-up source check: the included **Enhance That has not migrated** to `definePluginState` / `usePluginState`. Its eight sound parameters use direct Cmajor parameter calls plus the existing preset/snapshot controllers (`fx/enhancer_lite/view/source.ts:260`, `:437`); its plugin config has no `stateSource`. It does not need shared-memory uploads for those eight values. Migrating its editing/history integration would make the shipped example demonstrate the new API, while preserving its DSP, parameter identities and old presets. The current new-plugin generator also still emits the earlier `createPatchView` pattern (`kit/scripts/new_plugin.mjs:309`). Treat new-API adoption as deliberate author work until these teaching/default paths are updated.
+
 ## Evidence
 
 Local generated evidence is under `build/release-audit-2026-09-12/`: `release-audit-summary.json`, `RELEASE-CHANGE-AUDIT.md`, `released-baseline.json`, `export-result.json`, `npm-ci.log`, `typecheck.log`, `npm-test.log`, `runtime-build.log`, `native-build.log`, and strict-checked examples. These files are audit outputs, not customer content.
