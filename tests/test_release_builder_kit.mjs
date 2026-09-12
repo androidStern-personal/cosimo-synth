@@ -4,7 +4,9 @@ import fs from "node:fs/promises";
 import { existsSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { execFileSync } from "node:child_process";
+import { execFile, execFileSync } from "node:child_process";
+import http from "node:http";
+import { promisify } from "node:util";
 
 import {
     assertFeedMatchesPrefix,
@@ -201,7 +203,7 @@ test("release capability stays out of argv, JSON, logs, and subprocess failures"
         const feed = path.join(publishFixture, "feed");
         await initRepo(source, { "fixture.txt": "fixture" });
         await fs.mkdir(feed);
-        createBareMirror(source, path.join(feed, "kit.git"));
+        createBareMirror(source, path.join(feed, "kit.git"), { commit: git(source, "rev-parse", "HEAD"), includeReleaseTags: true });
         await fs.writeFile(path.join(feed, "manifest.json"), "{}");
         await publishReleaseObjects(feed, destination, {
             run: (command, args, options) => { calls.push({ command, args, env: options.env }); return ""; },
@@ -349,7 +351,7 @@ test("choc_submodule_url_must_be_relative", async () => {
     try {
         const relative = await makeForkPair(path.join(scratch, "relative"));
         const relativeMirror = path.join(scratch, "relative-mirror.git");
-        createBareMirror(relative.cmajorDir, relativeMirror);
+        createBareMirror(relative.cmajorDir, relativeMirror, { commit: relative.cmajorCommit });
         assert.equal(existsSync(path.join(relativeMirror, "info/refs")), true);
         assert.equal(existsSync(path.join(relativeMirror, "objects/info/packs")), true);
         const submodule = verifyRelativeChocSubmodule(relativeMirror, relative.cmajorCommit);
@@ -357,7 +359,7 @@ test("choc_submodule_url_must_be_relative", async () => {
 
         const absolute = await makeForkPair(path.join(scratch, "absolute"), "https://github.com/Tracktion/choc.git");
         const absoluteMirror = path.join(scratch, "absolute-mirror.git");
-        createBareMirror(absolute.cmajorDir, absoluteMirror);
+        createBareMirror(absolute.cmajorDir, absoluteMirror, { commit: absolute.cmajorCommit });
         assert.throws(() => verifyRelativeChocSubmodule(absoluteMirror, absolute.cmajorCommit), /must be relative/);
     } finally {
         await fs.rm(scratch, { recursive: true, force: true });
@@ -689,6 +691,67 @@ test("dry_run_fails_on_pin_and_submodule_problems", async () => {
             /same cohort path/,
         );
     } finally {
+        await fs.rm(scratch, { recursive: true, force: true });
+    }
+});
+
+
+test("selected mirrors exclude unrelated history while cold dumb-HTTP clients fetch release tags and relative CHOC", async () => {
+    const scratch = await makeScratch("kit-selected-mirrors-");
+    let server;
+    const gitAsync = async (cwd, ...args) => (await promisify(execFile)("git", args, { cwd })).stdout.trim();
+    try {
+        const forks = await makeForkPair(path.join(scratch, "source"));
+        git(forks.cmajorDir, "tag", "-a", "v0.1.0", "HEAD^", "-m", "older release");
+        git(forks.cmajorDir, "tag", "-a", "v0.2.0", "-m", "selected release");
+        const excluded = [];
+        for (const source of [forks.cmajorDir, forks.chocDir]) {
+            git(source, "switch", "--quiet", "--orphan", "unrelated-development");
+            await fs.writeFile(path.join(source, "unreleased.txt"), "UNRELEASED-DEVELOPMENT-CONTENT");
+            git(source, "add", "unreleased.txt");
+            git(source, "commit", "--quiet", "-m", "unrelated work");
+            git(source, "tag", "v99.0.0");
+            excluded.push(git(source, "rev-parse", "HEAD"), git(source, "rev-parse", "HEAD:unreleased.txt"));
+        }
+        const feed = path.join(scratch, "feed");
+        await fs.mkdir(feed);
+        createBareMirror(forks.cmajorDir, path.join(feed, "kit.git"), { commit: forks.cmajorCommit, includeReleaseTags: true });
+        createBareMirror(forks.cmajorDir, path.join(feed, "cmajor.git"), { commit: forks.cmajorCommit });
+        createBareMirror(forks.chocDir, path.join(feed, "choc.git"), { commit: forks.chocCommit });
+        for (const name of ["kit.git", "cmajor.git", "choc.git"]) {
+            const mirror = path.join(feed, name);
+            const refs = git(mirror, "for-each-ref", "--format=%(refname)").split("\n");
+            assert.deepEqual(refs, name === "kit.git"
+                ? ["refs/heads/main", "refs/tags/v0.1.0", "refs/tags/v0.2.0"] : ["refs/heads/main"]);
+            for (const object of excluded)
+                assert.throws(() => git(mirror, "cat-file", "-e", object), "unrelated commits and blobs must be absent, not merely unadvertised");
+            assert.equal(existsSync(path.join(mirror, "shallow")), false);
+            assert.equal(existsSync(path.join(mirror, "FETCH_HEAD")), false);
+        }
+        server = http.createServer(async (request, response) => {
+            try {
+                const file = path.resolve(feed, `.${new URL(request.url, "http://localhost").pathname}`);
+                if (!file.startsWith(`${feed}${path.sep}`)) throw new Error("outside fixture");
+                response.end(await fs.readFile(file));
+            } catch { response.statusCode = 404; response.end(); }
+        });
+        await new Promise(resolve => server.listen(0, "127.0.0.1", resolve));
+        const origin = `http://127.0.0.1:${server.address().port}`;
+        const client = path.join(scratch, "cold-source-client");
+        await gitAsync(scratch, "-c", "http.proxy=", "clone", "--quiet", `${origin}/cmajor.git`, client);
+        assert.equal(git(client, "rev-parse", "HEAD"), forks.cmajorCommit);
+        assert.equal(git(client, "rev-list", "--count", "HEAD"), "2");
+        await gitAsync(client, "-c", "http.proxy=", "submodule", "update", "--init", "include/choc");
+        assert.equal(git(path.join(client, "include/choc"), "rev-parse", "HEAD"), forks.chocCommit);
+        assert.equal(await fs.readFile(path.join(client, "include/choc/choc/text/UTF8.h"), "utf8"), "// choc\n");
+        const kitClient = path.join(scratch, "cold-kit-client");
+        await fs.mkdir(kitClient);
+        git(kitClient, "init", "--quiet");
+        await gitAsync(kitClient, "-c", "http.proxy=", "fetch", "--quiet", "--no-tags", `${origin}/kit.git`, "+refs/tags/v*:refs/kit/releases/v*");
+        assert.equal(git(kitClient, "rev-parse", "refs/kit/releases/v0.2.0^{}"), forks.cmajorCommit);
+        assert.equal(git(kitClient, "rev-parse", "refs/kit/releases/v0.1.0^{}"), git(client, "rev-parse", "HEAD^"));
+    } finally {
+        if (server) await new Promise(resolve => server.close(resolve));
         await fs.rm(scratch, { recursive: true, force: true });
     }
 });

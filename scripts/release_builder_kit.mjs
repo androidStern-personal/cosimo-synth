@@ -324,10 +324,28 @@ export function verifyRelativeChocSubmodule(cmajorMirror, commit) {
 // ---------------------------------------------------------------------------
 // Bare mirrors
 
-/** Bare-clone `source` into `destination` and prepare it for dumb-HTTP serving. */
-export function createBareMirror(source, destination) {
+/** Publish only a selected commit's full history, plus ancestral kit release tags. */
+export function createBareMirror(source, destination, { commit, includeReleaseTags = false }) {
+    if (!/^[0-9a-f]{40}$/.test(commit)) throw new Error("A mirror requires an exact selected commit.");
     if (existsSync(destination)) throw new Error(`Mirror destination already exists: ${destination}`);
-    runCommand("git", ["clone", "--bare", "--quiet", source, destination]);
+    // Fetch into a fresh repository: cloning then deleting refs can retain
+    // unrelated packed or loose objects in the published directory.
+    runCommand("git", ["init", "--bare", "--quiet", "--initial-branch=main", destination]);
+    try {
+        git(destination, "fetch", "--quiet", "--no-tags", "--no-write-fetch-head", source, `${commit}:refs/heads/main`);
+    } catch {
+        throw new Error(`Selected-history mirror does not contain the pinned commit ${commit}; fetch failed.`);
+    }
+    if (includeReleaseTags) {
+        const remoteTags = new Map(git(destination, "ls-remote", "--tags", source, "refs/tags/v*")
+            .split("\n").filter(Boolean).map(line => line.split(/\s+/).reverse()));
+        const ancestors = new Set(git(destination, "rev-list", commit).split("\n"));
+        const tags = [...remoteTags].filter(([ref, object]) =>
+            ref.startsWith("refs/tags/v") && semverPattern.test(ref.slice("refs/tags/v".length))
+            && ancestors.has(remoteTags.get(`${ref}^{}`) ?? object)).map(([ref]) => ref);
+        if (tags.length)
+            git(destination, "fetch", "--quiet", "--no-tags", "--no-write-fetch-head", source, ...tags.map(ref => `${remoteTags.get(ref)}:${ref}`));
+    }
     git(destination, "repack", "-a", "-d", "-q");
     git(destination, "update-server-info");
     for (const required of ["info/refs", "objects/info/packs"]) {
@@ -848,7 +866,7 @@ export async function runRelease(options, {
 
     // 4. Bare mirrors.
     const kitMirror = path.join(feedRoot, "kit.git");
-    createBareMirror(lineageDir, kitMirror);
+    createBareMirror(lineageDir, kitMirror, { commit: lineage.commit, includeReleaseTags: true });
     if (!git(kitMirror, "tag", "--list", lineage.tag)) throw new Error(`kit.git mirror is missing tag ${lineage.tag}.`);
     log(`Mirrored kit.git (${lineage.tag})`);
 
@@ -859,7 +877,7 @@ export async function runRelease(options, {
         dry(`Would mirror cmajor.git at ${cmajor.commit} and verify its relative CHOC submodule URL.`);
         dry("Would mirror choc.git from the URL that the cmajor .gitmodules resolves to.");
     } else {
-        createBareMirror(cmajorSource, cmajorMirror);
+        createBareMirror(cmajorSource, cmajorMirror, { commit: cmajor.commit });
         assertCommitPresent(cmajorMirror, cmajor.commit, "cmajor");
         const submodule = verifyRelativeChocSubmodule(cmajorMirror, cmajor.commit);
         log(`Mirrored cmajor.git; .gitmodules CHOC url "${submodule.url}" is relative (choc pin ${submodule.chocCommit.slice(0, 9)})`);
@@ -869,7 +887,7 @@ export async function runRelease(options, {
         if (dryRun && !isLocalSource(chocSource)) {
             dry(`Would mirror choc.git at ${submodule.chocCommit}.`);
         } else {
-            createBareMirror(chocSource, chocMirror);
+            createBareMirror(chocSource, chocMirror, { commit: submodule.chocCommit });
             assertCommitPresent(chocMirror, submodule.chocCommit, "choc");
             log("Mirrored choc.git");
         }

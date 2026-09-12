@@ -94,14 +94,14 @@ test("interrupted publication and repacking preserve cold old-tag clients and ad
         const oldFeed = path.join(scratch, "old-feed");
         const newFeed = path.join(scratch, "new-feed");
         for (const root of [oldFeed, newFeed]) await fs.mkdir(root);
-        createBareMirror(lineage, path.join(oldFeed, "kit.git"));
-        createBareMirror(oldSource, path.join(oldFeed, "cmajor.git"));
+        createBareMirror(lineage, path.join(oldFeed, "kit.git"), { commit: git(lineage, "rev-parse", "HEAD"), includeReleaseTags: true });
+        createBareMirror(oldSource, path.join(oldFeed, "cmajor.git"), { commit: oldSourceCommit });
         assert.equal(files(oldFeed).some((file) => /^cmajor\.git\/objects\/[0-9a-f]{2}\//u.test(file)), false, "old source retrieval must require pack discovery, not loose objects");
         await fs.writeFile(path.join(lineage, "payload.txt"), "new kit");
         git(lineage, "commit", "--quiet", "-am", "new");
         git(lineage, "tag", "v0.1.1");
-        createBareMirror(lineage, path.join(newFeed, "kit.git"));
-        createBareMirror(newSource, path.join(newFeed, "cmajor.git"));
+        createBareMirror(lineage, path.join(newFeed, "kit.git"), { commit: git(lineage, "rev-parse", "HEAD"), includeReleaseTags: true });
+        createBareMirror(newSource, path.join(newFeed, "cmajor.git"), { commit: git(newSource, "rev-parse", "HEAD") });
         for (const [root, version] of [[oldFeed, "0.1.0"], [newFeed, "0.1.1"]]) {
             await fs.mkdir(path.join(root, `tools/v${version}`), { recursive: true });
             await fs.writeFile(path.join(root, `tools/v${version}/cmaj.tar.gz`), `tool ${version}`);

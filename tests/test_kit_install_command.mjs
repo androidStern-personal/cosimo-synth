@@ -239,7 +239,7 @@ async function fixture() {
     git(lineage, "tag", "v1.0.0");
     const manifest = manifestFor(git(lineage, "rev-parse", "HEAD"));
     manifest.tools = { cmaj: { sha256: sha256(cmaj) }, cmajPlugin: { sha256: sha256(plugin) } };
-    createBareMirror(lineage, path.join(feed, "kit.git"));
+    createBareMirror(lineage, path.join(feed, "kit.git"), { commit: git(lineage, "rev-parse", "HEAD"), includeReleaseTags: true });
     const bootstrap = await renderBootstrap({ manifest, feedOrigin: origin, runtimes });
     assert.equal(bootstrap.ok, true);
     manifest.installation = { artifact: bootstrap.value.artifact, sha256: bootstrap.value.sha256 };
