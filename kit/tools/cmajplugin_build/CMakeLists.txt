@@ -17,3 +17,7 @@ include("${COSIMO_CMAJOR_SOURCE_DIR}/tools/scripts/cmake_warning_flags")
 set(JUCE_ENABLE_MODULE_SOURCE_GROUPS ON)
 add_subdirectory("${COSIMO_JUCE_SOURCE_DIR}" juce)
 add_subdirectory("${COSIMO_CMAJOR_SOURCE_DIR}/tools/CmajPlugin" cmajplugin)
+
+# LLVM is linked statically; its build-machine search directory is not a
+# runtime dependency and must not be embedded in the shipped tool.
+set_target_properties(CmajPlugin_VST3 PROPERTIES SKIP_BUILD_RPATH TRUE)

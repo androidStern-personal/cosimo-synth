@@ -29,3 +29,7 @@ foreach(configuration DEBUG RELEASE RELWITHDEBINFO MINSIZEREL)
 endforeach()
 
 add_subdirectory("${COSIMO_CMAJOR_SOURCE_DIR}" cmajor)
+
+# LLVM is linked statically; its build-machine search directory is not a
+# runtime dependency and must not be embedded in the shipped tool.
+set_target_properties(cmaj PROPERTIES SKIP_BUILD_RPATH TRUE)

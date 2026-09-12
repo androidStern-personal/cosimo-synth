@@ -93,6 +93,17 @@ function(cosimo_add_cmajor_toolchain_dependencies)
     )
     cosimo_add_juce_dependency()
 
+    # Keep source locations useful in shipped diagnostics without embedding the
+    # machine's checkout/cache paths. Append options; retain all build flags.
+    if(CMAKE_CXX_COMPILER_ID MATCHES "^(AppleClang|Clang|GNU)$")
+        add_compile_options(
+            "$<$<CONFIG:Release>:-ffile-prefix-map=${cosimo_cmajor_toolchain_SOURCE_DIR}=cmajor>"
+            "$<$<CONFIG:Release>:-ffile-prefix-map=${COSIMO_JUCE_SOURCE_DIR}=juce>"
+            "$<$<CONFIG:Release>:-ffile-prefix-map=${CMAKE_SOURCE_DIR}=builder-kit-tools>"
+            "$<$<CONFIG:Release>:-ffile-prefix-map=${CMAKE_BINARY_DIR}=build>"
+        )
+    endif()
+
     set(COSIMO_CMAJOR_SOURCE_DIR "${cosimo_cmajor_toolchain_SOURCE_DIR}" PARENT_SCOPE)
     set(COSIMO_CHOC_SOURCE_DIR "${cosimo_cmajor_toolchain_SOURCE_DIR}/include/choc" PARENT_SCOPE)
     set(COSIMO_JUCE_SOURCE_DIR "${COSIMO_JUCE_SOURCE_DIR}" PARENT_SCOPE)
