@@ -45,6 +45,7 @@ import {
 } from "../scripts/seqfx-release-config.mjs";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+const currentCmajorCommit = JSON.parse(await readFile(path.join(repoRoot, "kit/toolchain.json"), "utf8")).cmaj.forkCommit;
 const scriptPath = path.join(repoRoot, "scripts", "build_seqfx_beta_release.mjs");
 
 test("release staging rejects embedded source maps, source content, and TypeScript filenames", async (context) => {
@@ -172,8 +173,8 @@ function releaseToolchainFixture({ nativeBuildCacheVerified = true } = {}) {
         },
         sourceBuiltTools: {
             cmaj: {
-                cmajorCommit: "9ed4f96cc70996a8e4ab2e6aa13decb0460e260a",
-                chocCommit: "11f7dc63d7cb78f6dbaa559fe09ade8e941c0188",
+                cmajorCommit: currentCmajorCommit,
+                chocCommit: "eedf2aebd3049a84cdcf280664c73c53796118ac",
                 executablePolicy: "absolute-repository-build-output-no-path-fallback",
                 provenance: "repository-pinned-source-build",
             },
@@ -418,11 +419,11 @@ test("release config freezes the existing beta identity and current native outpu
             cpmName: "cosimo_cmajor",
             sourceDirectoryCacheKey: "CPM_PACKAGE_cosimo_cmajor_SOURCE_DIR",
             repository: "https://github.com/androidStern-personal/cmajor.git",
-            revision: "9ed4f96cc70996a8e4ab2e6aa13decb0460e260a",
+            revision: currentCmajorCommit,
         },
         choc: {
             repository: "https://github.com/androidStern-personal/choc.git",
-            revision: "11f7dc63d7cb78f6dbaa559fe09ade8e941c0188",
+            revision: "eedf2aebd3049a84cdcf280664c73c53796118ac",
             submodulePath: "include/choc",
         },
         juce: {

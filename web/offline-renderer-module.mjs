@@ -15,7 +15,7 @@ export async function buildOfflineRendererModule({outputDirectory,generatedClass
         + generatedClass
         + `\nWavetableSynth.createOfflinePerformer = async (sessionID,frequency) => {\n`
         + `  const runtime=await initialiseSharedDataPerformer(new WavetableSynth(),sessionID,frequency,${JSON.stringify(sharedData)});\n`
-        + `  return {...runtime,prepareWavetables:sources=>prepareOfflineWavetables(runtime,sources,sessionID),prepareMseg:source=>prepareOfflineMseg(runtime,source)};\n`
+        + `  return {...runtime,get performer(){return runtime.performer;},prepareWavetables:sources=>prepareOfflineWavetables(runtime,sources,sessionID),prepareMseg:source=>prepareOfflineMseg(runtime,source)};\n`
         + `};\nexport {WavetableSynth};\nexport default WavetableSynth;\n`;
     await fs.writeFile(path.join(outputDirectory,'cmaj_Cosimo_Synth.offline.js'),source);
 }

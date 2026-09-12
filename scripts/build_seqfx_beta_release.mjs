@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import { spawnSync } from "node:child_process";
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, readFileSync, realpathSync } from "node:fs";
 import {
     access,
     chmod,
@@ -401,7 +401,14 @@ function readCleanGitCheckout(checkoutPath, expectedRepository, expectedRevision
         "--ignore-submodules=none",
     ], checkoutPath);
 
-    if (repository !== expectedRepository) {
+    // Git canonicalizes local submodule origins (e.g. /var -> /private/var on
+    // macOS). Compare local filesystem identities; remote URLs remain exact.
+    const sameRepository = repository === expectedRepository || (
+        path.isAbsolute(repository) && path.isAbsolute(expectedRepository)
+        && existsSync(repository) && existsSync(expectedRepository)
+        && realpathSync(repository) === realpathSync(expectedRepository)
+    );
+    if (!sameRepository) {
         throw new Error(
             `${label} checkout origin drift: expected ${expectedRepository}, found ${repository}.`,
         );

@@ -26,21 +26,29 @@ The shared-memory web synth is deployed at https://synth.song-machines.com/ in
 the `cosimo-synth` Vercel project under `andrew-sterns-projects`.
 This is separate from the `song-machines` website project.
 
-Deploy the already-built static application, with `index.html` at its root and
-`web/vercel.json` copied into that root. The configuration supplies the isolation
-headers required for shared memory; no server function or Vercel build is needed.
-Keep `.env*`, `.gitignore`, and `.vercel` excluded in `.vercelignore`.
-
-The current deployment directory is `build/vercel-shared-memory/`. It contains
-the validated `dist/assets/` build with `synth-page.html` renamed to `index.html`.
-After replacing its assets with a newly validated build, deploy from that directory:
+One command builds, packages the approved public assets, verifies real keyboard
+interaction and non-silent browser audio, and deploys that exact directory:
 
 ```sh
-vercel deploy --prod --yes --scope andrew-sterns-projects
+npm run web:deploy -- --prod
 ```
 
-Verify HTTPS, `crossOriginIsolated`, successful wavetable loading, and non-silent
-audio on the deployed URL. Never upload the repository root as the static site.
+Omit `--prod` for a Vercel preview. Use `--dry-run` to build and verify without
+uploading. Production updates the existing `cosimo-synth` project; never upload
+the repository root. `web/vercel.json` supplies shared-memory isolation headers.
+The output is `build/vercel-shared-memory/`.
+
+All builds use `kit/cmake/CosimoDependencies.cmake`. To test unpublished Cmajor
+changes, set **one** environment variable to an absolute checkout path:
+
+```sh
+COSIMO_CMAJOR_SOURCE=/absolute/path/to/cmajor npm run web:deploy -- --dry-run
+```
+
+That source is used by the compiler, headers, and browser support files through
+CMake. Unset it to return to the pinned revision, including when reusing build
+caches. Production deployment rejects a local source override. There is no
+browser-only source-copy option.
 
 ## On-device performance HUD
 

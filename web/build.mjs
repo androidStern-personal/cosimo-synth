@@ -73,11 +73,6 @@ async function buildRendererAwarePatchModule() {
 }
 
 async function copyCmajorWebRuntime() {
-    if (process.env.COSIMO_PLUGIN_STATE_CMAJOR_SOURCE) {
-        await fs.cp(path.join(process.env.COSIMO_PLUGIN_STATE_CMAJOR_SOURCE, "javascript", "cmaj_api"),
-            path.join(outputDirectory, "cmaj_api"), {recursive:true});
-        return;
-    }
     stageCmajorWebRuntime(repoRoot, {
         buildDirectory: path.join(repoRoot, "build", "cmajor_web_runtime-web"),
         outputDirectory: path.join(outputDirectory, "cmaj_api"),

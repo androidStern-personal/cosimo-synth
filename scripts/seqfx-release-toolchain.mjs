@@ -1,3 +1,4 @@
+import { nativeReleaseDependencies } from "./native-release-dependencies.mjs";
 import { createHash } from "node:crypto";
 import { spawnSync } from "node:child_process";
 import { createReadStream } from "node:fs";
@@ -39,8 +40,8 @@ const approvedExternalTools = Object.freeze({
 });
 
 const pinnedSourceBuiltGenerator = Object.freeze({
-    cmajorCommit: "9ed4f96cc70996a8e4ab2e6aa13decb0460e260a",
-    chocCommit: "11f7dc63d7cb78f6dbaa559fe09ade8e941c0188",
+    cmajorCommit: nativeReleaseDependencies.cmajor.revision,
+    chocCommit: nativeReleaseDependencies.choc.revision,
 });
 
 const fixedChildPath = "/usr/bin:/bin:/usr/sbin:/sbin";

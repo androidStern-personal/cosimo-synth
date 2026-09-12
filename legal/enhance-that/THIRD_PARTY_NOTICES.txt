@@ -14,7 +14,7 @@ Cmajor
 ------
 License: GPL-3.0-or-later OR commercial
 Source: cmajor/LICENSE.md
-Revision/version: 9ed4f96cc70996a8e4ab2e6aa13decb0460e260a
+Revision/version: 812a46422502d25b79d1df59330535eaefb98b9e
 
 Copyright (C) 2024 Cmajor Software Ltd.
 Upstream: https://cmajor.dev
@@ -76,7 +76,7 @@ CHOC
 ----
 License: ISC
 Source: choc/LICENSE.md
-Revision/version: 11f7dc63d7cb78f6dbaa559fe09ade8e941c0188
+Revision/version: eedf2aebd3049a84cdcf280664c73c53796118ac
 
 CHOC is Copyright (C) 2022 Tracktion Corporation.
 Upstream: https://github.com/Tracktion/choc
@@ -101,7 +101,7 @@ QuickJS embedded through CHOC
 -----------------------------
 License: MIT
 Source: choc/choc/javascript/choc_javascript_QuickJS.h
-Revision/version: 11f7dc63d7cb78f6dbaa559fe09ade8e941c0188
+Revision/version: eedf2aebd3049a84cdcf280664c73c53796118ac
 
 QuickJS Javascript Engine License:
 
@@ -1030,7 +1030,7 @@ FLAC embedded through CHOC
 --------------------------
 License: BSD-3-Clause
 Source: choc/choc/audio/choc_AudioFileFormat_FLAC.h
-Revision/version: 11f7dc63d7cb78f6dbaa559fe09ade8e941c0188
+Revision/version: eedf2aebd3049a84cdcf280664c73c53796118ac
 
 FLAC license:
 
@@ -1124,7 +1124,7 @@ Ogg Vorbis embedded through CHOC
 --------------------------------
 License: BSD-3-Clause
 Source: choc/choc/audio/choc_AudioFileFormat_Ogg.h
-Revision/version: 11f7dc63d7cb78f6dbaa559fe09ade8e941c0188
+Revision/version: eedf2aebd3049a84cdcf280664c73c53796118ac
 
 Ogg-Vorbis license:
 
@@ -1161,7 +1161,7 @@ Ogg Vorbis preserved LPC attribution (CHOC and JUCE)
 ----------------------------------------------------
 License: preserved permissive notice
 Source: choc/choc/audio/choc_AudioFileFormat_Ogg.h
-Revision/version: 11f7dc63d7cb78f6dbaa559fe09ade8e941c0188
+Revision/version: eedf2aebd3049a84cdcf280664c73c53796118ac
 
 /* Copyright 1992, 1993, 1994 by Jutta Degener and Carsten Bormann,
 Technische Universita"t Berlin
@@ -1187,7 +1187,7 @@ minimp3 embedded through CHOC
 -----------------------------
 License: CC0-1.0
 Source: choc/choc/audio/choc_AudioFileFormat_MP3.h
-Revision/version: 11f7dc63d7cb78f6dbaa559fe09ade8e941c0188
+Revision/version: eedf2aebd3049a84cdcf280664c73c53796118ac
 
 minimp3 license:
 

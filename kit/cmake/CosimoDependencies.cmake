@@ -17,13 +17,33 @@ include("${CMAKE_CURRENT_LIST_DIR}/dependency-sources.cmake")
 
 # The pinned Cmajor fork commit. Both packages below pin the same commit; they
 # differ only in how much of the fork's submodule tree they check out.
-set(COSIMO_CMAJOR_PINNED_COMMIT "e2efddc2ce047a796b68ec9349501a983a8916d9")
+set(COSIMO_CMAJOR_PINNED_COMMIT "812a46422502d25b79d1df59330535eaefb98b9e")
+set(COSIMO_CHOC_PINNED_COMMIT "eedf2aebd3049a84cdcf280664c73c53796118ac")
+set(COSIMO_JUCE_PINNED_COMMIT "501c07674e1ad693085a7e7c398f205c2677f5da")
+
+# One explicit development source for headers, tools and browser support.
+# Re-evaluate on every configure: an old package-specific cache entry must not
+# silently select a different checkout when returning to a pinned build.
+set(_cosimo_cmajor_source "$ENV{COSIMO_CMAJOR_SOURCE}")
+if(NOT _cosimo_cmajor_source STREQUAL "")
+    if(NOT IS_ABSOLUTE "${_cosimo_cmajor_source}" OR
+       NOT EXISTS "${_cosimo_cmajor_source}/include/cmajor/API/cmaj_Engine.h" OR
+       NOT EXISTS "${_cosimo_cmajor_source}/javascript/cmaj_api")
+        message(FATAL_ERROR "COSIMO_CMAJOR_SOURCE must name an absolute Cmajor source checkout")
+    endif()
+    file(REAL_PATH "${_cosimo_cmajor_source}" _cosimo_cmajor_source)
+    message(STATUS "Cmajor development source: ${_cosimo_cmajor_source}")
+endif()
+foreach(_cosimo_package cosimo_cmajor cosimo_cmajor_toolchain)
+    set(CPM_${_cosimo_package}_SOURCE "${_cosimo_cmajor_source}" CACHE PATH
+        "Managed by COSIMO_CMAJOR_SOURCE; unset that environment variable for pinned builds" FORCE)
+endforeach()
 
 function(cosimo_add_juce_dependency)
     CPMAddPackage(
         NAME cosimo_juce
         GIT_REPOSITORY "${COSIMO_JUCE_GIT_URL}"
-        GIT_TAG "501c07674e1ad693085a7e7c398f205c2677f5da"
+        GIT_TAG "${COSIMO_JUCE_PINNED_COMMIT}"
         GIT_SHALLOW FALSE
         DOWNLOAD_ONLY YES
     )

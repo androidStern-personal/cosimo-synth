@@ -15,6 +15,7 @@
     "ui:desktop:dev": "vite --config ui/vite.desktop.config.mjs",
     "ui:desktop:build": "node ui/build.mjs --desktop",
     "web:build": "node web/build.mjs",
+    "web:deploy": "node web/deploy.mjs",
     "sites:build": "node web/build-sites.mjs",
     "test:developer-settings:generated": "node tests/tools/build_developer_settings_generated_artifacts.mjs && node --test tests/test_developer_settings_generated_browser.mjs",
     "web:serve": "python3 -m http.server 8123 --bind 127.0.0.1 --directory build/web",

@@ -2,6 +2,8 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs/promises";
 import path from "node:path";
+import os from "node:os";
+import { preparePublicWebAssets } from "../web/public-build.mjs";
 
 import { loadUIModule } from "./helpers/load_ui_module.mjs";
 
@@ -94,14 +96,23 @@ test("brand-new synth surfaces select the stable Core Shapes factory table for A
     assert.equal(debug.runtimeState.activeTableIndex, defaults.OSCILLATOR_DEFAULT_WAVETABLE_INDEX);
 });
 
-test("the curated Sites bank includes Core Shapes without shipping the complete factory library", async () => {
-    const [sitesBuildSource, sourceCatalogText] = await Promise.all([
-        fs.readFile(path.join(repoRoot, "web/build-sites.mjs"), "utf8"),
-        fs.readFile(path.join(repoRoot, "assets/factory-table-catalog.json"), "utf8"),
-    ]);
-    const sourceCatalog = JSON.parse(sourceCatalogText);
-
-    assert.match(sitesBuildSource, /const sitesDefaultTableName = "Core Shapes";/);
+test("the public bank includes Core Shapes without shipping the complete factory library", async context => {
+    const sourceCatalog = JSON.parse(await fs.readFile(path.join(repoRoot, "assets/factory-table-catalog.json"), "utf8"));
     assert.equal(sourceCatalog[35]?.tableId, "core-shapes");
-    assert.ok(sourceCatalog.length > 36, "the curated Sites bank must remain a strict subset");
+    assert.ok(sourceCatalog.length > 36, "the curated bank must remain a strict subset");
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), "cosimo-public-bank-"));
+    context.after(() => fs.rm(root, { recursive: true, force: true }));
+    const input = path.join(root, "input"), output = path.join(root, "output");
+    await fs.mkdir(path.join(input, "assets/factory_sources"), { recursive: true });
+    const tables = ["First", "Core Shapes", "Later"].map((name, i) => ({name, sourceWav: `assets/factory_sources/${i}.wav`}));
+    await fs.writeFile(path.join(input, "assets/factory-bank-catalog.json"), JSON.stringify({tables}));
+    for (const table of tables) await fs.writeFile(path.join(input, table.sourceWav), table.name);
+    await fs.writeFile(path.join(input, "index.html"), "<main>Synth</main>");
+    await fs.writeFile(path.join(input, "debug.js.map"), "{}");
+    await preparePublicWebAssets(input, output);
+    assert.deepEqual(JSON.parse(await fs.readFile(path.join(output, "assets/factory-bank-catalog.json"), "utf8")).tables, tables.slice(0, 2));
+    assert.equal(await fs.readFile(path.join(output, tables[1].sourceWav), "utf8"), "Core Shapes");
+    await assert.rejects(fs.access(path.join(output, tables[2].sourceWav)), {code: "ENOENT"});
+    await assert.rejects(fs.access(path.join(output, "debug.js.map")), {code: "ENOENT"});
+    assert.equal(await fs.readFile(path.join(output, "index.html"), "utf8"), "<main>Synth</main>");
 });

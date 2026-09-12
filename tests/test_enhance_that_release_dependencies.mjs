@@ -11,7 +11,7 @@ import { readDeclaredNativeDependencyProvenance } from "../scripts/build_seqfx_b
 
 const root = fileURLToPath(new URL("../", import.meta.url));
 const config = { nativeDependencies: enhanceThatNativeDependencies };
-const proposedCommit = "9ed4f96cc70996a8e4ab2e6aa13decb0460e260a";
+const proposedCommit = JSON.parse(await readFile(path.join(root, "kit/toolchain.json"), "utf8")).cmaj.forkCommit;
 const oldCommit = "7820a453f25e1b6eaf898d0bb2feb7e4ce01c207";
 
 async function scratch(context) {

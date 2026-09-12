@@ -2,12 +2,12 @@
   "schemaVersion": 1,
   "status": "Cmajor attribution reconciled to selected source; prior L1 compiled source inventory retained; final own build and extracted artifact reconciliation pending",
   "observedNativeSourceCommit": "954207e4b19c6896e6a9ab1cd4b18a8bd566af06",
-  "noticesSha256": "9d168d9d89e093650b1a6dea2d60dfb5f04c796654cb375e9c4e67da8479a6a0",
+  "noticesSha256": "8d4ef4ebf55d544ec603a2da02e1dcdb32f0ea91c6e4d3a54180823e45f5304a",
   "components": [
     {
       "component": "Cmajor",
       "dependency": "cmajor",
-      "revisionOrVersion": "9ed4f96cc70996a8e4ab2e6aa13decb0460e260a",
+      "revisionOrVersion": "812a46422502d25b79d1df59330535eaefb98b9e",
       "license": "GPL-3.0-or-later OR commercial",
       "sourcePath": "LICENSE.md",
       "sourceSha256": "e1d253cfd3aa590e6c9fe76f3638cbb8dd8d4b19aabe0912d45f5deba06e6607",
@@ -27,7 +27,7 @@
     {
       "component": "CHOC",
       "dependency": "choc",
-      "revisionOrVersion": "11f7dc63d7cb78f6dbaa559fe09ade8e941c0188",
+      "revisionOrVersion": "eedf2aebd3049a84cdcf280664c73c53796118ac",
       "license": "ISC",
       "sourcePath": "LICENSE.md",
       "sourceSha256": "098e8bc855cead3961ece222ca427296808a0c77605a8c24e77224d1ad8a0cae",
@@ -37,10 +37,10 @@
     {
       "component": "QuickJS embedded through CHOC",
       "dependency": "choc",
-      "revisionOrVersion": "11f7dc63d7cb78f6dbaa559fe09ade8e941c0188",
+      "revisionOrVersion": "eedf2aebd3049a84cdcf280664c73c53796118ac",
       "license": "MIT",
       "sourcePath": "choc/javascript/choc_javascript_QuickJS.h",
-      "sourceSha256": "af3f46b644996dbcc6637053616dca10a98191610e7a96cf7013611497b9c336",
+      "sourceSha256": "7eb24669c0f8c6477dda44a3aa90212b0b1c2956add0f34e7ad29594cfe15e0f",
       "selection": "CHOC_REGISTER_OPEN_SOURCE_LICENCE QuickJS block",
       "noticeTextSha256": "0040bdaf823dfa99e53288338a8058864e2ef99ae6a88d20304f7ff0459f0044"
     },
@@ -233,7 +233,7 @@
     {
       "component": "FLAC embedded through CHOC",
       "dependency": "choc",
-      "revisionOrVersion": "11f7dc63d7cb78f6dbaa559fe09ade8e941c0188",
+      "revisionOrVersion": "eedf2aebd3049a84cdcf280664c73c53796118ac",
       "license": "BSD-3-Clause",
       "sourcePath": "choc/audio/choc_AudioFileFormat_FLAC.h",
       "sourceSha256": "4135fb2876ac4576f0049ecd1e68c3b854b847f83d4544529e94c4b1b79a961b",
@@ -253,7 +253,7 @@
     {
       "component": "Ogg Vorbis embedded through CHOC",
       "dependency": "choc",
-      "revisionOrVersion": "11f7dc63d7cb78f6dbaa559fe09ade8e941c0188",
+      "revisionOrVersion": "eedf2aebd3049a84cdcf280664c73c53796118ac",
       "license": "BSD-3-Clause",
       "sourcePath": "choc/audio/choc_AudioFileFormat_Ogg.h",
       "sourceSha256": "f1ce885ee355bbc8d2877659f40621c9782976b734485d77594e55af513b2f4f",
@@ -263,7 +263,7 @@
     {
       "component": "Ogg Vorbis preserved LPC attribution (CHOC and JUCE)",
       "dependency": "choc",
-      "revisionOrVersion": "11f7dc63d7cb78f6dbaa559fe09ade8e941c0188",
+      "revisionOrVersion": "eedf2aebd3049a84cdcf280664c73c53796118ac",
       "license": "preserved permissive notice",
       "sourcePath": "choc/audio/choc_AudioFileFormat_Ogg.h",
       "sourceSha256": "f1ce885ee355bbc8d2877659f40621c9782976b734485d77594e55af513b2f4f",
@@ -273,7 +273,7 @@
     {
       "component": "minimp3 embedded through CHOC",
       "dependency": "choc",
-      "revisionOrVersion": "11f7dc63d7cb78f6dbaa559fe09ade8e941c0188",
+      "revisionOrVersion": "eedf2aebd3049a84cdcf280664c73c53796118ac",
       "license": "CC0-1.0",
       "sourcePath": "choc/audio/choc_AudioFileFormat_MP3.h",
       "sourceSha256": "ba102c37f458679a8814f24c0112065e476f60e7fa2236c563f81f110412c0db",

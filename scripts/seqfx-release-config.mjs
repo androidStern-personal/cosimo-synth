@@ -1,3 +1,4 @@
+import { nativeReleaseDependencies } from "./native-release-dependencies.mjs";
 import {
     forbiddenChocWebViewMarkers,
     requiredChocWebViewMarkers,
@@ -59,26 +60,7 @@ export const seqFxReleaseConfig = Object.freeze({
         installedVst3: "/Library/Audio/Plug-Ins/VST3/CosimoSeqFX.vst3",
         userInstalledVst3: "~/Library/Audio/Plug-Ins/VST3/CosimoSeqFX.vst3",
     }),
-    nativeDependencies: Object.freeze({
-        declarationPath: "kit/cmake/CosimoDependencies.cmake",
-        cmajor: Object.freeze({
-            cpmName: "cosimo_cmajor",
-            sourceDirectoryCacheKey: "CPM_PACKAGE_cosimo_cmajor_SOURCE_DIR",
-            repository: "https://github.com/androidStern-personal/cmajor.git",
-            revision: "9ed4f96cc70996a8e4ab2e6aa13decb0460e260a",
-        }),
-        choc: Object.freeze({
-            repository: "https://github.com/androidStern-personal/choc.git",
-            revision: "11f7dc63d7cb78f6dbaa559fe09ade8e941c0188",
-            submodulePath: "include/choc",
-        }),
-        juce: Object.freeze({
-            cpmName: "cosimo_juce",
-            sourceDirectoryCacheKey: "CPM_PACKAGE_cosimo_juce_SOURCE_DIR",
-            repository: "https://github.com/juce-framework/JUCE.git",
-            revision: "501c07674e1ad693085a7e7c398f205c2677f5da",
-        }),
-    }),
+    nativeDependencies: nativeReleaseDependencies,
     nativeMetadata: Object.freeze({
         bundlePackageType: "BNDL",
         vst3Category: "Fx",
