@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import fs from "node:fs/promises";
-import { createServer } from "node:http";
+import { createWebServer } from "../web/server.mjs";
 import path from "node:path";
 import test, { after, before } from "node:test";
 import { fileURLToPath } from "node:url";
@@ -230,45 +230,6 @@ const modulationUiAverageDispatchBudgetMs = 4;
 const modulationUiMaximumDispatchBudgetMs = 8;
 const modulationTopologyStressEventCount = stressCount("COSIMO_MOD_TOPOLOGY_STRESS_EVENTS", 250);
 const modulationTopologyStressIntervalMs = 40;
-
-function contentTypeFor(filePath) {
-    const extension = path.extname(filePath);
-
-    if (extension === ".html") return "text/html; charset=utf-8";
-    if (extension === ".js" || extension === ".mjs") return "text/javascript; charset=utf-8";
-    if (extension === ".json") return "application/json; charset=utf-8";
-    if (extension === ".jpg" || extension === ".jpeg") return "image/jpeg";
-    if (extension === ".png") return "image/png";
-    if (extension === ".svg") return "image/svg+xml";
-    if (extension === ".ttf") return "font/ttf";
-    if (extension === ".wav") return "audio/wav";
-    return "application/octet-stream";
-}
-
-async function serveWebProof(request, response) {
-    try {
-        const requestUrl = new URL(request.url ?? "/", baseUrl);
-        const relativePath = decodeURIComponent(requestUrl.pathname === "/" ? "index.html" : requestUrl.pathname.slice(1));
-        const filePath = path.resolve(webRoot, relativePath);
-        const relativeToRoot = path.relative(webRoot, filePath);
-
-        if (relativeToRoot.startsWith("..") || path.isAbsolute(relativeToRoot)) {
-            response.writeHead(403);
-            response.end("Forbidden");
-            return;
-        }
-
-        const contents = await fs.readFile(filePath);
-        response.writeHead(200, { "content-type": contentTypeFor(filePath) });
-        response.end(contents);
-    } catch (error) {
-        const status = error && typeof error === "object" && "code" in error && error.code === "ENOENT"
-            ? 404
-            : 500;
-        response.writeHead(status, { "content-type": "text/plain; charset=utf-8" });
-        response.end(status === 404 ? "Not found" : String(error));
-    }
-}
 
 async function readKeyboardLayout(page) {
     return page.evaluate(() => {
@@ -1225,9 +1186,7 @@ before(async () => {
 
     await fs.access(path.join(webRoot, "index.html"));
 
-    server = createServer((request, response) => {
-        void serveWebProof(request, response);
-    });
+    server = createWebServer(webRoot);
     await new Promise((resolve, reject) => {
         server.once("error", reject);
         server.listen(0, "127.0.0.1", () => {
@@ -1323,6 +1282,7 @@ test("generated browser proof keeps the real keyboard pinned and renders non-sil
 
     try {
         await page.goto(`${baseUrl}?test=1`, { waitUntil: "domcontentloaded" });
+        assert.equal(await page.evaluate(() => crossOriginIsolated), true, "packaged site must enable shared memory");
         await page.waitForFunction(() => globalThis.__COSIMO_WEB_POC__?.getSnapshot().phase === "ready", null, {
             timeout: 30_000,
         });
@@ -1374,13 +1334,18 @@ test("generated browser proof keeps the real keyboard pinned and renders non-sil
             route2Amount: null,
             route2Source: null,
             route2Target: null,
-            wavetableName: "PWM MedicineHat",
-            wavetableValue: "34",
+            wavetableName: "Core Shapes",
+            wavetableValue: "35",
         });
-        assert.equal(await page.evaluate(() => (
+        assert.deepEqual(await page.evaluate(() => Array.from(
             document.querySelector("cosimo-desktop-react-view")?.shadowRoot
-                ?.querySelectorAll("[data-rack-position]").length ?? 0
-        )), 8);
+                ?.querySelectorAll("[data-rack-position]") ?? [],
+            station => ({ device: station.getAttribute("data-device-id"), enabled: station.getAttribute("data-enabled") }),
+        )), [
+            { device: "distortion#1", enabled: "false" },
+            { device: "delay#1", enabled: "false" },
+            { device: "reverb#1", enabled: "false" },
+        ]);
         await page.waitForFunction(() => {
             const view = document.querySelector("cosimo-desktop-react-view");
             return Boolean(view?.shadowRoot?.querySelector("cosimo-react-desktop-keyboard"));

@@ -18,7 +18,7 @@
     "web:deploy": "node web/deploy.mjs",
     "sites:build": "node web/build-sites.mjs",
     "test:developer-settings:generated": "node tests/tools/build_developer_settings_generated_artifacts.mjs && node --test tests/test_developer_settings_generated_browser.mjs",
-    "web:serve": "python3 -m http.server 8123 --bind 127.0.0.1 --directory build/web",
+    "web:serve": "node web/server.mjs",
     "test:web:audio-recovery": "npm run web:build && npm run test:web:audio-recovery:built",
     "test:web:audio-recovery:built": "node --test tests/test_browser_audio_lifecycle.mjs && node --test tests/test_browser_audio_recovery.mjs",
     "test:web:poc": "npm run web:build && npm run test:modulation:routing && npm run test:web:audio-recovery:built && (node --test tests/test_web_poc_browser.mjs & chromium_pid=$!; COSIMO_WEB_BROWSER=webkit node --test tests/test_web_poc_browser.mjs & webkit_pid=$!; chromium_status=0; wait $chromium_pid || chromium_status=$?; webkit_status=0; wait $webkit_pid || webkit_status=$?; test $chromium_status -eq 0 && test $webkit_status -eq 0)",
@@ -180,8 +180,8 @@
     "jotai": "3.0.0",
     "mediabunny": "1.50.8",
     "nexusui": "^2.1.6",
-    "react": "^19.2.4",
-    "react-dom": "^19.2.4",
+    "react": "19.2.4",
+    "react-dom": "19.2.4",
     "remotion": "4.0.491"
   }
 }
