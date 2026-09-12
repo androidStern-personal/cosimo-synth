@@ -128,6 +128,18 @@ function command(input: unknown): PluginStateCommand | undefined {
         if (input.expectedEntry !== undefined && !expectedEntry) return undefined;
         return { kind: input.kind, ...(expectedEntry ? { expectedEntry } : {}) };
     }
+    if (input.kind === "edit-many") {
+        if (!Array.isArray(input.edits) || input.edits.length === 0) return undefined;
+        const edits = [];
+        const keys = new Set<string>();
+        for (const edit of input.edits) {
+            if (!isRecord(edit) || !name(edit.key) || keys.has(edit.key) || !Object.hasOwn(edit, "value")
+                || Object.hasOwn(edit, "gesture") || (edit.expectedVersion !== undefined && !counter(edit.expectedVersion, false))) return undefined;
+            keys.add(edit.key);
+            edits.push({ key: edit.key, value: edit.value, ...(edit.expectedVersion !== undefined ? { expectedVersion: edit.expectedVersion } : {}) });
+        }
+        return { kind: "edit-many", edits };
+    }
     if (!name(input.key)) return undefined;
     if (input.kind === "retry") {
         return counter(input.expectedVersion, false)

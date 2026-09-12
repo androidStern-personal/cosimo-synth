@@ -485,7 +485,7 @@ test("the note signal path applies the per-voice Enhancer after Filter and befor
     const bounceSource = renderBlock.indexOf("noteLeft = bounceSample[0]");
     const filter = renderBlock.indexOf("unisonLeftFilters.at (voice).process (noteLeft)");
     const enhancer = renderBlock.indexOf("voiceEnhancers.at (voice).process");
-    const amp = renderBlock.indexOf("let gain = ampEnvelopes[voice].gainOut");
+    const amp = renderBlock.indexOf("var gain = ampEnvelopes[voice].gainOut");
     const sum = renderBlock.indexOf("leftMix += noteLeft * gain");
     const residueSum = renderBlock.indexOf("enhancerResidueLeftMix += enhancerResidue[0] * gain");
     const dcBlock = renderBlock.indexOf("voiceEnhancerResidueDcBlocker.process");
@@ -503,14 +503,14 @@ test("the note signal path applies the per-voice Enhancer after Filter and befor
     assert.equal(renderBlock.match(/voiceEnhancerResidueDcBlocker\.process/g)?.length, 1);
     assert.match(
         voiceSource,
-        /resolveVoiceEnhancerFrequencyHz\s*\([\s\S]*std::notes::noteToFrequency \(sharedPlayedPitchSemitones\)/,
+        /let sharedPlayedPitchSemitones = resolveSharedPlayedPitchSemitones \(voiceIndex\);\s*let sharedPlayedPitchHz = exactNoteToFrequency\s*\(\s*voicePlayedPitchMemos\.at \(voice\), sharedPlayedPitchSemitones\);[\s\S]*resolveVoiceEnhancerFrequencyHzMemoized\s*\(\s*voiceEnhancerRatioMemos\.at \(voice\),\s*voiceEnhancerKeyTrackEnabledIn,\s*voiceEnhancerFrequencyIn,\s*sharedPlayedPitchHz,/,
         "Enhancer Key Track must consume the same glide, bend, Global Tune, and voice-rule pitch authority as oscillators.",
     );
 
     assert.match(
         synthSource,
-        /sharedEngine\.out\s*->\s*trim\.in;[\s\S]*trim\.out\s*->[^;]*rack\.in;[\s\S]*rack\.out\s*->\s*outputStage\.in;/,
-        "the completed note sum must enter the Effects Lane before the fixed output stage",
+        /sharedEngine\.out\s*->\s*trim\.in;[\s\S]*trim\.out\s*->[^;]*rack\.in;[\s\S]*rack\.out\s*->\s*polish\.in;[\s\S]*polish\.out\s*->\s*audioOut;/,
+        "the completed note sum must enter the Effects Lane before Polish and the audio output",
     );
 });
 

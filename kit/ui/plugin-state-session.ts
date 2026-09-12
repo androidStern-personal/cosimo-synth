@@ -109,6 +109,10 @@ export type PluginStateCommand = {
     readonly expectedVersion?: number;
     readonly gesture?: number;
 } | {
+    /** Accept a compound user action as one change and one Undo entry. */
+    readonly kind: "edit-many";
+    readonly edits: readonly { readonly key: string; readonly value: unknown; readonly expectedVersion?: number }[];
+} | {
     /** Establish a valid stored baseline without treating invalid display data as Undo history. */
     readonly kind: "recover";
     readonly key: string;
@@ -199,7 +203,8 @@ export interface PluginStateSession<Fields extends PluginStateFields> {
 
 type RuntimeField = PluginStateFieldSnapshot<unknown>;
 type RuntimeSnapshot = PluginStateSnapshot<PluginStateFields>;
-type HistoryEntry = { readonly key: string; readonly before: unknown; readonly after: unknown; readonly order: number };
+type ValueChange = { readonly key: string; readonly before: unknown; readonly after: unknown };
+type HistoryEntry = { readonly changes: readonly ValueChange[]; readonly order: number };
 type Gesture = PluginStateGestureOwner & { readonly before: unknown; readonly after: unknown; readonly order: number; readonly guardFloorVersion: number };
 type Model = {
     readonly snapshot: RuntimeSnapshot;
@@ -215,7 +220,7 @@ function sameScope(left: PluginStateScope, right: PluginStateScope): boolean {
     return left.owner === right.owner && left.document === right.document;
 }
 
-function historyReference(scope: PluginStateScope, entry: HistoryEntry): PluginStateHistoryEntry {
+function historyReference(scope: PluginStateScope, entry: { readonly order: number }): PluginStateHistoryEntry {
     return Object.freeze({ scope, id: entry.order });
 }
 
@@ -271,8 +276,8 @@ export function createPluginStateSession<const Fields extends PluginStateFields>
             snapshot: Object.freeze({
                 ...model.snapshot, revision: model.snapshot.revision + 1, fields: Object.freeze(fields),
                 history: Object.freeze({
-                    canUndo: !stopped && !historyBusy(model) && undo !== undefined && fields[undo.key]?.readiness.kind === "ready",
-                    canRedo: !stopped && !historyBusy(model) && redo !== undefined && fields[redo.key]?.readiness.kind === "ready",
+                    canUndo: !stopped && !historyBusy(model) && undo !== undefined && undo.changes.every(change => fields[change.key]?.readiness.kind === "ready"),
+                    canRedo: !stopped && !historyBusy(model) && redo !== undefined && redo.changes.every(change => fields[change.key]?.readiness.kind === "ready"),
                     ...(model.snapshot.scope && undo ? { undoEntry: historyReference(model.snapshot.scope, undo) } : {}),
                     ...(model.snapshot.scope && redo ? { redoEntry: historyReference(model.snapshot.scope, redo) } : {}),
                 }),
@@ -327,40 +332,68 @@ export function createPluginStateSession<const Fields extends PluginStateFields>
         const field = definition[key];
         const equal = field?.kind === "stored" ? field.codec.equals(gesture.before, gesture.after)
             : Object.is(gesture.before, gesture.after);
-        return equal ? history : history.record({ key, before: gesture.before, after: gesture.after, order: gesture.order });
+        return equal ? history : history.record({ changes: [{ key, before: gesture.before, after: gesture.after }], order: gesture.order });
     };
-    const applyValue = (model: Model, key: string, value: unknown, history: UndoHistory<HistoryEntry>, cause: "edit" | "history" | "recover"): PluginStateResult => {
-        const field = definition[key];
-        const previous = model.snapshot.fields[key];
-        if (!field || !previous || !model.snapshot.scope) {
-            return { kind: "rejected", reason: "not-ready" };
+    const applyValues = (model: Model, changes: readonly { readonly key: string; readonly value: unknown }[], history: UndoHistory<HistoryEntry>, cause: "edit" | "history" | "recover"): PluginStateResult => {
+        if (!model.snapshot.scope) return { kind: "rejected", reason: "not-ready" };
+        // Prepare all encodings before changing any accepted value. Native I/O
+        // remains separately reported per field; local acceptance is one commit.
+        const fields = { ...model.snapshot.fields };
+        const publications = new Map(model.publications);
+        const outgoing: PluginStatePublication[] = [];
+        for (const { key, value } of changes) {
+            const field = definition[key], previous = fields[key];
+            if (!field || !previous) return { kind: "rejected", reason: "not-ready" };
+            const baseline = "value" in previous ? previous : undefined;
+            if (!baseline && cause !== "recover") return { kind: "rejected", reason: "not-ready" };
+            if (cause === "history" && previous.readiness.kind !== "ready") return { kind: "rejected", reason: "not-ready" };
+            let operations: readonly PluginStateOperation[];
+            if (field.kind === "parameter") {
+                if (typeof value !== "number") return { kind: "rejected", reason: "invalid-value" };
+                operations = model.gestures.has(key)
+                    ? [{ kind: "parameter", endpoint: field.endpoint, value }]
+                    : [{ kind: "gesture-start", endpoint: field.endpoint },
+                        { kind: "parameter", endpoint: field.endpoint, value },
+                        { kind: "gesture-end", endpoint: field.endpoint }];
+            } else operations = field.lifetime === "instance" ? [] : [{ kind: "stored", key, value: field.codec.encode(value) }];
+            const version = (baseline?.version ?? 0) + 1;
+            if (operations.length) {
+                const request = ++nextPublication;
+                publications.set(request, { key, version });
+                outgoing.push({ request, scope: model.snapshot.scope, operations });
+            }
+            fields[key] = readyField(value, { kind: field.kind === "parameter" ? "host-managed" : field.lifetime === "instance" ? "not-written" : "pending" }, version, baseline?.metadata, baseline?.gesture, field.kind === "parameter" ? { kind: "pending" } : undefined);
         }
-        const baseline = "value" in previous ? previous : undefined;
-        const recovering = cause === "recover";
-        if (!baseline && !recovering) return { kind: "rejected", reason: "not-ready" };
-        let operations: readonly PluginStateOperation[];
-        if (field.kind === "parameter") {
-            if (typeof value !== "number") return { kind: "rejected", reason: "invalid-value" };
-            operations = model.gestures.has(key)
-                ? [{ kind: "parameter", endpoint: field.endpoint, value }]
-                : [{ kind: "gesture-start", endpoint: field.endpoint },
-                    { kind: "parameter", endpoint: field.endpoint, value },
-                    { kind: "gesture-end", endpoint: field.endpoint }];
-        } else operations = field.lifetime === "instance" ? [] : [{ kind: "stored", key, value: field.codec.encode(value) }];
-        const version = (baseline?.version ?? 0) + 1;
-        const request = operations.length ? ++nextPublication : 0;
-        const publications = operations.length ? new Map(model.publications).set(request, { key, version }) : model.publications;
-        const next = publishSnapshot(model, { ...model.snapshot.fields, [key]: readyField(value, { kind: field.kind === "parameter" ? "host-managed" : field.lifetime === "instance" ? "not-written" : "pending" }, version, baseline?.metadata, baseline?.gesture, field.kind === "parameter" ? { kind: "pending" } : undefined) }, history);
-        const result: PluginStateResult = { kind: "accepted", revision: next.snapshot.revision, version,
+        const next = publishSnapshot(model, fields, history);
+        const first = changes[0];
+        const only = changes.length === 1 && first ? fields[first.key] : undefined;
+        const result: PluginStateResult = { kind: "accepted", revision: next.snapshot.revision,
+            ...(only && "version" in only ? { version: only.version } : {}),
             ...(cause !== "history" ? { changed: true } : {}),
-            ...(cause === "edit" && historyParticipates(key) && !model.gestures.has(key) && history.undoEntry
+            ...(cause === "edit" && changes.some(({ key }) => historyParticipates(key) && !model.gestures.has(key)) && history.undoEntry
                 ? { historyEntry: historyReference(model.snapshot.scope, history.undoEntry) } : {}),
         };
         accepted = result;
         commit({ ...next, publications });
-        if (stopped || !operations.length) return result;
-        ports.native.publish({ request, scope: model.snapshot.scope, operations });
+        for (const publication of outgoing) { if (!stopped) ports.native.publish(publication); }
         return result;
+    };
+    const applyValue = (model: Model, key: string, value: unknown, history: UndoHistory<HistoryEntry>, cause: "edit" | "history" | "recover") =>
+        applyValues(model, [{ key, value }], history, cause);
+    const parseEditValue = (model: Model, key: string, value: unknown): { readonly kind: "ok"; readonly value: unknown } | { readonly kind: "error" } => {
+        const field = definition[key];
+        if (!field) return { kind: "error" };
+        if (field.kind === "stored") return field.codec.parse(value);
+        const metadata = model.parameters.get(key);
+        if (!metadata || typeof value !== "number" || !Number.isFinite(value)) return { kind: "error" };
+        const clamped = Math.min(metadata.max, Math.max(metadata.min, value));
+        return { kind: "ok", value: metadata.step > 0
+            ? Math.min(metadata.max, Math.max(metadata.min, metadata.min + Math.round((clamped - metadata.min) / metadata.step) * metadata.step))
+            : clamped };
+    };
+    const equalValue = (key: string, before: unknown, after: unknown) => {
+        const field = definition[key];
+        return field?.kind === "stored" ? field.codec.equals(before, after) : Object.is(before, after);
     };
     const apply = (event: PluginStateEvent): PluginStateResult => {
         const model = store.get(state);
@@ -409,8 +442,29 @@ export function createPluginStateSession<const Fields extends PluginStateFields>
                 if (expected && (!entry || !sameScope(expected.scope, model.snapshot.scope) || expected.id !== entry.order))
                     return { kind: "rejected", reason: "stale-history" };
                 if (!entry) return { kind: "accepted", revision: model.snapshot.revision };
-                return applyValue(model, entry.key, undo ? entry.before : entry.after,
+                return applyValues(model, entry.changes.map(change => ({ key: change.key, value: undo ? change.before : change.after })),
                     undo ? model.history.undo() : model.history.redo(), "history");
+            }
+            if (event.command.kind === "edit-many") {
+                const changes: ValueChange[] = [];
+                const keys = new Set<string>();
+                if (!Array.isArray(event.command.edits) || event.command.edits.length === 0) return { kind: "rejected", reason: "invalid-command" };
+                for (const { key, value, expectedVersion } of event.command.edits) {
+                    if (!Object.hasOwn(definition, key) || keys.has(key)) return { kind: "rejected", reason: "invalid-command" };
+                    keys.add(key);
+                    const current = model.snapshot.fields[key];
+                    if (!current || !("value" in current) || current.readiness.kind !== "ready") return { kind: "rejected", reason: "not-ready" };
+                    if (model.gestures.has(key)) return { kind: "rejected", reason: "busy" };
+                    if (expectedVersion !== undefined && expectedVersion !== current.version) return { kind: "rejected", reason: "stale-version" };
+                    const parsed = parseEditValue(model, key, value);
+                    if (parsed.kind === "error") return { kind: "rejected", reason: "invalid-value" };
+                    if (!equalValue(key, current.value, parsed.value)) changes.push({ key, before: current.value, after: parsed.value });
+                }
+                if (!changes.length) return { kind: "accepted", revision: model.snapshot.revision, changed: false };
+                const editOrder = model.editOrder + 1;
+                const recorded = changes.filter(({ key }) => historyParticipates(key));
+                return applyValues({ ...model, editOrder }, changes.map(({ key, after }) => ({ key, value: after })), recorded.length
+                    ? model.history.record({ changes: recorded, order: editOrder }) : model.history, "edit");
             }
             const { key } = event.command;
             if (!Object.hasOwn(definition, key)) return { kind: "rejected", reason: "invalid-command" };
@@ -478,7 +532,7 @@ export function createPluginStateSession<const Fields extends PluginStateFields>
                 } else if (activeGesture) {
                     gestures.delete(key);
                     history = sealGesture(history, key, activeGesture);
-                    if (history !== model.history && history.undoEntry) historyEntry = historyReference(model.snapshot.scope, { key, ...activeGesture });
+                    if (history !== model.history && history.undoEntry) historyEntry = historyReference(model.snapshot.scope, activeGesture);
                 }
                 const next = publishSnapshot({ ...model, gestures }, { ...model.snapshot.fields,
                     [key]: readyField(previous.value, previous.persistence, previous.version, previous.metadata, gestureOwner, previous.application, previous.persistenceRequest),
@@ -502,29 +556,17 @@ export function createPluginStateSession<const Fields extends PluginStateFields>
             if (expectedVersion !== undefined && expectedVersion !== previous.version
                 && !(activeGesture && expectedVersion >= activeGesture.guardFloorVersion && expectedVersion <= previous.version))
                 return { kind: "rejected", reason: "stale-version" };
-            let nextValue: unknown;
-            if (field.kind === "parameter") {
-                const metadata = model.parameters.get(key);
-                if (!metadata) return { kind: "rejected", reason: "not-ready" };
-                if (typeof value !== "number" || !Number.isFinite(value)) return { kind: "rejected", reason: "invalid-value" };
-                const clamped = Math.min(metadata.max, Math.max(metadata.min, value));
-                nextValue = metadata.step > 0
-                    ? Math.min(metadata.max, Math.max(metadata.min, metadata.min + Math.round((clamped - metadata.min) / metadata.step) * metadata.step))
-                    : clamped;
-                if (Object.is(previous.value, nextValue)) return { kind: "accepted", revision: model.snapshot.revision, version: previous.version, changed: false };
-            } else {
-                const parsed = field.codec.parse(value);
-                if (parsed.kind === "error") return { kind: "rejected", reason: "invalid-value" };
-                nextValue = parsed.value;
-                if (field.codec.equals(previous.value, nextValue)) return { kind: "accepted", revision: model.snapshot.revision, version: previous.version, changed: false };
-            }
+            const parsed = parseEditValue(model, key, value);
+            if (parsed.kind === "error") return { kind: "rejected", reason: "invalid-value" };
+            const nextValue = parsed.value;
+            if (equalValue(key, previous.value, nextValue)) return { kind: "accepted", revision: model.snapshot.revision, version: previous.version, changed: false };
             const editOrder = model.editOrder + 1;
             if (activeGesture) {
                 const gestures = new Map(model.gestures).set(key, { ...activeGesture, after: nextValue, order: editOrder });
                 return applyValue({ ...model, gestures, editOrder }, key, nextValue, historyParticipates(key) ? model.history.clearRedo() : model.history, "edit");
             }
             return applyValue({ ...model, editOrder }, key, nextValue, historyParticipates(key)
-                ? model.history.record({ key, before: previous.value, after: nextValue, order: editOrder }) : model.history, "edit");
+                ? model.history.record({ changes: [{ key, before: previous.value, after: nextValue }], order: editOrder }) : model.history, "edit");
         } else if (event.kind === "engine") {
             const field = model.snapshot.fields[event.target.key];
             if (!field?.target || !sameScope(field.target.scope, event.target.scope)

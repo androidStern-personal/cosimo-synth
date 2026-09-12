@@ -65,14 +65,17 @@ function projectionFor(client: Client) {
     return projection;
 }
 
-function useClientValue<Value>(client: Client, selection: Atom<Value>): Value {
-    const store = client.reactivity.store;
-    const subscribe = useCallback((notify: () => void) => store.sub(selection, notify), [store, selection]);
-    const snapshot = useCallback(() => store.get(selection), [store, selection]);
-    // React rechecks after subscribing, covering a native update between render
-    // and subscription. Jotai still owns the values, dependency graph and listeners.
+function useClientValue<Value>(client: Client, selection: Atom<Value>): Value;
+function useClientValue<Value>(client: Client | null, selection: Atom<Value> | null, fallback: Value): Value;
+function useClientValue<Value>(client: Client | null, selection: Atom<Value> | null, fallback?: Value): Value {
+    const store = client?.reactivity.store;
+    const subscribe = useCallback((notify: () => void) => store && selection ? store.sub(selection, notify) : () => {}, [store, selection]);
+    // SAFETY: a missing client/selection is used only by the overload requiring a fallback.
+    const snapshot = useCallback(() => store && selection ? store.get(selection) : fallback as Value, [store, selection, fallback]);
     return useSyncExternalStore(subscribe, snapshot, snapshot);
 }
+const connectingControl = Object.freeze({ kind: "connecting" as const });
+const connectingClient: ReturnType<Client["getSnapshot"]> = Object.freeze({ kind: "connecting" });
 
 /** Display readiness is separate from an edit awaiting acceptance or sound delivery. */
 export type PluginStateControlState<Value> =
@@ -124,11 +127,21 @@ export function PluginStateProvider(props: { definition: PluginStateFields; clie
 
 /** Read and edit one declared field; control code never sends worker messages. */
 export function usePluginState<Field extends PluginStateParameter | PluginStateStored<unknown>>(declaration: Field): PluginStateControl<PluginStateFieldValue<Field>> {
-    const { definition, client } = useClient();
-    const projection = projectionFor(client);
-    const key = Object.keys(definition).find(key => definition[key] === declaration);
-    if (key === undefined) throw new Error("The field does not belong to this plugin state definition.");
+    const control = useOptionalPluginState(declaration);
+    if (!control) throw new Error("PluginStateProvider is missing.");
+    return control;
+}
+
+/** Internal adapter seam: absence is explicit; an unready declared field still returns its control. */
+export function useOptionalPluginState<Field extends PluginStateParameter | PluginStateStored<unknown>>(declaration: Field | null): PluginStateControl<PluginStateFieldValue<Field>> | null {
+    const context = useContext(Context);
+    const definition = context?.definition;
+    const client = declaration !== null && context ? context.client : null;
+    const projection = client ? projectionFor(client) : null;
+    const key = definition && declaration !== null ? Object.keys(definition).find(key => definition[key] === declaration) : undefined;
+    if (client && key === undefined) throw new Error("The field does not belong to this plugin state definition.");
     const selected = useMemo(() => atom((get): PluginStateControlState<PluginStateFieldValue<Field>> => {
+        if (!client || key === undefined) return connectingControl;
         const snapshot = get(client.reactivity.snapshot);
         if (snapshot.kind !== "ready") return snapshot;
         const field = snapshot.state.fields[key];
@@ -144,14 +157,15 @@ export function usePluginState<Field extends PluginStateParameter | PluginStateS
             ...(field.metadata ? { metadata: field.metadata } : {}),
         };
     }), [client, key]);
-    const state = useClientValue(client, selected);
+    const state = useClientValue(client, selected, connectingControl);
     // The private accepted version changes even for ABA edits whose value is
     // equal again. React must renew its edit closure for those observations.
-    const source = useClientValue(client, client.reactivity.snapshot);
+    const source = useClientValue(client, client?.reactivity.snapshot ?? null, connectingClient);
     const renderedScope = source.kind === "ready" ? source.state.scope : null;
-    const renderedField = source.kind === "ready" ? source.state.fields[key] : undefined;
+    const renderedField = source.kind === "ready" && key !== undefined ? source.state.fields[key] : undefined;
     const renderedVersion = renderedField && "version" in renderedField ? renderedField.version : undefined;
     const actions = useMemo(() => {
+        if (!client || !definition || !projection || key === undefined) return null;
         let active: { readonly scope: PluginStateScope; readonly gesture: number } | undefined;
         const currentGesture = () => {
             const snapshot = client.getSnapshot();
@@ -190,7 +204,8 @@ export function usePluginState<Field extends PluginStateParameter | PluginStateS
             },
         };
     }, [client, key, definition, projection]);
-    useEffect(() => () => { void actions.endGesture(); }, [actions]);
+    useEffect(() => () => { void actions?.endGesture(); }, [actions]);
+    if (!client || !actions || !projection || key === undefined) return null;
     const currentScopeMatches = () => {
         const current = client.getSnapshot();
         return renderedScope !== null && current.kind === "ready" && current.state.scope?.owner === renderedScope.owner

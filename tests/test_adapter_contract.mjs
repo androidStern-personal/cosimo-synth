@@ -586,8 +586,22 @@ function contractSuite(adapterName, makeAdapter) {
         const blank = (await makeAdapter()).getSnapshot();
         adapter.commands.setParameter({ targetId: "oscA.warpAmount", value: 0.9, layer: { _tag: "patchBase" } });
         adapter.commands.setRepeatEnabled(true);
-        await adapter.commands.reset();
-        assert.deepEqual(adapter.getSnapshot().patch, blank.patch);
+        const reset = await adapter.commands.reset();
+        assert.equal(reset._tag, "ok", JSON.stringify(reset));
+        let expected = blank.patch;
+        if (adapterName === "bridge") {
+            // This logarithmic binding's host roundtrip differs by one ULP
+            // from its authored normalized initial value. Compare the exact
+            // authoritative roundtrip, retaining exact equality everywhere else.
+            const { getTargetDescriptor } = await targetDescriptorPromise;
+            const descriptor = getTargetDescriptor("voice-enhancer.frequency");
+            const { VOICE_ENHANCER_PARAMETER_DESCRIPTORS } = await loadUIModule(repoRoot, "ui/shared/voice-enhancer.ts");
+            expected = { ...blank.patch, parameterValues: { ...blank.patch.parameterValues,
+                "voice-enhancer.frequency": descriptor.binding.fromEngine(
+                    VOICE_ENHANCER_PARAMETER_DESCRIPTORS.frequency.initial),
+            } };
+        }
+        assert.deepEqual(adapter.getSnapshot().patch, expected);
         assert.deepEqual(adapter.getSnapshot().audition, blank.audition);
     });
 
@@ -663,6 +677,10 @@ test("bridge rack commands preserve desired state across an older effective read
 
     // The stored document is lane.v2 now: structure lives in the chain tree.
     // (A fresh bridge doc is the starter trio: drive → delay → reverb.)
+    await waitForModulation(() => {
+        const saved = connection.getDebugSnapshot().storedState["lane.v1"];
+        return typeof saved === "string" && JSON.parse(saved).chain[0]?.deviceId === "reverb#1";
+    });
     const storedRack = JSON.parse(String(connection.getDebugSnapshot().storedState["lane.v1"]));
     assert.equal(storedRack.version, 2);
     assert.equal(storedRack.chain[0].deviceId, "reverb#1");

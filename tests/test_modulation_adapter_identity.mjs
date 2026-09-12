@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import path from "node:path";
 
 import { loadUIModule } from "./helpers/load_ui_module.mjs";
+import { createSynthParameterFixture } from "./helpers/synth_parameter_fixture.mjs";
 import { loadChannel, waitForModulation } from "./helpers/modulation_state_fixture.mjs";
 
 const repoRoot = path.resolve(import.meta.dirname, "..");
@@ -26,8 +27,7 @@ class FakePatchConnection {
         const defects = [];
         this.host = createMockPluginStateHost({
             loadChannel,
-            readParameter: async endpoint => ({ endpoint, value: 0, min: endpoint === "globalTune" ? -24 : 0,
-                max: endpoint === "globalTune" ? 24 : 2, step: endpoint === "playMode" ? 1 : 0, defaultValue: 0 }),
+            readParameter: createSynthParameterFixture().readParameter,
             writeParameter() { assert.fail("identity hydration must not change native parameters"); },
             storedValues: { read: key => this.storedState[key], write: (key, value) => this.sendStoredStateValue(key, value) },
             beginGesture() {}, endGesture() {}, onDefect: error => defects.push(error),

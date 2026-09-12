@@ -85,6 +85,46 @@ async function openMixedSession() {
     } };
 }
 
+test("compound edits accept all fields together, form one Undo entry, and never publish a partial rejected operation", async t => {
+    const { session, native, command } = await openMixedSession();
+    t.after(() => session.stop());
+    const baseline = session.getSnapshot();
+    const edits = [{ key: "gain", value: -6, expectedVersion: 0 },
+        { key: "curve", value: { points: [1, 0] }, expectedVersion: 0 }];
+    for (const [bad, reason] of [
+        [{ ...edits[1], value: { points: [NaN, 0] } }, "invalid-value"],
+        [{ ...edits[1], expectedVersion: 4 }, "stale-version"],
+        [{ ...edits[1], key: "missing" }, "invalid-command"],
+        [{ ...edits[0] }, "invalid-command"],
+    ]) {
+        assert.deepEqual(await command({ kind: "edit-many", edits: [edits[0], bad] }), { kind: "rejected", reason });
+        assert.equal(session.getSnapshot(), baseline);
+        assert.deepEqual(native.publications, []);
+    }
+    await command({ kind: "begin", key: "curve", gesture: 1 }, 2);
+    const busy = session.getSnapshot();
+    assert.deepEqual(await command({ kind: "edit-many", edits }), { kind: "rejected", reason: "busy" });
+    assert.equal(session.getSnapshot(), busy);
+    await command({ kind: "end", key: "curve", gesture: 1 }, 2);
+    const observed = [];
+    const remove = session.subscribe(snapshot => observed.push([snapshot.fields.gain.value, snapshot.fields.curve.value.points]));
+    t.after(remove);
+    const result = await command({ kind: "edit-many", edits });
+    assert.equal(result.kind, "accepted"); assert.equal(result.changed, true); assert.ok(result.historyEntry);
+    assert.deepEqual(observed, [[-6, [1, 0]]], "views never see half of the accepted compound edit");
+    assert.deepEqual(native.publications.flatMap(p => p.operations).filter(op => op.kind === "parameter" || op.kind === "stored"),
+        [{ kind: "parameter", endpoint: "gain", value: -6 }, { kind: "stored", key: "curve", value: { points: [1, 0] } }]);
+    await command({ kind: "undo", expectedEntry: result.historyEntry });
+    assert.equal(session.getSnapshot().history.canUndo, false);
+    assert.deepEqual(observed.at(-1), [2.5, [0, 1]]);
+    await command({ kind: "redo" });
+    assert.deepEqual(observed.at(-1), [-6, [1, 0]]);
+    assert.equal(session.getSnapshot().history.canRedo, false);
+    const settled = session.getSnapshot();
+    assert.equal((await command({ kind: "edit-many", edits: edits.map(({ expectedVersion, ...edit }) => edit) })).changed, false);
+    assert.equal(session.getSnapshot(), settled, "a compound no-op adds no history or version");
+});
+
 test("native boot hydrates host gain and absent curve, then publishes one coherent undoable curve edit", async () => {
     const { definePluginState, parameter, storedValue } = await definitionModule;
     const { createPluginStateSession } = await sessionModule;

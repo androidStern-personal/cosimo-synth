@@ -225,6 +225,24 @@ export function createPluginStateClient<const Fields extends PluginStateFields>(
                     if (!expectedEntry) return Promise.resolve({ kind: "rejected", reason: "invalid-command" });
                     outbound = { ...command, expectedEntry };
                 }
+                if (command.kind === "edit-many") {
+                    if (!Array.isArray(command.edits) || command.edits.length === 0) return Promise.resolve({ kind: "rejected", reason: "invalid-command" });
+                    const edits = [], keys = new Set<string>();
+                    for (const edit of command.edits) {
+                        const field = definition[edit.key], current = base.state.fields[edit.key];
+                        if (!Object.hasOwn(definition, edit.key) || !field || keys.has(edit.key)) return Promise.resolve({ kind: "rejected", reason: "invalid-command" });
+                        keys.add(edit.key);
+                        if (!current || current.readiness.kind !== "ready" || !("value" in current)) return Promise.resolve({ kind: "rejected", reason: "not-ready" });
+                        const parsed = field.kind === "stored" ? field.codec.parse(edit.value)
+                            : typeof edit.value === "number" && Number.isFinite(edit.value)
+                                ? { kind: "ok" as const, value: edit.value } : { kind: "error" as const };
+                        if (parsed.kind === "error") return Promise.resolve({ kind: "rejected", reason: "invalid-value" });
+                        edits.push({ ...edit, value: field.kind === "stored" ? field.codec.encode(parsed.value) : parsed.value });
+                    }
+                    // A compound action waits for the owner's one coherent
+                    // accepted projection; it never paints partial local drafts.
+                    outbound = { kind: "edit-many", edits };
+                }
                 if (command.kind === "edit" || command.kind === "recover") {
                     const field = definition[command.key];
                     const current = base.state.fields[command.key];

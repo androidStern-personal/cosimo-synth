@@ -4,6 +4,7 @@ import path from "node:path";
 import { pathToFileURL } from "node:url";
 import { loadUIModule } from "../kit/tests/helpers/load_ui_module.mjs";
 import { stageCmajorWebRuntime } from "../ui/vite.shared.mjs";
+import { createSynthParameterFixture } from "./helpers/synth_parameter_fixture.mjs";
 
 const root = path.resolve(import.meta.dirname, "..");
 const { acquireSynthViewState } = await loadUIModule(root, "ui/shared/synth-state-client.ts");
@@ -21,14 +22,13 @@ async function until(predicate) {
 }
 
 function fixture() {
-    const values = new Map([["playMode", 1], ["glideTime", 0.15], ["globalTune", -7.5]]);
+    const { values, readParameter } = createSynthParameterFixture({ playMode: 1, glideTime: 0.15, globalTune: -7.5 });
     const gestures = [], writes = [], defects = [];
     // This existing host substitutes native parameter storage only. Its actual
     // Cmajor channel and state service accept edits and own the history ledger.
     const connection = createMockPluginStateHost({
         loadChannel: () => import(pathToFileURL(path.join(runtime, "cmaj-plugin-state-channel.js")).href),
-        readParameter: async endpoint => ({ endpoint, value: values.get(endpoint), min: endpoint === "globalTune" ? -24 : 0,
-            max: endpoint === "globalTune" ? 24 : 2, step: endpoint === "playMode" ? 1 : 0, defaultValue: 0 }),
+        readParameter,
         writeParameter(endpoint, value) { writes.push([endpoint, value]); values.set(endpoint, value); },
         beginGesture(endpoint) { gestures.push(["start", endpoint]); },
         endGesture(endpoint) { gestures.push(["end", endpoint]); },
@@ -131,11 +131,9 @@ test("last lease release detaches and seals accepted modulation when its final e
     worker.addStoredStateValueListener = listener => storedListeners.add(listener);
     worker.removeStoredStateValueListener = listener => storedListeners.delete(listener);
     worker.requestFullStoredState = callback => queueMicrotask(() => callback({ values: Object.fromEntries(stored) }));
+    const { readParameter } = createSynthParameterFixture();
     channel = new PluginStateChannel(worker, async request => {
-        if (request.kind === "open") return { parameters: request.parameters.map(endpoint => ({
-            endpoint, value: 0, min: endpoint === "globalTune" ? -24 : 0,
-            max: endpoint === "globalTune" ? 24 : 2, step: endpoint === "playMode" ? 1 : 0, defaultValue: 0,
-        })) };
+        if (request.kind === "open") return { parameters: request.parameters.map(readParameter) };
         if (request.kind === "close") return {};
         if (request.kind === "effect") return { error: "This storage/lease fixture has no audio engine." };
         throw new Error(`Unexpected native request ${request.kind}`);

@@ -1,3 +1,4 @@
+import { createSynthDocumentClient } from "./synth-document-client";
 import { useCallback, useMemo, useSyncExternalStore } from "react";
 
 import { usePatchConnection, type PatchConnectionLike } from "./cmajor-react";
@@ -8,19 +9,14 @@ import {
 } from "./user-edit-bus";
 import {
     EFFECT_ID_TO_LANE_TYPE,
-    LANE_OUTPUT_CONTROL_ENDPOINT_ID,
-    LANE_SLOT_PARAM_VALUE_ENDPOINT_ID,
     LANE_STATE_KEY,
 } from "./lane-state";
 import {
-    commitLaneStateV2,
     createDefaultLaneStateV2,
-    deserializeLaneStateV2,
     LANE_SPLIT_DEFAULT_XOVER_HIGH_HZ,
     LANE_SPLIT_DEFAULT_XOVER_LOW_HZ,
     LANE_SPLIT_XOVER_MAX_HZ,
     LANE_SPLIT_XOVER_MIN_HZ,
-    laneSplitMarkerSlotId,
     listLaneDeviceInstancesV2,
     parseLaneInstanceId,
     serializeLaneStateV2,
@@ -31,7 +27,6 @@ import {
     setLaneSplitCrossoverHz,
     setLaneSplitKeyTrackEnabled as transitionLaneSplitKeyTrackEnabled,
     setLaneSplitKeyTrackOffset as transitionLaneSplitKeyTrackOffset,
-    synchronizeLaneOutputTrimsFromHostParameters,
     type LaneSplitGroupV2,
     type LaneStateV2,
 } from "./lane-state-v2";
@@ -44,7 +39,6 @@ import {
     LANE_SPLIT_PARAM_XOVER_LOW_KEY_TRACK_OFFSET_SEMITONES,
 } from "./lane-state";
 import {
-    getLaneSlotId,
     getLaneSlotParamIndex,
     laneDeviceParamEndpoints,
 } from "./lane-slot-params";
@@ -73,145 +67,50 @@ import {
 } from "./effect-output-trim";
 import { EffectOutputTrimHostMirror } from "./effect-output-trim-host-mirror";
 
-/**
- * One shared lane-document store per patch connection.
- *
- * Since the B3 parameter cut, ordinary effect parameters have no host
- * endpoints: the lane.v1 stored-state document owns every value durably.
- * T78 Output Trim is mirrored to one real type+instance host parameter so DAW
- * automation and the lane document share one observed value. Other live
- * device edits ride laneSlotParamValue; whole-lane output edits ride
- * laneOutputControl. Every binding surface (the desktop rack workspace, the
- * iOS view) reads and writes THIS store, so the document cannot fork between
- * surfaces sharing a connection.
- *
- * Write discipline: setValue is the low-latency audible path (optimistic
- * store update + one field event, no document write); endGesture persists
- * the document once. The worker-side stored-state mirror replays the full
- * record set on each document write, which the engine treats as redundant.
- */
+/** One projection per view connection; the framework owns accepted state and history. */
 type LaneStateStore = {
     state: LaneStateV2;
     readonly connection: PatchConnectionLike;
     readonly listeners: Set<() => void>;
-    deliverySerial: number;
-    /** The serialized form of `state`, for identity-stable dedupe. */
     serialized: string;
-    outputTrimPersistTimer: ReturnType<typeof setTimeout> | null;
-    hasHydratedStoredState: boolean;
+    readonly client: ReturnType<typeof createSynthDocumentClient<LaneStateV2>>;
     outputTrimHostMirror: EffectOutputTrimHostMirror | null;
+    close(): void;
 };
-
 const stores = new WeakMap<object, LaneStateStore>();
 
-function readLaneStateFromFullStoredState(fullState: Record<string, unknown>) {
-    const values = fullState.values && typeof fullState.values === "object"
-        ? fullState.values as Record<string, unknown>
-        : {};
-    return Object.hasOwn(values, LANE_STATE_KEY) ? values[LANE_STATE_KEY] : fullState[LANE_STATE_KEY];
+function acceptLaneState(store: LaneStateStore, state: LaneStateV2) {
+    const next = store.outputTrimHostMirror?.synchronizeLaneState(state) ?? state;
+    const serialized = serializeLaneStateV2(next);
+    if (serialized === store.serialized) return;
+    reconcileLaneSoloAudition(store.connection, store.state, next);
+    store.state = next; store.serialized = serialized;
+    for (const listener of [...store.listeners]) listener();
 }
 
-function acceptLaneState(store: LaneStateStore, nextState: LaneStateV2) {
-    // Identity-stable: an update that decodes to the document we already hold
-    // must not mint a new state object — dozens of bindings subscribe here,
-    // and object churn on echoed stored-state traffic re-renders them all.
-    const serialized = serializeLaneStateV2(nextState);
-    if (serialized === store.serialized) {
-        return;
-    }
-    reconcileLaneSoloAudition(store.connection, store.state, nextState);
-    store.state = nextState;
-    store.serialized = serialized;
-    for (const listener of [...store.listeners]) {
-        listener();
-    }
-}
-
-function cancelPendingOutputTrimPersist(store: LaneStateStore) {
-    if (store.outputTrimPersistTimer !== null) {
-        globalThis.clearTimeout(store.outputTrimPersistTimer);
-        store.outputTrimPersistTimer = null;
-    }
-}
-
-function persistLaneState(store: LaneStateStore) {
-    cancelPendingOutputTrimPersist(store);
-    store.hasHydratedStoredState = true;
-    store.connection.sendStoredStateValue?.(LANE_STATE_KEY, serializeLaneStateV2(store.state));
-}
-
-function scheduleOutputTrimPersist(store: LaneStateStore) {
-    cancelPendingOutputTrimPersist(store);
-    store.outputTrimPersistTimer = globalThis.setTimeout(() => {
-        store.outputTrimPersistTimer = null;
-        store.connection.sendStoredStateValue?.(LANE_STATE_KEY, serializeLaneStateV2(store.state));
-    }, 120);
+function editLaneState(store: LaneStateStore, next: LaneStateV2 | null) {
+    if (!next) return;
+    void store.client.set(next).catch(error => console.error("Rack edit failed", error));
 }
 
 function getLaneStateStore(connection: PatchConnectionLike): LaneStateStore {
-    const key = connection as unknown as object;
-    const existing = stores.get(key);
-    if (existing !== undefined) {
-        return existing;
-    }
-    const initialState = createDefaultLaneStateV2();
-    const created: LaneStateStore = {
-        state: initialState,
-        connection,
-        listeners: new Set(),
-        deliverySerial: 0,
-        serialized: serializeLaneStateV2(initialState),
-        outputTrimPersistTimer: null,
-        hasHydratedStoredState: false,
-        outputTrimHostMirror: null,
+    const existing = stores.get(connection);
+    if (existing) return existing;
+    const initial = createDefaultLaneStateV2();
+    const client = createSynthDocumentClient<LaneStateV2>(connection, LANE_STATE_KEY);
+    const created: LaneStateStore = { state: initial, serialized: serializeLaneStateV2(initial), connection,
+        listeners: new Set(), client, outputTrimHostMirror: null, close() {},
     };
-    stores.set(key, created);
-
-    // ONE hydration per connection, attached imperatively at store creation:
-    // per-hook hydration would fan out a full-stored-state request for every
-    // mounted binding. The listener lives as long as the connection.
-    connection.addStoredStateValueListener?.((message: unknown) => {
-        if (typeof message !== "object" || message === null || Array.isArray(message)) {
-            return;
-        }
-        if (Reflect.get(message, "key") === LANE_STATE_KEY) {
-            const hydrated = deserializeLaneStateV2(Reflect.get(message, "value"));
-            if (hydrated === null) {
-                return;
-            }
-            created.hasHydratedStoredState = true;
-            acceptLaneState(created,
-                created.outputTrimHostMirror?.synchronizeLaneState(hydrated) ?? hydrated);
-        }
+    stores.set(connection, created);
+    const read = () => { const value = client.read(); if (value) acceptLaneState(created, value); };
+    const unsubscribe = client.subscribe(read);
+    created.outputTrimHostMirror = new EffectOutputTrimHostMirror(connection, () => {
+        // Automation is observed over the accepted source, never dispatched as
+        // a user rack edit or a raw stored write that could reset history.
+        read();
     });
-    connection.requestFullStoredState?.((fullState) => {
-        const hydrated = deserializeLaneStateV2(readLaneStateFromFullStoredState(fullState));
-        if (hydrated === null) {
-            return;
-        }
-        created.hasHydratedStoredState = true;
-        acceptLaneState(created,
-            created.outputTrimHostMirror?.synchronizeLaneState(hydrated) ?? hydrated);
-    });
-    created.outputTrimHostMirror = new EffectOutputTrimHostMirror(
-        connection,
-        (endpointID, value) => {
-            const nextState = synchronizeLaneOutputTrimsFromHostParameters(
-                created.state,
-                { [endpointID]: value },
-            );
-            if (nextState === created.state) {
-                return;
-            }
-            acceptLaneState(created, nextState);
-            // DAW automation has no UI gesture-end callback. Once the lane
-            // document has hydrated, coalesce automation into one durable mirror.
-            if (created.hasHydratedStoredState) {
-                scheduleOutputTrimPersist(created);
-            }
-        },
-    );
-
+    created.close = () => { unsubscribe(); client.stop(); created.outputTrimHostMirror?.dispose(); stores.delete(connection); };
+    read();
     return created;
 }
 
@@ -240,251 +139,62 @@ export function useLaneSoloAudition(laneState: LaneStateV2): {
  * the connection observe the same state object; hydration and stored-state
  * updates fan out through the one store.
  */
-export function useLaneStateDoc(): {
-    readonly laneState: LaneStateV2;
-    readonly commit: (nextState: LaneStateV2) => void;
-    readonly setParamValue: (deviceId: string, endpointID: string, value: number) => void;
-    readonly setKeyTrackEnabled: (
-        deviceId: string,
-        ordinaryEndpointID: string,
-        enabled: boolean,
-    ) => void;
-    /** Low-latency whole-lane output edits; persistence remains gesture-scoped. */
-    readonly setOutputMix: (mix: number) => void;
-    readonly setOutputBypassed: (bypassed: boolean) => void;
-    /** The split editor's hot path: optimistic doc update + the acked
-        marker-record field upload. */
-    readonly setSplitCrossover: (groupId: string, which: "low" | "high", hz: number) => void;
-    readonly setSplitKeyTrackEnabled: (
-        groupId: string,
-        which: "low" | "high",
-        enabled: boolean,
-    ) => void;
-    readonly setSplitKeyTrackOffset: (
-        groupId: string,
-        which: "low" | "high",
-        offsetSemitones: number,
-    ) => void;
-    readonly persist: () => void;
-} {
+export function useLaneStateDoc() {
     const patchConnection = usePatchConnection();
     const store = getLaneStateStore(patchConnection);
-
-    const laneState = useSyncExternalStore(
-        useCallback((onChange) => {
-            store.listeners.add(onChange);
-            return () => store.listeners.delete(onChange);
-        }, [store]),
-        () => store.state,
-    );
-
-    const commit = useCallback((nextState: LaneStateV2) => {
-        store.outputTrimHostMirror?.captureLaneState(nextState);
-        acceptLaneState(store, nextState);
-        commitLaneStateV2(patchConnection, nextState);
-        persistLaneState(store);
-    }, [patchConnection, store]);
-
-    const setParamValue = useCallback((deviceId: string, endpointID: string, value: number) => {
-        const parsedId = parseLaneInstanceId(deviceId);
-        const paramIndex = parsedId === null
-            ? null
-            : getLaneSlotParamIndex(parsedId.deviceType, endpointID);
-        if (parsedId === null || paramIndex === null) {
-            throw new Error(`Unknown lane parameter: ${deviceId}.${endpointID}`);
-        }
-        const previousParams = store.state.devices[deviceId]?.params;
-        const nextState = setLaneDeviceParam(store.state, deviceId, endpointID, value) ?? store.state;
-        const nextParams = nextState.devices[deviceId]?.params;
-        if (endpointID === effectOutputTrimLaneEndpointID(parsedId.deviceType)) {
-            store.outputTrimHostMirror?.captureLaneState(nextState);
-        }
-        acceptLaneState(store, nextState);
-        const sendField = (nextEndpointID: string, nextValue: number) => {
-            const nextParamIndex = getLaneSlotParamIndex(parsedId.deviceType, nextEndpointID);
-            if (nextParamIndex === null) return;
-            store.deliverySerial += 1;
-            patchConnection.sendEventOrValue?.(LANE_SLOT_PARAM_VALUE_ENDPOINT_ID, {
-                slotId: getLaneSlotId(parsedId.deviceType, parsedId.instanceNumber - 1),
-                paramIndex: nextParamIndex,
-                deliverySerial: store.deliverySerial,
-                value: nextValue,
-            });
+    const laneState = useSyncExternalStore(useCallback(listener => {
+        store.listeners.add(listener);
+        return () => {
+            store.listeners.delete(listener);
+            queueMicrotask(() => { if (store.listeners.size === 0 && stores.get(patchConnection) === store) store.close(); });
         };
-        // A state transition may atomically change dependent fields. Publish
-        // those first so the edited field can never expose a stale,
-        // contradictory runtime mode (Delay Sync versus Key Track).
-        if (previousParams !== undefined && nextParams !== undefined) {
-            for (const dependentEndpointID of laneDeviceParamEndpoints(parsedId.deviceType)) {
-                if (dependentEndpointID !== endpointID
-                        && !Object.is(
-                            previousParams[dependentEndpointID],
-                            nextParams[dependentEndpointID],
-                        )) {
-                    sendField(dependentEndpointID, nextParams[dependentEndpointID]);
-                }
+    }, [patchConnection, store]), () => store.state);
+    const commit = useCallback((next: LaneStateV2) => {
+        const parameters: Record<string, number> = {};
+        // A replacement may intentionally reset a resident instance's trim.
+        // Publish that user edit through its parameter owner as well as the rack.
+        for (const device of listLaneDeviceInstancesV2(next)) {
+            const parsed = parseLaneInstanceId(device.instanceId);
+            if (!parsed) continue;
+            const endpoint = effectOutputTrimLaneEndpointID(parsed.deviceType);
+            const value = next.devices[device.instanceId]?.params[endpoint];
+            const previous = store.state.devices[device.instanceId]?.params[endpoint];
+            if (typeof value === "number" && value !== previous) {
+                parameters[effectOutputTrimHostEndpointID(parsed.deviceType, parsed.instanceNumber)] = value;
             }
         }
-        sendField(endpointID, nextParams?.[endpointID] ?? value);
-    }, [patchConnection, store]);
-
-    const setKeyTrackEnabled = useCallback((
-        deviceId: string,
-        ordinaryEndpointID: string,
-        enabled: boolean,
-    ) => {
-        const parsedId = parseLaneInstanceId(deviceId);
-        const endpoints = getLaneKeyTrackEndpoints(ordinaryEndpointID);
-        const next = transitionLaneKeyTrackEnabled(
-            store.state, deviceId, ordinaryEndpointID, enabled);
-        if (parsedId === null || endpoints === null || next === null) {
-            return;
-        }
-        acceptLaneState(store, next);
-        const sendField = (endpointID: string, value: number) => {
-            const paramIndex = getLaneSlotParamIndex(parsedId.deviceType, endpointID);
-            if (paramIndex === null) return;
-            store.deliverySerial += 1;
-            patchConnection.sendEventOrValue?.(LANE_SLOT_PARAM_VALUE_ENDPOINT_ID, {
-                slotId: getLaneSlotId(parsedId.deviceType, parsedId.instanceNumber - 1),
-                paramIndex,
-                deliverySerial: store.deliverySerial,
-                value,
-            });
-        };
-        if (!enabled) {
-            sendField(endpoints.enabledEndpointID, 0);
-        } else {
-            // Publish every dependency before the primary enable bit. Each
-            // lane-field event may reach DSP on a different frame, so Delay
-            // must already be Free and every control already centred before
-            // Key Track can become active.
-            if (ordinaryEndpointID === "delayTime") {
-                sendField("delayTimeMode", 0);
-            }
-            sendField(endpoints.offsetEndpointID, 0);
-            sendField(endpoints.enabledEndpointID, 1);
-        }
-        patchConnection.sendStoredStateValue?.(LANE_STATE_KEY, serializeLaneStateV2(next));
-    }, [patchConnection, store]);
-
-    const setSplitCrossover = useCallback((groupId: string, which: "low" | "high", hz: number) => {
-        const slotId = laneSplitMarkerSlotId(groupId);
-        const next = setLaneSplitCrossoverHz(store.state, groupId, which, hz);
-        if (slotId === null || next === null) {
-            return;
-        }
-        acceptLaneState(store, next);
-        store.deliverySerial += 1;
-        patchConnection.sendEventOrValue?.(LANE_SLOT_PARAM_VALUE_ENDPOINT_ID, {
-            slotId,
-            paramIndex: which === "low" ? LANE_SPLIT_PARAM_XOVER_LOW_HZ : LANE_SPLIT_PARAM_XOVER_HIGH_HZ,
-            deliverySerial: store.deliverySerial,
-            value: hz,
-        });
-    }, [patchConnection, store]);
-
-    const sendSplitField = useCallback((groupId: string, paramIndex: number, value: number) => {
-        const slotId = laneSplitMarkerSlotId(groupId);
-        if (slotId === null) return;
-        store.deliverySerial += 1;
-        patchConnection.sendEventOrValue?.(LANE_SLOT_PARAM_VALUE_ENDPOINT_ID, {
-            slotId,
-            paramIndex,
-            deliverySerial: store.deliverySerial,
-            value,
-        });
-    }, [patchConnection, store]);
-
-    const setSplitKeyTrackEnabled = useCallback((
-        groupId: string,
-        which: "low" | "high",
-        enabled: boolean,
-    ) => {
-        const next = transitionLaneSplitKeyTrackEnabled(store.state, groupId, which, enabled);
-        if (next === null) return;
-        acceptLaneState(store, next);
-        const enabledParamIndex = which === "low"
-            ? LANE_SPLIT_PARAM_XOVER_LOW_KEY_TRACK_ENABLED
-            : LANE_SPLIT_PARAM_XOVER_HIGH_KEY_TRACK_ENABLED;
-        const offsetParamIndex = which === "low"
-            ? LANE_SPLIT_PARAM_XOVER_LOW_KEY_TRACK_OFFSET_SEMITONES
-            : LANE_SPLIT_PARAM_XOVER_HIGH_KEY_TRACK_OFFSET_SEMITONES;
-        if (!enabled) {
-            sendSplitField(groupId, enabledParamIndex, 0);
-        } else {
-            // Each marker-field event may reach DSP on a different frame.
-            // Centre the dependency before publishing the primary enable bit.
-            sendSplitField(groupId, offsetParamIndex, 0);
-            sendSplitField(groupId, enabledParamIndex, 1);
-        }
-        patchConnection.sendStoredStateValue?.(LANE_STATE_KEY, serializeLaneStateV2(next));
-    }, [patchConnection, sendSplitField, store]);
-
-    const setSplitKeyTrackOffset = useCallback((
-        groupId: string,
-        which: "low" | "high",
-        offsetSemitones: number,
-    ) => {
-        const next = transitionLaneSplitKeyTrackOffset(
-            store.state, groupId, which, offsetSemitones);
-        if (next === null) return;
-        acceptLaneState(store, next);
-        const group = next.chain.find((node) => node.kind === "split" && node.groupId === groupId);
-        if (group === undefined || group.kind !== "split") return;
-        const value = which === "low"
-            ? group.xoverLowKeyTrackOffsetSemitones
-            : group.xoverHighKeyTrackOffsetSemitones;
-        sendSplitField(groupId, which === "low"
-            ? LANE_SPLIT_PARAM_XOVER_LOW_KEY_TRACK_OFFSET_SEMITONES
-            : LANE_SPLIT_PARAM_XOVER_HIGH_KEY_TRACK_OFFSET_SEMITONES, value);
-    }, [sendSplitField, store]);
-
-    const setOutputMix = useCallback((mix: number) => {
-        const next = setLaneOutputMix(store.state, mix);
-        if (next === null) {
-            return;
-        }
-        acceptLaneState(store, next);
-        patchConnection.sendEventOrValue?.(LANE_OUTPUT_CONTROL_ENDPOINT_ID, next.output);
-    }, [patchConnection, store]);
-
-    const setOutputBypassed = useCallback((bypassed: boolean) => {
-        const next = setLaneOutputBypassed(store.state, bypassed);
-        if (next === null) {
-            return;
-        }
-        acceptLaneState(store, next);
-        patchConnection.sendEventOrValue?.(LANE_OUTPUT_CONTROL_ENDPOINT_ID, next.output);
-    }, [patchConnection, store]);
-
-    const persist = useCallback(() => {
-        persistLaneState(store);
+        void store.client.setWithParameters(next, parameters).catch(error => console.error("Rack edit failed", error));
     }, [store]);
-
-    return useMemo(() => ({
-        laneState,
-        commit,
-        setParamValue,
-        setKeyTrackEnabled,
-        setOutputMix,
-        setOutputBypassed,
-        setSplitCrossover,
-        setSplitKeyTrackEnabled,
-        setSplitKeyTrackOffset,
-        persist,
-    }), [
-        laneState,
-        commit,
-        setParamValue,
-        setKeyTrackEnabled,
-        setOutputMix,
-        setOutputBypassed,
-        setSplitCrossover,
-        setSplitKeyTrackEnabled,
-        setSplitKeyTrackOffset,
-        persist,
-    ]);
+    const setParamValue = useCallback((deviceId: string, endpoint: string, value: number) => {
+        const parsed = parseLaneInstanceId(deviceId);
+        if (!parsed || getLaneSlotParamIndex(parsed.deviceType, endpoint) === null) throw new Error(`Unknown lane parameter: ${deviceId}.${endpoint}`);
+        const next = setLaneDeviceParam(store.state, deviceId, endpoint, value);
+        if (endpoint === effectOutputTrimLaneEndpointID(parsed.deviceType)) {
+            // The accompanying host binding owns this edit and its history.
+            if (next) acceptLaneState(store, next);
+            return;
+        }
+        store.client.begin();
+        editLaneState(store, next);
+    }, [store]);
+    const setKeyTrackEnabled = useCallback((device: string, endpoint: string, enabled: boolean) =>
+        editLaneState(store, transitionLaneKeyTrackEnabled(store.state, device, endpoint, enabled)), [store]);
+    const setSplitCrossover = useCallback((group: string, which: "low" | "high", hz: number) => {
+        store.client.begin(); editLaneState(store, setLaneSplitCrossoverHz(store.state, group, which, hz));
+    }, [store]);
+    const setSplitKeyTrackEnabled = useCallback((group: string, which: "low" | "high", enabled: boolean) =>
+        editLaneState(store, transitionLaneSplitKeyTrackEnabled(store.state, group, which, enabled)), [store]);
+    const setSplitKeyTrackOffset = useCallback((group: string, which: "low" | "high", offset: number) => {
+        store.client.begin(); editLaneState(store, transitionLaneSplitKeyTrackOffset(store.state, group, which, offset));
+    }, [store]);
+    const setOutputMix = useCallback((mix: number) => { store.client.begin(); editLaneState(store, setLaneOutputMix(store.state, mix)); }, [store]);
+    const setOutputBypassed = useCallback((bypassed: boolean) => editLaneState(store, setLaneOutputBypassed(store.state, bypassed)), [store]);
+    const beginGesture = useCallback(() => store.client.begin(), [store]);
+    const persist = useCallback(() => { void store.client.end(); }, [store]);
+    return useMemo(() => ({ laneState, commit, setParamValue, setKeyTrackEnabled, setSplitCrossover,
+        setSplitKeyTrackEnabled, setSplitKeyTrackOffset, setOutputMix, setOutputBypassed, beginGesture, persist }),
+        [laneState, commit, setParamValue, setKeyTrackEnabled, setSplitCrossover, setSplitKeyTrackEnabled,
+            setSplitKeyTrackOffset, setOutputMix, setOutputBypassed, beginGesture, persist]);
 }
 
 /**
@@ -528,7 +238,7 @@ export function useLaneParameterBinding(
     deviceId?: string,
 ): PatchControlBinding<number> {
     const patchConnection = usePatchConnection();
-    const { laneState, setParamValue, persist } = useLaneStateDoc();
+    const { laneState, setParamValue, persist, beginGesture: beginLaneGesture } = useLaneStateDoc();
     const boundDeviceId = deviceId ?? `${EFFECT_ID_TO_LANE_TYPE[descriptor.effectId]}#1`;
     const parsedDeviceId = parseLaneInstanceId(boundDeviceId);
     const isOutputTrim = parsedDeviceId !== null
@@ -590,16 +300,16 @@ export function useLaneParameterBinding(
         if (isOutputTrim) {
             hostBinding.beginGesture();
         } else {
-            patchConnection.sendParameterGestureStart?.(descriptor.endpointID);
+            beginLaneGesture();
         }
         reportUserGestureStart();
-    }, [descriptor.endpointID, hostBinding.beginGesture, isOutputTrim, patchConnection]);
+    }, [descriptor.endpointID, hostBinding.beginGesture, isOutputTrim, patchConnection, beginLaneGesture]);
 
     const endGesture = useCallback(() => {
         if (isOutputTrim) {
             hostBinding.endGesture();
         } else {
-            patchConnection.sendParameterGestureEnd?.(descriptor.endpointID);
+            // The rack field closes in persist() below.
         }
         reportUserGestureEnd();
         persist();
@@ -642,7 +352,7 @@ export function useLaneSplitCrossoverBinding(
     which: "low" | "high",
 ): PatchControlBinding<number> {
     const patchConnection = usePatchConnection();
-    const { laneState, setSplitCrossover, persist } = useLaneStateDoc();
+    const { laneState, setSplitCrossover, persist, beginGesture: beginLaneGesture } = useLaneStateDoc();
     const endpointID = which === "low" ? "xoverLowHz" : "xoverHighHz";
     const initialValue = which === "low"
         ? LANE_SPLIT_DEFAULT_XOVER_LOW_HZ
@@ -665,11 +375,11 @@ export function useLaneSplitCrossoverBinding(
         reportUserParameterEdit({ endpointID, changed: !Object.is(clamped, value) });
     }, [endpointID, groupId, initialValue, setSplitCrossover, value, which]);
     const beginGesture = useCallback(() => {
-        patchConnection.sendParameterGestureStart?.(endpointID);
+        beginLaneGesture();
         reportUserGestureStart();
-    }, [endpointID, patchConnection]);
+    }, [endpointID, patchConnection, beginLaneGesture]);
     const endGesture = useCallback(() => {
-        patchConnection.sendParameterGestureEnd?.(endpointID);
+        // The rack field closes in persist() below.
         reportUserGestureEnd();
         persist();
     }, [endpointID, patchConnection, persist]);
@@ -710,7 +420,7 @@ export function useLaneKeyTrackControlBinding(
 ): LaneKeyTrackControlBinding {
     const patchConnection = usePatchConnection();
     const ordinaryBinding = useLaneParameterBinding(descriptor, deviceId);
-    const { laneState, setParamValue, setKeyTrackEnabled, persist } = useLaneStateDoc();
+    const { laneState, setParamValue, setKeyTrackEnabled, persist, beginGesture: beginLaneGesture } = useLaneStateDoc();
     const boundDeviceId = deviceId ?? `${EFFECT_ID_TO_LANE_TYPE[descriptor.effectId]}#1`;
     const definition = getKeyTrackDefinition(`lane.${descriptor.endpointID}`);
     const endpoints = getLaneKeyTrackEndpoints(descriptor.endpointID);
@@ -748,11 +458,11 @@ export function useLaneKeyTrackControlBinding(
         setParamValue,
     ]);
     const beginGesture = useCallback(() => {
-        patchConnection.sendParameterGestureStart?.(descriptor.endpointID);
+        beginLaneGesture();
         reportUserGestureStart();
-    }, [descriptor.endpointID, patchConnection]);
+    }, [descriptor.endpointID, patchConnection, beginLaneGesture]);
     const endGesture = useCallback(() => {
-        patchConnection.sendParameterGestureEnd?.(descriptor.endpointID);
+        // The rack field closes in persist() below.
         reportUserGestureEnd();
         persist();
     }, [descriptor.endpointID, patchConnection, persist]);
@@ -763,18 +473,20 @@ export function useLaneKeyTrackControlBinding(
     }, [beginGesture, endGesture, setValue]);
     const setEnabled = useCallback((nextEnabled: boolean) => {
         if (!eligible) return;
-        patchConnection.sendParameterGestureStart?.(descriptor.endpointID);
+        beginLaneGesture();
         reportUserGestureStart();
         setKeyTrackEnabled(boundDeviceId, descriptor.endpointID, nextEnabled);
         reportUserParameterEdit({ endpointID: descriptor.endpointID, changed: enabled !== nextEnabled });
-        patchConnection.sendParameterGestureEnd?.(descriptor.endpointID);
+        // The toggle is one complete field gesture.
         reportUserGestureEnd();
+        persist();
     }, [
         boundDeviceId,
         descriptor.endpointID,
         eligible,
         enabled,
-        patchConnection,
+        beginLaneGesture,
+        persist,
         setKeyTrackEnabled,
     ]);
 
@@ -820,7 +532,7 @@ export function useLaneSplitKeyTrackControlBinding(
         laneState,
         setSplitKeyTrackEnabled,
         setSplitKeyTrackOffset,
-        persist,
+        persist, beginGesture: beginLaneGesture,
     } = useLaneStateDoc();
     const endpointID = which === "low" ? "xoverLowHz" : "xoverHighHz";
     const definition = getKeyTrackDefinition(
@@ -853,11 +565,11 @@ export function useLaneSplitKeyTrackControlBinding(
         });
     }, [eligible, endpointID, groupId, offsetValue, range.knobMax, range.knobMin, setSplitKeyTrackOffset, which]);
     const beginGesture = useCallback(() => {
-        patchConnection.sendParameterGestureStart?.(endpointID);
+        beginLaneGesture();
         reportUserGestureStart();
-    }, [endpointID, patchConnection]);
+    }, [endpointID, patchConnection, beginLaneGesture]);
     const endGesture = useCallback(() => {
-        patchConnection.sendParameterGestureEnd?.(endpointID);
+        // The rack field closes in persist() below.
         reportUserGestureEnd();
         persist();
     }, [endpointID, patchConnection, persist]);
@@ -868,13 +580,14 @@ export function useLaneSplitKeyTrackControlBinding(
     }, [beginGesture, endGesture, setValue]);
     const setEnabled = useCallback((nextEnabled: boolean) => {
         if (!eligible) return;
-        patchConnection.sendParameterGestureStart?.(endpointID);
+        beginLaneGesture();
         reportUserGestureStart();
         setSplitKeyTrackEnabled(groupId, which, nextEnabled);
         reportUserParameterEdit({ endpointID, changed: enabled !== nextEnabled });
-        patchConnection.sendParameterGestureEnd?.(endpointID);
+        // The toggle is one complete field gesture.
         reportUserGestureEnd();
-    }, [eligible, enabled, endpointID, groupId, patchConnection, setSplitKeyTrackEnabled, which]);
+        persist();
+    }, [beginLaneGesture, eligible, enabled, endpointID, groupId, persist, setSplitKeyTrackEnabled, which]);
 
     const binding = useMemo<PatchControlBinding<number>>(() => enabled ? ({
         endpointID,

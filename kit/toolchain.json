@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "comment": "Release-source template. Artifact paths are relative to kit/feed.json baseUrl; kit:release writes hashes for the exact supplied or built archives into the staged customer release. Blank hashes in the monorepo keep unstaged downloads disabled and do not claim candidate qualification.",
   "cmaj": {
-    "forkCommit": "7816a2984c98c7d0bed03954de023d3a8ead29a5",
+    "forkCommit": "e4463747e6635fdeb0b0eefcd534af51c77e8d74",
     "artifact": "tools/v0.1.5/cmaj-macos-arm64.tar.gz",
     "sha256": "",
     "localPath": "build/kit-tools/cmaj"

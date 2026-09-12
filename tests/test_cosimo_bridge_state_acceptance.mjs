@@ -2,12 +2,13 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import path from "node:path";
 import { build } from "esbuild";
+import { createSynthParameterFixture } from "./helpers/synth_parameter_fixture.mjs";
 
 const root = path.resolve(import.meta.dirname, "..");
 const bundled = await build({ stdin: { contents: `
 export { createCosimoBridgeAdapter } from "./ui/shared/cosimo-bridge-adapter";
 export { acquireSynthViewState } from "./ui/shared/synth-state-client";
-export { synthPluginState } from "./ui/shared/synth-plugin-state";
+export { synthPluginState, synthParameterByEndpoint } from "./ui/shared/synth-plugin-state";
 export { createDefaultModulationState, createDefaultRoute, MODULATION_STATE_KEY } from "./ui/shared/modulation";
 export { createPluginStateSession } from "./kit/ui/plugin-state-session";
 `, resolveDir: root }, bundle: true, format: "esm", platform: "node", target: "es2022", write: false });
@@ -28,7 +29,8 @@ async function fixture() {
         overrides: {}, routeAmounts: { [routeId]: 0.6 },
     }] };
     const stored = new Map([[key, JSON.stringify(bank)], ["articulations.v4", JSON.stringify(articulations)]]);
-    const parameters = new Map([["playMode", 0], ["glideTime", 0], ["globalTune", 0], ["mseg1Morph", 0.63]]);
+    const { values: parameters, readParameter } = createSynthParameterFixture({ globalTune: 0, mseg1Morph: 0.63 });
+    const nativeParameters = () => Object.keys(api.synthParameterByEndpoint).map(readParameter);
     let scope = { owner: "prototype-adapter-test", document: 1 };
     let restoring = false;
     const pendingAttaches = [];
@@ -50,11 +52,7 @@ async function fixture() {
         },
         close() {},
     }, onDefect: error => defects.push(error) });
-    await session.dispatch({ kind: "opened", scope, native: { values: Object.fromEntries(stored), parameters: [
-        { endpoint: "playMode", value: 0, min: 0, max: 2, step: 1, defaultValue: 0 },
-        { endpoint: "glideTime", value: 0, min: 0, max: 5, step: 0, defaultValue: 0 },
-        { endpoint: "globalTune", value: 0, min: -24, max: 24, step: 0.01, defaultValue: 0 },
-    ] } });
+    await session.dispatch({ kind: "opened", scope, native: { values: Object.fromEntries(stored), parameters: nativeParameters() } });
     function connection() {
         const listeners = new Set(), storedListeners = new Set(), parameterListeners = new Map(), endpointListeners = new Map();
         let held = false;
@@ -126,12 +124,10 @@ async function fixture() {
             restoring = true;
             scope = { ...scope, document: scope.document + 1 };
             stored.set(key, JSON.stringify(nextBank));
+            stored.set("articulations.v4", JSON.stringify(articulations));
+            parameters.set("mseg1Morph", 0.63);
             for (const view of views) view.deliverNow({ kind: "reset", scope });
-            const replacing = session.dispatch({ kind: "replaced", scope, native: { values: Object.fromEntries(stored), parameters: [
-                { endpoint: "playMode", value: parameters.get("playMode"), min: 0, max: 2, step: 1, defaultValue: 0 },
-                { endpoint: "glideTime", value: parameters.get("glideTime"), min: 0, max: 5, step: 0, defaultValue: 0 },
-                { endpoint: "globalTune", value: parameters.get("globalTune"), min: -24, max: 24, step: 0.01, defaultValue: 0 },
-            ] } });
+            const replacing = session.dispatch({ kind: "replaced", scope, native: { values: Object.fromEntries(stored), parameters: nativeParameters() } });
             assert.deepEqual(session.getSnapshot().scope, scope, "the actual owner must install the replacement before native attach is answered");
             restoring = false;
             for (const attach of pendingAttaches.splice(0)) attach();
@@ -180,24 +176,23 @@ async function waitForAcceptedDeletion(fixture) {
     assert.equal(fixture.publications.filter(publication => publication.operations.some(operation => operation.kind === "stored" && operation.key === key)).length, 1);
 }
 
-test("disposing the adapter while an accepted deletion reply is held prevents dependent cleanup", async () => {
+test("disposing the adapter after atomic deletion acceptance prevents stale GUI side effects", async () => {
     const f = await fixture();
     try {
-        const artBefore = f.stored.get("articulations.v4");
         f.main.holdReplies();
         const deletion = f.adapter.commands.deleteSource("mseg-1");
         await waitForAcceptedDeletion(f);
-        assert.equal(f.parameters.get("mseg1Morph"), 0.63);
+        assert.equal(f.parameters.get("mseg1Morph"), 0);
         assert.deepEqual(f.rawWrites, []);
         f.adapter.dispose(); // The test's separate view lease keeps the actual client alive.
         f.main.releaseReplies();
         const result = await deletion;
         assert.equal(result._tag, "err");
         assert.equal(result.error._tag, "StateEditRefused");
-        assert.equal(result.error.result.kind, "accepted", "known bank acceptance is retained even though the composite cannot finish");
+        assert.equal(result.error.result.kind, "accepted", "known atomic sound-state acceptance survives disposal before the UI receipt");
         assert.equal(f.session.getSnapshot().fields[key].value.routes.length, 0);
-        assert.equal(f.stored.get("articulations.v4"), artBefore);
-        assert.equal(f.parameters.get("mseg1Morph"), 0.63);
+        assert.deepEqual(JSON.parse(f.stored.get("articulations.v4")).slots[0].routeAmounts, {});
+        assert.equal(f.parameters.get("mseg1Morph"), 0);
         assert.deepEqual(f.rawWrites, []);
         assert.deepEqual(f.rawSends, []);
     } finally { await f.stop(); }
@@ -251,6 +246,7 @@ test("a pending mapping draft cannot authorize an articulation route reference",
         const accepted = await f.adapter.commands.addMapping({ targetId: "oscB.warpAmount", sourceId: "mseg-1" });
         assert.equal(accepted._tag, "ok");
         f.adapter.commands.setMappingAmount(accepted.value, 45, { _tag: "articulationOverride", articulationId: "articulation-0" });
+        await new Promise(resolve => setImmediate(resolve));
         assert.equal(JSON.parse(f.stored.get("articulations.v4")).slots[0].routeAmounts[mappingId], 0.45);
     } finally { await f.stop(); }
 });

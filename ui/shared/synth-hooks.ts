@@ -1,3 +1,4 @@
+import { createSynthDocumentClient } from "./synth-document-client";
 import {
     useCallback,
     useEffect,
@@ -1408,8 +1409,7 @@ function useStoredArticulationEditorState(
     oscillatorID: OscillatorID,
 ) {
     const patchConnection = usePatchConnection();
-    const emptyState = createEmptyArticulationsState();
-    const [state, setState] = useState<ArticulationsState>(emptyState);
+    const [state, setState] = useState<ArticulationsState>(() => createEmptyArticulationsState());
     const [bank, setBank] = useState<ArticulationEditorState>(() => createDefaultArticulationEditorState());
     const [hasHydrated, setHasHydrated] = useState(false);
     const stateRef = useRef(state);
@@ -1417,190 +1417,55 @@ function useStoredArticulationEditorState(
     const modulationStateRef = useRef(modulationState);
     const acceptedRouteIdsRef = useRef<ReadonlySet<string>>(new Set());
     const getBaseSnapshotRef = useRef(getBaseSnapshot);
-    const pendingEchoTokensRef = useRef(new Map<string, number>());
-    const activeStoredStateConnectionRef = useRef<typeof patchConnection | null>(patchConnection);
-
+    const clientRef = useRef<ReturnType<typeof createSynthDocumentClient<ArticulationsState>> | null>(null);
     getBaseSnapshotRef.current = getBaseSnapshot;
     modulationStateRef.current = modulationState;
-    if (modulationState !== null) {
-        acceptedRouteIdsRef.current = currentArticulationRouteIds(modulationState.routes);
-    }
-
-    const rememberPendingEcho = useCallback((serializedBank: string) => {
-        const pendingEchoTokens = pendingEchoTokensRef.current;
-        pendingEchoTokens.set(serializedBank, (pendingEchoTokens.get(serializedBank) ?? 0) + 1);
-    }, []);
-
-    const consumePendingEcho = useCallback((serializedBank: string) => {
-        const pendingEchoTokens = pendingEchoTokensRef.current;
-        const pendingCount = pendingEchoTokens.get(serializedBank) ?? 0;
-        if (pendingCount <= 0) return false;
-        if (pendingCount === 1) pendingEchoTokens.delete(serializedBank);
-        else pendingEchoTokens.set(serializedBank, pendingCount - 1);
-        return true;
-    }, []);
+    if (modulationState !== null) acceptedRouteIdsRef.current = currentArticulationRouteIds(modulationState.routes);
 
     const applyCurrentState = useCallback((nextState: ArticulationsState) => {
         stateRef.current = nextState;
-        setState((previousState) => articulationStatesEqual(previousState, nextState) ? previousState : nextState);
-
-        const baseSnapshot = getBaseSnapshotRef.current();
-        if (baseSnapshot === null) {
-            return;
-        }
-
+        setState(previous => articulationStatesEqual(previous, nextState) ? previous : nextState);
+        const base = getBaseSnapshotRef.current();
+        if (!base) return;
         const routes = modulationBridge.current?.getState()?.routes ?? modulationStateRef.current?.routes ?? [];
-        const nextBank = projectCurrentArticulationsToEditorBank(
-            nextState,
-            baseSnapshot,
-            routes,
-            oscillatorID,
-        );
+        const nextBank = projectCurrentArticulationsToEditorBank(nextState, base, routes, oscillatorID);
         bankRef.current = nextBank;
-        setBank((previousBank) => (
-            articulationEditorStatesEqual(previousBank, nextBank) ? previousBank : nextBank
-        ));
-    }, [modulationBridge, oscillatorID, patchConnection]);
-
-    const refreshProjection = useCallback(() => {
-        applyCurrentState(stateRef.current);
-    }, [applyCurrentState]);
-
-    const applyIncomingState = useCallback((
-        rawValue: unknown,
-        isHydration: boolean,
-        acceptedRouteIds: ReadonlySet<string> = acceptedRouteIdsRef.current,
-    ) => {
-        if (rawValue === undefined) {
-            if (isHydration) {
-                acceptedRouteIdsRef.current = acceptedRouteIds;
-                setHasHydrated(true);
-                applyCurrentState(createEmptyArticulationsState());
-            }
-            return;
-        }
-
-        const parsedState = parseArticulationsV4(decodeArticulationDocument(rawValue), acceptedRouteIds);
-        if (parsedState._tag === "err") {
-            if (isHydration) {
-                acceptedRouteIdsRef.current = acceptedRouteIds;
-                setHasHydrated(true);
-                applyCurrentState(createEmptyArticulationsState());
-            }
-            return;
-        }
-
-        const serializedState = JSON.stringify(serializeArticulationsV4(parsedState.value));
-        if (consumePendingEcho(serializedState)) return;
-        acceptedRouteIdsRef.current = acceptedRouteIds;
-        setHasHydrated(true);
-        applyCurrentState(parsedState.value);
-    }, [applyCurrentState, consumePendingEcho]);
-
+        setBank(previous => articulationEditorStatesEqual(previous, nextBank) ? previous : nextBank);
+    }, [modulationBridge, oscillatorID]);
+    const refreshProjection = useCallback(() => applyCurrentState(stateRef.current), [applyCurrentState]);
     useEffect(() => {
-        const effectPatchConnection = patchConnection;
-        let effectIsLive = true;
-        activeStoredStateConnectionRef.current = effectPatchConnection;
-        const isCurrentConnection = () => (
-            effectIsLive
-            && activeStoredStateConnectionRef.current === effectPatchConnection
-        );
+        const client = createSynthDocumentClient<ArticulationsState>(patchConnection, ARTICULATIONS_V4_STATE_KEY);
+        clientRef.current = client;
         setHasHydrated(false);
-        pendingEchoTokensRef.current.clear();
-        const usesKeyRequestFallback = typeof effectPatchConnection.requestFullStoredState !== "function"
-            && typeof effectPatchConnection.requestStoredStateValue === "function";
-        let isAwaitingKeyHydration = usesKeyRequestFallback;
-        const handleStoredStateValue = (message: unknown) => {
-            if (!isCurrentConnection()) return;
-            if (!message || typeof message !== "object") return;
-            const nextMessage = message as { key?: unknown; value?: unknown };
-            if (nextMessage.key !== ARTICULATIONS_V4_STATE_KEY) return;
-            const isHydration = isAwaitingKeyHydration;
-            isAwaitingKeyHydration = false;
-            applyIncomingState(nextMessage.value, isHydration);
+        const read = () => {
+            const current = client.read();
+            if (!current) return;
+            setHasHydrated(true);
+            applyCurrentState(current);
         };
-
-        effectPatchConnection.addStoredStateValueListener?.(handleStoredStateValue);
-        if (typeof effectPatchConnection.requestFullStoredState === "function") {
-            effectPatchConnection.requestFullStoredState((storedState) => {
-                if (!isCurrentConnection()) return;
-                const parsedSnapshot = parseArticulationStateFromFullStoredState(
-                    storedState,
-                    modulationBridge.current?.getState()?.routes ?? modulationStateRef.current?.routes ?? [],
-                );
-                acceptedRouteIdsRef.current = parsedSnapshot.acceptedRouteIds;
-                if (parsedSnapshot.parsedState === null) {
-                    applyIncomingState(undefined, true, parsedSnapshot.acceptedRouteIds);
-                    return;
-                }
-                if (parsedSnapshot.parsedState._tag === "err") {
-                    setHasHydrated(true);
-                    return;
-                }
-                applyIncomingState(
-                    serializeArticulationsV4(parsedSnapshot.parsedState.value),
-                    true,
-                    parsedSnapshot.acceptedRouteIds,
-                );
-            });
-        } else if (typeof effectPatchConnection.requestStoredStateValue === "function") {
-            effectPatchConnection.requestStoredStateValue(ARTICULATIONS_V4_STATE_KEY);
-        } else {
-            applyIncomingState(undefined, true);
-        }
-
-        return () => {
-            effectIsLive = false;
-            effectPatchConnection.removeStoredStateValueListener?.(handleStoredStateValue);
-            if (activeStoredStateConnectionRef.current === effectPatchConnection) {
-                activeStoredStateConnectionRef.current = null;
-            }
-        };
-    }, [applyIncomingState, patchConnection]);
-
+        const unsubscribe = client.subscribe(read);
+        read();
+        return () => { unsubscribe(); client.stop(); if (clientRef.current === client) clientRef.current = null; };
+    }, [applyCurrentState, patchConnection]);
     const setAndPersistState = useCallback((
-        nextStateValue: ArticulationsState | ((previousState: ArticulationsState) => ArticulationsState),
+        value: ArticulationsState | ((previous: ArticulationsState) => ArticulationsState),
         acceptedRouteIds: ReadonlySet<string> = acceptedRouteIdsRef.current,
-        refreshProjection = false,
+        refresh = false,
     ) => {
-        const previousState = stateRef.current;
-        const candidate = typeof nextStateValue === "function"
-            ? nextStateValue(previousState)
-            : nextStateValue;
-        const parsedState = parseArticulationsV4(
-            serializeArticulationsV4(candidate),
-            acceptedRouteIds,
-        );
-        if (parsedState._tag === "err") return;
-
-        if (articulationStatesEqual(previousState, parsedState.value)) {
-            if (refreshProjection) {
-                acceptedRouteIdsRef.current = acceptedRouteIds;
-                applyCurrentState(parsedState.value);
-            }
+        const current = clientRef.current?.read();
+        if (!current) return;
+        const candidate = typeof value === "function" ? value(current) : value;
+        const parsed = parseArticulationsV4(serializeArticulationsV4(candidate), acceptedRouteIds);
+        if (parsed._tag === "err") return;
+        acceptedRouteIdsRef.current = acceptedRouteIds;
+        if (articulationStatesEqual(current, parsed.value)) {
+            if (refresh) applyCurrentState(parsed.value);
             return;
         }
-
-        const nextState = parsedState.value;
-        const serializedState = JSON.stringify(serializeArticulationsV4(nextState));
-        acceptedRouteIdsRef.current = acceptedRouteIds;
-        applyCurrentState(nextState);
-        setHasHydrated(true);
-        if (typeof patchConnection.sendStoredStateValue === "function") {
-            rememberPendingEcho(serializedState);
-            patchConnection.sendStoredStateValue(ARTICULATIONS_V4_STATE_KEY, serializedState);
-        }
-    }, [applyCurrentState, patchConnection, rememberPendingEcho]);
-
-    return useMemo(() => ({
-        state,
-        stateRef,
-        bank,
-        bankRef,
-        hasHydrated,
-        refreshProjection,
-        setAndPersistState,
-    }), [bank, hasHydrated, refreshProjection, setAndPersistState, state]);
+        void clientRef.current?.set(parsed.value).catch(error => console.error("Articulation edit failed", error));
+    }, [applyCurrentState]);
+    return useMemo(() => ({ state, stateRef, bank, bankRef, hasHydrated, refreshProjection, setAndPersistState }),
+        [state, bank, hasHydrated, refreshProjection, setAndPersistState]);
 }
 
 function parsePresetStoredStateValue(rawValue: unknown, label: string) {
@@ -1840,7 +1705,7 @@ function useSynthPresetStoredStateAdapters({
                     return;
                 }
 
-                patchConnection.sendStoredStateValue?.(MODULATION_STATE_KEY, serializeModulationState(nextState));
+                throw new Error("Modulation state is not ready for a preset edit.");
             },
             subscribe(listener: () => void) {
                 return subscribeToStoredStateKey(MODULATION_STATE_KEY, listener);

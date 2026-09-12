@@ -3,6 +3,7 @@ import path from "node:path";
 import { pathToFileURL } from "node:url";
 import { loadUIModule } from "../../kit/tests/helpers/load_ui_module.mjs";
 import { stageCmajorWebRuntime } from "../../ui/vite.shared.mjs";
+import { createSynthParameterFixture } from "./synth_parameter_fixture.mjs";
 
 const root = path.resolve(import.meta.dirname, "../..");
 const modules = Promise.all([
@@ -33,10 +34,10 @@ export async function waitForModulation(predicate, describe = () => "") {
 export async function createModulationFixture(t, connection) {
     const [{ createMockPluginStateHost }, { createModulationStateClient }, { createCmajorPluginStateClient }, { synthPluginState }] = await modules;
     const defects = [];
+    const { readParameter } = createSynthParameterFixture();
     const host = createMockPluginStateHost({
         loadChannel,
-        readParameter: async endpoint => ({ endpoint, value: 0, min: endpoint === "globalTune" ? -24 : 0,
-            max: endpoint === "globalTune" ? 24 : 2, step: endpoint === "playMode" ? 1 : 0, defaultValue: 0 }),
+        readParameter,
         writeParameter() { assert.fail("Modulation must not write a host-owned parameter"); },
         storedValues: {
             read(key) { connection.requestedKeys?.push(key); return connection.storedState[key]; },

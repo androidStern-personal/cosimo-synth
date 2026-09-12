@@ -51,13 +51,16 @@ async function buildRendererAwarePatchModule() {
     ]);
     const manifest = JSON.parse(manifestSource);
     const patchModule = `// Generated product WebAudio module with the canonical renderer.\n\n`
-        + `import * as helpers from "./cmaj_api/cmaj-audio-worklet-helper.js";\n\n`
+        + `import * as helpers from "./cmaj_api/cmaj-audio-worklet-helper.js";\n`
+        + `import { createCosimoMidiHandler } from "./cosimo-midi.mjs";\n\n`
         + `export const manifest = ${JSON.stringify(manifest, null, 2)};\n\n`
         + `export function getOutputEndpoints() { return WavetableSynth.prototype.getOutputEndpoints(); }\n`
         + `export function getInputEndpoints() { return WavetableSynth.prototype.getInputEndpoints(); }\n\n`
         + `export async function createAudioWorkletNodePatchConnection(audioContext, workletName) {\n`
         + `  const connection = new helpers.AudioWorkletPatchConnection(manifest);\n`
-        + `  await connection.initialise({ CmajorClass: WavetableSynth, audioContext, workletName, hostDescription: "WebAudio", performanceMessagePrefix: "cosimo-perf", performanceMarkedEndpoints: ["modulationProgram", "modulationAmount"] });\n`
+        + `  const midi = createCosimoMidiHandler(connection);\n`
+        + `  connection.sendMessageToServer = midi.sendMessageToServer;\n`
+        + `  await connection.initialise({ CmajorClass: WavetableSynth, audioContext, workletName, hostDescription: "WebAudio", handleStateHostEffect: midi.handleStateHostEffect, performanceMessagePrefix: "cosimo-perf", performanceMarkedEndpoints: ["modulationProgram", "modulationAmount"] });\n`
         + `  return connection;\n`
         + `}\n\n`
         + generatedClass;

@@ -1,3 +1,4 @@
+import { allEffectOutputTrimHostEndpointIDs, EFFECT_OUTPUT_TRIM_SILENCE_DB, EFFECT_OUTPUT_TRIM_MAX_DB } from "./effect-output-trim";
 import type { PatchConnectionLike } from "./cmajor-react";
 import { createMockPluginStateHost, type MockPluginStateChannelModule } from "./mock-plugin-state-host";
 import type { PluginStateNativeParameter } from "../../kit/ui/plugin-state-session";
@@ -452,6 +453,10 @@ function buildHarnessStatus(manifest: unknown) {
         manifest,
         details: {
             inputs: [
+                ...allEffectOutputTrimHostEndpointIDs().map(endpointID => ({
+                    endpointID, purpose: "parameter",
+                    annotation: { name: "Output Trim", min: EFFECT_OUTPUT_TRIM_SILENCE_DB, max: EFFECT_OUTPUT_TRIM_MAX_DB, init: 0, unit: "dB" },
+                })),
                 {
                     endpointID: midiInputEndpointID,
                     purpose: "event",

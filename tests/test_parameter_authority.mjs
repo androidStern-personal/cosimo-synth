@@ -4,6 +4,7 @@ import path from "node:path";
 
 import { loadUIModule } from "./helpers/load_ui_module.mjs";
 import { loadChannel, waitForModulation } from "./helpers/modulation_state_fixture.mjs";
+import { createSynthParameterFixture } from "./helpers/synth_parameter_fixture.mjs";
 
 const repoRoot = path.resolve(import.meta.dirname, "..");
 const modulesPromise = Promise.all([
@@ -63,6 +64,7 @@ class FakePatchConnection {
 
     emitParameter(endpointID, value) {
         this.parameterValues.set(endpointID, value);
+        this.observeParameter?.(endpointID);
         this.parameterListeners.get(endpointID)?.forEach((listener) => listener(value));
     }
 }
@@ -73,21 +75,20 @@ test("Cmajor parameters are the sole ordinary knob-value authority", async (t) =
     const descriptor = descriptors.getTargetDescriptor(targetID);
     assert.equal(descriptor.binding._tag, "endpoint");
     const endpointID = descriptor.binding.endpointId;
+    const { values, readParameter } = createSynthParameterFixture({ [endpointID]: descriptor.binding.toEngine(0.21) });
     const connection = new FakePatchConnection({
-        [endpointID]: descriptor.binding.toEngine(0.21),
-        playMode: 0, glideTime: 0, globalTune: 0,
+        ...Object.fromEntries(values),
     }, {
         "uiPatchValues.v1": JSON.stringify({ [targetID]: 0.91 }),
         "uiPatchValues.v2": JSON.stringify({ [targetID]: 0.84 }),
     });
+    connection.parameterValues = values;
     const defects = [];
-    // The new adapter requires the actual shared state channel even though this
-    // test's cutoff continues through the normal parameter connection.
+    // The actual shared owner accepts cutoff edits and observes native changes;
+    // the fake connection substitutes only native parameter storage/publication.
     const host = createMockPluginStateHost({
         loadChannel,
-        readParameter: async endpoint => ({ endpoint, value: connection.parameterValues.get(endpoint),
-            min: endpoint === "globalTune" ? -24 : 0, max: endpoint === "globalTune" ? 24 : 2,
-            step: endpoint === "playMode" ? 1 : 0, defaultValue: 0 }),
+        readParameter,
         writeParameter: (endpoint, value) => connection.sendEventOrValue(endpoint, value),
         storedValues: { read: key => connection.storedState[key], write: (key, value) => connection.sendStoredStateValue(key, value) },
         beginGesture() {}, endGesture() {}, onDefect: error => defects.push(String(error)),
@@ -95,6 +96,7 @@ test("Cmajor parameters are the sole ordinary knob-value authority", async (t) =
     connection.addEventListener = host.addEventListener;
     connection.removeEventListener = host.removeEventListener;
     connection.sendMessageToServer = host.sendMessageToServer;
+    connection.observeParameter = host.observeParameter;
     const adapter = adapterModule.createCosimoBridgeAdapter({ connection });
     t.after(async () => { adapter.dispose(); await host.stop(); assert.deepEqual(defects, []); });
     await host.ready;
@@ -110,6 +112,7 @@ test("Cmajor parameters are the sole ordinary knob-value authority", async (t) =
         layer: { _tag: "patchBase" },
     });
     assert.equal(adapter.getSnapshot().patch.parameterValues[targetID], 0.74);
+    await waitForModulation(() => connection.sentEvents.some(event => event.endpointID === endpointID));
     assert.deepEqual(connection.sentEvents.filter((event) => event.endpointID === endpointID), [{
         endpointID,
         value: descriptor.binding.toEngine(0.74),
@@ -117,6 +120,7 @@ test("Cmajor parameters are the sole ordinary knob-value authority", async (t) =
     assert.deepEqual(connection.storedWrites, []);
 
     connection.emitParameter(endpointID, descriptor.binding.toEngine(0.33));
+    await waitForModulation(() => Math.abs(adapter.getSnapshot().patch.parameterValues[targetID] - 0.33) < 1e-12);
     assert.ok(Math.abs(adapter.getSnapshot().patch.parameterValues[targetID] - 0.33) < 1e-12);
     adapter.dispose();
 });

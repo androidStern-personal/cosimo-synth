@@ -155,13 +155,15 @@ test("live invalid v6 retains the last valid state without a repair write", asyn
     assert.deepEqual(connection.storedWrites, []);
 });
 
-test("owner boot reads only the current declared modulation key", async (t) => {
+test("owner boot reads the current modulation document and the other declared synth documents", async (t) => {
     const modulation = await modulationModulePromise;
     const connection = new FakePatchConnection();
     connection.requestFullStoredState = undefined;
     const { bridge, restore, client } = await createModulationFixture(t, connection);
 
 
-    assert.deepEqual(connection.requestedKeys, ["modulation.v6"]);
+    assert.deepEqual(connection.requestedKeys, ["modulation.v6", "lane.v1", "articulations.v4"]);
+    assert.deepEqual(connection.requestedKeys.filter(key => key.startsWith("modulation.")), [modulation.MODULATION_STATE_KEY],
+        "legacy modulation documents must never be requested");
     assert.deepEqual(connection.storedWrites, []);
 });

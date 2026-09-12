@@ -4,6 +4,7 @@ import path from "node:path";
 import { pathToFileURL } from "node:url";
 import { loadUIModule } from "../kit/tests/helpers/load_ui_module.mjs";
 import { stageCmajorWebRuntime } from "../ui/vite.shared.mjs";
+import { createSynthParameterFixture, synthParameterEndpoints } from "./helpers/synth_parameter_fixture.mjs";
 
 const root = path.resolve(import.meta.dirname, "..");
 const { createMockPluginStateHost } = await loadUIModule(root, "ui/shared/mock-plugin-state-host.ts");
@@ -23,14 +24,13 @@ async function until(predicate) {
 }
 
 test("the dev host uses the production service for queued startup, detach, shared Undo and host observation", async () => {
-    const values = new Map([["playMode", 1], ["glideTime", 0.15], ["globalTune", -7.5]]);
+    const { values, readParameter } = createSynthParameterFixture({ playMode: 1, glideTime: 0.15, globalTune: -7.5 });
     const writes = [], gestures = [], defects = [];
     let release;
     const gate = new Promise(resolve => { release = resolve; });
     const host = createMockPluginStateHost({
         loadChannel: async () => { await gate; return loadChannel(); },
-        readParameter: async endpoint => ({ endpoint, value: values.get(endpoint), min: endpoint === "globalTune" ? -24 : 0,
-            max: endpoint === "globalTune" ? 24 : 2, step: endpoint === "playMode" ? 1 : 0, defaultValue: 0 }),
+        readParameter,
         writeParameter(endpoint, value) { writes.push([endpoint, value]); values.set(endpoint, value); },
         beginGesture(endpoint) { gestures.push(["start", endpoint]); },
         endGesture(endpoint) { gestures.push(["end", endpoint]); },
@@ -103,7 +103,8 @@ test("stop aborts an outstanding external host read and releases its subscriptio
     const host = createMockPluginStateHost({
         loadChannel,
         readParameter: (_endpoint, signal) => new Promise((resolve, reject) => {
-            const subscription = {};
+            const subscription = _endpoint;
+            assert.equal(subscriptions.has(subscription), false, "one read per declared parameter");
             subscriptions.add(subscription);
             signal?.addEventListener("abort", () => { subscriptions.delete(subscription); reject(new Error("Host read stopped")); }, { once: true });
         }),
@@ -112,7 +113,8 @@ test("stop aborts an outstanding external host read and releases its subscriptio
         endGesture() { assert.fail("No active gesture"); },
         onDefect: error => defects.push(String(error)),
     });
-    await until(() => subscriptions.size === 3);
+    await until(() => subscriptions.size === synthParameterEndpoints.length);
+    assert.deepEqual([...subscriptions].sort(), [...synthParameterEndpoints].sort());
     await host.stop();
     assert.equal(subscriptions.size, 0);
     await host.ready;
@@ -144,12 +146,11 @@ test("dev host shares native modulation storage with the real owner and fences r
     const initial = createDefaultModulationState();
     initial.msegSlots[0].shapeB.points[0].y = 0.34;
     const stored = new Map([[MODULATION_STATE_KEY, JSON.stringify(initial)], ["unowned", "retained"]]);
-    const parameters = new Map([["playMode", 1], ["glideTime", 0.15], ["globalTune", -7.5]]);
+    const { values: parameters, readParameter } = createSynthParameterFixture({ playMode: 1, glideTime: 0.15, globalTune: -7.5 });
     const writes = [], defects = [];
     const host = createMockPluginStateHost({
         loadChannel,
-        readParameter: async endpoint => ({ endpoint, value: parameters.get(endpoint), min: endpoint === "globalTune" ? -24 : 0,
-            max: endpoint === "globalTune" ? 24 : 2, step: endpoint === "playMode" ? 1 : 0, defaultValue: 0 }),
+        readParameter,
         writeParameter(endpoint, value) { parameters.set(endpoint, value); },
         storedValues: {
             read: key => stored.get(key),

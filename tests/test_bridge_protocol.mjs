@@ -220,11 +220,12 @@ test("a bound base edit reaches Cmajor without rebuilding articulation snapshots
         layer: { _tag: "patchBase" },
     });
 
+    await waitForModulation(() => harness.connection.getDebugSnapshot().parameterValues.filterQ === resonanceDescriptor.binding.toEngine(0.73));
     const debug = harness.connection.getDebugSnapshot();
-    assert.deepEqual(
-        debug.sentMessages.filter((message) => message.endpointID === "filterQ"),
+    assert.equal(debug.parameterValues.filterQ, resonanceDescriptor.binding.toEngine(0.73), "the native parameter receiver applied the owner publication");
+    assert.deepEqual(debug.sentMessages.filter(message => message.endpointID === "filterQ"),
         [{ endpointID: "filterQ", value: resonanceDescriptor.binding.toEngine(0.73) }],
-    );
+        "the native parameter receiver applied exactly one owner publication");
     assert.deepEqual(
         debug.sentMessages.filter((message) => message.endpointID === "articulationSnapshot"),
         [],
@@ -349,10 +350,10 @@ test("macro value events and macro-name persistence use their engine protocols",
     harness.connection.clearDebugLog();
 
     harness.adapter.commands.setMacroValue("macro-1", 0.31);
-    assert.deepEqual(
-        harness.connection.getDebugSnapshot().sentMessages,
-        [{ endpointID: "macro1", value: 0.31 }],
-    );
+    await waitForModulation(() => harness.connection.getDebugSnapshot().parameterValues.macro1 === 0.31);
+    assert.equal(harness.connection.getDebugSnapshot().parameterValues.macro1, 0.31);
+    assert.deepEqual(harness.connection.getDebugSnapshot().sentMessages.filter(message => message.endpointID === "macro1"),
+        [{ endpointID: "macro1", value: 0.31 }]);
 
     harness.adapter.commands.renameMacro("macro-1", "Shimmer");
     await new Promise(resolve => setImmediate(resolve));
@@ -362,69 +363,38 @@ test("macro value events and macro-name persistence use their engine protocols",
 test("articulation add, override, and clear persist v4 for sole-owner worker publication", async (t) => {
     const harness = await createHarness();
     t.after(() => harness.adapter.dispose());
+    const uploads = () => harness.connection.getDebugSnapshot().sentMessages.filter(message => message.endpointID === "articulationSnapshot");
+    const settled = () => waitForModulation(() => uploads().length > 0);
     harness.connection.clearDebugLog();
-
     const articulationId = expectOk(harness.adapter.commands.addArticulation(), "add articulation");
+    assert.deepEqual(uploads(), [], "the GUI does not upload a runtime image");
+    await settled();
     let stored = parseStoredArticulations(harness);
-    let slot = stored.slots.find((candidate) => candidate.id === articulationId);
+    let slot = stored.slots.find(candidate => candidate.id === articulationId);
     assert.notEqual(slot, undefined);
     const selector = slot.runtimeSlot;
-    assert.deepEqual(
-        harness.connection.getDebugSnapshot().sentMessages
-            .filter((message) => message.endpointID === "articulationSnapshot"),
-        [],
-        "the adapter only persists the declarative change",
-    );
-    await flushMicrotasks();
-    assert.deepEqual(
-        harness.connection.getDebugSnapshot().sentMessages
-            .filter((message) => message.endpointID === "articulationSnapshot")
-            .map((message) => message.value.selectorA),
-        [selector],
-    );
+    assert.deepEqual(uploads().map(message => message.value.selectorA), [selector]);
 
     harness.connection.clearDebugLog();
     const resonanceDescriptor = harness.descriptors.getTargetDescriptor(
-        expectOk(harness.descriptors.parseTargetId("voice-filter.resonance"), "parse resonance target"),
-    );
-    harness.adapter.commands.setParameter({
-        targetId: "voice-filter.resonance",
-        value: 0.42,
-        layer: { _tag: "articulationOverride", articulationId },
-    });
+        expectOk(harness.descriptors.parseTargetId("voice-filter.resonance"), "parse resonance target"));
+    harness.adapter.commands.setParameter({ targetId: "voice-filter.resonance", value: 0.42,
+        layer: { _tag: "articulationOverride", articulationId } });
+    assert.deepEqual(uploads(), []);
+    await settled();
     stored = parseStoredArticulations(harness);
-    slot = stored.slots.find((candidate) => candidate.id === articulationId);
+    slot = stored.slots.find(candidate => candidate.id === articulationId);
     assert.equal(slot.overrides.filterQ, resonanceDescriptor.binding.toEngine(0.42));
-    assert.deepEqual(
-        harness.connection.getDebugSnapshot().sentMessages
-            .filter((message) => message.endpointID === "articulationSnapshot"),
-        [],
-    );
-    await flushMicrotasks();
-    assert.deepEqual(
-        harness.connection.getDebugSnapshot().sentMessages
-            .filter((message) => message.endpointID === "articulationSnapshot")
-            .map((message) => message.value.selectorA),
-        [selector],
-    );
+    assert.deepEqual(uploads().map(message => message.value.selectorA), [selector]);
 
     harness.connection.clearDebugLog();
     harness.adapter.commands.clearArticulationBaseOverride("voice-filter.resonance", articulationId);
+    assert.deepEqual(uploads(), []);
+    await settled();
     stored = parseStoredArticulations(harness);
-    slot = stored.slots.find((candidate) => candidate.id === articulationId);
+    slot = stored.slots.find(candidate => candidate.id === articulationId);
     assert.equal(Object.hasOwn(slot.overrides, "filterQ"), false);
-    assert.deepEqual(
-        harness.connection.getDebugSnapshot().sentMessages
-            .filter((message) => message.endpointID === "articulationSnapshot"),
-        [],
-    );
-    await flushMicrotasks();
-    assert.deepEqual(
-        harness.connection.getDebugSnapshot().sentMessages
-            .filter((message) => message.endpointID === "articulationSnapshot")
-            .map((message) => message.value.selectorA),
-        [selector],
-    );
+    assert.deepEqual(uploads().map(message => message.value.selectorA), [selector]);
 });
 
 test("audition begin and end send paired MIDI note-on/note-off events", async (t) => {

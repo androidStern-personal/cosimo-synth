@@ -272,6 +272,47 @@ test("raw owner updates settle GUI edits with parsed canonical values and addres
     await owner.service.stop();
 });
 
+test("compound GUI edits cross the JSON channel as one history action and retain per-field save failure evidence", async t => {
+    const owner = await openService();
+    const connection = new RecordingPatchConnection();
+    const client = createCmajorPluginStateClient(definition, connection, { onDefect: error => assert.fail(String(error)) });
+    t.after(async () => { client.stop(); await owner.service.stop(); });
+    const state = owner.connection.bodies("update").at(-1).state;
+    connection.deliver({ kind: "attached", request: 1, scope: owner.scope, client: 7, revision: state.revision, state });
+    const send = async command => {
+        const pending = client.dispatch(command);
+        const message = connection.bodies("command").at(-1);
+        owner.connection.deliver({ kind: "command", address: { ...message.scope, client: message.client, sequence: message.sequence }, command: message.command });
+        connection.deliver(owner.connection.bodies("update").at(-1));
+        return pending;
+    };
+    const edited = await send({ kind: "edit-many", edits: [
+        { key: "gain", value: 3.24, expectedVersion: 0 },
+        { key: "curve", value: [1, 0], expectedVersion: 0 },
+    ] });
+    assert.equal(edited.kind, "accepted"); assert.ok(edited.historyEntry);
+    assert.equal(client.getSnapshot().state.fields.gain.value, 3, "host quantization is applied inside the compound edit");
+    assert.deepEqual(client.getSnapshot().state.fields.curve.value, [1, 0]);
+    const writes = owner.connection.bodies("publish");
+    const savedCurve = writes.find(message => message.operations.some(op => op.kind === "stored" && op.key === "curve"));
+    const savedGain = writes.find(message => message.operations.some(op => op.kind === "parameter"));
+    assert.ok(savedCurve); assert.ok(savedGain);
+    owner.connection.deliver({ kind: "published", scope: owner.scope, request: savedGain.request, result: { kind: "observed" } });
+    owner.connection.deliver({ kind: "published", scope: owner.scope, request: savedCurve.request, result: { kind: "failed", reason: "disk unavailable" } });
+    connection.deliver(owner.connection.bodies("update").at(-1));
+    assert.equal(client.getSnapshot().state.fields.gain.persistence.kind, "host-managed");
+    assert.deepEqual(client.getSnapshot().state.fields.curve.persistence, { kind: "failed", reason: "disk unavailable" });
+    assert.deepEqual(client.getSnapshot().state.fields.curve.value, [1, 0], "a failed save preserves the accepted edit and its history");
+    assert.equal((await send({ kind: "undo", expectedEntry: edited.historyEntry })).kind, "accepted");
+    assert.equal(client.getSnapshot().state.fields.gain.value, 2.5);
+    assert.deepEqual(client.getSnapshot().state.fields.curve.value, [0, 1]);
+    assert.equal(client.getSnapshot().state.history.canUndo, false);
+    await send({ kind: "redo" });
+    assert.equal(client.getSnapshot().state.fields.gain.value, 3);
+    assert.deepEqual(client.getSnapshot().state.fields.curve.value, [1, 0]);
+    assert.equal(client.getSnapshot().state.history.canRedo, false);
+});
+
 test("raw replacement resets GUI tickets, hydrates the new document and fences old publications and parameter observations", async () => {
     const owner = await openService();
     const connection = new RecordingPatchConnection();

@@ -1,3 +1,5 @@
+import { articulationStateCodec } from "./synth-document-state";
+import { effectOutputTrimHostEndpointID, effectOutputTrimLaneEndpointID } from "./effect-output-trim";
 import {
     ArticulationSlotsExhausted,
     MappingAlreadyExists,
@@ -21,7 +23,6 @@ import {
     createEmptyArticulationsState,
     lowestFreeRuntimeSlot,
     parseArticulationsV4,
-    serializeArticulationsV4,
     type ArticulationSlotV4,
     type ArticulationsState,
     type ArticulationVoiceParameterId,
@@ -67,10 +68,8 @@ import {
     LANE_STATE_KEY,
     LANE_TYPE_TO_EFFECT_ID,
     RACK_EFFECT_ORDER,
-    sendLaneParamValue,
 } from "./lane-state";
 import {
-    commitLaneStateV2,
     createDefaultLaneStateV2,
     findLaneDevicePath,
     getLaneDeviceEnabled,
@@ -78,7 +77,7 @@ import {
     moveLaneDevice,
     parseLaneInstanceId,
     parseLaneStateV2,
-    serializeLaneStateV2,
+    synchronizeLaneOutputTrimsFromHostParameters,
     setLaneDeviceEnabled,
     setLaneDeviceParam,
     type LaneStateV2,
@@ -132,11 +131,7 @@ type DeletedSourceBackup = {
     readonly historyEntry: PluginStateHistoryEntry | undefined;
     readonly historyHead: PluginStateHistoryEntry | undefined;
     readonly version: number;
-    readonly envelopeValue: ModulationEnvelope | null;
-    readonly macroValue: NormalizedValue | null;
-    readonly msegMorphValue: NormalizedValue | null;
     readonly mappingCreationOrder: ReadonlyArray<string>;
-    readonly articulationRouteAmounts: Readonly<Record<string, Readonly<Record<string, number>>>>;
 };
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -342,13 +337,6 @@ function parseStoredArticulations(
         : parseError(parsed.error.message);
 }
 
-function stableToken(value: unknown): string {
-    try {
-        return `${typeof value}:${JSON.stringify(value)}`;
-    } catch {
-        return `${typeof value}:${String(value)}`;
-    }
-}
 
 function midiNoteNumber(note: string): number {
     const match = /^([A-Ga-g])([#b]?)(-?\d+)$/.exec(note.trim());
@@ -404,7 +392,6 @@ class CosimoBridgeAdapter implements CosimoAdapterPort {
     private documentScope: PluginStateScope | null = null;
     private confirmedMappingIds: ReadonlySet<string> = new Set();
     private parameterValues = createInitialParameterValues();
-    private laneParamDeliverySerial = 0;
     private articulations = createEmptyArticulationsState();
     // lane.v1 is desired state. effectiveRackState has no intent correlation and
     // therefore cannot safely become the base for a later editor command.
@@ -432,7 +419,6 @@ class CosimoBridgeAdapter implements CosimoAdapterPort {
     private readonly routeReducers = new Map<string, MappingReducer>();
     private mappingCreationOrder: Array<string> = [];
     private readonly listeners = new Set<() => void>();
-    private readonly pendingStoredStateEchoes = new Map<string, Map<string, number>>();
     private readonly parameterListenerCleanups: Array<() => void> = [];
     private deletedSourceBackup: DeletedSourceBackup | null = null;
     private activeMidiNote: number | null = null;
@@ -440,6 +426,7 @@ class CosimoBridgeAdapter implements CosimoAdapterPort {
     private snapshot: PatchSnapshot;
     private commandDepth = 0;
     private snapshotDirty = false;
+    private stateSnapshotDeferred = false;
     private hydrationComplete = false;
     private disposed = false;
 
@@ -467,12 +454,42 @@ class CosimoBridgeAdapter implements CosimoAdapterPort {
 
     private readonly handleStateSnapshot = (): void => {
         if (this.disposed) return;
+        if (this.commandDepth > 0) { this.stateSnapshotDeferred = true; return; }
         const snapshot = this.stateLease.client.getSnapshot();
         if (snapshot.kind !== "ready") {
+            if (this.connectionState._tag === "detached") return;
             this.connectionState = snapshot.kind === "connecting" ? { _tag: "connecting" }
                 : { _tag: "detached", reason: snapshot.kind === "failed" ? snapshot.reason : "State client closed." };
             this.markSnapshotDirty();
             return;
+        }
+        const fields: Readonly<Record<string, import("../../kit/ui/plugin-state-session").PluginStateFieldSnapshot<unknown>>> = snapshot.state.fields;
+        const rack = snapshot.state.fields[LANE_STATE_KEY];
+        if (rack?.readiness.kind === "ready" && "value" in rack) {
+            const parsed = parseLaneStateV2(rack.value);
+            if (parsed._tag === "ok") {
+                const parameters = Object.fromEntries(Object.entries(snapshot.state.fields).flatMap(([key, field]) =>
+                    "value" in field && typeof field.value === "number" ? [[key, field.value]] : []));
+                this.rackState = synchronizeLaneOutputTrimsFromHostParameters(parsed.value, parameters);
+                this.refreshLaneParameterValues();
+            }
+        }
+        const articulations = snapshot.state.fields[ARTICULATIONS_V4_STATE_KEY];
+        if (articulations?.readiness.kind === "ready" && "value" in articulations)
+            this.articulations = articulations.value;
+        for (const descriptor of allTargetDescriptors()) {
+            if (descriptor.binding._tag !== "endpoint" || getRackParameterDescriptor(descriptor.binding.endpointId)) continue;
+            const field = fields[descriptor.binding.endpointId];
+            if (field?.readiness.kind === "ready" && "value" in field && typeof field.value === "number")
+                this.parameterValues = { ...this.parameterValues, [descriptor.targetId]: descriptor.binding.fromEngine(field.value) };
+        }
+        for (let index = 0; index < this.macroValues.length; index++) {
+            const field = fields[`macro${index + 1}`];
+            if (field?.readiness.kind === "ready" && "value" in field && typeof field.value === "number") this.macroValues[index] = clampNormalizedValue(field.value);
+        }
+        for (let index = 0; index < this.msegMorphValues.length; index++) {
+            const field = fields[MSEG_MORPH_ENDPOINT_IDS[index]!];
+            if (field?.readiness.kind === "ready" && "value" in field && typeof field.value === "number") this.msegMorphValues[index] = clampNormalizedValue(field.value);
         }
         const scope = snapshot.state.scope;
         const changedDocument = scope && this.documentScope && !this.sameDocument(this.documentScope);
@@ -525,39 +542,9 @@ class CosimoBridgeAdapter implements CosimoAdapterPort {
     }
 
     private readonly handleStoredStateValue = (message: unknown): void => {
-        if (this.disposed || !isRecord(message) || typeof message.key !== "string") {
-            return;
-        }
-        if (this.consumePendingStoredStateEcho(message.key, message.value)) {
-            return;
-        }
-
-        this.runCommand(() => {
-            if (message.key === LANE_STATE_KEY) {
-                const parsed = parseLaneStateV2(message.value);
-                if (parsed._tag === "err") {
-                    this.detach(parsed.message);
-                    return;
-                }
-                this.rackState = parsed.value;
-                this.refreshLaneParameterValues();
-                commitLaneStateV2(this.connection, this.rackState);
-                this.markSnapshotDirty();
-                return;
-            }
-            if (message.key === ARTICULATIONS_V4_STATE_KEY) {
-                const parsed = parseStoredArticulations(
-                    message.value,
-                    this.confirmedMappingIds,
-                );
-                if (parsed._tag === "err") {
-                    this.detach(parsed.message);
-                    return;
-                }
-                this.articulations = parsed.value;
-                this.markSnapshotDirty();
-            }
-        });
+        if (this.disposed || !isRecord(message)) return;
+        if (message.key === LANE_STATE_KEY || message.key === ARTICULATIONS_V4_STATE_KEY)
+            this.handleStateSnapshot();
     };
 
     constructor(connection: PatchConnectionLike) {
@@ -653,7 +640,6 @@ class CosimoBridgeAdapter implements CosimoAdapterPort {
                 throw new Error(`Rack is missing effect ${knownEffectId}`);
             }
             this.rackState = next;
-            commitLaneStateV2(this.connection, this.rackState);
             this.persistLaneState();
             this.markSnapshotDirty();
         }),
@@ -811,6 +797,10 @@ class CosimoBridgeAdapter implements CosimoAdapterPort {
 
         const rawArticulations = readFullStoredStateValue(storedState, ARTICULATIONS_V4_STATE_KEY);
         const rawRackState = readFullStoredStateValue(storedState, LANE_STATE_KEY);
+        if (rawArticulations !== undefined) {
+            const parsed = articulationStateCodec.parse(rawArticulations);
+            if (parsed.kind === "error") { this.detach(parsed.message); return; }
+        }
         this.pendingHydration = { value: storedState };
         const clientSnapshot = this.stateLease.client.getSnapshot();
         const restoredModulationState = this.modulationBridge.getState();
@@ -852,7 +842,6 @@ class CosimoBridgeAdapter implements CosimoAdapterPort {
             }
             this.hydrationComplete = true;
             this.adoptValidRoutes(validRoutes);
-            commitLaneStateV2(this.connection, this.rackState);
             this.markSnapshotDirty();
         });
     }
@@ -869,6 +858,10 @@ class CosimoBridgeAdapter implements CosimoAdapterPort {
         } finally {
             this.commandDepth -= 1;
             if (this.commandDepth === 0) {
+                if (this.stateSnapshotDeferred) {
+                    this.stateSnapshotDeferred = false;
+                    this.handleStateSnapshot();
+                }
                 this.flushSnapshot();
             }
         }
@@ -1150,17 +1143,14 @@ class CosimoBridgeAdapter implements CosimoAdapterPort {
                         throw new Error(`Rack is missing effect ${laneParameter.effectId}`);
                     }
                     this.rackState = next;
-                    this.laneParamDeliverySerial += 1;
-                    sendLaneParamValue(
-                        this.connection,
-                        laneParameter.effectId,
-                        laneParameter.endpointID,
-                        engineValue,
-                        this.laneParamDeliverySerial,
-                    );
-                    this.persistLaneState();
+                    const device = parseLaneInstanceId(laneDeviceIdForEffect(laneParameter.effectId));
+                    if (device && laneParameter.endpointID === effectOutputTrimLaneEndpointID(device.deviceType)) {
+                        this.editParameter(effectOutputTrimHostEndpointID(device.deviceType, device.instanceNumber), engineValue);
+                    } else {
+                        this.persistLaneState();
+                    }
                 } else {
-                    this.connection.sendEventOrValue?.(
+                    this.editParameter(
                         descriptor.binding.endpointId,
                         descriptor.binding.toEngine(input.value),
                     );
@@ -1240,25 +1230,18 @@ class CosimoBridgeAdapter implements CosimoAdapterPort {
 
     private async removeMapping(mappingId: MappingId): ReturnType<CosimoCommands["removeMapping"]> {
         const mapping = this.requireMapping(mappingId);
-        const accepted = await this.editBank({ ...this.projectedModulationState,
-            routes: this.projectedModulationState.routes.filter(route => route.id !== mapping.route.id),
-        });
+        const articulations = { ...this.articulations, slots: this.articulations.slots.map(slot => ({ ...slot,
+            routeAmounts: Object.fromEntries(Object.entries(slot.routeAmounts).filter(([id]) => id !== mappingId)),
+        })) };
+        const accepted = await this.editDocuments([
+            { key: MODULATION_STATE_KEY, value: { ...this.projectedModulationState,
+                routes: this.projectedModulationState.routes.filter(route => route.id !== mapping.route.id) } },
+            { key: ARTICULATIONS_V4_STATE_KEY, value: articulations },
+        ]);
         if (accepted._tag === "err") return accepted;
         if (!this.sameDocument(accepted.value.scope)) return err(new StateEditRefused(accepted.value.receipt));
-        this.runCommand(() => {
-            this.routeReducers.delete(mappingId);
-            this.articulations = {
-                ...this.articulations,
-                slots: this.articulations.slots.map((slot) => ({
-                    ...slot,
-                    routeAmounts: Object.fromEntries(
-                        Object.entries(slot.routeAmounts).filter(([routeId]) => routeId !== mappingId),
-                    ),
-                })),
-            };
-            this.persistArticulations();
-            this.markSnapshotDirty();
-        });
+        this.routeReducers.delete(mappingId);
+        this.markSnapshotDirty();
         return ok(undefined);
     }
 
@@ -1324,12 +1307,14 @@ class CosimoBridgeAdapter implements CosimoAdapterPort {
         if (definition === undefined) {
             return err(new SourceSlotsExhausted(type, definitions.length));
         }
-        const accepted = await this.editBank(this.resetSourceBank(this.projectedModulationState, definition));
+        const accepted = await this.editDocuments([
+            { key: MODULATION_STATE_KEY, value: this.resetSourceBank(this.projectedModulationState, definition) },
+            ...this.sourceParameterResets(definition),
+        ]);
         if (accepted._tag === "err") return accepted;
         if (!this.sameDocument(accepted.value.scope)) return err(new StateEditRefused(accepted.value.receipt));
         this.runCommand(() => {
             this.visibleSourceIds.add(definition.idRaw);
-            this.resetSourceParameters(definition);
             this.deletedSourceBackup = null;
             this.markSnapshotDirty();
         });
@@ -1352,6 +1337,26 @@ class CosimoBridgeAdapter implements CosimoAdapterPort {
 
     // Callers also check the returned scope immediately before dependent
     // effects: their await introduces another turn in which a reset can arrive.
+    private async editDocuments(values: ReadonlyArray<{ readonly key: string; readonly value: unknown }>) {
+        const current = this.stateLease.client.getSnapshot();
+        if (this.disposed || current.kind !== "ready" || !current.state.scope)
+            return err(new StateEditRefused({ kind: "rejected", reason: "not-ready" }));
+        if (values.some(({ key }) => current.pendingFields.includes(key)))
+            return err(new StateEditRefused({ kind: "rejected", reason: "busy" }));
+        const fields: Readonly<Record<string, import("../../kit/ui/plugin-state-session").PluginStateFieldSnapshot<unknown>>> = current.state.fields;
+        const edits = [];
+        for (const { key, value } of values) {
+            const field = fields[key];
+            if (!field || field.readiness.kind !== "ready" || !("version" in field))
+                return err(new StateEditRefused({ kind: "rejected", reason: "not-ready" }));
+            edits.push({ key, value, expectedVersion: field.version });
+        }
+        const scope = current.state.scope;
+        const result = await this.stateLease.client.dispatch({ kind: "edit-many", edits });
+        if (result.kind !== "accepted" || !this.sameDocument(scope)) return err(new StateEditRefused(result));
+        return ok({ receipt: result, scope });
+    }
+
     private async editBank(value: ModulationState) {
         const current = this.stateLease.client.getSnapshot();
         if (this.disposed) return err(new StateEditRefused({ kind: "rejected", reason: "service-closed" }));
@@ -1376,14 +1381,11 @@ class CosimoBridgeAdapter implements CosimoAdapterPort {
         return state;
     }
 
-    private resetSourceParameters(definition: SourceDefinition): void {
+    private sourceParameterResets(definition: SourceDefinition) {
         const index = this.slotIndex(definition);
-        if (definition.type === "macro") this.macroValues[index] = clampNormalizedValue(0);
-        else if (definition.type === "envelope") this.writeEnvelopeParameters(definition, createDefaultEnvelope(index));
-        else if (definition.type === "mseg") {
-            this.msegMorphValues[index] = clampNormalizedValue(0);
-            this.connection.sendEventOrValue?.(MSEG_MORPH_ENDPOINT_IDS[index], 0);
-        }
+        if (definition.type === "envelope") return this.envelopeParameterEdits(definition, createDefaultEnvelope(index));
+        if (definition.type === "mseg") return [{ key: MSEG_MORPH_ENDPOINT_IDS[index]!, value: 0 }];
+        return [{ key: `macro${index + 1}`, value: 0 }];
     }
 
     private async deleteSource(sourceId: SourceId): ReturnType<CosimoCommands["deleteSource"]> {
@@ -1396,17 +1398,17 @@ class CosimoBridgeAdapter implements CosimoAdapterPort {
             .filter(route => route.sourceId === sourceId).map(route => route.route.id));
         const metadata = {
             definition,
-            envelopeValue: definition.type === "envelope"
-                ? buildParameterOwnedEnvelope(this.parameterValues, state.envelopeSlots[this.slotIndex(definition)]?.name ?? definition.label, this.slotIndex(definition)) : null,
-            macroValue: definition.type === "macro" ? this.macroValues[this.slotIndex(definition)] ?? clampNormalizedValue(0) : null,
-            msegMorphValue: definition.type === "mseg" ? this.msegMorphValues[this.slotIndex(definition)] ?? clampNormalizedValue(0) : null,
             mappingCreationOrder: [...this.mappingCreationOrder],
-            articulationRouteAmounts: Object.fromEntries(this.articulations.slots.map(slot => [slot.id,
-                Object.fromEntries(Object.entries(slot.routeAmounts).filter(([id]) => removedMappingIds.has(id))),
-            ])),
         };
         const next = this.resetSourceBank({ ...state, routes: state.routes.filter(route => !removedMappingIds.has(route.id)) }, definition);
-        const accepted = await this.editBank(next);
+        const articulations = { ...this.articulations, slots: this.articulations.slots.map(slot => ({ ...slot,
+            routeAmounts: Object.fromEntries(Object.entries(slot.routeAmounts).filter(([id]) => !removedMappingIds.has(id))),
+        })) };
+        const accepted = await this.editDocuments([
+            { key: MODULATION_STATE_KEY, value: next },
+            { key: ARTICULATIONS_V4_STATE_KEY, value: articulations },
+            ...this.sourceParameterResets(definition),
+        ]);
         if (accepted._tag === "err") return accepted;
         if (!this.sameDocument(accepted.value.scope)) return err(new StateEditRefused(accepted.value.receipt));
         const current = this.stateLease.client.getSnapshot();
@@ -1414,15 +1416,10 @@ class CosimoBridgeAdapter implements CosimoAdapterPort {
         this.runCommand(() => {
             this.deletedSourceBackup = { ...metadata, scope: accepted.value.scope,
                 historyEntry: accepted.value.receipt.historyEntry, historyHead: current.state.history.undoEntry,
-                version: accepted.value.receipt.version ?? 0,
+                version: "version" in current.state.fields[MODULATION_STATE_KEY] ? (current.state.fields[MODULATION_STATE_KEY].version ?? 0) : 0,
             };
             this.mappingCreationOrder = this.mappingCreationOrder.filter(id => !removedMappingIds.has(id));
-            this.articulations = { ...this.articulations, slots: this.articulations.slots.map(slot => ({ ...slot,
-                routeAmounts: Object.fromEntries(Object.entries(slot.routeAmounts).filter(([id]) => !removedMappingIds.has(id))),
-            })) };
-            this.resetSourceParameters(definition);
             this.visibleSourceIds.delete(definition.idRaw);
-            this.persistArticulations();
             this.markSnapshotDirty();
         });
         return ok(undefined);
@@ -1447,19 +1444,9 @@ class CosimoBridgeAdapter implements CosimoAdapterPort {
         }
         this.runCommand(() => {
             this.visibleSourceIds.add(backup.definition.idRaw);
-            const index = this.slotIndex(backup.definition);
-            if (backup.macroValue !== null) {
-                this.macroValues[index] = backup.macroValue;
-                this.connection.sendEventOrValue?.(`macro${index + 1}`, backup.macroValue);
-            } else if (backup.envelopeValue !== null) this.writeEnvelopeParameters(backup.definition, backup.envelopeValue);
-            else if (backup.msegMorphValue !== null) this.setMsegMorph({ sourceId: sourceIdFromDefinition(backup.definition), morph: backup.msegMorphValue, layer: { _tag: "patchBase" } });
             const restoredIds = new Set(this.projectedModulationState.routes.map(route => route.id));
             this.mappingCreationOrder = backup.mappingCreationOrder.filter(id => restoredIds.has(id));
-            this.articulations = { ...this.articulations, slots: this.articulations.slots.map(slot => ({ ...slot,
-                routeAmounts: { ...slot.routeAmounts, ...Object.fromEntries(Object.entries(backup.articulationRouteAmounts[slot.id] ?? {}).filter(([id]) => restoredIds.has(id))) },
-            })) };
             this.deletedSourceBackup = null;
-            this.persistArticulations();
             this.markSnapshotDirty();
         });
         return ok(undefined);
@@ -1469,7 +1456,7 @@ class CosimoBridgeAdapter implements CosimoAdapterPort {
         const definition = this.requireSource(sourceId, "macro");
         const slotIndex = this.slotIndex(definition);
         this.macroValues[slotIndex] = value;
-        this.connection.sendEventOrValue?.(`macro${slotIndex + 1}`, value);
+        this.editParameter(`macro${slotIndex + 1}`, value);
         this.markSnapshotDirty();
     }
 
@@ -1498,42 +1485,24 @@ class CosimoBridgeAdapter implements CosimoAdapterPort {
         const normalizedEnvelope = isAmpEnvelope
             ? { ...baseEnvelope, name: "Amp Envelope", releaseSeconds: Math.max(0.005, baseEnvelope.releaseSeconds) }
             : baseEnvelope;
-        if (!isAmpEnvelope) {
-            const accepted = await this.editBank({ ...this.projectedModulationState,
-                envelopeSlots: this.projectedModulationState.envelopeSlots.map((slot, index) => index === slotIndex ? { name: normalizedEnvelope.name } : slot),
-            });
-            if (accepted._tag === "err") return accepted;
-            if (!this.sameDocument(accepted.value.scope)) return err(new StateEditRefused(accepted.value.receipt));
-        }
-
-        this.runCommand(() => this.writeEnvelopeParameters(definition, normalizedEnvelope));
-        return ok(undefined);
+        const edits = this.envelopeParameterEdits(definition, normalizedEnvelope);
+        const accepted = await this.editDocuments(isAmpEnvelope ? edits : [
+            { key: MODULATION_STATE_KEY, value: { ...this.projectedModulationState,
+                envelopeSlots: this.projectedModulationState.envelopeSlots.map((slot, index) => index === slotIndex ? { name: normalizedEnvelope.name } : slot) } },
+            ...edits,
+        ]);
+        return accepted._tag === "err" ? accepted : ok(undefined);
     }
 
-    private writeEnvelopeParameters(definition: SourceDefinition, normalizedEnvelope: ModulationEnvelope): void {
+    private envelopeParameterEdits(definition: SourceDefinition, envelope: ModulationEnvelope) {
         const slotIndex = this.slotIndex(definition);
-        const isAmpEnvelope = slotIndex === 3;
-        const parameterValues = [
-            ["attack", normalizedEnvelope.attackSeconds],
-            ["decay", normalizedEnvelope.decaySeconds],
-            ["sustain", normalizedEnvelope.sustain],
-            ["release", normalizedEnvelope.releaseSeconds],
-        ] as const;
-        for (const [field, engineValue] of parameterValues) {
-            const parsedTarget = parseTargetId(`${isAmpEnvelope ? "ampEnvelope" : `env${slotIndex + 1}`}.${field}`);
-            if (parsedTarget._tag === "err") {
-                throw parsedTarget.error;
-            }
-            const descriptor = getTargetDescriptor(parsedTarget.value);
-            if (descriptor.binding._tag !== "endpoint") {
-                throw new Error(`Envelope target ${descriptor.targetId} has no engine endpoint`);
-            }
-            this.setParameter({
-                targetId: parsedTarget.value,
-                value: descriptor.binding.fromEngine(engineValue),
-                layer: { _tag: "patchBase" },
-            });
-        }
+        const prefix = slotIndex === 3 ? "amp" : `env${slotIndex + 1}`;
+        return [
+            { key: `${prefix}Attack`, value: envelope.attackSeconds },
+            { key: `${prefix}Decay`, value: envelope.decaySeconds },
+            { key: `${prefix}Sustain`, value: envelope.sustain },
+            { key: `${prefix}Release`, value: envelope.releaseSeconds },
+        ];
     }
 
     private setMsegMorph(input: Parameters<CosimoCommands["setMsegMorph"]>[0]): void {
@@ -1543,7 +1512,7 @@ class CosimoBridgeAdapter implements CosimoAdapterPort {
         }
         const slotIndex = this.slotIndex(definition);
         this.msegMorphValues[slotIndex] = clampNormalizedValue(input.morph);
-        this.connection.sendEventOrValue?.(`mseg${slotIndex + 1}Morph`, input.morph);
+        this.editParameter(`mseg${slotIndex + 1}Morph`, input.morph);
         this.markSnapshotDirty();
     }
 
@@ -1795,7 +1764,6 @@ class CosimoBridgeAdapter implements CosimoAdapterPort {
             throw new Error(`Rack is missing effect ${knownEffectId}`);
         }
         this.rackState = next;
-        commitLaneStateV2(this.connection, this.rackState);
         this.persistLaneState();
         this.markSnapshotDirty();
     }
@@ -1823,7 +1791,6 @@ class CosimoBridgeAdapter implements CosimoAdapterPort {
                     this.rackState, laneDeviceIdForEffect(restoredEffectId)) ?? false,
             })),
         };
-        commitLaneStateV2(this.connection, this.rackState);
         this.persistLaneState();
         this.markSnapshotDirty();
     }
@@ -1895,12 +1862,14 @@ class CosimoBridgeAdapter implements CosimoAdapterPort {
         const parsed = this.mappingRoute({ targetId: descriptor.targetId, sourceId, amount: descriptor.modAmount.max }, definition);
         if (parsed._tag === "err") return parsed;
         const reset = this.resetSourceBank(this.projectedModulationState, definition);
-        const accepted = await this.editBank({ ...reset, routes: [...reset.routes, parsed.value.route] });
+        const accepted = await this.editDocuments([
+            { key: MODULATION_STATE_KEY, value: { ...reset, routes: [...reset.routes, parsed.value.route] } },
+            ...this.sourceParameterResets(definition),
+        ]);
         if (accepted._tag === "err") return accepted;
         if (!this.sameDocument(accepted.value.scope)) return err(new StateEditRefused(accepted.value.receipt));
         this.runCommand(() => {
             this.visibleSourceIds.add(definition.idRaw);
-            this.resetSourceParameters(definition);
             this.routeReducers.set(parsed.value.mappingId, "Max");
             if (this.audition.captureCandidate === candidate) this.audition = {
                 ...this.audition, triggerActive: false, captureCandidate: null,
@@ -1912,12 +1881,38 @@ class CosimoBridgeAdapter implements CosimoAdapterPort {
     }
 
     private async reset(): ReturnType<CosimoCommands["reset"]> {
+        // Reset follows any edits already submitted by this view. Capture its
+        // document before waiting so an old reset cannot target a new preset.
+        const before = this.stateLease.client.getSnapshot();
+        const scope = before.kind === "ready" ? before.state.scope : null;
+        if (!scope) return err(new StateEditRefused({ kind: "rejected", reason: "not-ready" }));
+        if (before.kind === "ready" && before.pendingFields.length > 0) {
+            await new Promise<void>(resolve => {
+                const remove = this.stateLease.client.subscribe(() => {
+                    const snapshot = this.stateLease.client.getSnapshot();
+                    if (snapshot.kind !== "ready" || snapshot.pendingFields.length === 0) { remove(); resolve(); }
+                });
+            });
+        }
+        if (!this.sameDocument(scope)) return err(new StateEditRefused({ kind: "rejected", reason: "stale-scope" }));
         const modulationState = createDefaultModulationState();
-        const accepted = await this.editBank({ ...modulationState, routes: [] });
+        const rack = createInitialLaneState();
+        const current = this.stateLease.client.getSnapshot();
+        if (current.kind !== "ready") return err(new StateEditRefused({ kind: "rejected", reason: "not-ready" }));
+        const values = new Map<string, number>(Object.entries(current.state.fields).flatMap(([key, field]) =>
+            "metadata" in field && field.metadata ? [[key, field.metadata.defaultValue]] : []));
+        const accepted = await this.editDocuments([
+            { key: MODULATION_STATE_KEY, value: { ...modulationState, routes: [] } },
+            { key: LANE_STATE_KEY, value: rack },
+            { key: ARTICULATIONS_V4_STATE_KEY, value: createEmptyArticulationsState() },
+            ...Array.from(values, ([key, value]) => ({ key, value })),
+        ]);
         if (accepted._tag === "err") return accepted;
         if (!this.sameDocument(accepted.value.scope)) return err(new StateEditRefused(accepted.value.receipt));
         this.runCommand(() => {
-            this.parameterValues = createInitialParameterValues();
+            this.parameterValues = { ...this.parameterValues, ...Object.fromEntries(allTargetDescriptors()
+                .filter(descriptor => descriptor.binding._tag === "unbacked")
+                .map(descriptor => [descriptor.targetId, descriptor.initialValue])) };
             this.articulations = createEmptyArticulationsState();
             this.rackState = createInitialLaneState();
             this.compoundSettings = {};
@@ -1938,19 +1933,14 @@ class CosimoBridgeAdapter implements CosimoAdapterPort {
             }
             for (let index = 0; index < this.macroValues.length; index += 1) {
                 this.macroValues[index] = clampNormalizedValue(0);
-                this.connection.sendEventOrValue?.(`macro${index + 1}`, 0);
             }
             for (let index = 0; index < this.msegMorphValues.length; index += 1) {
                 this.msegMorphValues[index] = clampNormalizedValue(0);
-                this.connection.sendEventOrValue?.(MSEG_MORPH_ENDPOINT_IDS[index], 0);
             }
             this.routeReducers.clear();
             this.mappingCreationOrder = [];
             this.deletedSourceBackup = null;
-            this.persistLaneState();
-            commitLaneStateV2(this.connection, this.rackState);
-            this.persistArticulations();
-            this.uploadAllBoundBaseValues();
+
             this.markSnapshotDirty();
         });
         return ok(undefined);
@@ -2009,66 +1999,27 @@ class CosimoBridgeAdapter implements CosimoAdapterPort {
         return definition.slot - 1;
     }
 
-    private uploadAllBoundBaseValues(): void {
-        for (const descriptor of allTargetDescriptors()) {
-            if (descriptor.binding._tag !== "endpoint") {
-                continue;
-            }
-            if (getRackParameterDescriptor(descriptor.binding.endpointId) !== null) {
-                // Effect parameters have no host endpoints: their values ride
-                // the lane document's record uploads (commitLaneState).
-                continue;
-            }
-            const value = this.parameterValues[descriptor.targetId];
-            if (value === undefined) {
-                throw new Error(`Patch base is missing target ${descriptor.targetId}`);
-            }
-            this.connection.sendEventOrValue?.(descriptor.binding.endpointId, descriptor.binding.toEngine(value));
-        }
+    private editParameter(endpoint: string, value: unknown): void {
+        this.editDocument(endpoint, value);
+    }
+
+    private editDocument(key: string, value: unknown): void {
+        const snapshot = this.stateLease.client.getSnapshot();
+        if (snapshot.kind !== "ready") throw new Error("Cosimo state is not ready.");
+        const fields: Readonly<Record<string, import("../../kit/ui/plugin-state-session").PluginStateFieldSnapshot<unknown>>> = snapshot.state.fields;
+        const field = fields[key];
+        if (!field || field.readiness.kind !== "ready" || !("version" in field)) throw new Error(`Cosimo field ${key} is not ready.`);
+        this.consumeStateEdit(this.stateLease.client.dispatch({ kind: "edit", key, value, expectedVersion: field.version }));
     }
 
     private persistArticulations(): void {
-        this.sendStoredStateValue(
-            ARTICULATIONS_V4_STATE_KEY,
-            JSON.stringify(serializeArticulationsV4(this.articulations)),
-        );
+        this.editDocument(ARTICULATIONS_V4_STATE_KEY, this.articulations);
     }
 
     private persistLaneState(): void {
-        this.sendStoredStateValue(LANE_STATE_KEY, serializeLaneStateV2(this.rackState));
+        this.editDocument(LANE_STATE_KEY, this.rackState);
     }
 
-    private sendStoredStateValue(key: string, value: unknown): void {
-        if (typeof this.connection.sendStoredStateValue !== "function") {
-            return;
-        }
-        const token = stableToken(value);
-        const pendingByToken = this.pendingStoredStateEchoes.get(key) ?? new Map<string, number>();
-        pendingByToken.set(token, (pendingByToken.get(token) ?? 0) + 1);
-        this.pendingStoredStateEchoes.set(key, pendingByToken);
-        this.connection.sendStoredStateValue(key, value);
-    }
-
-    private consumePendingStoredStateEcho(key: string, value: unknown): boolean {
-        const pendingByToken = this.pendingStoredStateEchoes.get(key);
-        if (pendingByToken === undefined) {
-            return false;
-        }
-        const token = stableToken(value);
-        const count = pendingByToken.get(token) ?? 0;
-        if (count === 0) {
-            return false;
-        }
-        if (count === 1) {
-            pendingByToken.delete(token);
-        } else {
-            pendingByToken.set(token, count - 1);
-        }
-        if (pendingByToken.size === 0) {
-            this.pendingStoredStateEchoes.delete(key);
-        }
-        return true;
-    }
 
     private freeArticulationKey(from: number): number {
         const occupied = new Set(this.articulations.slots.map((slot) => slot.key));

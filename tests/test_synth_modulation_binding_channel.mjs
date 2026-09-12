@@ -3,6 +3,7 @@ import test from "node:test";
 import path from "node:path";
 import { loadUIModule } from "./helpers/load_ui_module.mjs";
 import { loadChannel } from "./helpers/modulation_state_fixture.mjs";
+import { createSynthParameterFixture } from "./helpers/synth_parameter_fixture.mjs";
 
 const root = path.resolve(import.meta.dirname, "..");
 
@@ -16,11 +17,12 @@ async function until(predicate) {
 
 test("the actual state channel permits an amount-only modulation delta and processes its final host effect", async () => {
     const [{ createMockPluginStateHost },
-        { createCmajorPluginStateClient }, { synthPluginState }, modulation] = await Promise.all([
+        { createCmajorPluginStateClient }, { synthPluginState }, modulation, lane] = await Promise.all([
         loadUIModule(root, "ui/shared/mock-plugin-state-host.ts"),
         loadUIModule(root, "kit/ui/plugin-state-cmajor.ts"),
         loadUIModule(root, "ui/shared/synth-plugin-state.ts"),
         loadUIModule(root, "ui/shared/modulation.ts"),
+        loadUIModule(root, "ui/shared/lane-state-v2.ts"),
     ]);
     const key = modulation.MODULATION_STATE_KEY;
     const bank = modulation.createDefaultModulationState();
@@ -28,6 +30,10 @@ test("the actual state channel permits an amount-only modulation delta and proce
         targetKind: "oscA.pan", amount: 0.25 })];
     const stored = new Map([[key, JSON.stringify(bank)]]);
     const listeners = new Map(), events = [], prepared = [], hostEffects = [], writes = [], defects = [], protocolFailures = [];
+    const { readParameter } = createSynthParameterFixture();
+    const rackEvents = [];
+    const rackEndpoints = new Set(["laneOutputControl", "laneSlotParams", "laneSlotParamValue", "laneTopology"]);
+    let rackSerial = 0;
     const dspSessionId = 73;
     let modulationSerial = 0;
     const emit = (endpoint, value) => { for (const listener of [...(listeners.get(endpoint) ?? [])]) listener(value); };
@@ -47,8 +53,7 @@ test("the actual state channel permits an amount-only modulation delta and proce
     // accept state, publish native writes and correlate the final receipt.
     const host = createMockPluginStateHost({
         loadChannel,
-        readParameter: async endpoint => ({ endpoint, value: 0, min: endpoint === "globalTune" ? -24 : 0,
-            max: endpoint === "globalTune" ? 24 : 2, step: endpoint === "playMode" ? 1 : 0, defaultValue: 0 }),
+        readParameter,
         writeParameter(endpoint, value) { protocolFailures.push({ unexpectedParameter: endpoint, value }); },
         beginGesture() {}, endGesture() {}, onDefect: error => defects.push(error),
         storedValues: { read: key => stored.get(key), write(key, value) { stored.set(key, value); writes.push({ key, value }); } },
@@ -64,6 +69,12 @@ test("the actual state channel permits an amount-only modulation delta and proce
                 modulationSerial = words[2]; queueMicrotask(() => acknowledge(0));
             },
             sendEvent(endpoint, value) {
+                if (rackEndpoints.has(endpoint)) {
+                    if (endpoint === "laneSlotParams" || endpoint === "laneSlotParamValue")
+                        assert.equal(value.deliverySerial, ++rackSerial, "rack has an independent serial frontier");
+                    rackEvents.push({ endpointID: endpoint, value: structuredClone(value) });
+                    return;
+                }
                 events.push({ endpoint, value: structuredClone(value) });
                 if (endpoint === "runtimeSyncRequest") {
                     queueMicrotask(() => { emit("runtimeState", { dspSessionId }); acknowledge(value); });
@@ -95,6 +106,12 @@ test("the actual state channel permits an amount-only modulation delta and proce
         assert.equal(program.voiceRouteCount, 1);
         assert.equal(program.voiceRouteAmounts[program.voiceRouteCells[0]], 0.25);
         assert.equal(hostEffects.length, 1);
+        await until(() => client.getSnapshot().state.fields["lane.v1"].application?.kind === "sent");
+        const withoutSerial = event => ({ ...event, value: Object.fromEntries(Object.entries(event.value)
+            .filter(([key]) => key !== "deliverySerial")) });
+        assert.deepEqual(rackEvents.map(withoutSerial), lane.buildLaneRuntimeEventsV2(lane.createDefaultLaneStateV2())
+            .filter(event => rackEndpoints.has(event.endpointID)).map(withoutSerial), "the independent rack receiver gets its complete initial state");
+        const rackBefore = rackEvents.length;
         assert.deepEqual(writes, [], "native boot is not an editable-state write");
         const before = events.length;
         const oldGeneration = field().target.generation;
@@ -108,6 +125,7 @@ test("the actual state channel permits an amount-only modulation delta and proce
             "amount-only state acceptance must reach the declared native endpoint and final host receipt");
         const delta = events.slice(before).filter(event => event.endpoint !== "runtimeSyncRequest");
         assert.equal(prepared.length, 6, "an amount edit must not prepare another curve");
+        assert.equal(rackEvents.length, rackBefore, "a modulation amount edit must not republish the rack");
         assert.equal(delta.length, 1, "an amount edit must not resend buffers, playback or the full program");
         assert.deepEqual(delta[0], { endpoint: "modulationAmount", value: {
             pathKind: 1, cellIndex: program.voiceRouteCells[0], amount: 0.75,

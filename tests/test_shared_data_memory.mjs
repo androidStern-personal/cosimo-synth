@@ -201,3 +201,60 @@ test('direct-byte Wasm readers expose word counts and never read past the alloca
     descriptor.set([128,2]);
     assert.equal(reader.readInt32(0,1),new Int32Array(memory.buffer,128,2)[1],'legacy int reader retains sample-count descriptors');
 });
+
+test('mixed fixed-size replacements preserve a reusable large slot within the same arena cap', async () => {
+    const { createSharedDataReader } = await import(moduleURL);
+    const memory = new WebAssembly.Memory({ initial: 2, maximum: 2, shared: true });
+    const maxRetainedBytes = 60032;
+    const host = createSharedDataMemory({ memory, programBytes: 65536, inputCount: 3, maxRetainedBytes });
+    const reader = createSharedDataReader(host.readerConfiguration);
+    const wasm = new WebAssembly.Instance(readerModule, { env: {
+        memory,
+        descriptorBase: new WebAssembly.Global({ value: 'i32', mutable: true }, host.readerConfiguration.descriptorBase),
+        inputCount: new WebAssembly.Global({ value: 'i32', mutable: true }, 3),
+    } }).exports;
+    let generation = 0;
+    const replace = (input, byteLength, value) => {
+        const reserved = host.createResource(new Float32Array(byteLength / 4).fill(value));
+        assert.equal(reserved.kind, 'ready', `input ${input}: replacement must fit the unchanged retained/arena budget`);
+        const request = host.beginRequest(input, ++generation);
+        assert.equal(host.submit(request.ticket, reserved.resource).kind, 'accepted');
+        host.release(reserved.resource);
+        reader.beginBlock();
+        assert.equal(wasm.size(input), byteLength / 4);
+        assert.equal(wasm.read(input, 0), value);
+        assert.equal(wasm.read(input, byteLength / 4 - 1), value);
+        reader.endBlock(); assert.equal(host.drain().length, 1);
+    };
+    try {
+        replace(0, 20000, 0.25);
+        replace(1, 20000, 0.5); // A live allocation separates the large hole from the old small one.
+        replace(2, 16, 0.75);
+        replace(0, 20000, 1);
+        for (let iteration = 0; iteration < 20; iteration++) {
+            replace(2, 16, iteration + 2);
+            replace(0, 20000, iteration + 3);
+            assert.equal(wasm.read(1, 0), 0.5, 'another live reader must stay unchanged');
+            assert.equal(host.retainedBytes, 40016);
+            assert.ok(host.allocatedBytes <= maxRetainedBytes);
+            assert.equal(memory.buffer.byteLength, 2 * 65536, 'no extra memory headroom is added');
+        }
+    } finally { host.stop(); }
+    assert.equal(host.retainedBytes, 0);
+});
+
+test('an existing hole remains usable when preferred tail growth reaches the physical memory limit', () => {
+    const memory = new WebAssembly.Memory({ initial: 1, maximum: 1, shared: true });
+    const host = createSharedDataMemory({ memory, programBytes: 12000, inputCount: 1, maxRetainedBytes: 65536 });
+    try {
+        const first = host.createResource(new Float32Array(7500));
+        const pinned = host.createResource(new Float32Array(5000));
+        assert.equal(first.kind, 'ready'); assert.equal(pinned.kind, 'ready');
+        host.release(first.resource);
+        const replacement = host.createResource(new Float32Array(2500).fill(0.5));
+        assert.equal(replacement.kind, 'ready', 'a usable retired hole must survive unsuccessful optional tail growth');
+        assert.equal(host.retainedBytes, 30000);
+        assert.equal(memory.buffer.byteLength, 65536);
+        host.release(replacement.resource); host.release(pinned.resource);
+    } finally { host.stop(); }
+});

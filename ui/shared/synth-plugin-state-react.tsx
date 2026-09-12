@@ -1,15 +1,14 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 
 import {
     createCmajorPluginStateClient,
     type CmajorStateConnection,
 } from "../../kit/ui/plugin-state-cmajor";
-import { PluginStateProvider, usePluginState } from "../../kit/ui/plugin-state-react";
+import { PluginStateProvider, useOptionalPluginState } from "../../kit/ui/plugin-state-react";
 import type { PluginStateEditResult } from "../../kit/index";
-import type { PluginStateParameter } from "../../kit/ui/plugin-state-definition";
-import type { PatchConnectionLike } from "./cmajor-react";
+import type { PatchParameterPresentationPriority, PatchConnectionLike } from "./cmajor-react";
 import type { PatchControlBinding } from "./patch-controls";
-import { synthPluginState } from "./synth-plugin-state";
+import { synthPluginState, synthParameterByEndpoint } from "./synth-plugin-state";
 import { acquireSynthViewState } from "./synth-state-client";
 import {
     captureUserEditReporter,
@@ -17,7 +16,6 @@ import {
 } from "./user-edit-bus";
 
 type SynthStateClient = ReturnType<typeof createCmajorPluginStateClient<typeof synthPluginState>>;
-type SynthParameterKey = { [Key in keyof typeof synthPluginState]: typeof synthPluginState[Key] extends PluginStateParameter ? Key : never }[keyof typeof synthPluginState];
 type ViewConnection =
     | { readonly kind: "connected"; readonly patchConnection: PatchConnectionLike; readonly client: SynthStateClient }
     | { readonly kind: "failed"; readonly patchConnection: PatchConnectionLike };
@@ -61,25 +59,39 @@ export function SynthStateProvider({ patchConnection, children }: {
 }
 
 /** Translate the state hook to the synth's established control interface. */
-export function useSynthPluginParameterBinding(key: SynthParameterKey, options: {
+type SynthParameterOptions = {
     readonly initialValue: number;
     readonly coerce: (rawValue: unknown) => number;
-}): PatchControlBinding<number> {
-    const parameter = usePluginState(synthPluginState[key]);
+    readonly active?: boolean;
+    readonly presentationPriority?: PatchParameterPresentationPriority;
+};
+
+export function useSynthPluginParameterBinding(key: string, options: SynthParameterOptions): PatchControlBinding<number> {
+    const binding = useOptionalSynthPluginParameterBinding(key, options);
+    if (!binding) throw new Error("A declared synth parameter and SynthStateProvider are required.");
+    return binding;
+}
+
+/** Generic host controls use this only when the synth state provider owns the declaration. */
+export function useOptionalSynthPluginParameterBinding(key: string, options: SynthParameterOptions): PatchControlBinding<number> | null {
+    const parameter = useOptionalPluginState(synthParameterByEndpoint[key] ?? null);
     const firstHostValue = useRef<{ readonly key: typeof key; readonly value: number } | null>(null);
-    if (parameter.state.kind === "ready" && firstHostValue.current?.key !== key) {
+    if (parameter?.state.kind === "ready" && firstHostValue.current?.key !== key) {
         firstHostValue.current = { key, value: options.coerce(parameter.state.value) };
     }
-    const isReady = parameter.state.kind === "ready";
-    const value = parameter.state.kind === "ready" ? options.coerce(parameter.state.value) : options.initialValue;
-    const initialValue = parameter.state.kind === "ready"
+    const isReady = options.active !== false && parameter?.state.kind === "ready";
+    const hostValue = isReady && parameter?.state.kind === "ready" ? options.coerce(parameter.state.value) : options.initialValue;
+    const initialValue = parameter?.state.kind === "ready"
         ? options.coerce(parameter.state.metadata?.defaultValue ?? options.initialValue)
         : options.initialValue;
-    const endpointID = synthPluginState[key].endpoint;
+    const endpointID = key;
     const presentation = useRef({ isReady, coerce: options.coerce });
     presentation.current = { isReady, coerce: options.coerce };
     const reportingGesture = useRef<{ readonly reporter: UserEditReporter; started: boolean } | null>(null);
     const notifications = useRef<Promise<void> | null>(null);
+    const deferredValue = useDeferredValue(hostValue);
+    const value = options.presentationPriority === "deferred-during-gesture" && reportingGesture.current
+        ? deferredValue : hostValue;
 
     // Commands are already dispatched. Only their edit-bus notifications wait
     // here, preserving begin/edit/end order while the client owns ticket lifetime.
@@ -99,7 +111,7 @@ export function useSynthPluginParameterBinding(key: SynthParameterKey, options: 
         if (!current.isReady) return;
         const coercedValue = current.coerce(nextValue);
         const reporter = captureUserEditReporter();
-        reportAfter(parameter.setValue(coercedValue), result => {
+        reportAfter(parameter?.setValue(coercedValue), result => {
             if (result?.kind !== "accepted") return;
             if (typeof result.changed !== "boolean") {
                 reportStateDefect(new Error("An accepted Voice edit did not report whether its value changed."));
@@ -107,32 +119,33 @@ export function useSynthPluginParameterBinding(key: SynthParameterKey, options: 
             }
             reporter.parameterEdit({ endpointID, changed: result.changed });
         });
-    }, [endpointID, parameter.setValue, reportAfter]);
+    }, [endpointID, parameter?.setValue, reportAfter]);
 
     const beginGesture = useCallback(() => {
         if (!presentation.current.isReady || reportingGesture.current) return;
         const gesture = { reporter: captureUserEditReporter(), started: false };
         reportingGesture.current = gesture;
-        reportAfter(parameter.beginGesture(), result => {
+        reportAfter(parameter?.beginGesture(), result => {
             if (result?.kind !== "accepted") return;
             gesture.started = true;
             gesture.reporter.gestureStart();
         });
-    }, [parameter.beginGesture, reportAfter]);
+    }, [parameter?.beginGesture, reportAfter]);
 
     const endGesture = useCallback(() => {
         const gesture = reportingGesture.current;
         if (!gesture) return;
         reportingGesture.current = null;
-        reportAfter(parameter.endGesture(), () => {
+        reportAfter(parameter?.endGesture(), () => {
             // A view closing or a native restore can interrupt the end receipt;
             // every reported start still closes its local audition group once.
             if (!gesture.started) return;
             gesture.started = false;
             gesture.reporter.gestureEnd();
         });
-    }, [parameter.endGesture, reportAfter]);
+    }, [parameter?.endGesture, reportAfter]);
     useEffect(() => endGesture, [endGesture]);
+    useEffect(() => { if (options.active === false) endGesture(); }, [endGesture, options.active]);
 
     const commitValue = useCallback((nextValue: number) => {
         beginGesture();
@@ -140,7 +153,7 @@ export function useSynthPluginParameterBinding(key: SynthParameterKey, options: 
         endGesture();
     }, [beginGesture, endGesture, setValue]);
 
-    return useMemo(() => ({
+    const binding = useMemo(() => ({
         endpointID,
         value,
         initialValue,
@@ -153,4 +166,5 @@ export function useSynthPluginParameterBinding(key: SynthParameterKey, options: 
         beginGesture,
         endGesture,
     }), [beginGesture, commitValue, endGesture, endpointID, initialValue, isReady, key, setValue, value]);
+    return parameter ? binding : null;
 }
