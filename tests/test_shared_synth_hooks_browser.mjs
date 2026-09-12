@@ -752,6 +752,48 @@ test("owner articulation hydration accepts empty and valid saved values and reje
     }
 });
 
+test("articulation readiness follows invalid restore and recovery on the same connection", async () => {
+    const page = await openModulePage();
+    try {
+        await installHarness(page, "installArticulationOwnerHydrationHarness");
+        await invokeHarness(page, "selectConnection", "valid");
+        await invokeHarness(page, "releaseStateOwner", "valid");
+        await page.waitForFunction(() => window.__COSIMO_DESKTOP_MODULE_HARNESS__?.getSnapshot?.().slotCount === 1);
+        assert.equal((await getHarnessSnapshot(page)).captureDisabled, false);
+
+        const invalid = { kind: "not-articulations" };
+        await invokeHarness(page, "restoreValidConnectionArticulations", invalid);
+        await page.waitForFunction(() => window.__COSIMO_DESKTOP_MODULE_HARNESS__?.getSnapshot?.().articulationReadiness.kind === "failed");
+        let snapshot = await getHarnessSnapshot(page);
+        assert.deepEqual(snapshot.articulationReadiness, { kind: "failed", reason: "invalid-state" });
+        assert.equal(snapshot.hasHydrated, false, "a formerly ready bank becomes unavailable without remounting its connection");
+        assert.equal(snapshot.canCapture, false);
+        assert.equal(snapshot.captureDisabled, true);
+        assert.deepEqual(snapshot.validStoredValue, invalid, "an invalid restore is retained for explicit repair");
+
+        await invokeHarness(page, "restoreValidConnectionBank", 2);
+        await page.waitForFunction(() => {
+            const current = window.__COSIMO_DESKTOP_MODULE_HARNESS__?.getSnapshot?.();
+            return current?.articulationReadiness.kind === "ready" && current.slotCount === 2 && current.hasHydrated;
+        });
+        snapshot = await getHarnessSnapshot(page);
+        assert.equal(snapshot.canCapture, true);
+        assert.equal(snapshot.captureDisabled, false);
+        assert.equal(snapshot.slotCount, 2, "recovery displays the restored bank, not the prior bank");
+        await page.locator('[data-role="owner-hydration-capture"]').click();
+        await page.waitForFunction(() => {
+            const current = window.__COSIMO_DESKTOP_MODULE_HARNESS__?.getSnapshot?.();
+            return current?.slotCount === 3 && current.articulationReadiness.pending === false;
+        });
+        snapshot = await getHarnessSnapshot(page);
+        assert.equal(snapshot.articulationReadiness.value.slots.length, 3,
+            "the recovered Capture action reaches the state owner");
+        assert.equal(JSON.parse(snapshot.validStoredValue).slots.length, 3, "Capture persists the new bank");
+    } finally {
+        await page.close();
+    }
+});
+
 test("precision drag yields to clamped host echoes and endpoint changes without repeating unchanged values", async () => {
     const page = await openModulePage();
 

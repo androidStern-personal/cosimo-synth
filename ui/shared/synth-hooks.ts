@@ -1408,8 +1408,8 @@ function useStoredArticulationEditorState(
         setHasHydrated(false);
         const read = () => {
             const current = client.read();
+            setHasHydrated(current !== undefined);
             if (!current) return;
-            setHasHydrated(true);
             applyCurrentState(current);
         };
         const unsubscribe = client.subscribe(read);

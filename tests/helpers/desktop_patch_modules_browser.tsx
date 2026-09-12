@@ -2195,6 +2195,7 @@ export async function installArticulationOwnerHydrationHarness(target: HTMLEleme
                     type="button"
                     data-role="owner-hydration-capture"
                     disabled={!synthView.canCaptureArticulation}
+                    onClick={() => synthView?.handleCaptureArticulationSlot()}
                 >
                     Capture
                 </button>
@@ -2238,11 +2239,18 @@ export async function installArticulationOwnerHydrationHarness(target: HTMLEleme
             if (!repairArticulations) throw new Error("The articulation control is not mounted.");
             return repairArticulations();
         },
+        restoreValidConnectionArticulations(value: unknown) {
+            connections.valid.sendStoredStateValue(ARTICULATIONS_V4_STATE_KEY, value);
+        },
+        restoreValidConnectionBank(slotCount: number) {
+            connections.valid.sendStoredStateValue(ARTICULATIONS_V4_STATE_KEY, articulationBankWithSlots(slotCount));
+        },
         getSnapshot() {
             const currentSynthView = requireSynthView();
             return {
                 articulationReadiness: cloneValue(articulationReadiness),
                 malformedStoredValue: cloneValue(connections.malformed.getDebugSnapshot().storedState[ARTICULATIONS_V4_STATE_KEY]),
+                validStoredValue: cloneValue(connections.valid.getDebugSnapshot().storedState[ARTICULATIONS_V4_STATE_KEY]),
                 hasHydrated: currentSynthView.hasHydratedArticulations,
                 canCapture: currentSynthView.canCaptureArticulation,
                 slotCount: currentSynthView.articulationSlots.length,
