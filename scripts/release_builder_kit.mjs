@@ -36,8 +36,11 @@ import { execFileSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 
 import { exportKit as defaultExportKit, proveExport as defaultProveExport } from "../kit/scripts/export_kit.mjs";
+import { readCmajorPin } from "../kit/scripts/toolchain.mjs";
 import { ensureRedacted, redact, reveal } from "../kit/scripts/redacted.mjs";
 import { renderBootstrap } from "./builder-kit-install.mjs";
+
+export { readCmajorPin } from "../kit/scripts/toolchain.mjs";
 
 export const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -250,34 +253,6 @@ async function writeJson(filePath, value) {
 
 function isLocalSource(source) {
     return !/^[a-z][a-z0-9+.-]*:\/\//i.test(source) && !/^[^/@:]+@[^:]+:/.test(source);
-}
-
-// ---------------------------------------------------------------------------
-// Pins
-
-/** The Cmajor fork pin (commit + URL) as declared under kit/cmake. */
-export async function readCmajorPin(kitRoot = path.join(repoRoot, "kit")) {
-    const dependencies = await fs.readFile(path.join(kitRoot, "cmake/CosimoDependencies.cmake"), "utf8");
-    const block = dependencies.match(/NAME\s+cosimo_cmajor\b([\s\S]*?)\)/);
-    if (!block) throw new Error("CosimoDependencies.cmake: no CPMAddPackage block named cosimo_cmajor.");
-    // The tag is either a literal commit or the shared COSIMO_CMAJOR_PINNED_COMMIT
-    // variable (one pin for the plugin and toolchain packages).
-    let commit = block[1].match(/GIT_TAG\s+"([0-9a-f]{40})"/)?.[1] ?? null;
-    if (!commit && /GIT_TAG\s+"\$\{COSIMO_CMAJOR_PINNED_COMMIT\}"/.test(block[1])) {
-        commit = dependencies.match(/set\(COSIMO_CMAJOR_PINNED_COMMIT\s+"([0-9a-f]{40})"\)/)?.[1] ?? null;
-    }
-    if (!commit) throw new Error("CosimoDependencies.cmake: cosimo_cmajor GIT_TAG must be a full 40-hex commit (literal or COSIMO_CMAJOR_PINNED_COMMIT).");
-
-    let url = block[1].match(/GIT_REPOSITORY\s+"(https?:\/\/[^"]+)"/)?.[1] ?? null;
-    if (!url) {
-        const sourcesPath = path.join(kitRoot, "cmake/dependency-sources.cmake");
-        if (existsSync(sourcesPath)) {
-            const sources = await fs.readFile(sourcesPath, "utf8");
-            url = sources.match(/set\(COSIMO_CMAJOR_GIT_URL\s+"([^"]+)"\)/)?.[1] ?? null;
-        }
-    }
-    if (!url) throw new Error("Could not find the Cmajor fork URL (GIT_REPOSITORY or COSIMO_CMAJOR_GIT_URL) under kit/cmake.");
-    return { commit, url };
 }
 
 // ---------------------------------------------------------------------------

@@ -5,13 +5,14 @@ import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { readCmajorPin } from "../kit/scripts/toolchain.mjs";
 import { enhanceThatNativeDependencies } from "../scripts/enhance-that-release-config.mjs";
 import { seqFxReleaseConfig } from "../scripts/seqfx-release-config.mjs";
 import { readDeclaredNativeDependencyProvenance } from "../scripts/build_seqfx_beta_release.mjs";
 
 const root = fileURLToPath(new URL("../", import.meta.url));
 const config = { nativeDependencies: enhanceThatNativeDependencies };
-const proposedCommit = JSON.parse(await readFile(path.join(root, "kit/toolchain.json"), "utf8")).cmaj.forkCommit;
+const proposedCommit = readCmajorPin().commit;
 const oldCommit = "7820a453f25e1b6eaf898d0bb2feb7e4ce01c207";
 
 async function scratch(context) {
@@ -20,16 +21,14 @@ async function scratch(context) {
     return directory;
 }
 
-test("production SDK, tool producer and customer tool contract share the proposed pin", async () => {
+test("production SDK and tool producer share the exported dependency pin", async () => {
     const production = await readDeclaredNativeDependencyProvenance(config);
     const tools = await readDeclaredNativeDependencyProvenance({ nativeDependencies: {
         ...enhanceThatNativeDependencies,
         cmajor: { ...enhanceThatNativeDependencies.cmajor, cpmName: "cosimo_cmajor_toolchain" },
     } });
-    const toolchain = JSON.parse(await readFile(path.join(root, "kit/toolchain.json"), "utf8"));
     assert.equal(production.cmajor.revision, proposedCommit);
     assert.equal(tools.cmajor.revision, proposedCommit);
-    assert.equal(toolchain.cmaj.forkCommit, proposedCommit);
     assert.deepEqual(await readDeclaredNativeDependencyProvenance(seqFxReleaseConfig), production);
 });
 

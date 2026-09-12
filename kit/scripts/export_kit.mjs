@@ -22,6 +22,7 @@ import path from "node:path";
 import os from "node:os";
 import { execFileSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
+import { readCmajorPin } from "./toolchain.mjs";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const allowlistRelativePath = "scripts/builder-kit-export-policy.json";
@@ -254,6 +255,12 @@ export async function exportKit(outputDir, { force = false, feedUrl = null, sour
     await fs.mkdir(outputRoot, { recursive: true });
 
     const templateFiles = await copyCommittedSource(outputRoot, allowlist, sourceCommit);
+    // Customer provenance is derived from the same committed declaration used
+    // by both the native SDK and tool producer, never a second authored pin.
+    const toolchainPath = path.join(outputRoot, "kit/toolchain.json");
+    const toolchain = JSON.parse(await fs.readFile(toolchainPath, "utf8"));
+    toolchain.cmaj.forkCommit = readCmajorPin(path.join(outputRoot, "kit")).commit;
+    await fs.writeFile(toolchainPath, `${JSON.stringify(toolchain, null, 2)}\n`);
     const feedBaseUrl = await stampFeed(outputRoot, feedUrl);
 
     // Gates.

@@ -251,7 +251,19 @@ test("relative_git_urls_and_gitmodules_resolve_like_git", () => {
 test("cmajor_pin_matches_the_toolchain_contract", async () => {
     const pin = await readCmajorPin();
     const toolchain = JSON.parse(await fs.readFile(path.join(repoRoot, "kit/toolchain.json"), "utf8"));
-    assert.equal(pin.commit, toolchain.cmaj.forkCommit);
+    assert.equal(Object.hasOwn(toolchain.cmaj, "forkCommit"), false, "source template must not maintain a duplicate build pin");
+    const scratch = await fs.mkdtemp(path.join(os.tmpdir(), "kit-pin-contract-"));
+    try {
+        const { exportKit } = await import("../kit/scripts/export_kit.mjs");
+        const outputRoot = path.join(scratch, "customer");
+        await exportKit(outputRoot);
+        const exportedPin = await readCmajorPin(path.join(outputRoot, "kit"));
+        const exportedToolchain = JSON.parse(await fs.readFile(path.join(outputRoot, "kit/toolchain.json"), "utf8"));
+        assert.equal(exportedToolchain.cmaj.forkCommit, exportedPin.commit);
+        assert.equal(exportedPin.commit, pin.commit);
+    } finally {
+        await fs.rm(scratch, { recursive: true, force: true });
+    }
     assert.match(pin.url, /^https:\/\/.+cmajor\.git$/);
 });
 
@@ -266,6 +278,7 @@ test("tool artifact paths are scoped to the exact kit release version", async ()
 
 test("toolchain_and_manifest_render_release_hashes", async () => {
     const toolchain = JSON.parse(await fs.readFile(path.join(repoRoot, "kit/toolchain.json"), "utf8"));
+    toolchain.cmaj.forkCommit = (await readCmajorPin()).commit;
     const hashes = {
         cmaj: { file: "/x/cmaj-macos-arm64.tar.gz", sha256: "1".repeat(64), bytes: 10 },
         cmajPlugin: { file: "/x/CmajPlugin-macos-arm64.zip", sha256: "2".repeat(64), bytes: 20 },

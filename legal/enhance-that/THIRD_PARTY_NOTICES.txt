@@ -14,7 +14,7 @@ Cmajor
 ------
 License: GPL-3.0-or-later OR commercial
 Source: cmajor/LICENSE.md
-Revision/version: cdea10c4dc82c9510fcf77a32325663402c9ba5e
+Revision/version: dca85fc1f87af241af66ca31989940f2887a7e56
 
 Copyright (C) 2024 Cmajor Software Ltd.
 Upstream: https://cmajor.dev

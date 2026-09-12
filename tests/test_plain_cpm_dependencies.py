@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import subprocess
 from pathlib import Path
-import json
 import re
 
 
@@ -109,7 +108,7 @@ def test_t26_runner_builds_against_research_juce_7_through_cpm() -> None:
     assert "git clone" not in runner
 
 
-PRODUCTION_CMAJOR_COMMIT = json.loads((REPO_ROOT / "kit/toolchain.json").read_text())["cmaj"]["forkCommit"]
+PRODUCTION_CMAJOR_COMMIT = re.search(r'set\(COSIMO_CMAJOR_PINNED_COMMIT "([a-f0-9]+)"', (REPO_ROOT / "kit/cmake/CosimoDependencies.cmake").read_text()).group(1)
 PRODUCTION_CHOC_COMMIT = re.search(r'set\(COSIMO_CHOC_PINNED_COMMIT "([a-f0-9]+)"', (REPO_ROOT / "kit/cmake/CosimoDependencies.cmake").read_text()).group(1)
 PRODUCTION_JUCE_COMMIT = "501c07674e1ad693085a7e7c398f205c2677f5da"
 

@@ -8,6 +8,7 @@ import test from "node:test";
 import { fileURLToPath } from "node:url";
 import { deflateSync, gunzipSync, inflateSync } from "node:zlib";
 
+import { readCmajorPin } from "../kit/scripts/toolchain.mjs";
 import {
     adHocVst3SigningArgs,
     attestMatchingVst3Metadata,
@@ -45,7 +46,7 @@ import {
 } from "../scripts/seqfx-release-config.mjs";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-const currentCmajorCommit = JSON.parse(await readFile(path.join(repoRoot, "kit/toolchain.json"), "utf8")).cmaj.forkCommit;
+const currentCmajorCommit = readCmajorPin().commit;
 const scriptPath = path.join(repoRoot, "scripts", "build_seqfx_beta_release.mjs");
 
 test("release staging rejects embedded source maps, source content, and TypeScript filenames", async (context) => {

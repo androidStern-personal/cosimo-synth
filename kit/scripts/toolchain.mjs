@@ -58,6 +58,31 @@ function isPlainObject(value) {
     return value !== null && typeof value === "object" && !Array.isArray(value);
 }
 
+/** The Cmajor fork pin (commit + URL) as declared under kit/cmake. */
+export function readCmajorPin(kitRoot = path.join(repoRoot, "kit")) {
+    const dependencies = readFileSync(path.join(kitRoot, "cmake/CosimoDependencies.cmake"), "utf8");
+    const block = dependencies.match(/NAME\s+cosimo_cmajor\b([\s\S]*?)\)/);
+    if (!block) throw new Error("CosimoDependencies.cmake: no CPMAddPackage block named cosimo_cmajor.");
+    // The tag is either a literal commit or the shared COSIMO_CMAJOR_PINNED_COMMIT
+    // variable (one pin for the plugin and toolchain packages).
+    let commit = block[1].match(/GIT_TAG\s+"([0-9a-f]{40})"/)?.[1] ?? null;
+    if (!commit && /GIT_TAG\s+"\$\{COSIMO_CMAJOR_PINNED_COMMIT\}"/.test(block[1])) {
+        commit = dependencies.match(/set\(COSIMO_CMAJOR_PINNED_COMMIT\s+"([0-9a-f]{40})"\)/)?.[1] ?? null;
+    }
+    if (!commit) throw new Error("CosimoDependencies.cmake: cosimo_cmajor GIT_TAG must be a full 40-hex commit (literal or COSIMO_CMAJOR_PINNED_COMMIT).");
+
+    let url = block[1].match(/GIT_REPOSITORY\s+"(https?:\/\/[^"]+)"/)?.[1] ?? null;
+    if (!url) {
+        const sourcesPath = path.join(kitRoot, "cmake/dependency-sources.cmake");
+        if (existsSync(sourcesPath)) {
+            const sources = readFileSync(sourcesPath, "utf8");
+            url = sources.match(/set\(COSIMO_CMAJOR_GIT_URL\s+"([^"]+)"\)/)?.[1] ?? null;
+        }
+    }
+    if (!url) throw new Error("Could not find the Cmajor fork URL (GIT_REPOSITORY or COSIMO_CMAJOR_GIT_URL) under kit/cmake.");
+    return { commit, url };
+}
+
 /** Read and shape-check kit/toolchain.json. Every tool needs an artifact path and a localPath under build/. */
 export function readToolchain(filePath = toolchainPath()) {
     const toolchain = readJsonFile(filePath);

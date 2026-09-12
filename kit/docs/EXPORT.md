@@ -173,9 +173,10 @@ Steps, in order; every step fails closed:
    Enhancer Lite build,
    tests, update-flow merge); the proof dirties its tree, which is why the
    release tree is a separate copy.
-2. **Pins.** The Cmajor commit comes from the exported
-   `kit/cmake/CosimoDependencies.cmake` and must equal
-   `kit/toolchain.json` `cmaj.forkCommit`. Both tool artifact paths must remain
+2. **Pins.** `kit/cmake/CosimoDependencies.cmake` is the sole authored Cmajor
+   commit for the native SDK and tool producer. Export derives the customer
+   `kit/toolchain.json` `cmaj.forkCommit` from that committed declaration;
+   release verifies they agree. Both tool artifact paths must remain
    under `tools/v<version>/`, matching the exported kit version. The mirror source is the upstream
    fork URL the monorepo declares (`COSIMO_CMAJOR_GIT_URL`), overridable with
    `--cmajor-source`; `--choc-source` overrides the CHOC source likewise.

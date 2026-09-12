@@ -35,6 +35,8 @@ test("export payload and templates come only from the asserted commit, never ign
         }),
         "kit/fixture.txt": "committed payload\n",
         "kit/feed.json": '{"baseUrl":""}',
+        "kit/toolchain.json": JSON.stringify({ cmaj: { artifact: "tools/v1.0.0/cmaj.tar.gz", sha256: "" } }),
+        "kit/cmake/CosimoDependencies.cmake": `set(COSIMO_CMAJOR_PINNED_COMMIT "${"a".repeat(40)}")\nCPMAddPackage(\n NAME cosimo_cmajor\n GIT_TAG "\${COSIMO_CMAJOR_PINNED_COMMIT}"\n)\n`,
         "kit/cmake/dependency-sources.cmake": 'set(COSIMO_CMAJOR_GIT_URL "https://source.example/cmajor.git")\n',
         "kit/skills/example/SKILL.md": "fixture skill\n",
         "kit/template/root/package.json.template": '{"name":"fixture-customer","devDependencies":"__DEV_DEPENDENCIES__"}',
@@ -59,7 +61,8 @@ test("export payload and templates come only from the asserted commit, never ign
             await fs.writeFile(path.join(sourceRoot, relative), bytes);
         }
         await fs.mkdir(path.join(sourceRoot, "kit/scripts"));
-        await fs.copyFile(path.join(repoRoot, "kit/scripts/export_kit.mjs"), path.join(sourceRoot, "kit/scripts/export_kit.mjs"));
+        for (const script of ["export_kit.mjs", "toolchain.mjs", "redacted.mjs"])
+            await fs.copyFile(path.join(repoRoot, `kit/scripts/${script}`), path.join(sourceRoot, `kit/scripts/${script}`));
         git("init", "--quiet");
         git("add", ".");
         git("commit", "--quiet", "-m", "source fixture");
@@ -72,6 +75,7 @@ test("export payload and templates come only from the asserted commit, never ign
         await fs.writeFile(path.join(sourceRoot, "kit/fixture.txt"), sentinel);
         await fs.writeFile(path.join(sourceRoot, "kit/template/root/README.md"), sentinel);
         await fs.writeFile(path.join(sourceRoot, "package.json"), JSON.stringify({ devDependencies: { fixture: "9.9.9" } }));
+        await fs.writeFile(path.join(sourceRoot, "kit/cmake/CosimoDependencies.cmake"), files["kit/cmake/CosimoDependencies.cmake"].replaceAll("a".repeat(40), "b".repeat(40)));
         await fs.writeFile(path.join(sourceRoot, "scripts/builder-kit-export-policy.json"), "invalid live policy must not be read");
         const exporter = await import(pathToFileURL(path.join(sourceRoot, "kit/scripts/export_kit.mjs")).href);
         const result = await exporter.exportKit(output, { sourceCommit, feedUrl: "https://feed.example/SYNTHETIC-COHORT" });
@@ -79,6 +83,9 @@ test("export payload and templates come only from the asserted commit, never ign
         assert.equal(await fs.readFile(path.join(output, "kit/fixture.txt"), "utf8"), "committed payload\n");
         assert.equal(await fs.readFile(path.join(output, "README.md"), "utf8"), "committed template\n");
         assert.equal(JSON.parse(await fs.readFile(path.join(output, "package.json"), "utf8")).devDependencies.fixture, "1.0.0");
+        const exportedToolchain = JSON.parse(await fs.readFile(path.join(output, "kit/toolchain.json"), "utf8"));
+        assert.equal(exportedToolchain.cmaj.forkCommit, "a".repeat(40), "tool provenance comes from the asserted commit's build pin");
+        assert.equal(exportedToolchain.cmaj.sha256, "", "export cannot invent an archive hash");
         assert.equal(result.sourceCommit, sourceCommit);
         assert.equal(result.feedConfigured, true);
     } finally {

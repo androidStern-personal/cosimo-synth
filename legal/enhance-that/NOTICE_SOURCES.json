@@ -2,12 +2,12 @@
   "schemaVersion": 1,
   "status": "Cmajor attribution reconciled to selected source; prior L1 compiled source inventory retained; final own build and extracted artifact reconciliation pending",
   "observedNativeSourceCommit": "954207e4b19c6896e6a9ab1cd4b18a8bd566af06",
-  "noticesSha256": "3026422d7aed4eb2332e998bce45ee844eb050ff5a98add06b1db6f9f161c644",
+  "noticesSha256": "ecce21dedcccd9b6b3632a1fee8558b8d62a2695ebcbf7c4ec994378779b50b5",
   "components": [
     {
       "component": "Cmajor",
       "dependency": "cmajor",
-      "revisionOrVersion": "cdea10c4dc82c9510fcf77a32325663402c9ba5e",
+      "revisionOrVersion": "dca85fc1f87af241af66ca31989940f2887a7e56",
       "license": "GPL-3.0-or-later OR commercial",
       "sourcePath": "LICENSE.md",
       "sourceSha256": "e1d253cfd3aa590e6c9fe76f3638cbb8dd8d4b19aabe0912d45f5deba06e6607",

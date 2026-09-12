@@ -1,14 +1,13 @@
 {
   "schemaVersion": 1,
-  "comment": "Release-source template. Artifact paths are relative to kit/feed.json baseUrl; kit:release writes hashes for the exact supplied or built archives into the staged customer release. Blank hashes in the monorepo keep unstaged downloads disabled and do not claim candidate qualification.",
+  "comment": "Release-source template. Export derives cmaj.forkCommit from kit/cmake/CosimoDependencies.cmake. Artifact paths are relative to kit/feed.json baseUrl; kit:release writes hashes for the exact supplied or built archives into the staged customer release. Blank hashes in the monorepo keep unstaged downloads disabled and do not claim candidate qualification.",
   "cmaj": {
-    "forkCommit": "cdea10c4dc82c9510fcf77a32325663402c9ba5e",
-    "artifact": "tools/v0.1.5/cmaj-macos-arm64.tar.gz",
+    "artifact": "tools/v0.2.0/cmaj-macos-arm64.tar.gz",
     "sha256": "",
     "localPath": "build/kit-tools/cmaj"
   },
   "cmajPlugin": {
-    "artifact": "tools/v0.1.5/CmajPlugin-macos-arm64.zip",
+    "artifact": "tools/v0.2.0/CmajPlugin-macos-arm64.zip",
     "sha256": "",
     "localPath": "build/kit-tools/CmajPlugin.vst3"
   },
