@@ -1,25 +1,33 @@
 import { execFileSync } from "node:child_process";
-import { cp, mkdir, mkdtemp, readFile, symlink, writeFile } from "node:fs/promises";
+import { cp, mkdir, mkdtemp, readFile, rm } from "node:fs/promises";
 import path from "node:path";
+import os from "node:os";
+import { exportKit } from "../../kit/scripts/export_kit.mjs";
 
 const repo = path.resolve(import.meta.dirname, "../..");
 
-// Only staging/build mechanics are shared. Each caller keeps its own fixture,
-// configuration and assertions against the generated worker and actual DSP.
-export async function stageCustomerStateFixture(buildRoot, fixture, destination, kitEntries = ["fx", "ui", "native", "cmajor"]) {
+// Use the actual committed export and its locked dependency installation. Keep
+// it outside the monorepo so missing dependencies cannot resolve from ancestors.
+export async function stageCustomerStateFixture(buildRoot, fixture, destination) {
     if (!path.resolve(buildRoot).startsWith(path.join(repo, "build") + path.sep))
-        throw new Error("Customer fixtures must stay inside this checkout's build directory.");
+        throw new Error("Customer fixture evidence must stay inside this checkout's build directory.");
     await mkdir(buildRoot, { recursive: true });
-    const staging = await mkdtemp(path.join(buildRoot, "fixture-"));
-    await mkdir(path.join(staging, "kit"));
-    await Promise.all([
-        ...[...kitEntries, "index.ts", "package.json", "kit.json"].map(entry =>
-            cp(path.join(repo, "kit", entry), path.join(staging, "kit", entry), { recursive: true })),
-        cp(path.join(repo, "tests/native/fixtures", fixture), path.join(staging, "fx", destination), { recursive: true }),
-        symlink(path.join(repo, "node_modules"), path.join(staging, "node_modules")),
-        writeFile(path.join(staging, "package.json"), JSON.stringify({ private: true, type: "module" })),
-    ]);
-    return staging;
+    const scratch = await mkdtemp(path.join(os.tmpdir(), "cosimo-customer-state-"));
+    const staging = path.join(scratch, "fixture-customer");
+    try {
+        const sourceCommit = execFileSync("git", ["rev-parse", "HEAD"], { cwd: repo, encoding: "utf8" }).trim();
+        await exportKit(staging, { sourceCommit });
+        execFileSync("npm", ["ci", "--no-audit", "--no-fund"], {
+            cwd: staging, stdio: "pipe", timeout: 180000,
+        });
+        // Adding the authored test plugin is the same operation a customer makes
+        // after installation; exported framework/package files remain untouched.
+        await cp(path.join(repo, "tests/native/fixtures", fixture), path.join(staging, "fx", destination), { recursive: true });
+        return staging;
+    } catch (error) {
+        await rm(scratch, { recursive: true, force: true });
+        throw error;
+    }
 }
 
 export async function buildCustomerStateFixture(staging, plugin, manifestRelative) {

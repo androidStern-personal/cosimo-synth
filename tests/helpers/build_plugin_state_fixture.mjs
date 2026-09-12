@@ -15,7 +15,7 @@ export async function buildPluginStateFixture(buildDirectory) {
     if (!allowedRoots.some(root => buildRoot === root || buildRoot.startsWith(`${root}${path.sep}`))) {
         throw new Error("The plugin-state fixture must remain inside its dedicated build directory.");
     }
-    const stagingRoot = await stageCustomerStateFixture(buildRoot, "plugin_state_system", "state_lab", ["fx", "ui"]);
+    const stagingRoot = await stageCustomerStateFixture(buildRoot, "plugin_state_system", "state_lab");
     const { manifestPath, worker } = await buildCustomerStateFixture(stagingRoot, "state-lab",
         "build/fx/state_lab_runtime/PluginStateSystem.cmajorpatch");
     const workerSha256 = createHash("sha256").update(worker).digest("hex");

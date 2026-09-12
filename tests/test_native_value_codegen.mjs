@@ -1,26 +1,19 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { cp, mkdir, mkdtemp, symlink, writeFile, readFile } from 'node:fs/promises';
+import { cp, mkdir, lstat, writeFile, readFile } from 'node:fs/promises';
 import { execFileSync, spawnSync } from 'node:child_process';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { createServer } from 'node:http';
+import { stageCustomerStateFixture } from "./helpers/build_customer_state_fixture.mjs";
 import { loadUIModule } from '../kit/tests/helpers/load_ui_module.mjs';
 
 const root = path.resolve(import.meta.dirname, '..');
-const source = process.env.COSIMO_PLUGIN_STATE_CMAJOR_SOURCE;
-assert.ok(source, 'Set COSIMO_PLUGIN_STATE_CMAJOR_SOURCE to the authored Cmajor checkout');
+const source = process.env.COSIMO_CMAJOR_SOURCE;
+assert.ok(source, 'Set COSIMO_CMAJOR_SOURCE to the authored Cmajor checkout');
 const buildRoot = path.join(root, 'build/shared_state_native_final');
 await mkdir(buildRoot, { recursive: true });
-const staging = await mkdtemp(path.join(buildRoot, 'generated-values-'));
-await mkdir(path.join(staging, 'kit'));
-await Promise.all([
-    ...['fx', 'ui', 'native', 'cmajor', 'index.ts', 'package.json', 'kit.json'].map(file =>
-        cp(path.join(root, 'kit', file), path.join(staging, 'kit', file), { recursive: true })),
-    cp(path.join(root, 'tests/native/fixtures/plugin_state_shared_data'), path.join(staging, 'fx/shared_mseg'), { recursive: true }),
-    symlink(path.join(root, 'node_modules'), path.join(staging, 'node_modules')),
-    writeFile(path.join(staging, 'package.json'), JSON.stringify({ private: true, type: 'module' })),
-]);
+const staging = await stageCustomerStateFixture(buildRoot, "plugin_state_shared_data", "shared_mseg");
 const runtime = path.join(staging, 'build/fx/shared_mseg_runtime');
 const qualifiedRuntime = path.join(staging, 'qualified-runtime');
 const authoredState = expression => `import { definePluginState, parameter, Mseg, nativeValue, Native } from '../../kit/index';
@@ -31,6 +24,17 @@ async function buildState(expression) {
 }
 
 test('normal build emits nested native values that compile and read actual authored bytes', async () => {
+    assert.equal((await lstat(path.join(staging, 'node_modules'))).isSymbolicLink(), false,
+        'customer qualification must install dependencies, not borrow monorepo node_modules');
+    const exported = JSON.parse(await readFile(path.join(staging, 'EXPORT_MANIFEST.json'), 'utf8'));
+    assert.match(exported.sourceCommit, /^[0-9a-f]{40}$/);
+    const customerPackage = JSON.parse(await readFile(path.join(staging, 'package.json'), 'utf8'));
+    const customerLock = JSON.parse(await readFile(path.join(staging, 'package-lock.json'), 'utf8'));
+    assert.deepEqual(customerPackage.dependencies, customerLock.packages[''].dependencies);
+    assert.deepEqual(customerPackage.devDependencies, customerLock.packages[''].devDependencies);
+    assert.ok(customerPackage.dependencies?.jotai ?? customerPackage.devDependencies?.jotai,
+        'the public state runtime dependency must be declared');
+
     const result = await buildState(`
 settings: nativeValue({ codec: Native.record({
     a: Native.record({ b: Native.choice(['low', 'high']) }), a_b: Native.choice(['off', 'on']),

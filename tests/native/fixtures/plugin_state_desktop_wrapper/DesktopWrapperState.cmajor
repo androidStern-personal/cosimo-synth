@@ -48,5 +48,5 @@ processor DesktopWrapperState [[ main ]]
     int selector = -1;
     event articulationNoteMeta (NoteMeta meta) { selector = meta.selectorA; }
     event midiIn (std::midi::Message message) {}
-    void main() { loop { out <- float<2> (gain, float (selector)); advance(); } }
+    void main() { loop { out <- float<2> (gain * PluginState::workerLevel::read(0), float (selector)); advance(); } }
 }
