@@ -1,6 +1,6 @@
 # Builder Kit release audit — 2026-09-12
 
-**Status: preparing Builder Kit 0.2.0; not published.** The duplicate Cmajor pin is fixed, matching tool archives have been built, and Enhance That plus the new-plugin starter now use the state framework. Final packaged-customer qualification is in progress. Historical Git identifiers remain a separate distribution-policy decision.
+**Status: preparing Builder Kit 0.2.0; not published.** The duplicate Cmajor pin is fixed, matching tool archives have been built, and Enhance That plus the new-plugin starter now use the state framework. Final packaged-customer qualification passed from source `3a4a393a85bd45eeabe77b643990b1f1fc00594f`. Historical Git identifiers remain a separate distribution-policy decision.
 
 Audited source: `363907f5b3474fff9702fa04b6a3627effa8df64` on `codex/shared-data-runtime`. Baseline: the actual released **0.1.5**, tagged at customer commit `9c98949d583f9fbc226f669d81103c4a27e72917`, created September 9. Source commit for that release: `863b6cb1643450acd1ef63f3d7e0dad6e4de67be`. The production store releases 0.1.5, 0.1.6, and 0.1.7 all offered the same Builder Kit 0.1.5 installer. Older preview feeds exist, but they are not established as paying-customer cohorts.
 
@@ -13,7 +13,15 @@ Audited source: `363907f5b3474fff9702fa04b6a3627effa8df64` on `codex/shared-data
 | Included example and starter | Migrated to the public state API. Existing Enhance That DSP, parameter identities, presets, and snapshots are preserved. Rapid input, Undo/Redo, GUI reopening, and the existing interaction assertions pass. |
 | Existing-customer update | Actual 0.1.5 lineage was updated in isolated customer repos. Ordinary edits survived byte-for-byte; a deliberately mixed scaffold edit stopped as a conflict. Independent dependency installation, typecheck, and 287 customer tests passed, with six monorepo-only skips. |
 | Historical identifiers | New release commits/tags use a neutral identity. Existing reachable history is preserved; that does not erase old identifiers or old downloads. A clean-history migration was presented as a separate choice, not silently performed. |
-| Packaged customer qualification | In progress against the staged archives through normal setup and native build; no publication or installed-host claim yet. |
+| Packaged customer qualification | Passed: real HTTP download, normal setup and strict doctor, typecheck, 285 tests (six monorepo-only skips), 57 browser tests, and production Enhance That VST3 build. No publication or installed-DAW/listening claim. |
+
+Both the rebuilt CmajPlugin loader and the final customer-built Enhance That VST3 passed pluginval at strictness 5 with GUI tests skipped. GUI interaction was separately checked by the 57 browser tests; this is not installed-DAW or listening acceptance.
+
+The final archives were rebuilt after mapping compiler diagnostic paths to neutral source names and removing unnecessary build RPATH. Scanning both archives found zero occurrences of the maintainer home path. Upstream prebuilt LLVM still includes its own upstream build paths; these are not private Cosimo source or maintainer credentials.
+
+Release mirrors now contain only selected commit ancestry and ancestral kit release tags. Unrelated branch/tag objects are excluded. Existing published objects and reachable historical identifiers are not erased.
+
+Final candidate evidence: `candidate-qualification.json`, `candidate-export-audit.json`, `tool-artifacts.json`, `tool-archive-privacy.json`, `tool-pluginval.log`, and `candidate-pluginval.log` under `build/release-audit-2026-09-12/`. The 216-file exported source scan found no detected credentials, maintainer paths, or exact private source matches; the previously identified private-project name literal remains only in a negative test fixture.
 
 The original audit below described source `363907f5`; the follow-up above records the subsequent fixes. No external release, customer history rewrite, or customer email has been performed.
 
