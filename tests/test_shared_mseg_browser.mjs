@@ -1,33 +1,31 @@
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
-import { readFile, writeFile } from 'node:fs/promises';
+import { readFile, readdir, writeFile } from 'node:fs/promises';
 import { createServer } from 'node:http';
 import path from 'node:path';
 import { chromium } from 'playwright';
 import { build as bundle } from 'esbuild';
 import { buildSharedMsegFixture } from './helpers/build_shared_mseg_fixture.mjs';
 
-const source=process.env.COSIMO_PLUGIN_STATE_CMAJOR_SOURCE;
-assert.ok(source,'Set COSIMO_PLUGIN_STATE_CMAJOR_SOURCE to authored Cmajor checkout');
+const cmaj=process.env.COSIMO_CMAJ_EXECUTABLE??path.resolve('build/cmajor_command/bin/cmaj');
 const {staging,manifest,runtime}=await buildSharedMsegFixture();
-await bundle({entryPoints:[path.join(staging,'fx/shared_mseg/view/browser.tsx')],outfile:path.join(runtime,'browser.js'),
+await bundle({entryPoints:[path.join(staging,'fx/shared_mseg/view/browser.tsx')],outfile:path.join(runtime,'view/browser.js'),
     bundle:true,format:'esm',platform:'browser',jsx:'automatic',target:'es2022',logLevel:'silent'});
-const patchManifest=JSON.parse(await readFile(manifest,'utf8'));
-const combinedSource=path.join(runtime,'qualification.cmajor');
-await writeFile(combinedSource,(await Promise.all(patchManifest.source.map(file=>readFile(path.join(runtime,file),'utf8')))).join('\n'));
-execFileSync(process.env.CMAJOR_SHARED_GENERATOR??path.resolve('build/shared_data_codegen/source/shared_memory_generator'),
-    [combinedSource,path.join(runtime,'generated.js'),JSON.stringify({SIMD:'simd-only',sharedMemory:{maximumPages:256}})]);
-await writeFile(path.join(runtime,'index.html'),`<!doctype html><button id="start">Start</button><main></main>
+const output=path.join(path.dirname(runtime),'shared_mseg_web');
+execFileSync(cmaj,['generate','--target=webaudio-html',`--output=${output}`,manifest],{stdio:'pipe'});
+const modules=(await readdir(output)).filter(file=>/^cmaj_.*\.js$/.test(file));
+assert.equal(modules.length,1,'the supported CLI emits one patch module');
+for(const file of ['index.html','cmaj_api/cmaj-shared-data.js','cmaj_api/cmaj-shared-data-reader.js','worker.js','ascending.json','descending.json','view/browser.js'])
+    assert.ok((await readFile(path.join(output,file))).length>0,`CLI packages ${file}`);
+await writeFile(path.join(output,'qualification.html'),`<!doctype html><button id="start">Start</button><main></main>
 <script type="module">
-import {AudioWorkletPatchConnection} from '/cmaj_api/cmaj-audio-worklet-helper.js';
-import DSP from '/generated.js';
-import createView,{createAgent,outcomes,defects} from '/browser.js';
+import {createAudioWorkletNodePatchConnection} from '/${modules[0]}';
+import createView,{createAgent,outcomes,defects} from '/view/browser.js';
 document.querySelector('#start').onclick=async()=>{try{
  const context=new AudioContext({sampleRate:48000});
- const connection=new AudioWorkletPatchConnection(await(await fetch('/manifest.json')).json());
+ const connection=await createAudioWorkletNodePatchConnection(context,'shared-mseg');
  connection.sendStoredStateValue('shape',{format:'mseg.shape',version:1,name:'MSEG 1',globalSmooth:false,
      points:[{x:0,y:0,curvePower:0},{x:1,y:1,curvePower:0}]});
- await connection.initialise({CmajorClass:DSP,audioContext:context,workletName:'shared-mseg',rootResourcePath:location.origin+'/'});
  const capture=context.createScriptProcessor(256,3,1),silent=context.createGain();silent.gain.value=0;
  capture.channelInterpretation='discrete';connection.audioNode.connect(capture);capture.connect(silent);silent.connect(context.destination);
  const state={connection,context,outcomes,defects,audio:[],blocks:0};
@@ -42,8 +40,7 @@ document.querySelector('#start').onclick=async()=>{try{
 const server=createServer(async(req,res)=>{
     try {
         const url=new URL(req.url,'http://127.0.0.1');assert.ok(!url.pathname.includes('..'));
-        const file=url.pathname.startsWith('/cmaj_api/')?path.join(source,'javascript/cmaj_api',url.pathname.slice(10))
-            :url.pathname==='/manifest.json'?manifest:path.join(runtime,url.pathname==='/'?'index.html':url.pathname.slice(1));
+        const file=path.join(output,url.pathname==='/'?'qualification.html':url.pathname.slice(1));
         res.writeHead(200,{'content-type':file.endsWith('.html')?'text/html':'text/javascript',
             'cross-origin-opener-policy':'same-origin','cross-origin-embedder-policy':'require-corp'});
         res.end(await readFile(file));
@@ -137,8 +134,9 @@ try {
     await page.evaluate(() => { window.fixture.close(); window.fixture.open(); });
     await expectLoaded('descending.json', [1,0.75,0.5,0.25,0]);
     await page.evaluate(()=>window.fixture.dispose());
-    console.log('PASS real Cosimo MSEG renderer, generated state worker, public React edit/Undo/Redo, saved values, actual 3-channel Cmajor audio, GUI reopen, full restore, and custom async file loading with variable storage and mixed Undo.');
+    console.log('PASS customer CLI webaudio-html export, real kit MSEG renderer, generated state worker, public React edit/Undo/Redo, saved values, actual 3-channel Cmajor audio, GUI reopen, full restore, and custom async file loading with variable storage and mixed Undo.');
 } catch(error) {
+    console.error('Browser errors:',errors);
     console.error('Fixture diagnostics:',await page.evaluate(()=>({failure:window.failure,errors:window.fixture?.defects,state:window.fixture?.agent.getSnapshot(),audio:window.fixture?.audio})));
     throw error;
 } finally {await browser.close();await new Promise(resolve=>server.close(resolve));}

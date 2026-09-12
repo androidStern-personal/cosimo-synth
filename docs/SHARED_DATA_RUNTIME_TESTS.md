@@ -1,7 +1,7 @@
 # State and shared-data verification
 
 Current source is on `codex/shared-data-runtime`. The kit pins Cmajor
-`812a46422502d25b79d1df59330535eaefb98b9e`, including the generated embedded
+`cdea10c4dc82c9510fcf77a32325663402c9ba5e`, including the generated embedded
 assets. Installed plugins and published release artifacts are separate from this
 source qualification.
 
@@ -9,7 +9,7 @@ source qualification.
 
 | Boundary | What is checked | Evidence |
 |---|---|---|
-| Public state/history | Stale setters, own queued gestures, automation, exact Undo/Redo, grouped related edits, instance-only state, field errors and guarded retry | `npm run test:plugin-state` (209 passing tests after Cosimo migration) |
+| Public state/history | Stale setters, own queued gestures, automation, exact Undo/Redo, grouped related edits, instance-only state, field errors and guarded retry | `npm run test:plugin-state` (211 passing tests after Cosimo migration) |
 | Direct preparation + real shared store | Old audio survives partial failed writes, cancellation through adoption, budget refusal/reuse, per-input receipts, retry without extra history | `tests/test_plugin_state_direct_data.mjs`, `tests/test_shared_data_preparation.mjs` |
 | Storage/native readers | Concurrency, complete block snapshots, bounded reads, reclamation and invalid native settings under sanitizers | `tests/native/PatchSharedDataProtocolTests.cpp`, `tests/native/NativeValueTests.cpp`, shared-store tests |
 | Exported author build | Actual commit-pinned kit export, independent `npm ci` outside the monorepo, named resources, generated nested C++ types, record defaults/validation, keyword/type collisions | `tests/test_native_value_codegen.mjs` (native ASan/UBSan, generated Wasm in Node and Chromium) |
@@ -55,12 +55,16 @@ also shown to make its regression fail.
 ## Run
 
 Set `COSIMO_CMAJOR_SOURCE` to the authored/pinned Cmajor source.
-The existing isolated compiler is selected with `CMAJOR_SHARED_GENERATOR`.
+The customer MSEG browser proof uses the actual `cmaj generate --target=webaudio-html`
+export and serves only that output. It defaults to `build/cmajor_command/bin/cmaj`;
+set `COSIMO_CMAJ_EXECUTABLE` to select another built customer command. The lower-level
+worklet lifecycle test still selects its isolated compiler with `CMAJOR_SHARED_GENERATOR`.
 
 ```sh
 npm run test:plugin-state
 npm run test:shared-data
 npm run test:shared-data:browser
+node tests/test_shared_mseg_browser.mjs
 COSIMO_CMAJOR_RUNTIME_LIBRARY="$CMAJOR_RUNTIME_LIBRARY" npm run test:plugin-state:native-wrapper
 npm run typecheck
 # After building the normal web/worker assets:
