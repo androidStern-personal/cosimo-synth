@@ -4,13 +4,13 @@ Not published. Use after the release audit clears and existing owners can fetch 
 
 ## Short post
 
-Audio-plugin state, with the ergonomics of `useQuery`.
+Announcing `usePluginState()`.
 
-Your UI and audio engine play by different rules. Builder Kit handles the coordination, saving and Undo behind `usePluginState()`.
+Managing state between your UI and audio engine is complicated!
 
-Plus shadcn-style audio UI. Editable source included.
+Builder Kit now handles the coordination, saving, and undo behind `usePluginState()`.
 
-For Cmajor + React.
+Plus music UI components, including multi-segment envelope editors, filter controls, and sliders.
 
 ## Longer post
 
