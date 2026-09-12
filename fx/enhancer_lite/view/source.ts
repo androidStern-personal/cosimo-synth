@@ -1,7 +1,8 @@
-import { createElement, useLayoutEffect, useRef } from "react";
+import { createElement, useLayoutEffect, useRef, useState } from "react";
 import { createStatefulPatchView, usePluginState, usePluginHistory, usePatchConnection,
     type PluginStateControl } from "../../../kit/index";
 import definition from "../state";
+import { createPortal, flushSync } from "react-dom";
 import {
     ENHANCER_LITE_SETTING_DESCRIPTORS,
     type EnhancerLiteShape,
@@ -439,7 +440,10 @@ class EnhancerLiteView extends HTMLElement {
             gestureOwner.add(endpointID);
             void control.beginGesture();
         }
-        void control.setValue(value);
+        // This imperative panel reads the hook projection between DOM events.
+        // Flush its React layout update so same-turn relative edits and a drag
+        // returning to its origin never read the preceding rendered value.
+        flushSync(() => { void control.setValue(value); });
     }
 
     endParameterGestures(gestureEndpointIDs: Set<string>): void {
@@ -990,6 +994,10 @@ class EnhancerLiteView extends HTMLElement {
                 .topline { display: flex; align-items: flex-end; justify-content: space-between; gap: 20px; margin-bottom: 14px; }
                 h1 { margin: 0; color: #ffffff; font-size: 26px; font-weight: 700; letter-spacing: 0.16em; text-transform: uppercase; line-height: 1; }
                 .tag { margin-top: 7px; color: #00f0ff; font-size: 9px; letter-spacing: 0.14em; text-transform: uppercase; }
+                .history-controls { display: flex; gap: 6px; }
+                .history-controls button { min-height: 25px; padding: 4px 10px; border: 1px solid #123b43; border-radius: 4px; color: #00f0ff; background: #000000; font-size: 9px; letter-spacing: 0.06em; text-transform: uppercase; cursor: pointer; }
+                .history-controls button:disabled { color: #526a70; cursor: default; }
+                .history-controls button:focus-visible { outline: 2px solid #00f0ff; outline-offset: 2px; }
                 .engine-label { color: #b7ff27; font-size: 9px; letter-spacing: 0.12em; text-transform: uppercase; }
                 .response-panel { border: 1px solid #123b43; border-radius: 12px; padding: 12px 12px 5px; background: #000000; box-shadow: 0 0 22px rgba(0,240,255,0.08); }
                 .plot-heading { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 16px; padding: 0 4px 4px; color: #00f0ff; font-size: 9px; letter-spacing: 0.11em; }
@@ -1066,6 +1074,7 @@ class EnhancerLiteView extends HTMLElement {
                         <div class="tag">ONE BAND // STEREO + M/S</div>
                     </div>
                     <div class="engine-label">4X IIR // FAST CURVE</div>
+                    <div data-history-mount></div>
                 </header>
                 ${this.responsePlotMarkup()}
                 <div class="control-deck">
@@ -1127,6 +1136,7 @@ function View() {
     const history = usePluginHistory();
     const mount = useRef<HTMLDivElement>(null);
     const panel = useRef<EnhancerLiteView | null>(null);
+    const [historyMount, setHistoryMount] = useState<HTMLElement | null>(null);
     const ready = [...controls.values()].every(control => control.state.kind === "ready");
     useLayoutEffect(() => {
         if (!ready || !mount.current) return;
@@ -1139,15 +1149,16 @@ function View() {
         const view = new EnhancerLiteView(connection as EnhancerLitePatchConnection, controls);
         panel.current = view;
         mount.current.append(view);
-        return () => { view.remove(); panel.current = null; };
+        setHistoryMount(view.requireElement<HTMLElement>("[data-history-mount]"));
+        return () => { view.remove(); panel.current = null; setHistoryMount(null); };
     }, [connection, ready]);
     useLayoutEffect(() => { panel.current?.updateControls(controls); });
     return createElement("div", null,
-        ready ? null : createElement("p", { role: "status" }, "Connecting"),
+        ready ? null : createElement("p", { role: "status" }, [...controls.values()].some(control => control.state.kind === "failed" || control.state.kind === "closed") ? "Controls unavailable" : "Connecting"),
         createElement("div", { ref: mount }),
-        createElement("nav", { "aria-label": "Edit history", style: { display: "flex", gap: "8px", padding: "8px 18px" } },
+        historyMount ? createPortal(createElement("nav", { "aria-label": "Edit history", className: "history-controls" },
             createElement("button", { disabled: !history.canUndo, onClick: () => { void history.undo(); } }, "Undo"),
-            createElement("button", { disabled: !history.canRedo, onClick: () => { void history.redo(); } }, "Redo")),
+            createElement("button", { disabled: !history.canRedo, onClick: () => { void history.redo(); } }, "Redo")), historyMount) : null,
         ...[...controls.entries()].flatMap(([key, control]) => control.error
             ? [createElement("p", { key, role: "alert" }, control.error.message)] : []));
 }

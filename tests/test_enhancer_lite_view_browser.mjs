@@ -217,6 +217,7 @@ async function openEnhancerLite(modulePath = "/fx/enhancer_lite/view/source.ts",
             endpointListenerCount: (endpointID) => endpointListeners.get(endpointID)?.size ?? 0,
             disconnect: () => document.querySelector("#mount").replaceChildren(),
             reopen: () => document.querySelector("#mount").replaceChildren(module.default(patchConnection)),
+            openSecond: () => document.querySelector("#mount").append(module.default(patchConnection)),
         };
     }, { values: initialValues, sourceModulePath: modulePath, statusInputs: hostStatusInputs, withHost: host, manifest, userFileFixture, pauseFileLoads });
     await page.locator("cosimo-enhancer-lite-view").waitFor();
@@ -249,6 +250,86 @@ test(`scalar controls share Undo/Redo and retain their history when the GUI reop
 });
 
 }
+
+test("the history controls fit the existing 820 by 560 plugin frame", async () => {
+    const page = await openEnhancerLite();
+    try {
+        await page.setViewportSize({ width: 820, height: 560 });
+        await page.evaluate(() => { document.getElementById("mount").style.cssText = "width:820px;height:560px;padding:0"; });
+        const bounds = await shadow(page, ".history-controls").boundingBox();
+        assert.ok(bounds && bounds.x >= 0 && bounds.y >= 0 && bounds.x + bounds.width <= 820 && bounds.y + bounds.height <= 560);
+        const size = await page.evaluate(() => ({ width: document.documentElement.scrollWidth, height: document.documentElement.scrollHeight }));
+        assert.deepEqual(size, { width: 820, height: 560 }, "the native frame needs no scrolling for history controls");
+        await page.screenshot({ path: path.join(repoRoot, "build/enhance-state-820x560.png") });
+    } finally { await page.close(); }
+});
+
+test("same-turn parameter edits and keyboard steps read the latest state projection", async () => {
+    const page = await openEnhancerLite();
+    try {
+        const amount = shadow(page, "[data-readout-control='primary-amount']");
+        await amount.evaluate(element => {
+            element.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowUp", bubbles: true, cancelable: true }));
+            element.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowUp", bubbles: true, cancelable: true }));
+        });
+        assert.equal(await amount.getAttribute("aria-valuenow"), "0.24", "both relative keyboard increments reach the canonical projection");
+        await page.locator("cosimo-enhancer-lite-view").evaluate(view => {
+            view.sendValue("midAmountIn", 0.5);
+            view.sendValue("midAmountIn", 0);
+        });
+        assert.equal(await amount.getAttribute("aria-valuenow"), "0", "an absolute return to zero cannot be dropped as an old-render no-op");
+        const writes = await page.evaluate(() => window.__ENHANCER_LITE_TEST__.sent.filter(message => message.endpointID === "midAmountIn").map(message => message.value));
+        assert.deepEqual(writes, [0.01, 0.02, 0.5, 0]);
+    } finally { await page.close(); }
+});
+
+test("a same-turn captured drag returning to its origin adds no Undo entry", async () => {
+    const page = await openEnhancerLite();
+    try {
+        const amount = shadow(page, "[data-readout-control='primary-amount']");
+        const bounds = await amount.boundingBox();
+        assert.ok(bounds);
+        const x = bounds.x + bounds.width / 2, y = bounds.y + bounds.height / 2;
+        await page.mouse.move(x, y); await page.mouse.down();
+        await amount.evaluate((element, origin) => {
+            const view = element.getRootNode().host;
+            const pointerId = view.readoutDrag.pointerID;
+            for (const clientY of [origin.y - 50, origin.y]) element.dispatchEvent(new PointerEvent("pointermove", {
+                pointerId, clientX: origin.x, clientY, bubbles: true, buttons: 1,
+            }));
+        }, { x, y });
+        await page.mouse.up();
+        assert.equal(await amount.getAttribute("aria-valuenow"), "0");
+        assert.equal(await page.getByRole("button", { name: "Undo", exact: true }).isDisabled(), true);
+        const writes = await page.evaluate(() => window.__ENHANCER_LITE_TEST__.sent.filter(message => message.endpointID === "midAmountIn").map(message => message.value));
+        assert.equal(writes.length, 2);
+        assert.ok(writes[0] > 0);
+        assert.equal(writes[1], 0);
+    } finally { await page.close(); }
+});
+
+test("a competing GUI edit restores the owner projection while another GUI holds the gesture", async () => {
+    const page = await openEnhancerLite();
+    try {
+        await page.evaluate(() => window.__ENHANCER_LITE_TEST__.openSecond());
+        await page.locator("cosimo-enhancer-lite-view").nth(1).waitFor();
+        const controls = shadow(page, "[data-readout-control='primary-amount']");
+        const first = controls.nth(0), second = controls.nth(1);
+        const bounds = await first.boundingBox();
+        assert.ok(bounds);
+        await page.mouse.move(bounds.x + bounds.width / 2, bounds.y + bounds.height / 2);
+        await page.mouse.down();
+        await page.mouse.move(bounds.x + bounds.width / 2, bounds.y + bounds.height / 2 - 30);
+        const ownedValue = await first.getAttribute("aria-valuenow");
+        assert.ok(Number(ownedValue) > 0);
+        const writesBefore = await page.evaluate(() => window.__ENHANCER_LITE_TEST__.sent.length);
+        await second.evaluate(element => element.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowUp", bubbles: true, cancelable: true })));
+        assert.equal(await second.getAttribute("aria-valuenow"), ownedValue, "a rejected optimistic edit restores the accepted owner projection");
+        assert.equal(await first.getAttribute("aria-valuenow"), ownedValue);
+        assert.equal(await page.evaluate(() => window.__ENHANCER_LITE_TEST__.sent.length), writesBefore, "a competing GUI cannot write through the owner's gesture");
+        await page.mouse.up();
+    } finally { await page.close(); }
+});
 
 function shadow(page, selector) {
     return page.locator(`cosimo-enhancer-lite-view >> ${selector}`);
