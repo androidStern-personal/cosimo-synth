@@ -1,20 +1,21 @@
 # Builder Kit release audit — 2026-09-12
 
-**Verdict: do not cut the current source as a new release yet.** The framework is present in the customer export, and that export installs and tests successfully. The release inputs are not ready; the distributed Git history also retains personal identifiers.
+**Status: preparing Builder Kit 0.2.0; not published.** The duplicate Cmajor pin is fixed, matching tool archives have been built, and Enhance That plus the new-plugin starter now use the state framework. Final packaged-customer qualification is in progress. Historical Git identifiers remain a separate distribution-policy decision.
 
-Audited source: `363907f5b3474fff9702fa04b6a3627effa8df64` on `codex/shared-data-runtime`. Baseline: the actual released **0.1.5**, tagged at customer commit `9c98949d583f9fbc226f669d81103c4a27e72917`, created September 9. Source commit for that release: `863b6cb1643450acd1ef63f3d7e0dad6e4de67be`. Older installation feeds were also checked; they are not all on the same release.
+Audited source: `363907f5b3474fff9702fa04b6a3627effa8df64` on `codex/shared-data-runtime`. Baseline: the actual released **0.1.5**, tagged at customer commit `9c98949d583f9fbc226f669d81103c4a27e72917`, created September 9. Source commit for that release: `863b6cb1643450acd1ef63f3d7e0dad6e4de67be`. The production store releases 0.1.5, 0.1.6, and 0.1.7 all offered the same Builder Kit 0.1.5 installer. Older preview feeds exist, but they are not established as paying-customer cohorts.
 
-## What prevents release approval
+## Follow-up work
 
-| Finding | What it means | Completion condition |
-|---|---|---|
-| Cmajor metadata disagrees | CMake pins `dca85fc1f87af241af66ca31989940f2887a7e56`; `kit/toolchain.json` still names `cdea10c4dc82c9510fcf77a32325663402c9ba5e`. The release script rejects this mismatch. | Choose one published pin, build its tools, and stamp matching metadata and verified hashes. Do not bypass the guard. |
-| The source still says 0.1.5 | That version already exists for customers. The source toolchain is a release template, not the new downloadable tool set. Blank template hashes alone are not a defect. | Assign a new version; recommended **0.2.0**. Produce a staged release with its own matching archives and manifest. |
-| Git history retains personal identifiers | The current exported files are clean, but old Git objects and commit metadata remain downloadable. See the precise classification below. | Resolve the historical-distribution policy and update migration before claiming the package contains no personal information. Prevent new identifier leakage with history-aware inspection and a neutral release identity. |
-| Older update URLs still serve older releases | Each kit installation stores its download/update URL in `kit/feed.json`; its update skill fetches release tags there. Older live URLs were found, but this audit has not established which paying customers use them. | Identify the URLs actually distributed to customers, then demonstrate an update from those installations while preserving plugin edits. Maintain those URLs or provide an explicit migration. |
-| Exact packaged customer proof is incomplete | A raw export cannot supply the new verified tool archives. Its native build correctly stopped there. | Use the staged release through normal setup, build unchanged Enhance That natively, and exercise the packaged browser path with shared-memory isolation and audio. Audit the actual archives too. |
+| Item | Current result |
+|---|---|
+| Cmajor provenance | Fixed: the exported tool manifest derives its revision from the committed CMake pin, `dca85fc1f87af241af66ca31989940f2887a7e56`. The real committed-source regression and mismatch rejection both pass. |
+| Release identity and tools | Source version and archive paths are 0.2.0. Both pinned tools were built by the canonical release helper and archived with recorded hashes. Source-template hashes remain blank until release staging, intentionally. |
+| Included example and starter | Migrated to the public state API. Existing Enhance That DSP, parameter identities, presets, and snapshots are preserved. Rapid input, Undo/Redo, GUI reopening, and the existing interaction assertions pass. |
+| Existing-customer update | Actual 0.1.5 lineage was updated in isolated customer repos. Ordinary edits survived byte-for-byte; a deliberately mixed scaffold edit stopped as a conflict. Independent dependency installation, typecheck, and 287 customer tests passed, with six monorepo-only skips. |
+| Historical identifiers | New release commits/tags use a neutral identity. Existing reachable history is preserved; that does not erase old identifiers or old downloads. A clean-history migration was presented as a separate choice, not silently performed. |
+| Packaged customer qualification | In progress against the staged archives through normal setup and native build; no publication or installed-host claim yet. |
 
-No runtime source, version, pin, feed, customer history, or external release was changed during this audit. The changelog and announcement material are new local drafts.
+The original audit below described source `363907f5`; the follow-up above records the subsequent fixes. No external release, customer history rewrite, or customer email has been performed.
 
 ## What passed
 
@@ -57,7 +58,9 @@ The new kit supplies the state declarations, persistent owner, React controls, s
 
 The kit does not automatically migrate a customer's existing plugin. It does not infer custom DSP behavior, retain deleted external files for Undo, or supply the unfinished composable knob/context-menu package. Browser shared memory still requires cross-origin isolation. Supported customer installation remains Apple silicon with macOS 15 or newer; broader platform qualification is not established here.
 
-Follow-up source check: the included **Enhance That has not migrated** to `definePluginState` / `usePluginState`. Its eight sound parameters use direct Cmajor parameter calls plus the existing preset/snapshot controllers (`fx/enhancer_lite/view/source.ts:260`, `:437`); its plugin config has no `stateSource`. It does not need shared-memory uploads for those eight values. Migrating its editing/history integration would make the shipped example demonstrate the new API, while preserving its DSP, parameter identities and old presets. The current new-plugin generator also still emits the earlier `createPatchView` pattern (`kit/scripts/new_plugin.mjs:309`). Treat new-API adoption as deliberate author work until these teaching/default paths are updated.
+Enhance That now declares its eight existing scalar parameters in `fx/enhancer_lite/state.ts`, uses `usePluginState` and `usePluginHistory`, and has a generated state owner through `stateSource`. The starter generates the same pattern. These scalar controls do not need shared-memory uploads.
+
+Enhance That's multi-axis graph still groups history per affected scalar: a frequency/amount/Q drag can require more than one Undo. Existing preset and A–G snapshot recalls use their original host-write path and do not create shared Undo entries. The documentation and announcement must not imply preset Undo or whole-graph transaction grouping.
 
 ## Evidence
 
