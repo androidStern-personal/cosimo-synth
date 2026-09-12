@@ -5,7 +5,8 @@
 ### Added
 
 - A declarative state API: `definePluginState`, `parameter`, `storedValue`, and `preparedState`. The build generates the persistent state owner and connects each GUI to it.
-- Shared Undo/Redo across ordinary parameters and editable complex values. Drag gestures form one history entry; `edit(...)` can change several fields as one action. History has a configurable entry limit.
+- Shared Undo/Redo across ordinary parameters and editable complex values. A drag of one field forms one history entry; `edit(...)` can change several fields as one action. History has a configurable entry limit.
+- The included Enhance That controls and newly generated plugins use the state framework, with Undo/Redo available in their interfaces. Enhance That retains its sound, parameter identities, and existing preset/snapshot formats.
 - Automatic GUI reconnection, field-version conflict checks, and protection against delayed reports overwriting newer edits. Host automation remains distinct from user Undo history.
 - Per-field readiness, pending edits, engine-delivery status, errors, and retry. Invalid saved values remain visible as failures until repaired. Retrying does not add another Undo entry.
 - Direct preparation into shared audio storage on native JIT, compiled native, and browser WebAssembly. The framework handles allocation within the supplied budget, cancellation, complete-data publication at an audio-block boundary, and releasing replaced data.
@@ -23,6 +24,7 @@
 - Saved-state mirror callbacks could outlive the document they belonged to. Cleanup now continues when another cleanup callback fails.
 - Customer React and React DOM versions are pinned together, and the exported lockfile is checked through a separate dependency installation.
 - Compiler, native headers, and browser support use the same Cmajor dependency selection. Source builds and verified downloaded tools retain explicit, checked identities.
+- Release tool provenance is derived from the committed CMake pin instead of a second hand-maintained revision. New release commits and tags use a neutral product identity.
 
 ### Scope and updating
 
