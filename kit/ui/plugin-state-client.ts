@@ -59,7 +59,7 @@ export function createPluginStateClient<const Fields extends PluginStateFields>(
     let nextSequence = 0;
     let base: Extract<PluginStateClientSnapshot<Fields>, { readonly kind: "ready" }> | undefined;
     const drafts = new Map<number, { readonly key: string; readonly value: unknown }>();
-    const tickets = new Map<number, { readonly finish: (result: PluginStateClientResult) => void; sent: boolean }>();
+    const tickets = new Map<number, { readonly finish: (result: PluginStateClientResult) => void; readonly pendingFields: readonly string[]; sent: boolean }>();
     const outgoing: Extract<PluginStateClientMessage, { readonly kind: "command" }>[] = [];
     let sending = false;
     const duringAttach = new Map<string, Extract<PluginStateClientEvent<Fields>, { readonly kind: "update" }>>();
@@ -85,6 +85,9 @@ export function createPluginStateClient<const Fields extends PluginStateFields>(
         if (!base) return;
         const fields: Record<string, PluginStateFieldSnapshot<unknown>> = { ...base.state.fields };
         const pendingFields = new Set<string>();
+        for (const ticket of tickets.values()) {
+            for (const key of ticket.pendingFields) pendingFields.add(key);
+        }
         for (const draft of drafts.values()) {
             const field = fields[draft.key];
             if (field && ("value" in field || (field.readiness.kind === "failed" && field.readiness.reason === "invalid-state"))) {
@@ -265,7 +268,11 @@ export function createPluginStateClient<const Fields extends PluginStateFields>(
                 const sequence = ++nextSequence;
                 if (draft) drafts.set(sequence, draft);
                 return new Promise(finish => {
-                    tickets.set(sequence, { finish, sent: false });
+                    // Compound edits have no optimistic drafts; their pending
+                    // fields follow the existing ticket's receipt and lifetime.
+                    tickets.set(sequence, { finish, sent: false,
+                        pendingFields: outbound.kind === "edit-many" ? outbound.edits.map(edit => edit.key) : [],
+                    });
                     outgoing.push({ kind: "command", scope, client, sequence, command: outbound });
                     drain();
                 });

@@ -100,6 +100,85 @@ const receipt = (sequence, result, client = 3, addressScope = scope) => ({
     address: { ...addressScope, client, sequence }, result,
 });
 
+test("compound edits mark every affected field pending without optimistic values until their receipt arrives", async t => {
+    const channel = new ControlledChannel();
+    const client = createPluginStateClient(definition, { channel, onDefect: error => assert.fail(String(error)) });
+    t.after(() => client.stop());
+    channel.deliver(attached());
+    const before = client.getSnapshot().state;
+    const editing = client.dispatch({ kind: "edit-many", edits: [
+        { key: "gain", value: 0.9 }, { key: "curve", value: [1, 0] },
+    ] });
+    assert.deepEqual([...client.getSnapshot().pendingFields].sort(), ["curve", "gain"]);
+    assert.deepEqual(client.getSnapshot().state, before, "a compound edit must not draw partially accepted values");
+    const command = channel.sent.at(-1);
+    assert.equal(command.command.kind, "edit-many");
+    channel.deliver({ kind: "update", scope, revision: 2, state: snapshot(2, [1, 0], 0.9) });
+    assert.deepEqual([...client.getSnapshot().pendingFields].sort(), ["curve", "gain"],
+        "an authoritative snapshot cannot invent this command's acceptance");
+    const accepted = { kind: "accepted", revision: 2, changed: true };
+    channel.deliver({ kind: "receipt", ...receipt(command.sequence, accepted) });
+    assert.deepEqual(await editing, accepted);
+    assert.deepEqual(client.getSnapshot().pendingFields, []);
+    assert.equal(client.getSnapshot().state.fields.gain.value, 0.9);
+    assert.deepEqual(client.getSnapshot().state.fields.curve.value, [1, 0]);
+});
+
+test("compound rejection clears only its own pending fields while overlapping edits retain their receipts and drafts", async t => {
+    const channel = new ControlledChannel();
+    const client = createPluginStateClient(definition, { channel, onDefect: error => assert.fail(String(error)) });
+    t.after(() => client.stop());
+    channel.deliver(attached());
+    const first = client.dispatch({ kind: "edit-many", edits: [
+        { key: "gain", value: 0.7 }, { key: "curve", value: [1, 0] },
+    ] });
+    const second = client.dispatch({ kind: "edit-many", edits: [{ key: "gain", value: 0.9 }] });
+    const third = client.dispatch({ kind: "edit", key: "curve", value: [0, 0.8, 1] });
+    assert.deepEqual([...client.getSnapshot().pendingFields].sort(), ["curve", "gain"]);
+    assert.equal(client.getSnapshot().state.fields.gain.value, 0.65, "compound values wait for the owner");
+    assert.deepEqual(client.getSnapshot().state.fields.curve.value, [0, 0.8, 1], "ordinary edits still draw their draft");
+    const singleAccepted = { kind: "accepted", revision: 3 };
+    channel.deliver({ kind: "update", scope, revision: 3, state: snapshot(3, [0, 0.8, 1]), receipt: receipt(3, singleAccepted) });
+    assert.deepEqual(await third, singleAccepted);
+    assert.deepEqual([...client.getSnapshot().pendingFields].sort(), ["curve", "gain"],
+        "a newer ordinary receipt cannot settle an older compound command");
+    const rejected = { kind: "rejected", reason: "stale-version" };
+    channel.deliver({ kind: "receipt", ...receipt(1, rejected) });
+    assert.deepEqual(await first, rejected);
+    assert.deepEqual(client.getSnapshot().pendingFields, ["gain"], "the other compound command remains pending");
+    assert.deepEqual(client.getSnapshot().state.fields.curve.value, [0, 0.8, 1], "rejection never rolls back newer input");
+    const accepted = { kind: "accepted", revision: 4 };
+    channel.deliver({ kind: "update", scope, revision: 4, state: snapshot(4, [0, 0.8, 1], 0.9), receipt: receipt(2, accepted) });
+    assert.deepEqual(await second, accepted);
+    assert.deepEqual(client.getSnapshot().pendingFields, []);
+});
+
+test("reset and closure interrupt compound pending fields without carrying them into a new attachment", async t => {
+    for (const reason of ["reset", "closed"]) {
+        const channel = new ControlledChannel();
+        const client = createPluginStateClient(definition, { channel, onDefect: error => assert.fail(String(error)) });
+        t.after(() => client.stop());
+        channel.deliver(attached());
+        const editing = client.dispatch({ kind: "edit-many", edits: [
+            { key: "gain", value: 0.9 }, { key: "curve", value: [1, 0] },
+        ] });
+        assert.deepEqual([...client.getSnapshot().pendingFields].sort(), ["curve", "gain"]);
+        const nextScope = { ...scope, document: 1 };
+        channel.deliver(reason === "reset" ? { kind: "reset", scope: nextScope } : { kind: "closed", reason: "service-closed" });
+        assert.deepEqual(await editing, { kind: "interrupted", reason, acceptance: "unknown" });
+        if (reason === "reset") {
+            const restored = { ...snapshot(), scope: nextScope };
+            channel.deliver(attached(restored, 2, 4));
+            assert.deepEqual(client.getSnapshot().pendingFields, []);
+            assert.deepEqual(client.getSnapshot().state, restored);
+        } else assert.deepEqual(client.getSnapshot(), { kind: "closed" });
+        const settled = client.getSnapshot();
+        channel.deliver({ kind: "receipt", ...receipt(1, { kind: "accepted", revision: 2 }) });
+        assert.strictEqual(client.getSnapshot(), settled, "a late receipt cannot revive interrupted pending fields");
+        assert.equal(channel.sent.filter(message => message.kind === "command").length, 1, "interrupted commands are never replayed");
+    }
+});
+
 test("local edits draw immediately while exact receipts settle independently of snapshot order", async () => {
     const channel = new ControlledChannel();
     const client = createPluginStateClient(definition, { channel, onDefect: error => assert.fail(String(error)) });
