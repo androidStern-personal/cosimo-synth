@@ -7,8 +7,8 @@ import { stageCmajorWebRuntime } from '../ui/vite.shared.mjs';
 const root=path.resolve(import.meta.dirname,'..');
 
 test('ordinary synth parameters and MSEG edits share real public React Undo while host automation stays outside history',async()=>{
-    const server=await startStaticWebServer(root,{bundleTypeScript:true,mounts:{'/cmaj_api':()=>process.env.COSIMO_PLUGIN_STATE_CMAJOR_SOURCE
-        ?path.join(process.env.COSIMO_PLUGIN_STATE_CMAJOR_SOURCE,'javascript/cmaj_api')
+    const server=await startStaticWebServer(root,{bundleTypeScript:true,mounts:{'/cmaj_api':()=>process.env.COSIMO_CMAJOR_SOURCE
+        ?path.join(process.env.COSIMO_CMAJOR_SOURCE,'javascript/cmaj_api')
         :stageCmajorWebRuntime(root,{buildDirectory:path.join(root,'build/cmajor_web_runtime-ordinary-state'),instanceId:String(process.pid)})}});
     const browser=await chromium.launch({headless:true});
     const page=await browser.newPage(),errors=[];

@@ -8,14 +8,14 @@ import { fileURLToPath } from "node:url";
 import { chromium } from "playwright";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-const source = process.env.COSIMO_PLUGIN_STATE_CMAJOR_SOURCE;
+const source = process.env.COSIMO_CMAJOR_SOURCE;
 const build = path.join(root, "build/browser_plugin_state");
 const fixture = path.join(root, "tests/browser/fixtures/plugin_state_channel");
 let browser, page, server;
 const errors = [];
 
 before(async () => {
-    assert.ok(source, "Set COSIMO_PLUGIN_STATE_CMAJOR_SOURCE to the isolated Cmajor worktree");
+    assert.ok(source, "Set COSIMO_CMAJOR_SOURCE to the isolated Cmajor worktree");
     await fs.mkdir(build, { recursive: true });
     const generated = path.join(build, "generated.js");
     const result = spawnSync(path.join(root, "build/browser_plugin_state_generator/cosimo_cmajor_external_codegen"), [

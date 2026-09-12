@@ -5,8 +5,8 @@ import path from "node:path";
 import { pathToFileURL } from "node:url";
 import { stageCmajorWebRuntime } from "../kit/fx/vite.shared.mjs";
 
-const stateRuntime = process.env.COSIMO_PLUGIN_STATE_CMAJOR_SOURCE
-    ? path.join(process.env.COSIMO_PLUGIN_STATE_CMAJOR_SOURCE, "javascript/cmaj_api")
+const stateRuntime = process.env.COSIMO_CMAJOR_SOURCE
+    ? path.join(process.env.COSIMO_CMAJOR_SOURCE, "javascript/cmaj_api")
     : stageCmajorWebRuntime(path.resolve(import.meta.dirname, ".."), {
     buildDirectory: path.resolve(import.meta.dirname, "../build/cmajor_web_runtime-worker-state-tests"),
 });

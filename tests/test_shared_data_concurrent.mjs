@@ -5,8 +5,8 @@ import { pathToFileURL } from 'node:url';
 import { Worker } from 'node:worker_threads';
 import { setImmediate } from 'node:timers/promises';
 
-const source = process.env.COSIMO_PLUGIN_STATE_CMAJOR_SOURCE;
-assert.ok(source, 'Set COSIMO_PLUGIN_STATE_CMAJOR_SOURCE to the authored Cmajor checkout');
+const source = process.env.COSIMO_CMAJOR_SOURCE;
+assert.ok(source, 'Set COSIMO_CMAJOR_SOURCE to the authored Cmajor checkout');
 const apiURL = pathToFileURL(path.join(source, 'javascript/cmaj_api/cmaj-shared-data.js')).href;
 const { createSharedDataMemory, createSharedDataReader } = await import(apiURL);
 const { compileSharedDataReader } = await import(pathToFileURL(path.join(source, 'javascript/cmaj_api/cmaj-shared-data-reader.js')).href);

@@ -9,8 +9,8 @@ import { createSynthParameterFixture } from "./helpers/synth_parameter_fixture.m
 const root = path.resolve(import.meta.dirname, "..");
 const { acquireSynthViewState } = await loadUIModule(root, "ui/shared/synth-state-client.ts");
 const { createMockPluginStateHost } = await loadUIModule(root, "ui/shared/mock-plugin-state-host.ts");
-const runtime = process.env.COSIMO_PLUGIN_STATE_CMAJOR_SOURCE
-    ? path.join(process.env.COSIMO_PLUGIN_STATE_CMAJOR_SOURCE, "javascript/cmaj_api")
+const runtime = process.env.COSIMO_CMAJOR_SOURCE
+    ? path.join(process.env.COSIMO_CMAJOR_SOURCE, "javascript/cmaj_api")
     : stageCmajorWebRuntime(root, { buildDirectory: path.join(root, "build/cmajor_web_runtime-state-lease-tests"), instanceId: String(process.pid) });
 
 async function until(predicate) {

@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
-const source = process.env.COSIMO_PLUGIN_STATE_CMAJOR_SOURCE;
+const source = process.env.COSIMO_CMAJOR_SOURCE;
 const wasmPath = process.env.COSIMO_NATIVE_VALUE_WASM;
 assert.ok(source && wasmPath, 'Set authored Cmajor source and the compiled NativeValueTests.cpp Wasm path');
 const { createSharedDataMemory, createSharedDataPreparation, createSharedDataReader } = await import(

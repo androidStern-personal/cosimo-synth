@@ -11,6 +11,13 @@ if(NOT DEFINED CPM_SOURCE_CACHE OR CPM_SOURCE_CACHE STREQUAL "")
     unset(_cosimo_cpm_source_cache)
 endif()
 
+# CPM caches its script location. A build directory can outlive a repository
+# move/extraction; bootstrap our bundled copy unless CPM is already loaded in
+# this configure. Cached metadata alone is not a loaded CMake command.
+if(NOT COMMAND CPMAddPackage)
+    unset(CPM_DIRECTORY CACHE)
+    unset(CPM_DIRECTORY)
+endif()
 include("${CMAKE_CURRENT_LIST_DIR}/CPM.cmake")
 # Source URLs only (GitHub in the monorepo, feed mirror in a customer export).
 include("${CMAKE_CURRENT_LIST_DIR}/dependency-sources.cmake")

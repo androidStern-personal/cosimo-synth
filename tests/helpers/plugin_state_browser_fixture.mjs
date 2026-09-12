@@ -12,7 +12,7 @@ const fixture = path.join(root, "tests/browser/fixtures/plugin_state_system");
 
 /** Actual generated worker, React view, native storage and DSP checks shared by scenarios. */
 export async function startPluginStateBrowserFixture(build) {
-    const source = process.env.COSIMO_PLUGIN_STATE_CMAJOR_SOURCE;
+    const source = process.env.COSIMO_CMAJOR_SOURCE;
     let browser, page, server;
     const errors = [];
 
@@ -53,7 +53,7 @@ export async function startPluginStateBrowserFixture(build) {
     }
 
     try {
-        assert.ok(source, "Set COSIMO_PLUGIN_STATE_CMAJOR_SOURCE to the isolated Cmajor fork");
+        assert.ok(source, "Set COSIMO_CMAJOR_SOURCE to the isolated Cmajor fork");
         const manifestPath = await buildPluginStateFixture(build);
         const runtime = path.dirname(manifestPath);
         const staging = path.resolve(runtime, "../../..");

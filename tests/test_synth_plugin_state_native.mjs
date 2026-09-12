@@ -9,7 +9,7 @@ import { loadUIModule } from "./helpers/load_ui_module.mjs";
 
 const root = path.resolve(import.meta.dirname, "..");
 test("actual synth QuickJS owner applies an amount-only edit and shared Undo to real audio", { timeout: 240000 }, async () => {
-    const source = process.env.COSIMO_PLUGIN_STATE_CMAJOR_SOURCE;
+    const source = process.env.COSIMO_CMAJOR_SOURCE;
     const runtime = process.env.COSIMO_CMAJOR_RUNTIME_LIBRARY;
     assert.ok(source && runtime, "Set the qualified source and runtime explicitly");
     const out = path.join(root, "build/plugin_state_synth_qualification");

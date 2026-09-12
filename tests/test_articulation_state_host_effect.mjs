@@ -6,7 +6,7 @@ import { spawnSync } from "node:child_process";
 
 const root = path.resolve(import.meta.dirname, "..");
 test("native articulation state handler changes real MIDI selection and rejects unrelated or malformed effects", async () => {
-    const source = process.env.COSIMO_PLUGIN_STATE_CMAJOR_SOURCE;
+    const source = process.env.COSIMO_CMAJOR_SOURCE;
     assert.ok(source, "Set the qualified isolated Cmajor source explicitly");
     const build = path.join(root, "build/native_articulation_state_effect");
     await mkdir(build, { recursive: true });

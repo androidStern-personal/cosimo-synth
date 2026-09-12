@@ -3,14 +3,13 @@ set -euo pipefail
 
 repo_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd -P)"
 probe_build_dir="$repo_dir/build/native_plugin_state"
-: "${COSIMO_PLUGIN_STATE_CMAJOR_SOURCE:?Set the isolated Cmajor source worktree}"
+: "${COSIMO_CMAJOR_SOURCE:?Set the isolated Cmajor source worktree}"
 : "${COSIMO_PLUGIN_STATE_JUCE_SOURCE:?Set the verified pinned JUCE source directory}"
 : "${COSIMO_CMAJOR_RUNTIME_LIBRARY:?Set the verified Cmajor runtime library}"
 
 cmake -S "$repo_dir/tests/native" -B "$probe_build_dir" \
     -DCMAKE_BUILD_TYPE=Release \
     -DCPM_SOURCE_CACHE="$probe_build_dir/sources" \
-    -DCPM_cosimo_cmajor_SOURCE="$COSIMO_PLUGIN_STATE_CMAJOR_SOURCE" \
     -DCPM_cosimo_juce_SOURCE="$COSIMO_PLUGIN_STATE_JUCE_SOURCE"
 cmake --build "$probe_build_dir" --target PluginStateChannelProbe --parallel 2
 

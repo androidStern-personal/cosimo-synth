@@ -5,9 +5,9 @@ import { mkdtemp, readFile, writeFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
-const source=process.env.COSIMO_PLUGIN_STATE_CMAJOR_SOURCE;
+const source=process.env.COSIMO_CMAJOR_SOURCE;
 const generator=process.env.CMAJOR_SHARED_GENERATOR;
-assert.ok(source&&generator,'Set COSIMO_PLUGIN_STATE_CMAJOR_SOURCE and CMAJOR_SHARED_GENERATOR to the authored compiler/runtime.');
+assert.ok(source&&generator,'Set COSIMO_CMAJOR_SOURCE and CMAJOR_SHARED_GENERATOR to the authored compiler/runtime.');
 const directory=await mkdtemp(path.join(tmpdir(),'kit-mseg-dsp-'));
 try {
     const module=await readFile(path.resolve(import.meta.dirname,'../kit/cmajor/mseg.cmajor'),'utf8');

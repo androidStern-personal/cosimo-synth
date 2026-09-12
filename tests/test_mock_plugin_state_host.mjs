@@ -11,8 +11,8 @@ const { createMockPluginStateHost } = await loadUIModule(root, "ui/shared/mock-p
 const { createCmajorPluginStateClient } = await loadUIModule(root, "kit/ui/plugin-state-cmajor.ts");
 const { synthPluginState } = await loadUIModule(root, "ui/shared/synth-plugin-state.ts");
 const { createDefaultModulationState, MODULATION_STATE_KEY } = await loadUIModule(root, "ui/shared/modulation.ts");
-const runtime = process.env.COSIMO_PLUGIN_STATE_CMAJOR_SOURCE
-    ? path.join(process.env.COSIMO_PLUGIN_STATE_CMAJOR_SOURCE, "javascript/cmaj_api")
+const runtime = process.env.COSIMO_CMAJOR_SOURCE
+    ? path.join(process.env.COSIMO_CMAJOR_SOURCE, "javascript/cmaj_api")
     : stageCmajorWebRuntime(root, { buildDirectory: path.join(root, "build/cmajor_web_runtime-mock-state-tests"), instanceId: String(process.pid) });
 const loadChannel = () => import(pathToFileURL(path.join(runtime, "cmaj-plugin-state-channel.js")).href);
 async function until(predicate) {

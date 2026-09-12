@@ -11,8 +11,8 @@ let server;
 before(async () => {
     server = await startStaticWebServer(root, {
         bundleTypeScript: true,
-        mounts: { "/cmaj_api": () => process.env.COSIMO_PLUGIN_STATE_CMAJOR_SOURCE
-            ? path.join(process.env.COSIMO_PLUGIN_STATE_CMAJOR_SOURCE, "javascript/cmaj_api")
+        mounts: { "/cmaj_api": () => process.env.COSIMO_CMAJOR_SOURCE
+            ? path.join(process.env.COSIMO_CMAJOR_SOURCE, "javascript/cmaj_api")
             : stageCmajorWebRuntime(root, { buildDirectory: path.join(root, "build/cmajor_web_runtime-synth-state-tests"), instanceId: String(process.pid) }) },
     });
     browser = await chromium.launch({ headless: true });

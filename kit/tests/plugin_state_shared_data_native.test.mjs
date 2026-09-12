@@ -6,8 +6,8 @@ import { setImmediate } from 'node:timers/promises';
 import { loadUIModule } from './helpers/load_ui_module.mjs';
 
 const root=path.resolve(import.meta.dirname,'../..');
-const source=process.env.COSIMO_PLUGIN_STATE_CMAJOR_SOURCE;
-assert.ok(source,'Set COSIMO_PLUGIN_STATE_CMAJOR_SOURCE to the authored Cmajor checkout');
+const source=process.env.COSIMO_CMAJOR_SOURCE;
+assert.ok(source,'Set COSIMO_CMAJOR_SOURCE to the authored Cmajor checkout');
 const api=file=>import(pathToFileURL(path.join(source,'javascript/cmaj_api',file)).href);
 const {createSharedDataMemory,createSharedDataReader,createSharedDataPreparation}=await api('cmaj-shared-data.js');
 const {createDirectDataPort}=await loadUIModule(root,'kit/ui/plugin-state-direct-data.ts');

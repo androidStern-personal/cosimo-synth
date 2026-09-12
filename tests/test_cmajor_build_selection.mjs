@@ -56,6 +56,7 @@ file(WRITE "\${CMAKE_BINARY_DIR}/selected.txt" "\${headers}|\${browser}|\${tools
         return readFile(path.join(build, "selected.txt"), "utf8");
     }
     assert.equal(await configure({ ...env, CPM_cosimo_cmajor_SOURCE: development.directory }, [
+        `-DCPM_DIRECTORY=${path.join(root, "previous-cmake-location")}`,
         `-DCPM_cosimo_cmajor_SOURCE=${development.directory}`,
         `-DCPM_cosimo_cmajor_toolchain_SOURCE=${pinned.directory}`,
     ]), "pinned|pinned|pinned", "legacy per-package overrides cannot silently bypass the pin");

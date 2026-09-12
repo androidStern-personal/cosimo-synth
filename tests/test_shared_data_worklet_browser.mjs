@@ -7,8 +7,8 @@ import path from 'node:path';
 import { chromium } from 'playwright';
 import { build } from 'esbuild';
 
-const source = process.env.COSIMO_PLUGIN_STATE_CMAJOR_SOURCE;
-assert.ok(source, 'Set COSIMO_PLUGIN_STATE_CMAJOR_SOURCE to the authored Cmajor checkout');
+const source = process.env.COSIMO_CMAJOR_SOURCE;
+assert.ok(source, 'Set COSIMO_CMAJOR_SOURCE to the authored Cmajor checkout');
 const generator = process.env.CMAJOR_SHARED_GENERATOR ?? path.resolve('build/shared_data_codegen/source/shared_memory_generator');
 const directory = await mkdtemp(path.join(tmpdir(), 'cmajor-shared-worklet-'));
 const generated = path.join(directory, 'generated.js');
@@ -195,10 +195,49 @@ try {
     assert.equal(unavailable.kind,'failed');
     assert.match(unavailable.message,/does not support direct shared-data preparation/);
     assert.equal(await page.evaluate(()=>window.fixture.ordinary.sharedData===undefined),true);
+    // The authored class seam omits a required import from the real generated Wasm.
+    // Scheduling disposal from endpoint discovery guarantees the node exists but
+    // initialization has not completed; no runtime messages or ACKs are mocked.
+    for (const failureMode of ['initialise', 'constructor']) {
+        await page.evaluate(failureMode => {
+            const f=window.fixture;
+            f.failedDisposed=false;f.failedInitialisationResult=undefined;
+            const Failing=Function(`return class extends (${f.Probe.toString()}) {
+                constructor() {
+                    super();
+                    if (${JSON.stringify(failureMode)} === 'constructor' && typeof AudioWorkletProcessor === 'function')
+                        throw new Error('expected generated runtime initialization failure');
+                }
+                getInputEndpoints() {
+                    globalThis.queueMicrotask?.(() => globalThis.disposeStartingConnection?.());
+                    return super.getInputEndpoints();
+                }
+                initialise(sessionID, frequency, options) {
+                    return super.initialise(sessionID, frequency, {...options,externalFunctions:{}});
+                }
+            }`)();
+            const connection=new f.connection.constructor({sharedData:{inputCount:2,maxRetainedBytes:1024*1024}});
+            f.failedConnection=connection;
+            globalThis.disposeStartingConnection=() => {
+                delete globalThis.disposeStartingConnection;
+                f.failedDisposal=connection.dispose().then(()=>{f.failedDisposed=true;});
+            };
+            f.failedInitialisation=connection.initialise({CmajorClass:Failing,audioContext:f.context,
+                workletName:'failing-shared-probe-'+failureMode,rootResourcePath:location.origin+'/'})
+                .then(()=>{f.failedInitialisationResult='unexpected success';},error=>{f.failedInitialisationResult=String(error);});
+        }, failureMode);
+        await page.waitForFunction(() => window.fixture.failedInitialisationResult && window.fixture.failedDisposed, null, {timeout:5000});
+        assert.match(await page.evaluate(()=>window.fixture.failedInitialisationResult),failureMode==='constructor'
+            ? /expected generated runtime initialization failure/ : /missing external function/);
+        await cdp.send('HeapProfiler.collectGarbage');
+        assert.deepEqual(await page.evaluate(()=>window.fixture.failedConnection.getSharedDataMemoryUsage()),
+            {ownedBytes:0,retainedSampleBytes:0,memoryObjectAlive:false,readerReleased:true});
+    }
     await page.evaluate(async () => {await window.fixture.ordinary.dispose();await window.fixture.context.close();});
     console.log('PASS real AudioWorklet shared startup, private-worker transfer, reader Wasm output and suspended disposal');
     console.log('PASS actual compiler parse failure retains '+compileAudio.length+' old-audio blocks; corrected layout restores prepared editable data directly and rejects the disposed reservation');
     console.log('PASS ordinary worker receives immediate direct shared-data unsupported failure');
+    console.log('PASS concurrent disposal during missing-import and constructor failures preserves diagnostics and releases actual memory');
     console.log('PASS retained AudioContext and nine retained disposed connections across two compiler layouts release main memory objects and worklet runtime ownership');
 } finally {
     await browser.close();

@@ -43103,7 +43103,7 @@ function IB(e, t, n, r) {
     g.current = E, b(!1);
     const T = () => {
       const O = E.read();
-      O && (b(!0), k(O));
+      b(O !== void 0), O && k(O);
     }, R = E.subscribe(T);
     return T(), () => {
       R(), E.stop(), g.current === E && (g.current = null);

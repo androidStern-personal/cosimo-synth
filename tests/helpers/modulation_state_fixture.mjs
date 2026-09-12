@@ -14,8 +14,8 @@ const modules = Promise.all([
 ]);
 let runtime;
 export async function loadChannel() {
-    runtime ??= process.env.COSIMO_PLUGIN_STATE_CMAJOR_SOURCE
-        ? path.join(process.env.COSIMO_PLUGIN_STATE_CMAJOR_SOURCE, "javascript/cmaj_api")
+    runtime ??= process.env.COSIMO_CMAJOR_SOURCE
+        ? path.join(process.env.COSIMO_CMAJOR_SOURCE, "javascript/cmaj_api")
         : stageCmajorWebRuntime(root, { buildDirectory: path.join(root, "build/cmajor_web_runtime-modulation-regressions"), instanceId: String(process.pid) });
     return import(pathToFileURL(path.join(runtime, "cmaj-plugin-state-channel.js")).href);
 }
