@@ -96,9 +96,12 @@ async function openEnhancerLite(modulePath = "/fx/enhancer_lite/view/source.ts",
         const sent = [];
         const automationMessages = [];
         const storedWrites = [];
+        let stateHost;
+        let publishingParameter = false;
 
         const emit = (endpointID, value) => {
             parameterValues.set(endpointID, value);
+            if (!publishingParameter) stateHost?.observe(endpointID, Number(value));
             for (const listener of listeners.get(endpointID) ?? [])
                 listener(value);
         };
@@ -177,10 +180,30 @@ async function openEnhancerLite(modulePath = "/fx/enhancer_lite/view/source.ts",
                     storedState.set(key, value);
                     storedWrites.push({ key, value });
                     emitStoredStateValue(key, value);
+                    stateHost?.replace(key);
                 },
             });
         }
 
+        const { createBrowserPreviewState } = await import("/kit/ui/effects/browser-preview-state.ts");
+        stateHost = createBrowserPreviewState({
+            snapshot: () => ({ values: Object.fromEntries(storedState), parameters: statusInputs.map(input => ({
+                endpoint: input.endpointID, value: Number(parameterValues.get(input.endpointID) ?? 0),
+                min: input.annotation.min ?? 0, max: input.annotation.max ?? 1, step: input.annotation.step ?? 0,
+                defaultValue: input.annotation.init ?? 0,
+            })) }),
+            parameter(endpoint, value) {
+                publishingParameter = true;
+                try { patchConnection.sendEventOrValue(endpoint, value); }
+                finally { publishingParameter = false; }
+            },
+            stored(key, value) { storedState.set(key, value); storedWrites.push({ key, value }); emitStoredStateValue(key, value); },
+            gesture(endpoint, kind) {
+                if (kind === "gesture-start") patchConnection.sendParameterGestureStart(endpoint);
+                else patchConnection.sendParameterGestureEnd(endpoint);
+            },
+        });
+        Object.assign(patchConnection, stateHost.host);
         const module = await import(sourceModulePath);
         document.querySelector("#mount").replaceChildren(module.default(patchConnection));
         window.__ENHANCER_LITE_TEST__ = {
@@ -198,6 +221,33 @@ async function openEnhancerLite(modulePath = "/fx/enhancer_lite/view/source.ts",
     }, { values: initialValues, sourceModulePath: modulePath, statusInputs: hostStatusInputs, withHost: host, manifest, userFileFixture, pauseFileLoads });
     await page.locator("cosimo-enhancer-lite-view").waitFor();
     return page;
+}
+
+for (const sourceModule of ["/fx/enhancer_lite/view/source.ts", "/build/fx/enhancer_lite_runtime/view/app.js"]) {
+test(`scalar controls share Undo/Redo and retain their history when the GUI reopens (${sourceModule})`, async () => {
+    const page = await openEnhancerLite(sourceModule);
+    try {
+        const amount = shadow(page, "[data-readout-control='primary-amount']");
+        const frequency = shadow(page, "[data-readout-control='frequency']");
+        const originalFrequency = await frequency.getAttribute("aria-valuenow");
+        await amount.focus(); await page.keyboard.press("ArrowUp");
+        const editedAmount = await amount.getAttribute("aria-valuenow");
+        assert.ok(Number(editedAmount) > 0);
+        await frequency.focus(); await page.keyboard.press("ArrowRight");
+        assert.ok(Number(await frequency.getAttribute("aria-valuenow")) > Number(originalFrequency));
+        const undo = page.getByRole("button", { name: "Undo", exact: true });
+        await undo.click({ timeout: 2000 });
+        assert.equal(await frequency.getAttribute("aria-valuenow"), originalFrequency);
+        assert.equal(await amount.getAttribute("aria-valuenow"), editedAmount);
+        await page.evaluate(() => window.__ENHANCER_LITE_TEST__.reopen());
+        await shadow(page, "[data-readout-control='primary-amount']").waitFor();
+        await undo.click();
+        assert.equal(await amount.getAttribute("aria-valuenow"), "0");
+        await page.getByRole("button", { name: "Redo", exact: true }).click();
+        assert.equal(await amount.getAttribute("aria-valuenow"), editedAmount);
+    } finally { await page.close(); }
+});
+
 }
 
 function shadow(page, selector) {
@@ -612,7 +662,7 @@ test("disconnect closes an active readout gesture and releases capture", async (
         const frequencyReadout = shadow(page, "[data-readout-control='frequency']");
         const { pointerID } = await beginCapturedDrag(page, frequencyReadout);
         const cleanup = await page.evaluate((capturedPointerID) => {
-            const view = document.querySelector("cosimo-enhancer-lite-view");
+            const view = document.querySelector("builder-kit-state-view").shadowRoot.querySelector("cosimo-enhancer-lite-view");
             const readout = view.shadowRoot.querySelector("[data-readout-control='frequency']");
             document.querySelector("#mount").replaceChildren();
             return {
@@ -1020,7 +1070,7 @@ test("the shared axis reduces label density responsively without moving retained
                 host.style.width = `${width}px`;
             }, editorWidth);
             await page.waitForFunction((count) => {
-                const root = document.querySelector("cosimo-enhancer-lite-view")?.shadowRoot;
+                const root = document.querySelector("builder-kit-state-view").shadowRoot.querySelector("cosimo-enhancer-lite-view")?.shadowRoot;
                 return root?.querySelectorAll("[data-frequency-hz]:not([hidden])").length === count;
             }, expectedLabels);
 
@@ -1338,11 +1388,11 @@ test("one unchanged Lite UI isolates native presets by identity and retains orig
             userFileFixture: files,
         });
         try {
-            await page.waitForFunction(() => document.querySelector("cosimo-enhancer-lite-view").presetController.getState().missingCurrentValueEndpointIDs.length === 0);
+            await page.waitForFunction(() => document.querySelector("builder-kit-state-view").shadowRoot.querySelector("cosimo-enhancer-lite-view").presetController.getState().missingCurrentValueEndpointIDs.length === 0);
             await shadow(page, "cosimo-preset-bar >> [data-action='toggle-flyout']").click();
             assert.deepEqual(await shadow(page, "cosimo-preset-bar >> [data-source='user'] .item-name").allTextContents(), scenario.expected);
             if (scenario.save) {
-                const result = await page.evaluate((label) => document.querySelector("cosimo-enhancer-lite-view").presetController.saveCurrentAsNewPreset(label), scenario.save);
+                const result = await page.evaluate((label) => document.querySelector("builder-kit-state-view").shadowRoot.querySelector("cosimo-enhancer-lite-view").presetController.saveCurrentAsNewPreset(label), scenario.save);
                 assert.equal(result.ok, true);
                 await page.waitForFunction((label) => [...window.__PRESET_FILES_TEST__.files.values()].some((value) => JSON.parse(value).label === label), scenario.save);
             }
@@ -1378,7 +1428,7 @@ test("Lite shows a loading refusal in the preset UI and allows retry with the ol
         assert.match(await errorToast.textContent(), /still loading/);
         assert.deepEqual(await page.evaluate(() => window.__PRESET_FILES_TEST__.calls.map(({ operation }) => operation)), ["list"]);
         await page.evaluate(() => window.__PRESET_FILES_TEST__.releaseLoads());
-        await page.waitForFunction(() => document.querySelector("cosimo-enhancer-lite-view").presetController.getState().userPresets.length === 1);
+        await page.waitForFunction(() => document.querySelector("builder-kit-state-view").shadowRoot.querySelector("cosimo-enhancer-lite-view").presetController.getState().userPresets.length === 1);
         await shadow(page, "cosimo-preset-bar >> [data-action='save-as']").click();
         await shadow(page, "cosimo-preset-bar >> [data-el='dialog-input']").fill("New preset");
         await shadow(page, "cosimo-preset-bar >> [data-action='dialog-confirm']").click();

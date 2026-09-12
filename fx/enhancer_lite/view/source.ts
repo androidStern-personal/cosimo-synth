@@ -1,3 +1,7 @@
+import { createElement, useLayoutEffect, useRef } from "react";
+import { createStatefulPatchView, usePluginState, usePluginHistory, usePatchConnection,
+    type PluginStateControl } from "../../../kit/index";
+import definition from "../state";
 import {
     ENHANCER_LITE_SETTING_DESCRIPTORS,
     type EnhancerLiteShape,
@@ -59,7 +63,6 @@ export const browserPreviewParameters = ENHANCER_LITE_SETTING_DESCRIPTORS.map((d
         }
 )) satisfies EffectParameterContract[];
 
-type ParameterListener = ((value: unknown) => void) & { endpointID?: string };
 type EndpointListener = (message: unknown) => void;
 
 /**
@@ -261,7 +264,6 @@ class EnhancerLiteView extends HTMLElement {
     readonly patchConnection: EnhancerLitePatchConnection;
     readonly root: ShadowRoot;
     readonly values = new Map(endpointInitialValues);
-    readonly parameterListeners: Array<{ readonly endpointID: string; readonly listener: ParameterListener }> = [];
     readonly endpointListeners: Array<{ readonly endpointID: string; readonly listener: EndpointListener }> = [];
     readonly spectrumDisplays = new Map<SpectrumRole, EnhancerLiteSpectrumDisplay>();
     // The kit's preset bar and A-G snapshots, mounted as one header above the
@@ -275,7 +277,7 @@ class EnhancerLiteView extends HTMLElement {
     readoutDrag: ReadoutDrag | undefined;
     frequencyTickResizeObserver: ResizeObserver | undefined;
 
-    constructor(patchConnection: EnhancerLitePatchConnection) {
+    constructor(patchConnection: EnhancerLitePatchConnection, public controls: ReadonlyMap<string, PluginStateControl<number>>) {
         super();
         this.patchConnection = patchConnection;
         this.presetController = createStandaloneEffectPresetController({
@@ -295,6 +297,7 @@ class EnhancerLiteView extends HTMLElement {
         this.root.innerHTML = this.getMarkup();
         this.requireElement<HTMLElement>(".shell").before(this.effectHeader);
         this.bindControls();
+        this.updateControls(controls);
         this.renderAll();
     }
 
@@ -303,20 +306,6 @@ class EnhancerLiteView extends HTMLElement {
             return;
 
         this.hasAttached = true;
-        for (const endpointID of endpointInitialValues.keys()) {
-            const listener: ParameterListener = (value) => {
-                if (typeof value !== "number" || !Number.isFinite(value))
-                    return;
-
-                this.values.set(endpointID, value);
-                this.renderEndpoint(endpointID);
-            };
-            listener.endpointID = endpointID;
-            this.parameterListeners.push({ endpointID, listener });
-            this.patchConnection.addParameterListener(endpointID, listener);
-            this.patchConnection.requestParameterValue(endpointID);
-        }
-
         for (const role of ["input", "output"] as const) {
             const endpointID = ENHANCER_LITE_ANALYZER_ENDPOINTS[role];
             const listener: EndpointListener = (message) => this.renderSpectrum(role, message);
@@ -355,12 +344,9 @@ class EnhancerLiteView extends HTMLElement {
             0,
             0,
         );
-        for (const { endpointID, listener } of this.parameterListeners)
-            this.patchConnection.removeParameterListener(endpointID, listener);
         for (const { endpointID, listener } of this.endpointListeners)
             this.patchConnection.removeEndpointListener(endpointID, listener);
 
-        this.parameterListeners.length = 0;
         this.endpointListeners.length = 0;
         this.spectrumDisplays.clear();
         this.frequencyTickResizeObserver?.disconnect();
@@ -439,8 +425,8 @@ class EnhancerLiteView extends HTMLElement {
         if (previous !== undefined && Math.abs(previous - value) <= 1e-9)
             return;
 
-        this.values.set(endpointID, value);
-        this.renderEndpoint(endpointID);
+        const control = this.controls.get(endpointID);
+        if (!control) throw new Error(`No state control for ${endpointID}.`);
         const pointerGestureEndpointIDs = (this.readoutDrag ?? this.drag)?.gestureEndpointIDs;
         const gestureOwner = gestureEndpointIDs ?? (
             pointerGestureEndpointIDs?.has(endpointID) ? pointerGestureEndpointIDs : undefined
@@ -449,23 +435,27 @@ class EnhancerLiteView extends HTMLElement {
         // endpoint only when it changes, and keep it touched until release.
         // Keyboard edits to an already-touched endpoint share that ownership:
         // JUCE does not nest gestures, so an atomic end would close the drag.
-        if (!gestureOwner?.has(endpointID)) {
-            gestureOwner?.add(endpointID);
-            this.patchConnection.sendParameterGestureStart?.(endpointID);
+        if (gestureOwner && !gestureOwner.has(endpointID)) {
+            gestureOwner.add(endpointID);
+            void control.beginGesture();
         }
-        try {
-            this.patchConnection.sendEventOrValue(endpointID, value, 0);
-        } finally {
-            if (!gestureOwner)
-                this.patchConnection.sendParameterGestureEnd?.(endpointID);
-        }
+        void control.setValue(value);
     }
 
     endParameterGestures(gestureEndpointIDs: Set<string>): void {
         const endpointIDs = [...gestureEndpointIDs];
         gestureEndpointIDs.clear();
-        for (const endpointID of endpointIDs)
-            this.patchConnection.sendParameterGestureEnd?.(endpointID);
+        for (const endpointID of endpointIDs) void this.controls.get(endpointID)?.endGesture();
+    }
+
+    /** Render the hook's projection; this map never accepts host or local edits itself. */
+    updateControls(controls: ReadonlyMap<string, PluginStateControl<number>>): void {
+        this.controls = controls;
+        for (const [endpointID, control] of controls) {
+            if (control.state.kind !== "ready" || this.values.get(endpointID) === control.state.value) continue;
+            this.values.set(endpointID, control.state.value);
+            this.renderEndpoint(endpointID);
+        }
     }
 
     beginReadoutDrag(event: PointerEvent, role: ReadoutRole): void {
@@ -1122,11 +1112,45 @@ class EnhancerLiteView extends HTMLElement {
     }
 }
 
-/** Create the standalone one-band audition surface for a Cmajor patch connection. */
-export default function createPatchView(patchConnection: EnhancerLitePatchConnection): HTMLElement {
-    const elementName = "cosimo-enhancer-lite-view";
-    if (!window.customElements.get(elementName))
-        window.customElements.define(elementName, EnhancerLiteView);
-
-    return new EnhancerLiteView(patchConnection);
+function View() {
+    const connection = usePatchConnection();
+    const controls = new Map([
+        ["freqHzIn", usePluginState(definition.frequency)],
+        ["qIn", usePluginState(definition.q)],
+        ["modeIn", usePluginState(definition.routing)],
+        ["midAmountIn", usePluginState(definition.amount)],
+        ["sideAmountIn", usePluginState(definition.sideAmount)],
+        ["curveIn", usePluginState(definition.character)],
+        ["saturationModeIn", usePluginState(definition.intensity)],
+        ["shapeIn", usePluginState(definition.shape)],
+    ]);
+    const history = usePluginHistory();
+    const mount = useRef<HTMLDivElement>(null);
+    const panel = useRef<EnhancerLiteView | null>(null);
+    const ready = [...controls.values()].every(control => control.state.kind === "ready");
+    useLayoutEffect(() => {
+        if (!ready || !mount.current) return;
+        const required = ["addParameterListener", "removeParameterListener", "requestParameterValue",
+            "addEndpointListener", "removeEndpointListener", "sendEventOrValue"] as const;
+        for (const method of required) if (typeof connection[method] !== "function") throw new Error(`Missing patch connection ${method}.`);
+        const elementName = "cosimo-enhancer-lite-view";
+        if (!customElements.get(elementName)) customElements.define(elementName, EnhancerLiteView);
+        // SAFETY: all required panel connection methods were checked above.
+        const view = new EnhancerLiteView(connection as EnhancerLitePatchConnection, controls);
+        panel.current = view;
+        mount.current.append(view);
+        return () => { view.remove(); panel.current = null; };
+    }, [connection, ready]);
+    useLayoutEffect(() => { panel.current?.updateControls(controls); });
+    return createElement("div", null,
+        ready ? null : createElement("p", { role: "status" }, "Connecting"),
+        createElement("div", { ref: mount }),
+        createElement("nav", { "aria-label": "Edit history", style: { display: "flex", gap: "8px", padding: "8px 18px" } },
+            createElement("button", { disabled: !history.canUndo, onClick: () => { void history.undo(); } }, "Undo"),
+            createElement("button", { disabled: !history.canRedo, onClick: () => { void history.redo(); } }, "Redo")),
+        ...[...controls.entries()].flatMap(([key, control]) => control.error
+            ? [createElement("p", { key, role: "alert" }, control.error.message)] : []));
 }
+
+/** Preserve the existing panel while the public wrapper owns state and GUI lifetime. */
+export default createStatefulPatchView({ definition, View });

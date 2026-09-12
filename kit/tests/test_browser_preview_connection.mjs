@@ -66,3 +66,25 @@ test("preview refuses missing identity, missing metadata, and duplicate paramete
     assert.match(createBrowserPreviewConnection({ ID: "test.preview" }, undefined).message, /browserPreviewParameters/u);
     assert.match(createBrowserPreviewConnection({ ID: "test.preview" }, [...parameters, ...parameters]).message, /Duplicate/u);
 });
+
+test("stateful preview retains valid display and diagnoses malformed external stored input", async () => {
+    const { definePluginState, storedValue } = await loadUIModule(root, "kit/ui/plugin-state-definition.ts");
+    const definition = definePluginState({ label: storedValue({ initial: "valid", codec: {
+        parse: value => typeof value === "string" ? { kind: "ok", value } : { kind: "error", message: "Expected text." },
+        encode: value => value, equals: (left, right) => left === right,
+    } }) });
+    const connection = connect("test.preview.stored");
+    const defects = [];
+    const client = connection[Symbol.for("builder-kit.plugin-state-view-host")](definition, error => defects.push(error));
+    try {
+        assert.equal(client.getSnapshot().state.fields.label.value, "valid");
+        connection.sendStoredStateValue("unrelated", "keep history");
+        assert.equal(client.getSnapshot().state.scope.document, 0, "unowned header storage does not replace the state document");
+        connection.sendStoredStateValue("label", 12);
+        const field = client.getSnapshot().state.fields.label;
+        assert.deepEqual(field.readiness, { kind: "failed", reason: "invalid-state" });
+        assert.equal(field.value, "valid", "a malformed replacement retains the last valid display");
+        assert.deepEqual(field.persistence, { kind: "failed", reason: "invalid-state" });
+        assert.deepEqual(defects, []);
+    } finally { client.stop(); await connection.dispose(); }
+});

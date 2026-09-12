@@ -8,6 +8,7 @@ export function createBrowserPreviewState(storage: {
     snapshot(): PluginStateNativeSnapshot;
     parameter(endpoint: string, value: number): void;
     stored(key: string, value: unknown): void;
+    gesture(endpoint: string, kind: "gesture-start" | "gesture-end"): void;
 }) {
     let active: {
         definition: PluginStateFields;
@@ -44,6 +45,7 @@ export function createBrowserPreviewState(storage: {
                                     storage.parameter(operation.endpoint, operation.value);
                                 }
                                 else if (operation.kind === "stored") storage.stored(operation.key, operation.value);
+                                else storage.gesture(operation.endpoint, operation.kind);
                             }
                             run({ kind: "published", scope, request: publication.request, result: { kind: "observed" } });
                         },
@@ -62,7 +64,7 @@ export function createBrowserPreviewState(storage: {
                         if (definition[key]?.kind !== "stored") return;
                         scope = { ...scope, document: scope.document + 1 };
                         intents.clear();
-                        run({ kind: "replaced", scope, native: storage.snapshot() });
+                        run({ kind: "replaced", scope, native: storage.snapshot(), changedStoredKey: key });
                         for (const receive of clients.values()) receive({ kind: "reset", scope });
                     },
                     connect(clientDefect) {

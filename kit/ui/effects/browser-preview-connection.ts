@@ -73,6 +73,8 @@ export function createBrowserPreviewConnection(manifest: unknown, parameters: un
             defaultValue: Number(parameter.defaultValue),
         })) }),
         parameter: writeParameter,
+        // A silent page has no host automation recorder.
+        gesture() {},
         stored(key, value) { storedState.set(key, value); emitStoredState(key); },
     });
     return {

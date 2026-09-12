@@ -12,6 +12,7 @@
     "manufacturerCode": "Cosi",
     "version": "0.1.0"
   },
+  "stateSource": "fx/enhancer_lite/state.ts",
   "runtimeOut": "build/fx/enhancer_lite_runtime",
   "juceOut": "build/enhancer_lite_juce",
   "jitInstallRuntime": true
