@@ -368,7 +368,7 @@ test("commit_release_replaces_the_lineage_tree_and_tags_it", async () => {
     const scratch = await makeScratch("kit-release-lineage-");
     try {
         const lineage = path.join(scratch, "lineage");
-        await initRepo(lineage, { "kit/old.txt": "old\n", "fx/customer/plugin.txt": "never in a kit commit\n" });
+        const previousCommit = await initRepo(lineage, { "kit/old.txt": "old\n", "fx/customer/plugin.txt": "never in a kit commit\n" });
         const exportRoot = path.join(scratch, "export");
         await fs.mkdir(path.join(exportRoot, "kit"), { recursive: true });
         await fs.writeFile(path.join(exportRoot, "kit/new.txt"), "new\n");
@@ -378,6 +378,13 @@ test("commit_release_replaces_the_lineage_tree_and_tags_it", async () => {
         assert.equal(result.tag, "v2.0.0");
         assert.equal(result.branch, "main");
         assert.equal(git(lineage, "log", "-1", "--format=%s"), "Builder Kit 2.0.0");
+        assert.equal(git(lineage, "log", "-1", "--format=%an <%ae>%n%cn <%ce>"),
+            "Builder Kit Release <release@builder-kit.invalid>\nBuilder Kit Release <release@builder-kit.invalid>",
+            "release authors must not inherit the maintainer's shell identity");
+        assert.equal(git(lineage, "for-each-ref", "--format=%(taggername) %(taggeremail)", "refs/tags/v2.0.0"),
+            "Builder Kit Release <release@builder-kit.invalid>");
+        assert.equal(git(lineage, "rev-parse", "HEAD^"), previousCommit,
+            "neutral release metadata must preserve the ancestry used by customer updates");
         assert.deepEqual(git(lineage, "ls-tree", "-r", "--name-only", "HEAD").split("\n").sort(), ["kit/new.txt", "link.txt"]);
         assert.equal(git(lineage, "status", "--porcelain"), "");
         assert.equal(await fs.readlink(path.join(lineage, "link.txt")), "../kit/new.txt");

@@ -428,8 +428,17 @@ export async function commitRelease(lineageDir, exportRoot, version) {
     if (!git(lineageDir, "status", "--porcelain")) {
         throw new Error(`Export is identical to the lineage tip; nothing to release as ${tag}.`);
     }
-    git(lineageDir, "commit", "--quiet", "-m", `Builder Kit ${version}`);
-    git(lineageDir, "tag", "-a", tag, "-m", `Builder Kit ${version}`);
+    // Release metadata ships to customers too. Do not inherit the operator's
+    // personal Git identity; existing ancestry remains intact for updates.
+    const releaseEnvironment = {
+        ...process.env,
+        GIT_AUTHOR_NAME: "Builder Kit Release",
+        GIT_AUTHOR_EMAIL: "release@builder-kit.invalid",
+        GIT_COMMITTER_NAME: "Builder Kit Release",
+        GIT_COMMITTER_EMAIL: "release@builder-kit.invalid",
+    };
+    runCommand("git", ["commit", "--quiet", "-m", `Builder Kit ${version}`], { cwd: lineageDir, env: releaseEnvironment });
+    runCommand("git", ["tag", "-a", tag, "-m", `Builder Kit ${version}`], { cwd: lineageDir, env: releaseEnvironment });
     return {
         commit: git(lineageDir, "rev-parse", "HEAD"),
         tag,
