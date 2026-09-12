@@ -21,6 +21,9 @@ interface, or start a new plugin. You can also give it your own request.
 When you are ready: [try the Wavefold example](WAVEFOLD.md),
 [update or recover your kit](UPDATING.md), or [get setup help](SUPPORT.md).
 
+See [what changed in Builder Kit](kit/CHANGELOG.md) and the
+[plugin state guide](kit/docs/PLUGIN_STATE.md) for the state and Undo APIs.
+
 ## If you choose to build the included plugin as-is
 
 After the first-session strict doctor and choice above, follow this section only

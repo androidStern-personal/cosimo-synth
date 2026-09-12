@@ -1,0 +1,30 @@
+Subject: Builder Kit {{version}} is available
+From: Andrew at Song Machines <andrew@song-machines.com>
+Reply-To: andrew@song-machines.com
+
+Builder Kit {{version}} is available.
+
+This update is included with your Builder Kit purchase.
+
+What's new:
+
+- One Undo history: parameters, envelopes, and wavetable selections can share Undo and Redo.
+- An editable envelope, included: the MSEG editor comes with curve state, saving, and a reader for your audio code.
+- Shared audio data: prepare data in storage the audio engine can read. Builder Kit handles the handoff.
+
+Release notes: {{release_notes_url}}
+
+Update your existing project
+
+Open your project in Codex or Claude Code and give it this prompt:
+
+"Update Builder Kit using the bundled kit-update skill. Preserve my plugin changes, then show me what changed."
+
+Updating the kit adds these tools. Adopting the new state API in your plugin is a separate change.
+
+Find your Builder Kit access: {{access_url}}
+
+Questions? Reply to this email.
+
+Andrew
+Song Machines
