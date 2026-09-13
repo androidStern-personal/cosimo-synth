@@ -1,6 +1,6 @@
 # Public state lifecycle update — 2026-09-13
 
-Implemented and verified on `codex/builder-kit-state-docs-318e`; not integrated or published by this task. Source base: `51017bb36b04b6a35f2ffac39f22677391c2cf35`. Tested customer export: `4be2b39e0b2bcc00974c51059efe3e511e6452cf`.
+Integrated into `codex/shared-data-runtime` through `ee8190a84aa07150448d4a573f97ac8ca528cbd9`; not published. The original worker verification below is followed by the final coordinator qualification. Source base: `51017bb36b04b6a35f2ffac39f22677391c2cf35`. Tested customer export: `4be2b39e0b2bcc00974c51059efe3e511e6452cf`.
 
 ## Customer contract
 
@@ -59,6 +59,20 @@ Repair verification: 28 focused client/public-type checks, all 20 public-hook br
 | Release `EMAIL.txt`, `EMAIL.html`, and `SOCIAL.md` | Audited; no removed fields or invalidated lifecycle claims. No copy change required. |
 | Maintained website and customer-email source | Audited local website source and its available `origin/main` ref; no removed public API references. Email delivery's own `status` fields are unrelated. No website deployment or email send performed. |
 
-## Remaining release boundary
+## Original worker handoff boundary
 
 The integration coordinator owns rebasing, final review, integration, and publication. This task did not merge, push, deploy, change the store, or send customer email. The earlier native package qualification in `AUDIT.md` remains evidence for its recorded source revision. These new source/browser/customer-export checks do not claim a rebuilt native candidate, installed-host acceptance, listening acceptance, or a release of the changed API.
+
+
+## Final coordinator qualification — 2026-09-13
+
+Independent review reproduced a two-edit shutdown regression and accepted its repair at `ee8190a8`. No remaining scoped blocker was found. The coordinator fast-forwarded the clean branch after qualifying that exact committed source; the four unrelated dirty root trackers and separate untracked video project were preserved.
+
+- Source: typecheck, all 220 state tests, all 20 public-hook browser tests, and the real synth parameter/MSEG Undo/Redo/automation/reopen browser test passed.
+- Fresh release candidate: the existing release implementation staged the committed export and unchanged hash-verified Cmajor tools. A separate customer cloned it over HTTP and passed ordinary setup, strict doctor, typecheck, 289 tests (six monorepo-only skips), the runtime build, 57 ordinary browser tests, and 20 public-hook browser tests.
+- That customer's production Enhance That VST3 build passed, followed by pluginval strictness 5 with GUI tests skipped. GUI behavior was separately exercised by browser tests. This is not installed-DAW or listening acceptance.
+- The 218-file installed export scan found no detected credentials, maintainer home paths, or exact private Cosimo source matches. The existing negative-test private-project name literal remains; no new issue was found.
+
+Evidence: `build/state-api-integration-2026-09-13/candidate-qualification.json`, `candidate-export-audit.json`, `candidate-pluginval.log`, and the accompanying stage logs. Source rerun logs are `/tmp/state-api-integration-*-final.log`. The pinned tool source and hashes did not change, so no tool rebuild was needed.
+
+This renews packaged customer/native qualification for the changed public API. It does not publish the release, change store settings, send email, or alter video assets.
