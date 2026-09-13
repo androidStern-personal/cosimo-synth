@@ -51,7 +51,7 @@ const update = (page, snapshot, receipt) => deliver(page, { kind: "update", scop
 async function open() {
     const page = await browser.newPage();
     await page.route("**/reactivity-fixture.js", route => route.fulfill({ contentType: "text/javascript", body: fixture }));
-    await page.goto(`${server.baseUrl}/kit/tests/helpers/module_test_shell.html`);
+    await page.goto(new URL("kit/tests/helpers/module_test_shell.html", server.baseUrl).href);
     await page.evaluate(() => import("/reactivity-fixture.js"));
     await deliver(page, { kind: "attached", request: 1, client: 1, scope, revision: 1, state: state(field(2), field(0), 1) });
     return page;

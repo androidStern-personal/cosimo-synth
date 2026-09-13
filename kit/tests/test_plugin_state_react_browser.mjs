@@ -24,7 +24,7 @@ async function open() {
     const errors = [];
     browserErrors.set(page, errors);
     page.on("pageerror", error => errors.push(error.message));
-    await page.goto(`${server.baseUrl}/kit/tests/helpers/module_test_shell.html`);
+    await page.goto(new URL("kit/tests/helpers/module_test_shell.html", server.baseUrl).href);
     await page.evaluate(async () => {
         window.harness = await import("/kit/tests/helpers/plugin_state_react.tsx");
         window.unmount = window.harness.mount(document.getElementById("mount"));
@@ -43,7 +43,7 @@ test("public compound edits remain pending until receipt and one Undo restores b
     browserErrors.set(page, []);
     page.on("pageerror", error => browserErrors.get(page).push(error.message));
     try {
-        await page.goto(`${server.baseUrl}/kit/tests/helpers/module_test_shell.html`);
+        await page.goto(new URL("kit/tests/helpers/module_test_shell.html", server.baseUrl).href);
         await page.evaluate(async () => {
             const { mount } = await import("/kit/tests/helpers/plugin_state_public_react.tsx");
             window.publicState = await mount(document.getElementById("mount"));
@@ -80,7 +80,7 @@ test("public compound edit closures reject one stale field atomically and cannot
     browserErrors.set(page, []);
     page.on("pageerror", error => browserErrors.get(page).push(error.message));
     try {
-        await page.goto(`${server.baseUrl}/kit/tests/helpers/module_test_shell.html`);
+        await page.goto(new URL("kit/tests/helpers/module_test_shell.html", server.baseUrl).href);
         await page.evaluate(async () => {
             const { mount } = await import("/kit/tests/helpers/plugin_state_public_react.tsx");
             window.publicState = await mount(document.getElementById("mount"));
@@ -116,7 +116,7 @@ test("public compound edit closures reject one stale field atomically and cannot
 test("public edit closures reject ABA and reset while queued edits in their own gesture remain accepted", async () => {
     const page=await browser.newPage();browserErrors.set(page,[]);
     page.on('pageerror',error=>browserErrors.get(page).push(error.message));
-    await page.goto(`${server.baseUrl}/kit/tests/helpers/module_test_shell.html`);
+    await page.goto(new URL("kit/tests/helpers/module_test_shell.html", server.baseUrl).href);
     await page.evaluate(async()=>{const {mount}=await import('/kit/tests/helpers/plugin_state_public_react.tsx');window.publicState=await mount(document.getElementById('mount'));});
     try {
         await page.waitForFunction(()=>document.querySelector('[data-testid="public-control"]')?.textContent.includes('value'));
@@ -151,7 +151,7 @@ test("public edit closures reject ABA and reset while queued edits in their own 
 test("a public field failure exposes one guarded retry without adding editable history", async () => {
     const page=await browser.newPage();browserErrors.set(page,[]);
     page.on('pageerror',error=>browserErrors.get(page).push(error.message));
-    await page.goto(`${server.baseUrl}/kit/tests/helpers/module_test_shell.html`);
+    await page.goto(new URL("kit/tests/helpers/module_test_shell.html", server.baseUrl).href);
     await page.evaluate(async()=>{const {mount}=await import('/kit/tests/helpers/plugin_state_public_react.tsx');window.publicState=await mount(document.getElementById('mount'));});
     try {
         await page.waitForFunction(()=>document.querySelector('[data-testid="public-control"]')?.textContent.includes('value'));
@@ -178,7 +178,7 @@ test("public hook results hide transport identities while opaque history referen
     const errors = [];
     browserErrors.set(page, errors);
     page.on("pageerror", error => errors.push(error.message));
-    await page.goto(`${server.baseUrl}/kit/tests/helpers/module_test_shell.html`);
+    await page.goto(new URL("kit/tests/helpers/module_test_shell.html", server.baseUrl).href);
     await page.evaluate(async () => {
         const { mount } = await import("/kit/tests/helpers/plugin_state_public_react.tsx");
         window.publicState = await mount(document.getElementById("mount"));
@@ -220,7 +220,7 @@ test("opaque entry eligibility follows the actual shared history head, gestures 
     const errors = [];
     browserErrors.set(page, errors);
     page.on("pageerror", error => errors.push(error.message));
-    await page.goto(`${server.baseUrl}/kit/tests/helpers/module_test_shell.html`);
+    await page.goto(new URL("kit/tests/helpers/module_test_shell.html", server.baseUrl).href);
     await page.evaluate(async () => {
         const { mount } = await import("/kit/tests/helpers/plugin_state_public_react.tsx");
         window.publicState = await mount(document.getElementById("mount"));
@@ -278,7 +278,7 @@ test("public React setValue recovers invalid stored input and reset settles a he
     const errors = [];
     browserErrors.set(page, errors);
     page.on("pageerror", error => errors.push(error.message));
-    await page.goto(`${server.baseUrl}/kit/tests/helpers/module_test_shell.html`);
+    await page.goto(new URL("kit/tests/helpers/module_test_shell.html", server.baseUrl).href);
     await page.evaluate(async () => {
         const { mount } = await import("/kit/tests/helpers/plugin_state_recovery_react.tsx");
         window.recovery = await mount(document.getElementById("mount"));
@@ -331,7 +331,7 @@ test("public React guarded Undo and Redo preserve a competing client's newer ent
     const errors = [];
     browserErrors.set(page, errors);
     page.on("pageerror", error => errors.push(error.message));
-    await page.goto(`${server.baseUrl}/kit/tests/helpers/module_test_shell.html`);
+    await page.goto(new URL("kit/tests/helpers/module_test_shell.html", server.baseUrl).href);
     await page.evaluate(async () => {
         const { mount } = await import("/kit/tests/helpers/plugin_state_history_react.tsx");
         window.guardedHistory = await mount(document.getElementById("mount"));
@@ -499,7 +499,7 @@ test("an authoritative arrival between React render and subscription updates bot
     browserErrors.set(page, errors);
     page.on("pageerror", error => errors.push(error.message));
     try {
-        await page.goto(`${server.baseUrl}/kit/tests/helpers/module_test_shell.html`);
+        await page.goto(new URL("kit/tests/helpers/module_test_shell.html", server.baseUrl).href);
         await page.evaluate(async event => {
             window.harness = await import("/kit/tests/helpers/plugin_state_react.tsx");
             window.unmount = window.harness.mountWithLayoutDelivery(document.getElementById("mount"), event);

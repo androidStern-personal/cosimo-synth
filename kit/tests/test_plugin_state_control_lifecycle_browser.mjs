@@ -15,7 +15,7 @@ async function open(dependencies = []) {
     const page = await browser.newPage();
     const errors = [];
     page.on("pageerror", error => errors.push(error.message));
-    await page.goto(`${server.baseUrl}/kit/tests/helpers/module_test_shell.html`);
+    await page.goto(new URL("kit/tests/helpers/module_test_shell.html", server.baseUrl).href);
     await page.evaluate(async dependencies => {
         const { mount } = await import("/kit/tests/helpers/plugin_state_public_react.tsx");
         window.fixture = await mount(document.getElementById("mount"), dependencies);
