@@ -11,6 +11,13 @@ This file applies to plug-in repositories built on `kit/`. Owner, product, machi
 - Installs and host/device work mutate external state. Build first, install only when the task authorizes it, and report build, install, DAW discovery, and listening as separate results.
 - The customer's explicit acknowledgment of the shipped JUCE notice or its matching recorded receipt is sufficient; do not ask again. If neither exists, show the notice and ask once. Never infer consent or add `--accept-juce-terms` before the customer agrees.
 
+## State documentation
+
+| Documentation | Reference |
+|---|---|
+| State, saving, and Undo | [Plugin state](docs/PLUGIN_STATE.md) |
+| Preparing data for the audio engine | [Shared audio data](docs/SHARED_DATA.md) |
+
 ## Start with the relevant path
 
 | Task | Reference or command |

@@ -2,6 +2,10 @@
 
 Declare a value once. The kit owns saving, shared Undo, GUI reconnection and delivery to the engine. Your component owns what the value means and how sound uses it.
 
+Use `parameter("gain")` when the value is an existing audio-engine parameter that the DAW can automate. Use `storedValue(...)` when you need to remember your own value or object, without automatically sending it to the audio engine. Use `preparedState(...)` with `sharedData(...)` when changing that value must generate or load data for the audio engine to read—for example, turning envelope points into sampled curve data; `Mseg.state()` already supplies that preparation for an MSEG.
+
+The choice depends on how the value reaches the engine, not its JavaScript type or size. See [shared audio data](SHARED_DATA.md) for fixed tables, loaded assets and typed native settings, or the [React API reference](PLUGIN_STATE_API.md) for the complete `usePluginState` return object and its status values.
+
 ## Start here
 
 ```ts
