@@ -437,6 +437,68 @@ test("a projection defect closes the view but preserves acceptance already suppl
     assert.equal(channel.listener, undefined);
 });
 
+test("projection failure with two outstanding edits preserves the receipt and interrupts the other ticket", async t => {
+    for (const failingProjection of ["accepted snapshot", "remaining draft"]) {
+        await t.test(failingProjection, async () => {
+            const channel = new ControlledChannel();
+            const problem = new Error("curve equality failed");
+            const defects = [];
+            let failProjection = false;
+            const broken = definePluginState({ curve: storedValue({ initial: [0, 1], codec: {
+                ...codec, equals(left, right) {
+                    if (failProjection && (failingProjection === "accepted snapshot" || right[1] === 0.8)) throw problem;
+                    return codec.equals(left, right);
+                },
+            } }) });
+            const client = createPluginStateClient(broken, { channel, onDefect: error => defects.push(error) });
+            channel.deliver(attached());
+            const outcomes = [];
+            const edits = [0.3, 0.8].map((value, index) => client.dispatch({ kind: "edit", key: "curve", value: [0, value, 1] })
+                .then(result => { outcomes[index] = result; }));
+            assert.equal(channel.sent.filter(message => message.kind === "command").length, 2,
+                "both edits reached the real channel seam before projection fails");
+            failProjection = true;
+            const accepted = { kind: "accepted", revision: 2, version: 1 };
+            assert.doesNotThrow(() => channel.deliver({ kind: "update", scope, revision: 2,
+                state: snapshot(2, [0, 0.3, 1]), receipt: receipt(1, accepted) }));
+            await Promise.resolve();
+            assert.deepEqual(outcomes, [accepted, { kind: "interrupted", reason: "closed", acceptance: "unknown" }]);
+            await Promise.all(edits);
+            assert.deepEqual(defects, [problem]);
+            assert.deepEqual(client.getSnapshot(), { kind: "closed" });
+            assert.equal(channel.listener, undefined);
+            client.stop();
+            channel.deliver({ kind: "receipt", ...receipt(2, { kind: "accepted", revision: 3 }) });
+            assert.deepEqual(outcomes, [accepted, { kind: "interrupted", reason: "closed", acceptance: "unknown" }]);
+            assert.deepEqual(await client.dispatch({ kind: "undo" }), { kind: "rejected", reason: "service-closed" });
+        });
+    }
+});
+
+test("queued stored edits compare only the latest displayed draft and retain current accepted-value status", async t => {
+    const channel = new ControlledChannel();
+    const comparisons = [];
+    const recorded = definePluginState({ curve: storedValue({ initial: [0, 1], codec: {
+        ...codec, equals(left, right) { comparisons.push([left, right]); return codec.equals(left, right); },
+    } }) });
+    const client = createPluginStateClient(recorded, { channel, onDefect: error => assert.fail(String(error)) });
+    t.after(() => client.stop());
+    channel.deliver(attached());
+    const inputs = Array.from({ length: 32 }, (_, index) => [0, (index + 1) / 32, 1]);
+    const edits = inputs.map(value => client.dispatch({ kind: "edit", key: "curve", value }));
+    assert.ok(comparisons.length <= inputs.length, "equality work must not grow with superseded drafts on each redraw");
+    assert.deepEqual(client.getSnapshot().state.fields.curve.value, inputs.at(-1));
+    assert.deepEqual(client.getSnapshot().draftFields, ["curve"]);
+    comparisons.length = 0;
+    channel.deliver({ kind: "update", scope, revision: 2, state: snapshot(2, inputs.at(-1)) });
+    assert.ok(comparisons.length <= 2, "the accepted snapshot and displayed draft each need at most one comparison");
+    assert.deepEqual(client.getSnapshot().draftFields, [], "a held receipt does not hide an accepted value's current diagnostics");
+    assert.deepEqual(client.getSnapshot().pendingFields, ["curve"], "the commands still await their individual receipts");
+    client.stop();
+    for (const result of await Promise.all(edits))
+        assert.deepEqual(result, { kind: "interrupted", reason: "closed", acceptance: "unknown" });
+});
+
 test("inherited object keys are not plugin fields and do not consume command sequences", async () => {
     const channel = new ControlledChannel();
     const client = createPluginStateClient(definition, { channel, onDefect: error => assert.fail(String(error)) });

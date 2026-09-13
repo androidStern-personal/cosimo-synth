@@ -61,11 +61,12 @@ test("public compound edits remain pending until receipt and one Undo restores b
         }), [2, 0], "compound edits do not expose partial optimistic values");
         await page.evaluate(() => window.publicState.releaseCommands());
         await page.waitForFunction(() => window.publicState.current().control.state.value === 4 && window.publicState.current().other.state.value === 7);
+        await page.evaluate(async () => { await window.publicState.settleSaves(); await window.publicState.status({ kind: "unconfirmed" }); });
         assert.deepEqual(await page.evaluate(() => {
             const { control, other } = window.publicState.current();
             return [control.state.status, other.state.status];
-        }), ["updating", "updating"], "an owner snapshot cannot substitute for the command receipt");
-        await page.evaluate(async () => { await window.publicState.settleSaves(); await window.publicState.status({ kind: "unconfirmed" }); window.publicState.releaseReceipts(); });
+        }), ["updating", "updating"], "even after saving and preparation finish, an owner snapshot cannot substitute for the command receipt");
+        await page.evaluate(() => window.publicState.releaseReceipts());
         assert.deepEqual(await page.evaluate(() => window.compoundResult), { kind: "accepted", changed: true, historyEntry: {} });
         await page.waitForFunction(() => !(window.publicState.current().control.state.status === "updating") && !(window.publicState.current().other.state.status === "updating"));
         assert.deepEqual(await page.evaluate(() => window.publicState.current().history.undo()), { kind: "accepted" });

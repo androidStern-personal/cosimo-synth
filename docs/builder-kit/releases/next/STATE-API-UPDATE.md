@@ -39,6 +39,14 @@ The first customer browser run failed before mounting controls: the suites conca
 
 Local logs use `/tmp/builder-kit-state-*-318e.log`. Final customer-install/type/unit/browser logs contain `customer-final`; example compilation is `release-examples`. The export path is recorded in `/tmp/builder-kit-state-export-path-318e.txt`. These temporary logs are verification output, not customer content.
 
+### Integration-review repair
+
+Independent integration review found a regression with two outstanding stored edits: if codec equality threw while processing the first accepted reply, receipt settlement could redraw the remaining draft and throw again. This stranded promises after the listener had already been removed. Receipt settlement now completes without calling the fallible projection; normal receive paths redraw separately. Known acceptance resolves, remaining sent tickets interrupt with unknown acceptance, and the snapshot closes.
+
+A new real channel-seam regression failed before the repair and now covers both accepted-snapshot retention failure and remaining-draft projection failure. The original single-edit assertions remain. A second regression checks a 32-edit burst: draft equality work depends on the latest displayed draft per field, not every superseded draft. Held receipts still preserve current-value diagnostics. The public compound-edit browser assertion now finishes saves and preparation before checking that the held receipt alone keeps both controls updating.
+
+Repair verification: 28 focused client/public-type checks, all 20 public-hook browser tests, all 220 state tests, and source TypeScript pass. Logs use `/tmp/builder-kit-state-review-*-318e.log`; `review-red` records the original failing regressions. This repair does not change the public API or announcement wording. Customer-export and native qualification of the repaired candidate belong to the integration coordinator; the earlier export evidence above predates this repair.
+
 ## Release material audit
 
 | Material | Action |

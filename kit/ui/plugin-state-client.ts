@@ -91,26 +91,30 @@ export function createPluginStateClient<const Fields extends PluginStateFields>(
         for (const ticket of tickets.values()) {
             for (const key of ticket.pendingFields) pendingFields.add(key);
         }
-        for (const draft of drafts.values()) {
-            const field = fields[draft.key];
+        const displayedDrafts = new Map<string, unknown>();
+        for (const { key, value } of drafts.values()) displayedDrafts.set(key, value);
+        for (const [key, value] of displayedDrafts) {
+            const field = fields[key];
             if (field && ("value" in field || (field.readiness.kind === "failed" && field.readiness.reason === "invalid-state"))) {
-                const accepted = base.state.fields[draft.key];
-                const declaration = definition[draft.key];
+                const accepted = base.state.fields[key];
+                const declaration = definition[key];
                 // A held receipt does not make an already accepted value a new
                 // draft. Its current save/preparation errors must stay visible.
                 const differs = !accepted || accepted.readiness.kind !== "ready" || !("value" in accepted)
-                    || (declaration?.kind === "stored" ? !declaration.codec.equals(accepted.value, draft.value)
-                        : !Object.is(accepted.value, draft.value));
-                if (differs) draftFields.add(draft.key); else draftFields.delete(draft.key);
-                fields[draft.key] = Object.freeze("value" in field ? { ...field, value: draft.value }
-                    : { ...field, value: draft.value, version: 0, persistence: Object.freeze({ kind: "not-written" as const }) });
-                pendingFields.add(draft.key);
+                    || (declaration?.kind === "stored" ? !declaration.codec.equals(accepted.value, value)
+                        : !Object.is(accepted.value, value));
+                if (differs) draftFields.add(key);
+                fields[key] = Object.freeze("value" in field ? { ...field, value }
+                    : { ...field, value, version: 0, persistence: Object.freeze({ kind: "not-written" as const }) });
+                pendingFields.add(key);
             }
         }
         // SAFETY: drafts were parsed by their declared field codec before insertion.
         const state = Object.freeze({ ...base.state, fields: Object.freeze(fields) }) as PluginStateSnapshot<Fields>;
         store.set(projection, Object.freeze({ ...base, state, pendingFields: Object.freeze([...pendingFields]), draftFields: Object.freeze([...draftFields]) }));
     };
+    // Receipt ownership must settle without projecting drafts: codec failures
+    // cannot erase known acceptance or interrupt the rest of close's cleanup.
     const settle = (receipt: PluginStateReceipt) => {
         if (!base || !sameScope(base.state.scope, receipt.address) || receipt.address.client !== base.client) return false;
         const ticket = tickets.get(receipt.address.sequence);
@@ -122,7 +126,6 @@ export function createPluginStateClient<const Fields extends PluginStateFields>(
             }
         }
         tickets.delete(receipt.address.sequence);
-        redraw();
         ticket.finish(receipt.result);
         return true;
     };
@@ -185,10 +188,11 @@ export function createPluginStateClient<const Fields extends PluginStateFields>(
                     base = { ...base, state: retainValues(message.state, base.state) };
                 }
                 const settled = message.receipt && settle(message.receipt);
-                if (changed && !settled) redraw();
+                if (changed || settled) redraw();
             }
-        } else if (message.kind === "receipt") settle(message);
-        else if (message.kind === "closed") close();
+        } else if (message.kind === "receipt") {
+            if (settle(message)) redraw();
+        } else if (message.kind === "closed") close();
         else if (message.kind === "attach-failed") {
             if (message.request !== attachRequest || current.kind !== "connecting") return;
             duringAttach.clear();
