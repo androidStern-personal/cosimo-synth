@@ -50,3 +50,9 @@ export * from "./ui/editor-curve-geometry";
 export * from "./ui/filter-range-editor";
 export * from "./ui/parameter-value-entry";
 export * from "./ui/enhancer-spectrum";
+
+// Composable numeric controls and read-only live indicators.
+export { Knob, KnobRoot, KnobControl, KnobDial, KnobLabel, KnobValue, KnobInput, KnobRange, KnobMarker, useKnob } from "./ui/knob";
+export type { KnobRootProps, KnobValueOptions, KnobControlProps, KnobDrag, KnobParseResult } from "./ui/knob";
+export type { KnobScale } from "./ui/knob-scale";
+export type { LiveValue, LiveNumber } from "./ui/live-value";

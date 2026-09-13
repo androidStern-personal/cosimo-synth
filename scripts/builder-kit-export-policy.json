@@ -61,7 +61,9 @@
     "@types/react",
     "@types/react-dom",
     "playwright",
-    "jotai"
+    "jotai",
+    "@radix-ui/react-slot",
+    "@radix-ui/react-context-menu"
   ],
   "templateExplicitDevDependencies": {
     "esbuild": "^0.28.2"

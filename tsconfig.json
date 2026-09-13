@@ -21,6 +21,8 @@
     "kit/ui/**/*.tsx",
     "ui/**/*.d.ts",
     "ui/**/*.ts",
-    "ui/**/*.tsx"
+    "ui/**/*.tsx",
+    "kit/examples/**/*.ts",
+    "kit/examples/**/*.tsx"
   ]
 }

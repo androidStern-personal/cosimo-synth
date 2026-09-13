@@ -14,10 +14,9 @@
  */
 
 import { useId } from "react";
+import { knobArcPoint as polarPoint, knobSector as pieSectorPath, knobAnnulus as annularSectorPath } from "../../kit/ui/knob-geometry";
+export { knobArcPoint } from "../../kit/ui/knob-geometry";
 
-const KNOB_CENTER = 50;
-const KNOB_SWEEP_START_DEGREES = 225;
-const KNOB_SWEEP_DEGREES = 270;
 const BASE_RADIUS = 25;
 const MOD_INNER_RADIUS = 36;
 const MOD_OUTER_RADIUS = 48;
@@ -29,58 +28,6 @@ export const BYPASSED_GREY = "#758084";
 
 function clamp01(value: number): number {
     return Math.min(Math.max(value, 0), 1);
-}
-
-/** Map a normalized sweep position to knob user-space (shared with the live mod light driver). */
-export function knobArcPoint(normalized: number, radius: number): { x: number; y: number } {
-    return polarPoint(normalized, radius);
-}
-
-function polarPoint(normalized: number, radius: number): { x: number; y: number } {
-    const degrees = KNOB_SWEEP_START_DEGREES - (clamp01(normalized) * KNOB_SWEEP_DEGREES);
-    const radians = (degrees * Math.PI) / 180;
-    return {
-        x: KNOB_CENTER + (radius * Math.cos(radians)),
-        y: KNOB_CENTER - (radius * Math.sin(radians)),
-    };
-}
-
-function pointText(point: { x: number; y: number }): string {
-    return `${point.x.toFixed(3)} ${point.y.toFixed(3)}`;
-}
-
-function pieSectorPath(fromNormalized: number, toNormalized: number, radius: number): string {
-    const low = Math.min(fromNormalized, toNormalized);
-    const high = Math.max(fromNormalized, toNormalized);
-    const extent = (high - low) * KNOB_SWEEP_DEGREES;
-    if (extent <= 0.001) {
-        return "";
-    }
-    const start = polarPoint(low, radius);
-    const end = polarPoint(high, radius);
-    const largeArc = extent > 180 ? 1 : 0;
-    return `M ${KNOB_CENTER} ${KNOB_CENTER} L ${pointText(start)} A ${radius} ${radius} 0 ${largeArc} 1 ${pointText(end)} Z`;
-}
-
-function annularSectorPath(
-    fromNormalized: number,
-    toNormalized: number,
-    innerRadius: number,
-    outerRadius: number,
-): string {
-    const low = Math.min(fromNormalized, toNormalized);
-    const high = Math.max(fromNormalized, toNormalized);
-    const extent = (high - low) * KNOB_SWEEP_DEGREES;
-    if (extent <= 0.001) {
-        return "";
-    }
-    const outerStart = polarPoint(low, outerRadius);
-    const outerEnd = polarPoint(high, outerRadius);
-    const innerStart = polarPoint(low, innerRadius);
-    const innerEnd = polarPoint(high, innerRadius);
-    const largeArc = extent > 180 ? 1 : 0;
-    return `M ${pointText(outerStart)} A ${outerRadius} ${outerRadius} 0 ${largeArc} 1 ${pointText(outerEnd)}`
-        + ` L ${pointText(innerEnd)} A ${innerRadius} ${innerRadius} 0 ${largeArc} 0 ${pointText(innerStart)} Z`;
 }
 
 export type ParameterKnobModRing =
