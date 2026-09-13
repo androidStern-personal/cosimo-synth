@@ -15,11 +15,28 @@ test("normal component result and history types are public and do not expose nat
 import { usePluginState, usePluginHistory, definePluginState, parameter, storedValue, preparedState, sharedData, Native, type PluginStateControl,
     type PluginStateChanges, type PluginStateEditor,
     type PluginStateControlState, type PluginStateHistory, type PluginStateHistoryEntry,
-    type PluginStateEditResult, type PluginStateApplicationState, type PluginStateRejectionReason } from ${JSON.stringify(path.join(root, "kit/index"))};
+    type PluginStateEditResult, type PluginStateRejectionReason } from ${JSON.stringify(path.join(root, "kit/index"))};
 const control: PluginStateControl<number> = usePluginState(parameter("gain"));
 const history: PluginStateHistory = usePluginHistory();
 const state: PluginStateControlState<number> = control.state;
-const application: PluginStateApplicationState = {kind:"acknowledged"};
+// @ts-expect-error Engine progress is private to the framework.
+state.application;
+// @ts-expect-error There is one lifecycle discriminant.
+state.kind;
+// @ts-expect-error Pending commands are included in status.
+state.pending;
+// @ts-expect-error A value cannot be read before narrowing its availability.
+state.value;
+if (state.status === "idle" || state.status === "updating") {
+    const value: number = state.value;
+    const minimum: number | undefined = state.metadata?.min;
+    void control.setValue(value);
+}
+if (control.error) {
+    const message: string = control.error.message;
+    // @ts-expect-error Recovery is expressed by the callback, not internal cause enums.
+    control.error.kind;
+}
 const reason: PluginStateRejectionReason = "stale-history";
 const definition = definePluginState({ gain: parameter("gain"), enabled: storedValue({ codec: Native.boolean(), initial: true }) });
 const editor: PluginStateEditor<typeof definition> = usePluginState(definition);
@@ -56,10 +73,8 @@ preparedState({ codec: Native.number(), initial: 1,
 preparedState({ codec: Native.number(), initial: 1, engine: sharedData({ type: "float32", length: 4 }), prepare: async () => {} });
 // @ts-expect-error A dynamically sized plan's writer is also synchronous.
 preparedState({ codec: Native.number(), initial: 1, engine: sharedData({ type: "float32" }), prepare: async () => ({ length: 4, write: async () => {} }) });
-// @ts-expect-error Native acknowledgement correlation does not belong to component authors.
-application.engineSession;
-// @ts-expect-error Native operation identities do not belong to component authors.
-application.operation;
+// @ts-expect-error Internal application types are not exported for component authors.
+import type { PluginStateApplicationState } from ${JSON.stringify(path.join(root, "kit/index"))};
 // @ts-expect-error History tokens cannot be fabricated from public data.
 const fake: PluginStateHistoryEntry = {};
 if (history.undoEntry) {

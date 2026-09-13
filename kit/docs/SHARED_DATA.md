@@ -94,6 +94,6 @@ The generated native helper uses the framework audio read scope. A specialized b
 
 ## Status and compatibility
 
-Acceptance means the editable value/history changed. `control.state.application.kind === "acknowledged"` additionally proves audio adopted that exact replacement. Saving or delivery errors do not discard the accepted edit. The hook exposes `error` and nullable `retry`; retries cannot reinstate an obsolete target.
+Acceptance means the editable value/history changed. `control.state.status` is `updating` while tracked work remains and `idle` when it finishes. Both states keep the value editable; saving or delivery errors do not discard the accepted edit. Display `error.message` and offer the nullable `retry` action when present. Retries cannot reinstate an obsolete target. See the [React API reference](PLUGIN_STATE_API.md) for loading and recovery behavior.
 
 This requires the patched Cmajor shared-data runtime, including direct writable reservations and audio-adoption receipts. Browser hosts need cross-origin isolation and shared WebAssembly memory. An unsupported host fails visibly; this implementation does not silently fall back to the older packet path. Native and browser storage differ internally; author preparation and state APIs stay the same.

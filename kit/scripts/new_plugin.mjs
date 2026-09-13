@@ -224,7 +224,7 @@ export const browserPreviewParameters = [{
 function View() {
     const gain = usePluginState(definition.gain);
     const history = usePluginHistory();
-    if (gain.state.kind !== "ready") return <p role="status">{gain.state.kind}</p>;
+    if (!("value" in gain.state)) return <p role="status">{gain.state.status}</p>;
     const value = gain.state.value;
     return <main>
         <h1>${plan.displayName}</h1>

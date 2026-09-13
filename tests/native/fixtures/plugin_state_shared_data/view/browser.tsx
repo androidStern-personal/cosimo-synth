@@ -12,10 +12,10 @@ function View() {
     const loaded = usePluginState(definition.loaded);
     const history = usePluginHistory();
     const edit = (y: number) => {
-        if (shape.state.kind === "ready") record(shape.setValue(Mseg.movePoint(shape.state.value, 1, 1, y)));
+        if ("value" in shape.state) record(shape.setValue(Mseg.movePoint(shape.state.value, 1, 1, y)));
     };
     return <>
-        {shape.state.kind === "ready" ? <Mseg.Editor value={shape.state.value} onChange={value => record(shape.setValue(value))} onGestureStart={() => record(shape.beginGesture())} onGestureEnd={() => record(shape.endGesture())}/> : null}
+        {"value" in shape.state ? <Mseg.Editor value={shape.state.value} onChange={value => record(shape.setValue(value))} onGestureStart={() => record(shape.beginGesture())} onGestureEnd={() => record(shape.endGesture())}/> : null}
         <output data-testid="shape">{JSON.stringify(shape.state)}</output>
         <output data-testid="gain">{JSON.stringify(gain.state)}</output>
         <output data-testid="loaded">{JSON.stringify(loaded.state)}</output>

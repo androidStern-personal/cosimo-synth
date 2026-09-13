@@ -1,8 +1,10 @@
 # Builder Kit release audit — 2026-09-12
 
-**Status: preparing Builder Kit 0.2.0; not published.** The duplicate Cmajor pin is fixed, matching tool archives have been built, and Enhance That plus the new-plugin starter now use the state framework. Final packaged-customer qualification passed from source `3a4a393a85bd45eeabe77b643990b1f1fc00594f`. Release decision: preserve existing customer update history. The audited historical email/signing-team/device identifiers are non-secret metadata and no longer block this release.
+**Status: preparing Builder Kit 0.2.0; not published.** The duplicate Cmajor pin is fixed, matching tool archives have been built, and Enhance That plus the new-plugin starter now use the state framework. Earlier packaged-customer qualification passed from source `3a4a393a85bd45eeabe77b643990b1f1fc00594f`. Release decision: preserve existing customer update history. The audited historical email/signing-team/device identifiers are non-secret metadata and no longer block this release.
 
 Audited source: `363907f5b3474fff9702fa04b6a3627effa8df64` on `codex/shared-data-runtime`. Baseline: the actual released **0.1.5**, tagged at customer commit `9c98949d583f9fbc226f669d81103c4a27e72917`, created September 9. Source commit for that release: `863b6cb1643450acd1ef63f3d7e0dad6e4de67be`. The production store releases 0.1.5, 0.1.6, and 0.1.7 all offered the same Builder Kit 0.1.5 installer. Older preview feeds exist, but they are not established as paying-customer cohorts.
+
+The subsequent public-control lifecycle change is recorded in [STATE-API-UPDATE.md](STATE-API-UPDATE.md). Its source/browser/customer-export checks do not renew the earlier native package qualification.
 
 ## Follow-up work
 

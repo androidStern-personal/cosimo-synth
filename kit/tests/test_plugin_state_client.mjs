@@ -420,12 +420,15 @@ test("a projection defect closes the view but preserves acceptance already suppl
     const channel = new ControlledChannel();
     const problem = new Error("curve equality failed");
     const defects = [];
+    let failProjection = false;
     const broken = definePluginState({ curve: storedValue({ initial: [0, 1], codec: {
-        ...codec, equals() { throw problem; },
+        ...codec, equals(left, right) { if (failProjection) throw problem; return codec.equals(left, right); },
     } }) });
     const client = createPluginStateClient(broken, { channel, onDefect: error => defects.push(error) });
     channel.deliver(attached());
     const editing = client.dispatch({ kind: "edit", key: "curve", value: [1, 0] });
+    assert.equal(channel.sent.at(-1).kind, "command", "the edit reached the channel before the incoming projection fails");
+    failProjection = true;
     const accepted = { kind: "accepted", revision: 2, version: 1 };
     channel.deliver({ kind: "update", scope, revision: 2, state: snapshot(2, [1, 0]), receipt: receipt(1, accepted) });
     assert.deepEqual(await editing, accepted);

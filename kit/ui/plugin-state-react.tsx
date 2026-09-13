@@ -3,7 +3,7 @@ import type { Atom } from "jotai/vanilla";
 import { selectAtom } from "jotai/vanilla/utils";
 import type { PluginStateFields, PluginStateParameter, PluginStateStored, PluginStateFieldValue } from "./plugin-state-definition";
 import type { createPluginStateClient, PluginStateClientResult } from "./plugin-state-client";
-import type { PluginStateApplication, PluginStateNativeParameter, PluginStateScope, PluginStateFieldSnapshot, PluginStateHistoryEntry as NativeHistoryEntry } from "./plugin-state-session";
+import type { PluginStateNativeParameter, PluginStateScope, PluginStateFieldSnapshot, PluginStateHistoryEntry as NativeHistoryEntry } from "./plugin-state-session";
 
 type Client = ReturnType<typeof createPluginStateClient<PluginStateFields>>;
 const Context = createContext<{ definition: PluginStateFields; client: Client } | null>(null);
@@ -18,23 +18,10 @@ export type PluginStateEditResult =
     | { readonly kind: "accepted"; readonly changed?: boolean; readonly historyEntry?: PluginStateHistoryEntry }
     | { readonly kind: "rejected"; readonly reason: PluginStateRejectionReason }
     | { readonly kind: "interrupted"; readonly reason: "reset" | "closed"; readonly acceptance: "unknown" };
-/** Application evidence without backend correlation identities. */
-export type PluginStateApplicationState = Exclude<PluginStateApplication, { kind: "acknowledged" }>
-    | { readonly kind: "acknowledged" };
-
-/** A diagnostic belongs to this field and never exposes native correlation identities. */
+/** The current field's displayable problem; the matching retry action owns recovery policy. */
 export type PluginStateControlError = {
-    readonly kind: "readiness" | "persistence" | "application";
     readonly message: string;
 };
-
-function projectApplication(application: PluginStateApplication): PluginStateApplicationState {
-    switch (application.kind) {
-        case "failed": return { kind: "failed", error: { kind: application.error.kind, message: application.error.message } };
-        case "sent": return { kind: "sent", proof: application.proof };
-        default: return { kind: application.kind };
-    }
-}
 
 function createPublicProjection() {
     const entries = new WeakMap<PluginStateHistoryEntry, NativeHistoryEntry>();
@@ -75,18 +62,19 @@ function useClientValue<Value>(client: Client | null, selection: Atom<Value> | n
     const snapshot = useCallback(() => store && selection ? store.get(selection) : fallback as Value, [store, selection, fallback]);
     return useSyncExternalStore(subscribe, snapshot, snapshot);
 }
-const connectingControl = Object.freeze({ kind: "connecting" as const });
-const connectingClient: ReturnType<Client["getSnapshot"]> = Object.freeze({ kind: "connecting" });
+const loadingControl = Object.freeze({ status: "loading" as const });
+const connectingClient = Object.freeze({ kind: "connecting" as const });
 
-/** Display readiness is separate from an edit awaiting acceptance or sound delivery. */
+/**
+ * One UI lifecycle for the displayed value. Both idle and updating remain editable.
+ * Idle means no tracked work remains; unresolved errors are reported separately.
+ * Invalid saved data can be replaced through setValue; unavailable fields cannot.
+ */
 export type PluginStateControlState<Value> =
-    | { readonly kind: "connecting" | "closed" }
-    | { readonly kind: "failed"; readonly reason: string }
+    | { readonly status: "loading" | "invalid" | "unavailable" }
     | {
-        readonly kind: "ready";
+        readonly status: "idle" | "updating";
         readonly value: Value;
-        readonly pending: boolean;
-        readonly application?: PluginStateApplicationState;
         readonly metadata?: Omit<PluginStateNativeParameter, "endpoint" | "value">;
     };
 
@@ -185,6 +173,7 @@ type ControlSource = Exclude<ReturnType<Client["getSnapshot"]>, { kind: "ready" 
     readonly scope: PluginStateScope | null;
     readonly field: PluginStateFieldSnapshot<unknown> | undefined;
     readonly pending: boolean;
+    readonly hasDraft: boolean;
 };
 
 // These are parsed, shallow protocol records (readiness, metadata, application,
@@ -199,7 +188,7 @@ function sameControlDetails(left: unknown, right: unknown): boolean {
 
 function sameControlSource(left: ControlSource, right: ControlSource): boolean {
     if (left.kind !== "ready" || right.kind !== "ready") return sameControlDetails(left, right);
-    if (left.client !== right.client || left.pending !== right.pending
+    if (left.client !== right.client || left.pending !== right.pending || left.hasDraft !== right.hasDraft
         || !sameControlDetails(left.scope, right.scope)) return false;
     const before = left.field, after = right.field;
     if (before === after) return true;
@@ -225,22 +214,26 @@ export function useOptionalPluginState<Field extends PluginStateParameter | Plug
         (snapshot): ControlSource => snapshot.kind === "ready" ? {
             kind: "ready", client: snapshot.client, scope: snapshot.state.scope,
             field: snapshot.state.fields[key], pending: snapshot.pendingFields.includes(key),
+            hasDraft: snapshot.draftFields.includes(key),
         } : snapshot,
         sameControlSource,
     ) : null, [client, key]);
-    const source = useClientValue(client, selected, connectingControl);
+    const source = useClientValue(client, selected, connectingClient);
     const state: PluginStateControlState<PluginStateFieldValue<Field>> = (() => {
-        if (source.kind !== "ready") return source;
+        if (source.kind === "connecting") return loadingControl;
+        if (source.kind !== "ready") return { status: "unavailable" };
         const field = source.field;
-        if (!field || field.readiness.kind === "pending") return connectingControl;
-        if (field.readiness.kind === "failed") return { kind: "failed", reason: field.readiness.reason };
-        if (!("value" in field)) return connectingControl;
+        if (!field || field.readiness.kind === "pending") return loadingControl;
+        if (field.readiness.kind === "failed") return {
+            status: field.readiness.reason === "invalid-state" ? source.hasDraft ? "loading" : "invalid" : "unavailable",
+        };
+        if (!("value" in field)) return loadingControl;
+        const updating = source.pending || field.persistence.kind === "pending"
+            || field.application?.kind === "pending" || field.application?.kind === "preparing";
         return {
-            kind: "ready",
+            status: updating ? "updating" : "idle",
             // SAFETY: identity lookup above selected this exact field declaration.
             value: field.value as PluginStateFieldValue<Field>,
-            pending: source.pending,
-            ...(field.application ? { application: projectApplication(field.application) } : {}),
             ...(field.metadata ? { metadata: field.metadata } : {}),
         };
     })();
@@ -300,15 +293,33 @@ export function useOptionalPluginState<Field extends PluginStateParameter | Plug
     };
     const persistence = renderedField && "persistence" in renderedField ? renderedField.persistence : undefined;
     const application = renderedField?.application;
-    const error: PluginStateControlError | null = renderedField?.readiness.kind === "failed"
-        ? { kind: "readiness", message: renderedField.readiness.reason }
-        : persistence?.kind === "failed" ? { kind: "persistence", message: persistence.reason }
-            : application?.kind === "failed" ? { kind: "application", message: application.error.message } : null;
-    const canRetry = renderedField?.readiness.kind === "ready" && renderedVersion !== undefined
-        && ((persistence?.kind === "failed" && renderedField.persistenceRequest !== undefined)
-            || (application?.kind === "failed" && application.error.kind !== "defect" && renderedField.target !== undefined));
+    const hasDraft = source.kind === "ready" && source.hasDraft;
+    const error: PluginStateControlError | null = (() => {
+        if (source.kind === "closed") return { message: "Plugin connection is closed." };
+        if (source.kind === "failed") return { message: source.reason };
+        if (hasDraft) return null;
+        if (renderedField?.readiness.kind === "failed") {
+            switch (renderedField.readiness.reason) {
+                case "invalid-state": return { message: "Saved state is invalid. Supply a valid replacement or restore the default." };
+                case "missing-parameter": return { message: "The required parameter is unavailable." };
+                case "service-closed": return { message: "Plugin connection is closed." };
+            }
+        }
+        if (persistence?.kind === "failed") return { message: persistence.reason };
+        if (application?.kind === "failed") return { message: application.error.message };
+        // The session hydrates all fields together. Waiting with an otherwise
+        // usable value means a required parameter is unavailable, not a live job.
+        if (application?.kind === "waiting-for-inputs") return { message: "A required parameter is unavailable. This value cannot be applied yet." };
+        return null;
+    })();
+    const canRetry = !hasDraft && renderedField?.readiness.kind === "ready" && renderedVersion !== undefined
+        && (persistence?.kind === "failed" ? renderedField.persistenceRequest !== undefined
+            : application?.kind === "failed" && application.error.kind !== "defect" && renderedField.target !== undefined);
     const retry = canRetry ? (): Promise<PluginStateEditResult> => {
         if (!currentScopeMatches()) return Promise.resolve({ kind: "rejected", reason: "stale-scope" });
+        const current = client.getSnapshot();
+        if (current.kind === "ready" && current.draftFields.includes(key))
+            return Promise.resolve({ kind: "rejected", reason: "stale-version" });
         return client.dispatch({ kind: "retry", key, expectedVersion: renderedVersion,
             expectedGeneration: renderedField.target?.generation ?? null,
             expectedPersistenceRequest: persistence?.kind === "failed" ? renderedField.persistenceRequest ?? null : null,

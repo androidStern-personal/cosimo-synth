@@ -75,14 +75,15 @@ export function useSynthPluginParameterBinding(key: string, options: SynthParame
 /** Generic host controls use this only when the synth state provider owns the declaration. */
 export function useOptionalSynthPluginParameterBinding(key: string, options: SynthParameterOptions): PatchControlBinding<number> | null {
     const parameter = useOptionalPluginState(synthParameterByEndpoint[key] ?? null);
+    const valueState = parameter && "value" in parameter.state ? parameter.state : null;
     const firstHostValue = useRef<{ readonly key: typeof key; readonly value: number } | null>(null);
-    if (parameter?.state.kind === "ready" && firstHostValue.current?.key !== key) {
-        firstHostValue.current = { key, value: options.coerce(parameter.state.value) };
+    if (valueState !== null && firstHostValue.current?.key !== key) {
+        firstHostValue.current = { key, value: options.coerce(valueState.value) };
     }
-    const isReady = options.active !== false && parameter?.state.kind === "ready";
-    const hostValue = isReady && parameter?.state.kind === "ready" ? options.coerce(parameter.state.value) : options.initialValue;
-    const initialValue = parameter?.state.kind === "ready"
-        ? options.coerce(parameter.state.metadata?.defaultValue ?? options.initialValue)
+    const isReady = options.active !== false && valueState !== null;
+    const hostValue = isReady && valueState !== null ? options.coerce(valueState.value) : options.initialValue;
+    const initialValue = valueState !== null
+        ? options.coerce(valueState.metadata?.defaultValue ?? options.initialValue)
         : options.initialValue;
     const endpointID = key;
     const presentation = useRef({ isReady, coerce: options.coerce });

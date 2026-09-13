@@ -27,7 +27,7 @@ import definition from "../state";
 function View() {
     const gain = usePluginState(definition.gain);
     const history = usePluginHistory();
-    if (gain.state.kind !== "ready") return <p>{gain.state.kind}</p>;
+    if (!("value" in gain.state)) return <p>{gain.error?.message ?? gain.state.status}</p>;
     return <>
         <p>Gain: {gain.state.value}</p>
         <button onClick={() => { void gain.setValue(0.5); }}>Set gain to 0.5</button>
@@ -64,7 +64,7 @@ import definition from "../state";
 function View() {
     const envelope = usePluginState(definition.envelope);
     const history = usePluginHistory();
-    if (envelope.state.kind !== "ready") return <p>{envelope.state.kind}</p>;
+    if (!("value" in envelope.state)) return <p>{envelope.error?.message ?? envelope.state.status}</p>;
     return <>
         <Mseg.Editor value={envelope.state.value}
             onGestureStart={() => { void envelope.beginGesture(); }}

@@ -48,13 +48,13 @@ test("public compound edits remain pending until receipt and one Undo restores b
             const { mount } = await import("/kit/tests/helpers/plugin_state_public_react.tsx");
             window.publicState = await mount(document.getElementById("mount"));
         });
-        await page.waitForFunction(() => window.publicState.current().control.state.kind === "ready", undefined, { timeout: 2000 });
+        await page.waitForFunction(() => "value" in window.publicState.current().control.state, undefined, { timeout: 2000 });
         await page.evaluate(() => {
             window.publicState.holdCommands();
             window.publicState.holdReceipts();
             window.compoundResult = window.publicState.current().editor.edit({ gain: 4, other: 7 });
         });
-        await page.waitForFunction(() => window.publicState.current().control.state.pending && window.publicState.current().other.state.pending);
+        await page.waitForFunction(() => (window.publicState.current().control.state.status === "updating") && (window.publicState.current().other.state.status === "updating"));
         assert.deepEqual(await page.evaluate(() => {
             const { control, other } = window.publicState.current();
             return [control.state.value, other.state.value];
@@ -63,11 +63,11 @@ test("public compound edits remain pending until receipt and one Undo restores b
         await page.waitForFunction(() => window.publicState.current().control.state.value === 4 && window.publicState.current().other.state.value === 7);
         assert.deepEqual(await page.evaluate(() => {
             const { control, other } = window.publicState.current();
-            return [control.state.pending, other.state.pending];
-        }), [true, true], "an owner snapshot cannot substitute for the command receipt");
-        await page.evaluate(() => window.publicState.releaseReceipts());
+            return [control.state.status, other.state.status];
+        }), ["updating", "updating"], "an owner snapshot cannot substitute for the command receipt");
+        await page.evaluate(async () => { await window.publicState.settleSaves(); await window.publicState.status({ kind: "unconfirmed" }); window.publicState.releaseReceipts(); });
         assert.deepEqual(await page.evaluate(() => window.compoundResult), { kind: "accepted", changed: true, historyEntry: {} });
-        await page.waitForFunction(() => !window.publicState.current().control.state.pending && !window.publicState.current().other.state.pending);
+        await page.waitForFunction(() => !(window.publicState.current().control.state.status === "updating") && !(window.publicState.current().other.state.status === "updating"));
         assert.deepEqual(await page.evaluate(() => window.publicState.current().history.undo()), { kind: "accepted" });
         await page.waitForFunction(() => window.publicState.current().control.state.value === 2 && window.publicState.current().other.state.value === 0);
         assert.equal(await page.evaluate(() => window.publicState.current().history.canUndo), false, "the pair created exactly one Undo entry");
@@ -85,7 +85,7 @@ test("public compound edit closures reject one stale field atomically and cannot
             const { mount } = await import("/kit/tests/helpers/plugin_state_public_react.tsx");
             window.publicState = await mount(document.getElementById("mount"));
         });
-        await page.waitForFunction(() => window.publicState.current().control.state.kind === "ready");
+        await page.waitForFunction(() => "value" in window.publicState.current().control.state);
         const conflict = await page.evaluate(async () => {
             window.oldCompoundEdit = window.publicState.current().editor.edit;
             window.publicState.holdCommands();
@@ -100,7 +100,8 @@ test("public compound edit closures reject one stale field atomically and cannot
         assert.deepEqual(conflict.result, { kind: "rejected", reason: "stale-version" });
         assert.deepEqual(conflict.after, conflict.before, "a conflict in the second field cannot edit the first or create history");
         assert.equal(conflict.afterPublications, conflict.publications, "no persistence or engine effects escape a rejected pair");
-        await page.waitForFunction(() => !window.publicState.current().control.state.pending && !window.publicState.current().other.state.pending);
+        await page.evaluate(async () => { await window.publicState.settleSaves(); await window.publicState.status({ kind: "unconfirmed" }); });
+        await page.waitForFunction(() => window.publicState.current().control.state.status === "idle" && window.publicState.current().other.state.status === "idle");
         await page.evaluate(() => window.publicState.competingEdit(0, "other"));
         assert.deepEqual(await page.evaluate(() => window.oldCompoundEdit({ gain: 4, other: 7 })),
             { kind: "rejected", reason: "stale-version" }, "returning to the captured value cannot bypass its version guard");
@@ -118,7 +119,7 @@ test("public edit closures reject ABA and reset while queued edits in their own 
     await page.goto(`${server.baseUrl}/kit/tests/helpers/module_test_shell.html`);
     await page.evaluate(async()=>{const {mount}=await import('/kit/tests/helpers/plugin_state_public_react.tsx');window.publicState=await mount(document.getElementById('mount'));});
     try {
-        await page.waitForFunction(()=>document.querySelector('[data-testid="public-control"]')?.textContent.includes('ready'));
+        await page.waitForFunction(()=>document.querySelector('[data-testid="public-control"]')?.textContent.includes('value'));
         const unrelated=await page.evaluate(async()=>{
             const edit=window.publicState.current().control.setValue;
             await window.publicState.competingEdit(9,'other');
@@ -153,11 +154,11 @@ test("a public field failure exposes one guarded retry without adding editable h
     await page.goto(`${server.baseUrl}/kit/tests/helpers/module_test_shell.html`);
     await page.evaluate(async()=>{const {mount}=await import('/kit/tests/helpers/plugin_state_public_react.tsx');window.publicState=await mount(document.getElementById('mount'));});
     try {
-        await page.waitForFunction(()=>document.querySelector('[data-testid="public-control"]')?.textContent.includes('ready'));
+        await page.waitForFunction(()=>document.querySelector('[data-testid="public-control"]')?.textContent.includes('value'));
         assert.equal(await page.evaluate(()=>window.publicState.current().control.retry),null);
         await page.evaluate(()=>window.publicState.status({kind:'failed',error:{kind:'resource',message:'Memory budget exhausted'}}));
         await page.waitForFunction(()=>window.publicState.current().control.retry!==null);
-        assert.deepEqual(await page.evaluate(()=>window.publicState.current().control.error),{kind:'application',message:'Memory budget exhausted'});
+        assert.deepEqual(await page.evaluate(()=>window.publicState.current().control.error),{message:'Memory budget exhausted'});
         const result=await page.evaluate(async()=>{
             const before=window.publicState.accepted();window.oldRetry=window.publicState.current().control.retry;
             const result=await window.oldRetry();const after=window.publicState.accepted();
@@ -184,14 +185,13 @@ test("public hook results hide transport identities while opaque history referen
     });
     const state = () => page.getByTestId("public-control").evaluate(element => JSON.parse(element.textContent));
     try {
-        await page.waitForFunction(() => JSON.parse(document.querySelector('[data-testid="public-control"]').textContent).kind === "ready");
+        await page.waitForFunction(() => "value" in JSON.parse(document.querySelector('[data-testid="public-control"]').textContent));
         await page.evaluate(() => window.publicState.status({ kind: "acknowledged", engineSession: "private-engine", operation: "private-operation" }));
-        await page.waitForFunction(() => JSON.parse(document.querySelector('[data-testid="public-control"]').textContent).application?.kind === "acknowledged");
-        assert.deepEqual((await state()).application, { kind: "acknowledged" });
+        await page.waitForFunction(() => JSON.parse(document.querySelector('[data-testid="public-control"]').textContent).status === "idle");
+        assert.deepEqual(await state(), { status: "idle", value: 2 });
         for (const application of [{ kind: "sent", proof: "native-publication-processed" }, { kind: "unconfirmed" }]) {
             await page.evaluate(application => window.publicState.status(application), application);
-            await page.waitForFunction(kind => JSON.parse(document.querySelector('[data-testid="public-control"]').textContent).application?.kind === kind, application.kind);
-            assert.deepEqual((await state()).application, application);
+            assert.deepEqual(await state(), { status: "idle", value: 2 }, "transport phases and proof strings remain private");
         }
         const edited = await page.evaluate(async () => {
             const result = await window.publicState.current().control.setValue(4);
@@ -285,17 +285,17 @@ test("public React setValue recovers invalid stored input and reset settles a he
     });
     const control = () => page.getByTestId("recovery-state").evaluate(element => JSON.parse(element.textContent));
     try {
-        assert.deepEqual(await control(), { kind: "failed", reason: "invalid-state" });
+        assert.deepEqual(await control(), { status: "invalid" });
         assert.deepEqual(await page.evaluate(() => window.recovery.publications()), []);
         await page.getByText("Recover curve", { exact: true }).click();
         assert.deepEqual((await page.evaluate(() => window.recovery.held())).map(message => message.command), [
             { kind: "recover", key: "curve", value: [0, 0.4, 1], expectedVersion: 0 },
         ]);
-        assert.deepEqual(await control(), { kind: "failed", reason: "invalid-state" }, "a draft does not claim valid accepted state");
+        assert.deepEqual(await control(), { status: "loading" }, "recovery reports work without exposing an unaccepted value");
         assert.deepEqual(await page.evaluate(() => window.recovery.clientSnapshot().state.fields.curve.value), [0, 0.4, 1]);
         assert.equal(await page.evaluate(() => Object.hasOwn(window.recovery.snapshot().fields.curve, "value")), false);
         await page.evaluate(() => window.recovery.release());
-        await page.waitForFunction(() => JSON.parse(document.querySelector('[data-testid="recovery-state"]').textContent).kind === "ready");
+        await page.waitForFunction(() => "value" in JSON.parse(document.querySelector('[data-testid="recovery-state"]').textContent));
         assert.deepEqual((await control()).value, [0, 0.4, 1]);
         assert.deepEqual(JSON.parse(await page.getByTestId("recovery-history").textContent()), { canUndo: false, canRedo: false });
         const result = JSON.parse(await page.getByTestId("recovery-result").textContent());
@@ -364,14 +364,14 @@ test("public React guarded Undo and Redo preserve a competing client's newer ent
 test("React reads the real client's Jotai projection: host hydration, immediate drafts, and late receipts preserve newer input", async () => {
     const page = await open();
     try {
-        assert.deepEqual(JSON.parse(await page.getByTestId("gain").textContent()), { kind: "connecting" });
+        assert.deepEqual(JSON.parse(await page.getByTestId("gain").textContent()), { status: "loading" });
         await deliver(page, { kind: "attached", request: 1, scope, client: 2, revision: 0, state: snapshot(2, 0, 0) });
         await page.waitForFunction(() => JSON.parse(document.querySelector('[data-testid="gain"]').textContent).value === 2);
         await page.getByText("Set four", { exact: true }).click();
         await page.getByText("Set seven", { exact: true }).click();
         let state = JSON.parse(await page.getByTestId("gain").textContent());
         assert.equal(state.value, 7);
-        assert.equal(state.pending, true);
+        assert.equal(state.status, "updating");
         assert.deepEqual((await messages(page)).sent.slice(1).map(message => message.command), [
             { kind: "edit", key: "gain", value: 4, expectedVersion: 0 }, { kind: "edit", key: "gain", value: 7, expectedVersion: 0 },
         ]);
@@ -379,10 +379,10 @@ test("React reads the real client's Jotai projection: host hydration, immediate 
             receipt: { address: { ...scope, client: 2, sequence: 1 }, result: { kind: "accepted", revision: 1, version: 1 } } });
         state = JSON.parse(await page.getByTestId("gain").textContent());
         assert.equal(state.value, 7, "the rendered control must not jump back to an older reply");
-        assert.equal(state.pending, true);
+        assert.equal(state.status, "updating");
         await deliver(page, { kind: "update", scope, revision: 2, state: snapshot(7, 2, 2, { canUndo: true, canRedo: false }),
             receipt: { address: { ...scope, client: 2, sequence: 2 }, result: { kind: "accepted", revision: 2, version: 2 } } });
-        await page.waitForFunction(() => JSON.parse(document.querySelector('[data-testid="gain"]').textContent).pending === false);
+        await page.waitForFunction(() => JSON.parse(document.querySelector('[data-testid="gain"]').textContent).status === "idle");
         assert.equal(await page.getByText("Undo", { exact: true }).isEnabled(), true);
         await page.getByText("Undo", { exact: true }).click();
         assert.deepEqual((await messages(page)).sent.at(-1).command, { kind: "undo" });
@@ -439,7 +439,7 @@ test("a rejected drag does not send an end on unmount, and a failed field never 
         const failed = snapshot(2, 1, 0);
         failed.fields.gain.readiness = { kind: "failed", reason: "service-closed" };
         await deliver(page, { kind: "update", scope, revision: 1, state: failed });
-        assert.deepEqual(JSON.parse(await page.getByTestId("gain").textContent()), { kind: "failed", reason: "service-closed" });
+        assert.deepEqual(JSON.parse(await page.getByTestId("gain").textContent()), { status: "unavailable" });
         await page.getByText("Set seven", { exact: true }).click();
         assert.equal((await messages(page)).sent.filter(message => message.kind === "command").length, 1);
         assert.deepEqual((await messages(page)).defects, []);
@@ -477,7 +477,7 @@ test("the public view factory owns mounting, drag cleanup, fresh attachment on r
         await page.evaluate(() => window.viewHarness.append());
         assert.deepEqual((await viewMessages()).sent.at(-1).message, { kind: "attach", request: 2 });
         await viewDeliver({ kind: "attached", request: 1, scope, client: 2, revision: 0, state: snapshot(2, 0, 0) });
-        assert.equal(JSON.parse(await page.getByTestId("wrapped").textContent()).kind, "connecting");
+        assert.equal(JSON.parse(await page.getByTestId("wrapped").textContent()).status, "loading");
         await viewDeliver({ kind: "attached", request: 2, scope, client: 3, revision: 4, state: snapshot(5, 4, 1) });
         assert.equal(JSON.parse(await page.getByTestId("wrapped").textContent()).value, 5);
         await page.getByText("Wrapped seven", { exact: true }).click();

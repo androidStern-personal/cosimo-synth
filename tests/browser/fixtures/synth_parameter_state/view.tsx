@@ -61,7 +61,7 @@ export async function mount(element: HTMLElement) {
         end: (key: "cutoff" | "detune") => latest[key].endGesture(),
         commit: (key: "cutoff" | "table" | "inactive", value: number) => latest[key].commitValue(value),
         shape(value: number) {
-            if (latest.modulation.state.kind !== "ready") throw new Error("Modulation is not ready");
+            if (!("value" in latest.modulation.state)) throw new Error("Modulation is not ready");
             const bank = latest.modulation.state.value;
             return latest.modulation.setValue({ ...bank, msegSlots: bank.msegSlots.map((slot, index) => index !== 0 ? slot : {
                 ...slot, shapeA: { ...slot.shapeA, points: slot.shapeA.points.map(point => ({ ...point, y: value })) },

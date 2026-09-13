@@ -25,18 +25,14 @@ interface PluginStateControl<Value> {
 
 ## The state object
 
-`state.kind` is the control's connection/readiness status. It is not the kind of envelope or the declaration kind. Its literal strings are lowercase. The alternatives below expand the public type without changing its property names:
+`state.status` is the one public lifecycle discriminant:
 
 ```ts
 type PluginStateControlState<Value> =
-    | { readonly kind: "connecting" }
-    | { readonly kind: "closed" }
-    | { readonly kind: "failed"; readonly reason: string }
+    | { readonly status: "loading" | "invalid" | "unavailable" }
     | {
-        readonly kind: "ready";
+        readonly status: "idle" | "updating";
         readonly value: Value;
-        readonly pending: boolean;
-        readonly application?: PluginStateApplicationState;
         readonly metadata?: {
             readonly min: number;
             readonly max: number;
@@ -46,16 +42,19 @@ type PluginStateControlState<Value> =
     };
 ```
 
-| `state.kind` | Meaning | Additional properties |
-|---|---|---|
-| `connecting` | Waiting for the connection or this field's initial usable value. | None |
-| `closed` | The client connection has closed. | None |
-| `failed` | Connection or field readiness failed. | `reason: string` |
-| `ready` | There is a usable editable value. | `value`, `pending`, optional `application`, optional `metadata` |
+| `state.status` | What the UI should do |
+|---|---|
+| `loading` | Show a placeholder while obtaining a usable value, including while a replacement for invalid saved data awaits acceptance. |
+| `invalid` | Offer to supply a valid replacement/default with `setValue`. There is no usable value to edit. |
+| `unavailable` | Show the explanation in `error.message`. A missing parameter or closed connection cannot be repaired by changing its value. |
+| `updating` | Keep the value editable; optionally show progress while an edit, save or engine preparation/delivery remains outstanding. |
+| `idle` | Keep the value editable without a progress indicator. Display any unresolved error. |
 
-Only `ready` exposes `value`. Its `pending` means this GUI is waiting for edit acceptance; it does not mean the audio engine has finished applying the edit. `metadata` is supplied for host parameters and contains the four numbers shown above, not units, formatting functions or endpoint names. An MSEG field normally has `application` and no parameter `metadata`.
+Both `idle` and `updating` include `value`; the other statuses do not. Narrow with `"value" in control.state` before reading it. Do not disable a control simply because it is updating: successive drag updates are supported. `metadata` is supplied for host parameters and contains the four numbers shown above. MSEG fields have no parameter metadata.
 
-The public `failed.reason` is an unrestricted diagnostic string, not an enum. Field-readiness reasons currently include `missing-parameter`, `invalid-state`, and `service-closed`; connection failures can carry other messages.
+`idle` means no tracked work remains. It is not an audio-adoption or successful-save certificate. A missing preparation dependency produces an error instead of an indefinite progress indicator. Engine phases, native receipt identities and transport proof strings remain framework details.
+
+The status describes the displayed value. An optimistic draft does not inherit the previous value's failure. If that draft is rejected, the accepted value and its relevant error are restored. A held receipt does not hide a failure belonging to the new value once it has been accepted.
 
 For an MSEG, the actual `state.value` data shape is:
 
@@ -69,56 +68,21 @@ type Curve = {
 };
 ```
 
-Treat received values as immutable even though this curve type uses mutable TypeScript property declarations. `x` and `y` are normalized curve coordinates; `curvePower` controls the outgoing segment. `globalSmooth` is retained metadata, not an implemented smoothing effect. Connection status, engine status, duration and playback policy are not fields in this curve object.
+Treat received values as immutable even though this curve type uses mutable TypeScript property declarations. `x` and `y` are normalized curve coordinates; `curvePower` controls the outgoing segment. `globalSmooth` is retained metadata, not an implemented smoothing effect. Lifecycle status, duration and playback policy are not fields in this curve object.
 
-## Engine application
-
-The optional `state.application` describes delivery of the requested value to the engine. This is separate from having an editable value and from accepting an edit:
-
-```ts
-type PluginStateApplicationState =
-    | { readonly kind: "pending" }
-    | { readonly kind: "waiting-for-inputs" }
-    | { readonly kind: "preparing" }
-    | { readonly kind: "unconfirmed" }
-    | {
-        readonly kind: "sent";
-        readonly proof:
-            | "connection-call-returned"
-            | "native-publication-processed";
-    }
-    | { readonly kind: "acknowledged" }
-    | {
-        readonly kind: "failed";
-        readonly error: {
-            readonly kind: "resource" | "transport" | "engine-rejected" | "defect";
-            readonly message: string;
-        };
-    };
-```
-
-| `application.kind` | Meaning |
-|---|---|
-| `pending` | An engine update is requested; no later progress has been reported. |
-| `waiting-for-inputs` | Required declared inputs are not ready yet. |
-| `preparing` | Preparing the engine data. |
-| `unconfirmed` | Engine application is not confirmed. |
-| `sent` | The stated handoff completed; this is not audio-adoption confirmation. |
-| `acknowledged` | The engine confirmed applying that update. |
-| `failed` | Preparation or delivery failed; inspect `error`. |
-
-`resource` covers expected resource/preparation failures, `transport` delivery failures, `engine-rejected` an explicit engine refusal, and `defect` an unexpected implementation failure. The hook does not offer retry for a `defect`.
-
-## Field error
+## Field error and recovery
 
 ```ts
 type PluginStateControlError = {
-    readonly kind: "readiness" | "persistence" | "application";
     readonly message: string;
 };
 ```
 
-`envelope.error` is `null` or one field diagnostic. If multiple failures exist, the projection chooses readiness first, then persistence, then application. A `ready` control can still have a persistence or application error: having an editable value does not establish successful saving or engine delivery. A connection-level `state.reason` is not necessarily duplicated in `error`; inspect the failed state itself. There is no separate public persistence-status object on this control.
+`control.error` is `null` or one current diagnostic. An error can coexist with `updating`: for example, saving can fail while preparation continues. Keep displaying the editable value in that case.
+
+`control.retry` is the matching framework-owned action or `null`. Show a Retry button when it exists; do not classify message strings to decide whether recovery is allowed. If saving and preparation both fail, the save error takes priority. Retrying it preserves the value and history, then any remaining preparation error becomes visible with its own retry action. Unexpected author preparation defects do not offer retry; a deliberate new edit can recover.
+
+`invalid` has a different recovery: call `setValue(validReplacement)` with a value supplied by your plugin. The kit never silently overwrites malformed saved data with a default. The control reports `loading` without a value until that replacement is accepted.
 
 ## Action results
 

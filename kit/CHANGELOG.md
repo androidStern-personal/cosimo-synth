@@ -8,7 +8,7 @@
 - Shared Undo/Redo across ordinary parameters and editable complex values. A drag of one field forms one history entry; `edit(...)` can change several fields as one action. History has a configurable entry limit.
 - The included Enhance That controls and newly generated plugins use the state framework, with Undo/Redo available in their interfaces. Enhance That retains its sound, parameter identities, and existing preset/snapshot formats.
 - Automatic GUI reconnection, field-version conflict checks, and protection against delayed reports overwriting newer edits. Host automation remains distinct from user Undo history.
-- Per-field readiness, pending edits, engine-delivery status, errors, and retry. Invalid saved values remain visible as failures until repaired. Retrying does not add another Undo entry.
+- One per-field UI status: `loading`, `invalid`, `unavailable`, `updating`, or `idle`. Values stay editable during updates and recoverable failures, with one current error and a guarded retry action. Invalid saved values require an explicit replacement. Retrying does not add another Undo entry.
 - Direct preparation into shared audio storage on native JIT, compiled native, and browser WebAssembly. The framework handles allocation within the supplied budget, cancellation, complete-data publication at an audio-block boundary, and releasing replaced data.
 - Fixed-size preparation and a load-once preparation plan for data whose size is discovered after loading. Generated `PluginState.cmajor` references connect declared data to DSP readers.
 - Reusable MSEG curve state, math, rendering, editing interactions, composable surfaces, and a Cmajor reader/player. The editor handles one curve without requiring a drawer or A/B morphing.
@@ -16,6 +16,8 @@
 - An independently reusable `UndoHistory` module and documented extension points for specialized delivery protocols.
 
 ### Fixed
+
+- Optimistic values no longer display an older value's error. Current save failures stay visible during preparation, and unavailable dependencies do not leave an endless progress indicator.
 
 - Late scalar-parameter observations could rewind an active drag or replay old values after release. Native and browser delivery now preserve write identity and ordering.
 - Compound edits could incorrectly appear settled while awaiting acceptance.

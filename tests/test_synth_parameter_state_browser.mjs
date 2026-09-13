@@ -17,7 +17,7 @@ test('ordinary synth parameters and MSEG edits share real public React Undo whil
     const state=()=>page.getByTestId('ordinary-state').evaluate(element=>JSON.parse(element.textContent));
     const wait=async(cutoff,table,y)=>page.waitForFunction(({cutoff,table,y})=>{
         const raw=document.querySelector('[data-testid="ordinary-state"]')?.textContent;if(!raw)return false;const s=JSON.parse(raw);
-        return s.cutoff.value===cutoff&&s.table.value===table&&s.modulation.kind==='ready'
+        return s.cutoff.value===cutoff&&s.table.value===table&&'value' in s.modulation
             &&(y===null||s.modulation.value.msegSlots[0].shapeA.points[0].y===y);
     },{cutoff,table,y});
     try {

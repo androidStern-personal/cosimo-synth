@@ -42,7 +42,7 @@ import definition from "../state";
 function View() {
     const envelope = usePluginState(definition.envelope);
     const history = usePluginHistory();
-    if (envelope.state.kind !== "ready") return <p>{envelope.state.kind}</p>;
+    if (!("value" in envelope.state)) return <p>{envelope.error?.message ?? envelope.state.status}</p>;
 
     return <>
         <Mseg.Editor value={envelope.state.value}
@@ -51,7 +51,8 @@ function View() {
             onGestureEnd={() => { void envelope.endGesture(); }} />
         <button disabled={!history.canUndo} onClick={() => { void history.undo(); }}>Undo</button>
         <button disabled={!history.canRedo} onClick={() => { void history.redo(); }}>Redo</button>
-        {envelope.error && <p>{envelope.error.message}</p>}
+        {envelope.state.status === "updating" && <p role="status">Updating…</p>}
+        {envelope.error && <p role="alert">{envelope.error.message}</p>}
         {envelope.retry && <button onClick={() => { void envelope.retry?.(); }}>Retry</button>}
     </>;
 }
@@ -64,16 +65,14 @@ The wrapper reconnects the GUI automatically. Opening the window does not recrea
 
 | API | Meaning |
 |---|---|
-| `control.state` | Connecting, ready, failed or closed. Ready includes the editable `value`. |
+| `control.state.status` | `loading`, `invalid`, `unavailable`, `updating`, or `idle`. Both `updating` and `idle` include the editable `value`. |
 | `control.setValue(value)` | Draws immediately, then resolves to accepted, rejected or interrupted. An old render's setter cannot overwrite a newer accepted edit. |
-| `control.state.pending` | This GUI is waiting for its edit to be accepted. |
-| `control.state.application` | Engine progress. `acknowledged` means the engine confirmed this version; `sent` means only the stated handoff is proven. |
-| `control.error` | This field's readiness, saving or application error; otherwise `null`. |
+| `control.error` | One current `{ message }` or `null`. An error can coexist with `updating`; keep editing enabled when a value exists. |
 | `control.retry` | Retry the captured failure; otherwise `null`. Does not create another edit or Undo entry, or replay a superseded value. |
 | `beginGesture` / `endGesture` | Many drag updates, one Undo entry. A net-zero drag adds none. |
 | `usePluginHistory()` | Shared latest-first Undo/Redo. Values are restored through the same engine path as edits. |
 
-A codec has `parse(unknown)`, `encode(value)` and `equals(a,b)`. Parsing returns `{kind:"ok",value}` or `{kind:"error",message}`. Accepted values must be immutable and independent of the input. Invalid saved data stays visibly failed until a valid edit repairs it; it is not silently replaced by a default.
+A codec has `parse(unknown)`, `encode(value)` and `equals(a,b)`. Parsing returns `{kind:"ok",value}` or `{kind:"error",message}`. Accepted values must be immutable and independent of the input. Invalid saved data reports `invalid` until a valid replacement is requested and accepted; it is not silently replaced by a default.
 
 Return `preparationFailure("Could not load this file")` for an expected resource failure. The failed field and its Undo remain usable; unrelated fields continue. A throw from your preparation function or synchronous writer becomes a non-retryable error on that field; its previous audio remains active. A later deliberate edit can recover. Unexpected framework or delivery-callback defects still close the service because continuing may be unsafe. A transport can report a recoverable handoff failure through its explicit protocol. Source files needed by future Undo remain the author's responsibility.
 
@@ -90,7 +89,7 @@ if (result.kind === "rejected") {
 }
 ```
 
-Only included fields participate. Each value is validated and encoded by its codec. The hook captures their versions when rendered: if either field changed meanwhile, the whole edit is rejected. Field controls report `pending` until the compound command settles, even though it has no optimistic preview. There is no second history manager.
+Only included fields participate. Each value is validated and encoded by its codec. The hook captures their versions when rendered: if either field changed meanwhile, the whole edit is rejected. Field controls report `updating` while the compound command is outstanding, even though it has no optimistic preview; they return to `idle` after tracked saving and engine work also finish. There is no second history manager.
 
 ## Concurrent editing
 

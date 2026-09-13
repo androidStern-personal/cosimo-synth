@@ -83,13 +83,13 @@ test("field selection retains pending receipts, failure retry guards, and same-v
     const page = await open();
     try {
         await page.evaluate(() => { void window.fixture.dispatch({ kind: "edit", key: "gain", value: 2, expectedVersion: 0 }); });
-        assert.equal(await page.evaluate(() => window.fixture.controls.gain.state.pending), true);
+        assert.equal(await page.evaluate(() => window.fixture.controls.gain.state.status), "updating");
         const command = await page.evaluate(() => window.fixture.sent.at(-1));
         await deliver(page, { kind: "receipt", address: { ...scope, client: 1, sequence: command.sequence }, result: { kind: "accepted", revision: 1, changed: false } });
-        assert.equal(await page.evaluate(() => window.fixture.controls.gain.state.pending), false, "receipt-only settlement updates the consumer without a state revision");
+        assert.equal(await page.evaluate(() => window.fixture.controls.gain.state.status), "idle", "receipt-only settlement updates the consumer without a state revision");
         const failed = { ...field(2), persistence: { kind: "failed", reason: "write failed" }, persistenceRequest: 5 };
         await update(page, state(failed, field(0), 2));
-        assert.deepEqual(await page.evaluate(() => window.fixture.controls.gain.error), { kind: "persistence", message: "write failed" });
+        assert.deepEqual(await page.evaluate(() => window.fixture.controls.gain.error), { message: "write failed" });
         await page.evaluate(() => { window.oldRetry = window.fixture.controls.gain.retry; window.oldEdit = window.fixture.controls.gain.setValue; });
         await update(page, state({ ...failed, persistenceRequest: 6 }, field(0), 3));
         await page.evaluate(() => { void window.fixture.controls.gain.retry(); });

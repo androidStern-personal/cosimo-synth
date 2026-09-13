@@ -456,7 +456,7 @@ class EnhancerLiteView extends HTMLElement {
     updateControls(controls: ReadonlyMap<string, PluginStateControl<number>>): void {
         this.controls = controls;
         for (const [endpointID, control] of controls) {
-            if (control.state.kind !== "ready" || this.values.get(endpointID) === control.state.value) continue;
+            if (!("value" in control.state) || this.values.get(endpointID) === control.state.value) continue;
             this.values.set(endpointID, control.state.value);
             this.renderEndpoint(endpointID);
         }
@@ -1137,7 +1137,7 @@ function View() {
     const mount = useRef<HTMLDivElement>(null);
     const panel = useRef<EnhancerLiteView | null>(null);
     const [historyMount, setHistoryMount] = useState<HTMLElement | null>(null);
-    const ready = [...controls.values()].every(control => control.state.kind === "ready");
+    const ready = [...controls.values()].every(control => "value" in control.state);
     useLayoutEffect(() => {
         if (!ready || !mount.current) return;
         const required = ["addParameterListener", "removeParameterListener", "requestParameterValue",
@@ -1154,7 +1154,7 @@ function View() {
     }, [connection, ready]);
     useLayoutEffect(() => { panel.current?.updateControls(controls); });
     return createElement("div", null,
-        ready ? null : createElement("p", { role: "status" }, [...controls.values()].some(control => control.state.kind === "failed" || control.state.kind === "closed") ? "Controls unavailable" : "Connecting"),
+        ready ? null : createElement("p", { role: "status" }, [...controls.values()].some(control => control.state.status === "invalid" || control.state.status === "unavailable") ? "Controls unavailable" : "Connecting"),
         createElement("div", { ref: mount }),
         historyMount ? createPortal(createElement("nav", { "aria-label": "Edit history", className: "history-controls" },
             createElement("button", { disabled: !history.canUndo, onClick: () => { void history.undo(); } }, "Undo"),

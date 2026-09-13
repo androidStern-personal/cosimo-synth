@@ -33,7 +33,7 @@ export { nativeValue } from "./ui/native-value";
 export * as Native from "./ui/native-value-codecs";
 export { UndoHistory } from "./ui/undo-history";
 export type { PluginStateControlState, PluginStateControl, PluginStateChanges, PluginStateEditor, PluginStateHistory, PluginStateHistoryEntry,
-    PluginStateEditResult, PluginStateRejectionReason, PluginStateApplicationState, PluginStateControlError } from "./ui/plugin-state-react";
+    PluginStateEditResult, PluginStateRejectionReason, PluginStateControlError } from "./ui/plugin-state-react";
 export { usePluginState, usePluginHistory } from "./ui/plugin-state-react";
 export { createStatefulPatchView } from "./ui/plugin-state-view";
 export { engineData } from "./ui/engine-data-delivery";

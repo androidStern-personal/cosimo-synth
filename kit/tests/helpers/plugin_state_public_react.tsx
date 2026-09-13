@@ -1,9 +1,9 @@
 import { createRoot } from "react-dom/client";
 import { PluginStateProvider } from "../../ui/plugin-state-react";
-import { definePluginState, storedValue, usePluginState, usePluginHistory,
+import { definePluginState, parameter, storedValue, usePluginState, usePluginHistory,
     type PluginStateControl, type PluginStateEditor, type PluginStateHistory } from "../../index";
 import { createPluginStateClient, type PluginStateClientEvent } from "../../ui/plugin-state-client";
-import { createPluginStateSession } from "../../ui/plugin-state-session";
+import { createPluginStateSession, type PluginStatePublication } from "../../ui/plugin-state-session";
 import type { EngineApplication, EngineTarget } from "../../ui/plugin-state-engine";
 
 const numberCodec = {
@@ -11,13 +11,14 @@ const numberCodec = {
         ? { kind: "ok" as const, value } : { kind: "error" as const, message: "Expected a number." }; },
     encode: (value: number) => value, equals: (left: number, right: number) => left === right,
 };
-const definition = definePluginState({ gain: storedValue({ initial: 1, codec: numberCodec }), other: storedValue({ initial: 0, codec: numberCodec }) });
+const definition = definePluginState({ gain: storedValue({ initial: 1, codec: numberCodec }), other: storedValue({ initial: 0, codec: numberCodec }), input: parameter("input") });
 
 /** Actual owner/client/history; only engine status is supplied at its external port. */
-export async function mount(element: HTMLElement) {
+export async function mount(element: HTMLElement, dependencies: readonly string[] = []) {
     let scope = { owner: "private-owner", document: 0 };
     const defects: unknown[] = [];
-    const publications: unknown[] = [];
+    const publications: PluginStatePublication[] = [];
+    const completed = new Set<number>();
     let receive: ((event: PluginStateClientEvent<typeof definition>) => void) | undefined;
     let target: EngineTarget | undefined;
     let latest: { control: PluginStateControl<number>; other: PluginStateControl<number>;
@@ -29,7 +30,7 @@ export async function mount(element: HTMLElement) {
     const receipts: PluginStateClientEvent<typeof definition>[] = [];
     let otherSequence = 0;
     const owner = createPluginStateSession(definition, {
-        bindings: [{ key: "gain", dependencies: [], replace(_input, next) { target = next; }, cancel() {}, async stop() {} }],
+        bindings: [{ key: "gain", dependencies, replace(_input, next) { target = next; }, cancel() {}, async stop() {} }],
         native: { publish(publication) { publications.push(publication); }, close() {}, update(state, receipt) {
             receive?.({ kind: "update", scope, revision: state.revision, state, ...(receipt && !holdReceipts ? { receipt } : {}) });
             if (receipt && holdReceipts) receipts.push({ kind: "receipt", ...receipt });
@@ -68,6 +69,14 @@ export async function mount(element: HTMLElement) {
             return owner.dispatch({ kind: "command", address: { ...scope, client: 9, sequence: ++otherSequence }, command: { kind: "edit", key, value } });
         },
         accepted() { return owner.getSnapshot(); },
+        clientSnapshot() { return client.getSnapshot(); },
+        async settleSaves(result: { kind: "observed" } | { kind: "failed"; reason: string } = { kind: "observed" }) {
+            for (const publication of publications) {
+                if (completed.has(publication.request)) continue;
+                completed.add(publication.request);
+                await owner.dispatch({ kind: "published", scope: publication.scope, request: publication.request, result });
+            }
+        },
         publicationCount: () => publications.length,
         async status(status: EngineApplication) {
             if (!target) throw new Error("The actual owner has not requested an engine target.");

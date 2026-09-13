@@ -33,7 +33,9 @@ export type PluginStateClientResult = PluginStateResult
 /** A disconnected view never masquerades as a ready plugin with default values. */
 export type PluginStateClientSnapshot<Fields extends PluginStateFields> =
     | { readonly kind: "connecting" }
-    | { readonly kind: "ready"; readonly client: number; readonly state: PluginStateSnapshot<Fields>; readonly pendingFields: readonly string[] }
+    | { readonly kind: "ready"; readonly client: number; readonly state: PluginStateSnapshot<Fields>; readonly pendingFields: readonly string[];
+        /** Fields whose displayed draft differs from the accepted baseline. Never crosses the native protocol. */
+        readonly draftFields: readonly string[] }
     | { readonly kind: "closed" }
     | { readonly kind: "failed"; readonly reason: string };
 
@@ -85,12 +87,21 @@ export function createPluginStateClient<const Fields extends PluginStateFields>(
         if (!base) return;
         const fields: Record<string, PluginStateFieldSnapshot<unknown>> = { ...base.state.fields };
         const pendingFields = new Set<string>();
+        const draftFields = new Set<string>();
         for (const ticket of tickets.values()) {
             for (const key of ticket.pendingFields) pendingFields.add(key);
         }
         for (const draft of drafts.values()) {
             const field = fields[draft.key];
             if (field && ("value" in field || (field.readiness.kind === "failed" && field.readiness.reason === "invalid-state"))) {
+                const accepted = base.state.fields[draft.key];
+                const declaration = definition[draft.key];
+                // A held receipt does not make an already accepted value a new
+                // draft. Its current save/preparation errors must stay visible.
+                const differs = !accepted || accepted.readiness.kind !== "ready" || !("value" in accepted)
+                    || (declaration?.kind === "stored" ? !declaration.codec.equals(accepted.value, draft.value)
+                        : !Object.is(accepted.value, draft.value));
+                if (differs) draftFields.add(draft.key); else draftFields.delete(draft.key);
                 fields[draft.key] = Object.freeze("value" in field ? { ...field, value: draft.value }
                     : { ...field, value: draft.value, version: 0, persistence: Object.freeze({ kind: "not-written" as const }) });
                 pendingFields.add(draft.key);
@@ -98,7 +109,7 @@ export function createPluginStateClient<const Fields extends PluginStateFields>(
         }
         // SAFETY: drafts were parsed by their declared field codec before insertion.
         const state = Object.freeze({ ...base.state, fields: Object.freeze(fields) }) as PluginStateSnapshot<Fields>;
-        store.set(projection, Object.freeze({ ...base, state, pendingFields: Object.freeze([...pendingFields]) }));
+        store.set(projection, Object.freeze({ ...base, state, pendingFields: Object.freeze([...pendingFields]), draftFields: Object.freeze([...draftFields]) }));
     };
     const settle = (receipt: PluginStateReceipt) => {
         if (!base || !sameScope(base.state.scope, receipt.address) || receipt.address.client !== base.client) return false;
@@ -160,7 +171,7 @@ export function createPluginStateClient<const Fields extends PluginStateFields>(
             const pending = duringAttach.get(scopeKey(message.scope));
             const newest = pending && pending.revision > message.revision ? pending.state : message.state;
             duringAttach.clear();
-            base = { kind: "ready", client: message.client, state: retainValues(newest), pendingFields: [] };
+            base = { kind: "ready", client: message.client, state: retainValues(newest), pendingFields: [], draftFields: [] };
             redraw();
         } else if (message.kind === "update") {
             if (current.kind === "connecting") {
@@ -273,7 +284,8 @@ export function createPluginStateClient<const Fields extends PluginStateFields>(
                     // Compound edits have no optimistic drafts; their pending
                     // fields follow the existing ticket's receipt and lifetime.
                     tickets.set(sequence, { finish, sent: false,
-                        pendingFields: outbound.kind === "edit-many" ? outbound.edits.map(edit => edit.key) : [],
+                        pendingFields: outbound.kind === "edit-many" ? outbound.edits.map(edit => edit.key)
+                            : outbound.kind === "retry" ? [outbound.key] : [],
                     });
                     outgoing.push({ kind: "command", scope, client, sequence, command: outbound });
                     drain();

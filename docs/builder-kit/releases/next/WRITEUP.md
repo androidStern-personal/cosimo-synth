@@ -1,6 +1,6 @@
 # State management for audio plugins, built into Builder Kit
 
-Draft for the next release. Compared with the live Builder Kit 0.1.5 release; implementation reviewed at `363907f5`. Suggested version: **0.2.0**, because this introduces a substantial new author-facing framework. No release version or tag has been changed.
+Draft for the next release. Compared with the live Builder Kit 0.1.5 release; the public control lifecycle and examples now use the single `state.status` contract documented in [the API reference](../../../../kit/docs/PLUGIN_STATE_API.md). Suggested version: **0.2.0**, because this introduces a substantial new author-facing framework. No release version or tag has been changed.
 
 Builder Kit now gives Cmajor plugin authors one API for parameters, editable complex state, saving, Undo/Redo, and getting prepared data into the audio engine.
 
@@ -16,7 +16,7 @@ For large audio data, the author supplies the preparation function. The framewor
 | A persistent owner | Normal `stateSource` build setup creates the state owner. `createStatefulPatchView` reconnects an open GUI automatically. |
 | Shared history | `usePluginHistory()` undoes the most recent user action across participating fields. Drag grouping, compound edits, bounded history, and guarded component-specific Undo use the same system. |
 | Concurrent editing | A setter retains the version its GUI saw. Stale edits are rejected; one active gesture owns its field. Genuine host automation remains supported without turning delayed own echoes into new edits. |
-| Clear failure states | Controls expose readiness, pending acceptance, engine progress, an error or `null`, and a retry function or `null`. A retry preserves history and cannot reinstall an obsolete edit. |
+| Clear failure states | Controls expose one status (`loading`, `invalid`, `unavailable`, `updating`, or `idle`), a current error or `null`, and a retry function or `null`. Both `idle` and `updating` keep the value editable. A retry preserves history and cannot reinstall an obsolete edit. |
 | Shared audio data | Fixed or discovered sizes, one author-supplied memory ceiling, direct writable storage, cancellation, block-boundary publication, and safe cleanup. Native JIT, compiled native, and browser WebAssembly use the same declaration. |
 | Bundled MSEG | Curve schema/math, rendering, an editable graph, composable drawing surfaces, shared curve data, and a Cmajor reader/player. A/B morphing and a drawer are optional composition choices. |
 | Native settings | `nativeValue` and `Native` codecs produce matching C++ accessors for a native component. The component still decides what the settings do. |
@@ -61,7 +61,7 @@ export default definePluginState({
 ```
 
 ```tsx
-// PLUGIN AUTHOR — React GUI, after checking envelope.state.kind === "ready".
+// PLUGIN AUTHOR — React GUI, after checking "value" in envelope.state.
 const envelope = usePluginState(definition.envelope);
 
 <Mseg.Editor
