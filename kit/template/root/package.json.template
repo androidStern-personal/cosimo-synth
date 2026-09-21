@@ -14,6 +14,7 @@
     "cmajplugin:build": "./kit/scripts/build_cmajplugin_vst3.sh",
     "cmajplugin:install": "./kit/scripts/install_cmajplugin_vst3.sh",
     "ui:knobs:dev": "vite --config kit/examples/knobs/vite.config.mjs",
+    "ui:knobs:build": "vite build --config kit/examples/knobs/vite.config.mjs",
     "test:knobs": "node --test kit/tests/test_knob_browser.mjs",
     "typecheck": "tsc --noEmit",
     "test": "node kit/scripts/test_unit.mjs",
