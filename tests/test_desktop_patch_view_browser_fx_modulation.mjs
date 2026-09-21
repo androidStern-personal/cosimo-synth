@@ -109,6 +109,15 @@ async function armRackModSourceForRouting(page, selector) {
     }
 }
 
+async function assertRackDragUndo(page, initial, final) {
+    await expandGlobalModRail(page);
+    await page.locator('[data-role="mobile-global-mod-rail-voice-toggle"]').click();
+    await page.getByRole("button", { name: "Undo Voice edit", exact: true }).click();
+    await waitForHarnessSnapshot(page, "one shared Undo restores the full rack drag", next => Number(next.laneParams.reverbSize) === initial);
+    await page.getByRole("button", { name: "Redo Voice edit", exact: true }).click();
+    await waitForHarnessSnapshot(page, "Redo restores the final rack value", next => Number(next.laneParams.reverbSize) === final);
+}
+
 test("Add route appends unique inert mappings and scrolls the new row into view", async () => {
     const page = await openHarnessPage();
 
@@ -1095,12 +1104,8 @@ test("rack knob base drags capture the pointer, show a stable HUD, and detach cl
         snapshot = await waitForHarnessSnapshot(
             page,
             "rack knob pointer gesture",
-            (nextSnapshot) => nextSnapshot.gestureStarts.includes("reverbSize")
-                && nextSnapshot.gestureEnds.includes("reverbSize")
-                && Number(nextSnapshot.laneParams.reverbSize) > 0.5,
+            (nextSnapshot) => Number(nextSnapshot.laneParams.reverbSize) > 0.5,
         );
-        assert.deepEqual(snapshot.gestureStarts, ["reverbSize"]);
-        assert.deepEqual(snapshot.gestureEnds, ["reverbSize"]);
 
         const valueAfterRelease = Number(snapshot.laneParams.reverbSize);
         await clearHarnessDebugLog(page);
@@ -1110,6 +1115,9 @@ test("rack knob base drags capture the pointer, show a stable HUD, and detach cl
         snapshot = await getHarnessSnapshot(page);
         assert.equal(Number(snapshot.laneParams.reverbSize), valueAfterRelease);
         assert.deepEqual(snapshot.sentMessages, []);
+        // Rack values now belong to document history, not host scalar gestures.
+        // One actual Undo must restore the entire drag, not its final pointer sample.
+        await assertRackDragUndo(page, 0.5, valueAfterRelease);
     } finally {
         await page.close();
     }
@@ -1145,6 +1153,7 @@ test("rack knob touch drag survives unavailable pointer capture outside the knob
         await knob.dispatchEvent("pointerdown", {
             pointerId,
             pointerType: "touch",
+            isPrimary: true,
             button: 0,
             buttons: 1,
             clientX: start.x,
@@ -1157,6 +1166,7 @@ test("rack knob touch drag survives unavailable pointer capture outside the knob
                 window.dispatchEvent(new PointerEvent("pointermove", {
                     pointerId,
                     pointerType: "touch",
+                    isPrimary: true,
                     button: 0,
                     buttons: 0,
                     clientX: point.x,
@@ -1169,15 +1179,15 @@ test("rack knob touch drag survives unavailable pointer capture outside the knob
         let snapshot = await waitForHarnessSnapshot(
             page,
             "capture-free rack knob touch move",
-            (nextSnapshot) => nextSnapshot.gestureStarts.includes("reverbSize")
-                && Number(nextSnapshot.laneParams.reverbSize) > 0.5,
+            (nextSnapshot) => Number(nextSnapshot.laneParams.reverbSize) > 0.5,
         );
-        assert.deepEqual(snapshot.gestureEnds, []);
+        assert.equal(await knob.getAttribute("data-dragging"), "base");
 
         await page.evaluate(({ pointerId, moved }) => {
             window.dispatchEvent(new PointerEvent("pointerup", {
                 pointerId,
                 pointerType: "touch",
+                isPrimary: true,
                 button: 0,
                 buttons: 0,
                 clientX: moved.x,
@@ -1185,13 +1195,9 @@ test("rack knob touch drag survives unavailable pointer capture outside the knob
                 bubbles: true,
             }));
         }, { pointerId, moved });
-        snapshot = await waitForHarnessSnapshot(
-            page,
-            "capture-free rack knob touch release",
-            (nextSnapshot) => nextSnapshot.gestureEnds.includes("reverbSize"),
-        );
-        assert.deepEqual(snapshot.gestureEnds, ["reverbSize"]);
         await page.waitForFunction(() => document.querySelector('[data-role="mobile-voice-hud"]') === null);
+        assert.equal(await knob.getAttribute("data-dragging"), null);
+        await assertRackDragUndo(page, 0.5, Number(snapshot.laneParams.reverbSize));
     } finally {
         await page.close();
     }
@@ -1692,6 +1698,7 @@ test("a stationary touch hold on a rack knob opens its routing menu with one hap
         await knob.dispatchEvent("pointerdown", {
             pointerId: 41,
             pointerType: "touch",
+            isPrimary: true,
             button: 0,
             buttons: 1,
             clientX: point.x,
@@ -1720,6 +1727,7 @@ test("a stationary touch hold on a rack knob opens its routing menu with one hap
         await knob.dispatchEvent("pointerup", {
             pointerId: 41,
             pointerType: "touch",
+            isPrimary: true,
             button: 0,
             buttons: 0,
             clientX: point.x,
@@ -1763,6 +1771,7 @@ test("moving a rack knob touch cancels the hold menu and completes one captured 
         await knob.dispatchEvent("pointerdown", {
             pointerId: 42,
             pointerType: "touch",
+            isPrimary: true,
             button: 0,
             buttons: 1,
             clientX: start.x,
@@ -1774,6 +1783,7 @@ test("moving a rack knob touch cancels the hold menu and completes one captured 
             await knob.dispatchEvent("pointermove", {
                 pointerId: 42,
                 pointerType: "touch",
+                isPrimary: true,
                 button: 0,
                 buttons: 1,
                 clientX: start.x + deltaX,
@@ -1786,6 +1796,7 @@ test("moving a rack knob touch cancels the hold menu and completes one captured 
         await knob.dispatchEvent("pointerup", {
             pointerId: 42,
             pointerType: "touch",
+            isPrimary: true,
             button: 0,
             buttons: 0,
             clientX: start.x + 28,
@@ -1795,12 +1806,9 @@ test("moving a rack knob touch cancels the hold menu and completes one captured 
         const snapshot = await waitForHarnessSnapshot(
             page,
             "completed touch knob gesture",
-            (nextSnapshot) => nextSnapshot.gestureStarts.includes("reverbSize")
-                && nextSnapshot.gestureEnds.includes("reverbSize")
-                && Number(nextSnapshot.laneParams.reverbSize) > 0.5,
+            (nextSnapshot) => Number(nextSnapshot.laneParams.reverbSize) > 0.5,
         );
-        assert.deepEqual(snapshot.gestureStarts, ["reverbSize"]);
-        assert.deepEqual(snapshot.gestureEnds, ["reverbSize"]);
+        await assertRackDragUndo(page, 0.5, Number(snapshot.laneParams.reverbSize));
     } finally {
         await page.close();
     }
@@ -4214,4 +4222,51 @@ test("T08A: the target claiming the drag shows an unmistakably stronger treatmen
         await cdp.send("Input.dispatchTouchEvent", { type: "touchCancel", touchPoints: [] }).catch(() => undefined);
         await page.close();
     }
+});
+
+
+test("production rack composition drives the public marker from engine telemetry without editing state", async () => {
+    const page = await openHarnessPage({ beforeGoto: p => p.setViewportSize({ width: 393, height: 852 }) });
+    try {
+        await page.click('[data-role="mobile-workspace-tab-fx"]');
+        await selectRackEffect(page, "reverb");
+        await toggleRackEffectEnabled(page, "reverb");
+        await expandGlobalModRail(page);
+        await armRackModSourceForRouting(page, '[data-role="rack-mod-source-mseg-1"]');
+        await createRackMappingByDrop(page);
+        const knob = page.locator('[data-role="rack-parameter-reverbSize"]');
+        await page.waitForFunction(() => document.querySelector('[data-role="rack-parameter-reverbSize"]')?.getAttribute("data-route-state") === "mapped");
+        await dispatchRackKnobPointerEvents(knob, [
+            { type: "pointerdown", pointerId: 91, buttons: 1 },
+            { type: "pointermove", pointerId: 91, buttons: 1, deltaY: -8 },
+            { type: "pointermove", pointerId: 91, buttons: 1, deltaY: -65 },
+            { type: "pointerup", pointerId: 91, buttons: 0, deltaY: -65 },
+        ]);
+        const marker = knob.locator('[data-slot="knob-marker"]');
+        await marker.waitFor({ state: 'attached', timeout: 5000 });
+        assert.equal(await knob.getAttribute('data-slot'), 'knob-control');
+        assert.equal(await knob.locator('[data-slot="knob-range"]').count(), 1);
+        const base = await knob.getAttribute('aria-valuenow');
+        await clearHarnessDebugLog(page);
+        const emit = (generation, active, value) => page.evaluate(({ generation, active, value }) => {
+            window.__COSIMO_DESKTOP_HARNESS__.emitEffectiveModSourceState({ voiceGeneration: generation,
+                hasActive: active ? 1 : 0, values: [value, 0, 0, 0, 0, 0, 0, 0, 0, 0] });
+        }, { generation, active, value });
+        await emit(7, true, 0);
+        await page.waitForFunction(() => document.querySelector('[data-role="rack-knob-mod-light"]')?.getAttribute('data-active') === 'true');
+        const before = await marker.getAttribute('cx');
+        assert.equal(await marker.evaluate(el => getComputedStyle(el).opacity), '1');
+        await emit(7, true, 1);
+        await page.waitForFunction(old => document.querySelector('[data-role="rack-knob-mod-light"]')?.getAttribute('cx') !== old, before);
+        assert.equal(await knob.getAttribute('aria-valuenow'), base);
+        assert.deepEqual((await getHarnessSnapshot(page)).sentMessages, [], 'telemetry never sends a parameter edit');
+        await emit(8, false, 0);
+        await page.waitForFunction(() => document.querySelector('[data-role="rack-knob-mod-light"]')?.getAttribute('data-active') === 'false');
+        await emit(7, true, 1);
+        assert.equal(await marker.getAttribute('data-active'), 'false', 'stale voice reports cannot reactivate the marker');
+        await emit(9, true, .5);
+        await page.waitForFunction(() => document.querySelector('[data-role="rack-knob-mod-light"]')?.getAttribute('data-active') === 'true');
+        const snapshot = await getHarnessSnapshot(page);
+        assert.equal(snapshot.endpointListenerCounts.effectiveModSourceState, 1, 'knobs and other displays share the monitor');
+    } finally { await page.close(); }
 });

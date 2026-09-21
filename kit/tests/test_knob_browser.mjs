@@ -3,6 +3,9 @@ import test, { before, after } from 'node:test';
 import path from 'node:path';
 import { chromium } from 'playwright';
 import { createServer } from 'vite';
+import { build } from 'esbuild';
+import { readFile } from 'node:fs/promises';
+import ts from 'typescript';
 
 const root = path.resolve(import.meta.dirname, '../..');
 let server, browser, base;
@@ -144,6 +147,7 @@ test('horizontal sensitivity and explicit keyboard increments are honored', asyn
     const knob=page.getByRole('slider',{name:'Horizontal drag'});
     await drag(page,knob,74,0); assert.ok(Math.abs(await value(knob)-70)<.005);
     await knob.press('ArrowRight'); assert.equal(await value(knob),75);
+    await knob.press('Shift+ArrowRight'); assert.equal(await value(knob),75.5);
 }));
 
 test('one drag is one history entry and undo restores its initial value', async () => withPage(async page => {
@@ -184,7 +188,7 @@ test('phone layout has no horizontal overflow and every example exposes source',
     assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>window.innerWidth),false);
     assert.equal(await page.locator('.example').count(),11);
     const card=page.locator('#live'); await card.getByRole('tab',{name:'Code',exact:true}).click();
-    assert.match(await card.locator('code').textContent(),/KnobMarker value=\{source\}/);
+    assert.match(await card.locator('[data-source-file="live.tsx"] code').textContent(),/KnobMarker value=\{source\}/);
     await card.getByRole('tab',{name:'Preview',exact:true}).click();
     await card.locator('[data-slot=knob-marker]').waitFor();
 }, { viewport:{width:390,height:844}, isMobile:true, hasTouch:true }));
@@ -253,4 +257,79 @@ test('pointer frames use current controlled callbacks rather than the pointer-do
     await page.mouse.move(x,y-50);await page.mouse.up();
     assert.deepEqual(await page.evaluate(()=>window.knobFixture.callbackBases),[100,changed]);
     await page.evaluate(()=>window.knobFixture.unmount());
+}));
+
+
+test('every displayed example compiles and runs with only its copied source, stylesheet and public kit imports', async () => withPage(async page => {
+    const copied = new Map();
+    let css = '';
+    for (const id of await page.locator('.example').evaluateAll(nodes => nodes.map(node => node.id))) {
+        const card = page.locator(`#${id}`);
+        await card.getByRole('tab', { name: 'Code', exact: true }).click();
+        copied.set(id, await card.locator(`[data-source-file="${id}.tsx"] code`).textContent());
+        const styles = await card.locator('[data-source-file="examples.css"] code').textContent();
+        if (css) assert.equal(styles, css);
+        css = styles;
+    }
+    const exampleDir = path.join(root, 'kit/examples/knobs');
+    const files = new Map([...copied].map(([id, text]) => [path.join(exampleDir, `copied-${id}.tsx`), text]));
+    const options = { noEmit: true, skipLibCheck: true, strict: true, target: ts.ScriptTarget.ES2022,
+        module: ts.ModuleKind.ESNext, moduleResolution: ts.ModuleResolutionKind.Bundler,
+        jsx: ts.JsxEmit.ReactJSX, allowSyntheticDefaultImports: true, types: ["vite/client"] };
+    const host = ts.createCompilerHost(options), original = host.getSourceFile.bind(host);
+    host.getSourceFile = (name, language, onError, create) => files.has(name)
+        ? ts.createSourceFile(name, files.get(name), language, true, ts.ScriptKind.TSX)
+        : original(name, language, onError, create);
+    const program = ts.createProgram([...files.keys()], options, host);
+    for (const file of files.keys()) {
+        const errors = program.getSemanticDiagnostics(program.getSourceFile(file));
+        assert.deepEqual(errors.map(error => ts.flattenDiagnosticMessageText(error.messageText, '\n')), [], file);
+    }
+    const names = [...copied].map(([id, source]) => [id, source.match(/export function (\w+Example)/)[1]]);
+    const entry = names.map(([id, name]) => `import { ${name} } from "copy:${id}";`).join('\n')
+        + '\nimport { createRoot } from "react-dom/client";\ncreateRoot(document.getElementById("root")).render(<>'
+        + names.map(([id, name]) => `<section id="${id}"><${name} /></section>`).join('') + '</>);';
+    const bundle = await build({ stdin: { contents: entry, loader: 'tsx', resolveDir: exampleDir },
+        bundle: true, write: false, outfile: 'copy-proof.js', format: 'esm', jsx: 'automatic',
+        define: { 'process.env.NODE_ENV': '"test"' }, plugins: [{ name: 'copied-files-only', setup(builder) {
+            builder.onResolve({ filter: /^copy:/ }, args => ({ path: args.path.slice(5), namespace: 'copied' }));
+            builder.onLoad({ filter: /.*/, namespace: 'copied' }, args => ({ contents: copied.get(args.path), loader: 'tsx', resolveDir: exampleDir }));
+            builder.onResolve({ filter: /^\.\/examples\.css$/ }, () => ({ path: 'examples.css', namespace: 'copied-css' }));
+            builder.onLoad({ filter: /.*/, namespace: 'copied-css' }, () => ({ contents: css, loader: 'css' }));
+            builder.onResolve({ filter: /\?(inline|raw)$/ }, args => ({ path: path.resolve(args.resolveDir, args.path.replace(/\?.*$/, '')), namespace: 'raw' }));
+            builder.onLoad({ filter: /.*/, namespace: 'raw' }, async args => ({ contents: await readFile(args.path, 'utf8'), loader: 'text' }));
+        } }] });
+    const isolated = await browser.newPage();
+    const errors = []; isolated.on('pageerror', error => errors.push(error.message));
+    try {
+        await isolated.setContent('<!doctype html><html><head></head><body><div id="root"></div></body></html>');
+        await isolated.addStyleTag({ content: bundle.outputFiles.find(file => file.path.endsWith('.css')).text });
+        await isolated.addScriptTag({ type: 'module', content: bundle.outputFiles.find(file => file.path.endsWith('.js')).text });
+        const gain = isolated.getByRole('slider', { name: 'Gain', exact: true });
+        await gain.press('ArrowUp'); assert.equal(await value(gain), .63);
+        const input = isolated.getByRole('textbox', { name: 'Exact frequency' });
+        await input.fill('2.5 kHz'); await input.press('Enter');
+        assert.equal(await value(isolated.getByRole('slider', { name: 'Frequency', exact: true })), 2500);
+        await isolated.getByRole('slider', { name: 'Custom dial' }).press('ArrowUp');
+        assert.equal(await value(isolated.getByRole('slider', { name: 'Custom meter' })), .51);
+        const widths = await isolated.locator('#styles [data-slot=knob-control]').evaluateAll(nodes => nodes.map(node => getComputedStyle(node).width));
+        assert.deepEqual(widths, ['78px', '120px', '158px']);
+        const marker = isolated.locator('#live [data-slot=knob-marker]');
+        await isolated.waitForFunction(() => document.querySelector('#live [data-slot=knob-marker]')?.getAttribute('data-active') === 'true');
+        const x = await marker.getAttribute('cx');
+        await isolated.waitForFunction(old => document.querySelector('#live [data-slot=knob-marker]')?.getAttribute('cx') !== old, x);
+        assert.deepEqual(errors, []);
+    } finally { await isolated.close(); }
+}));
+
+
+test('secondary drag sensitivity is independent of the base drag sensitivity', async () => withPage(async page => {
+    const knob = page.getByRole('slider', { name: 'Value & depth' });
+    const depth = page.getByRole('slider', { name: 'Secondary depth' });
+    await drag(page, knob, 0, -46);
+    assert.ok(Math.abs(Number(await depth.inputValue()) - .45) < .005, `secondary value: ${await depth.inputValue()}`);
+    assert.equal(await value(knob), .5);
+    await drag(page, knob, 54, 0);
+    assert.ok(Math.abs(await value(knob) - .7) < .005);
+    assert.ok(Math.abs(Number(await depth.inputValue()) - .45) < .005);
 }));

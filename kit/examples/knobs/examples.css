@@ -1,0 +1,46 @@
+/* Example presentation only. Knob defaults are installed by the kit. */
+:root { --demo-disc: #27272e; --line: #3a3a42; --text: #ededf1; --muted: #95959f; --panel: #222226; --hover: #393940; }
+.button-row button { font: inherit; border: 1px solid var(--line); border-radius: 7px; background: var(--panel); color: var(--text); padding: 7px 11px; cursor: pointer; }
+.knob-row{display:flex;align-items:center;justify-content:space-evenly;gap:36px;width:100%}
+.hero-knobs{gap:32px}
+.hero-knobs .bk-knob{--knob-size:150px}
+.cyan{--knob-color:#76cbe6;--knob-range-color:#b9afff}
+.lavender{--knob-color:#bcb0ff}
+.warm{--knob-color:#eaae80}
+.compact{--knob-size:78px}
+.large{--knob-size:158px}
+.bk-knob{font-size:15px;gap:12px}
+.bk-knob [data-slot=knob-label]{color:var(--muted);font-size:12px}
+.bk-knob [data-slot=knob-value]{font-size:13px;letter-spacing:-.2px}
+.docs[data-theme=light] .bk-knob{--knob-color:#739623;--knob-range-color:#3c95b4;--knob-indicator:#fff}
+.docs[data-theme=light] .cyan{--knob-color:#26829f}
+.docs[data-theme=light] .lavender{--knob-color:#8570c8}
+.docs[data-theme=light] .warm{--knob-color:#b27538}
+.live-layout{display:flex;gap:64px;align-items:center;width:100%;justify-content:center}
+.live-knob-slot{width:170px;min-width:150px;min-height:205px;display:flex;align-items:center;justify-content:center}
+.live-knob-slot .bk-knob{--knob-size:158px}
+.demo-controls{width:270px;display:flex;flex-direction:column;gap:22px}
+.demo-controls label{font-size:12px;display:block}
+.demo-controls label>span{float:right;color:var(--muted);font-variant-numeric:tabular-nums}
+.demo-controls input[type=range],.wide-range input{width:100%;display:block;margin:10px 0 0;accent-color:#b5d87b;height:5px}
+.demo-controls small,small{font-size:11px;line-height:1.7;color:var(--muted)}
+.button-row{display:flex;gap:8px;flex-wrap:wrap}
+.button-row button{font-size:11px}
+.demo-controls label.check{display:flex;gap:8px;align-items:center}
+.check input{accent-color:#b5d87b}
+.centered-demo{display:flex;flex-direction:column;align-items:center;gap:26px;width:100%}
+.axis-readout{min-width:160px;text-align:center}
+.wide-range{width:240px;color:var(--muted);font-size:11px}
+.meter-control{border-radius:9px;display:flex;align-items:center;justify-content:center}
+.meter-art{height:105px;width:30px;background:var(--demo-disc);position:relative;border:1px solid var(--line);border-radius:5px;overflow:hidden}
+.meter-art div{position:absolute;bottom:0;left:0;right:0;background:var(--knob-color);opacity:.6}
+.meter-art i{position:absolute;height:3px;left:0;right:0;background:var(--knob-indicator)}
+.bk-knob-control>svg{width:100%;height:100%}
+.event-log{font-family:monospace;font-size:10px;color:var(--muted);min-height:85px;border-left:2px solid var(--line);padding-left:14px}
+.demo-menu{min-width:205px;background:#222226;color:#ededf1;border:1px solid #3a3a42;border-radius:8px;padding:5px;box-shadow:0 12px 32px #0006;z-index:50;font-family:inherit;font-size:12px}
+.demo-menu [role=menuitem]{padding:8px 10px;border-radius:4px;outline:0;display:flex;justify-content:space-between;gap:24px;cursor:pointer}
+.demo-menu [role=menuitem][data-highlighted]{background:#393940}
+.demo-menu [role=separator]{height:1px;background:#3a3a42;margin:4px}
+.demo-menu span{color:#9999a3}
+
+@media(max-width:650px) { .knob-row { flex-wrap:wrap; gap:24px; } .live-layout { flex-direction:column; gap:28px; } .demo-controls { width:min(270px,100%); } }

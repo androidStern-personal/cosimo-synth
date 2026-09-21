@@ -2,7 +2,7 @@
 
 A controlled numeric input with reusable pointer/keyboard behavior and composable artwork. Import from `kit/index`; the scoped default styles are included.
 
-Run `npm run ui:knobs:dev` for the interactive reference page. Every example has a Preview/Code view. It covers the default control, linear/log/custom scales, discrete values, exact entry, live modulation, two-axis editing, context menus, custom artwork, styling, disabled/read-only state and gesture grouping.
+Run `npm run ui:knobs:dev` for the interactive reference page. Every example has a Preview/Code view. The Code tab contains the complete TSX file (including imports and helpers) and `examples.css`. Copy both files together; adjust the public kit import path for your application. The examples run from those exact source files, and a browser test copies the displayed code into a separate page without the documentation application. It covers the default control, linear/log/custom scales, discrete values, exact entry, live modulation, two-axis editing, context menus, custom artwork, styling, disabled/read-only state and gesture grouping.
 
 ## Start with a complete control
 
@@ -74,7 +74,7 @@ The source supplies the effective value in the knob's units. Its owner resolves 
 
 ## Input and edit gestures
 
-`KnobControl` defaults to vertical drag. Set `drag="horizontal"` for horizontal movement. `sensitivity` is CSS pixels per full travel, default 220. Shift-drag uses one tenth of normal travel.
+`KnobControl` defaults to vertical drag. Set `drag="horizontal"` for horizontal movement. `sensitivity` is CSS pixels per full travel, default 220. A secondary quantity in a two-axis mapping can supply its own `sensitivity`; otherwise it inherits the control’s sensitivity. Shift-drag uses one tenth of normal travel.
 
 Arrow keys move by one `step`, or 1% of normalized travel when continuous. Shift-arrow uses 0.1% for a continuous range. `keyboardStep` optionally replaces that increment with a canonical-unit amount. Page Up/Down move ten increments; Home/End reach the endpoints. Holding a key groups repeats until release. Read-only blocks edits but remains focusable; disabled also leaves the tab order. Both still reflect external value updates.
 
@@ -84,7 +84,7 @@ Arrow keys move by one `step`, or 1% of normalized travel when continuous. Shift
 <KnobControl drag={{
   horizontal: "value",
   vertical: {
-    value: depth, onValueChange: setDepth, min: -1, max: 1,
+    value: depth, onValueChange: setDepth, min: -1, max: 1, sensitivity: 360,
     onGestureStart: beginDepthEdit, onGestureEnd: endDepthEdit,
   },
 }}>

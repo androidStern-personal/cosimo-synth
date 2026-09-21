@@ -2,10 +2,12 @@ import {
     useCallback,
     useContext,
     useId,
+    useMemo,
+    useEffect,
+    useLayoutEffect,
     useRef,
     useState,
     type CSSProperties,
-    type PointerEvent as ReactPointerEvent,
 } from "react";
 import { maybeLaneBaseKindForRackEndpoint } from "../shared/modulation-targets";
 import { createPortal } from "react-dom";
@@ -21,8 +23,6 @@ import type { ModulationTargetKind } from "../shared/modulation-targets";
 import {
     PARAMETER_GESTURE_BASE_PIXELS_PER_FULL_RANGE,
     PARAMETER_GESTURE_MODULATION_PIXELS_PER_FULL_SPAN,
-    useParameterGesture,
-    type ParameterGestureChannel,
 } from "../shared/parameter-gesture";
 import {
     ParameterHudLayerContext,
@@ -50,7 +50,8 @@ import {
     type ModulatedParameterProjectionDescriptor,
     type RackRouteEffectiveness,
 } from "../shared/rack-route-presentation";
-import { useModSourceLight, type ModSourceLightPlacement } from "../shared/mod-source-live";
+import { useModSourceValue } from "../shared/mod-source-live";
+import { KnobRoot, KnobControl, KnobRange, KnobMarker, useKnob, type KnobScale } from "../../kit/index";
 import { clearUiTimeout, uiTimeout } from "../shared/ui-timers";
 import {
     effectOutputTrimNormalizedValue,
@@ -63,11 +64,6 @@ const KNOB_SWEEP_DEGREES = 270;
 const BASE_RADIUS = 25;
 const MOD_INNER_RADIUS = 36;
 const MOD_OUTER_RADIUS = 48;
-
-const KNOB_LIGHT_PLACEMENT: ModSourceLightPlacement = {
-    kind: "knob-arc",
-    radius: (MOD_INNER_RADIUS + MOD_OUTER_RADIUS) / 2,
-};
 
 type Point = {
     readonly x: number;
@@ -194,24 +190,6 @@ function valueFromNormalized(descriptor: ParameterKnobDescriptor, normalized: nu
         : descriptor.min + (clamped * (descriptor.max - descriptor.min));
 }
 
-function snapParameterValue(
-    descriptor: ParameterKnobDescriptor,
-    value: number,
-    detentStep: number | null,
-) {
-    const clamped = clamp(value, descriptor.min, descriptor.max);
-    if (detentStep === null) {
-        return clamped;
-    }
-
-    const stepIndex = Math.round((clamped - descriptor.min) / detentStep);
-    return Number(clamp(
-        descriptor.min + (stepIndex * detentStep),
-        descriptor.min,
-        descriptor.max,
-    ).toFixed(10));
-}
-
 function pointOnCircle(degrees: number, radius: number): Point {
     const radians = (degrees * Math.PI) / 180;
     return {
@@ -290,6 +268,13 @@ type ParameterKnobSurfaceProps = {
     ) => string;
 };
 
+/** Observe the public interaction context; the private HUD remains a product concern. */
+function KnobInteraction({ onChange }: { readonly onChange: (dragging: boolean, axis: "horizontal" | "vertical" | null) => void }) {
+    const { isDragging, activeAxis } = useKnob();
+    useLayoutEffect(() => { onChange(isDragging, activeAxis); }, [isDragging, activeAxis, onChange]);
+    return null;
+}
+
 function ParameterKnobSurface({
     descriptor,
     rackDescriptor,
@@ -318,13 +303,12 @@ function ParameterKnobSurface({
 }: ParameterKnobSurfaceProps) {
     const artRef = useRef<SVGSVGElement | null>(null);
     const bindingRef = useRef(binding);
-    const detentStepRef = useRef(detentStep);
-    const onModulationAmountChangeRef = useRef(onModulationAmountChange);
-    const onRequestContextMenuRef = useRef(onRequestContextMenu);
     bindingRef.current = binding;
-    detentStepRef.current = detentStep;
-    onModulationAmountChangeRef.current = onModulationAmountChange;
-    onRequestContextMenuRef.current = onRequestContextMenu;
+    const gestureBase = useRef(binding.value);
+    const pointerType = useRef("mouse");
+    const scale = useMemo<KnobScale>(() => descriptor.valueKind === "effect-output-trim-db"
+        ? { toPosition: effectOutputTrimNormalizedValue, fromPosition: effectOutputTrimValueFromNormalized }
+        : descriptor.scale === "log" ? "log" : "linear", [descriptor.valueKind, descriptor.scale]);
     const patternStem = useId().replaceAll(":", "");
     const baseTrackPatternID = `rack-knob-base-${patternStem}`;
     const modTrackPatternID = `rack-knob-mod-${patternStem}`;
@@ -362,13 +346,12 @@ function ParameterKnobSurface({
             liveLightRoute,
             sourceValue01,
         );
-    const attachModLight = useModSourceLight({
-        source: liveLightRoute !== null
-            ? { sourceKind: liveLightRoute.sourceKind, sourceSlot: liveLightRoute.sourceSlot }
-            : null,
-        project: liveLightProject ?? ((sourceValue01) => sourceValue01),
-        placement: KNOB_LIGHT_PLACEMENT,
-    });
+    const projectLiveValue = useCallback((sourceValue: number) => {
+        if (liveLightRoute === null || rackDescriptor === null) return binding.value;
+        return valueFromNormalized(descriptor, projectRackRouteLiveNormalized(rackDescriptor, binding.value, liveLightRoute, sourceValue));
+    }, [liveLightRoute, rackDescriptor, descriptor, binding.value]);
+    const liveValue = useModSourceValue(liveLightRoute === null ? null
+        : { sourceKind: liveLightRoute.sourceKind, sourceSlot: liveLightRoute.sourceSlot }, projectLiveValue);
     const routePresencePoint = pointOnCircle(angleForNormalized(baseNormalized), (MOD_INNER_RADIUS + MOD_OUTER_RADIUS) / 2);
     const handlePoint = pointOnCircle(angleForNormalized(baseNormalized), BASE_RADIUS * 0.72);
     const defaultPoint = pointOnCircle(
@@ -386,7 +369,6 @@ function ParameterKnobSurface({
         "--rack-knob-bypassed-ink": KNOB_BYPASSED_GREY,
     } as CSSProperties;
 
-    const gestureController = useParameterGesture();
     const hudLayer = useContext(ParameterHudLayerContext);
     const [draggingMode, setDraggingMode] = useState<"pending" | "base" | "modulation" | null>(null);
     const [hudPresentation, setHudPresentation] = useState<{
@@ -394,8 +376,6 @@ function ParameterKnobSurface({
         readonly axis: "base" | "modulation";
     } | null>(null);
     const hudLingerTimerRef = useRef<number | null>(null);
-    const hostGestureActiveRef = useRef(false);
-    const lastBaseValueRef = useRef(binding.value);
 
     const clearHudLinger = useCallback(() => {
         if (hudLingerTimerRef.current !== null) {
@@ -419,136 +399,27 @@ function ParameterKnobSurface({
         }, PARAMETER_HUD_LINGER_MS);
     }, [clearHudLinger]);
 
-    const endHostGesture = useCallback(() => {
-        if (hostGestureActiveRef.current) {
-            bindingRef.current.endGesture();
-            hostGestureActiveRef.current = false;
-        }
-    }, []);
-
-    const handlePointerDown = useCallback((event: ReactPointerEvent<HTMLButtonElement>) => {
-        if (!bindingRef.current.isReady) {
-            return;
-        }
-        if (event.pointerType === "mouse" && event.button !== 0) {
-            return;
-        }
-        if (gestureController.isGestureActive()) {
-            return;
-        }
-        onSelect();
-
-        const gestureDescriptor = descriptor;
-        const gestureTargetKind = modulationTargetKind
-            ?? maybeLaneBaseKindForRackEndpoint(gestureDescriptor.endpointID)
-            ?? (`lane.none#1.${gestureDescriptor.endpointID}` as RackModulationTargetKind);
-        const amountBounds = enableModulationGesture && route !== null
-            ? modulationAmountBounds ?? getModulationAmountBounds(gestureTargetKind)
-            : null;
-        lastBaseValueRef.current = bindingRef.current.value;
-
-        const baseChannel: ParameterGestureChannel = {
-            startNormalized: normalizedValue(gestureDescriptor, bindingRef.current.value),
-            pixelsPerFullSpan: PARAMETER_GESTURE_BASE_PIXELS_PER_FULL_RANGE,
-            write: (normalized) => {
-                const nextValue = snapParameterValue(
-                    gestureDescriptor,
-                    valueFromNormalized(gestureDescriptor, normalized),
-                    detentStepRef.current,
-                );
-                const valueChanged = Math.abs(nextValue - lastBaseValueRef.current) > 1e-9;
-                if (detentStepRef.current !== null && valueChanged) {
-                    triggerParameterControlHaptic();
-                }
-                if (detentStepRef.current === null || valueChanged) {
-                    bindingRef.current.setValue(nextValue);
-                    lastBaseValueRef.current = nextValue;
-                }
-            },
-            onActivate: () => {
-                if (!hostGestureActiveRef.current) {
-                    bindingRef.current.beginGesture();
-                    hostGestureActiveRef.current = true;
-                }
-                setDraggingMode("base");
-                clearHudLinger();
-                setHudPresentation({ phase: "active", axis: "base" });
-            },
-        };
-
-        // The vertical axis always classifies; without an editable mapping it
-        // stays inert and the HUD keeps the base presentation (ADR-024).
-        const modulationEditable = amountBounds !== null;
-        const baseValueAtStart = bindingRef.current.value;
-        const dialWalk = modulationDragStyle === "effective-value";
-        const modulationChannel: ParameterGestureChannel = {
-            startNormalized: amountBounds === null
-                ? 0
-                : dialWalk
-                    ? normalizedValue(gestureDescriptor, baseValueAtStart + (route?.amount ?? 0))
-                    : clamp(
-                        ((route?.amount ?? 0) - amountBounds.min) / (amountBounds.max - amountBounds.min),
-                        0,
-                        1,
-                    ),
-            pixelsPerFullSpan: dialWalk
-                ? PARAMETER_GESTURE_BASE_PIXELS_PER_FULL_RANGE
-                : PARAMETER_GESTURE_MODULATION_PIXELS_PER_FULL_SPAN,
-            write: amountBounds === null ? null : (normalized) => {
-                if (dialWalk) {
-                    // Walk the modulated value along the dial: every pixel of
-                    // travel covers the same fraction of the knob's range in
-                    // both directions, and the amount is derived storage.
-                    onModulationAmountChangeRef.current(
-                        valueFromNormalized(gestureDescriptor, normalized) - baseValueAtStart,
-                    );
-                    return;
-                }
-                onModulationAmountChangeRef.current(
-                    amountBounds.min + (normalized * (amountBounds.max - amountBounds.min)),
-                );
-            },
-            onActivate: () => {
-                endHostGesture();
-                setDraggingMode(modulationEditable ? "modulation" : "base");
-                clearHudLinger();
-                setHudPresentation({ phase: "active", axis: modulationEditable ? "modulation" : "base" });
-            },
-        };
-
-        gestureController.startGesture(event, {
-            horizontal: baseChannel,
-            vertical: modulationChannel,
-            onFinish: (reason, ownedAxis) => {
-                endHostGesture();
-                setDraggingMode(null);
-                if (ownedAxis !== null) {
-                    hideHud(reason === "cancel");
-                } else {
-                    hideHud(true);
-                }
-            },
-            onLongPress: enableContextMenu
-                ? (clientX, clientY) => {
-                    triggerParameterControlHaptic();
-                    onRequestContextMenuRef.current(clientX, clientY);
-                }
-                : undefined,
-        });
-        setDraggingMode("pending");
-    }, [
-        clearHudLinger,
-        descriptor,
-        enableContextMenu,
-        enableModulationGesture,
-        endHostGesture,
-        gestureController,
-        hideHud,
-        modulationTargetKind,
-        modulationAmountBounds,
-        onSelect,
-        route,
-    ]);
+    useEffect(() => () => clearHudLinger(), [clearHudLinger]);
+    const observeInteraction = useCallback((dragging: boolean, axis: "horizontal" | "vertical" | null) => {
+        const mode = axis === "vertical" && enableModulationGesture && route !== null ? "modulation" : "base";
+        setDraggingMode(dragging ? mode : null);
+        if (dragging) {
+            clearHudLinger();
+            setHudPresentation({ phase: "active", axis: mode });
+        } else hideHud(false);
+    }, [enableModulationGesture, route !== null, clearHudLinger, hideHud]);
+    const amountBounds = enableModulationGesture && route !== null
+        ? modulationAmountBounds ?? getModulationAmountBounds(targetKind) : null;
+    const secondary = amountBounds === null ? null : modulationDragStyle === "effective-value" ? {
+        value: binding.value + modulationAmount,
+        min: descriptor.min, max: descriptor.max, scale,
+        sensitivity: PARAMETER_GESTURE_BASE_PIXELS_PER_FULL_RANGE,
+        onValueChange: (value: number) => onModulationAmountChange(clamp(value - gestureBase.current, amountBounds.min, amountBounds.max)),
+    } : {
+        value: modulationAmount, min: amountBounds.min, max: amountBounds.max,
+        sensitivity: PARAMETER_GESTURE_MODULATION_PIXELS_PER_FULL_SPAN,
+        onValueChange: onModulationAmountChange,
+    };
 
     const hudModel: ParameterHudModel | null = hudPresentation === null ? null : (() => {
         // Routes shown here always come from the armed rail source, whose
@@ -603,7 +474,30 @@ function ParameterKnobSurface({
     })();
 
     return (
-        <>
+        <KnobRoot value={binding.value} min={descriptor.min} max={descriptor.max} step={detentStep ?? undefined}
+            scale={scale} disabled={!binding.isReady} formatValue={formatValue} style={{ display: "contents" }}
+            onValueChange={value => {
+                if (detentStep !== null && value !== binding.value) triggerParameterControlHaptic();
+                binding.setValue(value);
+            }}
+            onGestureStart={() => bindingRef.current.beginGesture()}
+            onGestureEnd={cancelled => { bindingRef.current.endGesture(); if (cancelled) hideHud(true); }}>
+        <KnobInteraction onChange={observeInteraction} />
+        <KnobControl asChild sensitivity={PARAMETER_GESTURE_BASE_PIXELS_PER_FULL_RANGE}
+            keyboardStep={enableModulationGesture ? undefined : descriptor.step}
+            drag={{ horizontal: "value", vertical: secondary }}
+            onPointerDown={event => {
+                pointerType.current = event.pointerType;
+                if (event.button !== 0 || !event.isPrimary || !binding.isReady) return;
+                gestureBase.current = binding.value;
+                onSelect();
+            }}
+            onKeyDown={() => onSelect()}
+            onContextMenu={enableContextMenu ? event => {
+                event.preventDefault(); event.stopPropagation(); onSelect();
+                if (pointerType.current === "touch") triggerParameterControlHaptic();
+                onRequestContextMenu(event.clientX, event.clientY);
+            } : undefined}>
         <button
             type="button"
             role="slider"
@@ -624,56 +518,7 @@ function ParameterKnobSurface({
             data-dragging={draggingMode ?? undefined}
             className={`${className} disabled:cursor-wait disabled:opacity-45`}
             style={style}
-            onPointerDown={handlePointerDown}
-            onContextMenu={(event) => {
-                if (!enableContextMenu) {
-                    return;
-                }
-                event.preventDefault();
-                event.stopPropagation();
-                onSelect();
-                onRequestContextMenu(event.clientX, event.clientY);
-            }}
-            onClick={(event) => {
-                if (event.detail === 0) {
-                    onSelect();
-                }
-            }}
-            onKeyDown={(event) => {
-                if (!["ArrowUp", "ArrowRight", "ArrowDown", "ArrowLeft", "Home", "End"].includes(event.key)) {
-                    return;
-                }
-                event.preventDefault();
-                if (!enableModulationGesture) {
-                    const direction = ["ArrowUp", "ArrowRight"].includes(event.key) ? 1 : -1;
-                    const keyboardStep = event.shiftKey && detentStep === null
-                        ? descriptor.step / 10
-                        : descriptor.step;
-                    const rawValue = event.key === "Home"
-                        ? descriptor.min
-                        : event.key === "End"
-                            ? descriptor.max
-                            : binding.value + (direction * keyboardStep);
-                    const nextValue = snapParameterValue(descriptor, rawValue, detentStep);
-                    if (Math.abs(nextValue - binding.value) > 1e-9) {
-                        binding.commitValue(nextValue);
-                        if (detentStep !== null) {
-                            triggerParameterControlHaptic();
-                        }
-                    }
-                    onSelect();
-                    return;
-                }
-                const step = event.shiftKey ? 0.01 : 0.04;
-                const current = normalizedValue(descriptor, binding.value);
-                const nextNormalized = event.key === "Home"
-                    ? 0
-                    : event.key === "End"
-                        ? 1
-                        : clamp(current + (["ArrowUp", "ArrowRight"].includes(event.key) ? step : -step), 0, 1);
-                binding.commitValue(valueFromNormalized(descriptor, nextNormalized));
-                onSelect();
-            }}
+            onClick={event => { if (event.detail === 0) onSelect(); }}
         >
             <span className="rack-knob-label">{descriptor.shortLabel}</span>
             <svg
@@ -713,22 +558,14 @@ function ParameterKnobSurface({
                     d={annularSectorPath(0, 1, MOD_INNER_RADIUS, MOD_OUTER_RADIUS)}
                     fill={`url(#${modTrackPatternID})`}
                 />
-                <path
+                <KnobRange
                     className={`rack-knob-mod-fill${route && !route.enabled ? " is-bypassed" : ""}`}
-                    d={routeTravel === null
-                        ? ""
-                        : annularSectorPath(routeTravel.normalized[0], routeTravel.normalized[1], MOD_INNER_RADIUS, MOD_OUTER_RADIUS)}
+                    from={routeTravel?.values[0] ?? binding.value} to={routeTravel?.values[1] ?? binding.value}
+                    innerRadius={MOD_INNER_RADIUS} outerRadius={MOD_OUTER_RADIUS}
                 />
                 {liveLightRoute !== null ? (
-                    <circle
-                        data-role="rack-knob-mod-light"
-                        data-mod-live="0"
-                        className="rack-knob-mod-light"
-                        ref={attachModLight}
-                        cx={routePresencePoint.x}
-                        cy={routePresencePoint.y}
-                        r="2.4"
-                    />
+                    <KnobMarker data-role="rack-knob-mod-light" className="rack-knob-mod-light"
+                        value={liveValue} radius={(MOD_INNER_RADIUS + MOD_OUTER_RADIUS) / 2} />
                 ) : null}
                 <circle
                     className="rack-knob-default-marker"
@@ -746,10 +583,11 @@ function ParameterKnobSurface({
             </svg>
             <output className="rack-knob-readout">{formatValue(binding.value)}</output>
         </button>
+        </KnobControl>
         {hudModel !== null && hudLayer !== null
             ? createPortal(<ParameterPrecisionHud model={hudModel} />, hudLayer)
             : null}
-        </>
+        </KnobRoot>
     );
 }
 

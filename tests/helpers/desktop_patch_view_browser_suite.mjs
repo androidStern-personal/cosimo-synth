@@ -578,6 +578,7 @@ export async function dispatchRackKnobPointerEvents(locator, events) {
                 bubbles: true,
                 pointerId: pointerEvent.pointerId,
                 pointerType: "mouse",
+                isPrimary: true,
                 button: 0,
                 buttons: pointerEvent.buttons,
                 clientX: centerX + (pointerEvent.deltaX ?? 0),

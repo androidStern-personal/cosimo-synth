@@ -1,7 +1,7 @@
 import { useState, type ComponentType } from 'react';
 import { createRoot } from 'react-dom/client';
 import * as Examples from './examples';
-import source from './examples.tsx?raw';
+import { exampleSources, exampleStyles } from './sources';
 import './docs.css';
 
 const examples: { id: string; title: string; description: string; component: ComponentType; note?: string }[] = [
@@ -19,11 +19,11 @@ const examples: { id: string; title: string; description: string; component: Com
 ];
 
 function exampleSource(id: string) {
-    return source.split(`// example:${id}\n`)[1]?.split('// endexample')[0]?.trim() ?? '';
+    return exampleSources[id] ?? "";
 }
-function Code({ text }: { text: string }) {
+function Code({ text, file }: { text: string; file?: string }) {
     const tokens = text.split(/("[^"\n]*"|'[^'\n]*'|\/\/[^\n]*|\b(?:export|function|return|const|let|if|else|type|import|from|true|false|null|undefined)\b|\b\d+(?:\.\d+)?\b)/g);
-    return <pre><code>{tokens.map((token, i) => <span key={i} className={token.startsWith('//') ? 'comment' : /^['"]/.test(token) ? 'string' : /^(export|function|return|const|let|if|else|type|import|from|true|false|null|undefined)$/.test(token) ? 'keyword' : /^\d/.test(token) ? 'number' : ''}>{token}</span>)}</code></pre>;
+    return <pre data-source-file={file}><code>{tokens.map((token, i) => <span key={i} className={token.startsWith('//') ? 'comment' : /^['"]/.test(token) ? 'string' : /^(export|function|return|const|let|if|else|type|import|from|true|false|null|undefined)$/.test(token) ? 'keyword' : /^\d/.test(token) ? 'number' : ''}>{token}</span>)}</code></pre>;
 }
 function Copy({ text }: { text: string }) {
     const [status, setStatus] = useState('Copy');
@@ -45,7 +45,7 @@ function Example({ example }: { example: typeof examples[number] }) {
                 {tab === 'code' && <Copy text={exampleSource(example.id)} />}
             </div>
             {tab === 'preview' ? <div className="preview" role="tabpanel"><Demo /></div>
-                : <div role="tabpanel" className="source"><Code text={exampleSource(example.id)} /></div>}
+                : <div role="tabpanel" className="source"><p className="source-help">Save this as {example.id}.tsx alongside examples.css. The import targets this example’s location in the kit; adjust the kit import path for your application.</p><Code file={`${example.id}.tsx`} text={exampleSource(example.id)} /><div className="source-style-heading"><strong>examples.css</strong><Copy text={exampleStyles} /></div><Code file="examples.css" text={exampleStyles} /></div>}
             {example.note && <div className="example-note">{example.note}</div>}
         </div>
     </section>;

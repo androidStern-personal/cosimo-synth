@@ -116,12 +116,11 @@
     filter: drop-shadow(0 0 2px var(--rack-knob-mod-accent));
 }
 
-/* The traveling live-modulation light; the mod-source-live driver owns
-   cx/cy and opacity, so it stays invisible until playback arms it. */
+/* The public marker owns geometry and visibility; the product supplies its material. */
 .rack-knob-mod-light {
     fill: var(--cosimo-ink);
     filter: drop-shadow(0 0 3px var(--rack-knob-mod-accent));
-    opacity: 0;
+    opacity: 1;
     transition: opacity 160ms ease;
     pointer-events: none;
 }

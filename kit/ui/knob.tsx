@@ -92,8 +92,8 @@ export function useKnob() {
 
 /** Map each drag axis to the root value, a second quantity, or an inert axis. */
 export type KnobDrag = "vertical" | "horizontal" | {
-    readonly horizontal: "value" | KnobValueOptions | null;
-    readonly vertical: "value" | KnobValueOptions | null;
+    readonly horizontal: "value" | (KnobValueOptions & { readonly sensitivity?: number }) | null;
+    readonly vertical: "value" | (KnobValueOptions & { readonly sensitivity?: number }) | null;
 };
 
 /** Focusable input surface. asChild composes behavior onto one ref-forwarding DOM child. */
@@ -132,8 +132,8 @@ export const KnobControl = forwardRef<HTMLElement, KnobControlProps>(function Kn
     }, [gesture, finishKeyboard, readOnly, context.domain, sensitivity, keyboardStep,
         typeof drag === "string" ? drag : "two-axis",
         typeof drag === "object" && drag.horizontal === "value", typeof drag === "object" && drag.vertical === "value",
-        secondaryHorizontal?.min, secondaryHorizontal?.max, secondaryHorizontal?.scale, secondaryHorizontal?.step,
-        secondaryVertical?.min, secondaryVertical?.max, secondaryVertical?.scale, secondaryVertical?.step]);
+        secondaryHorizontal?.min, secondaryHorizontal?.max, secondaryHorizontal?.scale, secondaryHorizontal?.step, secondaryHorizontal?.sensitivity,
+        secondaryVertical?.min, secondaryVertical?.max, secondaryVertical?.scale, secondaryVertical?.step, secondaryVertical?.sensitivity]);
 
     const startPointer: NonNullable<HTMLAttributes<HTMLElement>["onPointerDown"]> = event => {
         onPointerDown?.(event);
@@ -142,7 +142,7 @@ export const KnobControl = forwardRef<HTMLElement, KnobControlProps>(function Kn
         event.currentTarget.focus({ preventScroll: true });
         let close: ((cancelled: boolean) => void) | null = null;
         const finish = (cancelled: boolean) => { const end = close; close = null; end?.(cancelled); };
-        const channel = (quantity: "value" | KnobValueOptions | null, axis: RollingAxis): ParameterGestureChannel | null => {
+        const channel = (quantity: "value" | (KnobValueOptions & { readonly sensitivity?: number }) | null, axis: RollingAxis): ParameterGestureChannel | null => {
             if (quantity === null) return {
                 startNormalized: 0, pixelsPerFullSpan: Math.max(1, sensitivity), write: null,
                 onActivate: () => current.current.setInteraction({ isDragging: true, activeAxis: axis }),
@@ -157,7 +157,7 @@ export const KnobControl = forwardRef<HTMLElement, KnobControlProps>(function Kn
                 min: options.min ?? 0, max: options.max ?? 1, step: options.step, scale: options.scale });
             let previous = options.value;
             return {
-                startNormalized: domain.toPosition(options.value), pixelsPerFullSpan: Math.max(1, sensitivity),
+                startNormalized: domain.toPosition(options.value), pixelsPerFullSpan: Math.max(1, typeof quantity === "object" ? quantity.sensitivity ?? sensitivity : sensitivity),
                 onActivate: () => current.current.setInteraction({ isDragging: true, activeAxis: axis }),
                 onDeactivate: () => finish(false),
                 write: position => {
@@ -194,7 +194,7 @@ export const KnobControl = forwardRef<HTMLElement, KnobControlProps>(function Kn
         const page = event.key.startsWith("Page") ? 10 : 1;
         const unitStep = keyboardStep ?? domain.step;
         const next = event.key === "Home" ? domain.min : event.key === "End" ? domain.max
-            : unitStep !== undefined ? domain.snap(value + direction * unitStep * page)
+            : unitStep !== undefined ? domain.snap(value + direction * unitStep * page * (event.shiftKey && domain.step === undefined ? 0.1 : 1))
                 : domain.fromPosition(domain.toPosition(value) + direction * 0.01 * page * (event.shiftKey ? 0.1 : 1));
         if (next === value || !Number.isFinite(next)) return;
         if (!keyboardFinish.current) {
