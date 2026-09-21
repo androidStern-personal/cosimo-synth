@@ -30,7 +30,7 @@ export function mount(host: HTMLElement) {
             onValueChange={next => { callbackBases.push(value); changes.push(next); setValue(next); }}
             onGestureStart={() => gestures.push('start')} onGestureEnd={cancelled => gestures.push(cancelled ? 'cancel' : 'end')}>
             <KnobLabel>Fixture frequency</KnobLabel>
-            <KnobControl><KnobDial>
+            <KnobControl className="bk-knob-default-control"><KnobDial>
                 <KnobMarker value={options.source === 'second' ? second : first} smoothingMs={0} />
                 <KnobMarker value={10} radius={38} data-testid="static-marker" />
             </KnobDial></KnobControl>

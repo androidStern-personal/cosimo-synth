@@ -34,7 +34,7 @@ export function LiveExample() {
         <div className="live-knob-slot">{mounted && <KnobRoot value={cutoff} onValueChange={setCutoff}
             min={20} max={20000} scale="log" formatValue={formatFrequencyDisplay}>
             <KnobLabel>Modulated cutoff</KnobLabel>
-            <KnobControl><KnobDial>
+            <KnobControl className="bk-knob-default-control"><KnobDial>
                 <KnobRange from={20} to={20000} opacity={0.15} />
                 <KnobRange from={cutoff / 2 ** depth} to={cutoff * 2 ** depth} />
                 <KnobMarker value={source} smoothingMs={smooth} />

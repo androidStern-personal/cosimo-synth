@@ -13,7 +13,26 @@ Implemented on `codex/builder-kit-knob-318e`, based on integrated state-API comm
 - Demo telemetry is explicitly simulated. Local gesture history demonstrates callback grouping. These are visible application code, not hidden library behavior; actual plugin-state wiring is documented separately.
 - `kit/docs/KNOBS.md` is linked from the shipped agent guide. Examples, demo scripts, dependencies and the customer lockfile ship in the export, including `ui:knobs:dev`, `ui:knobs:build` and `test:knobs`.
 
-## Qualification
+## Styling repair — 2026-09-21
+
+The original integration missed drag-target and keyboard-focus presentation. `KnobControl` imposed a round CSS box on custom artwork, while the product painted both the surrounding tile and the nested input. Its broad `:focus-within` rule also combined two white outlines and cyan filters.
+
+- `KnobControl` now owns interaction without input size, shape or focus decoration. `<Knob>` opts into `bk-knob-default-control`; composed default examples use the same documented class. Custom CSS does not need to undo a forced circular shape. `asChild` only controls the DOM composition.
+- Rack and compact-filter tiles own drop hit testing and feedback. Their inner knobs retain the parameter identity for editing but no longer register duplicate drop targets. Standalone base/modulated controls remain their own targets.
+- Keyboard focus paints one outline on a rack tile, with no filter over its artwork. Pointer selection keeps the existing effect-color treatment. The actual modulation range and live marker remain independent.
+- The shipped custom example exercises a rectangular meter's selection, keyboard focus and source drop. The same test runs against its copied TSX/CSS in an isolated page.
+
+Current verification:
+
+- `npm run typecheck`, `npm run test:knobs` (20/20), `npm run ui:knobs:build`, and `npm run web:build`: passed.
+- `node --test --test-name-pattern='rack knob tile owns|source preview and valid hover|a source drag dwell|T21: a drag' tests/test_desktop_patch_view_browser_rail.mjs`: 4/4.
+- `node --test --test-name-pattern='ADR-025|T08A|production rack composition|rack Resonance' tests/test_desktop_patch_view_browser_fx_modulation.mjs`: 6/6, including mapping eligibility, capture, bypass/delete, colors and live telemetry.
+- Real built WebAudio app checked at 390px and 600px: eligible/captured tiles, pointer selection and keyboard focus. Reviewed `build/knob-evidence/fixed-*.png`; assertions and capture script are in ignored `build/verify-knob-visual-fix.mjs`. Existing in-app web preview refreshed and visually checked.
+- Three older `desktop chorus knob` cancellation/capture tests fail on legacy host-gesture assertions. All three reproduce unchanged in a clean archive of starting commit `89352b5c` with its own dependency install. They remain unresolved, separate from these visual repairs. Logs: `build/knob-style-baseline-tests.log` and `build/knob-production-focused.log`.
+
+The original customer export below is historical; this pass verifies the updated kit through the copied-code tests, not a new customer install. No native launch/install or physical-device acceptance was performed.
+
+## Prior qualification
 
 - `npm run typecheck`: passed.
 - `npm run test:knobs`: 19/19 browser cases. Includes real pointer/touch interaction, compound composition, current callbacks, cancellation, shadow-root styles, live-source replacement/unmount and per-axis sensitivity.

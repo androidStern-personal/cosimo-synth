@@ -5564,7 +5564,72 @@ test("rack modulation-source gesture cancels on window blur instead of creating 
     }
 });
 
-test("source preview and valid hover stay transient while the armed ring and focus indicator persist", async () => {
+test("rack knob tile owns drop feedback and keyboard focus without recoloring its artwork", async () => {
+    const page = await openHarnessPage({
+        beforeGoto: nextPage => nextPage.setViewportSize({ width: 600, height: 1000 }),
+    });
+    try {
+        await page.click('[data-role="mobile-workspace-tab-fx"]');
+        await selectRackEffect(page, "drive");
+        await page.click('[data-role="rack-editor-power"]');
+        await expandGlobalModRail(page);
+        const tile = page.locator('[data-role="rack-parameter-surface-distortionWet"]');
+        const knob = tile.locator('[data-slot="knob-control"]');
+        const read = () => tile.evaluate(element => {
+            const knob = element.querySelector('[data-slot="knob-control"]');
+            const paint = node => {
+                const style = getComputedStyle(node);
+                return { radius: style.borderRadius, shadow: style.boxShadow, filter: style.filter,
+                    outline: style.outlineStyle, outlineColor: style.outlineColor };
+            };
+            return { tile: paint(element), knob: paint(knob),
+                fill: getComputedStyle(knob.querySelector('.rack-knob-base-fill')).fill,
+                nestedTargets: element.querySelectorAll('[data-modulation-target-kind]').length };
+        });
+        const idle = await read();
+        assert.equal(idle.nestedTargets, 0, "the tile must be the only drop target for this knob");
+        const source = page.locator('[data-role="rack-mod-source-mseg-1"]');
+        const sourceBox = await source.boundingBox(), targetBox = await tile.boundingBox();
+        assert.ok(sourceBox && targetBox);
+        await page.mouse.move(sourceBox.x + sourceBox.width / 2, sourceBox.y + sourceBox.height / 2);
+        await page.mouse.down();
+        await page.mouse.move(targetBox.x + targetBox.width / 2, targetBox.y + targetBox.height / 2, { steps: 12 });
+        await page.waitForFunction(() => document.querySelector('[data-role="rack-parameter-surface-distortionWet"]')?.classList.contains('is-mod-hover'));
+        const captured = await read();
+        assert.notEqual(captured.tile.shadow, 'none');
+        assert.equal(captured.knob.shadow, 'none', "only the tile paints the purple capture highlight");
+        assert.notEqual(captured.knob.radius, '50%');
+        assert.equal(captured.fill, idle.fill);
+        // Every other eligible knob must also have only its outer highlight.
+        const nestedShadows = await page.locator('.rack-editor-control [data-slot="knob-control"]').evaluateAll(nodes => nodes.map(node => getComputedStyle(node).boxShadow));
+        assert.ok(nestedShadows.every(shadow => shadow === 'none'));
+        await page.mouse.up();
+        await waitForHarnessSnapshot(page, "dropped route", snapshot => readStoredModulationState(snapshot).routes.some(route => route.targetKind.endsWith('.distortionWet')));
+        // End confirmation feedback before inspecting ordinary selection.
+        await page.waitForFunction(() => !document.querySelector('[data-role="rack-parameter-surface-distortionWet"]')?.hasAttribute('data-creation-confirmed'));
+        await knob.click();
+        const selected = await read();
+        assert.equal(await tile.evaluate(element => element.classList.contains('is-selected-target')), true);
+        assert.equal(selected.tile.filter, 'none');
+        assert.equal(selected.knob.filter, 'none');
+        assert.equal(selected.tile.outline, 'none', "pointer selection must not acquire keyboard focus paint");
+        assert.equal(selected.knob.outline, 'none');
+        assert.equal(selected.fill, idle.fill);
+        await page.keyboard.press('Tab'); await page.keyboard.press('Shift+Tab');
+        assert.equal(await knob.evaluate(element => element.matches(':focus-visible')), true);
+        const focused = await read();
+        assert.equal(focused.tile.outline, 'solid');
+        assert.equal(focused.knob.outline, 'none', "only the tile paints keyboard focus");
+        assert.equal(focused.tile.filter, 'none');
+        assert.equal(focused.knob.filter, 'none');
+        assert.equal(focused.fill, idle.fill);
+        const beforeValue = Number(await knob.getAttribute('aria-valuenow'));
+        await page.keyboard.press('ArrowRight');
+        assert.ok(Number(await knob.getAttribute('aria-valuenow')) > beforeValue);
+    } finally { await page.close(); }
+});
+
+test("source preview and valid hover preserve the armed ring and one retained keyboard focus indicator", async () => {
     const page = await openHarnessPage({
         beforeGoto: (nextPage) => nextPage.setViewportSize({ width: 393, height: 852 }),
     });
@@ -5588,6 +5653,10 @@ test("source preview and valid hover stay transient while the armed ring and foc
         const surface = page.locator('[data-role="rack-parameter-surface-reverbSize"]');
         const knob = surface.locator('[data-role="rack-parameter-reverbSize"]');
         await knob.focus();
+        await page.keyboard.press('Tab'); await page.keyboard.press('Shift+Tab');
+        await page.keyboard.press('ArrowRight');
+        assert.equal(await surface.evaluate(element => getComputedStyle(element).outlineStyle), 'solid');
+        assert.equal(await knob.evaluate(element => getComputedStyle(element).outlineStyle), 'none');
         const env = page.locator('[data-role="rack-mod-source-env-1"]');
         const envBox = await env.boundingBox();
         const targetBox = await surface.boundingBox();
@@ -5623,6 +5692,9 @@ test("source preview and valid hover stay transient while the armed ring and foc
         assert.equal(live.dragAccent, "#b8e236");
         assert.match(live.outline, /rgb\(245, 255, 255\)/);
         assert.equal(live.outlineOffset, "2px");
+        assert.equal(await knob.evaluate(element => getComputedStyle(element).outlineStyle), 'none');
+        assert.equal(await surface.evaluate(element => getComputedStyle(element).filter), 'none');
+        assert.equal(await knob.evaluate(element => getComputedStyle(element).filter), 'none');
         assert.equal(live.ringAccent, "#cc59d2");
 
         await page.evaluate(() => window.dispatchEvent(new Event("blur")));

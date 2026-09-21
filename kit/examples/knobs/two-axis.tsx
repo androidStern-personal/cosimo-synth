@@ -15,7 +15,7 @@ export function TwoAxisExample() {
     return <div className="live-layout">
         <KnobRoot value={value} onValueChange={setValue} formatValue={percent}>
             <KnobLabel>Value & depth</KnobLabel>
-            <KnobControl drag={{ horizontal: "value", vertical: enabled ? {
+            <KnobControl className="bk-knob-default-control" drag={{ horizontal: "value", vertical: enabled ? {
                 value: depth, onValueChange: setDepth, min: -1, max: 1, sensitivity: 360,
             } : null }}><KnobDial>
                 <KnobRange from={value} to={value + depth} />

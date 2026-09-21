@@ -134,6 +134,46 @@ test('custom asChild artwork keeps shared value and keyboard/pointer behavior', 
     assert.equal(await second.evaluate(el=>el.tagName),'BUTTON');
 }));
 
+async function verifyCustomStyling(page) {
+    const meter = page.getByRole('slider', { name: 'Custom meter' });
+    const tile = page.locator('.custom-meter-tile');
+    const styles = locator => locator.evaluate(el => {
+        const s = getComputedStyle(el);
+        return { radius: s.borderRadius, width: s.width, shadow: s.boxShadow, filter: s.filter, outline: s.outlineStyle };
+    });
+    // No radius reset on the custom input: the kit must not impose a circle.
+    assert.equal((await styles(meter)).radius, '0px');
+    assert.equal((await styles(meter)).width, '88px');
+    await meter.click();
+    assert.equal(await tile.getAttribute('data-selected'), 'true');
+    assert.equal((await styles(tile)).filter, 'none');
+    assert.equal((await styles(meter)).filter, 'none');
+    await page.keyboard.press('Tab'); await page.keyboard.press('Shift+Tab');
+    assert.equal(await meter.evaluate(el => el.matches(':focus-visible')), true);
+    assert.equal((await styles(tile)).outline, 'solid');
+    assert.equal((await styles(meter)).outline, 'none');
+    const source = page.getByRole('button', { name: 'Drag source', exact: true });
+    await source.hover(); await page.mouse.down();
+    await meter.hover(); await meter.hover();
+    await page.waitForFunction(() => document.querySelector('.custom-meter-tile')?.dataset.hovered === 'true');
+    assert.notEqual((await styles(tile)).shadow, 'none');
+    assert.equal((await styles(meter)).shadow, 'none');
+    assert.equal((await styles(meter)).radius, '0px');
+    await page.mouse.up();
+    assert.equal(await page.locator('#custom [role=status]').textContent(), 'Source assigned');
+    await drag(page, meter, 0, -32);
+    assert.ok(await value(meter) > .5);
+    assert.equal((await styles(meter)).shadow, 'none');
+}
+
+test('custom control owns its shape; selection, drop highlight and keyboard focus have one visual owner', async () => withPage(async page => {
+    const gain = page.getByRole('slider', { name: 'Gain', exact: true });
+    assert.equal(await gain.evaluate(el => getComputedStyle(el).borderRadius), '50%');
+    await gain.focus(); await page.keyboard.press('Tab'); await page.keyboard.press('Shift+Tab');
+    assert.equal(await gain.evaluate(el => getComputedStyle(el).outlineStyle), 'solid');
+    await verifyCustomStyling(page);
+}));
+
 test('read-only and disabled cannot edit but both follow external updates', async () => withPage(async page => {
     const section=page.locator('#states');
     const locked=section.getByRole('slider',{name:'Read-only'}), disabled=section.getByRole('slider',{name:'Disabled'});
@@ -312,6 +352,7 @@ test('every displayed example compiles and runs with only its copied source, sty
         assert.equal(await value(isolated.getByRole('slider', { name: 'Frequency', exact: true })), 2500);
         await isolated.getByRole('slider', { name: 'Custom dial' }).press('ArrowUp');
         assert.equal(await value(isolated.getByRole('slider', { name: 'Custom meter' })), .51);
+        await verifyCustomStyling(isolated);
         const widths = await isolated.locator('#styles [data-slot=knob-control]').evaluateAll(nodes => nodes.map(node => getComputedStyle(node).width));
         assert.deepEqual(widths, ['78px', '120px', '158px']);
         const marker = isolated.locator('#live [data-slot=knob-marker]');

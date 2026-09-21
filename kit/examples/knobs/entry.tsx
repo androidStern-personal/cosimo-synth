@@ -13,7 +13,7 @@ export function EntryExample() {
     return <KnobRoot value={value} onValueChange={setValue} min={20} max={20000} scale="log"
         formatValue={formatFrequencyDisplay} className="cyan">
         <KnobLabel>Frequency</KnobLabel>
-        <KnobControl><KnobDial /></KnobControl>
+        <KnobControl className="bk-knob-default-control"><KnobDial /></KnobControl>
         <KnobValue />
         <KnobInput parseValue={parseFrequency} aria-label="Exact frequency" />
     </KnobRoot>;

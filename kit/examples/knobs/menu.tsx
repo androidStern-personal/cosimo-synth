@@ -13,7 +13,7 @@ export function MenuExample() {
             <KnobLabel>Output</KnobLabel>
             <ContextMenu.Root>
                 <ContextMenu.Trigger asChild>
-                    <KnobControl onKeyDown={event => {
+                    <KnobControl className="bk-knob-default-control" onKeyDown={event => {
                         if (event.key === "ContextMenu" || (event.shiftKey && event.key === "F10")) {
                             event.preventDefault();
                             const rect = event.currentTarget.getBoundingClientRect();

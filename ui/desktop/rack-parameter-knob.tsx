@@ -258,6 +258,8 @@ type ParameterKnobSurfaceProps = {
     readonly onModulationAmountChange: (amount: number) => void;
     readonly onRequestContextMenu: (clientX: number, clientY: number) => void;
     readonly modulationTargetKind?: ModulationTargetKind;
+    /** Omit when the surrounding tile already owns hit testing and feedback. */
+    readonly dropTargetKind?: ModulationTargetKind;
     readonly ownerAccent?: string;
     readonly presentHudVisualization?: (value: number) => ParameterHudVisualization;
     readonly modulationDragStyle?: "amount-span" | "effective-value";
@@ -295,6 +297,7 @@ function ParameterKnobSurface({
     onModulationAmountChange,
     onRequestContextMenu,
     modulationTargetKind,
+    dropTargetKind,
     ownerAccent,
     presentHudVisualization,
     modulationDragStyle = "amount-span",
@@ -514,7 +517,7 @@ function ParameterKnobSurface({
             data-detented={detentStep === null ? "false" : "true"}
             data-route-state={!sourceIsSelected ? "no-source" : route === null ? "unmapped" : route.enabled ? "mapped" : "bypassed"}
             data-route-effectiveness={effectiveness}
-            data-modulation-target-kind={modulationTargetKind}
+            data-modulation-target-kind={dropTargetKind}
             data-dragging={draggingMode ?? undefined}
             className={`${className} disabled:cursor-wait disabled:opacity-45`}
             style={style}
@@ -595,7 +598,7 @@ function ignoreSelection() {}
 function ignoreModulationAmountChange(_amount: number) {}
 function ignoreContextMenu(_clientX: number, _clientY: number) {}
 
-/** Stippled dual-ring rack control: inner sector is the base value, outer sector is the selected modulation route. */
+/** Dual-ring control inside a target tile. The caller's tile owns drop hit testing and feedback; modulationTargetKind identifies the edited quantity. */
 export function RackParameterKnob(props: RackParameterKnobProps) {
     return (
         <ParameterKnobSurface
@@ -621,6 +624,7 @@ export function ModulatedParameterKnob({
         <ParameterKnobSurface
             {...props}
             descriptor={descriptor}
+            dropTargetKind={props.modulationTargetKind}
             rackDescriptor={{ ...descriptor, modulationApplication }}
             className="rack-parameter-knob"
             detentStep={null}
@@ -639,6 +643,7 @@ export function BaseParameterKnob(props: BaseParameterKnobProps) {
     return (
         <ParameterKnobSurface
             {...surfaceProps}
+            dropTargetKind={props.modulationTargetKind}
             rackDescriptor={null}
             route={null}
             sourceIsSelected={false}

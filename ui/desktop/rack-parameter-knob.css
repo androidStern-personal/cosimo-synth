@@ -18,6 +18,12 @@
     -webkit-user-select: none;
 }
 
+/* Standalone inputs keep keyboard focus without filtering their artwork. */
+.rack-parameter-knob:focus-visible {
+    outline: 2px solid var(--rack-knob-accent);
+    outline-offset: 2px;
+}
+
 .oscillator-parameter-knob {
     width: auto;
     height: 86px;

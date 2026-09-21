@@ -104,7 +104,7 @@ export type KnobControlProps = HTMLAttributes<HTMLElement> & {
     readonly keyboardStep?: number;
 };
 
-/** Pointer/keyboard behavior shared by the default dial and customer artwork. */
+/** Pointer/keyboard behavior without control appearance. Add bk-knob-default-control for the kit's round skin, or supply your own CSS. */
 export const KnobControl = forwardRef<HTMLElement, KnobControlProps>(function KnobControl({
     asChild = false, drag = "vertical", sensitivity = 220, keyboardStep, children, className = "", style,
     onPointerDown, onKeyDown, onKeyUp, onBlur, onContextMenu, ...props
@@ -342,5 +342,5 @@ export const KnobInput = forwardRef<HTMLInputElement, Omit<InputHTMLAttributes<H
 export const Knob = forwardRef<HTMLDivElement, Omit<KnobRootProps, "children"> & { readonly label: ReactNode }>(
     function Knob({ label, ...props }, ref) {
         return <KnobRoot {...props} ref={ref}><KnobLabel>{label}</KnobLabel>
-            <KnobControl><KnobDial /></KnobControl><KnobValue /></KnobRoot>;
+            <KnobControl className="bk-knob-default-control"><KnobDial /></KnobControl><KnobValue /></KnobRoot>;
     });

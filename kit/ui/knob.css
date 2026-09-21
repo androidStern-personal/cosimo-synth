@@ -10,16 +10,20 @@
 .bk-knob [data-slot="knob-label"] { font-size: .8em; color: inherit; cursor: default; }
 .bk-knob [data-slot="knob-value"] { font-size: .8em; font-variant-numeric: tabular-nums; }
 .bk-knob-control {
-    display: block; width: var(--knob-size); height: var(--knob-size); padding: 0; border: 0;
-    background: none; color: inherit; border-radius: 50%; cursor: ns-resize;
     touch-action: none; user-select: none; -webkit-user-select: none;
     -webkit-touch-callout: none; -webkit-tap-highlight-color: transparent;
 }
-.bk-knob-control:focus-visible { outline: 2px solid var(--knob-color); outline-offset: 6px; }
+/* Opt-in appearance, used by <Knob> and available to composed default dials.
+   KnobControl itself must not reshape or decorate a caller's input surface. */
+.bk-knob-default-control {
+    display: block; width: var(--knob-size); height: var(--knob-size); padding: 0; border: 0;
+    background: none; color: inherit; border-radius: 50%; cursor: ns-resize;
+}
+.bk-knob-default-control:focus-visible { outline: 2px solid var(--knob-color); outline-offset: 6px; }
 .bk-knob-control [data-slot="knob-dial"] { display: block; width: 100%; height: 100%; overflow: visible; }
-.bk-knob-control[data-readonly] { cursor: default; }
+.bk-knob-default-control[data-readonly] { cursor: default; }
 .bk-knob[data-disabled] { opacity: .35; }
-.bk-knob-control[data-disabled] { cursor: not-allowed; }
+.bk-knob-default-control[data-disabled] { cursor: not-allowed; }
 .bk-knob-entry { display: flex; flex-direction: column; align-items: center; gap: 6px; }
 .bk-knob-input { font: inherit; font-size: .8em; color: inherit; width: 100px; border: 1px solid #52545a;
     border-radius: 6px; padding: 8px 10px; background: transparent; text-align: center; }

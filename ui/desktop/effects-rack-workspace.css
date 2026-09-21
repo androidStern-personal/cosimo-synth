@@ -2024,13 +2024,15 @@
     white-space: nowrap;
 }
 
-.effects-rack-workspace button:focus-visible,
-.rack-editor-control:focus-within {
+.rack-editor-control .rack-parameter-knob:focus-visible { outline: none; }
+
+/* A tile paints one keyboard indicator. Pointer focus is not selection. */
+.effects-rack-workspace button:focus-visible:not(.rack-editor-control button),
+.rack-editor-control:has(:focus-visible) {
     position: relative;
     z-index: 6;
     outline: 2px solid #f5ffff;
     outline-offset: 2px;
-    filter: drop-shadow(0 0 3px #38d9d5);
 }
 
 @media (max-width: 639px) {

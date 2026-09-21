@@ -20,7 +20,7 @@ import { Knob } from "../../kit/index";
 ```tsx
 <KnobRoot value={cutoff} onValueChange={setCutoff} min={20} max={20_000} scale="log">
   <KnobLabel>Cutoff</KnobLabel>
-  <KnobControl>
+  <KnobControl className="bk-knob-default-control">
     <KnobDial>
       <KnobRange from={400} to={6000} />
       <KnobMarker value={liveCutoff} />
@@ -34,7 +34,7 @@ import { Knob } from "../../kit/index";
 | Part | Owns |
 |---|---|
 | `KnobRoot` | Value interpretation, range, scale, formatting and shared interaction state. A layout container. |
-| `KnobControl` | Slider accessibility, focus, keyboard editing, pointer capture, drag and gesture cleanup. |
+| `KnobControl` | Slider accessibility, focus, keyboard editing, pointer capture, drag and gesture cleanup. No control size, shape, colors or focus decoration. |
 | `KnobDial` | Default SVG artwork. Children share its 100-unit drawing coordinates. |
 | `KnobRange` | A visual interval in canonical units. `innerRadius` / `outerRadius` default to 40 / 48. |
 | `KnobMarker` | A read-only value indicator. `radius` defaults to 44; `smoothingMs` defaults to 45. |
@@ -43,6 +43,10 @@ import { Knob } from "../../kit/index";
 | `useKnob()` | `value`, normalized `position`, `toPosition(value)`, `isDragging`, `activeAxis` for custom child presentation. |
 
 Every visual part forwards its normal DOM props and ref. Use classes, styles, ARIA and data attributes normally. Scoped default CSS uses `--knob-size`, `--knob-color`, `--knob-range-color`, `--knob-indicator` and `--knob-ink`. State styling can target `data-disabled`, `data-readonly`, `data-dragging`, and `data-axis`.
+
+`Knob` includes the default round control appearance. When composing the parts, add `className="bk-knob-default-control"` to opt into that same size, round shape and keyboard-focus outline. Omit that class for custom artwork and style your control with ordinary CSS, including a visible `:focus-visible` indicator. This choice works with or without `asChild`; `asChild` only chooses the DOM element. You do not need CSS resets to cancel a forced circle. `KnobRoot` retains its documented layout, label/readout styles and theme variables; customize it with `className` or `style` as usual.
+
+The custom example puts a rectangular meter inside a rounded tile. The tile owns selection, drop feedback and keyboard focus; the input inside owns editing. It includes an ordinary HTML drag source to exercise the visual states. Application drag/drop semantics remain application code. The input surface and the artwork may have different sizes.
 
 Replace `KnobDial` with your SVG or HTML artwork inside `KnobControl` to preserve input behavior. Use `asChild` to put the control behavior on one custom, ref-forwarding element. That child must spread its props, preserve the supplied event handlers and remain focusable. Interactive descendants inside the slider are not supported: put a text input or button beside the control. Caller handlers can prevent default before an edit starts; cleanup still runs when a gesture ends.
 
@@ -81,7 +85,7 @@ Arrow keys move by one `step`, or 1% of normalized travel when continuous. Shift
 `onGestureStart` fires before the first changed value. `onGestureEnd(cancelled)` finishes the bracket once on release, cancellation, loss of capture/focus, relevant reconfiguration or unmount. Cancellation ends input; it keeps changes already accepted by the owner. A click with no edit creates no bracket. Key the root when switching to a different parameter with the same range so transient input cannot remain bound to the old parameter.
 
 ```tsx
-<KnobControl drag={{
+<KnobControl className="bk-knob-default-control" drag={{
   horizontal: "value",
   vertical: {
     value: depth, onValueChange: setDepth, min: -1, max: 1, sensitivity: 360,
