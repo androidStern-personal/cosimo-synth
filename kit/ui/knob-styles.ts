@@ -1,3 +1,4 @@
+/// <reference path="./style-modules.d.ts" />
 import css from "./knob.css?inline";
 
 type Sheet = { readonly element: HTMLStyleElement; count: number };

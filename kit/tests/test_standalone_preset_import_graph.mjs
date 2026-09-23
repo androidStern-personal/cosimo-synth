@@ -38,7 +38,9 @@ function importSpecifiers(source) {
 
 async function resolveRelativeImport(fromRelativePath, specifier) {
     const baseDirectory = path.posix.dirname(fromRelativePath);
-    const joined = path.posix.normalize(path.posix.join(baseDirectory, specifier));
+    // Vite asset queries select a loader; the boundary still follows the real file.
+    const assetPath = specifier.replace(/\?(?:inline|raw)$/u, "");
+    const joined = path.posix.normalize(path.posix.join(baseDirectory, assetPath));
 
     for (const candidate of [joined, `${joined}.ts`, `${joined}.tsx`, `${joined}.js`, `${joined}.mjs`, `${joined}/index.ts`]) {
         try {
