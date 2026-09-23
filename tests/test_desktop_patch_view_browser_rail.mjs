@@ -6445,108 +6445,55 @@ test("desktop chorus controls render host values before edits", async () => {
     }
 });
 
-test("desktop chorus knob closes host gesture on pointer cancellation", async () => {
-    const page = await openHarnessPage();
-
-    try {
-        await page.waitForSelector('[data-role="effects-rack-card"]');
-        await selectRackEffect(page, "chorus");
-        await page.waitForSelector('[data-role="chorus-mix-track"]');
-        await clearHarnessDebugLog(page);
-
-        await dispatchRackKnobPointerEvents(page.locator('[data-role="chorus-mix-control"]'), [
-            { type: "pointerdown", pointerId: 7, buttons: 1, deltaX: 0 },
-            { type: "pointermove", pointerId: 7, buttons: 1, deltaX: 12 },
-            { type: "pointercancel", pointerId: 7, buttons: 0, deltaX: 12 },
-        ]);
-
-        const snapshot = await waitForHarnessSnapshot(
-            page,
-            "chorus cancelled gesture",
-            (nextSnapshot) => (
-                nextSnapshot.gestureStarts.includes("chorusMix")
-                && nextSnapshot.gestureEnds.includes("chorusMix")
-            ),
-        );
-
-        assert.deepEqual(snapshot.gestureStarts, ["chorusMix"]);
-        assert.deepEqual(snapshot.gestureEnds, ["chorusMix"]);
-    } finally {
-        await page.close();
-    }
-});
-
-test("desktop chorus knob survives pointer-capture loss and closes its host gesture on release", async () => {
-    const page = await openHarnessPage();
-
-    try {
-        await page.waitForSelector('[data-role="effects-rack-card"]');
-        await selectRackEffect(page, "chorus");
-        await page.waitForSelector('[data-role="chorus-mix-track"]');
-        await clearHarnessDebugLog(page);
-
-        // The shared contract continues through capture loss on its window
-        // listeners; release still closes the host gesture exactly once.
-        await dispatchRackKnobPointerEvents(page.locator('[data-role="chorus-mix-control"]'), [
-            { type: "pointerdown", pointerId: 8, buttons: 1, deltaX: 0 },
-            { type: "pointermove", pointerId: 8, buttons: 1, deltaX: 12 },
-            { type: "lostpointercapture", pointerId: 8, buttons: 1, deltaX: 12 },
-            { type: "pointermove", pointerId: 8, buttons: 1, deltaX: 30 },
-            { type: "pointerup", pointerId: 8, buttons: 0, deltaX: 30 },
-        ]);
-
-        const snapshot = await waitForHarnessSnapshot(
-            page,
-            "chorus capture-loss survival",
-            (nextSnapshot) => (
-                nextSnapshot.gestureStarts.includes("chorusMix")
-                && nextSnapshot.gestureEnds.includes("chorusMix")
-                && nextSnapshot.sentMessages.some((message) => isLaneParamSend(message, "chorusMix"))
-            ),
-        );
-
-        assert.deepEqual(snapshot.gestureStarts, ["chorusMix"]);
-        assert.deepEqual(snapshot.gestureEnds, ["chorusMix"]);
-        assert.equal(
-            snapshot.sentMessages.some((message) => isLaneParamSend(message, "chorusMix")),
-            true,
-            "The move after capture loss must still edit the base value.",
-        );
-    } finally {
-        await page.close();
-    }
-});
-
-test("desktop chorus knob closes host gesture when pointer movement reports no pressed buttons", async () => {
-    const page = await openHarnessPage();
-
-    try {
-        await page.waitForSelector('[data-role="effects-rack-card"]');
-        await selectRackEffect(page, "chorus");
-        await page.waitForSelector('[data-role="chorus-mix-track"]');
-        await clearHarnessDebugLog(page);
-
-        await dispatchRackKnobPointerEvents(page.locator('[data-role="chorus-mix-control"]'), [
-            { type: "pointerdown", pointerId: 9, buttons: 1, deltaX: 0 },
-            { type: "pointermove", pointerId: 9, buttons: 1, deltaX: 12 },
-            { type: "pointermove", pointerId: 9, buttons: 0, deltaX: 12 },
-        ]);
-
-        const snapshot = await waitForHarnessSnapshot(
-            page,
-            "chorus zero-button pointer cleanup",
-            (nextSnapshot) => (
-                nextSnapshot.gestureStarts.includes("chorusMix")
-                && nextSnapshot.gestureEnds.includes("chorusMix")
-            ),
-        );
-
-        assert.deepEqual(snapshot.gestureStarts, ["chorusMix"]);
-        assert.deepEqual(snapshot.gestureEnds, ["chorusMix"]);
-    } finally {
-        await page.close();
-    }
-});
+for (const [name, ending] of [
+    ["pointer cancellation", [
+        { type: "pointercancel", buttons: 0, deltaX: 44 },
+    ]],
+    ["capture loss", [
+        { type: "lostpointercapture", buttons: 1, deltaX: 44 },
+        { type: "pointermove", buttons: 1, deltaX: 68 },
+        { type: "pointerup", buttons: 0, deltaX: 68 },
+    ]],
+    ["movement with no pressed buttons", [
+        { type: "pointermove", buttons: 0, deltaX: 44 },
+    ]],
+]) {
+    test(`desktop chorus knob closes one shared Undo gesture after ${name}`, async () => {
+        const page = await openHarnessPage({ beforeGoto: page => page.setViewportSize({width: 390, height: 844}) });
+        try {
+            await page.click('[data-role="mobile-workspace-tab-fx"]');
+            await selectRackEffect(page, "chorus");
+            const knob = page.locator('[data-role="chorus-mix-control"]');
+            await page.evaluate(() => window.__COSIMO_DESKTOP_HARNESS__.setLaneParamValue("chorusMix", .2));
+            await page.waitForFunction(() => Number(document.querySelector('[data-role="chorus-mix-control"]')?.value) === .2);
+            await clearHarnessDebugLog(page);
+            await dispatchRackKnobPointerEvents(knob, [
+                { type: "pointerdown", pointerId: 7, buttons: 1, deltaX: 0 },
+                // First move classifies the drag axis; subsequent moves edit.
+                { type: "pointermove", pointerId: 7, buttons: 1, deltaX: 12 },
+                { type: "pointermove", pointerId: 7, buttons: 1, deltaX: 28 },
+                { type: "pointermove", pointerId: 7, buttons: 1, deltaX: 44 },
+            ]);
+            const beforeEnd = await waitForHarnessSnapshot(page, "chorus edit before termination", next => Number(next.laneParams.chorusMix) > .2);
+            await dispatchRackKnobPointerEvents(knob, ending.map(event => ({...event, pointerId: 7})));
+            const final = Number((await getHarnessSnapshot(page)).laneParams.chorusMix);
+            if (name === "capture loss") assert.equal(final, Number(beforeEnd.laneParams.chorusMix), "The kit contract cancels on capture loss; later movement must be inert.");
+            await dispatchRackKnobPointerEvents(knob, [{ type: "pointermove", pointerId: 7, buttons: 0, deltaX: 90 }]);
+            assert.equal(Number((await getHarnessSnapshot(page)).laneParams.chorusMix), final, "Termination detaches editing.");
+            await expandGlobalModRail(page);
+            await page.locator('[data-role="mobile-global-mod-rail-voice-toggle"]').click();
+            await page.getByRole("button", {name: "Undo Voice edit", exact: true}).click();
+            await waitForHarnessSnapshot(page, "one Undo restores the whole terminated drag", next => Number(next.laneParams.chorusMix) === .2);
+            await page.getByRole("button", {name: "Redo Voice edit", exact: true}).click();
+            await waitForHarnessSnapshot(page, "Redo restores the final value", next => Number(next.laneParams.chorusMix) === final);
+            // The next edit is independently undoable: no abandoned transaction.
+            await knob.press("ArrowUp");
+            await waitForHarnessSnapshot(page, "subsequent key edit", next => Number(next.laneParams.chorusMix) > final);
+            await page.getByRole("button", {name: "Undo Voice edit", exact: true}).click();
+            await waitForHarnessSnapshot(page, "next Undo preserves the prior drag", next => Number(next.laneParams.chorusMix) === final);
+        } finally { await page.close(); }
+    });
+}
 
 test("desktop chorus knob ignores mouse movement after a completed drag release", async () => {
     const page = await openHarnessPage();

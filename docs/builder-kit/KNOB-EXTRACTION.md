@@ -49,3 +49,7 @@ Ignored evidence is under `build/knob-evidence/`; `customer-path.txt` points to 
 ## Remaining gates
 
 The production telemetry browser test injects engine-format reports at the real connection boundary; it does not run the audio DSP or prove a native host. No standalone native launch, plug-in install, DAW/listening test or physical-phone acceptance was performed. Native launch/install can replace shared installed plug-ins and remains with the integration coordinator. No merge, push, release publication or email delivery occurred. MSEG composition/extraction and launch-copy work remain separate.
+
+### Gesture-test closeout — September 24
+
+The three old chorus tests asserted host scalar gesture messages, but rack edits now use shared document history. They also dispatched only the axis-classification move, without a committed value change. The replacement checks make multiple edits, terminate via cancellation, capture loss, or zero-button movement, and prove one Undo/Redo round trip plus an independently undoable subsequent key edit. Capture loss cancels according to the public kit contract already covered by the knob suite; it preserves accepted changes and ignores later pointer motion. All four focused chorus cases pass. No production changes were needed for this closeout.
