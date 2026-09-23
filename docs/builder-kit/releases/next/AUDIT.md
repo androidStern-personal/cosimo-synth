@@ -1,5 +1,11 @@
 # Builder Kit release audit — 2026-09-12
 
+## September 24 component candidate
+
+Knob and MSEG composition, copied-code demos, bundled docs, and updated launch copy are implemented on `codex/builder-kit-knob-318e`. See [the component handoff](../../MSEG-EXTRACTION.md) for current source and independently installed customer-export evidence. The native/package qualifications below belong to their named earlier source and do not certify this new component candidate. Integration must rerun the release gates on its composed source. No public release or customer email has been sent by this task.
+
+The email templates have been rewritten; the store's release-update delivery command described in [RELEASE-AND-EMAIL.md](RELEASE-AND-EMAIL.md) remains a separate launch operation to implement/verify before sending.
+
 **Status: preparing Builder Kit 0.2.0; not published.** The duplicate Cmajor pin is fixed, matching tool archives have been built, and Enhance That plus the new-plugin starter now use the state framework. Latest packaged-customer/native qualification passed from source `ee8190a84aa07150448d4a573f97ac8ca528cbd9`, including the simplified public state API and review repair. Release decision: preserve existing customer update history. The audited historical email/signing-team/device identifiers are non-secret metadata and no longer block this release.
 
 Audited source: `363907f5b3474fff9702fa04b6a3627effa8df64` on `codex/shared-data-runtime`. Baseline: the actual released **0.1.5**, tagged at customer commit `9c98949d583f9fbc226f669d81103c4a27e72917`, created September 9. Source commit for that release: `863b6cb1643450acd1ef63f3d7e0dad6e4de67be`. The production store releases 0.1.5, 0.1.6, and 0.1.7 all offered the same Builder Kit 0.1.5 installer. Older preview feeds exist, but they are not established as paying-customer cohorts.

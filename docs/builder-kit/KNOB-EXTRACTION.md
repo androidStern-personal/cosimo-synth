@@ -28,7 +28,7 @@ Current verification:
 - `node --test --test-name-pattern='rack knob tile owns|source preview and valid hover|a source drag dwell|T21: a drag' tests/test_desktop_patch_view_browser_rail.mjs`: 4/4.
 - `node --test --test-name-pattern='ADR-025|T08A|production rack composition|rack Resonance' tests/test_desktop_patch_view_browser_fx_modulation.mjs`: 6/6, including mapping eligibility, capture, bypass/delete, colors and live telemetry.
 - Real built WebAudio app checked at 390px and 600px: eligible/captured tiles, pointer selection and keyboard focus. Reviewed `build/knob-evidence/fixed-*.png`; assertions and capture script are in ignored `build/verify-knob-visual-fix.mjs`. Existing in-app web preview refreshed and visually checked.
-- Three older `desktop chorus knob` cancellation/capture tests fail on legacy host-gesture assertions. All three reproduce unchanged in a clean archive of starting commit `89352b5c` with its own dependency install. They remain unresolved, separate from these visual repairs. Logs: `build/knob-style-baseline-tests.log` and `build/knob-production-focused.log`.
+- Three older `desktop chorus knob` cancellation/capture tests fail on legacy host-gesture assertions. All three reproduce unchanged in a clean archive of starting commit `89352b5c` with its own dependency install. They were unresolved at that visual-repair checkpoint; the September 24 closeout below now resolves them. Logs: `build/knob-style-baseline-tests.log` and `build/knob-production-focused.log`.
 
 The original customer export below is historical; this pass verifies the updated kit through the copied-code tests, not a new customer install. No native launch/install or physical-device acceptance was performed.
 
@@ -48,7 +48,7 @@ Ignored evidence is under `build/knob-evidence/`; `customer-path.txt` points to 
 
 ## Remaining gates
 
-The production telemetry browser test injects engine-format reports at the real connection boundary; it does not run the audio DSP or prove a native host. No standalone native launch, plug-in install, DAW/listening test or physical-phone acceptance was performed. Native launch/install can replace shared installed plug-ins and remains with the integration coordinator. No merge, push, release publication or email delivery occurred. MSEG composition/extraction and launch-copy work remain separate.
+The production telemetry browser test injects engine-format reports at the real connection boundary; it does not run the audio DSP or prove a native host. No standalone native launch, plug-in install, DAW/listening test or physical-phone acceptance was performed. Native launch/install can replace shared installed plug-ins and remains with the integration coordinator. No merge, push, release publication or email delivery occurred. The subsequent MSEG composition and launch-copy implementation is recorded in [MSEG-EXTRACTION.md](MSEG-EXTRACTION.md).
 
 ### Gesture-test closeout — September 24
 

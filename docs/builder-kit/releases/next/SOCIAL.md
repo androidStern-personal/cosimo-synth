@@ -4,13 +4,13 @@ Not published. Use after the release audit clears and existing owners can fetch 
 
 ## Short post
 
-Announcing `usePluginState()`.
+What's new in Builder Kit:
 
-Managing state between your UI and audio engine is complicated!
+1. Simplified state management — declare your values; the kit handles saving and engine coordination.
+2. Global Undo — parameter changes and envelope edits in one Undo/Redo history.
+3. Composable knobs and MSEGs — ready-made controls, reusable parts and live indicators. Interactive examples and agent docs ship with the kit.
 
-Builder Kit now handles the coordination, saving, and undo behind `usePluginState()`.
-
-Plus music UI components, including multi-segment envelope editors, filter controls, and sliders.
+Included for existing owners. Built for Cmajor + React.
 
 ## Longer post
 
@@ -36,7 +36,7 @@ Demonstrate that promise with the same state hook for a simple parameter and a c
 
 The direct [TanStack Query comparison](https://tanstack.com/query/latest/docs/framework/react/reference/functions/useQuery) is about approachable hooks over difficult state coordination. `usePluginState` also exposes editing and shared Undo; this is our audio-plugin API, not TanStack Query integration.
 
-The [shadcn comparison](https://ui.shadcn.com/docs) is about editable source and composition. The exported kit contains the MSEG editor/surface, filter-range editor, sliders, parameter entry and preset/snapshot controls. The full composable Cosimo knob/context-menu extraction remains unfinished. Use “shadcn-style audio UI” for this release; do not imply that every Cosimo control has shipped as a polished component system.
+The [shadcn comparison](https://ui.shadcn.com/docs) is about editable source and composition. The exported kit contains the MSEG editor/surface, filter-range editor, sliders, parameter entry and preset/snapshot controls. Composable knobs and MSEG layers ship through the public kit entry. The kit examples exercise ordinary Radix menu composition; private routing menus, the Cosimo HUD and the ADSR editor are not bundled.
 
 ## Two-image code carousel
 
@@ -51,7 +51,7 @@ const state = definePluginState({
 
 Caption: “An existing DSP parameter and the included MSEG. One state system.”
 
-**Image 2 — “One Undo history.”**
+**Image 2 — “Global Undo.”**
 
 ```tsx
 const gain = usePluginState(state.gain);

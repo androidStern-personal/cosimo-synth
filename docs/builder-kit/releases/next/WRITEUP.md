@@ -18,7 +18,9 @@ For large audio data, the author supplies the preparation function. The framewor
 | Concurrent editing | A setter retains the version its GUI saw. Stale edits are rejected; one active gesture owns its field. Genuine host automation remains supported without turning delayed own echoes into new edits. |
 | Clear failure states | Controls expose one status (`loading`, `invalid`, `unavailable`, `updating`, or `idle`), a current error or `null`, and a retry function or `null`. Both `idle` and `updating` keep the value editable. A retry preserves history and cannot reinstall an obsolete edit. |
 | Shared audio data | Fixed or discovered sizes, one author-supplied memory ceiling, direct writable storage, cancellation, block-boundary publication, and safe cleanup. Native JIT, compiled native, and browser WebAssembly use the same declaration. |
-| Bundled MSEG | Curve schema/math, rendering, an editable graph, composable drawing surfaces, shared curve data, and a Cmajor reader/player. A/B morphing and a drawer are optional composition choices. |
+| Composable knobs | Complete controls or independent input, dial, label, readout, exact-entry, range and live-marker parts. Ordinary menu composition and custom artwork reuse the same editing behavior. |
+| Composable MSEG | Complete editor or Root/Surface/drawing layers, custom handles and inspector commands, shared curve data, Cmajor reader/player and observed playback position. A/B morphing and a drawer are optional compositions. |
+| Shipped agent docs and examples | The kit AGENTS guide links to focused state, shared-data, knob and MSEG guides. Knob and MSEG reference pages include complete Preview/Code examples. |
 | Native settings | `nativeValue` and `Native` codecs produce matching C++ accessors for a native component. The component still decides what the settings do. |
 | Extensibility | Reusable history and explicit custom-delivery seams remain available underneath the convenient declarations. |
 
@@ -67,7 +69,7 @@ const envelope = usePluginState(definition.envelope);
 <Mseg.Editor
     value={envelope.state.value}
     onGestureStart={() => { void envelope.beginGesture(); }}
-    onChange={value => { void envelope.setValue(value); }}
+    onValueChange={value => { void envelope.setValue(value); }}
     onGestureEnd={() => { void envelope.endGesture(); }}
 />
 ```
@@ -90,5 +92,5 @@ Lead with **“State management for audio plugins, built into Builder Kit.”** 
 - Saved presets and closing the GUI are supported lifecycle cases. Undo history itself is not serialized as part of the DAW project.
 - External files needed for future Undo must remain available. A declared state field is not an asset archive.
 - An asynchronous preparation callback is not a promise of a dedicated computation thread.
-- Do not announce the unfinished composable knob/context-menu extraction, a generic arbitrary C++ shared-memory reader, Windows/Intel qualification, or fully automatic plugin migration.
+- Do not announce a general ADSR editor, a generic arbitrary C++ shared-memory reader, Windows/Intel qualification, or fully automatic plugin migration.
 - The measured drag improvement was roughly one-third less state-message traffic in the same browser interaction. That is not a new audio-DSP CPU benchmark or a universal speedup claim.

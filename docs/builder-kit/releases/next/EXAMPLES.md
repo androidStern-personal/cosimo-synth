@@ -68,7 +68,7 @@ function View() {
     return <>
         <Mseg.Editor value={envelope.state.value}
             onGestureStart={() => { void envelope.beginGesture(); }}
-            onChange={value => { void envelope.setValue(value); }}
+            onValueChange={value => { void envelope.setValue(value); }}
             onGestureEnd={() => { void envelope.endGesture(); }} />
         <button disabled={!history.canUndo} onClick={() => { void history.undo(); }}>Undo curve edit</button>
         {envelope.error && <p>{envelope.error.message}</p>}
