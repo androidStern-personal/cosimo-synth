@@ -1,0 +1,10 @@
+{
+  "generatedBy": "scripts/build_mseg_example.mjs",
+  "sha256": {
+    "kit/cmajor/mseg.cmajor": "e602b38f1590ae65b2c9ae03a2e3ee3ff8561b0fefe1e84e4838ae6e21d12e54",
+    "kit/examples/mseg/playback.cmajor": "f9622262ef6f04a5aa0d57ee057538eb3b2acf575dbfa8f527af3909393c2a96",
+    "kit/cmake/CosimoDependencies.cmake": "a8b71cdb8b560862830932ad00573a14c47fdb0c108e5d1af7ab680717d449d9",
+    "kit/examples/mseg/playback-program.js": "aed49162e0b47609d7da04e99f129b12c803b3b9658328311afb7e205bfe3ce3",
+    "kit/examples/mseg/playback-reader.json": "4563e7d4cb89bafe8ae0f4390ab3bf49ec72ec02c6fdb8cb795153a74e1524a4"
+  }
+}

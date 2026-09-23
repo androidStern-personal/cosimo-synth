@@ -18,6 +18,7 @@ This file applies to plug-in repositories built on `kit/`. Owner, product, machi
 | State, saving, and Undo | [Plugin state](docs/PLUGIN_STATE.md) |
 | Preparing data for the audio engine | [Shared audio data](docs/SHARED_DATA.md) |
 | Composable knobs and live indicators | [Knob guide and interactive examples](docs/KNOBS.md) |
+| Envelope editing, drawing layers and playback position | [MSEG guide and interactive examples](docs/MSEG.md) |
 
 ## Start with the relevant path
 

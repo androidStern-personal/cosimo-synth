@@ -1,6 +1,6 @@
 # Builder Kit changelog
 
-## Unreleased — Plugin state and shared audio data
+## Unreleased — Plugin state, Global Undo and composable controls
 
 ### Added
 
@@ -12,6 +12,9 @@
 - Direct preparation into shared audio storage on native JIT, compiled native, and browser WebAssembly. The framework handles allocation within the supplied budget, cancellation, complete-data publication at an audio-block boundary, and releasing replaced data.
 - Fixed-size preparation and a load-once preparation plan for data whose size is discovered after loading. Generated `PluginState.cmajor` references connect declared data to DSP readers.
 - Reusable MSEG curve state, math, rendering, editing interactions, composable surfaces, and a Cmajor reader/player. The editor handles one curve without requiring a drawer or A/B morphing.
+- Composable knobs: complete controls and independent input, dial, label, readout, exact-entry, range and live-marker parts. Linear/log/custom scales, two-axis input, menu composition and custom artwork share the same editing behavior.
+- Composable MSEG Root/Surface/layers, custom point artwork, inspector commands, reference curves, sampled plots, time axes and live playheads. The included Reader reports observed playback with activity and retrigger identity; the public adapter handles subscription, stale reports and cleanup.
+- Complete Preview/Code reference pages for knobs and MSEGs, including an offline real-DSP MSEG playback example. Agent documentation ships under `kit/docs/` and is linked from the kit guide.
 - Typed native settings through `nativeValue` and `Native` codecs, with matching generated C++ readers.
 - An independently reusable `UndoHistory` module and documented extension points for specialized delivery protocols.
 
@@ -32,9 +35,9 @@
 
 Existing plugins are not automatically rewritten to use the new state API. An agent or plugin author adopts it deliberately. Custom DSP still defines how values affect sound and how custom data is interpreted. Undo does not retain deleted external source files for you, and shared data uses the memory budget you supply.
 
-The supported customer installation target remains Apple silicon on macOS 15 or newer. Browser shared-memory execution needs cross-origin isolation. This release does not promise Windows/Intel qualification, background CPU execution for every preparation callback, or a newly extracted composable knob/context-menu package.
+The supported customer installation target remains Apple silicon on macOS 15 or newer. Browser shared-memory execution needs cross-origin isolation. This release does not promise Windows/Intel qualification, background CPU execution for every preparation callback, or a general-purpose ADSR editor.
 
-See [Plugin state](docs/PLUGIN_STATE.md), [Shared audio data](docs/SHARED_DATA.md), and the [kit-update skill](skills/kit-update/SKILL.md).
+See [Plugin state](docs/PLUGIN_STATE.md), [Shared audio data](docs/SHARED_DATA.md), [Knobs](docs/KNOBS.md), [MSEGs](docs/MSEG.md), and the [kit-update skill](skills/kit-update/SKILL.md).
 
 ## 0.1.5 — 2026-09-09
 

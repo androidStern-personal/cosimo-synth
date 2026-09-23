@@ -10,8 +10,8 @@ const root=path.resolve(import.meta.dirname,'../..');
 const directory=await mkdtemp(path.join(tmpdir(),'kit-mseg-editor-'));
 let browser,server;
 try {
-    await build({stdin:{contents:`import {createRoot} from 'react-dom/client';import {useState} from 'react';import {MsegEditor} from './kit/ui/mseg-editor';import {createDefaultMsegShape} from './kit/ui/mseg';
-function View(){const [shape,setShape]=useState(createDefaultMsegShape());window.shape=shape;window.gestures??=[];return <MsegEditor value={shape} onChange={setShape} onGestureStart={()=>window.gestures.push('start')} onGestureEnd={cancelled=>window.gestures.push(cancelled?'cancel':'end')} style={{width:400,height:180}}/>;}createRoot(document.querySelector('main')).render(<View/>);`,resolveDir:root,loader:'tsx'},outfile:path.join(directory,'app.js'),bundle:true,format:'esm',platform:'browser',jsx:'automatic',logLevel:'silent'});
+    await build({stdin:{contents:`import {createRoot} from 'react-dom/client';import {useState} from 'react';import {Mseg} from './kit/index';
+function View(){const [shape,setShape]=useState(Mseg.defaultCurve());window.shape=shape;window.gestures??=[];return <Mseg.Editor value={shape} onValueChange={setShape} surfaceProps={{"data-role":"mseg-editor"}} onGestureStart={()=>window.gestures.push('start')} onGestureEnd={cancelled=>window.gestures.push(cancelled?'cancel':'end')} style={{width:400,height:180}}/>;}createRoot(document.querySelector('main')).render(<View/>);`,resolveDir:root,loader:'tsx'},outfile:path.join(directory,'app.js'),bundle:true,format:'esm',platform:'browser',jsx:'automatic',logLevel:'silent',plugins:[{name:'inline-css',setup(builder){builder.onResolve({filter:/\.css\?inline$/},args=>({path:path.resolve(args.resolveDir,args.path.replace('?inline','')),namespace:'css-text'}));builder.onLoad({filter:/.*/,namespace:'css-text'},async args=>({contents:await readFile(args.path,'utf8'),loader:'text'}));}}]});
     await writeFile(path.join(directory,'index.html'),'<!doctype html><main></main><script type="module" src="/app.js"></script>');
     server=createServer(async(req,res)=>{try{const file=req.url==='/app.js'?'app.js':'index.html';res.writeHead(200,{'content-type':file.endsWith('.js')?'text/javascript':'text/html'});res.end(await readFile(path.join(directory,file)));}catch{res.writeHead(404);res.end();}});
     await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));
@@ -22,7 +22,7 @@ function View(){const [shape,setShape]=useState(createDefaultMsegShape());window
     const point=page.locator('[data-point-index="1"]');let bounds=await point.boundingBox();assert.ok(bounds);
     await page.mouse.move(bounds.x+bounds.width/2,bounds.y+bounds.height/2);await page.mouse.down();await page.mouse.move(box.x+260,box.y+55,{steps:4});await page.mouse.up();
     let shape=await page.evaluate(()=>window.shape);assert.ok(shape.points[1].x>.6&&shape.points[1].y>.6);
-    const circles=await page.locator('[data-role=mseg-point]').evaluateAll(elements=>elements.map(element=>({x:Number(element.getAttribute('cx')),y:Number(element.getAttribute('cy'))})));
+    const circles=await page.locator('[data-role=mseg-point]').evaluateAll(elements=>elements.map(element=>{const r=element.getBoundingClientRect(),s=element.closest('svg').getBoundingClientRect();return {x:r.x+r.width/2-s.x,y:r.y+r.height/2-s.y};}));
     const segment={x:(circles[0].x+circles[1].x)/2,y:(circles[0].y+circles[1].y)/2};
     await page.mouse.move(box.x+segment.x,box.y+segment.y);await page.mouse.down();await page.mouse.move(box.x+segment.x,box.y+segment.y+24,{steps:3});await page.mouse.up();
     shape=await page.evaluate(()=>window.shape);assert.ok(Math.abs(shape.points[0].curvePower)>.1);

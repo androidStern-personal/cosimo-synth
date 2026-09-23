@@ -1,4 +1,3 @@
-import { useMsegGestures } from "../../kit/ui/mseg-gestures";
 import { createSynthDocumentClient } from "./synth-document-client";
 import {
     useCallback,
@@ -38,8 +37,6 @@ import { createAutoPreviewScheduler } from "./auto-preview-scheduler";
 import { createPreviewStrategyEngine } from "./auto-preview-strategies";
 import { PERF_TUNING_AVAILABLE, getPerfTuningState, subscribePerfTuning } from "./perf-tuning";
 import { createPreviewNoteMemory } from "./preview-note-memory";
-import { clearUiTimeout, uiTimeout } from "./ui-timers";
-const msegGestureTimers = { setTimeout: uiTimeout, clearTimeout: clearUiTimeout };
 import {
     AUTO_PREVIEW_SYNC_CONFIG,
     quantizeStrikeTime,
@@ -1886,8 +1883,6 @@ export function useMsegEditorInteractions({
     msegState,
     owner,
     msegController,
-    surfaceRef,
-    orientation = "horizontal",
     curveEditActivationMode = "immediate",
     curveEditHoldDelayMs = 350,
     onCurveEditHoldActivated = null,
@@ -1895,30 +1890,17 @@ export function useMsegEditorInteractions({
     msegState: MsegState | null;
     owner: MsegStateOwner | null;
     msegController: RefObject<MsegEditorControllerLike | null>;
-    surfaceRef: RefObject<SVGSVGElement | null>;
-    orientation?: MsegSurfaceOrientation;
     curveEditActivationMode?: "immediate" | "hold-or-drag";
     curveEditHoldDelayMs?: number;
     onCurveEditHoldActivated?: (() => void) | null;
 }) {
     const [isOpen, setIsOpen] = useState(false);
     const history = useMsegEditorHistory(owner, msegState?.editShapeIndex ?? 0);
-    const controller = useMemo(() => ({ get current() {
-        const current = msegController.current;
-        if (!current) return null;
-        // Capture the same controller as the queued edit, not a later ref value.
-        return {
-            getShape: () => current.getState()?.shape,
-            addPoint: (x: number, y: number) => current.addPoint(x, y),
-            movePoint: (index: number, x: number, y: number) => current.movePoint(index, x, y),
-            deletePoint: (index: number) => current.deletePoint(index),
-            setSegmentCurvePower: (index: number, power: number) => current.setSegmentCurvePower(index, power),
-        };
-    } }), [msegController]);
-    const gestures = useMsegGestures({ shape: msegState?.shape ?? null, controller, surfaceRef,
-        edit: history.edit, finishGesture: history.finishGesture, orientation,
-        curveEditActivationMode, curveEditHoldDelayMs, onCurveEditHoldActivated, timers: msegGestureTimers });
-    const cancelActivePointer = gestures.cancelGesture;
+    const [editorKey, setEditorKey] = useState(0);
+    const cancelActivePointer = useCallback(() => {
+        setEditorKey(key => key + 1);
+        void history.finishGesture(true);
+    }, [history.finishGesture]);
     useEffect(() => {
         const closeOnEscape = (event: KeyboardEvent) => { if (event.key === "Escape") setIsOpen(false); };
         window.addEventListener("keydown", closeOnEscape);
@@ -1945,9 +1927,17 @@ export function useMsegEditorInteractions({
         cancelActivePointer();
     }, [cancelActivePointer]);
 
+    const onValueChange = useCallback((value: import("../../kit/index").Mseg.Curve) => {
+        const target = msegController.current;
+        if (target) history.edit(() => target.setShape(value), true);
+    }, [msegController, history.edit]);
+    const composition = useMemo(() => ({editorKey, onValueChange, onGestureEnd: history.finishGesture,
+        curveEditActivationMode, curveEditHoldDelayMs, onCurveEditHoldActivated: onCurveEditHoldActivated ?? undefined}),
+        [editorKey, onValueChange, history.finishGesture, curveEditActivationMode, curveEditHoldDelayMs, onCurveEditHoldActivated]);
+
     const undoLastEdit = history.undo;
 
-    return { ...gestures, isOpen, canUndo: history.canUndo, beginEditorSession, openEditor,
+    return { cancelGesture: cancelActivePointer, composition, isOpen, canUndo: history.canUndo, beginEditorSession, openEditor,
         resumeEditorSession, closeEditor, undoLastEdit, finishGesture: history.finishGesture };
 }
 
@@ -2685,8 +2675,6 @@ export function useSynthPatchViewModel({
         msegState,
         owner: modulationOwner,
         msegController: displayedMsegControllerRef,
-        surfaceRef: msegEditorSurfaceRef,
-        orientation: msegSurfaceOrientation,
         curveEditActivationMode: msegCurveEditActivationMode,
         onCurveEditHoldActivated: onMsegCurveEditHoldActivated,
     });

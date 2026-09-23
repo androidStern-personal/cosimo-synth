@@ -4481,7 +4481,7 @@ test("main MSEG morph control updates morph without taking keyboard focus and pr
         await waitForHarnessSnapshot(
             page,
             "initial MSEG boot sync before morph drag",
-            (snapshot) => snapshot.sentMessages.some(({ endpointID, value }) => endpointID === "modulationMsegBuffer" && Number(value?.slot) === 1),
+            (snapshot) => snapshot.installedMsegData.some(record => record.input === 3),
         );
         await clearHarnessDebugLog(page);
         await page.mouse.move(sliderBox.x + 2, sliderBox.y + (sliderBox.height * 0.5));
@@ -4776,8 +4776,7 @@ test("MSEG overview rate updates its host parameter while loop policy updates mo
         await waitForHarnessSnapshot(
             page,
             "initial MSEG boot sync",
-            (snapshot) => snapshot.sentMessages.some(({ endpointID, value }) => endpointID === "modulationMsegBuffer" && Number(value?.slot) === 1)
-                && snapshot.sentMessages.some(({ endpointID, value }) => endpointID === "modulationMsegPlayback" && Number(value?.slot) === 1)
+            (snapshot) => snapshot.installedMsegData.some(({input, dspSessionId, deliverySerial, samples}) => input === 3 && dspSessionId > 0 && deliverySerial > 0 && samples.length === 2051)
                 && snapshot.sentMessages.some(({ endpointID }) => endpointID === "modulationProgram"),
         );
 

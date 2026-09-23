@@ -868,6 +868,7 @@ export class MockPatchConnection implements PatchConnectionLike {
     private readonly pluginStateHost;
     // The browser harness records this native-only effect. It does not emulate
     // the C++ MIDI processor or claim that this changes real incoming notes.
+    private installedMsegData: Array<{input: number; dspSessionId: number; deliverySerial: number; samples: number[]}> = [];
     private nativeHostEffects: Array<{ name: string; value: string }> = [];
 
     constructor(manifest: unknown, options: { loadStateChannel?: () => Promise<MockPluginStateChannelModule> } = {}) {
@@ -894,6 +895,8 @@ export class MockPatchConnection implements PatchConnectionLike {
                     if (input < 3 || input > 8 || words[0] !== 0x4d534547 || words[1] !== this.runtimeState.dspSessionId
                         || words[2] !== this.acceptedModulationSerial + 1 || (words[3] + 4) * 4 !== destination.byteLength)
                         throw new Error("Invalid development modulation shared resource.");
+                    this.installedMsegData.push({input, dspSessionId: words[1], deliverySerial: words[2],
+                        samples: Array.from(new Float32Array(destination.buffer, destination.byteOffset + 16, words[3]))});
                     this.acceptedModulationSerial = words[2];
                     queueMicrotask(() => this.emitRuntimeInstallAck(0));
                 },
@@ -1279,6 +1282,7 @@ export class MockPatchConnection implements PatchConnectionLike {
         this.midiInputEvents = [];
         this.parameterTransactions = [];
         this.nativeHostEffects = [];
+        this.installedMsegData = [];
     }
 
     getDebugSnapshot() {
@@ -1301,6 +1305,7 @@ export class MockPatchConnection implements PatchConnectionLike {
             laneParams,
             runtimeState: { ...this.runtimeState },
             storedState: Object.fromEntries(this.storedState.entries()),
+            installedMsegData: this.installedMsegData.map(record => ({...record, samples: [...record.samples]})),
             nativeHostEffects: this.nativeHostEffects.map(effect => ({ ...effect })),
             sentMessages: this.sentMessages.map((message) => ({
                 endpointID: message.endpointID,

@@ -47,7 +47,7 @@ function View() {
     return <>
         <Mseg.Editor value={envelope.state.value}
             onGestureStart={() => { void envelope.beginGesture(); }}
-            onChange={value => { void envelope.setValue(value); }}
+            onValueChange={value => { void envelope.setValue(value); }}
             onGestureEnd={() => { void envelope.endGesture(); }} />
         <button disabled={!history.canUndo} onClick={() => { void history.undo(); }}>Undo</button>
         <button disabled={!history.canRedo} onClick={() => { void history.redo(); }}>Redo</button>
@@ -59,7 +59,7 @@ function View() {
 export default createStatefulPatchView({ definition, View });
 ```
 
-The wrapper reconnects the GUI automatically. Opening the window does not recreate the state or reinstall its audio data. `Mseg.Editor` edits one curve; it does not require a drawer or A/B morphing. `Mseg.Surface` supplies geometry and appearance with underlay/overlay slots for a composed editor.
+The wrapper reconnects the GUI automatically. Opening the window does not recreate the state or reinstall its audio data. `Mseg.Editor` edits one curve; it does not require a drawer or A/B morphing. Compose `Mseg.Root`, `Mseg.Surface` and the drawing layers for custom handles, reference curves, A/B editing or an engine playhead. See the [MSEG guide and complete examples](MSEG.md).
 
 ## Values, errors and Undo
 

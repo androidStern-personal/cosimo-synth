@@ -1,7 +1,8 @@
 import type { PluginStateNativeParameter } from "../../kit/ui/plugin-state-session";
 import { usePluginState } from "../../kit/ui/plugin-state-react";
 import { synthPluginState } from "../../ui/shared/synth-plugin-state";
-import { MsegEditor } from "../../kit/ui/mseg-editor";
+import { Mseg } from "../../kit/index";
+import { normalizeMsegShape } from "../../ui/shared/mseg";
 import { createDefaultMsegShape as defaultKitCurve, addMsegPoint as addKitPoint } from "../../kit/ui/mseg";
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { createModulationEditorFixture, createModulationProjectionHost } from "./modulation_editor_state";
@@ -2499,8 +2500,8 @@ export async function installStockMsegEditorHarness(target: HTMLElement) {
             const [mode, updateMode] = useState<"immediate" | "hold-or-drag">("immediate");
             const [delay, updateDelay] = useState(350);
             setMode = updateMode; setDelay = updateDelay;
-            return <MsegEditor value={shape} onChange={setShape} style={{height: 180}} curveEditActivationMode={mode}
-                curveEditHoldDelayMs={delay} onCurveEditHoldActivated={() => hapticLog.push("light")} />;
+            return <Mseg.Editor value={shape} onValueChange={setShape} style={{height: 180}} surfaceProps={{"data-role": "mseg-editor", curveEditActivationMode: mode,
+                curveEditHoldDelayMs: delay, onCurveEditHoldActivated: () => hapticLog.push("light")}} />;
         }
         root.render(<Harness />);
     });
@@ -2563,36 +2564,22 @@ export async function installMsegEditorInteractionsHookHarness(target: HTMLEleme
             const surfaceRef = useRef<SVGSVGElement | null>(null);
             const controllerRef = useRef({
                 ...controller,
-                addPoint(x: number, y: number) { actionLog.push({ type: "add", x, y }); return controller.addPoint(x, y); },
-                movePoint(pointIndex: number, x: number, y: number) { actionLog.push({ type: "move", pointIndex, x, y }); return controller.movePoint(pointIndex, x, y); },
-                deletePoint(pointIndex: number) { actionLog.push({ type: "delete", pointIndex }); return controller.deletePoint(pointIndex); },
-                setSegmentCurvePower(segmentIndex: number, curvePower: number) {
-                    actionLog.push({ type: "curve", segmentIndex, curvePower }); return controller.setSegmentCurvePower(segmentIndex, curvePower);
+                setShape(value: unknown) {
+                    const before = controller.getState()!.shape;
+                    const after = normalizeMsegShape(value);
+                    if (after.points.length > before.points.length) actionLog.push({type: "add"});
+                    else if (after.points.length < before.points.length) actionLog.push({type: "delete"});
+                    else {
+                        const index = after.points.findIndex((p, i) => p.curvePower !== before.points[i].curvePower);
+                        if (index >= 0) actionLog.push({type: "curve", segmentIndex: index, curvePower: after.points[index].curvePower});
+                        else actionLog.push({type: "move"});
+                    }
+                    return controller.setShape(after);
                 },
             });
-            const {
-                isOpen,
-                canUndo, undoLastEdit, beginEditorSession,
-                selectedPointIndex,
-                hoveredSegmentIndex,
-                activeSegmentIndex,
-                openEditor,
-                closeEditor,
-                handlePointerDown,
-                handlePointerMove,
-                handlePointerLeave,
-                handlePointerUp,
-            } = useMsegEditorInteractions({
-                msegState,
-                owner,
-                msegController: controllerRef,
-                surfaceRef,
-                orientation,
-                curveEditActivationMode: curveEditMode,
-                curveEditHoldDelayMs,
-                onCurveEditHoldActivated: () => {
-                    hapticLog.push("light");
-                },
+            const {isOpen, canUndo, undoLastEdit, beginEditorSession, openEditor, closeEditor, composition} = useMsegEditorInteractions({
+                msegState, owner, msegController: controllerRef, curveEditActivationMode: curveEditMode,
+                curveEditHoldDelayMs, onCurveEditHoldActivated: () => hapticLog.push("light"),
             });
 
             useEffect(() => {
@@ -2614,26 +2601,9 @@ export async function installMsegEditorInteractionsHookHarness(target: HTMLEleme
                     <button id="new-editor-session" onClick={beginEditorSession}>New session</button>
                     <button id="open-editor" type="button" onClick={openEditor}>Open</button>
                     <button id="close-editor" type="button" onClick={closeEditor}>Close</button>
-                    <div
-                        id="editor-state"
-                        data-open={isOpen ? "true" : "false"}
-                        data-selected={selectedPointIndex}
-                        data-hovered-segment={hoveredSegmentIndex}
-                        data-active-segment={activeSegmentIndex}
-                    />
-                    <EditableMsegSurface
-                        surfaceRef={surfaceRef}
-                        points={msegState.shape.points}
-                        selectedPointIndex={selectedPointIndex}
-                        hoveredSegmentIndex={hoveredSegmentIndex}
-                        activeSegmentIndex={activeSegmentIndex}
-                        onPointerDown={handlePointerDown}
-                        onPointerMove={handlePointerMove}
-                        onPointerLeave={handlePointerLeave}
-                        onPointerUp={handlePointerUp}
-                        className="h-[180px]"
-                        dataRole="mseg-surface"
-                    />
+                    <div id="editor-state" data-open={isOpen ? "true" : "false"}/>
+                    <EditableMsegSurface surfaceRef={surfaceRef} value={msegState.shape} composition={composition}
+                        orientation={orientation} className="h-[180px]" dataRole="mseg-surface"/>
                     <div id="point-count">{msegState.shape.points.length}</div>
                 </div>
             );
@@ -2728,9 +2698,9 @@ export async function installMsegEditorInteractionsHookHarness(target: HTMLEleme
         },
         getSnapshot() {
             const editorState = document.getElementById("editor-state");
-            const selectedPointIndex = Number(editorState?.getAttribute("data-selected") ?? 0);
-            const hoveredSegmentIndex = Number(editorState?.getAttribute("data-hovered-segment") ?? -1);
-            const activeSegmentIndex = Number(editorState?.getAttribute("data-active-segment") ?? -1);
+            const selectedPointIndex = Number(document.querySelector('[data-slot="mseg-root"]')?.getAttribute("data-selected-point") ?? -1);
+            const hoveredSegmentIndex = Number(document.querySelector('[data-role="mseg-surface"]')?.getAttribute("data-hovered-segment") ?? -1);
+            const activeSegmentIndex = Number(document.querySelector('[data-role="mseg-surface"]')?.getAttribute("data-active-segment") ?? -1);
             const isOpen = editorState?.getAttribute("data-open") === "true";
             const pointCountText = document.getElementById("point-count")?.textContent ?? "0";
             const highlightedSegment = document.querySelector('[data-role="mseg-highlight-segment"]');

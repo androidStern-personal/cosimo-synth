@@ -58,6 +58,7 @@ export function useMsegGestures<Result>({
     shape, controller, surfaceRef, edit, finishGesture,
     orientation = "horizontal", curveEditActivationMode = "immediate", curveEditHoldDelayMs = 350,
     onCurveEditHoldActivated = null, timers = browserTimers,
+    selectedPoint, onSelectedPointChange, onSelectedSegmentChange,
 }: {
     shape: Shape | null;
     controller: RefObject<MsegGestureController<Result> | null>;
@@ -70,8 +71,19 @@ export function useMsegGestures<Result>({
     curveEditHoldDelayMs?: number;
     onCurveEditHoldActivated?: (() => void) | null;
     timers?: Timers;
+    selectedPoint?: number;
+    onSelectedPointChange?: (index: number) => void;
+    onSelectedSegmentChange?: (index: number) => void;
 }) {
-    const [selectedPointIndex, setSelectedPointIndex] = useState(0);
+    const [localSelectedPoint, setLocalSelectedPoint] = useState(0);
+    const selectedPointIndex = selectedPoint ?? localSelectedPoint;
+    const selectionCallbacks = useRef({selectedPointIndex, onSelectedPointChange, onSelectedSegmentChange});
+    selectionCallbacks.current = {selectedPointIndex, onSelectedPointChange, onSelectedSegmentChange};
+    const setSelectedPointIndex = useCallback((next: number | ((previous: number) => number)) => {
+        const index = typeof next === "function" ? next(selectionCallbacks.current.selectedPointIndex) : next;
+        setLocalSelectedPoint(index);
+        if (index !== selectionCallbacks.current.selectedPointIndex) selectionCallbacks.current.onSelectedPointChange?.(index);
+    }, []);
     const [hoveredSegmentIndex, setHoveredSegmentIndex] = useState(-1);
     const [activeSegmentIndex, setActiveSegmentIndex] = useState(-1);
     const activePointerRef = useRef<ActiveMsegPointerState | null>(null);
@@ -108,12 +120,13 @@ export function useMsegGestures<Result>({
             return;
         }
 
+        if (selectedPoint !== undefined) return;
         setSelectedPointIndex((previousIndex) => clamp(
             previousIndex,
             0,
             Math.max(0, shape.points.length - 1),
         ));
-    }, [shape]);
+    }, [shape, selectedPoint, setSelectedPointIndex]);
 
     const resolvePointerLocation = useCallback((clientX: number, clientY: number) => {
         if (!shape || !surfaceRef.current) {
@@ -253,6 +266,7 @@ export function useMsegGestures<Result>({
         }
 
         if (pointerLocation.segmentIndex >= 0) {
+            selectionCallbacks.current.onSelectedSegmentChange?.(pointerLocation.segmentIndex);
             setActiveSegmentIndex(pointerLocation.segmentIndex);
             setHoveredSegmentIndex(pointerLocation.segmentIndex);
             if (curveEditActivationMode === "immediate") {

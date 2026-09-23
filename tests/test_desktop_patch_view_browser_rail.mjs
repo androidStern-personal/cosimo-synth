@@ -3663,6 +3663,13 @@ test("T71 full-screen MSEG and parked Mod bar stay operable across compact phone
             assert.equal(await editor.locator('[data-role="mseg-editor-undo"]').isDisabled(), false);
             assert.deepEqual(readShapeB(await getHarnessSnapshot(page)), shapeAfterDrawerEdit);
 
+            await editor.locator('[data-role="mseg-editor-undo"]').click();
+            await waitForHarnessSnapshot(
+                page,
+                `${viewport.name} drawer undo survives full-screen transition`,
+                (snapshot) => JSON.stringify(readShapeB(snapshot)) === JSON.stringify(shapeBefore),
+            );
+
             const rate = controls.locator('[data-role="mseg-editor-cell-rate"]');
             await rate.focus();
             await page.keyboard.press("End");
@@ -3716,12 +3723,6 @@ test("T71 full-screen MSEG and parked Mod bar stay operable across compact phone
             });
             assert.deepEqual(parkedChrome, { immediatelyBeforeNext: true, ownsHit: true });
 
-            await editor.locator('[data-role="mseg-editor-undo"]').click();
-            await waitForHarnessSnapshot(
-                page,
-                `${viewport.name} drawer undo survives full-screen transition`,
-                (snapshot) => JSON.stringify(readShapeB(snapshot)) === JSON.stringify(shapeBefore),
-            );
             await page.locator('[data-action="shell-back"]').click();
             await editor.waitFor({ state: "detached" });
 

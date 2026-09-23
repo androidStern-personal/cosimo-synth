@@ -1216,6 +1216,7 @@ const IOSDistortionPanel = memo(function IOSDistortionPanel({
 });
 
 const IOSMsegModal = memo(function IOSMsegModal({
+    composition,
     isOpen,
     onClose,
     slotLabel,
@@ -1224,13 +1225,6 @@ const IOSMsegModal = memo(function IOSMsegModal({
     selectedMsegMorph,
     surfaceRef,
     orientation,
-    selectedPointIndex,
-    hoveredSegmentIndex,
-    activeSegmentIndex,
-    onPointerDown,
-    onPointerMove,
-    onPointerLeave,
-    onPointerUp,
     rateSeconds,
     rateReady,
     onSelectShape,
@@ -1239,6 +1233,7 @@ const IOSMsegModal = memo(function IOSMsegModal({
     onToggleLoop,
     rateFocusBindings,
 }: {
+    composition: import("../shared/synth-components").MsegCompositionBindings;
     isOpen: boolean;
     onClose: () => void;
     slotLabel: string;
@@ -1247,13 +1242,6 @@ const IOSMsegModal = memo(function IOSMsegModal({
     selectedMsegMorph: ReturnType<typeof useSynthPatchViewModel>["selectedMsegMorph"];
     surfaceRef: RefObject<SVGSVGElement | null>;
     orientation: MsegSurfaceOrientation;
-    selectedPointIndex: number;
-    hoveredSegmentIndex: number;
-    activeSegmentIndex: number;
-    onPointerDown: (event: ReactPointerEvent<SVGSVGElement>) => void;
-    onPointerMove: (event: ReactPointerEvent<SVGSVGElement>) => void;
-    onPointerLeave: (event: ReactPointerEvent<SVGSVGElement>) => void;
-    onPointerUp: (event: ReactPointerEvent<SVGSVGElement>) => void;
     rateSeconds: number;
     rateReady: boolean;
     onSelectShape: (shapeIndex: number) => void;
@@ -1290,24 +1278,18 @@ const IOSMsegModal = memo(function IOSMsegModal({
 
                     <div className="mseg-modal-stage">
                         {msegState ? (
-                            <EditableMsegSurface
+                            <EditableMsegSurface key={slotIndex} composition={composition}
                                 surfaceRef={surfaceRef}
                                 dataRole="mseg-modal-viewport"
                                 className="mseg-surface mseg-modal-surface"
                                 orientation={orientation}
-                                points={msegState.shape.points}
+                                value={msegState.shape}
                                 referencePoints={msegState.referenceShape?.points ?? null}
                                 morphShapeAPoints={msegState.shapeA?.points ?? null}
                                 morphShapeBPoints={msegState.shapeB?.points ?? null}
                                 morphValue={selectedMsegMorph.value}
                                 editShapeIndex={msegState.editShapeIndex ?? 0}
-                                selectedPointIndex={selectedPointIndex}
-                                hoveredSegmentIndex={hoveredSegmentIndex}
-                                activeSegmentIndex={activeSegmentIndex}
-                                onPointerDown={onPointerDown}
-                                onPointerMove={onPointerMove}
-                                onPointerLeave={onPointerLeave}
-                                onPointerUp={onPointerUp}
+
                             />
                         ) : null}
                     </div>
@@ -1675,7 +1657,7 @@ function IOSPatchViewBody() {
                     </div>
                 </div>
 
-                <IOSMsegModal
+                <IOSMsegModal composition={synthView.msegEditor.composition}
                     isOpen={isMsegModalOpen}
                     onClose={closeMsegModal}
                     slotLabel={`MSEG ${synthView.selectedMsegSlot + 1}`}
@@ -1684,13 +1666,13 @@ function IOSPatchViewBody() {
                     selectedMsegMorph={synthView.selectedMsegMorph}
                     surfaceRef={msegEditorSurfaceRef}
                     orientation={msegEditorOrientation}
-                    selectedPointIndex={synthView.msegEditor.selectedPointIndex}
-                    hoveredSegmentIndex={synthView.msegEditor.hoveredSegmentIndex}
-                    activeSegmentIndex={synthView.msegEditor.activeSegmentIndex}
-                    onPointerDown={synthView.msegEditor.handlePointerDown}
-                    onPointerMove={synthView.msegEditor.handlePointerMove}
-                    onPointerLeave={synthView.msegEditor.handlePointerLeave}
-                    onPointerUp={synthView.msegEditor.handlePointerUp}
+
+
+
+
+
+
+
                     rateSeconds={synthView.msegState?.playback.rate.seconds ?? 1}
                     rateReady={synthView.callbackControlReadiness.mseg.rate}
                     onSelectShape={synthView.handleSelectMsegShape}

@@ -34,6 +34,14 @@ namespace kit::mseg
         bool legatoRestarts;
     }
 
+    /** UI-rate playback observations. Generation increases on each trigger/retrigger. */
+    struct Position
+    {
+        int32 generation;
+        bool active;
+        float32 position;
+    }
+
     /** Single-curve playback; instantiate with PluginState::fieldName::inputIndex.
         Shared data is adopted by the host, so held notes see curve edits without a sample upload. */
     processor Reader (int32 sharedInput)
@@ -45,6 +53,9 @@ namespace kit::mseg
         input value float32 durationSeconds;
         output stream float32 out;
         output stream float32 progressOut;
+        output event Position positionOut;
+
+        int32 generation, monitorFrames;
 
         bool active, loopEnabled, stopFutureWraps, ignoreNoteOff, legatoRestarts;
         bool holdFinalValue = true;
@@ -67,6 +78,8 @@ namespace kit::mseg
         void restart()
         {
             active = true;
+            ++generation;
+            monitorFrames = 0;
             progress = 0.0f;
             currentValue = sample (sharedInput, 0.0f);
             stopFutureWraps = false;
@@ -107,6 +120,12 @@ namespace kit::mseg
                 }
                 out <- holdFinalValue || active ? currentValue : 0.0f;
                 progressOut <- displayedProgress;
+                if (monitorFrames == 0)
+                {
+                    positionOut <- Position (generation, active, displayedProgress);
+                    monitorFrames = std::intrinsics::max (1, int32 (processor.frequency / 60.0));
+                }
+                --monitorFrames;
                 advance();
             }
         }

@@ -11,7 +11,7 @@ import {
     type RefObject,
 } from "react";
 
-import { MsegEditorSurface } from "../../kit/ui/mseg-editor";
+import { Mseg } from "../../kit/index";
 import { buildMsegSurfacePaths } from "../../kit/ui/mseg-editor-geometry";
 
 import type { PatchControlBinding } from "./patch-controls";
@@ -817,85 +817,79 @@ export function WavetableCanvas({
     );
 }
 
+export type MsegCompositionBindings = { readonly editorKey: number } & Pick<Mseg.RootProps, "onValueChange" | "onGestureEnd"> &
+    Pick<Mseg.SurfaceProps, "curveEditActivationMode" | "curveEditHoldDelayMs" | "onCurveEditHoldActivated">;
 export function EditableMsegSurface({
     surfaceRef,
-    points,
+    value,
+    composition,
     referencePoints = null,
     morphShapeAPoints = null,
     morphShapeBPoints = null,
     morphValue = null,
     realizedMorphEmphasis = "resting",
+    playheadPosition = null,
     editShapeIndex = 0,
-    selectedPointIndex,
-    hoveredSegmentIndex = -1,
-    activeSegmentIndex = -1,
     orientation = "horizontal",
     timeAxisScale,
     onOrientationChange,
-    onPointerDown,
-    onPointerMove,
-    onPointerLeave,
-    onPointerUp,
     className,
     dataRole,
 }: {
     surfaceRef: RefObject<SVGSVGElement | null>;
-    points: Array<{ x: number; y: number; curvePower: number }>;
+    composition: MsegCompositionBindings;
+    value: MsegState["shape"];
     referencePoints?: Array<{ x: number; y: number; curvePower: number }> | null;
     morphShapeAPoints?: Array<{ x: number; y: number; curvePower: number }> | null;
     morphShapeBPoints?: Array<{ x: number; y: number; curvePower: number }> | null;
     morphValue?: number | null;
     /** The realized A/B result is always present; active only changes its visual prominence. */
     realizedMorphEmphasis?: "resting" | "active";
+    playheadPosition?: number | null;
     /** Shape identity controls color only; selection never swaps A/B colors. */
     editShapeIndex?: 0 | 1;
-    selectedPointIndex: number;
-    hoveredSegmentIndex?: number;
-    activeSegmentIndex?: number;
     orientation?: MsegSurfaceOrientation;
     timeAxisScale?: MsegTimeAxisScale;
     onOrientationChange?: (orientation: MsegSurfaceOrientation) => void;
-    onPointerDown: (event: ReactPointerEvent<SVGSVGElement>) => void;
-    onPointerMove: (event: ReactPointerEvent<SVGSVGElement>) => void;
-    onPointerLeave?: (event: ReactPointerEvent<SVGSVGElement>) => void;
-    onPointerUp: (event: ReactPointerEvent<SVGSVGElement>) => void;
     className?: string;
     dataRole?: string;
 }) {
+    const curve = useMemo<Mseg.Curve>(() => ({...value, format: "mseg.shape"}), [value]);
     const size = useResizeObserver(surfaceRef);
-    const emphasizedSegmentIndex = activeSegmentIndex >= 0 ? activeSegmentIndex : hoveredSegmentIndex;
-    const hasEmphasizedSegment = emphasizedSegmentIndex >= 0;
     useLayoutEffect(() => {
         const next = resolveMsegSurfaceOrientation(size.width, size.height, orientation);
         if (next !== orientation) onOrientationChange?.(next);
     }, [onOrientationChange, orientation, size.height, size.width]);
-    const reference = referencePoints ? buildMsegSurfacePaths(referencePoints, size.width, size.height, { orientation }) : null;
-    const morph = buildMsegMorphSurfacePaths(morphShapeAPoints, morphShapeBPoints, morphValue, size.width, size.height, { orientation });
+    const reference = useMemo(() => referencePoints ? {...curve, points: referencePoints} : null, [curve, referencePoints]);
+    const morph = useMemo(() => {
+        if (!morphShapeAPoints || !morphShapeBPoints || morphValue === null) return null;
+        const a = new Float32Array(Mseg.sampleCount), b = new Float32Array(Mseg.sampleCount);
+        Mseg.renderInto({...curve, points: morphShapeAPoints}, a); Mseg.renderInto({...curve, points: morphShapeBPoints}, b);
+        return a.slice(1, -2).map((sample, index) => sample * (1 - morphValue) + b[index + 1] * morphValue);
+    }, [curve, morphShapeAPoints, morphShapeBPoints, morphValue]);
     const shape = editShapeIndex === 0 ? "a" : "b";
     const other = editShapeIndex === 0 ? "b" : "a";
-    return <MsegEditorSurface
-        surfaceRef={surfaceRef} points={points} width={size.width} height={size.height}
-        selectedPointIndex={selectedPointIndex} hoveredSegmentIndex={hoveredSegmentIndex}
-        activeSegmentIndex={activeSegmentIndex} orientation={orientation} timeAxisScale={timeAxisScale}
-        onPointerDown={onPointerDown} onPointerMove={onPointerMove} onPointerLeave={onPointerLeave} onPointerUp={onPointerUp}
-        className={joinClasses("h-full w-full touch-none overflow-hidden rounded-[20px] bg-white/[0.03]", className)}
-        dataRole={dataRole} curveIdentity={shape}
-        attributes={{ "data-morph-presentation": realizedMorphEmphasis === "active" ? "morph-active" : "edit-shape", "data-edit-shape": shape }}
-        classes={{
-            grid: "cosimo-grid-line",
-            fill: joinClasses("cosimo-curve-fill", `cosimo-mseg-shape-${shape}-fill`, hasEmphasizedSegment && "cosimo-curve-fill-muted"),
-            curve: joinClasses("cosimo-curve-line", `cosimo-mseg-shape-${shape}-curve-line`, hasEmphasizedSegment && "cosimo-curve-line-muted"),
-            highlight: `cosimo-curve-line cosimo-curve-line-highlight cosimo-mseg-shape-${shape}-curve-line`,
-            pointSelected: "cosimo-mseg-point-selected", pointHighlighted: "cosimo-mseg-point-highlight",
-            pointMuted: "cosimo-mseg-point-muted", point: "cosimo-mseg-point-default",
-            timeAxis: "cosimo-mseg-time-axis", timeTick: "cosimo-mseg-time-tick", timeLabel: "cosimo-mseg-time-label",
-        }}
-        underlay={reference ? <>
-            <path data-role="mseg-reference-fill" data-shape-identity={other} className={`cosimo-reference-curve-fill cosimo-mseg-shape-${other}-fill`} d={reference.fillPath}/>
-            <path data-role="mseg-reference-curve" data-shape-identity={other} className={`cosimo-reference-curve-line cosimo-mseg-shape-${other}-curve-line`} d={reference.curvePath}/>
-        </> : null}
-        overlay={morph ? <path data-role="mseg-effective-curve" className={joinClasses("cosimo-mseg-effective-curve-line", realizedMorphEmphasis === "active" && "is-active")} d={morph.curvePath}/> : null}
-    />;
+    return <Mseg.Root key={`${editShapeIndex}:${composition.editorKey}`} defaultSelection={{kind: "point", index: 0}} value={curve} onValueChange={composition.onValueChange} onGestureEnd={composition.onGestureEnd} style={{display: "contents"}}>
+        <Mseg.Surface ref={surfaceRef} orientation={orientation} curveEditActivationMode={composition.curveEditActivationMode}
+            curveEditHoldDelayMs={composition.curveEditHoldDelayMs} onCurveEditHoldActivated={composition.onCurveEditHoldActivated}
+            className={joinClasses("h-full w-full touch-none overflow-hidden rounded-[20px] bg-white/[0.03]", className)}
+            data-role={dataRole} data-morph-presentation={realizedMorphEmphasis === "active" ? "morph-active" : "edit-shape"} data-edit-shape={shape}
+            aria-label="MSEG curve">
+            <Mseg.Grid className="cosimo-grid-line" opacity={1}/>
+            {reference && <><Mseg.Fill value={reference} data-role="mseg-reference-fill" data-shape-identity={other} className={`cosimo-reference-curve-fill cosimo-mseg-shape-${other}-fill`} fillOpacity={1}/>
+                <Mseg.Curve value={reference} data-role="mseg-reference-curve" data-shape-identity={other} className={`cosimo-reference-curve-line cosimo-mseg-shape-${other}-curve-line`}/></>}
+            <Mseg.Fill data-role="mseg-base-fill" data-shape-identity={shape} className={`cosimo-curve-fill cosimo-mseg-shape-${shape}-fill`} fillOpacity={1}/>
+            <Mseg.Curve data-role="mseg-base-curve" data-shape-identity={shape} className={`cosimo-curve-line cosimo-mseg-shape-${shape}-curve-line`}/>
+            {morph && <Mseg.Plot samples={morph} data-role="mseg-effective-curve" className={joinClasses("cosimo-mseg-effective-curve-line", realizedMorphEmphasis === "active" && "is-active")}/>}
+            <Mseg.SegmentHighlight data-role="mseg-highlight-segment" className={`cosimo-curve-line cosimo-curve-line-highlight cosimo-mseg-shape-${shape}-curve-line`}/>
+            <Mseg.Points data-role="mseg-edit-points" data-shape-identity={shape} renderPoint={({index, state, position, handleProps}) => <g {...handleProps} transform={undefined}>
+                <circle data-role="mseg-point" data-point-index={index} data-point-state={state} cx={position.x} cy={position.y} r={state === "selected" ? 10 : 8}
+                    className={state === "selected" ? "cosimo-mseg-point-selected" : state === "highlighted" ? "cosimo-mseg-point-highlight" : state === "muted" ? "cosimo-mseg-point-muted" : "cosimo-mseg-point-default"}/>
+            </g>}/>
+            <Mseg.Playhead position={playheadPosition} data-role="mod-source-mseg-playhead" data-progress={playheadPosition?.toFixed(3)} className="cosimo-mseg-playhead"/>
+            {timeAxisScale && <Mseg.TimeAxis scale={timeAxisScale} data-role="mseg-time-axis" className="cosimo-mseg-time-axis"/>}
+        </Mseg.Surface>
+    </Mseg.Root>;
 }
 
 export function RangeField({

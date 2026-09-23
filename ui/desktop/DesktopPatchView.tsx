@@ -588,6 +588,7 @@ type VoiceToneSectionProps = FilterSectionProps & {
 };
 
 type MsegEditorModalProps = {
+    composition: import("../shared/synth-components").MsegCompositionBindings;
     isOpen: boolean;
     compactShellBack: boolean;
     slotIndex: number;
@@ -596,18 +597,11 @@ type MsegEditorModalProps = {
     morphBinding: PatchControlBinding<number>;
     rateBinding: PatchControlBinding<number>;
     surfaceRef: RefObject<SVGSVGElement | null>;
-    selectedPointIndex: number;
-    hoveredSegmentIndex: number;
-    activeSegmentIndex: number;
     canUndo: boolean;
     onClose: () => void;
     onUndo: () => void;
     onSelectShape: (shapeIndex: number) => void;
     onToggleLoop: () => void;
-    onPointerDown: (event: ReactPointerEvent<SVGSVGElement>) => void;
-    onPointerMove: (event: ReactPointerEvent<SVGSVGElement>) => void;
-    onPointerLeave: (event: ReactPointerEvent<SVGSVGElement>) => void;
-    onPointerUp: (event: ReactPointerEvent<SVGSVGElement>) => void;
     rateFocusBindings: SynthFocusBindings;
     orientation: MsegSurfaceOrientation;
     onOrientationChange: (orientation: MsegSurfaceOrientation) => void;
@@ -653,20 +647,7 @@ type ModulationMatrixSectionProps = {
     onRemoveRoute: (routeIndex: number) => void;
     onRouteChange: (routeIndex: number, update: ModulationRouteUpdate) => void;
     msegRateFocusBindings: SynthFocusBindings;
-    /** T14 compact SOURCE panel: direct point editing on the graph. The
-        handlers are the FULL editor's own (one shape-editing brain); the
-        shared surface ref is claimed just-in-time on pointer-down because
-        the full-screen editor reuses the same ref while it is open. */
-    msegDirectEditing?: {
-        sharedSurfaceRef: RefObject<SVGSVGElement | null>;
-        selectedPointIndex: number;
-        hoveredSegmentIndex: number;
-        activeSegmentIndex: number;
-        onPointerDown: (event: ReactPointerEvent<SVGSVGElement>) => void;
-        onPointerMove: (event: ReactPointerEvent<SVGSVGElement>) => void;
-        onPointerLeave: (event: ReactPointerEvent<SVGSVGElement>) => void;
-        onPointerUp: (event: ReactPointerEvent<SVGSVGElement>) => void;
-    } | null;
+    msegDirectEditing?: {composition: import("../shared/synth-components").MsegCompositionBindings} | null;
 };
 
 type EnvelopeEntryField = "attackSeconds" | "decaySeconds" | "sustain" | "releaseSeconds";
@@ -3903,6 +3884,7 @@ function KeyboardSection({
 }
 
 function MsegEditorModal({
+    composition,
     isOpen,
     compactShellBack,
     slotIndex,
@@ -3911,18 +3893,11 @@ function MsegEditorModal({
     morphBinding,
     rateBinding,
     surfaceRef,
-    selectedPointIndex,
-    hoveredSegmentIndex,
-    activeSegmentIndex,
     canUndo,
     onClose,
     onUndo,
     onSelectShape,
     onToggleLoop,
-    onPointerDown,
-    onPointerMove,
-    onPointerLeave,
-    onPointerUp,
     rateFocusBindings,
     orientation,
     onOrientationChange,
@@ -4078,25 +4053,20 @@ function MsegEditorModal({
                     />
                 )}
                 graphic={(
-                    <EditableMsegSurface
+                    <EditableMsegSurface key={slotIndex} composition={composition}
                         surfaceRef={surfaceRef}
-                        points={msegState.shape.points}
+                        value={msegState.shape}
                         referencePoints={msegState.referenceShape?.points ?? null}
                         morphShapeAPoints={msegState.shapeA?.points ?? null}
                         morphShapeBPoints={msegState.shapeB?.points ?? null}
                         morphValue={morphBinding.value}
                         realizedMorphEmphasis={isMorphAdjusting ? "active" : "resting"}
                         editShapeIndex={msegState.editShapeIndex ?? 0}
-                        selectedPointIndex={selectedPointIndex}
-                        hoveredSegmentIndex={hoveredSegmentIndex}
-                        activeSegmentIndex={activeSegmentIndex}
+
                         orientation={orientation}
                         timeAxisScale={{ kind: "seconds", totalSeconds: msegState.playback.rate.seconds }}
                         onOrientationChange={onOrientationChange}
-                        onPointerDown={onPointerDown}
-                        onPointerMove={onPointerMove}
-                        onPointerLeave={onPointerLeave}
-                        onPointerUp={onPointerUp}
+
                         className="h-full w-full"
                         dataRole="mseg-editor-surface"
                     />
@@ -4171,75 +4141,29 @@ function MacroSourceEditor({
     );
 }
 
-function EditableMsegSurfaceHost({
-    msegState,
-    morphValue,
-    showMorphCurve,
-    editing,
-    progressFillEnd,
-}: {
+function EditableMsegSurfaceHost({msegState, morphValue, showMorphCurve, editing, progressFillEnd}: {
     msegState: NonNullable<ModulationMatrixSectionProps["msegState"]>;
     morphValue: number;
     showMorphCurve: boolean;
     editing: NonNullable<ModulationMatrixSectionProps["msegDirectEditing"]>;
-    /** Live playback progress (0..1) — the compact editable graph keeps the
-        preview's playhead so editability never costs the activity light. */
-    progressFillEnd: number;
+    progressFillEnd: number | null;
 }) {
-    const localRef = useRef<SVGSVGElement | null>(null);
-    const attachSurface = useCallback((element: SVGSVGElement | null) => {
-        localRef.current = element;
-        // Steady-state owner: whichever editable surface mounted last. The
-        // pointer-down claim below covers the full editor handing back.
-        if (element !== null) {
-            editing.sharedSurfaceRef.current = element;
-        }
-    }, [editing.sharedSurfaceRef]);
-    const surfaceRefObject = useMemo(() => ({
-        get current() {
-            return localRef.current;
-        },
-        set current(element: SVGSVGElement | null) {
-            attachSurface(element);
-        },
-    }), [attachSurface]);
-
+    const surfaceRefObject = useRef<SVGSVGElement | null>(null);
     return (
-        <EditableMsegSurface
+        <EditableMsegSurface composition={editing.composition}
             surfaceRef={surfaceRefObject}
-            points={msegState.shape.points}
+            value={msegState.shape}
             referencePoints={msegState.referenceShape?.points ?? null}
             morphShapeAPoints={msegState.shapeA?.points ?? null}
             morphShapeBPoints={msegState.shapeB?.points ?? null}
             morphValue={morphValue}
             realizedMorphEmphasis={showMorphCurve ? "active" : "resting"}
+            playheadPosition={progressFillEnd}
             editShapeIndex={msegState.editShapeIndex ?? 0}
-            selectedPointIndex={editing.selectedPointIndex}
-            hoveredSegmentIndex={editing.hoveredSegmentIndex}
-            activeSegmentIndex={editing.activeSegmentIndex}
-            onPointerDown={(event) => {
-                // Claim the shape-editing brain's geometry ref for THIS
-                // surface (the modal releases it by closing).
-                editing.sharedSurfaceRef.current = localRef.current;
-                editing.onPointerDown(event);
-            }}
-            onPointerMove={editing.onPointerMove}
-            onPointerLeave={editing.onPointerLeave}
-            onPointerUp={editing.onPointerUp}
+
+
             className="h-full w-full"
             dataRole="mod-source-mseg-surface"
-        />
-    );
-}
-
-function EditableMsegPlayhead({ progressFillEnd }: { progressFillEnd: number }) {
-    return (
-        <div
-            data-role="mod-source-mseg-playhead"
-            data-progress={progressFillEnd.toFixed(3)}
-            aria-hidden="true"
-            className="pointer-events-none absolute inset-y-0 w-px bg-cyan-200/50"
-            style={{ left: `${(progressFillEnd * 100).toFixed(2)}%` }}
         />
     );
 }
@@ -5124,16 +5048,13 @@ function ModulationMatrixSection({
                         <div className="absolute inset-x-0 top-0 bottom-[48px]" data-role="mod-source-mseg-editable">
                             {msegState ? (
                                 <>
-                                    <EditableMsegSurfaceHost
+                                    <EditableMsegSurfaceHost key={selectedMsegSlot}
                                         msegState={msegState}
                                         morphValue={selectedMsegMorph.value}
                                         showMorphCurve={isMsegMorphAdjusting}
                                         editing={msegDirectEditing}
-                                        progressFillEnd={observedMsegPlayhead.progressFillEnd ?? 0}
+                                        progressFillEnd={observedMsegPlayhead.progressFillEnd}
                                     />
-                                    {observedMsegPlayhead.progressFillEnd !== null ? (
-                                        <EditableMsegPlayhead progressFillEnd={observedMsegPlayhead.progressFillEnd} />
-                                    ) : null}
                                 </>
                             ) : (
                                 <div className="h-full w-full bg-white/[0.02]" />
@@ -6483,16 +6404,7 @@ function DesktopPatchViewBody({
                             onRemoveRoute={synthView.handleRemoveRoute}
                             onRouteChange={synthView.handleRouteChange}
                             msegRateFocusBindings={synthView.keyboardRouting.msegRateFocusBindings}
-                            msegDirectEditing={{
-                                sharedSurfaceRef: msegEditorSurfaceRef,
-                                selectedPointIndex: synthView.msegEditor.selectedPointIndex,
-                                hoveredSegmentIndex: synthView.msegEditor.hoveredSegmentIndex,
-                                activeSegmentIndex: synthView.msegEditor.activeSegmentIndex,
-                                onPointerDown: synthView.msegEditor.handlePointerDown,
-                                onPointerMove: synthView.msegEditor.handlePointerMove,
-                                onPointerLeave: synthView.msegEditor.handlePointerLeave,
-                                onPointerUp: synthView.msegEditor.handlePointerUp,
-                            }}
+                            msegDirectEditing={{composition: synthView.msegEditor.composition}}
                         />
                         )}
                         mappingsPanel={(
@@ -6813,28 +6725,23 @@ function DesktopPatchViewBody({
                     resolveScrollLockTargets={resolveMobileVoiceScrollLocks}
                     onRequestHaptic={triggerMobileVoiceHaptic}
                     msegSurface={synthView.msegState === null ? null : (
-                        <EditableMsegSurface
+                        <EditableMsegSurface key={synthView.selectedMsegSlot} composition={synthView.msegEditor.composition}
                             surfaceRef={msegEditorSurfaceRef}
-                            points={synthView.msegState.shape.points}
+                            value={synthView.msegState.shape}
                             referencePoints={synthView.msegState.referenceShape?.points ?? null}
                             morphShapeAPoints={synthView.msegState.shapeA?.points ?? null}
                             morphShapeBPoints={synthView.msegState.shapeB?.points ?? null}
                             morphValue={synthView.selectedMsegMorph.value}
                             realizedMorphEmphasis={isQuickMsegMorphAdjusting ? "active" : "resting"}
                             editShapeIndex={synthView.msegState.editShapeIndex ?? 0}
-                            selectedPointIndex={synthView.msegEditor.selectedPointIndex}
-                            hoveredSegmentIndex={synthView.msegEditor.hoveredSegmentIndex}
-                            activeSegmentIndex={synthView.msegEditor.activeSegmentIndex}
+
                             orientation={msegSurfaceOrientation}
                             timeAxisScale={{
                                 kind: "seconds",
                                 totalSeconds: synthView.msegState.playback.rate.seconds,
                             }}
                             onOrientationChange={setMsegSurfaceOrientation}
-                            onPointerDown={synthView.msegEditor.handlePointerDown}
-                            onPointerMove={synthView.msegEditor.handlePointerMove}
-                            onPointerLeave={synthView.msegEditor.handlePointerLeave}
-                            onPointerUp={synthView.msegEditor.handlePointerUp}
+
                             className="h-full w-full"
                             dataRole="quick-sheet-mseg-surface"
                         />
@@ -6881,7 +6788,7 @@ function DesktopPatchViewBody({
                 />
             ) : null}
 
-            <MsegEditorModal
+            <MsegEditorModal composition={synthView.msegEditor.composition}
                 isOpen={synthView.msegEditor.isOpen}
                 compactShellBack={isCompactViewport}
                 slotIndex={synthView.selectedMsegSlot}
@@ -6890,18 +6797,18 @@ function DesktopPatchViewBody({
                 morphBinding={synthView.selectedMsegMorph}
                 rateBinding={synthView.selectedMsegRate}
                 surfaceRef={msegEditorSurfaceRef}
-                selectedPointIndex={synthView.msegEditor.selectedPointIndex}
-                hoveredSegmentIndex={synthView.msegEditor.hoveredSegmentIndex}
-                activeSegmentIndex={synthView.msegEditor.activeSegmentIndex}
+
+
+
                 canUndo={synthView.msegEditor.canUndo}
                 onClose={closeMsegEditor}
                 onUndo={synthView.msegEditor.undoLastEdit}
                 onSelectShape={synthView.handleSelectMsegShape}
                 onToggleLoop={synthView.handleToggleMsegLoop}
-                onPointerDown={synthView.msegEditor.handlePointerDown}
-                onPointerMove={synthView.msegEditor.handlePointerMove}
-                onPointerLeave={synthView.msegEditor.handlePointerLeave}
-                onPointerUp={synthView.msegEditor.handlePointerUp}
+
+
+
+
                 rateFocusBindings={synthView.keyboardRouting.msegRateFocusBindings}
                 orientation={msegSurfaceOrientation}
                 onOrientationChange={setMsegSurfaceOrientation}

@@ -784,13 +784,15 @@
     pointer-events: none;
 }
 
-.cosimo-mseg-time-tick {
+.cosimo-mseg-time-tick,
+.cosimo-mseg-time-axis [data-role="mseg-time-tick"] {
     stroke: color-mix(in srgb, var(--quick-sheet-accent) 72%, var(--cosimo-ink-muted));
     stroke-width: 1;
     vector-effect: non-scaling-stroke;
 }
 
-.cosimo-mseg-time-label {
+.cosimo-mseg-time-label,
+.cosimo-mseg-time-axis [data-role="mseg-time-label"] {
     fill: color-mix(in srgb, var(--quick-sheet-accent) 78%, var(--cosimo-ink-muted));
     stroke: rgb(var(--cosimo-ground-rgb) / 0.88);
     stroke-width: 3px;

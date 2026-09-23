@@ -1372,27 +1372,11 @@ after(async () => {
 export function assertLatestMsegBufferMatchesStoredShape(snapshot) {
     const storedShape = readStoredMsegShape(snapshot);
     const expectedBuffer = Array.from(renderMsegShape(storedShape));
-    const lastBufferMessage = [...snapshot.sentMessages]
-        .reverse()
-        .find(({ endpointID, value }) => (
-            endpointID === "modulationMsegBuffer"
-            && Number(value?.slot) === 1
-            && Number(value?.shapeIndex ?? 0) === 0
-        ));
-
-    assert.ok(lastBufferMessage, "Expected a modulationMsegBuffer upload for slot 1.");
-    assert.deepEqual({
-        slot: lastBufferMessage.value.slot,
-        shapeIndex: lastBufferMessage.value.shapeIndex,
-        buffer: lastBufferMessage.value.buffer,
-    }, {
-        slot: 1,
-        shapeIndex: 0,
-        buffer: expectedBuffer,
-    });
-    assert.equal(lastBufferMessage.value.dspSessionId, snapshot.runtimeState.dspSessionId);
-    assert.equal(Number.isSafeInteger(lastBufferMessage.value.deliverySerial), true);
-    assert.equal(lastBufferMessage.value.deliverySerial > 0, true);
+    const installed = [...snapshot.installedMsegData].reverse().find(record => record.input === 3);
+    assert.ok(installed, "Expected actual shared-data installation for slot 1 shape A.");
+    assert.deepEqual(installed.samples, expectedBuffer);
+    assert.equal(installed.dspSessionId, snapshot.runtimeState.dspSessionId);
+    assert.equal(Number.isSafeInteger(installed.deliverySerial) && installed.deliverySerial > 0, true);
 }
 
 export async function beginRackReorderWithoutPointerCapture(page, {

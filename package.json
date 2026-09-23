@@ -162,7 +162,10 @@
     "test:shared-data": "npm run test:shared-data:modules && node --test tests/test_native_value_codegen.mjs",
     "ui:knobs:dev": "vite --config kit/examples/knobs/vite.config.mjs",
     "ui:knobs:build": "vite build --config kit/examples/knobs/vite.config.mjs",
-    "test:knobs": "node --test kit/tests/test_knob_browser.mjs"
+    "test:knobs": "node --test kit/tests/test_knob_browser.mjs",
+    "ui:mseg:dev": "vite --config kit/examples/mseg/vite.config.mjs",
+    "ui:mseg:build": "vite build --config kit/examples/mseg/vite.config.mjs",
+    "test:mseg": "node --test kit/tests/test_mseg_editor_browser.mjs kit/tests/test_mseg_composition_browser.mjs"
   },
   "devDependencies": {
     "@react-grab/mcp": "0.1.29",
