@@ -43,28 +43,13 @@ try {
     await preparePublicWebAssets(webBuildDirectory, assetsDirectory);
     // Sites serves matching static assets before the Worker and does not apply
     // Cloudflare _headers files. Keep the document behind the Worker so its
-    // isolation headers reach the browser; all large assets stay static.
-    await fs.rename(path.join(assetsDirectory, "index.html"), path.join(assetsDirectory, "synth-page.html"));
-    await fs.writeFile(
+    // isolation headers reach the browser. Store it without an HTML extension:
+    // the asset host redirects HTML to clean URLs, bypassing the Worker.
+    await fs.rename(path.join(assetsDirectory, "index.html"), path.join(assetsDirectory, "cosimo-document.bin"));
+    await fs.rm(path.join(assetsDirectory, "synth.html"));
+    await fs.copyFile(
+        path.join(webDirectory, "sites-worker.mjs"),
         path.join(distDirectory, "server", "index.js"),
-        `const worker = {
-    async fetch(request, env) {
-        const url = new URL(request.url);
-        if (url.pathname === "/" || url.pathname === "/index.html") {
-            url.pathname = "/synth-page.html";
-        } else if (url.pathname === "/favicon.ico") {
-            url.pathname = "/favicon.svg";
-        }
-        const asset = await env.ASSETS.fetch(new Request(url, request));
-        const response = new Response(asset.body, asset);
-        response.headers.set("Cross-Origin-Opener-Policy", "same-origin");
-        response.headers.set("Cross-Origin-Embedder-Policy", "require-corp");
-        return response;
-    },
-};
-
-export default worker;
-`,
     );
 } catch (cause) {
     sitesBuildFailure = cause;

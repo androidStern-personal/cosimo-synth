@@ -24,6 +24,23 @@ the bare instrument host; the public shell and bare host both receive audio chec
 
 The generated application lives under `build/web/` and is intentionally not committed.
 
+## Codex Sites hosting
+
+`npm run sites:build` produces the Sites Worker and approved public assets in
+`dist/`. The instrument document is stored as `cosimo-document.bin` and served
+as HTML through the Worker. HTML assets otherwise receive an automatic clean-URL
+redirect from the host, bypassing the Worker and losing the isolation headers
+required by `SharedArrayBuffer`. Keep the document out of static HTML routes.
+
+After deployment, verify the final document, its phone iframe, and real audio
+startup through the hosted routes:
+
+```sh
+COSIMO_SITES_BASE_URL=https://your-site.chatgpt.site node --test tests/test_cosimo_sites_browser.mjs
+```
+
+The local static-server checks do not prove the host's redirect behavior.
+
 ## Vercel hosting
 
 The shared-memory web synth is deployed at https://synth.song-machines.com/ in
