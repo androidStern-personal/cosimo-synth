@@ -76,16 +76,16 @@ test("main Filter Cutoff drag shows the live production response and frequency",
         await hud.waitFor();
         const response = hud.locator('[data-role="parameter-hud-filter"]');
         assert.equal(await response.count(), 1, await hud.innerHTML());
-        assert.equal(await response.locator('[data-role="filter-response-graph"]').count(), 1);
+        assert.equal(await response.locator('[data-role="filter-range-editor-surface"]').count(), 1);
         assert.equal(await hud.locator(".mobile-voice-hud-knob").count(), 0);
         assert.equal(
             await hud.locator('[data-role="mobile-voice-hud-base"]').textContent(),
             await cutoffKnob.getAttribute("aria-valuetext"),
         );
 
-        const initialPath = await response.locator('[data-role="filter-response-graph"] path').first().getAttribute("d");
+        const initialPath = await response.locator('[data-role="filter-range-editor-surface"] path').first().getAttribute("d");
         await page.mouse.move(startX + 72, startY, { steps: 8 });
-        const updatedPath = await response.locator('[data-role="filter-response-graph"] path').first().getAttribute("d");
+        const updatedPath = await response.locator('[data-role="filter-range-editor-surface"] path').first().getAttribute("d");
         assert.notEqual(updatedPath, initialPath, "the production response must follow the live cutoff");
 
         await page.mouse.up();
@@ -103,7 +103,7 @@ test("direct filter-graph dragging hides a lingering HUD while ordinary paramete
         await page.locator('[data-role="filter-mode-chip"]').click();
         const cutoffKnob = page.locator('[data-role="voice-filter-knob-filterCutoff"]');
         const resonanceKnob = page.locator('[data-role="voice-filter-knob-filterQ"]');
-        const graphHandle = page.locator('[data-role="filter-card"] [data-role="filter-response-handle-hit-target"]');
+        const graphHandle = page.locator('[data-role="filter-card"] [data-role="filter-range-value-hit-target"]');
         const [cutoffBounds, resonanceBounds] = await Promise.all([
             cutoffKnob.boundingBox(),
             resonanceKnob.boundingBox(),
@@ -188,15 +188,15 @@ test("Effects Filter Cutoff drag shows the selected rack filter response", async
             await cutoffKnob.getAttribute("aria-valuetext"),
         );
 
-        const initialPath = await response.locator('[data-role="filter-response-graph"] path').first().getAttribute("d");
+        const initialPath = await response.locator('[data-role="filter-range-editor-surface"] path').first().getAttribute("d");
         await page.mouse.move(startX - 72, startY, { steps: 8 });
-        const updatedPath = await response.locator('[data-role="filter-response-graph"] path').first().getAttribute("d");
+        const updatedPath = await response.locator('[data-role="filter-range-editor-surface"] path').first().getAttribute("d");
         assert.notEqual(updatedPath, initialPath, "the rack response must follow the live cutoff");
 
         await page.mouse.up();
 
         const graphHandle = page.locator(
-            '[data-role="rack-editor-filter"] [data-role="filter-response-handle-hit-target"]',
+            '[data-role="rack-editor-filter"] [data-role="filter-range-value-hit-target"]',
         );
         const graphHandleBounds = await graphHandle.boundingBox();
         assert.ok(graphHandleBounds);

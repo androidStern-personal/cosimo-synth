@@ -20,7 +20,8 @@ For large audio data, the author supplies the preparation function. The framewor
 | Shared audio data | Fixed or discovered sizes, one author-supplied memory ceiling, direct writable storage, cancellation, block-boundary publication, and safe cleanup. Native JIT, compiled native, and browser WebAssembly use the same declaration. |
 | Composable knobs | Complete controls or independent input, dial, label, readout, exact-entry, range and live-marker parts. Ordinary menu composition and custom artwork reuse the same editing behavior. |
 | Composable MSEG | Complete editor or Root/Surface/drawing layers, custom handles and inspector commands, shared curve data, Cmajor reader/player and observed playback position. A/B morphing and a drawer are optional compositions. |
-| Shipped agent docs and examples | The kit AGENTS guide links to focused state, shared-data, knob and MSEG guides. Knob and MSEG reference pages include complete Preview/Code examples. |
+| Shared filter editor | One response graph and cutoff/resonance input, with optional cutoff bands, two-dimensional modulation handles, live response and spectrum overlays. Author values, routing and theme remain outside the editor. |
+| Shipped agent docs and examples | The kit AGENTS guide links to focused state, shared-data, knob, MSEG and filter guides. Control reference pages include complete Preview/Code examples. |
 | Native settings | `nativeValue` and `Native` codecs produce matching C++ accessors for a native component. The component still decides what the settings do. |
 | Extensibility | Reusable history and explicit custom-delivery seams remain available underneath the convenient declarations. |
 

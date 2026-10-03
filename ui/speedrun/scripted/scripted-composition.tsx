@@ -176,7 +176,7 @@ function inspectFrame(
             rail: inspectionRect(root.querySelector('[data-role="mobile-global-mod-rail"]')),
             ghost: inspectionRect(root.querySelector('[data-role="mobile-global-mod-source-ghost"]')),
             hud: inspectionRect(root.querySelector('[data-role="mobile-voice-hud"].is-visible')),
-            filterCurve: inspectionRect(root.querySelector('[data-role="filter-response-graph"] path')),
+            filterCurve: inspectionRect(root.querySelector('[data-role="filter-range-editor-surface"] path')),
             keyboard: inspectionRect(root.querySelector(".keyboard")),
         },
         adsrActiveHandle: root.querySelector('[data-role="adsr-editor-surface"]')

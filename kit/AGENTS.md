@@ -19,6 +19,7 @@ This file applies to plug-in repositories built on `kit/`. Owner, product, machi
 | Preparing data for the audio engine | [Shared audio data](docs/SHARED_DATA.md) |
 | Composable knobs and live indicators | [Knob guide and interactive examples](docs/KNOBS.md) |
 | Envelope editing, drawing layers and playback position | [MSEG guide and interactive examples](docs/MSEG.md) |
+| Filter response, modulation handles and spectrum | [Filter guide and interactive examples](docs/FILTERS.md) |
 
 ## Start with the relevant path
 

@@ -203,7 +203,7 @@ function installFilterRangeEditorTestStyles() {
     styleElement.textContent = `
         .filter-range-editor-test {
             width: 640px;
-            height: 320px;
+            grid-template-rows: 320px auto;
         }
         .filter-range-editor-test .filter-range-editor__viewport,
         .filter-range-editor-test .filter-range-editor__surface {

@@ -712,6 +712,56 @@ test("SeqFX production shadow-root host exposes the shared editor token palette"
     }
 });
 
+test("SeqFX packaged filter installs its styles and edits the shared cutoff band", async () => {
+    const page = await browser.newPage();
+    const pageErrors = [];
+    page.on("pageerror", (error) => pageErrors.push(error.message));
+
+    try {
+        const result = await mountProductionView(page);
+        assert.deepEqual(result, { timedOut: false });
+        await page.getByRole("button", { name: "Chain 1 step 1", exact: true }).click();
+        const editor = page.locator('[data-role="filter-range-editor"]');
+        await editor.waitFor();
+        const layout = await editor.evaluate((node) => {
+            const surface = node.querySelector('[data-role="filter-range-editor-surface"]');
+            const bounds = surface?.getBoundingClientRect();
+            return {
+                inShadowRoot: node.getRootNode() instanceof ShadowRoot,
+                styleCount: node.getRootNode().querySelectorAll('style[data-builder-kit-filter]').length,
+                surfaceWidth: bounds?.width ?? 0,
+                surfaceHeight: bounds?.height ?? 0,
+                overflow: node.scrollWidth > node.clientWidth + 1,
+                curve: node.querySelector('[data-role="filter-range-value-response"]')?.getAttribute("d"),
+            };
+        });
+        assert.equal(layout.inShadowRoot, true);
+        assert.equal(layout.styleCount, 1);
+        assert.ok(layout.surfaceWidth > 100 && layout.surfaceHeight > 100);
+        assert.equal(layout.overflow, false);
+        assert.ok(layout.curve?.length > 100);
+
+        const endChip = editor.locator('[data-role="filter-range-chip-end"]');
+        const endBefore = await endChip.textContent();
+        const startGrip = editor.locator('[data-role="filter-range-start-hit-target"]');
+        await startGrip.focus();
+        await page.keyboard.press("End");
+        await page.waitForFunction(() => document.querySelector("cosimo-seqfx-react-view")
+            ?.shadowRoot?.querySelector('[data-role="filter-range-start-hit-target"]')?.getAttribute("aria-valuenow") === "20000");
+        assert.equal(await endChip.textContent(), endBefore, "start edit must preserve the other endpoint");
+
+        const mode = editor.locator('[data-role="filter-range-mode-cycle-button"]');
+        const modeBefore = await mode.getAttribute("data-mode-label");
+        await mode.click();
+        await page.waitForFunction((previous) => document.querySelector("cosimo-seqfx-react-view")
+            ?.shadowRoot?.querySelector('[data-role="filter-range-mode-cycle-button"]')?.getAttribute("data-mode-label") !== previous,
+        modeBefore);
+        assert.deepEqual(pageErrors, []);
+    } finally {
+        await page.close();
+    }
+});
+
 test("SeqFX packaged shadow-root flow renders implemented effect inspectors through Flange", async () => {
     const page = await browser.newPage();
     const pageErrors = [];

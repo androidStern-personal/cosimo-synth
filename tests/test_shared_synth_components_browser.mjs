@@ -494,7 +494,7 @@ test("shared filter range editor exposes the universal cutoff, resonance, range,
         assertAlmostEqual(snapshot.range.endCutoffHz, beforeStartDrag.range.endCutoffHz, 1e-6);
         assertAlmostEqual(snapshot.value.cutoffHz, beforeStartDrag.value.cutoffHz, 1e-6);
         assert.equal(snapshot.readoutCenter, "Center800 Hz");
-        assert.deepEqual(snapshot.editLog.slice(0, 2), ["start:range-start", "end:range-start"]);
+        assert.deepEqual(snapshot.editLog, ["start:value", "end:value", "start:range-start", "end:range-start"]);
 
         const beforeEndDrag = snapshot;
         await dragLocatorBy(page, page.locator('[data-role="filter-range-end-hit-target"]'), -72, 0);

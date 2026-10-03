@@ -71,8 +71,8 @@ test("real Cosimo parameter drags never replay older values during dragging or a
         assert.ok(report.messages <= 115, `50 edits must not produce redundant snapshots (${report.messages})`);
         // The user's second path: pull cutoff down using the graph, including
         // its pointer-up handoff, not a simulated parameter setter.
-        const graph = await page.locator('[data-role="filter-response-graph"]').boundingBox();
-        let handle = await page.locator('[data-role="filter-response-handle-hit-target"]').boundingBox();
+        const graph = await page.locator('[data-role="filter-range-editor-surface"]').boundingBox();
+        let handle = await page.locator('[data-role="filter-range-value-hit-target"]').boundingBox();
         await page.mouse.move(handle.x + handle.width / 2, handle.y + handle.height / 2);
         await page.mouse.down();
         await page.mouse.move(graph.x + graph.width * 0.85, handle.y + handle.height / 2, { steps: 20 });
@@ -80,12 +80,12 @@ test("real Cosimo parameter drags never replay older values during dragging or a
         await page.waitForTimeout(300);
         await page.evaluate(() => {
             const view = document.querySelector("cosimo-desktop-react-view");
-            const handle = view.shadowRoot.querySelector('[data-role="filter-response-handle"]');
+            const handle = view.shadowRoot.querySelector('[data-role="filter-range-value-handle"]');
             window.filterTrace = [Number(handle.getAttribute("cx"))];
             window.filterObserver = new MutationObserver(() => window.filterTrace.push(Number(handle.getAttribute("cx"))));
             window.filterObserver.observe(handle, { attributes: true, attributeFilter: ["cx"] });
         });
-        handle = await page.locator('[data-role="filter-response-handle-hit-target"]').boundingBox();
+        handle = await page.locator('[data-role="filter-range-value-hit-target"]').boundingBox();
         const filterX = handle.x + handle.width / 2, filterY = handle.y + handle.height / 2;
         await page.mouse.move(filterX, filterY);
         await page.mouse.down();

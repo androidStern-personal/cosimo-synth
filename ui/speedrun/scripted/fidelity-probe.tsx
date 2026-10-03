@@ -141,7 +141,7 @@ async function applyScenario(root: HTMLElement, scenario: FidelityScenario) {
         const filterStation = requiredElement(root, '[data-role="rack-station-filter"]');
         filterStation.click();
         await waitForFrames(4);
-        requiredElement(root, '[data-role="filter-response-graph"]');
+        requiredElement(root, '[data-role="filter-range-editor-surface"]');
         return;
     }
 
@@ -176,8 +176,8 @@ function inspect(root: HTMLElement, scenario: FidelityScenario): ProbeInspection
         rail: '[data-role="mobile-global-mod-rail"]',
         knob: '[data-role="parameter-knob-artwork"]',
         filter: scenario === "fx-filter"
-            ? '[data-role="rack-editor-filter"] [data-role="filter-response-graph"]'
-            : '[data-role="mobile-workspace-panel-voice"] [data-role="filter-response-graph"]',
+            ? '[data-role="rack-editor-filter"] [data-role="filter-range-editor-surface"]'
+            : '[data-role="mobile-workspace-panel-voice"] [data-role="filter-range-editor-surface"]',
         image: ".mobile-mod-source-art img",
         hud: '[data-role="mobile-voice-hud"]',
         ghost: '[data-role="mobile-global-mod-source-ghost"]',

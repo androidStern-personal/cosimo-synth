@@ -837,7 +837,7 @@ test("tracked rack graphs and X/Y editors preserve their hidden ordinary axes", 
                 ?.params?.globalFilterCutoffKeyTrackEnabled) === 1
         ));
         const filterHandle = page.locator(
-            '[data-role="rack-editor-filter"] [data-role="filter-response-handle-hit-target"]',
+            '[data-role="rack-editor-filter"] [data-role="filter-range-value-hit-target"]',
         );
         await dragLocatorBy(page, filterHandle, -70, -35);
         let snapshot = await waitForHarnessSnapshot(page, "Global Filter Q graph edit", (next) => (
@@ -1040,14 +1040,14 @@ test("Voice Filter Key Track retains Q travel and presents Cutoff travel in semi
         await page.locator('[data-role="filter-mode-chip"]').click();
         await page.locator('[data-role="filter-travel-overlay"]').waitFor();
         await toggleKeyTrackFromMenu(page, voiceFilterControl(page), "Enable Key Track");
-        const overlay = page.locator('[data-role="filter-travel-overlay"]');
+        const overlay = page.locator('[data-role="cosimo-filter-editor"]');
         await overlay.waitFor();
         assert.equal(await overlay.getAttribute("data-cutoff-route-storage"), "0.375");
         assert.equal(
             (await page.locator('[data-role="filter-travel-cutoff-amount-label"]').textContent())?.trim(),
             "4.5 st",
         );
-        const baseY = Number(await page.locator('[data-role="filter-response-handle"]').getAttribute("cy"));
+        const baseY = Number(await page.locator('[data-role="filter-range-value-handle"]').getAttribute("cy"));
         const endHandle = page.locator('[data-role="filter-travel-hit-target-end"]');
         const endY = Number(await page.locator('[data-role="filter-travel-handle-end"]').getAttribute("cy"));
         assert.notEqual(endY, baseY, "The armed Q route must retain visible travel.");

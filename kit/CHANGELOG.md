@@ -14,7 +14,8 @@
 - Reusable MSEG curve state, math, rendering, editing interactions, composable surfaces, and a Cmajor reader/player. The editor handles one curve without requiring a drawer or A/B morphing.
 - Composable knobs: complete controls and independent input, dial, label, readout, exact-entry, range and live-marker parts. Linear/log/custom scales, two-axis input, menu composition and custom artwork share the same editing behavior.
 - Composable MSEG Root/Surface/layers, custom point artwork, inspector commands, reference curves, sampled plots, time axes and live playheads. The included Reader reports observed playback with activity and retrigger identity; the public adapter handles subscription, stale reports and cleanup.
-- Complete Preview/Code reference pages for knobs and MSEGs, including an offline real-DSP MSEG playback example. Agent documentation ships under `kit/docs/` and is linked from the kit guide.
+- Shared filter editor with cutoff bands or two-dimensional modulation handles, live response, optional FFT overlays and per-root style installation. `FilterRangeEditor` remains a compatible alias.
+- Complete Preview/Code reference pages for knobs, MSEGs and filters, including an offline real-DSP MSEG playback example. Agent documentation ships under `kit/docs/` and is linked from the kit guide.
 - Typed native settings through `nativeValue` and `Native` codecs, with matching generated C++ readers.
 - An independently reusable `UndoHistory` module and documented extension points for specialized delivery protocols.
 
@@ -37,7 +38,7 @@ Existing plugins are not automatically rewritten to use the new state API. An ag
 
 The supported customer installation target remains Apple silicon on macOS 15 or newer. Browser shared-memory execution needs cross-origin isolation. This release does not promise Windows/Intel qualification, background CPU execution for every preparation callback, or a general-purpose ADSR editor.
 
-See [Plugin state](docs/PLUGIN_STATE.md), [Shared audio data](docs/SHARED_DATA.md), [Knobs](docs/KNOBS.md), [MSEGs](docs/MSEG.md), and the [kit-update skill](skills/kit-update/SKILL.md).
+See [Plugin state](docs/PLUGIN_STATE.md), [Shared audio data](docs/SHARED_DATA.md), [Knobs](docs/KNOBS.md), [MSEGs](docs/MSEG.md), [Filters](docs/FILTERS.md), and the [kit-update skill](skills/kit-update/SKILL.md).
 
 ## 0.1.5 — 2026-09-09
 

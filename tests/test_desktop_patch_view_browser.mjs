@@ -757,7 +757,7 @@ test("desktop voice visuals stack full-width above the compact panel grid", asyn
                 filterResonanceField: rectOf('[data-role="filter-resonance-field"]'),
                 distortionModeButton: rectOf('[data-role="distortion-mode-option-1"]'),
                 filter: rectOf('[data-role="filter-card"]'),
-                filterGraph: rectOf('[data-role="filter-response-graph"]'),
+                filterGraph: rectOf('[data-role="filter-range-editor-surface"]'),
             };
             });
 
@@ -2941,7 +2941,7 @@ test("a travel axis without its own mapping stays pinned at base and never fabri
         const handleY = await page.locator('[data-role="filter-travel-handle-end"]').evaluate((element) => (
             Number(element.getAttribute("cy"))
         ));
-        const baseY = await page.locator('[data-role="filter-response-handle"]').evaluate((element) => (
+        const baseY = await page.locator('[data-role="filter-range-value-handle"]').evaluate((element) => (
             Number(element.getAttribute("cy"))
         ));
         assert.ok(Math.abs(handleY - baseY) <= 1, `end handle must sit at base Q: ${handleY} vs ${baseY}`);
@@ -3106,7 +3106,7 @@ test("unipolar travel: the center grip translates while the base handle pins the
         // so base moves and the amount compensates.
         const endHzBefore = Number(await page.locator('[data-role="filter-travel-hit-target-end"]').getAttribute("aria-valuenow"));
         const baseBefore = Number(translated.parameterValues.filterCutoff);
-        await dragBy(page.locator('[data-role="filter-response-handle-hit-target"]'), 30);
+        await dragBy(page.locator('[data-role="filter-range-value-hit-target"]'), 30);
         const pinned = await waitForHarnessSnapshot(
             page,
             "base-as-start drag",
@@ -3179,7 +3179,7 @@ test("center-grip translation moves both endpoints by the same pixels on the non
         // base sits mid-range: the exact configuration that used to make a
         // parameter-space translation move one handle far more than the other.
         const readHandleYs = () => page.evaluate(() => ({
-            base: Number(document.querySelector('[data-role="filter-response-handle"]')?.getAttribute("cy")),
+            base: Number(document.querySelector('[data-role="filter-range-value-handle"]')?.getAttribute("cy")),
             end: Number(document.querySelector('[data-role="filter-travel-handle-end"]')?.getAttribute("cy")),
         }));
         const before = await readHandleYs();
@@ -3193,7 +3193,7 @@ test("center-grip translation moves both endpoints by the same pixels on the non
         await page.mouse.up();
 
         await page.waitForFunction((baseYBefore) => {
-            const baseY = Number(document.querySelector('[data-role="filter-response-handle"]')?.getAttribute("cy"));
+            const baseY = Number(document.querySelector('[data-role="filter-range-value-handle"]')?.getAttribute("cy"));
             return Math.abs(baseY - baseYBefore) > 20;
         }, before.base);
         const after = await readHandleYs();

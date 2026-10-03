@@ -47,7 +47,8 @@ export * from "./ui/editor-tokens";
 export * from "./ui/editor-tick-slider";
 export * from "./ui/editor-curve-surface";
 export * from "./ui/editor-curve-geometry";
-export * from "./ui/filter-range-editor";
+export * from "./ui/filter-editor";
+export * from "./ui/filter-spectrum";
 export * from "./ui/parameter-value-entry";
 export * from "./ui/enhancer-spectrum";
 

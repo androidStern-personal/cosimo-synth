@@ -589,7 +589,7 @@ export async function dispatchRackKnobPointerEvents(locator, events) {
 }
 
 export async function clickFilterGraphAt(page, normalizedX, normalizedY) {
-    const graph = page.locator('[data-role="filter-response-graph"]');
+    const graph = page.locator('[data-role="filter-range-editor-surface"]');
     await graph.scrollIntoViewIfNeeded();
     const box = await graph.boundingBox();
 
@@ -604,7 +604,7 @@ export async function clickFilterGraphAt(page, normalizedX, normalizedY) {
 }
 
 export async function dragFilterHandleBy(page, deltaX, deltaY) {
-    const handle = page.locator('[data-role="filter-response-handle-hit-target"]');
+    const handle = page.locator('[data-role="filter-range-value-hit-target"]');
     await handle.scrollIntoViewIfNeeded();
     const box = await handle.boundingBox();
 

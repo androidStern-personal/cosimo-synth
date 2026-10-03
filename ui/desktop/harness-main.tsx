@@ -116,7 +116,9 @@ function readFilterGraphState() {
     }
 
     try {
-        return JSON.parse(rawDebug);
+        const parsed = JSON.parse(rawDebug);
+        const curve = getDesktopViewRoot()?.querySelector('[data-role="cosimo-filter-editor"]')?.getAttribute("data-resonance-curve");
+        return { ...parsed, resonanceCurve: curve ? JSON.parse(curve) : null };
     } catch {
         return null;
     }

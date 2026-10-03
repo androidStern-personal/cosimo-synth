@@ -1,3 +1,160 @@
+:where(.filter-range-editor) {
+    --filter-spectrum-rgb: 0 180 216;
+    /* Surface */
+    --editor-surface-bg: #e4ded3;
+    --editor-surface-border: #1c1c1c;
+    --editor-surface-ink: #1c1c1c;
+    --editor-surface-ink-muted: #6f716d;
+
+    /* Plot structure */
+    --editor-grid-stroke: rgba(28, 28, 28, 0.12);
+    --editor-axis-stroke: rgba(28, 28, 28, 0.44);
+    --editor-zone-fill: rgba(28, 28, 28, 0.05);
+    --editor-zone-stroke: rgba(28, 28, 28, 0.32);
+
+    /* Primary curve / envelope */
+    --editor-curve-stroke: #1c1c1c;
+    --editor-curve-stroke-width: 2.6;
+    --editor-curve-fill: rgba(0, 180, 216, 0.22);
+    --editor-curve-preview-stroke: #f4923a;
+    --editor-curve-preview-stroke-width: 1.8;
+
+    /* Canonical accent pair (from filter range handles) */
+    --editor-accent-start: #00b4d8;
+    --editor-accent-start-ink: #1c1c1c;
+    --editor-accent-start-border: rgba(0, 100, 140, 0.35);
+    --editor-accent-end: #e8604c;
+    --editor-accent-end-ink: #f0ece6;
+    --editor-accent-end-border: rgba(200, 40, 20, 0.28);
+    --editor-accent-range: #f2d16b;
+    --editor-accent-range-ink: #1c1c1c;
+
+    /* Primary draggable handle (filter-style: halo + dark center + light stroke) */
+    --editor-handle-fill: #1c1c1c;
+    --editor-handle-stroke: #f0ece6;
+    --editor-handle-stroke-width: 2;
+    --editor-handle-halo-fill: rgba(240, 236, 230, 0.72);
+    --editor-handle-halo-stroke: #1c1c1c;
+    --editor-handle-halo-stroke-width: 1.2;
+
+    /* Typography
+       One font stack, one weight. Every label/chip/readout uses these. */
+    --editor-label-font: Menlo, Monaco, "Liberation Mono", monospace;
+    --editor-label-weight: 800;
+    --editor-label-letter-spacing: 0;
+    --editor-label-size-sm: 10px;
+    --editor-label-size-md: 11px;
+
+    /* Chips (value readouts that ride on the plot) */
+    --editor-chip-ink: #f0ece6;
+    --editor-chip-bg: #1c1c1c;
+    --editor-chip-border: rgba(28, 28, 28, 0.28);
+    --editor-chip-radius: 3px;
+    --editor-chip-padding: 3px 6px;
+
+    /* Overlay pills (auxiliary controls like slices/speed or Q readout) */
+    --editor-pill-bg: rgba(240, 236, 230, 0.92);
+    --editor-pill-border: rgba(28, 28, 28, 0.42);
+    --editor-pill-shadow: 0 2px 6px rgba(28, 28, 28, 0.1);
+    --editor-pill-radius: 6px;
+}
+
+.filter-range-editor .editor-curve-surface {
+    display: block;
+    width: 100%;
+    height: 100%;
+    overflow: visible;
+    color: var(--editor-surface-ink);
+}
+
+.filter-range-editor .editor-curve-plot-area {
+    fill: var(--editor-zone-fill);
+    stroke: var(--editor-zone-stroke);
+    stroke-width: 1;
+}
+
+.filter-range-editor .editor-curve-grid-line {
+    stroke: var(--editor-grid-stroke);
+    stroke-width: 1;
+    shape-rendering: crispEdges;
+}
+
+.filter-range-editor .editor-curve-axis {
+    stroke: var(--editor-axis-stroke);
+    stroke-width: 1;
+    shape-rendering: crispEdges;
+}
+
+.filter-range-editor .editor-curve-path {
+    fill: none;
+    stroke: var(--editor-curve-stroke);
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    stroke-width: var(--editor-curve-stroke-width);
+}
+
+.filter-range-editor .editor-curve-path--preview {
+    stroke: var(--editor-curve-preview-stroke);
+    stroke-width: var(--editor-curve-preview-stroke-width);
+    opacity: 0.95;
+}
+
+.filter-range-editor .editor-curve-path--muted {
+    opacity: 0.34;
+}
+
+.filter-range-editor .editor-curve-path--highlight {
+    stroke: var(--editor-accent-range);
+}
+
+.filter-range-editor .editor-curve-fill {
+    fill: var(--editor-curve-fill);
+}
+
+.filter-range-editor .editor-curve-handle-halo {
+    fill: var(--editor-handle-halo-fill);
+    stroke: var(--editor-handle-halo-stroke);
+    stroke-width: var(--editor-handle-halo-stroke-width);
+}
+
+.filter-range-editor .editor-curve-handle {
+    fill: var(--editor-handle-fill);
+    stroke: var(--editor-handle-stroke);
+    stroke-width: var(--editor-handle-stroke-width);
+    cursor: grab;
+}
+
+.filter-range-editor .editor-curve-handle:active {
+    cursor: grabbing;
+}
+
+.filter-range-editor .editor-curve-handle--range-start {
+    fill: var(--editor-accent-start);
+    stroke: var(--editor-surface-ink);
+    stroke-width: 1.5;
+}
+
+.filter-range-editor .editor-curve-handle--range-end {
+    fill: var(--editor-accent-end);
+    stroke: var(--editor-surface-ink);
+    stroke-width: 1.5;
+}
+
+.filter-range-editor .editor-curve-handle--secondary {
+    fill: var(--editor-accent-range);
+    stroke: var(--editor-surface-ink);
+    stroke-width: 1.5;
+}
+
+.filter-range-editor .editor-curve-hit-target {
+    fill: transparent;
+    cursor: grab;
+}
+
+.filter-range-editor .editor-curve-hit-target:active {
+    cursor: grabbing;
+}
+
 .filter-range-editor {
     container-type: inline-size;
     display: grid;
@@ -275,3 +432,12 @@
         display: none;
     }
 }
+
+.filter-editor__spectrum { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+.filter-range-editor[data-disabled] { opacity: .5; }
+.filter-range-editor[data-disabled] .editor-curve-hit-target,
+.filter-range-editor[data-readonly] .editor-curve-hit-target { cursor: default; }
+.filter-range-editor .editor-curve-hit-target:focus-visible,
+.filter-range-editor [role="slider"]:focus-visible { outline: none; stroke: var(--editor-accent-start); stroke-width: 2; }
+
+.filter-range-editor[data-has-range="false"] .filter-range-editor__readout { grid-template-columns: repeat(2, minmax(0, 1fr)); }

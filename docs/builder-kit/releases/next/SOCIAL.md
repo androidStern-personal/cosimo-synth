@@ -36,7 +36,7 @@ Demonstrate that promise with the same state hook for a simple parameter and a c
 
 The direct [TanStack Query comparison](https://tanstack.com/query/latest/docs/framework/react/reference/functions/useQuery) is about approachable hooks over difficult state coordination. `usePluginState` also exposes editing and shared Undo; this is our audio-plugin API, not TanStack Query integration.
 
-The [shadcn comparison](https://ui.shadcn.com/docs) is about editable source and composition. The exported kit contains the MSEG editor/surface, filter-range editor, sliders, parameter entry and preset/snapshot controls. Composable knobs and MSEG layers ship through the public kit entry. The kit examples exercise ordinary Radix menu composition; private routing menus, the Cosimo HUD and the ADSR editor are not bundled.
+The [shadcn comparison](https://ui.shadcn.com/docs) is about editable source and composition. The exported kit contains the MSEG editor/surface, shared filter editor with cutoff bands, two-axis modulation handles and an optional spectrum, sliders, parameter entry and preset/snapshot controls. Composable knobs and MSEG layers ship through the public kit entry. The kit examples exercise ordinary Radix menu composition; private routing menus, the Cosimo HUD and the ADSR editor are not bundled.
 
 ## Two-image code carousel
 

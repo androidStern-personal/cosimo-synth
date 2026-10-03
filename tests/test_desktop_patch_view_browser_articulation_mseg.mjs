@@ -2374,8 +2374,8 @@ test("desktop filter graph follows live effective filter state and falls back to
 
     try {
         const filterCard = page.locator('[data-role="filter-card"]');
-        const filterGraph = page.locator('[data-role="filter-response-graph"]');
-        const filterHandle = page.locator('[data-role="filter-response-handle-hit-target"]');
+        const filterGraph = page.locator('[data-role="filter-range-editor-surface"]');
+        const filterHandle = page.locator('[data-role="filter-range-value-hit-target"]');
         const filterCardBox = await filterCard.boundingBox();
         const filterGraphBox = await filterGraph.boundingBox();
         const filterHandleBox = await filterHandle.boundingBox();
@@ -2519,7 +2519,7 @@ test("desktop filter graph closes both host gestures when the window blurs mid-d
     const page = await openHarnessPage();
 
     try {
-        const handle = page.locator('[data-role="filter-response-handle-hit-target"]');
+        const handle = page.locator('[data-role="filter-range-value-hit-target"]');
         await handle.scrollIntoViewIfNeeded();
         const bounds = await handle.boundingBox();
         assert.ok(bounds);
@@ -2550,8 +2550,8 @@ test("desktop filter graph keeps tracking touch when pointer capture is unavaila
     const page = await openHarnessPage();
 
     try {
-        const graph = page.locator('[data-role="filter-response-graph"]');
-        const handle = page.locator('[data-role="filter-response-handle-hit-target"]');
+        const graph = page.locator('[data-role="filter-range-editor-surface"]');
+        const handle = page.locator('[data-role="filter-range-value-hit-target"]');
         const bounds = await handle.boundingBox();
         assert.ok(bounds);
         await graph.evaluate((element) => {

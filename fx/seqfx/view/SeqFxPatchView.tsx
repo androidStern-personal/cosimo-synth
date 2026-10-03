@@ -3,7 +3,7 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperti
 import type { PatchConnectionLike } from "../../../kit/index";
 import { createEffectHeader, EffectSnapshotBankController, createStandaloneEffectPresetController } from "../../../kit/index";
 import {
-    FilterRangeEditor,
+    FilterEditor,
     type FilterRangeEndpoints,
     type FilterRangeMode,
     type FilterRangeModeOption,
@@ -5329,7 +5329,7 @@ export function SeqFxPatchView({
                                                     ))}
                                                 </div>
                                             ) : null}
-                                            <FilterRangeEditor
+                                            <FilterEditor
                                                 ariaLabel="SeqFX filter range editor"
                                                 modeOptions={SEQFX_FILTER_MODE_OPTIONS}
                                                 range={filterRangeEndpointsFromSeqFxStep(inspectedCell)}
