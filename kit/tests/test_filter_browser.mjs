@@ -74,9 +74,14 @@ test('analyzer modes, live preview and removing a frame change the actual canvas
     let d=await debug(s);assert.equal(d.spectrum.renderGeometry.kind,'graph');assert.ok(d.live.hasActive)
     const canvas=s.locator('canvas'), graphImage=await canvas.evaluate(c=>c.toDataURL())
     await s.getByRole('combobox').selectOption('round-bars');await page.waitForFunction(()=>JSON.parse(document.querySelector('#analyzer [data-role=filter-graph-debug]').textContent).spectrum.renderGeometry?.rounded)
-    assert.notEqual(await canvas.evaluate(c=>c.toDataURL()),graphImage)
+    // The DOM describes the next geometry before its requestAnimationFrame paints it.
+    // Verify the actual pixels, rather than assuming the state update already painted.
+    await page.waitForFunction(image=>document.querySelector('#analyzer canvas').toDataURL()!==image,graphImage)
     await s.getByRole('checkbox').uncheck();await page.waitForFunction(()=>!JSON.parse(document.querySelector('#analyzer [data-role=filter-graph-debug]').textContent).spectrum.hasSpectrum)
-    assert.equal(await canvas.evaluate(c=>Array.from(c.getContext('2d').getImageData(0,0,c.width,c.height).data).some(v=>v!==0)),false)
+    await page.waitForFunction(()=>{
+        const c=document.querySelector('#analyzer canvas')
+        return !Array.from(c.getContext('2d').getImageData(0,0,c.width,c.height).data).some(v=>v!==0)
+    })
 }))
 test('custom styles do not change interaction and read-only/disabled prevent writes',()=>withPage(async page=>{
     const s=page.locator('#states'), h=valueHandle(s)
@@ -98,7 +103,7 @@ test('copied examples typecheck using only the public kit boundary',async()=>{
     const files=['default','band','modulation','analyzer','states'].map(n=>path.join(root,'kit/examples/filters/'+n+'.tsx'))
     const config=ts.readConfigFile(path.join(root,'tsconfig.json'),ts.sys.readFile).config
     const options=ts.parseJsonConfigFileContent(config,ts.sys,root).options
-    const program=ts.createProgram([...files,path.join(root,'kit/ui/style-modules.d.ts')],{...options,noEmit:true})
+    const program=ts.createProgram([...files,path.join(root,'kit/ui/style-modules.d.ts')],{...options,types:['vite/client'],noEmit:true})
     assert.deepEqual(ts.getPreEmitDiagnostics(program).map(d=>ts.flattenDiagnosticMessageText(d.messageText,'\n')),[])
     for(const file of files){const source=await readFile(file,'utf8');assert.ok(!source.includes('/ui/filter-'));assert.ok(!source.includes('ui/shared'))}
 })
