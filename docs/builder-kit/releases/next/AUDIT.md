@@ -1,5 +1,7 @@
 # Builder Kit release audit — 2026-09-12
 
+October 3 component follow-up: the shared filter editor, Cosimo/SeqFX migration, shipped examples/docs and updated launch copy are qualified on `codex/builder-kit-knob-318e`. See [FILTER-EXTRACTION.md](../../FILTER-EXTRACTION.md) for exact source, independent customer export and verification limits. This does not replace the final composed-release gates.
+
 ## September 24 component candidate
 
 Knob and MSEG composition, copied-code demos, bundled docs, and updated launch copy are implemented on `codex/builder-kit-knob-318e`. See [the component handoff](../../MSEG-EXTRACTION.md) for current source and independently installed customer-export evidence. The native/package qualifications below belong to their named earlier source and do not certify this new component candidate. Integration must rerun the release gates on its composed source. No public release or customer email has been sent by this task.
