@@ -57,6 +57,8 @@ Defaults install once per document or shadow root and disappear when the last ed
 
 Common tokens: `--editor-surface-bg`, `--editor-surface-ink`, `--editor-surface-ink-muted`, `--editor-grid-stroke`, `--editor-axis-stroke`, `--editor-zone-fill`, `--editor-zone-stroke`, `--editor-curve-stroke`, `--editor-curve-stroke-width`, `--editor-curve-preview-stroke`, `--editor-handle-fill`, `--editor-handle-stroke`, `--editor-handle-halo-fill`, `--editor-handle-halo-stroke`, `--editor-accent-start`, `--editor-accent-end`, and `--filter-spectrum-rgb` (three space-separated RGB channels). Modulation can use `color` or `--filter-modulation-color`; `--filter-modulation-handle-fill` controls hollow grip backgrounds. The remaining chip, label, and readout tokens are listed in `kit/ui/filter-editor.css`.
 
+The mode button follows the surface colors in light and dark themes. Override `--filter-mode-background`, `--filter-mode-hover-background`, `--filter-mode-active-background` or `--filter-mode-border` for separate button chrome.
+
 The viewport sizes itself to its container. Override `.filter-range-editor__viewport` for a fixed height; `plotPadding={{ horizontal, top, bottom }}` sets geometry spacing in pixels. `sampleRateHz` controls the response calculation (default 44,100). The spectrum uses its own frame sample rate. Optional `spectrum.timestampMs` gives deterministic smoothing in a recording or replay.
 
 `FilterRangeEditor` remains a compatibility alias of `FilterEditor`, with the same existing cutoff-band props and helpers. There is one response sampler and one gesture implementation for both presentations.

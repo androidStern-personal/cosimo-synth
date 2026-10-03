@@ -86,6 +86,22 @@ test('analyzer modes, live preview and removing a frame change the actual canvas
 test('custom styles do not change interaction and read-only/disabled prevent writes',()=>withPage(async page=>{
     const s=page.locator('#states'), h=valueHandle(s)
     assert.equal(await s.locator('[data-role=filter-range-value-response]').evaluate(n=>getComputedStyle(n).stroke),'rgb(235, 166, 118)')
+    const contrast=await s.locator('[data-role=filter-range-mode-cycle-button]').evaluate(node=>{
+        const style=getComputedStyle(node), canvas=document.createElement('canvas')
+        canvas.width=canvas.height=1
+        const context=canvas.getContext('2d')
+        const luminance=color=>{
+            context.fillStyle=color;context.fillRect(0,0,1,1)
+            const channels=Array.from(context.getImageData(0,0,1,1).data).slice(0,3).map(value=>{
+                const channel=value/255
+                return channel<=0.04045?channel/12.92:((channel+0.055)/1.055)**2.4
+            })
+            return channels[0]*0.2126+channels[1]*0.7152+channels[2]*0.0722
+        }
+        const ink=luminance(style.color), background=luminance(style.backgroundColor)
+        return (Math.max(ink,background)+0.05)/(Math.min(ink,background)+0.05)
+    })
+    assert.ok(contrast>=4.5,`dark mode icon must remain legible, contrast was ${contrast}`)
     await drag(page,h,20,-30);assert.ok((await debug(s)).base.cutoffHz>400)
     await s.getByRole('checkbox',{name:'Read only'}).check();let original=await h.getAttribute('aria-valuetext');await h.press('ArrowRight');await drag(page,h,20,20);assert.equal(await h.getAttribute('aria-valuetext'),original)
     await s.getByRole('button',{name:'External reset'}).click();assert.equal((await debug(s)).base.cutoffHz,3000)

@@ -2729,6 +2729,10 @@ select {
 .seqfx-inspector .filter-range-editor__mode-cycle {
     width: 24px;
     height: 24px;
+    --filter-mode-background: rgba(240, 236, 230, 0.85);
+    --filter-mode-hover-background: rgba(240, 236, 230, 1);
+    --filter-mode-active-background: rgba(28, 28, 28, 0.12);
+    --filter-mode-border: rgba(28, 28, 28, 0.38);
 }
 
 .seqfx-inspector :is(

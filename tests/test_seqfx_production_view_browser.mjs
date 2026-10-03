@@ -732,6 +732,7 @@ test("SeqFX packaged filter installs its styles and edits the shared cutoff band
                 surfaceWidth: bounds?.width ?? 0,
                 surfaceHeight: bounds?.height ?? 0,
                 overflow: node.scrollWidth > node.clientWidth + 1,
+                modeBackground: getComputedStyle(node.querySelector('[data-role="filter-range-mode-cycle-button"]')).backgroundColor,
                 curve: node.querySelector('[data-role="filter-range-value-response"]')?.getAttribute("d"),
             };
         });
@@ -739,6 +740,7 @@ test("SeqFX packaged filter installs its styles and edits the shared cutoff band
         assert.equal(layout.styleCount, 1);
         assert.ok(layout.surfaceWidth > 100 && layout.surfaceHeight > 100);
         assert.equal(layout.overflow, false);
+        assert.equal(layout.modeBackground, "rgba(240, 236, 230, 0.85)");
         assert.ok(layout.curve?.length > 100);
 
         const endChip = editor.locator('[data-role="filter-range-chip-end"]');
