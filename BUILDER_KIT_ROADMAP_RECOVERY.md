@@ -1,6 +1,6 @@
 # Builder Kit roadmap recovery — September 9, 2026
 
-October 4 release progress: component/state integration, fresh customer package/native/audio/update qualification, and release-email sender implementation are complete. See [the current qualification record](docs/builder-kit/releases/next/QUALIFICATION-2026-10-04.md) and [release sequence](docs/builder-kit/releases/next/RELEASE-AND-EMAIL.md). Publication/deployment and live customer delivery remain separate from these results; the recovered product roadmap below remains the broader plan.
+October 4 release progress: component/state integration, concise control docs including sliders, fresh customer package/native/audio/update qualification, release page/video/email preparation, and sender implementation are complete. [Final preparation and remaining gates](docs/builder-kit/releases/next/FINAL-PREPARATION-2026-10-04.md) is the current release checklist. See [the current qualification record](docs/builder-kit/releases/next/QUALIFICATION-2026-10-04.md) and [release sequence](docs/builder-kit/releases/next/RELEASE-AND-EMAIL.md). Publication/deployment and live customer delivery remain separate from these results; the recovered product roadmap below remains the broader plan.
 
 ## Recovered documents
 

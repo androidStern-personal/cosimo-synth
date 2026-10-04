@@ -1,6 +1,6 @@
 # Publishing the next Builder Kit update
 
-Candidate version: **0.2.0**, committed and qualified; not published. The component branch is integrated into `codex/builder-kit-020-candidate`. [The October 4 qualification](QUALIFICATION-2026-10-04.md) records the exact source, customer installation/update/native results, and implemented email sender.
+Candidate version: **0.2.0**, committed and qualified; not published. [Final preparation](FINAL-PREPARATION-2026-10-04.md) records the revised control docs, final customer/native checks, and frozen launch assets. The component branch is integrated into `codex/builder-kit-020-candidate`. [The October 4 qualification](QUALIFICATION-2026-10-04.md) records the exact source, customer installation/update/native results, and implemented email sender.
 
 ## The shortest complete release path
 
