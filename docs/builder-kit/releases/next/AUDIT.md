@@ -2,7 +2,7 @@
 
 ## Current result — October 4
 
-The latest exact-source qualification and launch assets are recorded in [final preparation](FINAL-PREPARATION-2026-10-04.md). It supersedes the current-status wording below; the older evidence remains attached to its named source.
+Use the [release plan](RELEASE-AND-EMAIL.md) for current actions and scope, and [final preparation](FINAL-PREPARATION-2026-10-04.md) for the latest exact-source qualification and launch assets. These supersede the current-status wording below; older evidence remains attached to its named source.
 
 The complete component/state source is integrated and qualified on `codex/builder-kit-020-candidate`, from exact source `d8c0f97d4f48497d3b1378158f5dba5ebd37c82c`. Fresh tool builds, current export/archive scans, independent HTTP installation, browser UI and real AudioWorklet audio, native build/pluginval, and an actual 0.1.5 update with a real customized plug-in all passed. The release-email sender is implemented on store branch `codex/builder-kit-release-email-318e` at `8aab1b5`; all 115 store tests and build checks passed.
 

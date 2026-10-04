@@ -1,5 +1,7 @@
 # Builder Kit 0.2.0 — final preparation, October 4, 2026
 
+Evidence record. Use the [release plan](RELEASE-AND-EMAIL.md) for the current checklist and launch scope.
+
 Prepared and qualified; not published. The executable/source candidate is **9b85292337834aaa4ab0e49a4ee6c7638f9e77bb** on `codex/builder-kit-020-candidate`. Store/release-page source is **dbab0d5542166b3a451d5973de17999846f8c2e6** on `codex/builder-kit-release-email-318e`. Later commits that record this evidence do not change the kit or store runtime.
 
 ## Completed

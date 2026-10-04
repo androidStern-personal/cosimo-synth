@@ -1,65 +1,35 @@
-# Publishing the next Builder Kit update
+# Builder Kit 0.2.0 release plan
 
-Candidate version: **0.2.0**, committed and qualified; not published. [Final preparation](FINAL-PREPARATION-2026-10-04.md) records the revised control docs, final customer/native checks, and frozen launch assets. The component branch is integrated into `codex/builder-kit-020-candidate`. [The October 4 qualification](QUALIFICATION-2026-10-04.md) records the exact source, customer installation/update/native results, and implemented email sender.
+**Prepared and qualified; not published.** Current checklist below; [qualification evidence](FINAL-PREPARATION-2026-10-04.md) stays separate.
 
-## The shortest complete release path
+## Source and scope
 
-1. **Done:** integrate the component/state source into the isolated release candidate. Existing customer Git history is preserved.
-2. **Done:** construct a staged 0.2.0 candidate through the existing release command with freshly rebuilt, hash-verified tools from the committed Cmajor pin. Current export/archive privacy scans passed.
-3. **Done:** install over HTTP as an independent customer; qualify the example, browser controls, native build, and pluginval; update actual 0.1.5 with a real customer plug-in present. Customer work survived unchanged; a deliberate mixed edit stopped as a conflict.
-4. **Remaining:** review and publish the qualified release at its production destination, publish its stable changelog, deploy the reviewed email callback integration, verify one authorized operator delivery, then send the approved owner notice and social announcement. Candidate staging URLs are temporary loopback URLs, not publication.
+- Kit: `codex/builder-kit-020-candidate`; qualified code **9b852923**. Later planning commits leave the customer kit unchanged.
+- Website/email: `codex/builder-kit-release-email-318e`; qualified code **dbab0d5** in [song-machines-website](https://github.com/androidStern-personal/song-machines-website/tree/dbab0d5542166b3a451d5973de17999846f8c2e6). Later evidence commits leave runtime/assets unchanged.
 
-## Changelog
-
-`kit/CHANGELOG.md` is the customer changelog; it ships through the existing kit export. The exported README now links it. Keep new entries under **Unreleased** while work is in progress. When the release is qualified, move those entries under the actual version/date.
-
-Use the same reviewed entries for the public release page. [WRITEUP.md](WRITEUP.md) supplies the full launch narrative and code examples. [SOCIAL.md](SOCIAL.md) is the shorter public copy. Do not maintain conflicting independent accounts of what shipped.
-
-Each version's entry also carries **Update instructions** and a copyable release-specific prompt. State required compatibility changes, optional adoption and relevant documentation there. The email supplies the target version and points to that section; `kit-update` reads the changelog from the fetched release before merging, including applicable skipped-release instructions. Keep the general update procedure in the skill instead of repeating it in every release entry.
-
-## Email: reuse the store's existing sender
-
-The store already records purchases and email deliveries, and sends customer access mail through **Resend**. A new email provider, newsletter system, or always-running worker is unnecessary for the first release notice.
-
-What already exists:
-
-- Paid/entitled order records, purchase email addresses, and access recovery.
-- A durable email delivery record, stable provider idempotency key, and a Resend sender.
-- A separate optional marketing topic and draft template. Its mixed customer/subscriber segment is not a release-delivery recipient list.
-
-Implemented and tested on store branch `codex/builder-kit-release-email-318e`, commit `8aab1b5`:
-
-1. A frozen release payload containing the version, sender, subject, HTML, plain text, and stable links. The Resend adapter sends both styled HTML and plain text.
-2. `npm run email:release` with plan, enqueue, send, status, retry, and reconciliation actions over the existing SQLite/Blob purchase ledger. It deduplicates by **product + version + normalized recipient email**, includes guest purchase addresses and supported gifted/refunded lifetime access, and rechecks eligibility before sending.
-3. Durable delivery records, persisted claims across operators, identical retry payloads/keys, and held reconciliation for unresolved attempts past the safe provider window. Accepted deliveries remain deduplicated after restart and beyond that window.
-4. Verified signed customer delivery callbacks, including lost acknowledgements and bounce/complaint suppression without removing access. Register the existing endpoint's delivery events after the reviewed code is deployed; no registration was performed here.
-
-The store's `docs/RELEASE-EMAIL.md` contains exact operator instructions. All **115 store tests**, including **16 release-email tests**, static validation, and the deployment build pass. No provider or inbox acceptance is claimed from fixtures.
-
-No automatic release polling is needed. Sending should follow a verified publication, using its frozen changelog and links. A later release job can invoke the same operation.
-
-## What kind of email this is
-
-Keep this first email a factual notice delivering an update the recipient already owns: what is included, where its notes are, how to update, and how to get support. Keep upsells, invitations to buy, and the social sales pitch out of it.
-
-The US rule expressly includes entitled product updates/upgrades in transactional/relationship delivery. The subject and primary content still matter; an existing purchase alone does not make every email transactional. UK guidance likewise distinguishes routine service communications from promotion. [16 CFR 316.3](https://www.ecfr.gov/current/title-16/chapter-I/subchapter-C/part-316/section-316.3), [FTC guidance](https://www.ftc.gov/business-guidance/resources/can-spam-act-compliance-guide-business), [ICO guidance](https://ico.org.uk/for-organisations/direct-marketing-and-privacy-and-electronic-communications/direct-marketing-and-regulatory-communications/).
-
-This implementation does not build a new preference center for the factual delivery notice. If the email becomes an optional promotional newsletter, use the existing marketing consent/topic and unsubscribe handling. Do not treat the word “product update” as a blanket exemption across jurisdictions.
-
-Provider retry behavior: [Resend idempotency documentation](https://resend.com/docs/dashboard/emails/idempotency-keys).
-
-## Template and release-day review
-
-[EMAIL.html](EMAIL.html) is the styled template; [EMAIL.txt](EMAIL.txt) is its text equivalent. They use the store's existing dark palette and lime accent. Variables:
-
-| Variable | Supply at send time |
+| Workstream | Status and source of truth |
 |---|---|
-| `version` | Exact published Builder Kit version. |
-| `release_notes_url` | Verified stable public page for that release. No page has been published by this audit. |
-| `access_url` | Stable existing access-recovery page; no personal access token in the template. |
+| Simplified state management | Done: declarations, saving/sync, one public field status, guarded retry. [State guide](../../../../kit/docs/PLUGIN_STATE.md). |
+| Global Undo | Done: shared parameter/complex-value history, compound edits and gesture grouping. [Customer changelog](../../../../kit/CHANGELOG.md). |
+| Shared data and tools | Done: native/browser preparation, generated DSP readers, consistent pinned tools. [Shared data](../../../../kit/docs/SHARED_DATA.md). |
+| Component extraction | Done: composable [knobs](../../../../kit/docs/KNOBS.md), [MSEGs](../../../../kit/docs/MSEG.md), [filters](../../../../kit/docs/FILTERS.md), and [sliders](../../../../kit/docs/SLIDERS.md). Shipped examples exercise public composition, styling and modulation/playback. Cosimo reuse is integrated. |
+| Customer/agent documentation | Done: [kit guide](../../../../kit/AGENTS.md), Preview/Code pages, API references and per-release update prompt. Existing plugins are preserved; adoption is optional. |
+| Package qualification | Passed: independent installation, actual 0.1.5 customer-edit update/conflict protection, browser/audio, native build and pluginval GUI. DAW listening/save/reopen acceptance remains open. [Evidence](FINAL-PREPARATION-2026-10-04.md). |
+| Websites and access | Release page/video/poster built and reviewed; not deployed. Target: [0.2.0 notes](https://song-machines.com/builder-kit/releases/0.2.0). Retain the existing checkout, entitlements and [access recovery](https://song-machines.com/enhance-that/recover); verify live paths after deployment. |
+| Customer communication | HTML/text [email](EMAIL.html) and existing Resend sender ready; no messages sent. Factual notice to eligible kit owners, with update prompt, notes and recovery links. [Operator procedure](https://github.com/androidStern-personal/song-machines-website/blob/ed16453f1613d7883e7e2c59906d21ab200d3ed9/docs/RELEASE-EMAIL.md). |
+| Video, branding and social | Approved v12 frozen: vertical, 46.83 seconds, Song Machines logo/sign-off and SongMachines.com. [Video/poster](https://github.com/androidStern-personal/song-machines-website/tree/dbab0d5542166b3a451d5973de17999846f8c2e6/builder-kit/releases/0.2.0), [provenance](https://github.com/androidStern-personal/song-machines-website/blob/dbab0d5542166b3a451d5973de17999846f8c2e6/evidence/release-020-media.json), [social drafts](SOCIAL.md), [launch copy](WRITEUP.md). Prepared, not posted. |
 
-Escape substituted values and validate link destinations. Fail before enqueueing if placeholders remain. Review the rendered email and recipient count, then send a test to the operator before the approved customer batch.
+## Release sequence
 
-The proposed update prompt uses the already bundled `kit-update` skill. Verify it against the oldest supported customer feed before telling all customers to use it. Updating kit files and migrating an existing plugin to the new API are different actions; the email states that plainly.
+- [ ] Hear the customer-built plug-in in a DAW; edit, Undo/Redo, save and reopen. Record listening acceptance.
+- [ ] Review/integrate both source branches through the coordinator. Confirm protected production configuration, exact release source, archive hashes and preserved customer ancestry. Date the changelog **when releasing**.
+- [ ] Publish through the existing kit/feed release helper; deploy the website and sender. Verify production download/install/update, notes/video, access recovery and checkout compatibility. Retain the previous release for recovery.
+- [ ] Configure the deployed store's Resend callback/signing secret. Review rendered email and recipient count; verify an explicitly authorized operator delivery and its callback/inbox result.
+- [ ] Send the approved owner notice using the published version/links. Check delivery outcomes; retry through the existing operator procedure. Publish approved video/social copy.
+- [ ] Monitor setup/update failures, access and email delivery; record support issues and next-release fixes. Never paste access tokens or customer lists into public assets.
 
-No recipients were exported, emails sent, contacts changed, or social posts published during this audit.
+Production configuration is still needed. At the October 4 check, notes returned 404 and recovery returned 200. Pushing these branches does not publish the release.
+
+## Broader product launch
+
+Retain approved pricing/rights, notices, support/refunds and commerce from the [product handoff](../../../../ENHANCE_THAT_LAUNCH_HANDOFF.md). Before wider sales launch, reconcile clean-Mac/platform and host-format acceptance, signing/notarization if replacing our free plug-in, beta/customer runthrough and purchase/download rehearsal. Historical evidence does not close these gates for 0.2.0; full-product launch decisions remain separate.
