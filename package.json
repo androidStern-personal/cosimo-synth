@@ -168,7 +168,13 @@
     "test:filters": "node --test kit/tests/test_filter_browser.mjs",
     "ui:mseg:dev": "vite --config kit/examples/mseg/vite.config.mjs",
     "ui:mseg:build": "vite build --config kit/examples/mseg/vite.config.mjs",
-    "test:mseg": "node --test kit/tests/test_mseg_editor_browser.mjs kit/tests/test_mseg_composition_browser.mjs"
+    "test:mseg": "node --test kit/tests/test_mseg_editor_browser.mjs kit/tests/test_mseg_composition_browser.mjs",
+    "ui:docs:dev": "vite --config kit/examples/vite.config.mjs",
+    "ui:docs:build": "vite build --config kit/examples/vite.config.mjs",
+    "ui:sliders:dev": "vite --config kit/examples/sliders/vite.config.mjs",
+    "ui:sliders:build": "vite build --config kit/examples/sliders/vite.config.mjs",
+    "test:sliders": "node --test kit/tests/test_slider_browser.mjs",
+    "test:controls-docs": "node --test kit/tests/test_controls_docs_browser.mjs"
   },
   "devDependencies": {
     "@react-grab/mcp": "0.1.29",

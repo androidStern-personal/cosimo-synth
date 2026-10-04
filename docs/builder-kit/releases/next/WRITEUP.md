@@ -1,6 +1,6 @@
 # State management for audio plugins, built into Builder Kit
 
-Draft for the next release. Compared with the live Builder Kit 0.1.5 release; the public control lifecycle and examples now use the single `state.status` contract documented in [the API reference](../../../../kit/docs/PLUGIN_STATE_API.md). Suggested version: **0.2.0**, because this introduces a substantial new author-facing framework. No release version or tag has been changed.
+Draft for the next release. Compared with the live Builder Kit 0.1.5 release; the public control lifecycle and examples now use the single `state.status` contract documented in [the API reference](../../../../kit/docs/PLUGIN_STATE_API.md). The candidate is **0.2.0**. It is staged for qualification and has not been published.
 
 Builder Kit now gives Cmajor plugin authors one API for parameters, editable complex state, saving, Undo/Redo, and getting prepared data into the audio engine.
 
@@ -21,7 +21,8 @@ For large audio data, the author supplies the preparation function. The framewor
 | Composable knobs | Complete controls or independent input, dial, label, readout, exact-entry, range and live-marker parts. Ordinary menu composition and custom artwork reuse the same editing behavior. |
 | Composable MSEG | Complete editor or Root/Surface/drawing layers, custom handles and inspector commands, shared curve data, Cmajor reader/player and observed playback position. A/B morphing and a drawer are optional compositions. |
 | Shared filter editor | One response graph and cutoff/resonance input, with optional cutoff bands, two-dimensional modulation handles, live response and spectrum overlays. Author values, routing and theme remain outside the editor. |
-| Shipped agent docs and examples | The kit AGENTS guide links to focused state, shared-data, knob, MSEG and filter guides. Control reference pages include complete Preview/Code examples. |
+| Segmented sliders | Controlled values, logarithmic and discrete ranges, unit entry, modulation endpoints, styling and gesture grouping. |
+| Shipped agent docs and examples | The kit AGENTS guide links to focused state, shared-data, knob, MSEG, filter and slider guides. Control reference pages include complete Preview/Code examples. |
 | Native settings | `nativeValue` and `Native` codecs produce matching C++ accessors for a native component. The component still decides what the settings do. |
 | Extensibility | Reusable history and explicit custom-delivery seams remain available underneath the convenient declarations. |
 

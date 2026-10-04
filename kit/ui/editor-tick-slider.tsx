@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useRef, useState, type ChangeEvent, type CSSProperties, type KeyboardEvent, type PointerEvent } from "react";
+import { forwardRef, useEffect, useLayoutEffect, useMemo, useRef, useState, type ChangeEvent, type CSSProperties, type HTMLAttributes, type KeyboardEvent, type PointerEvent } from "react";
+import { retainSliderStyles } from "./slider-styles";
 
 import {
     formatParameterEntry,
@@ -17,18 +18,18 @@ export type EditorTickSliderModulation = {
     direction?: ModulationDirection;
 };
 
-export type EditorTickSliderProps = {
+export type EditorTickSliderProps = Omit<HTMLAttributes<HTMLDivElement>, "onChange" | "children"> & {
     label: string;
     value: number;
-    min: number;
-    max: number;
-    step: number;
-    tickCount: number;
+    min?: number;
+    max?: number;
+    step?: number;
+    tickCount?: number;
     onChange: (value: number) => void;
     accent?: EditorTickSliderAccent;
-    dataRole: string;
-    inputDataRole: string;
-    valueDataRole: string;
+    dataRole?: string;
+    inputDataRole?: string;
+    valueDataRole?: string;
     formatValue?: (value: number) => string;
     modulation?: EditorTickSliderModulation | null;
     onModulationToggle?: (() => void) | null;
@@ -125,30 +126,35 @@ export function ModBadge({
     isOn: boolean;
     direction?: ModulationDirection;
 }) {
+    const elementRef = useRef<HTMLSpanElement | null>(null);
+    useLayoutEffect(() => {
+        const element = elementRef.current;
+        if (element) return retainSliderStyles(element);
+    }, []);
     const directional = direction !== "both";
     return (
-        <span className={[
-            "mod-badge",
+        <span ref={elementRef} className={[
+            "bk-mod-badge mod-badge",
             isOn ? "is-on" : "",
-            directional ? "mod-badge--directional" : "",
+            directional ? "bk-mod-badge--directional mod-badge--directional" : "",
         ].filter(Boolean).join(" ")} aria-hidden="true">
             M{direction === "up" ? "↑" : direction === "down" ? "↓" : ""}
         </span>
     );
 }
 
-export function EditorTickSlider({
+export const EditorTickSlider = forwardRef<HTMLDivElement, EditorTickSliderProps>(function EditorTickSlider({
     label,
     value,
-    min,
-    max,
-    step,
-    tickCount,
+    min = 0,
+    max = 1,
+    step = 0.01,
+    tickCount = 16,
     onChange,
     accent = "start",
-    dataRole,
-    inputDataRole,
-    valueDataRole,
+    dataRole = "editor-tick-slider",
+    inputDataRole = "editor-tick-slider-input",
+    valueDataRole = "editor-tick-slider-value",
     formatValue = (nextValue) => String(nextValue),
     modulation = null,
     onModulationToggle = null,
@@ -161,8 +167,25 @@ export function EditorTickSlider({
     entrySpec = null,
     onGestureStart = null,
     onGestureEnd = null,
-}: EditorTickSliderProps) {
+    className,
+    ...rootProps
+}, forwardedRef) {
+    const rootRef = useRef<HTMLDivElement | null>(null);
     const dragTargetRef = useRef<"start" | "end" | null>(null);
+    const gestureActiveRef = useRef(false);
+    const endCallbackRef = useRef(onGestureEnd);
+    endCallbackRef.current = onGestureEnd;
+    const beginGesture = () => {
+        if (disabled || gestureActiveRef.current) return;
+        gestureActiveRef.current = true;
+        onGestureStart?.();
+    };
+    const finishGesture = () => {
+        dragTargetRef.current = null;
+        if (!gestureActiveRef.current) return;
+        gestureActiveRef.current = false;
+        endCallbackRef.current?.();
+    };
     const exactInputRef = useRef<HTMLInputElement | null>(null);
     const skipExactCommitOnBlurRef = useRef(false);
     const [isEditingExactValue, setIsEditingExactValue] = useState(false);
@@ -191,6 +214,24 @@ export function EditorTickSlider({
         ? ((Math.max(discreteStartIndex, discreteEndIndex) + 1) / safeTickCount) * 100
         : Math.max(startPercent, endPercent);
     const hasModulationRange = modulationEnd !== normalizedValue;
+
+    useLayoutEffect(() => {
+        const element = rootRef.current;
+        if (element) return retainSliderStyles(element);
+    }, []);
+    useEffect(() => () => {
+        dragTargetRef.current = null;
+        if (gestureActiveRef.current) {
+            gestureActiveRef.current = false;
+            endCallbackRef.current?.();
+        }
+    }, [isModulated]);
+    useEffect(() => {
+        if (disabled) {
+            finishGesture();
+            setIsEditingExactValue(false);
+        }
+    }, [disabled]);
 
     useEffect(() => {
         if (!isEditingExactValue) {
@@ -241,6 +282,7 @@ export function EditorTickSlider({
         event.preventDefault();
         const nextValue = valueFromClientX(event.currentTarget, event.clientX, min, max, step, scale);
         const target = Math.abs(nextValue - normalizedValue) <= Math.abs(nextValue - modulationEnd) ? "start" : "end";
+        beginGesture();
         dragTargetRef.current = target;
         event.currentTarget.setPointerCapture(event.pointerId);
         applyDragValue(event.currentTarget, event.clientX, target);
@@ -259,7 +301,7 @@ export function EditorTickSlider({
             return;
         }
 
-        dragTargetRef.current = null;
+        finishGesture();
         event.currentTarget.releasePointerCapture?.(event.pointerId);
     };
 
@@ -268,6 +310,8 @@ export function EditorTickSlider({
         if (!["ArrowLeft", "ArrowRight", "ArrowDown", "ArrowUp", "Home", "End"].includes(event.key)) {
             return;
         }
+        if (disabled) return;
+        beginGesture();
 
         const baseValue = target === "start" ? normalizedValue : modulationEnd;
         const nextValue = event.key === "Home"
@@ -284,6 +328,7 @@ export function EditorTickSlider({
     };
 
     const handleInputKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {
+        if (["ArrowLeft", "ArrowRight", "ArrowDown", "ArrowUp", "Home", "End", "PageUp", "PageDown"].includes(event.key)) beginGesture();
         if (scale !== "log" || !["ArrowLeft", "ArrowRight", "ArrowDown", "ArrowUp", "Home", "End"].includes(event.key)) {
             return;
         }
@@ -308,7 +353,7 @@ export function EditorTickSlider({
         setExactDraft(formatParameterEntry(entrySpec, normalizedValue).draft);
         setExactError("");
         setIsEditingExactValue(true);
-        onGestureStart?.();
+        beginGesture();
     };
 
     const commitExactEntry = () => {
@@ -331,7 +376,7 @@ export function EditorTickSlider({
         onChange(result.commit.value);
         setExactError("");
         setIsEditingExactValue(false);
-        onGestureEnd?.();
+        finishGesture();
     };
 
     const handleExactEntryKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {
@@ -344,7 +389,7 @@ export function EditorTickSlider({
             skipExactCommitOnBlurRef.current = true;
             setExactError("");
             setIsEditingExactValue(false);
-            onGestureEnd?.();
+            finishGesture();
             event.preventDefault();
         }
     };
@@ -402,9 +447,16 @@ export function EditorTickSlider({
 
     return (
         <div
+            {...rootProps}
+            ref={element => {
+                rootRef.current = element;
+                if (typeof forwardedRef === "function") forwardedRef(element);
+                else if (forwardedRef) forwardedRef.current = element;
+            }}
             className={[
                 `editor-tick-slider editor-tick-slider--accent-${accent}`,
                 isModulated ? "editor-tick-slider--modulated" : "",
+                className,
             ].filter(Boolean).join(" ")}
             data-role={dataRole}
         >
@@ -485,6 +537,7 @@ export function EditorTickSlider({
                             onPointerMove={handleDragPointerMove}
                             onPointerUp={endDrag}
                             onPointerCancel={endDrag}
+                            onLostPointerCapture={finishGesture}
                             role="presentation"
                         />
                         <span
@@ -495,6 +548,8 @@ export function EditorTickSlider({
                             aria-disabled={disabled}
                             className="editor-tick-slider__sr-handle"
                             onKeyDown={handleHandleKeyDown("start")}
+                            onKeyUp={finishGesture}
+                            onBlur={finishGesture}
                             role="slider"
                             tabIndex={disabled ? -1 : 0}
                         />
@@ -506,6 +561,8 @@ export function EditorTickSlider({
                             aria-disabled={disabled}
                             className="editor-tick-slider__sr-handle"
                             onKeyDown={handleHandleKeyDown("end")}
+                            onKeyUp={finishGesture}
+                            onBlur={finishGesture}
                             role="slider"
                             tabIndex={disabled ? -1 : 0}
                         />
@@ -523,10 +580,18 @@ export function EditorTickSlider({
                         disabled={disabled}
                         max={scale === "log" ? 1 : max}
                         min={scale === "log" ? 0 : min}
-                        onBlur={() => onGestureEnd?.()}
+                        onBlur={finishGesture}
                         onChange={handleChange}
-                        onFocus={() => onGestureStart?.()}
                         onKeyDown={handleInputKeyDown}
+                        onKeyUp={finishGesture}
+                        onPointerDown={event => {
+                            if (disabled || event.button !== 0) return;
+                            beginGesture();
+                            event.currentTarget.setPointerCapture(event.pointerId);
+                        }}
+                        onPointerUp={finishGesture}
+                        onPointerCancel={finishGesture}
+                        onLostPointerCapture={finishGesture}
                         step={scale === "log" ? 0.000001 : step}
                         type="range"
                         value={scale === "log" ? startProportion : normalizedValue}
@@ -537,4 +602,4 @@ export function EditorTickSlider({
             {valueReadout}
         </div>
     );
-}
+});

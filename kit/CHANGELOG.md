@@ -15,7 +15,8 @@
 - Composable knobs: complete controls and independent input, dial, label, readout, exact-entry, range and live-marker parts. Linear/log/custom scales, two-axis input, menu composition and custom artwork share the same editing behavior.
 - Composable MSEG Root/Surface/layers, custom point artwork, inspector commands, reference curves, sampled plots, time axes and live playheads. The included Reader reports observed playback with activity and retrigger identity; the public adapter handles subscription, stale reports and cleanup.
 - Shared filter editor with cutoff bands or two-dimensional modulation handles, live response, optional FFT overlays and per-root style installation. `FilterRangeEditor` remains a compatible alias.
-- Complete Preview/Code reference pages for knobs, MSEGs and filters, including an offline real-DSP MSEG playback example. Agent documentation ships under `kit/docs/` and is linked from the kit guide.
+- Focused Preview/Code reference pages for knobs, MSEGs, filters and sliders, including an offline real-DSP MSEG playback example. Agent documentation ships under `kit/docs/` and is linked from the kit guide.
+- Segmented sliders with usable defaults, ordinary root styling and refs, standalone styles, and gesture grouping for value and modulation edits. Disabling or unmounting a control ends its active gesture.
 - Typed native settings through `nativeValue` and `Native` codecs, with matching generated C++ readers.
 - An independently reusable `UndoHistory` module and documented extension points for specialized delivery protocols.
 

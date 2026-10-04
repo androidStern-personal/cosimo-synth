@@ -1,155 +1,41 @@
-import { useState, type ComponentType } from 'react'
-import { createRoot } from 'react-dom/client'
-import { DefaultExample } from './default'
-import { ComposedExample } from './composed'
-import { MorphExample } from './morph'
-import { StatesExample } from './states'
-import { PlaybackExample } from './playback'
-import playbackSource from './playback.tsx?raw'
-import runtimeSource from './playback-runtime.ts?raw'
-import defaultSource from './default.tsx?raw'
-import composedSource from './composed.tsx?raw'
-import morphSource from './morph.tsx?raw'
-import statesSource from './states.tsx?raw'
-import styles from './examples.css?raw'
-import '../knobs/docs.css'
-const examples = [
-    {
-        id: 'playback',
-        title: 'Real engine playback',
-        description:
-            'Trigger, retrigger and release the shipped Cmajor MSEG Reader. Its reports drive the playhead through the public adapter. Edit the envelope while it plays.',
-        component: PlaybackExample,
-        source: playbackSource,
-    },
-    {
-        id: 'default',
-        title: 'Default editor',
-        description:
-            'Click empty space to add a point. Drag a point or bend a segment. Click an interior point to delete it; Tab and arrow keys also work.',
-        component: DefaultExample,
-        source: defaultSource,
-    },
-    {
-        id: 'composed',
-        title: 'Your layers, handles & controls',
-        description:
-            'A reference curve, square handles, a time axis and a custom inspector use the same editing behavior. Right-click for an ordinary context menu.',
-        component: ComposedExample,
-        source: composedSource,
-    },
-    {
-        id: 'morph',
-        title: 'Optional A/B morphing',
-        description:
-            'Two independent curves with different point counts. The gold line is their sampled result. The editor has no built-in A/B state.',
-        component: MorphExample,
-        source: morphSource,
-    },
-    {
-        id: 'states',
-        title: 'Orientation & external state',
-        description:
-            'Vertical time uses the same coordinates for rendering and editing. Lock the editor or replace its value externally.',
-        component: StatesExample,
-        source: statesSource,
-    },
-]
-function Example({
-    id,
-    title,
-    description,
-    component: Demo,
-    source,
-}: {
-    id: string
-    title: string
-    description: string
-    component: ComponentType
-    source: string
-}) {
-    const [code, setCode] = useState(false)
-    return (
-        <section className="example" id={id}>
-            <h2>{title}</h2>
-            <p>{description}</p>
-            <div className="example-card">
-                <div role="tablist" aria-label={`${title} view`} className="tabs">
-                    <button role="tab" aria-selected={!code} onClick={() => setCode(false)}>
-                        Preview
-                    </button>
-                    <button role="tab" aria-selected={code} onClick={() => setCode(true)}>
-                        Code
-                    </button>
-                </div>
-                {code ? (
-                    <div className="source">
-                        <p>Complete example. Adjust the public kit import path for your project.</p>
-                        <pre data-source-file={`${id}.tsx`}>
-                            <code>{source}</code>
-                        </pre>
-                        {id === 'playback' && (
-                            <>
-                                <h3>playback-runtime.ts</h3>
-                                <pre data-source-file="playback-runtime.ts">
-                                    <code>{runtimeSource}</code>
-                                </pre>
-                                <p>
-                                    Copy the frozen playback-program.js, playback-program.d.ts and playback-reader.json
-                                    alongside this runtime from kit/examples/mseg. A plugin uses its own patch
-                                    connection instead.
-                                </p>
-                            </>
-                        )}
-                        <h3>examples.css</h3>
-                        <pre data-source-file="examples.css">
-                            <code>{styles}</code>
-                        </pre>
-                    </div>
-                ) : (
-                    <div className="preview" role="tabpanel">
-                        <Demo />
-                    </div>
-                )}
-            </div>
-        </section>
-    )
-}
-function App() {
-    return (
-        <div className="docs" data-theme="dark">
-            <header className="topbar">
-                <a href="#" className="brand">
-                    Builder Kit / MSEG
-                </a>
-                <span>Interactive reference</span>
-            </header>
-            <div className="page-layout">
-                <aside className="sidebar">
-                    <div className="sidebar-label">ON THIS PAGE</div>
-                    {examples.map((e) => (
-                        <a key={e.id} href={`#${e.id}`}>
-                            {e.title}
-                        </a>
-                    ))}
-                </aside>
-                <main>
-                    <div className="breadcrumb">Components / MSEG</div>
-                    <div className="page-title">
-                        <h1>MSEG</h1>
-                        <span className="badge">Composable editor</span>
-                    </div>
-                    <p className="lead">
-                        One curve, your presentation.
-                        <br />
-                        Start with the editor, then compose the parts.
-                    </p>
-                    {examples.map((e) => (
-                        <Example key={e.id} {...e} />
-                    ))}
-                </main>
-            </div>
-        </div>
-    )
-}
-createRoot(document.getElementById('root')!).render(<App />)
+import { createRoot } from "react-dom/client";
+import { ReferencePage, type DocsExample } from "../reference";
+import { DefaultExample } from "./default";
+import { ComposedExample } from "./composed";
+import { MorphExample } from "./morph";
+import { StatesExample } from "./states";
+import { PlaybackExample } from "./playback";
+import defaultSource from "./default.tsx?raw";
+import composedSource from "./composed.tsx?raw";
+import morphSource from "./morph.tsx?raw";
+import statesSource from "./states.tsx?raw";
+import playbackSource from "./playback.tsx?raw";
+import runtimeSource from "./playback-runtime.ts?raw";
+import styles from "./examples.css?raw";
+
+const entries = [
+    ["default", "Default", "Add points, drag handles and bend segments.", DefaultExample, defaultSource],
+    ["composed", "Composition", "Custom handles, drawing layers and a context menu.", ComposedExample, composedSource],
+    ["playback", "Playback position", "Trigger the included Cmajor envelope Reader to move the playhead. Uses playback-program.js and playback-reader.json from this folder; no speaker output.", PlaybackExample, playbackSource],
+    ["morph", "A/B morphing", "Edit either curve and blend their sampled output.", MorphExample, morphSource],
+    ["states", "Orientation and state", "Vertical time, external updates, disabled and read-only editing.", StatesExample, statesSource],
+] as const;
+const examples: DocsExample[] = entries.map(([id, title, description, component, source]) => ({
+    id, title, description, component,
+    files: [{ name: `${id}.tsx`, text: source },
+        ...(id === "playback" ? [{ name: "playback-runtime.ts", text: runtimeSource }] : []),
+        { name: "examples.css", text: styles }],
+}));
+const root = document.getElementById("root");
+if (!root) throw new Error("Missing component reference root.");
+createRoot(root).render(<ReferencePage title="MSEG" description="An editable envelope made of points and curved segments."
+    usage={'import { useState } from "react";\nimport { Mseg } from "../../kit/index";\n\nexport function Example() {\n    const [curve, setCurve] = useState(Mseg.defaultCurve);\n    return <Mseg.Editor value={curve} onValueChange={setCurve} aria-label="Envelope" />;\n}'}
+    examples={examples} api={[
+        { name: "Mseg.Editor", description: "Complete controlled editor. value and onValueChange edit the curve." },
+        { name: "Mseg.Root / Mseg.Surface", description: "Editing context and the SVG interaction surface." },
+        { name: "Mseg.Grid / Fill / Curve / Points", description: "Optional drawing layers, rendered in JSX order." },
+        { name: "Mseg.Playhead / TimeAxis / Plot", description: "Playback position, time labels and sampled reference curves." },
+        { name: "className / style / SVG props", description: "Size, colors and custom artwork use ordinary CSS and SVG." },
+        { name: "disabled / readOnly", description: "Prevent editing while keeping the curve visible." },
+        { name: "onGestureStart / onGestureEnd", description: "Connect edit grouping to your plugin state." },
+    ]} />);

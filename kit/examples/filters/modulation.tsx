@@ -28,7 +28,9 @@ export function ModulationExample() {
             </select></label>
             <label><input type="checkbox" checked={unipolar} onChange={e => setUnipolar(e.target.checked)} /> Unipolar</label>
         </div>
+        <details><summary>Edit details</summary>
         <output className="filter-log" data-role="endpoint-values">{JSON.stringify(endpoints)}</output>
-        <output className="filter-log" data-role="gesture-events">{events.join(' · ') || 'Drag a handle to see edit boundaries.'}</output>
+        <output className="filter-log" data-role="gesture-events">{events.join(' · ') || 'No edits yet.'}</output>
+        </details>
     </div>
 }

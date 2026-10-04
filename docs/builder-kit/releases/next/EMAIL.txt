@@ -10,7 +10,7 @@ What's new:
 
 - Simplified state management. Declare the parameters and custom data your plugin uses. Builder Kit handles saving, reconnecting the UI, and getting prepared data to the audio engine. The included MSEG supplies its own curve preparation and player.
 - Global Undo. Parameter changes and envelope edits can share one Undo/Redo history. A continuous drag is one action.
-- Knobs, MSEGs and filters. Use the complete controls, or customize their artwork, handles, menus and live indicators with the same editing behavior. The shared filter editor includes modulation handles and an optional spectrum overlay. The kit includes interactive Preview/Code examples and agent documentation.
+- Knobs, MSEGs, filters and sliders. Use the complete controls, or customize their artwork, handles, menus and live indicators with the same editing behavior. The shared filter editor includes modulation handles and an optional spectrum overlay. Sliders include logarithmic and stepped values, exact entry and modulation ranges. The kit includes interactive Preview/Code examples and agent documentation.
 
 Release notes: {{release_notes_url}}
 

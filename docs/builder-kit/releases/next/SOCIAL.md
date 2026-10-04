@@ -8,7 +8,7 @@ What's new in Builder Kit:
 
 1. Simplified state management — declare your values; the kit handles saving and engine coordination.
 2. Global Undo — parameter changes and envelope edits in one Undo/Redo history.
-3. Composable knobs and MSEGs — ready-made controls, reusable parts and live indicators. Interactive examples and agent docs ship with the kit.
+3. New and improved components — knobs, MSEGs, filters and sliders. Complete controls, reusable parts, and interactive Preview/Code examples in the kit.
 
 Included for existing owners. Built for Cmajor + React.
 

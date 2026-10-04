@@ -25,7 +25,13 @@
     "typecheck": "tsc --noEmit",
     "test": "node kit/scripts/test_unit.mjs",
     "test:kit:native-install": "node --test kit/tests/vst3_install_native.test.mjs",
-    "test:browser": "node --test kit/tests/test_effect_browser_preview_browser.mjs tests/test_enhancer_lite_view_browser.mjs"
+    "test:browser": "node --test kit/tests/test_effect_browser_preview_browser.mjs tests/test_enhancer_lite_view_browser.mjs",
+    "ui:docs:dev": "vite --config kit/examples/vite.config.mjs",
+    "ui:docs:build": "vite build --config kit/examples/vite.config.mjs",
+    "ui:sliders:dev": "vite --config kit/examples/sliders/vite.config.mjs",
+    "ui:sliders:build": "vite build --config kit/examples/sliders/vite.config.mjs",
+    "test:sliders": "node --test kit/tests/test_slider_browser.mjs",
+    "test:controls-docs": "node --test kit/tests/test_controls_docs_browser.mjs"
   },
   "devDependencies": "__DEV_DEPENDENCIES__"
 }

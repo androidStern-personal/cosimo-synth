@@ -17,9 +17,10 @@ This file applies to plug-in repositories built on `kit/`. Owner, product, machi
 |---|---|
 | State, saving, and Undo | [Plugin state](docs/PLUGIN_STATE.md) |
 | Preparing data for the audio engine | [Shared audio data](docs/SHARED_DATA.md) |
-| Composable knobs and live indicators | [Knob guide and interactive examples](docs/KNOBS.md) |
-| Envelope editing, drawing layers and playback position | [MSEG guide and interactive examples](docs/MSEG.md) |
-| Filter response, modulation handles and spectrum | [Filter guide and interactive examples](docs/FILTERS.md) |
+| Composable knobs and live indicators | [Knob](docs/KNOBS.md) |
+| Envelope editing, drawing layers and playback position | [MSEG](docs/MSEG.md) |
+| Filter response, modulation handles and spectrum | [Filter](docs/FILTERS.md) |
+| Segmented values, exact entry and modulation endpoints | [Slider](docs/SLIDERS.md) |
 
 ## Start with the relevant path
 

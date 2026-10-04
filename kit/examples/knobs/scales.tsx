@@ -1,11 +1,12 @@
 import { useMemo, useState } from "react";
-import { Knob, type KnobScale } from "../../index";
+import { Knob, formatFrequencyDisplay, type KnobScale } from "../../index";
 import "./examples.css";
 
 const db = (value: number) => `${value > 0 ? "+" : ""}${value.toFixed(1)} dB`;
 const choices = ["Low-pass", "High-pass", "Band-pass", "Notch"];
 
 export function ScalesExample() {
+    const [cutoff, setCutoff] = useState(1200);
     const [trim, setTrim] = useState(-6);
     const [mode, setMode] = useState(1);
     const [response, setResponse] = useState(25);
@@ -15,6 +16,8 @@ export function ScalesExample() {
         fromPosition: position => position ** 2 * 100,
     }), []);
     return <div className="knob-row">
+        <Knob label="Cutoff" value={cutoff} onValueChange={setCutoff} min={20} max={20000}
+            scale="log" formatValue={formatFrequencyDisplay} className="cyan" />
         <Knob label="Bipolar trim" min={-24} max={24} step={0.5} value={trim} onValueChange={setTrim} formatValue={db} />
         <Knob label="Filter mode" min={0} max={3} step={1} value={mode} onValueChange={setMode}
             formatValue={value => choices[value] ?? ""} className="cyan" />
