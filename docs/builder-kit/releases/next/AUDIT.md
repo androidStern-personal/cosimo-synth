@@ -1,12 +1,18 @@
 # Builder Kit release audit — 2026-09-12
 
+## Current result — October 4
+
+The complete component/state source is integrated and qualified on `codex/builder-kit-020-candidate`, from exact source `d8c0f97d4f48497d3b1378158f5dba5ebd37c82c`. Fresh tool builds, current export/archive scans, independent HTTP installation, browser UI and real AudioWorklet audio, native build/pluginval, and an actual 0.1.5 update with a real customized plug-in all passed. The release-email sender is implemented on store branch `codex/builder-kit-release-email-318e` at `8aab1b5`; all 115 store tests and build checks passed.
+
+See [QUALIFICATION-2026-10-04.md](QUALIFICATION-2026-10-04.md) for exact evidence and limits. Publication, store deployment, live operator/inbox acceptance, and customer sending remain unperformed. The dated component/audit records below are historical and do not indicate that these completed engineering steps still need implementation.
+
 October 3 component follow-up: the shared filter editor, Cosimo/SeqFX migration, shipped examples/docs and updated launch copy are qualified on `codex/builder-kit-knob-318e`. See [FILTER-EXTRACTION.md](../../FILTER-EXTRACTION.md) for exact source, independent customer export and verification limits. This does not replace the final composed-release gates.
 
 ## September 24 component candidate
 
 Knob and MSEG composition, copied-code demos, bundled docs, and updated launch copy are implemented on `codex/builder-kit-knob-318e`. See [the component handoff](../../MSEG-EXTRACTION.md) for current source and independently installed customer-export evidence. The native/package qualifications below belong to their named earlier source and do not certify this new component candidate. Integration must rerun the release gates on its composed source. No public release or customer email has been sent by this task.
 
-The email templates have been rewritten; the store's release-update delivery command described in [RELEASE-AND-EMAIL.md](RELEASE-AND-EMAIL.md) remains a separate launch operation to implement/verify before sending.
+At the September 24 checkpoint, the email templates had been rewritten and the store sender remained to implement. The October 4 result above completes that implementation and automated qualification; live deployment/delivery remains separate.
 
 **Status: preparing Builder Kit 0.2.0; not published.** The duplicate Cmajor pin is fixed, matching tool archives have been built, and Enhance That plus the new-plugin starter now use the state framework. Latest packaged-customer/native qualification passed from source `ee8190a84aa07150448d4a573f97ac8ca528cbd9`, including the simplified public state API and review repair. Release decision: preserve existing customer update history. The audited historical email/signing-team/device identifiers are non-secret metadata and no longer block this release.
 

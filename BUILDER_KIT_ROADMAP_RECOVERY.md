@@ -1,5 +1,7 @@
 # Builder Kit roadmap recovery — September 9, 2026
 
+October 4 release progress: component/state integration, fresh customer package/native/audio/update qualification, and release-email sender implementation are complete. See [the current qualification record](docs/builder-kit/releases/next/QUALIFICATION-2026-10-04.md) and [release sequence](docs/builder-kit/releases/next/RELEASE-AND-EMAIL.md). Publication/deployment and live customer delivery remain separate from these results; the recovered product roadmap below remains the broader plan.
+
 ## Recovered documents
 
 - Full product/GTM/release roadmap: `ENHANCER_LITE_BUILDER_KIT_ROADMAP.md`, all 1,117 original lines preserved from `46d709db074b030807adc048123f3e1f76fda9e2`, with only the explicitly labeled September 9 addition.

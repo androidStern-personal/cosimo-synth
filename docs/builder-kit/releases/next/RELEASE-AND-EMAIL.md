@@ -1,13 +1,13 @@
 # Publishing the next Builder Kit update
 
-Recommended version: **0.2.0**. This is a proposal, not a version bump or a published release. Clear [the release blockers](AUDIT.md) first.
+Candidate version: **0.2.0**, committed and qualified; not published. The component branch is integrated into `codex/builder-kit-020-candidate`. [The October 4 qualification](QUALIFICATION-2026-10-04.md) records the exact source, customer installation/update/native results, and implemented email sender.
 
 ## The shortest complete release path
 
-1. Review and integrate the composable-control candidate described in [MSEG-EXTRACTION.md](../../MSEG-EXTRACTION.md), then qualify the resulting release source. Preserve existing customer Git history; the audit resolved the historical non-secret identifiers without rewriting customer history. Keep the export boundary and archive scans.
-2. Stamp one version and one published Cmajor pin. Use the existing release command to construct a staged candidate with verified tools; do not assemble ad hoc downloads.
-3. Install that candidate as a customer, build its unchanged example, and verify its packaged browser/audio path. Identify which download/update URLs were actually given to customers, then update from those installations with a local plugin edit present. Older live URLs alone do not prove customer impact. The existing release guards remain enabled.
-4. Publish the release and make it discoverable to existing owners. Publish the changelog at a stable public URL, then send its factual delivery notice and make the social announcement.
+1. **Done:** integrate the component/state source into the isolated release candidate. Existing customer Git history is preserved.
+2. **Done:** construct a staged 0.2.0 candidate through the existing release command with freshly rebuilt, hash-verified tools from the committed Cmajor pin. Current export/archive privacy scans passed.
+3. **Done:** install over HTTP as an independent customer; qualify the example, browser controls, native build, and pluginval; update actual 0.1.5 with a real customer plug-in present. Customer work survived unchanged; a deliberate mixed edit stopped as a conflict.
+4. **Remaining:** review and publish the qualified release at its production destination, publish its stable changelog, deploy the reviewed email callback integration, verify one authorized operator delivery, then send the approved owner notice and social announcement. Candidate staging URLs are temporary loopback URLs, not publication.
 
 ## Changelog
 
@@ -25,12 +25,14 @@ What already exists:
 - A durable email delivery record, stable provider idempotency key, and a Resend sender.
 - A separate optional marketing topic and draft template. Its mixed customer/subscriber segment is not a release-delivery recipient list.
 
-What must be added before sending:
+Implemented and tested on store branch `codex/builder-kit-release-email-318e`, commit `8aab1b5`:
 
-1. A `release-update` email type and one reviewed release payload containing the version, subject, HTML, plain text, and stable public links. The existing Resend adapter currently sends text only; extend it to send both `html` and `text` so the styled template actually reaches the recipient.
-2. A small operator-run enqueue/send command using the existing sender. First show a dry-run recipient count and exclusions; then queue one message per **product + version + normalized recipient email**. Use the purchase email when a guest customer record has no email. Existing entitlement policy, including supported gifted/refunded access, determines eligibility.
-3. Durable sent/failed records and an explicit retry command. Resend's idempotency keys expire after 24 hours; our ledger must prevent duplicate sends across later retries, and ambiguous older delivery outcomes need reconciliation rather than blind resending.
-4. Delivery-failure/complaint handling for these customer emails. The existing Resend webhook code handles marketing deliveries; connect the customer provider IDs too and register the store endpoint. Suppress known undeliverable or complained-about recipients without removing their product access.
+1. A frozen release payload containing the version, sender, subject, HTML, plain text, and stable links. The Resend adapter sends both styled HTML and plain text.
+2. `npm run email:release` with plan, enqueue, send, status, retry, and reconciliation actions over the existing SQLite/Blob purchase ledger. It deduplicates by **product + version + normalized recipient email**, includes guest purchase addresses and supported gifted/refunded lifetime access, and rechecks eligibility before sending.
+3. Durable delivery records, persisted claims across operators, identical retry payloads/keys, and held reconciliation for unresolved attempts past the safe provider window. Accepted deliveries remain deduplicated after restart and beyond that window.
+4. Verified signed customer delivery callbacks, including lost acknowledgements and bounce/complaint suppression without removing access. Register the existing endpoint's delivery events after the reviewed code is deployed; no registration was performed here.
+
+The store's `docs/RELEASE-EMAIL.md` contains exact operator instructions. All **115 store tests**, including **16 release-email tests**, static validation, and the deployment build pass. No provider or inbox acceptance is claimed from fixtures.
 
 No automatic release polling is needed. Sending should follow a verified publication, using its frozen changelog and links. A later release job can invoke the same operation.
 
@@ -40,7 +42,7 @@ Keep this first email a factual notice delivering an update the recipient alread
 
 The US rule expressly includes entitled product updates/upgrades in transactional/relationship delivery. The subject and primary content still matter; an existing purchase alone does not make every email transactional. UK guidance likewise distinguishes routine service communications from promotion. [16 CFR 316.3](https://www.ecfr.gov/current/title-16/chapter-I/subchapter-C/part-316/section-316.3), [FTC guidance](https://www.ftc.gov/business-guidance/resources/can-spam-act-compliance-guide-business), [ICO guidance](https://ico.org.uk/for-organisations/direct-marketing-and-privacy-and-electronic-communications/direct-marketing-and-regulatory-communications/).
 
-This proposal does not build a new preference center for the factual delivery notice. If the email becomes an optional promotional newsletter, use the existing marketing consent/topic and unsubscribe handling. Do not treat the word “product update” as a blanket exemption across jurisdictions.
+This implementation does not build a new preference center for the factual delivery notice. If the email becomes an optional promotional newsletter, use the existing marketing consent/topic and unsubscribe handling. Do not treat the word “product update” as a blanket exemption across jurisdictions.
 
 Provider retry behavior: [Resend idempotency documentation](https://resend.com/docs/dashboard/emails/idempotency-keys).
 
