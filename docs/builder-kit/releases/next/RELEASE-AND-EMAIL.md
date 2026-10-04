@@ -15,6 +15,8 @@ Candidate version: **0.2.0**, committed and qualified; not published. The compon
 
 Use the same reviewed entries for the public release page. [WRITEUP.md](WRITEUP.md) supplies the full launch narrative and code examples. [SOCIAL.md](SOCIAL.md) is the shorter public copy. Do not maintain conflicting independent accounts of what shipped.
 
+Each version's entry also carries **Update instructions** and a copyable release-specific prompt. State required compatibility changes, optional adoption and relevant documentation there. The email supplies the target version and points to that section; `kit-update` reads the changelog from the fetched release before merging, including applicable skipped-release instructions. Keep the general update procedure in the skill instead of repeating it in every release entry.
+
 ## Email: reuse the store's existing sender
 
 The store already records purchases and email deliveries, and sends customer access mail through **Resend**. A new email provider, newsletter system, or always-running worker is unnecessary for the first release notice.

@@ -1,6 +1,7 @@
 ---
 name: kit-update
-description: Use when a Builder Kit customer repo should take a newer kit release — "update the kit", "is there a new kit version", "merge the latest kit tag", or when kit:doctor reports the kit is behind the feed. Drives the whole update: checkpoint, fetch the feed's kit.git, inspect local changes, git merge the release tag, resolve mechanical conflicts, verify with kit:doctor / npm test / fx:build, and production-build + install only when everything is green. Not for creating or editing plugins (use $cosimo-make-plugin) and not for cutting kit releases.
+description: >-
+  Use when a Builder Kit customer repo should take a newer kit release — "update the kit", "is there a new kit version", "merge the latest kit tag", or when kit:doctor reports the kit is behind the feed. Drives the whole update: checkpoint, fetch the feed's kit.git, inspect local changes, git merge the release tag, resolve mechanical conflicts, verify with kit:doctor / npm test / fx:build, and production-build + install only when everything is green. Not for creating or editing plugins (use $cosimo-make-plugin) and not for cutting kit releases.
 ---
 
 # Kit Update
@@ -81,7 +82,15 @@ supplied, or it refuses any check, stop with every customer path untouched.
    included example and its tests: upstream may have changed them since the
    customer started modifying them. Conflicts are possible wherever both sides
    touched a path, regardless of ownership.
-5. Summarize both lists to the user in a few lines before merging.
+5. Read `git show <target-ref>:kit/CHANGELOG.md` before merging. The local
+   changelog still belongs to the installed version. Follow the release's
+   **Update instructions**, including applicable sections for intervening
+   releases when skipping versions. Distinguish required compatibility work
+   from optional feature adoption; an update request alone does not authorize
+   an optional plugin rewrite. Older releases without these sections use the
+   general workflow here; do not invent missing release requirements.
+6. Summarize both lists and applicable release instructions to the user in a
+   few lines before merging.
 
 ## 4. Merge
 

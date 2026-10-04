@@ -32,6 +32,16 @@
 - Compiler, native headers, and browser support use the same Cmajor dependency selection. Source builds and verified downloaded tools retain explicit, checked identities.
 - Release tool provenance is derived from the committed CMake pin instead of a second hand-maintained revision. New release commits and tags use a neutral product identity.
 
+### Update instructions — 0.2.0
+
+Copyable release prompt:
+
+> Update Builder Kit to 0.2.0 using the kit-update skill. Follow this release's Update instructions in the target release's kit/CHANGELOG.md before merging. Preserve my plugin changes and verify that my existing plugins still build. Then summarize how the new state management, Global Undo, and composable controls apply to my project. Keep optional adoption separate from the kit update.
+
+- **Required:** this release updates the dependency lockfile and pinned tool manifest. Carry those changes through the normal kit merge, run `npm ci` for changed dependencies, and refresh tools through `kit:setup` when strict doctor reports a mismatch. Verify the customer's existing plugins through the skill's normal checks.
+- **Existing plugins:** updating the kit does not require adopting the new state API or replacing custom controls. Preserve DSP behavior, parameter identities and saved preset formats. If an existing API use no longer compiles, explain the concrete repair before changing customer code.
+- **Optional adoption:** use [Plugin state](docs/PLUGIN_STATE.md) for state and shared Undo, [Shared audio data](docs/SHARED_DATA.md) for prepared data, and [Knobs](docs/KNOBS.md), [MSEGs](docs/MSEG.md), or [Filters](docs/FILTERS.md) for composing controls. Propose relevant changes after the existing plugin passes its update checks; adoption is a separate customer decision.
+
 ### Scope and updating
 
 Existing plugins are not automatically rewritten to use the new state API. An agent or plugin author adopts it deliberately. Custom DSP still defines how values affect sound and how custom data is interpreted. Undo does not retain deleted external source files for you, and shared data uses the memory budget you supply.

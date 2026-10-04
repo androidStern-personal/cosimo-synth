@@ -18,7 +18,7 @@ Update your existing project
 
 Open your project in Codex or Claude Code and give it this prompt:
 
-"Update Builder Kit using the bundled kit-update skill. Preserve my plugin changes, then show me what changed."
+"Update Builder Kit to {{version}} using the kit-update skill. Follow this release's Update instructions in kit/CHANGELOG.md, reading it from the fetched release before merging. Preserve my plugin changes, then show me what changed."
 
 Updating the kit adds these tools. Adopting the new state API in your plugin is a separate change.
 
