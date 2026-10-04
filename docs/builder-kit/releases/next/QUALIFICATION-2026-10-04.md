@@ -6,7 +6,7 @@ The component branch is integrated into the isolated release candidate, and the 
 
 Candidate branch: `codex/builder-kit-020-candidate`. Qualification worktree: `builder-kit-020-qualification/cosimo-synth`.
 
-The state integration base `6febf1ea4cf` was an ancestor of component source **`d8c0f97d4f48497d3b1378158f5dba5ebd37c82c`**, so integration fast-forwarded without conflict. That exact committed source was exported and qualified. Later changes on this candidate branch only record the results in maintainer documentation; they are not the source SHA in the staged release manifest. The original component worktree and primary maintained checkout were preserved. No master merge, push, or shared tracker rewrite occurred.
+The state integration base `6febf1ea4cf` was an ancestor of component source **`d8c0f97d4f48497d3b1378158f5dba5ebd37c82c`**, so integration fast-forwarded without conflict. That exact committed source was exported and qualified. Subsequent changes record these results and add customer release-update documentation; they are not the source SHA in the staged release manifest. The original component worktree and primary maintained checkout were preserved. No master merge, push, or shared tracker rewrite occurred.
 
 The existing release helper staged version **0.2.0** over the real **0.1.5** customer ancestry, using freshly built canonical tools. Cmajor pin: `dca85fc1f87af241af66ca31989940f2887a7e56`. CHOC pin: `eedf2aebd3049a84cdcf280664c73c53796118ac`. The staging feed used loopback HTTP and is no longer running; its URLs are qualification fixtures, not a production destination.
 
@@ -45,6 +45,12 @@ Store branch: **`codex/builder-kit-release-email-318e`**, commit **`8aab1b5`**, 
 The complete store suite passes **115 tests**, including **16 focused release-email tests**. Static validation and the deployment build also pass. These include the real SQLite and production Blob adapters against controlled persistence/HTTP fixtures and signed callbacks through the real endpoint: concurrency, lost acknowledgements, restarts, recipient exclusions, frozen retries, reconciliation and cancellation. The store's `docs/RELEASE-EMAIL.md` contains the exact operator sequence. Its rendered template source matches this release's approved `EMAIL.html`/`EMAIL.txt`.
 
 No real provider send, production ledger mutation, callback registration or deployment was performed. Automated fixtures do not prove inbox delivery.
+
+## Release-specific update instructions
+
+Documentation commit **`9a24aa3e`** adds the 0.2.0 changelog's copyable update prompt, required compatibility work and optional adoption links. The update skill reads the target release's changelog before merging, including applicable skipped-version instructions. The email points customers to that section; its matching store-template commit is **`8546b13`**. No sender behavior or executable kit code changed.
+
+The committed customer export includes the changelog section, discoverable skill, root update guide and every referenced API document; export boundary checks pass. The skill's YAML frontmatter parses successfully. The existing update-helper suite passes **14 tests**, and the sender suite with the revised templates passes **16 tests**. The export and template-equality receipt is `build/release-020-qualification/release-prompt-export.json`. This verifies the documentation follow-up; the full runtime/native results above remain attached to `d8c0f97d`, and production publication must restage the newer source.
 
 ## Remaining launch operations
 
