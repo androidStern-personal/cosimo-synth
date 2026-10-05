@@ -109,7 +109,9 @@ Every other field is optional and falls back to a derivation:
 - `alias` (registry key and CLI name): the directory name lowercased with runs
   of non-alphanumerics collapsed to `-`. A directory holding more than one
   patch must disambiguate with explicit aliases; duplicate aliases fail
-  discovery.
+  discovery. Commands also accept the directory name of a folder holding one
+  plugin, so `npm run fx:build -- demo_verb` and `-- demo-verb` build the same
+  target.
 - `cmakeTarget` / `productName` (the install filename, `<productName>.vst3`):
   the manifest `name` (falling back to the patch file base name) with
   non-alphanumerics removed, e.g. "Enhance That" -> `EnhanceThat`. Overrides must stay
@@ -120,11 +122,6 @@ Every other field is optional and falls back to a derivation:
   `_build/generated-project-stage` into durable `juceOut` so unchanged files
   keep their timestamps while removed, changed, or missing outputs converge to
   the current inputs. `--clean` remains the explicit full `juceOut` reset.
-- `previousProductName`: optional former bundle filename stem when renaming a
-  plugin while retaining its identity. It must differ from `productName` and
-  use the same identifier syntax. `fx:prod:install` removes
-  `<previousProductName>.vst3` after the renamed bundle is installed and
-  verified.
 - `jitInstallRuntime`: defaults to true when the plugin has a state module or
   a worker bundle.
 

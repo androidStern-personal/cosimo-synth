@@ -41,10 +41,10 @@ test("release modes always rebuild and cannot accidentally notarize a repeatabil
 test("source contract requires the reviewed presentation and unchanged saved-session identities", () => {
     const patch = { name: "Enhance That", ID: "dev.cosimo.enhancer-lite", manufacturer: "Cosimo", version: "0.1.0",
         plugin: { pluginCode: "CsEL", manufacturerCode: "Cosi" } };
-    const plugin = { productName: "EnhanceThat", cmakeTarget: "EnhanceThat", previousProductName: "CosimoEnhancerLite" };
+    const plugin = { productName: "EnhanceThat", cmakeTarget: "EnhanceThat" };
     assert.deepEqual(enhanceThatSourceErrors(plugin, patch), []);
     assert.ok(enhanceThatSourceErrors(plugin, { ...patch, plugin: { ...patch.plugin, pluginCode: "New1" } }).length);
-    assert.ok(enhanceThatSourceErrors({ ...plugin, previousProductName: undefined }, patch).length);
+    assert.ok(enhanceThatSourceErrors({ ...plugin, productName: "CosimoEnhancerLite" }, patch).length);
     assert.ok(enhanceThatSourceErrors(plugin, { ...patch, name: "Cosimo Enhancer Lite" }).length);
 });
 

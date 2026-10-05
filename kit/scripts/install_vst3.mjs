@@ -19,22 +19,16 @@ function verifyBundle(bundle, codesign) {
     });
 }
 
-/**
- * Install `bundle` as <installDirectory>/<bundle name>. `previousBundleName`
- * is the plugin's former file name, removed after the new copy verifies.
- * Returns the installed path.
- */
+/** Install `bundle` as <installDirectory>/<bundle name> and return the installed path. */
 export async function installVST3Bundle({
     bundle,
     installDirectory = userVST3Directory,
-    previousBundleName,
     dryRun = false,
     codesign = "codesign",
     log = console.log,
 }) {
     const name = path.basename(bundle);
     const destination = path.join(installDirectory, name);
-    const previous = previousBundleName === undefined ? null : path.join(installDirectory, previousBundleName);
 
     verifyBundle(bundle, codesign);
 
@@ -52,9 +46,6 @@ export async function installVST3Bundle({
     await rm(destination, { recursive: true, force: true });
     await rename(staging, destination);
     verifyBundle(destination, codesign);
-
-    if (previous !== null)
-        await rm(previous, { recursive: true, force: true });
 
     log(`Installed ${name}: ${destination}`);
     return destination;

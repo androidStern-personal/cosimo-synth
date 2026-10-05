@@ -21,7 +21,7 @@ export const effectDistributableRuntimeEnvironmentKey = "FX_DISTRIBUTABLE_RUNTIM
  *
  *   {
  *     "schemaVersion": 1,             // required; must not exceed kit/kit.json schemaVersions.plugin
- *     "alias", "cmakeTarget", "productName", "previousProductName",
+ *     "alias", "cmakeTarget", "productName",
  *     "product": { ...identity... },  // optional; presence makes identity authoritative
  *     "runtimeOut", "juceOut", "stateSource", "workerSource", "workerOut",
  *     "includeInAll", "jitInstallRuntime", "disableMicrophonePermission"
@@ -32,6 +32,7 @@ export const effectDistributableRuntimeEnvironmentKey = "FX_DISTRIBUTABLE_RUNTIM
  * - alias (registry key/CLI name): directory name, lowercased, with runs of
  *   non-alphanumerics collapsed to `-`. A directory holding more than one
  *   patch must disambiguate with explicit aliases.
+ *   Commands also accept the directory name of a folder holding one plugin.
  * - cmakeTarget / productName (the install filename, `<productName>.vst3`):
  *   the patch manifest `name` (falling back to the patch file base name) with
  *   non-alphanumerics removed, e.g. "Enhance That" -> "EnhanceThat".
@@ -69,7 +70,6 @@ const buildKeyValidators = {
     alias: (value) => typeof value === "string" && /^[a-z0-9][a-z0-9-]*$/.test(value) && value !== "all",
     cmakeTarget: isBuildIdentifier,
     productName: isBuildIdentifier,
-    previousProductName: isBuildIdentifier,
     runtimeOut: isRepoRelativeBuildPath,
     juceOut: isRepoRelativeBuildPath,
     workerSource: isRepoRelativeSourcePath,
@@ -495,12 +495,6 @@ function createDiscoveredPlugin({ patch, manifest, config, directoryName, patchF
     if (!isBuildIdentifier(plugin.cmakeTarget) || !isBuildIdentifier(plugin.productName))
         throw new Error(`Could not derive a build identifier for ${patch}; set cmakeTarget/productName in its ${pluginConfigSuffix} config.`);
 
-    if (build.previousProductName !== undefined) {
-        if (build.previousProductName === plugin.productName)
-            throw new Error(`${patch} previousProductName must differ from its current productName.`);
-        plugin.previousProductName = build.previousProductName;
-    }
-
     if (config.product !== null) {
         const configLabel = path.basename(config.configPath);
         const label = config.configPath;
@@ -698,7 +692,11 @@ function loadRegistry() {
     if (registry === null) {
         const failures = [];
         const plugins = discoverEffectPlugins({
-            onPluginError: (directoryPath, error) => failures.push({ alias: deriveAlias(path.basename(directoryPath)), error }),
+            onPluginError: (directoryPath, error) => failures.push({
+                alias: deriveAlias(path.basename(directoryPath)),
+                directoryName: path.basename(directoryPath),
+                error,
+            }),
         });
 
         registry = { plugins, failures };
@@ -740,16 +738,44 @@ export function usage() {
     return `Usage: npm run fx:build -- <plugin>\n\nAvailable plugins: ${availableEffectPluginNamesLine()}${failuresNote()}`;
 }
 
-/** One discovered plugin; a plugin whose folder failed to load throws that failure. */
-export function getEffectPlugin(pluginName, createUsage = usage) {
-    const { plugins, failures } = loadRegistry();
+/**
+ * The alias a command-line name refers to: the alias itself, or the fx/
+ * directory name of a folder holding exactly one plugin. Returns null when
+ * nothing matches; a folder holding several plugins asks for one of them.
+ */
+export function findPluginAlias(plugins, pluginName) {
+    if (typeof pluginName !== "string")
+        return null;
 
     if (Object.hasOwn(plugins, pluginName))
-        return plugins[pluginName];
+        return pluginName;
 
-    const failure = failures.find((entry) => entry.alias === pluginName);
+    const inDirectory = Object.entries(plugins)
+        .filter(([, plugin]) => plugin.patch.split("/").at(-2) === pluginName)
+        .map(([alias]) => alias);
+
+    if (inDirectory.length > 1)
+        throw new Error(`The folder ${pluginName} holds several plugins; name one of them: ${inDirectory.join(", ")}.`);
+
+    return inDirectory[0] ?? null;
+}
+
+/** The alias for a plugin alias or folder name; a plugin whose folder failed to load throws that failure. */
+export function resolvePluginAlias(pluginName, createUsage = usage) {
+    const { plugins, failures } = loadRegistry();
+    const alias = findPluginAlias(plugins, pluginName);
+
+    if (alias !== null)
+        return alias;
+
+    const failure = failures.find((entry) => entry.alias === pluginName || entry.directoryName === pluginName);
 
     throw failure ? failure.error : new Error(`Unknown plugin ${JSON.stringify(pluginName ?? "")}.\n\n${createUsage()}`);
+}
+
+/** One discovered plugin, named by its alias or its folder name. */
+export function getEffectPlugin(pluginName, createUsage = usage) {
+    return loadRegistry().plugins[resolvePluginAlias(pluginName, createUsage)];
 }
 
 export function resolvePluginNames(pluginName, createUsage = usage) {
@@ -762,24 +788,24 @@ export function resolvePluginNames(pluginName, createUsage = usage) {
         return effectPluginNames();
     }
 
-    getEffectPlugin(pluginName, createUsage);
-
-    return [pluginName];
+    return [resolvePluginAlias(pluginName, createUsage)];
 }
 
 /** Everything `npm run fx:jit:install` needs to point the generic VST3 at one target. */
 export function createJitInstallPlan(pluginName, plugins = null) {
-    const plugin = plugins === null ? getEffectPlugin(pluginName) : plugins[pluginName];
+    const alias = plugins === null ? resolvePluginAlias(pluginName) : findPluginAlias(plugins, pluginName);
 
-    if (!plugin) {
+    if (alias === null) {
         throw new Error(
             `Unknown effect plugin: ${JSON.stringify(pluginName ?? "")}. `
             + `Available plugins: ${Object.keys(plugins).join(", ")}.`,
         );
     }
 
+    const plugin = (plugins ?? getEffectPlugins())[alias];
+
     return {
-        name: pluginName,
+        name: alias,
         patch: plugin.patch,
         runtimePatch: `${plugin.runtimeOut}/${path.posix.basename(plugin.patch)}`,
         jitInstallRuntime: plugin.jitInstallRuntime === true,
@@ -992,7 +1018,8 @@ function getView(manifest, patchPath) {
     return manifest.view;
 }
 
-export async function buildPlugin(pluginName, { environment = process.env, stripDevModule = false } = {}) {
+export async function buildPlugin(name, { environment = process.env, stripDevModule = false } = {}) {
+    const pluginName = resolvePluginAlias(name);
     const plugin = getEffectPlugin(pluginName);
     // Vite, React and esbuild load here so discovery-only commands (kit:doctor,
     // kit:new, --targets) work before npm dependencies are installed.

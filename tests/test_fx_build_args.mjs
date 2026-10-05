@@ -132,6 +132,36 @@ test("fx_build_single_plugin_still_resolves_to_only_that_plugin", async () => {
     }
 });
 
+test("fx_build_accepts_a_plugin_folder_name_as_well_as_its_alias", async () => {
+    const { buildModule, prodModule } = await loadBuildModules();
+
+    for (const [alias, plugin] of Object.entries(buildModule.getEffectPlugins())) {
+        const folder = plugin.patch.split("/").at(-2);
+        const sharesFolder = Object.values(buildModule.getEffectPlugins())
+            .filter((candidate) => candidate.patch.split("/").at(-2) === folder).length > 1;
+        if (sharesFolder) continue;
+        assert.deepEqual(buildModule.resolvePluginNames(folder), [alias], folder);
+        assert.deepEqual(prodModule.resolveProdPluginNames(folder), [alias], folder);
+        assert.equal(buildModule.getEffectPlugin(folder), plugin, folder);
+        assert.equal(buildModule.createJitInstallPlan(folder).name, alias, folder);
+    }
+});
+
+test("a folder holding several plugins asks for one of their aliases", async () => {
+    const { buildModule } = await loadBuildModules();
+
+    await withFixtureFxRoot(async (fxRoot) => {
+        await writeFixturePlugin(fxRoot, "twin_lab", "Left.cmajorpatch", { name: "Left" }, { alias: "twin-left" });
+        await writeFixturePlugin(fxRoot, "twin_lab", "Right.cmajorpatch", { name: "Right" }, { alias: "twin-right" });
+        const plugins = buildModule.discoverEffectPlugins({ fxRoot });
+
+        assert.equal(buildModule.findPluginAlias(plugins, "twin-left"), "twin-left");
+        assert.equal(buildModule.findPluginAlias(plugins, "nothing"), null);
+        assert.throws(() => buildModule.findPluginAlias(plugins, "twin_lab"),
+            /The folder twin_lab holds several plugins; name one of them: twin-left, twin-right\./);
+    });
+});
+
 test("every discovered target points at real patch and worker files", async () => {
     const { buildModule } = await loadBuildModules();
     const outputDirectories = new Set();
@@ -455,8 +485,6 @@ test("plugin config build identifiers and worker paths must be separator-free or
         [{ cmakeTarget: "../Escape" }, /invalid "cmakeTarget" value/],
         [{ productName: "Evil/../../Product" }, /invalid "productName" value/],
         [{ productName: ".." }, /invalid "productName" value/],
-        [{ previousProductName: "../Other" }, /invalid "previousProductName" value/],
-        [{ previousProductName: ["OldName"] }, /invalid "previousProductName" value/],
         [
             { workerSource: "../outside/worker.ts", workerOut: "worker.js" },
             /invalid "workerSource" value/,
@@ -479,19 +507,13 @@ test("plugin config build identifiers and worker paths must be separator-free or
     }
 });
 
-test("explicit former bundle filename reaches the installer config without changing identity", async () => {
+test("a plugin config has no former-bundle-name field", async () => {
     const { buildModule } = await loadBuildModules();
     await withFixtureFxRoot(async (fxRoot) => {
         await writeFixturePlugin(fxRoot, "renamed_tone", "Tone.cmajorpatch", { name: "Tone" }, {
             productName: "NewTone", previousProductName: "OldTone",
         });
-        const plugin = buildModule.discoverEffectPlugins({ fxRoot })["renamed-tone"];
-        assert.equal(plugin.productName, "NewTone");
-        assert.equal(plugin.previousProductName, "OldTone");
-        await writeFixturePlugin(fxRoot, "renamed_tone", "Tone.cmajorpatch", { name: "Tone" }, {
-            productName: "NewTone", previousProductName: "NewTone",
-        });
-        assert.throws(() => buildModule.discoverEffectPlugins({ fxRoot }), /previousProductName must differ/);
+        assert.throws(() => buildModule.discoverEffectPlugins({ fxRoot }), /unknown key "previousProductName"/);
     });
 });
 
@@ -1028,6 +1050,7 @@ test("jit install plans pair each target with its runtime patch and build requir
         });
         assert.equal(buildModule.createJitInstallPlan("worker-lab", plugins).jitInstallRuntime, true);
         assert.equal(buildModule.createJitInstallPlan("pinned-lab", plugins).jitInstallRuntime, true);
+        assert.equal(buildModule.createJitInstallPlan("plain_lab", plugins).name, "plain-lab");
         assert.throws(
             () => buildModule.createJitInstallPlan("missing-lab", plugins),
             /Unknown effect plugin: "missing-lab"\. Available plugins: pinned-lab, plain-lab, worker-lab\./,

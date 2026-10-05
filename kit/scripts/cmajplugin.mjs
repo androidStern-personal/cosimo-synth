@@ -96,7 +96,7 @@ export async function jitInstall(pluginName, { dryRun = false, log = console.log
     const cmaj = await resolveCmajExecutable();
 
     if (plan.jitInstallRuntime)
-        await buildPlugin(pluginName);
+        await buildPlugin(plan.name);
 
     const patch = path.join(projectRoot, plan.jitInstallRuntime ? plan.runtimePatch : plan.patch);
 

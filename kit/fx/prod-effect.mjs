@@ -351,7 +351,6 @@ async function installVST3(pluginName, plugin, options) {
 
     await installVST3Bundle({
         bundle: builtVST3,
-        previousBundleName: plugin.previousProductName === undefined ? undefined : `${plugin.previousProductName}.vst3`,
         dryRun: options.dryRun,
         codesign: options.toolPaths.codesign,
         log: console.log,

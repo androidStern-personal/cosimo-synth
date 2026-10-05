@@ -76,8 +76,6 @@ export function enhanceThatSourceErrors(plugin, patch) {
     if (patch?.manufacturer !== identity.manufacturer) errors.push("Patch manufacturer must remain Cosimo.");
     if (plugin?.productName !== identity.bundleName || plugin?.cmakeTarget !== identity.bundleName)
         errors.push("Native target and bundle basename must be EnhanceThat.");
-    if (plugin?.previousProductName !== "CosimoEnhancerLite")
-        errors.push("Compose the reviewed previousProductName migration field first.");
     if (typeof patch?.version !== "string" || !/^\d+\.\d+\.\d+$/u.test(patch.version))
         errors.push("The plugin version must be a three-part numeric version.");
     return errors;
