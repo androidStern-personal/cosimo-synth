@@ -17,12 +17,24 @@ export function createPluginStateTestPlatform(PluginStateChannel, { parameters, 
 
     function connection() {
         const listeners = new Set();
+        // The synth's engine deliveries listen to declared output endpoints and saved
+        // documents; this fixture engine emits no outputs and reports the saved values.
+        const endpointListeners = new Map();
+        const storedListeners = new Set();
         const received = [];
         const queued = [];
         let held = false;
         const port = {
             addEventListener(type, listener) { if (type === "kit_state") listeners.add(listener); },
             removeEventListener(type, listener) { if (type === "kit_state") listeners.delete(listener); },
+            addEndpointListener(endpoint, listener) {
+                if (!endpointListeners.has(endpoint)) endpointListeners.set(endpoint, new Set());
+                endpointListeners.get(endpoint).add(listener);
+            },
+            removeEndpointListener(endpoint, listener) { endpointListeners.get(endpoint)?.delete(listener); },
+            addStoredStateValueListener(listener) { storedListeners.add(listener); },
+            removeStoredStateValueListener(listener) { storedListeners.delete(listener); },
+            requestFullStoredState(callback) { callback({ values: Object.fromEntries(stored) }); },
             sendMessageToServer(envelope) {
                 if (envelope.type !== "kit_state") throw new Error("Unexpected fixture envelope");
                 if (port === worker && envelope.message.kind === "publish") publicationRecords.push(structuredClone(envelope.message));
@@ -35,11 +47,10 @@ export function createPluginStateTestPlatform(PluginStateChannel, { parameters, 
             },
             messages: () => structuredClone(received),
             holdIncoming() { held = true; },
-            releaseIncoming(reverse = false) {
+            /** Deliver held messages in order: updates are deltas against the previous update. */
+            releaseIncoming() {
                 held = false;
-                const envelopes = queued.splice(0);
-                if (reverse) envelopes.reverse();
-                for (const envelope of envelopes) port.deliverMessageFromServer(envelope);
+                for (const envelope of queued.splice(0)) port.deliverMessageFromServer(envelope);
             },
             queuedMessages: () => queued.length,
         };

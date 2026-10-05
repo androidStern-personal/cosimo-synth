@@ -1,5 +1,4 @@
 import assert from "node:assert/strict";
-import path from "node:path";
 import test from "node:test";
 
 import { buildBounceBank, encodeBounceBank } from "../bounce/bank-format.mjs";
@@ -16,9 +15,7 @@ import {
     serializeBounceDocument,
 } from "../bounce/document.mjs";
 import { BounceRuntimeRestorer } from "../bounce/runtime-restorer.mjs";
-import { loadUIModule } from "./helpers/load_ui_module.mjs";
 
-const repoRoot = path.resolve(import.meta.dirname, "..");
 
 class FakeFileHandle {
     constructor(directory, name, supportsMove) {
@@ -331,76 +328,4 @@ test("missing or corrupt persisted banks expose typed errors and keep the oscill
         assert.deepEqual(sourceModes, [0]);
         assert.equal(staged, false);
     }
-});
-
-class PresetPatchConnection {
-    constructor(initialValue) {
-        this.initialValue = initialValue;
-        this.listeners = new Set();
-        this.storedWrites = [];
-        this.parameterWrites = [];
-    }
-
-    addStoredStateValueListener(listener) { this.listeners.add(listener); }
-    removeStoredStateValueListener(listener) { this.listeners.delete(listener); }
-    requestFullStoredState(callback) {
-        callback({ values: { [BOUNCE_STATE_KEY]: this.initialValue } });
-    }
-    sendEventOrValue(endpointID, value) { this.parameterWrites.push({ endpointID, value }); }
-    sendStoredStateValue(key, value) {
-        this.storedWrites.push({ key, value });
-        this.emit(key, value);
-    }
-    emit(key, value) {
-        for (const listener of this.listeners) listener({ key, value });
-    }
-}
-
-test("synth preset capture and load carry the bounce.v1 reference, never PCM", async () => {
-    const fixture = await bankFixture();
-    const document = bounceDocument(fixture);
-    const serialized = serializeBounceDocument(document);
-    const [bouncePreset, contracts, presets] = await Promise.all([
-        loadUIModule(repoRoot, "ui/shared/bounce-preset-state.ts"),
-        loadUIModule(repoRoot, "ui/shared/effects/effect-state-contract.ts"),
-        loadUIModule(repoRoot, "ui/shared/effects/effect-preset-v2.ts"),
-    ]);
-    const connection = new PresetPatchConnection(serialized);
-    const adapter = bouncePreset.createBouncePresetStoredStateAdapter(connection);
-    const unsubscribe = adapter.subscribe(() => {});
-    const currentContract = contracts.buildCanonicalPluginStateContract({
-        effectID: "cosimo-synth",
-        parameters: [{
-            endpointID: "sourceMode",
-            type: "integer",
-            min: 0,
-            max: 1,
-            defaultValue: 0,
-        }],
-        storedState: [adapter.getContract()],
-    });
-    const saved = presets.captureEffectPresetV2({
-        effectID: "cosimo-synth",
-        presetID: "user.bounced",
-        label: "Bounced",
-        currentContract,
-        currentParameterValues: { sourceMode: 1 },
-        storedStateAdapters: [adapter],
-    });
-
-    assert.equal(saved.storedState[BOUNCE_STATE_KEY], serialized);
-    assert.equal(JSON.stringify(saved).includes("pcm"), false);
-    connection.emit(BOUNCE_STATE_KEY, null);
-    presets.applyEffectPresetV2({
-        preset: saved,
-        currentContract,
-        storedStateAdapters: [adapter],
-        patchConnection: connection,
-    });
-    assert.deepEqual(connection.storedWrites.at(-1), {
-        key: BOUNCE_STATE_KEY,
-        value: serialized,
-    });
-    assert.equal(adapter.capture().digest, fixture.digest);
-    unsubscribe();
 });

@@ -42,11 +42,12 @@ test('web shell keeps the actual phone UI and playable audio through desktop, ta
         }
         // Shared sound links must still target the public page, and a consumed
         // link must clear from both documents rather than replay on refresh.
-        const preset = frame.locator('cosimo-preset-bar');
-        await preset.locator('[data-el="shell-more"]').click();
-        await preset.locator('[data-el="menu-share"]').click();
-        await preset.locator('[data-el="share-dialog"]').waitFor({state:'visible'});
-        const link = await preset.locator('[data-el="share-link"]').inputValue();
+        const preset = frame.locator('[data-role="synth-preset-bar"]');
+        await preset.locator('[data-action="toggle-sound-actions"]').click();
+        await preset.locator('[data-role="sound-actions"] [data-action="share"]').click();
+        const shareDialog = preset.locator('[data-role="share-dialog"]');
+        await shareDialog.waitFor({state:'visible'});
+        const link = await shareDialog.getByLabel('Sound link').inputValue();
         assert.equal(new URL(link).pathname, new URL(url).pathname);
         assert.ok(new URL(link).hash.startsWith('#p='));
         await page.goto(link);
@@ -54,7 +55,7 @@ test('web shell keeps the actual phone UI and playable audio through desktop, ta
         const restored = await (await page.locator('#cosimo-phone').elementHandle()).contentFrame();
         await restored.waitForFunction(() => globalThis.__COSIMO_WEB_POC__?.getSnapshot().phase === 'ready');
         await restored.locator('#cosimo-start-overlay').click();
-        await restored.locator('cosimo-preset-bar [data-action="shared-load-confirm"]').click();
+        await restored.locator('[data-role="shared-load-dialog"]').getByRole('button', {name:'Load'}).click();
         await restored.waitForFunction(() => location.hash === '');
         assert.equal(new URL(page.url()).hash, '');
         assert.deepEqual(errors, []);

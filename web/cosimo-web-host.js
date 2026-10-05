@@ -9,6 +9,24 @@ import { createBounceRuntimeRestorer } from "./bounce/runtime-restorer.mjs";
 globalThis.__COSIMO_DESKTOP_RUNTIME_KIND__ = "standalone";
 globalThis.__COSIMO_VIDEO_BOUNCE_MODULE_URL__ = new URL("./video-bounce/index.js", import.meta.url).href;
 
+// A plugin host gives the view a per-user file store; the browser has none, so the
+// user's files (the synth's preset library) live in this site's local storage.
+const userFilesPrefix = "cosimo.user-files.";
+globalThis.chocUserFiles ??= {
+    async list(scope) {
+        const folder = `${userFilesPrefix}${scope}/`;
+        return Object.keys(localStorage).filter((key) => key.startsWith(folder)).map((key) => key.slice(folder.length));
+    },
+    async read(scope, fileName) {
+        const text = localStorage.getItem(`${userFilesPrefix}${scope}/${fileName}`);
+        if (text === null) throw new Error(`${fileName} is not in the user's files.`);
+        return text;
+    },
+    async write(scope, fileName, contents) {
+        localStorage.setItem(`${userFilesPrefix}${scope}/${fileName}`, contents);
+    },
+};
+
 const searchParameters = new URLSearchParams(globalThis.location.search);
 const isTestMode = searchParameters.has("test");
 // ?perf=1 turns on the AudioWorklet's render-load counters and a small

@@ -185,8 +185,8 @@ const PresetControls = memo(function PresetControls(props: PresetControlsProps) 
     const soundActions = <>
         {compact && <SnapshotBar definition={synthPluginState} className="synth-preset-bar-snapshots" />}
         <MenuButton action="share" disabled={!ready || !canUseSoundLinks()} onClick={closeMenuAnd(() => { void shareSound(); })}>Share sound link</MenuButton>
-        <MenuButton action="bounce-audio" disabled={!props.bounceAudioAvailable} onClick={closeMenuAnd(props.onBounceAudio)}>Bounce audio</MenuButton>
-        {props.videoBounceAvailable && <MenuButton action="bounce-video" disabled={!ready} onClick={closeMenuAnd(bounceVideo)}>Bounce video</MenuButton>}
+        <MenuButton action="bounce-audio" disabled={!props.bounceAudioAvailable} onClick={closeMenuAnd(props.onBounceAudio)}>Bounce Audio</MenuButton>
+        {props.videoBounceAvailable && <MenuButton action="bounce-video" disabled={!ready} onClick={closeMenuAnd(bounceVideo)}>Bounce Video</MenuButton>}
         {props.developerSettingsAvailable && <MenuButton action="perf-tuning" onClick={closeMenuAnd(props.onOpenDeveloperSettings)}>Developer settings</MenuButton>}
     </>;
 

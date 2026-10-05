@@ -158,13 +158,11 @@ test("native host state stamps the current complete sound and rejects older chun
 });
 
 test("every non-host complete-sound transport hard-cuts to the Polish version", async () => {
-    const [browserState, browserStateDeclaration, speedrun, envelope, shareLink, migrations] = await Promise.all([
+    const [browserState, browserStateDeclaration, speedrun, shareLink] = await Promise.all([
         read("web/browser-patch-state.mjs"),
         read("web/browser-patch-state.d.mts"),
         read("ui/speedrun/patch-io.ts"),
-        read("ui/shared/sound-share-envelope.ts"),
         read("ui/shared/sound-share-link.ts"),
-        read("ui/shared/effects/synth-preset-migrations.ts"),
     ]);
 
     const runtimeVersion = browserState.match(/BROWSER_PATCH_STATE_VERSION = (\d+)/)?.[1];
@@ -172,18 +170,17 @@ test("every non-host complete-sound transport hard-cuts to the Polish version", 
     assert.equal(runtimeVersion, "5");
     assert.equal(declaredVersion, runtimeVersion);
     assert.match(speedrun, /BROWSER_PATCH_STATE_VERSION = 5/);
-    assert.match(envelope, /SOUND_SHARE_ENVELOPE_VERSION = 2/);
-    assert.match(shareLink, /SOUND_SHARE_FRAGMENT_VERSION = 2/);
-    assert.match(migrations, /return \[\];/);
-    assert.doesNotMatch(migrations, /fromHash|migrate:/);
+    // Sound links carry the kit preset file from version 3; older links are refused, not migrated.
+    assert.match(shareLink, /SOUND_SHARE_FRAGMENT_VERSION = 3/);
+    assert.doesNotMatch(speedrun, /cosimo\.soundShare|cosimo\.effectPreset/);
 });
 
 test("the product UI exposes four compact Polish modules, independent bypasses, and an expansion handoff", async () => {
     const [workspace, subway, meter, genericBar, modulationTargets] = await Promise.all([
         read("ui/desktop/effects-rack-workspace.tsx"),
         read("ui/desktop/subway-map-column.tsx"),
-        read("ui/shared/effects/synth-preset-bar.ts"),
-        read("ui/shared/effects/preset-bar.ts"),
+        read("ui/shared/synth-preset-bar.tsx"),
+        read("kit/ui/preset-bar.tsx"),
         read("ui/shared/modulation-targets.ts"),
     ]);
 
@@ -226,33 +223,25 @@ test("the product UI exposes four compact Polish modules, independent bypasses, 
     );
     assert.doesNotMatch(fixedNode, /draggable|onContextMenu|onPointerDown|bypass|power/i);
 
-    // The Polish meter and the ADR-026 compact shell live in the synth-owned
-    // preset-bar extension; the generic bar carries neither.
-    assert.match(meter, /height: var\(--compact-shell-row, 40px\)/);
-    assert.match(meter, /width: 92px/);
-    assert.match(meter, /font-variant-numeric: tabular-nums/);
-    assert.ok(meter.indexOf('data-el="shell-back"') < meter.indexOf('data-el="polish-meter"'));
-    // The shell cluster (Back, then meter) is prepended into .preset-bar, so it
-    // renders ahead of the generic bar's centered preset name.
-    assert.match(meter, /bar\.prepend\(htmlFragment\(SYNTH_SHELL_CLUSTER_HTML\)\)/);
-    assert.match(genericBar, /data-el="preset-name"/);
-    assert.doesNotMatch(genericBar, /polish|shell-back|compact-synth/);
+    // The Polish meter and the ADR-026 compact shell live in the synth's preset
+    // row beside the kit's preset bar; the kit bar carries neither.
+    assert.match(meter, /h-\[var\(--compact-shell-row,40px\)\]/);
+    assert.match(meter, /w-\[92px\]/);
+    assert.match(meter, /tabular-nums/);
+    // The shell cluster (Back, then meter) renders ahead of the centered preset name.
+    assert.ok(meter.indexOf('data-action="shell-back"') < meter.indexOf("<PolishMeter"));
+    assert.ok(meter.indexOf("<PolishMeter") < meter.indexOf('data-role="preset-name"'));
+    assert.doesNotMatch(genericBar, /polish|shell-back|compact/i);
 });
 
 test("the factory inventory contains no old-format synth sound to retain", async () => {
-    const chorusPresets = await read("fx/chorus_lab/view/factory-presets.js");
-    const ottPresets = await read("fx/ott_lab/view/factory-presets.js");
+    const chorusPresets = await read("fx/chorus_lab/view/factory-presets.ts");
+    const ottPresets = await read("fx/ott_lab/view/factory-presets.ts");
 
     for (const inventory of [chorusPresets, ottPresets]) {
         assert.doesNotMatch(inventory, /cosimo-synth|wavetable-synth/);
+        assert.match(inventory, /export const factoryPresets: readonly FactoryPreset\[\]/);
     }
-
-    assert.match(chorusPresets, /CHORUS_FACTORY_PRESETS[\s\S]*?chorus:/);
-    assert.match(ottPresets, /OTT_FACTORY_PRESETS[\s\S]*?ott:/);
-
-    // The controller no longer carries a Cosimo default inventory at all.
-    const standalone = await read("ui/shared/effects/standalone-effect-presets.ts");
-    assert.doesNotMatch(standalone, /EFFECT_FACTORY_PRESETS/);
 });
 
 test("the retired memoryless RackOutputStage is absent from production", async () => {

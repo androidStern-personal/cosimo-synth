@@ -70,9 +70,8 @@ test("preset bar action buttons are compact icon buttons with accessible labels"
 
             return {
                 buttons,
-                // The synth-only surface (share links, bounce, compact shell,
-                // Polish meter) lives in the synth's registered extension, not
-                // in the generic bar.
+                // Share links, Bounce, the compact shell and the Polish meter
+                // belong to the synth's own preset row, never to this bar.
                 synthSurface: [
                     '[data-action="share"]',
                     "[data-synth-bounce]",
@@ -137,74 +136,12 @@ test("preset bar action buttons are compact icon buttons with accessible labels"
     }
 });
 
-test("the synth preset bar extension keeps the full action row including the share link", async () => {
-    const page = await openModulePage();
-
-    try {
-        const details = await page.evaluate(async () => {
-            const { createSynthPresetBar } = await import("/ui/shared/effects/synth-preset-bar.ts");
-            const mountPoint = document.getElementById("mount");
-
-            if (!(mountPoint instanceof HTMLElement)) {
-                throw new Error("Module test mount point is missing.");
-            }
-
-            const presetBar = createSynthPresetBar();
-            mountPoint.append(presetBar);
-
-            const shadow = presetBar.shadowRoot;
-            if (!shadow) {
-                throw new Error("Preset bar shadow root is missing.");
-            }
-
-            const actionGroup = shadow.querySelector(".action-group");
-            if (!actionGroup) {
-                throw new Error("Preset action group is missing.");
-            }
-
-            const share = actionGroup.querySelector('button[data-action="share"]');
-            if (!(share instanceof HTMLButtonElement)) {
-                throw new Error("Share action button is missing.");
-            }
-            const svg = share.querySelector("svg");
-
-            return {
-                actionOrder: Array.from(actionGroup.querySelectorAll("button[data-action]"))
-                    .map((button) => button.dataset.action),
-                share: {
-                    ariaLabel: share.getAttribute("aria-label"),
-                    title: share.getAttribute("title"),
-                    visibleText: share.textContent?.trim() ?? "",
-                    svgClass: svg?.getAttribute("class") ?? null,
-                    svgHidden: svg?.getAttribute("aria-hidden") ?? null,
-                    width: getComputedStyle(share).width,
-                    disabled: share.disabled,
-                },
-            };
-        });
-
-        assert.deepEqual(details.actionOrder, ["save", "save-as", "revert", "copy", "paste", "share"]);
-        assert.deepEqual(details.share, {
-            ariaLabel: "Share sound link",
-            title: "Share sound link",
-            visibleText: "",
-            svgClass: "lucide lucide-link-2",
-            svgHidden: "true",
-            width: "32px",
-            disabled: true,
-        });
-    } finally {
-        await page.close();
-    }
-});
-
 test("preset bar registrations fail loudly when a tag is already taken by a different class", async () => {
     const page = await openModulePage();
 
     try {
         const result = await page.evaluate(async () => {
             const { createPresetBar, definePresetBarElement } = await import("/ui/shared/effects/preset-bar.ts");
-            const { createSynthPresetBar, defineSynthPresetBarElement } = await import("/ui/shared/effects/synth-preset-bar.ts");
             const thrownMessage = (callback) => {
                 try {
                     callback();
@@ -214,35 +151,23 @@ test("preset bar registrations fail loudly when a tag is already taken by a diff
                 }
             };
 
-            // A foreign element already owning the tag must be rejected by
-            // both registration paths.
+            // A foreign element already owning the tag must be rejected.
             customElements.define("test-foreign-bar", class extends HTMLElement {});
 
-            // The latent first-wins incident: the generic bar claiming the tag
-            // first must make the synth registration loud, not silently hand
-            // back a bar without the synth surface.
             definePresetBarElement("test-generic-first-bar");
 
             // Re-registering the same class under the same tag stays a no-op.
             const genericRedefineMessage = thrownMessage(() => definePresetBarElement("test-generic-first-bar"));
-            createSynthPresetBar("test-synth-bar");
-            const synthRedefineMessage = thrownMessage(() => defineSynthPresetBarElement("test-synth-bar"));
 
             return {
                 genericOverForeignMessage: thrownMessage(() => definePresetBarElement("test-foreign-bar")),
-                synthOverForeignMessage: thrownMessage(() => defineSynthPresetBarElement("test-foreign-bar")),
-                synthOverGenericMessage: thrownMessage(() => defineSynthPresetBarElement("test-generic-first-bar")),
                 genericRedefineMessage,
-                synthRedefineMessage,
                 genericTagName: createPresetBar("test-generic-first-bar").tagName,
             };
         });
 
         assert.match(result.genericOverForeignMessage ?? "", /"test-foreign-bar" is already registered to a non-PresetBar element/);
-        assert.match(result.synthOverForeignMessage ?? "", /"test-foreign-bar" is already registered to a non-SynthPresetBar element/);
-        assert.match(result.synthOverGenericMessage ?? "", /"test-generic-first-bar" is already registered to a non-SynthPresetBar element/);
         assert.equal(result.genericRedefineMessage, null);
-        assert.equal(result.synthRedefineMessage, null);
         assert.equal(result.genericTagName, "TEST-GENERIC-FIRST-BAR");
     } finally {
         await page.close();

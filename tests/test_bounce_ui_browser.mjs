@@ -185,42 +185,33 @@ async function bounceStoreUsage(page) {
     });
 }
 
-async function discardBounceGuardIfOpen(page) {
-    await page.waitForTimeout(50);
-    return page.evaluate(() => {
-        const view = document.querySelector("cosimo-desktop-react-view");
-        const presetBar = view?.shadowRoot?.querySelector("cosimo-preset-bar");
-        const shadow = presetBar?.shadowRoot;
-        const dialog = shadow?.querySelector('[data-el="sound-replacement-dialog"]');
-        const discard = shadow?.querySelector('[data-action="sound-replacement-discard"]');
-        if (!(dialog instanceof HTMLElement) || dialog.hidden
-            || !(discard instanceof HTMLButtonElement)) {
-            return false;
-        }
-        discard.click();
-        return true;
+/** Open the synth's Sound actions menu, where Bounce audio lives. */
+async function openSoundActions(page) {
+    await page.evaluate(() => {
+        const toggle = document.querySelector("cosimo-desktop-react-view")?.shadowRoot
+            ?.querySelector('[data-role="synth-preset-bar"] [data-action="toggle-sound-actions"]');
+        if (!(toggle instanceof HTMLButtonElement)) throw new Error("The Sound actions menu is missing.");
+        if (toggle.getAttribute("aria-expanded") !== "true") toggle.click();
     });
 }
 
 async function waitForBounceAudioAvailable(page, timeout = 30_000) {
+    await openSoundActions(page);
     await page.waitForFunction(() => {
-        const view = document.querySelector("cosimo-desktop-react-view");
-        const presetBar = view?.shadowRoot?.querySelector("cosimo-preset-bar");
-        const action = presetBar?.shadowRoot?.querySelector('.flyout-synth-action[data-action="bounce-audio"]');
+        const action = document.querySelector("cosimo-desktop-react-view")?.shadowRoot
+            ?.querySelector('[data-role="sound-actions"] [data-action="bounce-audio"]');
         return action instanceof HTMLButtonElement && !action.disabled;
     }, null, { timeout });
 }
 
 async function clickBounceAudio(page) {
+    await openSoundActions(page);
     await page.evaluate(() => {
-        const view = document.querySelector("cosimo-desktop-react-view");
-        const presetBar = view?.shadowRoot?.querySelector("cosimo-preset-bar");
-        const shadow = presetBar?.shadowRoot;
-        const action = shadow?.querySelector('.flyout-synth-action[data-action="bounce-audio"]');
+        const action = document.querySelector("cosimo-desktop-react-view")?.shadowRoot
+            ?.querySelector('[data-role="sound-actions"] [data-action="bounce-audio"]');
         if (!(action instanceof HTMLButtonElement) || action.disabled) {
-            throw new Error("Bounce Audio is not available in the preset dropdown.");
+            throw new Error("Bounce audio is not available in the Sound actions menu.");
         }
-        shadow.querySelector('[data-action="toggle-flyout"]')?.click();
         action.click();
     });
 }
@@ -231,7 +222,6 @@ async function completeBounce(page, expectedGeneration) {
         retirements: globalThis.__COSIMO_BOUNCE_TEST_DIAGNOSTICS__?.retirements.length ?? 0,
     }));
     await clickBounceAudio(page);
-    await discardBounceGuardIfOpen(page);
     await page.waitForFunction(({ captures, retirements, generation }) => {
         const diagnostics = globalThis.__COSIMO_BOUNCE_TEST_DIAGNOSTICS__;
         const latest = diagnostics?.captures.at(-1);

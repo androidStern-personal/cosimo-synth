@@ -1,5 +1,6 @@
 import { definePluginState, parameter, preparedState, storedValue, type PluginStateParameter } from "../../kit/ui/plugin-state-definition";
-import { presets, snapshots } from "../../kit/index";
+import { presets } from "../../kit/ui/presets";
+import { snapshots } from "../../kit/ui/snapshots";
 import { createDefaultModulationState, MODULATION_STATE_KEY } from "./modulation";
 import { modulationStateCodec } from "./synth-modulation-state";
 import { OSCILLATOR_BINDING_CONTRACTS } from "./oscillator-binding";

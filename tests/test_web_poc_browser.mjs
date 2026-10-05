@@ -2744,16 +2744,16 @@ test("generated preset-bar Init starts clean after the pre-Type saved-sound vers
             };
         });
 
-        const presetBar = page.locator("cosimo-preset-bar");
-        await presetBar.locator('[data-action="toggle-shell-menu"]').click();
-        await presetBar.locator('.shell-menu.open [data-action="init"]').click();
+        const presetBar = page.locator('[data-role="synth-preset-bar"]');
+        await presetBar.locator('[data-action="toggle-sound-actions"]').click();
+        await presetBar.locator('[data-role="sound-actions"]').getByLabel("Preset", { exact: true }).selectOption({ label: "Init" });
         await page.waitForFunction((expectedRackJSON) => {
             const saved = JSON.parse(localStorage.getItem("cosimo.web.patch-state.v2") ?? "{}");
             const resetCompleted = saved?.version === 3
                 && saved?.sound?.storedState?.["lane.v1"] === expectedRackJSON;
             const view = document.querySelector("cosimo-desktop-react-view");
-            const bar = view?.shadowRoot?.querySelector("cosimo-preset-bar");
-            const hasError = (bar?.shadowRoot?.querySelectorAll(".cpb-toast.error").length ?? 0) > 0;
+            const bar = view?.shadowRoot?.querySelector('[data-role="synth-preset-bar"]');
+            const hasError = (bar?.querySelectorAll('[role="alert"]').length ?? 0) > 0;
             return resetCompleted || hasError;
         }, JSON.stringify(expectedRack));
         await page.waitForFunction(() => {
@@ -2769,8 +2769,7 @@ test("generated preset-bar Init starts clean after the pre-Type saved-sound vers
         const result = await page.evaluate(() => {
             const saved = JSON.parse(localStorage.getItem("cosimo.web.patch-state.v2") ?? "{}");
             const view = document.querySelector("cosimo-desktop-react-view");
-            const bar = view?.shadowRoot?.querySelector("cosimo-preset-bar");
-            const shadow = bar?.shadowRoot;
+            const bar = view?.shadowRoot?.querySelector('[data-role="synth-preset-bar"]');
             const rawRack = saved?.sound?.storedState?.["lane.v1"];
             return {
                 version: saved?.version ?? null,
@@ -2786,10 +2785,10 @@ test("generated preset-bar Init starts clean after the pre-Type saved-sound vers
                     cMuted: view?.shadowRoot?.querySelector('[data-role="mobile-voice-tab-c"]')?.classList.contains("is-muted") ?? null,
                     level: view?.shadowRoot?.querySelector('[data-role="mobile-voice-cell-volumeDb"]')?.getAttribute("aria-valuenow") ?? null,
                 },
-                presetName: shadow?.querySelector('[data-el="preset-name"]')?.textContent?.trim() ?? null,
-                dirty: shadow?.querySelector('[data-el="dirty-dot"]')?.classList.contains("visible") ?? null,
-                errorMessages: Array.from(shadow?.querySelectorAll(".cpb-toast.error") ?? [])
-                    .map((toast) => toast.textContent?.trim()),
+                presetName: bar?.querySelector('[data-role="preset-name"]')?.firstChild?.textContent?.trim() ?? null,
+                dirty: bar?.querySelector('[data-role="preset-modified"]') !== null,
+                errorMessages: Array.from(bar?.querySelectorAll('[role="alert"]') ?? [])
+                    .map((alert) => alert.textContent?.trim()),
             };
         });
 
@@ -2814,7 +2813,7 @@ test("generated preset-bar Init starts clean after the pre-Type saved-sound vers
             cMuted: true,
             level: "0",
         });
-        assert.equal(result.presetName, "INIT");
+        assert.equal(result.presetName, "Init");
         assert.equal(result.dirty, false);
         assert.deepEqual(result.errorMessages, []);
     } finally {

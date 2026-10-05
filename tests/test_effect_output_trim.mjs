@@ -209,10 +209,10 @@ test("the sparse modulation program grows to 235 rack cells and executes only ma
 });
 
 test("host automation is reconciled into lane state and every UI projection preserves hard silence", async () => {
-    const [trim, laneState, initState, targetBase, routePresentation, catalog] = await Promise.all([
+    const [trim, laneState, synthState, targetBase, routePresentation, catalog] = await Promise.all([
         loadUIModule(repoRoot, "ui/shared/effect-output-trim.ts"),
         loadUIModule(repoRoot, "ui/shared/lane-state-v2.ts"),
-        loadUIModule(repoRoot, "ui/shared/effects/synth-init-state.ts"),
+        loadUIModule(repoRoot, "ui/shared/synth-plugin-state.ts"),
         loadUIModule(repoRoot, "ui/shared/modulation-target-base.ts"),
         loadUIModule(repoRoot, "ui/shared/rack-route-presentation.ts"),
         loadUIModule(repoRoot, "ui/shared/rack-parameter-descriptors.ts"),
@@ -236,42 +236,18 @@ test("host automation is reconciled into lane state and every UI projection pres
     );
     assert.equal(Object.hasOwn(synchronized.devices["reverb#1"].params, "polishOutputTrimDb"), false);
 
-    const transactionEvents = [];
-    const transactionStoredWrites = [];
-    const adapter = initState.createSynthRackInitStateAdapter({
-        sendEventOrValue(endpointID, value) {
-            transactionEvents.push({ endpointID, value });
-        },
-        sendStoredStateValue(key, value) {
-            transactionStoredWrites.push({ key, value });
-        },
-    });
-    const transactionContext = {
-        parameters: hostParameters,
-        storedState: { "lane.v1": laneState.serializeLaneStateV2(initial) },
-    };
+    // Presets, snapshots, Init and sound links recall the trim parameters and the lane
+    // document in one edit; the lane field depends on every trim and is prepared from them.
+    const laneField = synthState.synthPluginState["lane.v1"];
+    assert.deepEqual([...laneField.engine.dependencies].sort(), [...trim.allEffectOutputTrimHostEndpointIDs()].sort());
     assert.deepEqual(
-        adapter.normalizeForTransaction(initial, transactionContext),
+        laneField.engine.prepare(initial, { parameters: hostParameters }),
         synchronized,
-        "preset/Init/URL transactions must replay the lane mirror from the host parameter authority",
+        "the engine receives the lane document reconciled with the host trim parameters",
     );
-    assert.deepEqual(
-        JSON.parse(adapter.serializeForTransaction(initial, transactionContext)),
-        synchronized,
-    );
-    adapter.apply(initial, transactionContext);
-    assert.deepEqual(
-        transactionEvents.filter(({ endpointID }) => (
-            trim.parseEffectOutputTrimHostEndpointID(endpointID) !== null
-        )),
-        [
-            { endpointID: "laneDistortion1OutputTrimDb", value: 4.5 },
-            { endpointID: "laneDelay1OutputTrimDb", value: -18 },
-            { endpointID: "laneReverb1OutputTrimDb", value: trim.EFFECT_OUTPUT_TRIM_SILENCE_DB },
-        ],
-        "loading a preset or shared URL must install the matching real host parameters",
-    );
-    assert.deepEqual(JSON.parse(transactionStoredWrites[0].value), synchronized);
+    for (const endpointID of trim.allEffectOutputTrimHostEndpointIDs()) {
+        assert.equal(synthState.synthPluginState[endpointID]?.kind, "parameter", `${endpointID} is a recalled host parameter`);
+    }
 
     assert.equal(
         trim.effectOutputTrimEffectiveDb(trim.EFFECT_OUTPUT_TRIM_SILENCE_DB, 35),

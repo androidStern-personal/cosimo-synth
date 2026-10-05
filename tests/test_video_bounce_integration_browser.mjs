@@ -51,10 +51,15 @@ test("the preset dropdown opens current-patch Bounce Video and lazy-loads its re
         await page.waitForFunction(() => globalThis.__COSIMO_WEB_POC__?.getSnapshot().phase === "ready", null, {
             timeout: 30_000,
         });
+        await page.evaluate(() => {
+            const toggle = document.querySelector("cosimo-desktop-react-view")?.shadowRoot
+                ?.querySelector('[data-role="synth-preset-bar"] [data-action="toggle-sound-actions"]');
+            if (!(toggle instanceof HTMLButtonElement)) throw new Error("The Sound actions menu is missing.");
+            toggle.click();
+        });
         await page.waitForFunction(() => {
             const root = document.querySelector("cosimo-desktop-react-view")?.shadowRoot;
-            const preset = root?.querySelector("cosimo-preset-bar");
-            const video = preset?.shadowRoot?.querySelector('.flyout-synth-action[data-action="bounce-video"]');
+            const video = root?.querySelector('[data-role="sound-actions"] [data-action="bounce-video"]');
             return video instanceof HTMLButtonElement && !video.disabled;
         }, null, { timeout: 30_000 });
 
@@ -62,12 +67,10 @@ test("the preset dropdown opens current-patch Bounce Video and lazy-loads its re
 
         const menuBefore = await page.evaluate(() => {
             const root = document.querySelector("cosimo-desktop-react-view")?.shadowRoot;
-            const preset = root?.querySelector("cosimo-preset-bar");
-            const shadow = preset?.shadowRoot;
-            if (!root || !shadow) throw new Error("Synth preset dropdown is missing.");
-            shadow.querySelector('[data-action="toggle-flyout"]')?.click();
+            const menu = root?.querySelector('[data-role="sound-actions"]');
+            if (!root || !menu) throw new Error("The Sound actions menu is missing.");
             return {
-                labels: Array.from(shadow.querySelectorAll(".flyout-synth-action"))
+                labels: Array.from(menu.querySelectorAll('[data-action^="bounce-"]'))
                     .map((button) => button.textContent?.trim()),
                 visibleBounceStarts: root.querySelectorAll('[data-role="bounce-start"]').length,
             };
@@ -76,10 +79,9 @@ test("the preset dropdown opens current-patch Bounce Video and lazy-loads its re
         assert.equal(menuBefore.visibleBounceStarts, 0);
 
         await page.evaluate(() => {
-            const root = document.querySelector("cosimo-desktop-react-view")?.shadowRoot;
-            const preset = root?.querySelector("cosimo-preset-bar");
-            const video = preset?.shadowRoot?.querySelector('.flyout-synth-action[data-action="bounce-video"]');
-            if (!(video instanceof HTMLButtonElement)) throw new Error("Bounce Video is missing.");
+            const video = document.querySelector("cosimo-desktop-react-view")?.shadowRoot
+                ?.querySelector('[data-role="sound-actions"] [data-action="bounce-video"]');
+            if (!(video instanceof HTMLButtonElement)) throw new Error("Bounce video is missing.");
             video.click();
         });
         await page.waitForFunction(() => {

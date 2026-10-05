@@ -6,7 +6,6 @@ import path from "node:path";
 const repoRoot = path.resolve(import.meta.dirname, "..");
 
 const GENERIC_ENTRY = "ui/shared/effects/standalone-effect-presets.ts";
-const SYNTH_ADAPTER = "ui/shared/effects/synth-standalone-presets.ts";
 
 // The generic preset controller must never reach synth, bounce, sound-share, or
 // wavetable code; those live in the synth adapter.
@@ -108,39 +107,8 @@ test("the generic standalone preset controller's import graph reaches no synth, 
     }
 });
 
-test("the synth adapter owns the bounce, sound-share, and wavetable imports the generic core shed", async () => {
-    const source = await fs.readFile(path.join(repoRoot, SYNTH_ADAPTER), "utf8");
-    const specifiers = importSpecifiers(source);
-
-    assert.ok(
-        specifiers.some((specifier) => /(^|\/)bounce\/document\.mjs$/.test(specifier)),
-        "synth adapter must import the bounce document (BOUNCE_STATE_KEY)",
-    );
-    assert.ok(
-        specifiers.some((specifier) => specifier.endsWith("sound-share-envelope")),
-        "synth adapter must import the sound-share envelope",
-    );
-    assert.ok(
-        specifiers.some((specifier) => specifier.endsWith("sound-share-wavetable")),
-        "synth adapter must import the sound-share wavetable validation",
-    );
-    assert.match(source, /parameters\.sourceMode === 1/, "the sourceMode bounce guard is synth-adapter-owned");
-
-    // The runtime-minted preset id prefix is one configurable constant whose
-    // default preserves the historical "cosimo." ids.
-    assert.match(source, /DEFAULT_RUNTIME_PRESET_ID_PREFIX = "cosimo"/);
-    assert.match(source, /runtimePresetIDPrefix\s*\?\?\s*DEFAULT_RUNTIME_PRESET_ID_PREFIX/);
-
-    const genericSource = await fs.readFile(path.join(repoRoot, GENERIC_ENTRY), "utf8");
-    assert.doesNotMatch(genericSource, /"cosimo\./, "the generic core must not mint cosimo-prefixed ids");
-});
-
-// The generic header and bar elements must stay free of polish, sound-share,
-// bounce, and synth modules; the synth's registered preset-bar extension owns
-// that surface.
 const GENERIC_HEADER_ENTRY = "ui/shared/effects/effect-header.ts";
 const GENERIC_BAR = "ui/shared/effects/preset-bar.ts";
-const SYNTH_BAR = "ui/shared/effects/synth-preset-bar.ts";
 
 const BAR_FORBIDDEN_SPECIFIER_PATTERNS = [
     ...FORBIDDEN_SPECIFIER_PATTERNS,
@@ -184,42 +152,6 @@ test("the generic effect header and preset bar import graph reaches no polish, s
     assert.doesNotMatch(genericBarSource, /location\.hash/);
 });
 
-test("the synth preset-bar extension owns the polish, sound-share, and bounce surface the generic bar shed", async () => {
-    const source = await fs.readFile(path.join(repoRoot, SYNTH_BAR), "utf8");
-    const specifiers = importSpecifiers(source);
-
-    assert.ok(
-        specifiers.some((specifier) => specifier.endsWith("/polish")),
-        "synth bar must import the polish meter helpers",
-    );
-    assert.ok(
-        specifiers.some((specifier) => specifier.endsWith("sound-share-link")),
-        "synth bar must import the sound-share link helpers",
-    );
-    assert.ok(
-        specifiers.some((specifier) => specifier.endsWith("sound-share-envelope")),
-        "synth bar must import the sound-share envelope type",
-    );
-    assert.ok(
-        specifiers.includes("./preset-bar"),
-        "synth bar must extend the generic preset bar",
-    );
-
-    // The synth's events and shell stay synth-owned…
-    assert.match(source, /cosimo-bounce-audio/);
-    assert.match(source, /cosimo-bounce-video/);
-    assert.match(source, /cosimo-shell-back/);
-    assert.match(source, /cosimo-open-perf-tuning/);
-    // …and it registers under the same configurable tag the generic bar defaults to.
-    assert.match(source, /DEFAULT_PRESET_BAR_ELEMENT_NAME/);
-
-    const genericBarSource = await fs.readFile(path.join(repoRoot, GENERIC_BAR), "utf8");
-    assert.match(genericBarSource, /DEFAULT_PRESET_BAR_ELEMENT_NAME = "cosimo-preset-bar"/);
-});
-
-// The kit ships without this repository's products, so no module under kit/ui
-// or kit/fx may import ui/shared, bounce code, or a specific fx plugin.
-// Product code may import the kit; the reverse direction is forbidden.
 const KIT_MODULE_ROOTS = ["kit/ui", "kit/fx"];
 const KIT_SOURCE_MODULE_PATTERN = /\.(?:ts|tsx|js|mjs)$/;
 

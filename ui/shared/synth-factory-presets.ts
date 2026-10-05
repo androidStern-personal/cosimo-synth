@@ -1,4 +1,4 @@
-import type { FactoryPreset } from "../../kit/index";
+import type { FactoryPreset } from "../../kit/ui/presets";
 import { allEffectOutputTrimHostEndpointIDs } from "./effect-output-trim";
 import { createDefaultModulationState, MODULATION_STATE_KEY } from "./modulation";
 import { createDefaultLaneStateV2 } from "./lane-state-v2";

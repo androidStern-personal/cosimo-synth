@@ -60,6 +60,7 @@ test("Init starts the modulation, effects rack and articulation documents from t
 test("presets and snapshots recall every parameter and document except the source mode", () => {
     const sound = kitDefinition.soundFieldKeys(definition);
     assert.equal(sound.includes("sourceMode"), false, "Bounce owns the source mode");
+    assert.equal(sound.includes("bounce.v1"), false, "a preset never holds a Bounce reference");
     for (const key of documentKeys) assert.equal(sound.includes(key), true, `${key} is part of the sound`);
     for (const key of ["presetLibrary", "activePreset", "snapshotSlots", "activeSnapshot"]) {
         assert.equal(sound.includes(key), false, `${key} is preset bookkeeping, not sound`);

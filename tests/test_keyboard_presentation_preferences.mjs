@@ -111,14 +111,14 @@ test("T79 sound, URL, host, Init, automation, and modulation inventories exclude
             "WavetableSynth.iOS.cmajorpatch",
         ]],
         ["preset and sound", [
-            "ui/shared/effects/effect-preset-v2.ts",
+            "ui/shared/synth-plugin-state.ts",
+            "ui/shared/synth-preset-bar.tsx",
             "ui/shared/synth-hooks.ts",
         ]],
         ["shared URL", [
-            "ui/shared/sound-share-envelope.ts",
             "ui/shared/sound-share-link.ts",
         ]],
-        ["Init", ["ui/shared/effects/synth-init-state.ts"]],
+        ["Init", ["ui/shared/synth-factory-presets.ts"]],
         ["modulation", [
             "ui/shared/modulation-targets.ts",
             "ui/shared/modulation.ts",
