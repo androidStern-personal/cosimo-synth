@@ -12,7 +12,7 @@
   },
   "view": {
     "src": "view/index.js",
-    "devModule": "/fx/chorus_lab/view/source.js",
+    "devModule": "/fx/chorus_lab/view/source.ts",
     "width": 920,
     "height": 680,
     "resizable": true

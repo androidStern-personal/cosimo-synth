@@ -873,7 +873,7 @@ test("kit:new scaffolds a plugin discovery registers, and identity validation gu
         assert.equal(config.schemaVersion, kitManifest.schemaVersions.plugin);
         assert.equal(config.product.bundleIdentifier, "dev.cosimo.demo-verb");
 
-        // The view entry is the shared kit loader, linked like chorus/ott.
+        // The view entry is a link to the shared kit loader.
         assert.equal(
             await realpath(path.join(fxRoot, "demo_verb/view/index.js")),
             await realpath(path.join(tempRoot, "kit/ui/view-loader.js")),
@@ -1053,6 +1053,23 @@ test("every jit install plan points at a patch whose declared view entry will ex
     // must build and point at the runtime patch (the 2.1 "JIT-installable" win).
     for (const pluginName of ["enhancer", "enhancer-lite"])
         assert.equal(buildModule.createJitInstallPlan(pluginName).jitInstallRuntime, true, pluginName);
+});
+
+test("Chorus Lab and OTT Lab declare their state through the kit and install from their built runtime", async () => {
+    const { buildModule } = await loadBuildModules();
+
+    for (const [pluginName, directory, patchFile] of [["chorus", "fx/chorus_lab", "ChorusLab.cmajorpatch"], ["ott", "fx/ott_lab", "OttLab.cmajorpatch"]]) {
+        const plugin = buildModule.getEffectPlugins()[pluginName];
+
+        assert.equal(plugin.stateSource, `${directory}/state.ts`, pluginName);
+        assert.equal(plugin.workerSource, undefined, `${pluginName} has no hand-written worker`);
+        assert.equal(plugin.devModule, `/${directory}/view/source.ts`, pluginName);
+        assert.equal(buildModule.createJitInstallPlan(pluginName).jitInstallRuntime, true, `${pluginName} installs the runtime that carries its state worker`);
+        await assert.rejects(access(path.join(repoRoot, directory, "view", "index.js")), `${pluginName} keeps no source-patch loader link`);
+
+        const sourceManifest = JSON.parse(await readFile(path.join(repoRoot, directory, patchFile), "utf8"));
+        assert.equal(buildModule.createRuntimePatchManifest(sourceManifest, plugin).worker, "worker.js", `${pluginName} runs the generated state worker`);
+    }
 });
 
 test("fx/enhancer_lite ships only the product patch; the shelves audition lives with the calibration tools", async () => {

@@ -3,6 +3,7 @@
   "alias": "ott",
   "cmakeTarget": "OTTLab",
   "productName": "OTTLab",
+  "stateSource": "fx/ott_lab/state.ts",
   "runtimeOut": "build/fx/ott_lab_runtime",
   "juceOut": "build/ott_lab_juce"
 }
