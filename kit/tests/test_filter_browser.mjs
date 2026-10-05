@@ -95,9 +95,11 @@ test('analyzer modes, live preview and removing a frame change the actual canvas
     assert.notEqual(await image(),graphImage)
     await s.getByRole('combobox').selectOption('graph');await paint()
     assert.equal(await image(),graphImage)
-    // The example drops its frame in an effect, so the cleared canvas lands one
-    // render later: allow two animation frames.
-    await s.getByRole('checkbox').uncheck();await paint();await paint()
+    // The example drops its frame in an effect. React renders that change on a
+    // real-time task the fake clock does not drive, so keep painting animation
+    // frames (at most ten) until the render has landed.
+    await s.getByRole('checkbox').uncheck()
+    for(let frame=0;frame<10&&await page.evaluate(canvasHasPixels,'#analyzer canvas');frame++)await paint()
     assert.equal(await page.evaluate(canvasHasPixels,'#analyzer canvas'),false)
 },{prepare:async page=>{await page.clock.install({time:0});await page.clock.pauseAt(1000)}}))
 test('custom styles do not change interaction and read-only/disabled prevent writes',()=>withPage(async page=>{
