@@ -170,7 +170,7 @@ export type SeqFxStoredBlock = {
     params?: number[];
     aux?: SeqFxStoredAux;
     memories?: SeqFxStoredMemories;
-    /** Rare legacy per-cell edits without an extra trigger. */
+    /** Cells after the first whose values differ from it; they continue the block without retriggering. */
     stepOverrides?: SeqFxStoredStepOverride[];
 };
 

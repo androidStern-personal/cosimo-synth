@@ -2006,7 +2006,9 @@ test("seqfx effect picker uses two rows of six without overflow and keeps keyboa
         await previousLocator.focus();
         await previousLocator.press("Tab");
         assert.equal(await locator.evaluate((node) => node === window.__SEQFX_DOM__.activeElement), true, "Tab should reach the expected cell surface");
-        return locator.evaluate((node) => {
+        return locator.evaluate(async (node) => {
+            // Compare the settled focus surfaces, not two frames of their transitions.
+            await Promise.all(node.getAnimations().map((animation) => animation.finished));
             const style = getComputedStyle(node);
             return {
                 boxShadow: style.boxShadow,
