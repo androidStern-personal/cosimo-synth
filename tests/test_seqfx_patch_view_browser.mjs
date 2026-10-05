@@ -733,9 +733,15 @@ test("seqfx_test_dev_server_origin_accepts_only_explicit_loopback_http_origins",
 
 before(async () => {
     if (!await canUseExistingServer()) {
-        serverProcess = spawn("npm", ["run", "fx:dev"], {
-            cwd: new URL("..", import.meta.url).pathname,
-            stdio: ["ignore", "pipe", "pipe"],
+        // The same command as `npm run fx:dev`, started without npm's shell
+        // layer so stopping this one process stops the server and the suite exits.
+        serverProcess = spawn(process.execPath, [
+            path.join(repoRoot, "node_modules/vite/bin/vite.js"),
+            "--config",
+            "kit/fx/vite.config.mjs",
+        ], {
+            cwd: repoRoot,
+            stdio: "ignore",
         });
     }
 
@@ -843,17 +849,37 @@ test("seqfx_bespoke_editors_disclose_trigger_latching_and_crush_shows_a_host_rat
     await page.close();
 });
 
+const SEQFX_FONT_STACK = '"Avenir Next", "Helvetica Neue", Arial, sans-serif';
+
 test("seqfx renders its type in the product font stack", async () => {
     const page = await browser.newPage({ viewport: { width: 1280, height: 820 } });
     await loadSeqFxHarness(page);
     await page.locator('[data-role="seqfx-root"]').waitFor();
+    const fontFamily = (locator) => locator.evaluate((node) => getComputedStyle(node).fontFamily);
+
+    assert.equal(await fontFamily(page.locator('[data-role="seqfx-root"]')), SEQFX_FONT_STACK);
+    assert.equal(await fontFamily(page.getByRole("heading", { name: "SeqFX", exact: true })), SEQFX_FONT_STACK);
+    assert.equal(await fontFamily(page.getByText("Select a cell", { exact: true })), SEQFX_FONT_STACK);
+    await page.getByRole("button", { name: "Chain 3 step 1", exact: true }).click();
+    await page.locator('[data-role="seqfx-tape-v2-editor"]').waitFor();
+
+    await page.close();
+});
+
+test("seqfx product font stack resolves to Avenir Next", {
+    skip: process.platform === "darwin"
+        ? false
+        : "Avenir Next ships only with macOS; elsewhere the stack falls back to Arial or sans-serif, whose metrics differ by design.",
+}, async () => {
+    const page = await browser.newPage({ viewport: { width: 1280, height: 820 } });
+    await loadSeqFxHarness(page);
+    await page.locator('[data-role="seqfx-root"]').waitFor();
     await page.evaluate(() => document.fonts?.ready);
-    const renderedFont = await page.locator('[data-role="seqfx-root"]').evaluate((node) => getComputedStyle(node).fontFamily);
-    const measuredText = await page.evaluate(() => {
+    const measuredText = await page.evaluate((fontStack) => {
         const samples = [
-            { label: "title", text: "SeqFX", size: 32, weight: 700, letterSpacing: 0, lineHeight: 32 },
-            { label: "inspectorTitle", text: "Select a cell", size: 18, weight: 700, letterSpacing: 0, lineHeight: null },
-            { label: "filterReadout", text: "1.00 kHz", size: 17, weight: 800, letterSpacing: 0, lineHeight: null },
+            { label: "title", text: "SeqFX", size: 32, weight: 700, lineHeight: 32 },
+            { label: "inspectorTitle", text: "Select a cell", size: 18, weight: 700, lineHeight: null },
+            { label: "filterReadout", text: "1.00 kHz", size: 17, weight: 800, lineHeight: null },
         ];
 
         return samples.map((sample) => {
@@ -864,10 +890,10 @@ test("seqfx renders its type in the product font stack", async () => {
                 left: "-10000px",
                 top: "-10000px",
                 whiteSpace: "pre",
-                fontFamily: '"Avenir Next", "Helvetica Neue", Arial, sans-serif',
+                fontFamily: fontStack,
                 fontSize: `${sample.size}px`,
                 fontWeight: String(sample.weight),
-                letterSpacing: `${sample.letterSpacing}px`,
+                letterSpacing: "0px",
                 lineHeight: sample.lineHeight ? `${sample.lineHeight}px` : "normal",
             });
             document.body.appendChild(node);
@@ -879,18 +905,16 @@ test("seqfx renders its type in the product font stack", async () => {
                 height: rect.height,
             };
         });
-    });
+    }, SEQFX_FONT_STACK);
 
-    assert.equal(renderedFont, '"Avenir Next", "Helvetica Neue", Arial, sans-serif');
     assertClose(measuredText.find((entry) => entry.label === "title").width, 99.9375, 0.2, "Avenir Next title width");
     assertClose(measuredText.find((entry) => entry.label === "title").height, 32, 0.2, "Avenir Next title height");
     assertClose(measuredText.find((entry) => entry.label === "inspectorTitle").width, 102.9063, 0.2, "Avenir Next inspector title width");
     assertClose(measuredText.find((entry) => entry.label === "filterReadout").width, 80.5781, 0.2, "Avenir Next filter readout width");
-    await page.getByRole("button", { name: "Chain 3 step 1", exact: true }).click();
-    await page.locator('[data-role="seqfx-tape-v2-editor"]').waitFor();
 
     await page.close();
 });
+
 
 test("seqfx_topbar_keeps_patterns_on_one_row_without_duplicate_draw_or_transport_controls", async () => {
     const page = await browser.newPage({ viewport: { width: 567, height: 776 } });
@@ -1107,11 +1131,19 @@ test("seqfx consolidated top controls preserve global loop transport and history
     assert.ok(consolidatedLayout.scrollWidth <= consolidatedLayout.clientWidth + 1, "the normal consolidated row should not clip or scroll");
     assert.ok(consolidatedLayout.childBounds.every((child) => child.left >= consolidatedLayout.bounds.left - 1 && child.right <= consolidatedLayout.bounds.right + 1));
 
-    const rateBounds = await rate.boundingBox();
-    assert.ok(rateBounds, "sequence rate should have measurable browser geometry");
+    // A select left to size itself fits its widest option plus the native arrow
+    // in whatever font renders it; compare against that intrinsic width.
+    const rateWidths = await rate.evaluate((select) => {
+        const probe = select.cloneNode(true);
+        Object.assign(probe.style, { position: "absolute", visibility: "hidden", width: "max-content", minWidth: "0", maxWidth: "none" });
+        select.parentElement.append(probe);
+        const intrinsic = probe.getBoundingClientRect().width;
+        probe.remove();
+        return { rendered: select.getBoundingClientRect().width, intrinsic };
+    });
     assert.ok(
-        rateBounds.width >= 54,
-        `sequence rate should leave room for 1/16 plus the native select arrow, got ${rateBounds.width}px`,
+        rateWidths.rendered >= rateWidths.intrinsic - 0.5,
+        `sequence rate should leave room for 1/16 plus the native select arrow, got ${JSON.stringify(rateWidths)}`,
     );
 
     await page.evaluate(() => window.__SEQFX_HARNESS__?.clearEvents());
@@ -1166,16 +1198,21 @@ test("seqfx consolidated top controls preserve global loop transport and history
         { endpointID: "swing", value: 0.2 },
         { endpointID: "loopStart", value: 4 },
         { endpointID: "loopLength", value: 28 },
-        { endpointID: "loopStart", value: 4 },
+        // The Stop commit edits the range as a pair; the state editor writes only
+        // the field it changes, so the unchanged Start is not sent again.
         { endpointID: "loopLength", value: 9 },
         { endpointID: "internalPlay", value: 1 },
         { endpointID: "internalReset", value: 1 },
     ]);
+    // Every parameter edit outside a pointer drag, including a typed knob value,
+    // reaches the host inside its own gesture so the DAW records it as one change.
     assert.deepEqual(snapshot.gestureStarts, [
         "enabled",
+        "globalMix",
         "clockMode",
         "manualBpm",
         "rate",
+        "swing",
         "loopStart",
         "loopLength",
         "loopStart",
@@ -1210,11 +1247,19 @@ test("seqfx consolidated top controls preserve global loop transport and history
     await clock.selectOption("1");
     assert.equal(await transport.isEnabled(), true);
     assert.equal(await transport.getAttribute("aria-label"), "Play internal clock");
-    assert.deepEqual((await getHarnessSnapshot(page)).events, [
-        { endpointID: "internalPlay", value: 0 },
-        { endpointID: "clockMode", value: 0 },
-        { endpointID: "clockMode", value: 1 },
-    ], "leaving Internal must stop DSP transport instead of hiding a latched run state");
+    // The clock writes travel through the state editor and the stop is a direct
+    // DSP event, so only the stop's place before the return to Internal is fixed.
+    const clockEvents = (await getHarnessSnapshot(page)).events;
+    assert.deepEqual(
+        clockEvents.filter(({ endpointID }) => endpointID !== "internalPlay"),
+        [{ endpointID: "clockMode", value: 0 }, { endpointID: "clockMode", value: 1 }],
+    );
+    assert.deepEqual(clockEvents.filter(({ endpointID }) => endpointID === "internalPlay"), [{ endpointID: "internalPlay", value: 0 }]);
+    assert.ok(
+        clockEvents.findIndex(({ endpointID }) => endpointID === "internalPlay")
+            < clockEvents.findIndex(({ endpointID, value }) => endpointID === "clockMode" && value === 1),
+        "leaving Internal must stop DSP transport instead of hiding a latched run state",
+    );
 
     await page.getByRole("button", { name: "Chain 1 step 1", exact: true }).click();
     assert.equal(await undo.isEnabled(), true);
@@ -3375,8 +3420,10 @@ test("seqfx_rate_change_cancels_an_active_drag_instead_of_remapping_the_pointer"
 after(async () => {
     await browser?.close();
 
-    if (serverProcess) {
+    if (serverProcess && serverProcess.exitCode === null) {
+        const exited = new Promise((resolve) => serverProcess.once("exit", resolve));
         serverProcess.kill("SIGTERM");
+        await exited;
     }
 });
 

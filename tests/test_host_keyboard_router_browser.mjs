@@ -577,7 +577,15 @@ test("the exact CHOC router reaches the native forward/discard seam from package
 
         const clockMode = page.locator('[data-role="seqfx-clock-mode"]');
         await t.test("a focused select menu keeps Space inside the plugin", async () => {
-            assertDiscardedPair(await pressAndRead(page, clockMode), " ", "text-entry-active");
+            // Chromium opens a focused select's popup on Space and the popup takes the
+            // keyup, so the page never sees it; WKWebView, which this router serves,
+            // delivers both. The router's contract is that event pair, so drive it here.
+            await clockMode.focus();
+            await clearRouterMessages(page);
+            for (const type of ["keydown", "keyup"]) {
+                await clockMode.dispatchEvent(type, { key: " ", code: "Space", bubbles: true, composed: true, cancelable: true });
+            }
+            assertDiscardedPair(await readRouterMessages(page), " ", "text-entry-active");
         });
 
         await t.test("pointer-used select menu releases focus before the next Space pair", async () => {

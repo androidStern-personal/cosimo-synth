@@ -645,8 +645,11 @@ select {
     opacity: 1;
 }
 
+/* The bar frame outlines this box, so it hugs the cell columns: the
+   stacked layout caps cell size and leaves the shell wider than the cells. */
 .seqfx-bar-lanes {
     position: relative;
+    width: max-content;
 }
 
 .seqfx-step-header,
