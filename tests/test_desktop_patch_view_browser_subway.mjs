@@ -10,7 +10,7 @@ import {
 import { createDefaultLaneStateV2 } from "../patch_gui/lane-state-v2.js";
 import { normalizeModulationState } from "../patch_gui/modulation.js";
 import {
-    clickPresetBarAction,
+    recallSynthPreset,
     clearHarnessDebugLog,
     createRackMappingByDrop,
     editRackParameterValue,
@@ -1633,10 +1633,10 @@ test("POLISH composes four compact modules, independent bypasses, and the T75 ex
         assert.equal(
             keyboardBoundary.focusChain.some((entry) => (
                 entry === "synth-preset-bar-host"
-                    || entry === "cosimo-preset-bar"
+                    || entry === "synth-preset-bar"
                     || entry === "mobile-bottom-dock"
                     || entry === "shell-back"
-                    || entry === "toggle-shell-menu"
+                    || entry === "toggle-sound-actions"
             )),
             true,
             `Shift+Tab must reach intentional live shell chrome: ${JSON.stringify(keyboardBoundary)}`,
@@ -2200,25 +2200,8 @@ test("Init clears active branch Solo without serializing it", async () => {
         await page.click('[data-role="mobile-workspace-tab-fx"]');
         await page.click('[data-role="rack-fork-parallel#1"]');
         await page.click('[data-role="rack-branch-solo-parallel#1-0"]');
-        await clickPresetBarAction(page, "init");
-        await page.waitForTimeout(100);
-        let snapshot = await getHarnessSnapshot(page);
-        if (snapshot.sentMessages.filter(({ endpointID }) => endpointID === "laneSolo")
-            .at(-1)?.value?.parallelSoloBranches?.[0] !== 0) {
-            await page.waitForFunction(() => (
-                document.querySelector("cosimo-preset-bar")?.shadowRoot
-                    ?.querySelector('[data-action="sound-replacement-discard"]') instanceof HTMLButtonElement
-            ));
-            await page.evaluate(() => {
-                const discard = document.querySelector("cosimo-preset-bar")?.shadowRoot
-                    ?.querySelector('[data-action="sound-replacement-discard"]');
-                if (!(discard instanceof HTMLButtonElement)) {
-                    throw new Error("Discard and Init action is missing.");
-                }
-                discard.click();
-            });
-        }
-        snapshot = await waitForHarnessSnapshot(
+        await recallSynthPreset(page, "Init");
+        const snapshot = await waitForHarnessSnapshot(
             page,
             "Init clears the runtime Solo overlay",
             (candidate) => candidate.sentMessages

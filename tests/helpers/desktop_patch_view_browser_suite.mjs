@@ -56,13 +56,7 @@ export const TEST_SAMPLES_PER_FRAME = 2048;
 
 export const MSEG_PREVIEW_HORIZONTAL_PADDING_PX = 24;
 
-export const EFFECT_PRESETS_V2_STATE_KEY = "effects.presets.v2";
-
-export const SYNTH_PRESET_EFFECT_ID = "cosimo-synth";
-
 export const ARTICULATION_STATE_KEY = ARTICULATIONS_V4_STATE_KEY;
-
-export const RETIRED_SYNTH_LOCAL_DIRTY_STATE_KEY = ["synth", "preset" + "Baseline" + "Snapshot", "v1"].join(".");
 
 export function expectedMsegPreviewProgressClipWidth(previewState, progress) {
     const plotWidth = Math.max(1, previewState.width - (MSEG_PREVIEW_HORIZONTAL_PADDING_PX * 2));
@@ -217,12 +211,11 @@ export function editorBankToStoredArticulations(bankValue) {
     };
 }
 
-export function readEffectPresetState(snapshot) {
-    return JSON.parse(String(snapshot.storedState[EFFECT_PRESETS_V2_STATE_KEY]));
-}
-
-export function containsRetiredSynthPresetBaselineKey(snapshot) {
-    return Object.prototype.hasOwnProperty.call(snapshot.storedState, RETIRED_SYNTH_LOCAL_DIRTY_STATE_KEY);
+/** The project's active preset as the state framework saved it, or null. */
+export function readActivePreset(snapshot) {
+    const raw = snapshot.storedState.activePreset;
+    if (raw === undefined || raw === null) return null;
+    return typeof raw === "string" ? JSON.parse(raw) : raw;
 }
 
 export function readStoredMsegShape(snapshot, slotIndex = 0) {
@@ -728,70 +721,50 @@ export async function readVisibleHarnessParameterEndpointIDs(page) {
     });
 }
 
-export async function clickPresetBarAction(page, action) {
-    await page.waitForFunction((nextAction) => {
-        const button = document
-            .querySelector("cosimo-preset-bar")
-            ?.shadowRoot
-            ?.querySelector(`[data-action="${nextAction}"]`);
-        return button instanceof HTMLButtonElement && !button.disabled;
-    }, action);
+/** The kit preset bar inside the synth's row; on the phone shell it sits in the Sound actions menu. */
+export async function openSynthPresetBar(page) {
+    const bar = page.locator('[data-role="synth-preset-bar"]');
+    await bar.waitFor();
+    if (await bar.getAttribute("data-compact") !== null) {
+        const toggle = bar.locator('[data-action="toggle-sound-actions"]');
+        if (await toggle.getAttribute("aria-expanded") !== "true") await toggle.click();
+    }
+    return bar.locator(".bk-preset-bar");
+}
 
-    await page.evaluate((nextAction) => {
-        const button = document
-            .querySelector("cosimo-preset-bar")
-            ?.shadowRoot
-            ?.querySelector(`[data-action="${nextAction}"]`);
+/**
+ * Open Developer settings from the Sound actions menu. The clicks are
+ * programmatic so no pointer gesture reaches the surfaces under test.
+ */
+export async function openDeveloperSettingsFromPresetBar(page) {
+    const toggle = page.locator('[data-role="synth-preset-bar"] [data-action="toggle-sound-actions"]');
+    if (await toggle.getAttribute("aria-expanded") !== "true") await toggle.evaluate((button) => button.click());
+    await page.locator('[data-role="sound-actions"] [data-action="perf-tuning"]').evaluate((button) => button.click());
+}
 
-        if (!(button instanceof HTMLButtonElement)) {
-            throw new Error(`Missing preset bar action ${nextAction}.`);
-        }
-
-        button.click();
-    }, action);
+/** Recall a factory or user preset by name through the preset selector. */
+export async function recallSynthPreset(page, name) {
+    const presets = await openSynthPresetBar(page);
+    await presets.getByLabel("Preset", { exact: true }).selectOption({ label: name });
 }
 
 export async function saveSynthPresetAs(page, label) {
-    await clickPresetBarAction(page, "save-as");
-    await page.waitForFunction(() => {
-        const overlay = document
-            .querySelector("cosimo-preset-bar")
-            ?.shadowRoot
-            ?.querySelector('[data-el="dialog-overlay"]');
-        return overlay instanceof HTMLElement && overlay.classList.contains("open");
-    });
-
-    await page.evaluate((nextLabel) => {
-        const shadowRoot = document.querySelector("cosimo-preset-bar")?.shadowRoot;
-        const input = shadowRoot?.querySelector('[data-el="dialog-input"]');
-        const confirm = shadowRoot?.querySelector('[data-action="dialog-confirm"]');
-
-        if (!(input instanceof HTMLInputElement) || !(confirm instanceof HTMLButtonElement)) {
-            throw new Error("Preset save dialog controls are missing.");
-        }
-
-        const valueSetter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set;
-
-        if (!valueSetter) {
-            throw new Error("Expected HTMLInputElement.prototype.value setter.");
-        }
-
-        valueSetter.call(input, nextLabel);
-        input.dispatchEvent(new Event("input", { bubbles: true }));
-        confirm.click();
-    }, label);
+    const presets = await openSynthPresetBar(page);
+    await presets.getByRole("button", { name: "Save as new", exact: true }).click();
+    await presets.getByLabel("Preset name", { exact: true }).fill(label);
+    await presets.getByRole("button", { name: "Save", exact: true }).click();
+    await presets.getByLabel("Preset", { exact: true }).waitFor();
 }
 
+export async function revertSynthPreset(page) {
+    const presets = await openSynthPresetBar(page);
+    await presets.getByRole("button", { name: "Revert", exact: true }).click();
+}
+
+/** Wait until the bar shows (or stops showing) that the sound differs from the active preset. */
 export async function waitForPresetBarDirtyState(page, dirty) {
-    await page.waitForFunction((expectedDirty) => {
-        const shadowRoot = document.querySelector("cosimo-preset-bar")?.shadowRoot;
-        const dirtyDot = shadowRoot?.querySelector('[data-el="dirty-dot"]');
-        const revertButton = shadowRoot?.querySelector('[data-action="revert"]');
-        return dirtyDot instanceof HTMLElement
-            && revertButton instanceof HTMLButtonElement
-            && dirtyDot.classList.contains("visible") === expectedDirty
-            && revertButton.disabled !== expectedDirty;
-    }, dirty);
+    const modified = page.locator('[data-role="synth-preset-bar"] :is(.bk-preset-bar-dirty, [data-role="preset-modified"])');
+    await modified.first().waitFor({ state: dirty ? "visible" : "detached" });
 }
 
 export async function dragArticulationCardToLane(page, articulationId, lane, targetPosition, {

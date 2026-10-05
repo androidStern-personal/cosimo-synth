@@ -84,10 +84,6 @@ import {
     VOICE_ENHANCER_Q_ENDPOINT_ID,
 } from "./voice-enhancer";
 import { getModulationArticulationCellIndex } from "./modulation-runtime-program";
-import type {
-    EffectStoredStateAdapter,
-    EffectStoredStateContext,
-} from "./effects/effect-preset-v2";
 import {
     ARTICULATIONS_V4_STATE_KEY,
     createEmptyArticulationsState,
@@ -98,7 +94,6 @@ import {
     type ArticulationVoiceParameterId,
     type OscillatorArticulationParameterId,
 } from "./articulation-image";
-import { createBouncePresetStoredStateAdapter } from "./bounce-preset-state";
 import {
     articulationEditorStatesEqual,
     articulationSnapshotsEqual,
@@ -307,7 +302,6 @@ const AUTO_PREVIEW_SCHEDULER_CONFIG = {
 const AUTO_PREVIEW_MIN_NOTE_MS = 250;
 const VOICE_ARTICULATION_START_ENDPOINT_ID = "voiceArticulationStart";
 const ARTICULATION_AUDITION_FALLBACK_NOTE = 60;
-export { SYNTH_PRESET_EFFECT_ID } from "./effects/synth-preset-identity";
 export const GLIDE_TIME_MIN_SECONDS = 0;
 export const GLIDE_TIME_MAX_SECONDS = 2;
 export const GLIDE_TIME_STEP_SECONDS = 0.001;
@@ -519,7 +513,8 @@ export type SynthPatchViewModel = {
     articulationSlots: ArticulationSlot[];
     selectedArticulationSlot: ArticulationSlot | null;
     selectedArticulationIsDirty: boolean;
-    presetStoredStateAdapters: EffectStoredStateAdapter[];
+    /** Re-anchor every oscillator's articulation base to a sound that replaced the current one. */
+    resetArticulationPatchBases: (parameters: Readonly<Record<string, number>>) => void;
     articulationHeldInput: ArticulationHeldInput;
     discardedArticulationEdit: {
         slotId: string;
@@ -1434,158 +1429,88 @@ function useStoredArticulationEditorState(
         [state, bank, hasHydrated, refreshProjection, setAndPersistState]);
 }
 
-function parsePresetStoredStateValue(rawValue: unknown, label: string) {
-    if (typeof rawValue !== "string") {
-        return rawValue;
-    }
-
-    try {
-        return JSON.parse(rawValue);
-    } catch (error) {
-        throw new Error(`${label} must be valid JSON.`);
-    }
-}
-
-function parseStrictArticulationPresetState(
-    rawValue: unknown,
-    acceptedRouteIds: ReadonlySet<string>,
-): ArticulationsState {
-    const parsedValue = parsePresetStoredStateValue(rawValue, "Articulation preset state");
-    const parsedState = parseArticulationsV4(parsedValue, acceptedRouteIds);
-    if (parsedState._tag === "err") {
-        throw parsedState.error;
-    }
-
-    return parsedState.value;
-}
-
-function parseStrictModulationPresetState(rawValue: unknown): ModulationState {
-    const parsedValue = parsePresetStoredStateValue(rawValue, "Modulation preset state");
-    const parsedState = parseModulationState(parsedValue);
-    if (parsedState._tag === "err") {
-        throw parsedState.error;
-    }
-
-    return parsedState.value;
-}
-
-function presetParameterNumber(
-    context: EffectStoredStateContext,
-    endpointID: string,
-    fallback: number,
-) {
-    const value = context.parameters[endpointID];
-    return typeof value === "number" && Number.isFinite(value) ? value : fallback;
-}
-
-/** Build one oscillator's stable local/shared patch base from the preset transaction itself. */
-export function buildPresetArticulationBaseSnapshot(
-    context: EffectStoredStateContext,
+/** Build one oscillator's stable local/shared articulation base from a recalled sound's parameters. */
+export function buildArticulationBaseSnapshot(
+    soundParameters: Readonly<Record<string, number>>,
     modulationState: ModulationState,
     oscillatorID: OscillatorID,
 ): ArticulationSnapshot {
+    const parameterOr = (endpointID: string, fallback: number) => {
+        const value = soundParameters[endpointID];
+        return typeof value === "number" && Number.isFinite(value) ? value : fallback;
+    };
     const defaults = createDefaultArticulationSnapshot();
     const parameters = defaults.parameters;
     return normalizeArticulationSnapshot({
         parameters: {
-            wavetablePosition: presetParameterNumber(
-                context,
-                getOscillatorControlAddress(oscillatorID, "framePosition").endpointID,
+            wavetablePosition: parameterOr(getOscillatorControlAddress(oscillatorID, "framePosition").endpointID,
                 parameters.wavetablePosition,
             ),
-            pan: presetParameterNumber(context, getOscillatorControlAddress(oscillatorID, "pan").endpointID, parameters.pan),
-            octave: presetParameterNumber(context, getOscillatorControlAddress(oscillatorID, "octave").endpointID, parameters.octave),
-            semitone: presetParameterNumber(context, getOscillatorControlAddress(oscillatorID, "semitone").endpointID, parameters.semitone),
-            fineCents: presetParameterNumber(context, getOscillatorControlAddress(oscillatorID, "fineCents").endpointID, parameters.fineCents),
-            volumeDb: presetParameterNumber(context, getOscillatorControlAddress(oscillatorID, "volumeDb").endpointID, parameters.volumeDb),
-            mute: presetParameterNumber(
-                context,
-                getOscillatorControlAddress(oscillatorID, "mute").endpointID,
+            pan: parameterOr(getOscillatorControlAddress(oscillatorID, "pan").endpointID, parameters.pan),
+            octave: parameterOr(getOscillatorControlAddress(oscillatorID, "octave").endpointID, parameters.octave),
+            semitone: parameterOr(getOscillatorControlAddress(oscillatorID, "semitone").endpointID, parameters.semitone),
+            fineCents: parameterOr(getOscillatorControlAddress(oscillatorID, "fineCents").endpointID, parameters.fineCents),
+            volumeDb: parameterOr(getOscillatorControlAddress(oscillatorID, "volumeDb").endpointID, parameters.volumeDb),
+            mute: parameterOr(getOscillatorControlAddress(oscillatorID, "mute").endpointID,
                 getOscillatorDefaultMute(oscillatorID),
             ),
-            solo: presetParameterNumber(context, getOscillatorControlAddress(oscillatorID, "solo").endpointID, parameters.solo),
-            warpMode: presetParameterNumber(
-                context,
-                getOscillatorControlAddress(oscillatorID, "warpMode").endpointID,
+            solo: parameterOr(getOscillatorControlAddress(oscillatorID, "solo").endpointID, parameters.solo),
+            warpMode: parameterOr(getOscillatorControlAddress(oscillatorID, "warpMode").endpointID,
                 parameters.warpMode,
             ),
-            warpAmount: presetParameterNumber(
-                context,
-                getOscillatorControlAddress(oscillatorID, "warpAmount").endpointID,
+            warpAmount: parameterOr(getOscillatorControlAddress(oscillatorID, "warpAmount").endpointID,
                 parameters.warpAmount,
             ),
-            filterMode: presetParameterNumber(context, FILTER_MODE_ENDPOINT_ID, parameters.filterMode),
-            filterCutoff: presetParameterNumber(context, FILTER_CUTOFF_ENDPOINT_ID, parameters.filterCutoff),
-            filterQ: presetParameterNumber(context, FILTER_Q_ENDPOINT_ID, parameters.filterQ),
-            unisonVoices: presetParameterNumber(
-                context,
-                getOscillatorControlAddress(oscillatorID, "unisonVoices").endpointID,
+            filterMode: parameterOr(FILTER_MODE_ENDPOINT_ID, parameters.filterMode),
+            filterCutoff: parameterOr(FILTER_CUTOFF_ENDPOINT_ID, parameters.filterCutoff),
+            filterQ: parameterOr(FILTER_Q_ENDPOINT_ID, parameters.filterQ),
+            unisonVoices: parameterOr(getOscillatorControlAddress(oscillatorID, "unisonVoices").endpointID,
                 parameters.unisonVoices,
             ),
-            unisonDetune: presetParameterNumber(
-                context,
-                getOscillatorControlAddress(oscillatorID, "unisonDetune").endpointID,
+            unisonDetune: parameterOr(getOscillatorControlAddress(oscillatorID, "unisonDetune").endpointID,
                 parameters.unisonDetune,
             ),
-            unisonBlend: presetParameterNumber(
-                context,
-                getOscillatorControlAddress(oscillatorID, "unisonBlend").endpointID,
+            unisonBlend: parameterOr(getOscillatorControlAddress(oscillatorID, "unisonBlend").endpointID,
                 parameters.unisonBlend,
             ),
-            unisonWidth: presetParameterNumber(
-                context,
-                getOscillatorControlAddress(oscillatorID, "unisonWidth").endpointID,
+            unisonWidth: parameterOr(getOscillatorControlAddress(oscillatorID, "unisonWidth").endpointID,
                 parameters.unisonWidth,
             ),
-            unisonPhase: presetParameterNumber(
-                context,
-                getOscillatorControlAddress(oscillatorID, "phase").endpointID,
+            unisonPhase: parameterOr(getOscillatorControlAddress(oscillatorID, "phase").endpointID,
                 parameters.unisonPhase,
             ),
-            unisonRandom: presetParameterNumber(
-                context,
-                getOscillatorControlAddress(oscillatorID, "phaseRandom").endpointID,
+            unisonRandom: parameterOr(getOscillatorControlAddress(oscillatorID, "phaseRandom").endpointID,
                 parameters.unisonRandom,
             ),
-            unisonPhaseMode: presetParameterNumber(
-                context,
-                getOscillatorControlAddress(oscillatorID, "retrigger").endpointID,
+            unisonPhaseMode: parameterOr(getOscillatorControlAddress(oscillatorID, "retrigger").endpointID,
                 parameters.unisonPhaseMode,
             ),
-            unisonDetuneMode: presetParameterNumber(
-                context,
-                getOscillatorControlAddress(oscillatorID, "unisonDetuneMode").endpointID,
+            unisonDetuneMode: parameterOr(getOscillatorControlAddress(oscillatorID, "unisonDetuneMode").endpointID,
                 parameters.unisonDetuneMode,
             ),
-            unisonStackMode: presetParameterNumber(
-                context,
-                getOscillatorControlAddress(oscillatorID, "unisonStackMode").endpointID,
+            unisonStackMode: parameterOr(getOscillatorControlAddress(oscillatorID, "unisonStackMode").endpointID,
                 parameters.unisonStackMode,
             ),
-            unisonWavetablePositionSpread: presetParameterNumber(
-                context,
-                getOscillatorControlAddress(oscillatorID, "unisonWavetablePositionSpread").endpointID,
+            unisonWavetablePositionSpread: parameterOr(getOscillatorControlAddress(oscillatorID, "unisonWavetablePositionSpread").endpointID,
                 parameters.unisonWavetablePositionSpread,
             ),
-            unisonWarpSpread: presetParameterNumber(
-                context,
-                getOscillatorControlAddress(oscillatorID, "unisonWarpSpread").endpointID,
+            unisonWarpSpread: parameterOr(getOscillatorControlAddress(oscillatorID, "unisonWarpSpread").endpointID,
                 parameters.unisonWarpSpread,
             ),
             msegMorphs: [
-                presetParameterNumber(context, MSEG_1_MORPH_ENDPOINT_ID, parameters.msegMorphs[0]),
-                presetParameterNumber(context, MSEG_2_MORPH_ENDPOINT_ID, parameters.msegMorphs[1]),
-                presetParameterNumber(context, MSEG_3_MORPH_ENDPOINT_ID, parameters.msegMorphs[2]),
+                parameterOr(MSEG_1_MORPH_ENDPOINT_ID, parameters.msegMorphs[0]),
+                parameterOr(MSEG_2_MORPH_ENDPOINT_ID, parameters.msegMorphs[1]),
+                parameterOr(MSEG_3_MORPH_ENDPOINT_ID, parameters.msegMorphs[2]),
             ],
         },
             envelopes: modulationState.envelopeSlots.map((envelope, slotIndex) => {
                 const endpointPrefix = `env${slotIndex + 1}`;
                 return {
                     name: envelope.name,
-                    attackSeconds: presetParameterNumber(context, `${endpointPrefix}Attack`, 0.01),
-                    decaySeconds: presetParameterNumber(context, `${endpointPrefix}Decay`, 0.25),
-                    sustain: presetParameterNumber(context, `${endpointPrefix}Sustain`, 0.5),
-                    releaseSeconds: presetParameterNumber(context, `${endpointPrefix}Release`, 0.2),
+                    attackSeconds: parameterOr(`${endpointPrefix}Attack`, 0.01),
+                    decaySeconds: parameterOr(`${endpointPrefix}Decay`, 0.25),
+                    sustain: parameterOr(`${endpointPrefix}Sustain`, 0.5),
+                    releaseSeconds: parameterOr(`${endpointPrefix}Release`, 0.2),
                 };
             }),
         modRouteAmounts: modulationState.routes.flatMap((route) => (
@@ -1594,132 +1519,6 @@ export function buildPresetArticulationBaseSnapshot(
                 : [{ routeId: route.id, amount: route.amount }]
         )),
     });
-}
-
-function useSynthPresetStoredStateAdapters({
-    articulationBankState,
-    modulationBridge,
-    modulationState,
-    setArticulationPatchBase,
-}: {
-    articulationBankState: ReturnType<typeof useStoredArticulationEditorState>;
-    modulationBridge: ReturnType<typeof useModulationState>["bridge"];
-    modulationState: ModulationState | null;
-    setArticulationPatchBase: (oscillatorID: OscillatorID, snapshot: ArticulationSnapshot) => void;
-}) {
-    const patchConnection = usePatchConnection();
-    const { stateRef, setAndPersistState } = articulationBankState;
-    const latestModulationStateRef = useRef<ModulationState | null>(null);
-
-    useEffect(() => {
-        latestModulationStateRef.current = modulationState;
-    }, [modulationState]);
-
-    return useMemo<EffectStoredStateAdapter[]>(() => {
-        const subscribeToStoredStateKey = (stateKey: string, listener: () => void) => {
-            const handleStoredStateValue = (message: unknown) => {
-                if (!message || typeof message !== "object") {
-                    return;
-                }
-
-                if ((message as { key?: unknown }).key === stateKey) {
-                    listener();
-                }
-            };
-
-            patchConnection.addStoredStateValueListener?.(handleStoredStateValue);
-
-            return () => {
-                patchConnection.removeStoredStateValueListener?.(handleStoredStateValue);
-            };
-        };
-
-        const presetModulationState = (context?: EffectStoredStateContext) => {
-            if (!context || !(MODULATION_STATE_KEY in context.storedState)) {
-                throw new Error("Synth preset modulation state is required before articulation validation.");
-            }
-
-            return parseStrictModulationPresetState(context.storedState[MODULATION_STATE_KEY]);
-        };
-
-        const modulationAdapter: EffectStoredStateAdapter = {
-            key: MODULATION_STATE_KEY,
-            schemaVersion: MODULATION_STATE_VERSION,
-            getContract() {
-                return {
-                    key: MODULATION_STATE_KEY,
-                    schemaVersion: MODULATION_STATE_VERSION,
-                    required: true,
-                };
-            },
-            capture() {
-                return modulationBridge.current?.getState()
-                    ?? latestModulationStateRef.current
-                    ?? createDefaultModulationState();
-            },
-            normalizeForPreset(value: unknown) {
-                return parseStrictModulationPresetState(value);
-            },
-            serializeForPreset(value) {
-                return serializeModulationState(parseStrictModulationPresetState(value));
-            },
-            apply(value) {
-                const nextState = parseStrictModulationPresetState(value);
-
-                if (modulationBridge.current) {
-                    submitModulationEdit(modulationBridge.current.setState(nextState));
-                    return;
-                }
-
-                throw new Error("Modulation state is not ready for a preset edit.");
-            },
-            subscribe(listener: () => void) {
-                return subscribeToStoredStateKey(MODULATION_STATE_KEY, listener);
-            },
-        };
-        const articulationAdapter: EffectStoredStateAdapter = {
-            key: ARTICULATIONS_V4_STATE_KEY,
-            schemaVersion: 4,
-            getContract() {
-                return {
-                    key: ARTICULATIONS_V4_STATE_KEY,
-                    schemaVersion: 4,
-                    required: true,
-                };
-            },
-            capture() {
-                return stateRef.current;
-            },
-            normalizeForPreset(value: unknown, context?: EffectStoredStateContext) {
-                const routeIds = currentArticulationRouteIds(presetModulationState(context).routes);
-                return parseStrictArticulationPresetState(value, routeIds);
-            },
-            serializeForPreset(value, context) {
-                const routeIds = currentArticulationRouteIds(presetModulationState(context).routes);
-                return serializeArticulationsV4(parseStrictArticulationPresetState(value, routeIds));
-            },
-            apply(value, context) {
-                const nextModulationState = presetModulationState(context);
-                const routeIds = currentArticulationRouteIds(nextModulationState.routes);
-                if (!context) {
-                    throw new Error("Synth preset context is required before articulation application.");
-                }
-                for (const oscillator of OSCILLATOR_BINDING_CONTRACTS) {
-                    setArticulationPatchBase(
-                        oscillator.id,
-                        buildPresetArticulationBaseSnapshot(context, nextModulationState, oscillator.id),
-                    );
-                }
-                setAndPersistState(parseStrictArticulationPresetState(value, routeIds), routeIds, true);
-            },
-            subscribe(listener: () => void) {
-                return subscribeToStoredStateKey(ARTICULATIONS_V4_STATE_KEY, listener);
-            },
-        };
-
-        const bounceAdapter = createBouncePresetStoredStateAdapter(patchConnection);
-        return [modulationAdapter, articulationAdapter, bounceAdapter];
-    }, [modulationBridge, patchConnection, setAndPersistState, setArticulationPatchBase, stateRef]);
 }
 
 export function useMsegState() {
@@ -2549,12 +2348,13 @@ export function useSynthPatchViewModel({
     useEffect(() => {
         setDiscardedArticulationEdit(null);
     }, [patchConnection]);
-    const presetStoredStateAdapters = useSynthPresetStoredStateAdapters({
-        articulationBankState,
-        modulationBridge,
-        modulationState,
-        setArticulationPatchBase,
-    });
+    const resetArticulationPatchBases = useCallback((parameters: Readonly<Record<string, number>>) => {
+        const currentModulation = modulationBridge.current?.getState() ?? modulationState ?? createDefaultModulationState();
+        for (const oscillator of OSCILLATOR_BINDING_CONTRACTS) {
+            setArticulationPatchBase(oscillator.id, buildArticulationBaseSnapshot(parameters, currentModulation, oscillator.id));
+        }
+        articulationBankState.refreshProjection();
+    }, [articulationBankState, modulationBridge, modulationState, setArticulationPatchBase]);
     const activeAuditionRef = useRef<{ slotId: string; note: number } | null>(null);
     const lastPlayedNoteRef = useRef(ARTICULATION_AUDITION_FALLBACK_NOTE);
     const [lastPlayedNote, setLastPlayedNote] = useState(ARTICULATION_AUDITION_FALLBACK_NOTE);
@@ -4280,7 +4080,7 @@ export function useSynthPatchViewModel({
         articulationSlots,
         selectedArticulationSlot,
         selectedArticulationIsDirty,
-        presetStoredStateAdapters,
+        resetArticulationPatchBases,
         articulationHeldInput,
         discardedArticulationEdit: discardedArticulationEdit?.patchConnection === patchConnection
             ? {

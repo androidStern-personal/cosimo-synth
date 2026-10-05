@@ -43,7 +43,6 @@ import {
     createEmptyArticulationsState,
     serializeArticulationsV4,
 } from "./articulation-image";
-import { EFFECT_PRESETS_V2_STATE_KEY } from "./effects/effect-preset-store-v2";
 
 const PRODUCT_STORED_STATE_DEFAULTS = Object.freeze({
     "modulation.v6": serializeModulationState(createDefaultModulationState()),
@@ -205,14 +204,6 @@ function recordTestDiagnostic(
     if (values.length > 64) values.splice(0, values.length - 64);
 }
 
-function hasExternalPresetFileStore() {
-    const scope = globalThis as typeof globalThis & {
-        chocUserFiles?: unknown;
-        window?: { chocUserFiles?: unknown };
-    };
-    return Boolean(scope.chocUserFiles ?? scope.window?.chocUserFiles);
-}
-
 /** Browser product controller for snapshot -> workers -> OPFS -> live flip. */
 export function useBounceInPlace() {
     const connection = usePatchConnection();
@@ -222,8 +213,6 @@ export function useBounceInPlace() {
     const preparationAbortRef = useRef<AbortController | null>(null);
     const hydrationRevisionRef = useRef(0);
     const captureStateKeysRef = useRef(new Set<string>());
-    const userPresetStateRef = useRef<unknown>(null);
-    const userPresetStateKnownRef = useRef(false);
 
     const applyPatchDocument = useCallback((document: {
         storedState: Readonly<Record<string, unknown>>;
@@ -363,10 +352,6 @@ export function useBounceInPlace() {
             if (!event || typeof event !== "object") return;
             const record = event as Record<string, unknown>;
             if (typeof record.key === "string") acceptCaptureKey(record.key);
-            if (record.key === EFFECT_PRESETS_V2_STATE_KEY) {
-                userPresetStateRef.current = record.value ?? null;
-                userPresetStateKnownRef.current = true;
-            }
             if (record.key === BOUNCE_STATE_KEY) void presentStoredReference(record.value);
         };
         connection.addStoredStateValueListener?.(handleStoredState);
@@ -378,8 +363,6 @@ export function useBounceInPlace() {
                 // absence authoritative, rather than a hydration race.
                 Object.keys(PRODUCT_STORED_STATE_DEFAULTS).forEach(acceptCaptureKey);
                 Object.keys(values).forEach(acceptCaptureKey);
-                userPresetStateRef.current = values[EFFECT_PRESETS_V2_STATE_KEY] ?? null;
-                userPresetStateKnownRef.current = true;
                 void presentStoredReference(values[BOUNCE_STATE_KEY] ?? null);
             });
         } else {
@@ -496,7 +479,8 @@ export function useBounceInPlace() {
             // A successful install overwrote the inactive DSP slot. Starting
             // with generation 3, the prior document's own Revert bank is now
             // beyond the locked one-level history and can be retired only if
-            // no live patch, preset, or state save still roots it.
+            // no live patch or in-flight state save still roots it. Presets and
+            // snapshots never hold a Bounce reference.
             const supersededDigest = previousBounceDocument?.revertRef.bankDigest ?? null;
             let retirement: unknown;
             try {
@@ -515,9 +499,6 @@ export function useBounceInPlace() {
                         candidateDigests: [supersededDigest],
                         dspOverwrittenDigests: [supersededDigest],
                         livePatchDocument: result.patchDocument,
-                        userPresetState: userPresetStateRef.current,
-                        userPresetStateKnown: userPresetStateKnownRef.current,
-                        hasExternalPresetFileStore: hasExternalPresetFileStore(),
                     });
                 }
             } catch (cause) {

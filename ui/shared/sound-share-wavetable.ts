@@ -1,9 +1,5 @@
-import type { EffectParameterValue } from "./effects/effect-state-contract";
 import { OSCILLATOR_BINDING_CONTRACTS } from "./oscillator-binding";
-import {
-    SoundShareError,
-    type SoundShareResult,
-} from "./sound-share-envelope";
+import { SoundShareError, type SoundShareResult } from "./sound-share-link";
 
 /** One shipped factory-table identity at its stable selector slot. */
 export type ShippedWavetableTable = {
@@ -19,7 +15,7 @@ export type ShippedWavetableTable = {
  * a custom or unavailable runtime resource.
  */
 export function validateSoundShareWavetables(
-    parameters: Readonly<Record<string, EffectParameterValue>>,
+    parameters: Readonly<Record<string, unknown>>,
     shippedTables: ReadonlyArray<ShippedWavetableTable>,
 ): SoundShareResult<undefined> {
     if (shippedTables.length === 0) {

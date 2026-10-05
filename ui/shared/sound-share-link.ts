@@ -1,13 +1,39 @@
-import {
-    parseSoundShareEnvelope,
-    parseSoundShareEnvelopeText,
-    SoundShareError,
-    type SoundShareErrorTag,
-    type SoundShareEnvelopeV2,
-    type SoundShareResult,
-} from "./sound-share-envelope";
+/**
+ * A sound link carries one Builder Kit preset file (the same text Copy JSON writes),
+ * deflated into the URL fragment so the sound never reaches a server.
+ */
 
-export const SOUND_SHARE_FRAGMENT_VERSION = 2;
+/** The synth's manifest ID. A sound link's preset file must name it to load. */
+export const SYNTH_PLUGIN_ID = "dev.cosimo.wavetable-synth";
+
+export type SoundShareErrorTag =
+    | "InvalidFragment"
+    | "UnsupportedVersion"
+    | "CompressionUnavailable"
+    | "CompressionFailed"
+    | "DecompressionFailed"
+    | "PayloadTooLarge"
+    | "URLTooLong"
+    | "UnavailableWavetable"
+    | "InvalidURL"
+    | "HistoryUpdateFailed";
+
+export class SoundShareError extends Error {
+    constructor(
+        readonly _tag: SoundShareErrorTag,
+        message: string,
+        options: { readonly cause?: unknown } = {},
+    ) {
+        super(message, options);
+        this.name = "SoundShareError";
+    }
+}
+
+export type SoundShareResult<T> =
+    | { readonly ok: true; readonly value: T }
+    | { readonly ok: false; readonly error: SoundShareError };
+
+export const SOUND_SHARE_FRAGMENT_VERSION = 3;
 export const SOUND_SHARE_URL_WARNING_LENGTH = 8_000;
 export const SOUND_SHARE_URL_MAX_LENGTH = 128_000;
 export const SOUND_SHARE_DECOMPRESSED_MAX_BYTES = 3_250_000;
@@ -139,19 +165,14 @@ export function classifySoundShareURLLength(length: number): SoundShareURLLength
     return length > SOUND_SHARE_URL_WARNING_LENGTH ? "warning" : "normal";
 }
 
-export async function encodeSoundShareFragment(
-    envelope: SoundShareEnvelopeV2,
-): Promise<SoundShareResult<string>> {
-    const parsed = parseSoundShareEnvelope(envelope);
-    if (!parsed.ok) {
-        return parsed;
-    }
+/** Deflate one preset file into a `#p=` fragment. */
+export async function encodeSoundShareFragment(presetFileText: string): Promise<SoundShareResult<string>> {
     const streamResult = compressionStream("compress");
     if (!streamResult.ok) {
         return streamResult;
     }
     try {
-        const input = new TextEncoder().encode(JSON.stringify(parsed.value));
+        const input = new TextEncoder().encode(presetFileText);
         if (input.byteLength > SOUND_SHARE_DECOMPRESSED_MAX_BYTES) {
             return errorResult(new SoundShareError(
                 "PayloadTooLarge",
@@ -179,9 +200,8 @@ export async function encodeSoundShareFragment(
     }
 }
 
-export async function decodeSoundShareFragment(
-    fragment: string,
-): Promise<SoundShareResult<SoundShareEnvelopeV2 | null>> {
+/** The preset file text in a `#p=` fragment, or null when the fragment holds no sound. */
+export async function decodeSoundShareFragment(fragment: string): Promise<SoundShareResult<string | null>> {
     try {
         if (!fragment.startsWith("#p=")) {
             return { ok: true, value: null };
@@ -224,9 +244,7 @@ export async function decodeSoundShareFragment(
         if (!decompressed.ok) {
             return decompressed;
         }
-        const text = new TextDecoder("utf-8", { fatal: true }).decode(decompressed.value);
-        const parsed = parseSoundShareEnvelopeText(text);
-        return parsed.ok ? parsed : errorResult(parsed.error);
+        return { ok: true, value: new TextDecoder("utf-8", { fatal: true }).decode(decompressed.value) };
     } catch (cause) {
         return errorResult(new SoundShareError(
             "DecompressionFailed",
@@ -236,8 +254,9 @@ export async function decodeSoundShareFragment(
     }
 }
 
+/** A link to `baseURL` that carries one preset file. */
 export async function createSoundShareURL(
-    envelope: SoundShareEnvelopeV2,
+    presetFileText: string,
     baseURL: string,
 ): Promise<SoundShareResult<CreatedSoundShareURL>> {
     let url: URL;
@@ -249,7 +268,7 @@ export async function createSoundShareURL(
     if (url.protocol !== "http:" && url.protocol !== "https:") {
         return errorResult(new SoundShareError("InvalidURL", "Sound links are available from the browser app only."));
     }
-    const fragment = await encodeSoundShareFragment(envelope);
+    const fragment = await encodeSoundShareFragment(presetFileText);
     if (!fragment.ok) {
         return fragment;
     }

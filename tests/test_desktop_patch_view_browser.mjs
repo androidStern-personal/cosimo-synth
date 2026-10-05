@@ -34,17 +34,12 @@ import {
     waitForHarnessReady,
     TEST_SAMPLES_PER_FRAME,
     MSEG_PREVIEW_HORIZONTAL_PADDING_PX,
-    EFFECT_PRESETS_V2_STATE_KEY,
-    SYNTH_PRESET_EFFECT_ID,
     ARTICULATION_STATE_KEY,
-    RETIRED_SYNTH_LOCAL_DIRTY_STATE_KEY,
     expectedMsegPreviewProgressClipWidth,
     buildShortMidi,
     readStoredModulationState,
     readStoredArticulationEditorState,
     editorBankToStoredArticulations,
-    readEffectPresetState,
-    containsRetiredSynthPresetBaselineKey,
     readStoredMsegShape,
     readStoredMsegPlayback,
     readStoredRouteAmount,
@@ -75,9 +70,7 @@ import {
     waitForPageValue,
     waitForReactFrames,
     readVisibleHarnessParameterEndpointIDs,
-    clickPresetBarAction,
-    saveSynthPresetAs,
-    waitForPresetBarDirtyState,
+    recallSynthPreset,
     dragArticulationCardToLane,
     previewArticulationCardDragOver,
     readDesktopRangeSegments,
@@ -5696,8 +5689,7 @@ test("an active mobile workspace tab returns from detail before a second tap scr
         ));
         await selectedSource.click();
         await page.waitForFunction(() => {
-            const presetBar = document.querySelector("cosimo-preset-bar");
-            const backButton = presetBar?.shadowRoot?.querySelector('[data-el="shell-back"]');
+            const backButton = document.querySelector('[data-role="synth-preset-bar"] [data-action="shell-back"]');
             return backButton instanceof HTMLButtonElement && !backButton.disabled;
         });
         const detailScrollTop = await modPanel.evaluate((element) => element.scrollTop);
@@ -5705,8 +5697,7 @@ test("an active mobile workspace tab returns from detail before a second tap scr
 
         await modTab.click();
         await page.waitForFunction(() => {
-            const presetBar = document.querySelector("cosimo-preset-bar");
-            const backButton = presetBar?.shadowRoot?.querySelector('[data-el="shell-back"]');
+            const backButton = document.querySelector('[data-role="synth-preset-bar"] [data-action="shell-back"]');
             return backButton instanceof HTMLButtonElement && backButton.disabled;
         });
         assert.equal(
@@ -5822,13 +5813,12 @@ test("mobile workspace keeps the synth preset bar visible and contained at 320px
         const layout = await host.evaluate((element) => {
             const bounds = element.getBoundingClientRect();
             const panels = document.querySelector('[data-role="mobile-workspace-panels"]');
-            const shadow = element.querySelector("cosimo-preset-bar")?.shadowRoot;
-            const presetBar = shadow?.querySelector(".preset-bar");
-            const presetName = shadow?.querySelector('[data-el="preset-name"]');
-            const nameRegion = shadow?.querySelector(".name-region");
-            const leftCluster = shadow?.querySelector(".shell-left-cluster");
-            const meter = shadow?.querySelector('[data-el="polish-meter"]');
-            const more = shadow?.querySelector('[data-el="shell-more"]');
+            const presetBar = element.querySelector('[data-role="synth-preset-bar"]');
+            const presetName = element.querySelector('[data-role="preset-name"]');
+            const nameRegion = presetName;
+            const leftCluster = element.querySelector('[data-role="shell-left-cluster"]');
+            const meter = element.querySelector('[data-role="polish-meter"]');
+            const more = element.querySelector('[data-action="toggle-sound-actions"]');
             const rectOf = (node) => {
                 if (!(node instanceof HTMLElement)) return null;
                 const rect = node.getBoundingClientRect();
@@ -5857,8 +5847,8 @@ test("mobile workspace keeps the synth preset bar visible and contained at 320px
         // retiring the legacy 38px preset-bar literal (ADR-026).
         assert.equal(layout.presetBarHeight, 40);
         assert.equal(layout.panelsTop >= layout.height, true);
-        // T03D: the unnamed working sound is the INIT identity.
-        assert.equal(layout.presetName, "INIT");
+        // A fresh instance plays the Init sound but has not recalled a preset yet.
+        assert.equal(layout.presetName, "No preset");
         assert.ok(layout.bar && layout.nameRegion && layout.leftCluster && layout.meter && layout.more);
         assert.equal(Math.abs(layout.meter.width - 92) <= 0.5, true);
         assert.equal(layout.nameRegion.left >= layout.leftCluster.right - 0.5, true);
@@ -5871,17 +5861,15 @@ test("mobile workspace keeps the synth preset bar visible and contained at 320px
                 loudnessDbfs: -12.4,
             });
         });
-        await page.waitForFunction(() => {
-            const shadow = document.querySelector("cosimo-preset-bar")?.shadowRoot;
-            return shadow?.querySelector('[data-el="polish-meter-peak"]')?.textContent === "1.2"
-                && shadow?.querySelector('[data-el="polish-meter-loudness"]')?.textContent === "-12"
-                && shadow?.querySelector('[data-el="polish-meter"]')?.getAttribute("data-overload") === "true";
-        });
+        await page.waitForFunction(() => (
+            document.querySelector('[data-role="polish-meter-peak"]')?.textContent === "1.2"
+                && document.querySelector('[data-role="polish-meter-loudness"]')?.textContent === "-12"
+                && document.querySelector('[data-role="polish-meter"]')?.getAttribute("data-overload") === "true"
+        ));
         const activeMeter = await host.evaluate((element) => {
-            const shadow = element.querySelector("cosimo-preset-bar")?.shadowRoot;
-            const meter = shadow?.querySelector('[data-el="polish-meter"]');
-            const light = shadow?.querySelector('[data-el="polish-meter-light"]');
-            const nameRegion = shadow?.querySelector(".name-region");
+            const meter = element.querySelector('[data-role="polish-meter"]');
+            const light = element.querySelector('[data-role="polish-meter-light"]');
+            const nameRegion = element.querySelector('[data-role="preset-name"]');
             if (!(meter instanceof HTMLElement) || !(light instanceof HTMLElement)
                     || !(nameRegion instanceof HTMLElement)) return null;
             const meterRect = meter.getBoundingClientRect();
@@ -5907,13 +5895,12 @@ test("mobile workspace keeps the synth preset bar visible and contained at 320px
         await dialog.waitFor();
 
         const focusedLayout = await host.evaluate((element) => {
-            const shadow = element.querySelector("cosimo-preset-bar")?.shadowRoot;
-            const presetBar = shadow?.querySelector(".preset-bar");
-            const back = shadow?.querySelector('[data-el="shell-back"]');
-            const meter = shadow?.querySelector('[data-el="polish-meter"]');
-            const nameRegion = shadow?.querySelector(".name-region");
-            const presetName = shadow?.querySelector('[data-el="preset-name"]');
-            const more = shadow?.querySelector('[data-el="shell-more"]');
+            const presetBar = element.querySelector('[data-role="synth-preset-bar"]');
+            const back = element.querySelector('[data-action="shell-back"]');
+            const meter = element.querySelector('[data-role="polish-meter"]');
+            const nameRegion = element.querySelector('[data-role="preset-name"]');
+            const presetName = nameRegion;
+            const more = element.querySelector('[data-action="toggle-sound-actions"]');
             const dialogElement = document.querySelector('[data-role="mseg-editor-dialog"]');
             const rectOf = (node) => {
                 if (!(node instanceof HTMLElement)) return null;
@@ -5929,9 +5916,9 @@ test("mobile workspace keeps the synth preset bar visible and contained at 320px
                 };
             };
             const backRect = rectOf(back);
-            const backHit = backRect === null || shadow === undefined
+            const backHit = backRect === null
                 ? null
-                : shadow.elementFromPoint(
+                : document.elementFromPoint(
                     (backRect.left + backRect.right) / 2,
                     (backRect.top + backRect.bottom) / 2,
                 );
@@ -5978,23 +5965,22 @@ test("mobile workspace keeps the synth preset bar visible and contained at 320px
         assert.equal(focusedLayout.nameOverflow, "ellipsis");
         assert.equal(focusedLayout.dialog.top >= focusedLayout.bar.bottom - 0.5, true);
 
-        assert.equal(await host.evaluate((element) => {
-            const shadow = element.querySelector("cosimo-preset-bar")?.shadowRoot;
-            return shadow?.activeElement === shadow?.querySelector('[data-action="shell-back"]');
-        }), true, "Focused compact MSEG must initially include universal Back in its focus scope.");
+        assert.equal(await host.evaluate((element) => (
+            document.activeElement === element.querySelector('[data-action="shell-back"]')
+        )), true, "Focused compact MSEG must initially include universal Back in its focus scope.");
         await page.keyboard.press("Tab");
+        // The MSEG curve surface is the dialog's first focusable control.
         assert.equal(
-            await page.locator('[data-role="mseg-shape-a"]').evaluate(
+            await dialog.locator('[data-role="mseg-editor-surface"]').evaluate(
                 (element) => document.activeElement === element,
             ),
             true,
             "Tab from universal Back must enter the focused MSEG controls.",
         );
         await page.keyboard.press("Shift+Tab");
-        assert.equal(await host.evaluate((element) => {
-            const shadow = element.querySelector("cosimo-preset-bar")?.shadowRoot;
-            return shadow?.activeElement === shadow?.querySelector('[data-action="shell-back"]');
-        }), true, "Shift+Tab must make the retained Back action reachable again.");
+        assert.equal(await host.evaluate((element) => (
+            document.activeElement === element.querySelector('[data-action="shell-back"]')
+        )), true, "Shift+Tab must make the retained Back action reachable again.");
         await page.keyboard.press("Enter");
         await dialog.waitFor({ state: "detached" });
     } finally {
@@ -6099,17 +6085,7 @@ test("fresh and Init desktop state show only oscillator A enabled at 0 dB", asyn
             "Tab actions write only the selected oscillator's Mute endpoint.",
         );
 
-        await clickPresetBarAction(page, "init");
-        await page.evaluate(() => {
-            const discard = document
-                .querySelector("cosimo-preset-bar")
-                ?.shadowRoot
-                ?.querySelector('[data-action="sound-replacement-discard"]');
-            if (!(discard instanceof HTMLButtonElement)) {
-                throw new Error("Discard and Init action is missing.");
-            }
-            discard.click();
-        });
+        await recallSynthPreset(page, "Init");
         snapshot = await waitForHarnessSnapshot(
             page,
             "Init oscillator defaults",
@@ -6143,11 +6119,17 @@ test("fresh and Init desktop state show only oscillator A enabled at 0 dB", asyn
             filterCutoffKeyTrackEnabled: 0,
             filterCutoffKeyTrackOffsetSemitones: 0,
         })) {
+            // Recall writes only the parameters that change; the rest already hold the Init value.
             const latestWrite = [...snapshot.sentMessages]
                 .reverse()
                 .find((message) => message.endpointID === endpointID);
-            assert.equal(Number(latestWrite?.value), expectedValue, `${endpointID} Init write`);
+            assert.equal(Number(latestWrite?.value ?? snapshot.parameterValues[endpointID] ?? 0), expectedValue, `${endpointID} after Init`);
         }
+        assert.equal(
+            Number([...snapshot.sentMessages].reverse().find((message) => message.endpointID === "oscBMute")?.value),
+            1,
+            "Init writes the oscillator B mute that the tab toggle had cleared",
+        );
     } finally {
         await page.close();
     }

@@ -2,10 +2,9 @@ import { buildCanonicalPluginStateContract } from "../../shared/effects/effect-s
 import { ARTICULATIONS_V4_STATE_KEY } from "../../shared/articulation-image";
 import { LANE_STATE_KEY } from "../../shared/lane-state";
 import { MODULATION_STATE_KEY } from "../../shared/modulation";
-import { SYNTH_PRESET_EFFECT_ID } from "../../shared/effects/synth-preset-identity";
 import { getFactoryBankCatalogValue } from "../../shared/wavetable-bank";
 import type { WavetableCatalog } from "../recipe";
-import type { ParameterEndpointMetadata, PatchIntakeOptions } from "../patch-io";
+import { SYNTH_CONTRACT_ID, type ParameterEndpointMetadata, type PatchIntakeOptions } from "../patch-io";
 import { SpeedrunStudioError, studioError } from "./errors";
 
 type OfflineSynthClass = {
@@ -77,7 +76,7 @@ export async function loadSpeedrunStudioRuntime(): Promise<SpeedrunStudioRuntime
         return endpoint.purpose === "parameter" && annotation?.hidden !== true;
     });
     const currentContract = buildCanonicalPluginStateContract({
-        effectID: SYNTH_PRESET_EFFECT_ID,
+        effectID: SYNTH_CONTRACT_ID,
         parameters: visibleParameters,
         storedState: [
             { key: MODULATION_STATE_KEY, schemaVersion: 6, required: true },

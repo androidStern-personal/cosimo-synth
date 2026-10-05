@@ -1,4 +1,5 @@
 import { definePluginState, parameter, preparedState, storedValue, type PluginStateParameter } from "../../kit/ui/plugin-state-definition";
+import { presets, snapshots } from "../../kit/index";
 import { createDefaultModulationState, MODULATION_STATE_KEY } from "./modulation";
 import { modulationStateCodec } from "./synth-modulation-state";
 import { OSCILLATOR_BINDING_CONTRACTS } from "./oscillator-binding";
@@ -9,6 +10,10 @@ import { createDefaultLaneStateV2, synchronizeLaneOutputTrimsFromHostParameters 
 import { LANE_STATE_KEY } from "./lane-state";
 import { ARTICULATIONS_V4_STATE_KEY, createEmptyArticulationsState } from "./articulation-image";
 import { synthRackDelivery } from "../worker/synth-rack-delivery";
+import { synthFactoryPresets } from "./synth-factory-presets";
+
+/** Bounce and its Revert own the source mode; presets and snapshots leave it alone. */
+export const synthSourceMode = parameter("sourceMode", { preset: false });
 
 // Reuse the oscillator and resident-effect identities. Ranges/defaults still
 // come from the actual host parameter; this declares user editing and history.
@@ -45,7 +50,7 @@ export const synthParameterByEndpoint: Readonly<Record<string, PluginStateParame
     env3Release: parameter("env3Release"),
     filterMix: parameter("filterMix"),
     ampRelease: parameter("ampRelease"),
-    sourceMode: parameter("sourceMode"),
+    sourceMode: synthSourceMode,
     globalTune: parameter("globalTune"),
     ampAttack: parameter("ampAttack"),
     ampDecay: parameter("ampDecay"),
@@ -67,7 +72,10 @@ export const synthParameterByEndpoint: Readonly<Record<string, PluginStateParame
     polishOutputTrimBypass: parameter("polishOutputTrimBypass"),
 });
 
-/** All audible host controls and editable modulation share one plugin history. */
+/**
+ * All audible host controls and editable modulation share one plugin history.
+ * Presets and snapshots recall every field except the source mode.
+ */
 export const synthPluginState = definePluginState({
     ...synthParameterByEndpoint,
     [MODULATION_STATE_KEY]: preparedState({ initial: createDefaultModulationState(), codec: modulationStateCodec, prepare: value => value, engine: synthModulationDelivery }),
@@ -78,4 +86,6 @@ export const synthPluginState = definePluginState({
         engine: synthRackDelivery,
     }),
     [ARTICULATIONS_V4_STATE_KEY]: storedValue({ initial: createEmptyArticulationsState(), codec: articulationStateCodec }),
+    ...presets({ factory: synthFactoryPresets }),
+    ...snapshots(),
 });

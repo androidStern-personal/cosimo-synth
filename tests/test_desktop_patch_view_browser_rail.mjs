@@ -19,6 +19,7 @@ import {
     clearHarnessDebugLog,
     getHarnessRenderedState,
     getHarnessSnapshot,
+    openDeveloperSettingsFromPresetBar,
     getKeyboardDebug,
     setHarnessRuntimeState,
     startStaticRepoServer,
@@ -26,17 +27,12 @@ import {
     waitForHarnessReady,
     TEST_SAMPLES_PER_FRAME,
     MSEG_PREVIEW_HORIZONTAL_PADDING_PX,
-    EFFECT_PRESETS_V2_STATE_KEY,
-    SYNTH_PRESET_EFFECT_ID,
     ARTICULATION_STATE_KEY,
-    RETIRED_SYNTH_LOCAL_DIRTY_STATE_KEY,
     expectedMsegPreviewProgressClipWidth,
     buildShortMidi,
     readStoredModulationState,
     readStoredArticulationEditorState,
     editorBankToStoredArticulations,
-    readEffectPresetState,
-    containsRetiredSynthPresetBaselineKey,
     readStoredMsegShape,
     readStoredMsegPlayback,
     readStoredRouteAmount,
@@ -69,9 +65,6 @@ import {
     waitForPageValue,
     waitForReactFrames,
     readVisibleHarnessParameterEndpointIDs,
-    clickPresetBarAction,
-    saveSynthPresetAs,
-    waitForPresetBarDirtyState,
     dragArticulationCardToLane,
     previewArticulationCardDragOver,
     readDesktopRangeSegments,
@@ -1508,11 +1501,7 @@ test("T60 live preferences park, scale, hide, restore, and float the Mod bar wit
     });
 
     const openDeveloperSettings = async () => {
-        const presetBar = page.locator("cosimo-preset-bar");
-        await presetBar.waitFor();
-        await presetBar.evaluate((element) => {
-            element.dispatchEvent(new CustomEvent("cosimo-open-perf-tuning"));
-        });
+        await openDeveloperSettingsFromPresetBar(page);
         const settings = page.locator('[data-role="perf-tuning-page"]');
         await settings.waitFor({ state: "visible" });
         return settings;
@@ -1815,9 +1804,7 @@ test("T79 Developer Settings updates and persists keyboard geometry without remo
         };
     });
     const openDeveloperSettings = async () => {
-        await page.locator("cosimo-preset-bar").evaluate((element) => {
-            element.dispatchEvent(new CustomEvent("cosimo-open-perf-tuning"));
-        });
+        await openDeveloperSettingsFromPresetBar(page);
         const settings = page.locator('[data-role="perf-tuning-page"]');
         await settings.waitFor({ state: "visible" });
         return settings;
@@ -2603,10 +2590,7 @@ test("T60 preserves the explicitly visible source group in both placement direct
     });
 
     const changePlacement = async (placement) => {
-        const presetBar = page.locator("cosimo-preset-bar");
-        await presetBar.evaluate((element) => {
-            element.dispatchEvent(new CustomEvent("cosimo-open-perf-tuning"));
-        });
+        await openDeveloperSettingsFromPresetBar(page);
         const settings = page.locator('[data-role="perf-tuning-page"]');
         await settings.waitFor({ state: "visible" });
         await settings.locator(`[data-mod-bar-placement="${placement}"]`).click();
@@ -2695,11 +2679,7 @@ test("T60 live placement changes preserve an active source drag through its real
         await page.mouse.move(sourceCenter.x - 12, sourceCenter.y + 12, { steps: 3 });
         await rail.locator('xpath=self::*[@data-mapping-active="true"]').waitFor();
 
-        await page.evaluate(() => {
-            document.querySelector("cosimo-preset-bar")?.dispatchEvent(
-                new CustomEvent("cosimo-open-perf-tuning"),
-            );
-        });
+        await openDeveloperSettingsFromPresetBar(page);
         const settings = page.locator('[data-role="perf-tuning-page"]');
         await settings.waitFor({ state: "visible" });
         await settings.locator('[data-mod-bar-placement="parked"]').evaluate((button) => {
@@ -7381,9 +7361,7 @@ test("T43: source taps toggle and switch the Voice/FX quick sheet without steali
         assert.equal(await sheet.count(), 0, "The quick sheet belongs to Voice/FX only.");
         await tapChip('[data-role="rack-mod-source-mseg-1"]');
         await page.waitForFunction(() => (
-            document.querySelector("cosimo-preset-bar")
-                ?.shadowRoot
-                ?.querySelector('[data-action="shell-back"]')
+            document.querySelector('[data-role="synth-preset-bar"] [data-action="shell-back"]')
                 ?.hasAttribute("disabled") === false
         ));
         assert.equal(await sheet.count(), 0, "The Mod source panel must never be replaced by a quick sheet.");

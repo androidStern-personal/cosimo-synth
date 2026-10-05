@@ -30,17 +30,12 @@ import {
     waitForHarnessReady,
     TEST_SAMPLES_PER_FRAME,
     MSEG_PREVIEW_HORIZONTAL_PADDING_PX,
-    EFFECT_PRESETS_V2_STATE_KEY,
-    SYNTH_PRESET_EFFECT_ID,
     ARTICULATION_STATE_KEY,
-    RETIRED_SYNTH_LOCAL_DIRTY_STATE_KEY,
     expectedMsegPreviewProgressClipWidth,
     buildShortMidi,
     readStoredModulationState,
     readStoredArticulationEditorState,
     editorBankToStoredArticulations,
-    readEffectPresetState,
-    containsRetiredSynthPresetBaselineKey,
     readStoredMsegShape,
     readStoredMsegPlayback,
     readStoredRouteAmount,
@@ -72,7 +67,9 @@ import {
     waitForPageValue,
     waitForReactFrames,
     readVisibleHarnessParameterEndpointIDs,
-    clickPresetBarAction,
+    readActivePreset,
+    recallSynthPreset,
+    revertSynthPreset,
     saveSynthPresetAs,
     waitForPresetBarDirtyState,
     dragArticulationCardToLane,
@@ -1167,27 +1164,22 @@ test("contextual toolbar only exposes articulation draft actions", async () => {
 
         const snapshot = await waitForHarnessSnapshot(
             page,
-            "updated articulation without synth-local preset baseline",
-            (nextSnapshot) => {
-                const storedBank = readStoredArticulationEditorState(nextSnapshot);
-                return storedBank.slots[0].snapshot.parameters.pan === 0.25
-                    && !containsRetiredSynthPresetBaselineKey(nextSnapshot);
-            },
+            "updated articulation",
+            (nextSnapshot) => readStoredArticulationEditorState(nextSnapshot).slots[0].snapshot.parameters.pan === 0.25,
         );
         const storedBank = readStoredArticulationEditorState(snapshot);
         assert.equal(storedBank.slots[0].snapshot.parameters.pan, 0.25);
-        assert.equal(containsRetiredSynthPresetBaselineKey(snapshot), false);
         await page.waitForFunction(() => !document.querySelector('[data-role="contextual-floating-toolbar"]'));
     } finally {
         await page.close();
     }
 });
 
-test("synth preset bar saves current synth state through shared effect presets", async () => {
+test("a saved synth preset holds every sound field and recalls them together", async () => {
     const page = await openHarnessPage();
 
     try {
-        await page.waitForFunction(() => Boolean(document.querySelector("cosimo-preset-bar")?.shadowRoot));
+        await page.locator('[data-role="synth-preset-bar"]').waitFor();
 
         const seededBank = normalizeArticulationEditorState({
             selectedSlotId: "bright-bow",
@@ -1269,93 +1261,81 @@ test("synth preset bar saves current synth state through shared effect presets",
 
         const snapshot = await waitForHarnessSnapshot(
             page,
-            "shared synth preset saved",
-            (nextSnapshot) => {
-                const rawState = nextSnapshot.storedState[EFFECT_PRESETS_V2_STATE_KEY];
-                if (!rawState || containsRetiredSynthPresetBaselineKey(nextSnapshot)) {
-                    return false;
-                }
-
-                const state = JSON.parse(String(rawState));
-                return Array.isArray(state.userPresets?.[SYNTH_PRESET_EFFECT_ID])
-                    && state.userPresets[SYNTH_PRESET_EFFECT_ID].some((preset) => preset.label === "Bright Test Synth");
-            },
+            "synth preset saved",
+            (nextSnapshot) => readActivePreset(nextSnapshot)?.name === "Bright Test Synth",
         );
-
-        const presetState = readEffectPresetState(snapshot);
-        const savedPreset = presetState.userPresets[SYNTH_PRESET_EFFECT_ID].find((preset) => (
-            preset.label === "Bright Test Synth"
-        ));
-
-        assert.ok(savedPreset, "shared preset state must contain the saved synth preset");
-        assert.equal(savedPreset.kind, "cosimo.effectPreset");
-        assert.equal(savedPreset.version, 2);
-        assert.equal(savedPreset.effectID, SYNTH_PRESET_EFFECT_ID);
+        const savedPreset = readActivePreset(snapshot);
         const visibleEndpointIDs = await readVisibleHarnessParameterEndpointIDs(page);
-        const savedParameterIDs = Object.keys(savedPreset.parameters).sort((left, right) => left.localeCompare(right));
+        // Bounce owns the source mode, so presets leave it out.
+        const soundEndpointIDs = visibleEndpointIDs.filter((endpointID) => endpointID !== "sourceMode");
         assert.deepEqual(
-            savedParameterIDs,
-            visibleEndpointIDs,
-            "saved synth presets must capture the complete visible Cmajor parameter contract",
+            Object.keys(savedPreset.values).sort((left, right) => left.localeCompare(right)),
+            [...soundEndpointIDs, ARTICULATION_STATE_KEY, "lane.v1", "modulation.v6"].sort((left, right) => left.localeCompare(right)),
+            "a synth preset holds every visible parameter except the source mode, and the three sound documents",
         );
-        for (const endpointID of visibleEndpointIDs) {
+        for (const endpointID of soundEndpointIDs) {
+            // The harness records only values that were written; the untouched
+            // effect output trims are still at their 0 dB init value.
             assert.equal(
-                savedPreset.parameters[endpointID],
-                snapshot.parameterValues[endpointID],
+                savedPreset.values[endpointID],
+                snapshot.parameterValues[endpointID] ?? 0,
                 `saved parameter ${endpointID} must match the live value`,
             );
         }
-        assert.equal(snapshot.parameterValues.hiddenSynthPresetGuard, 0.42);
-        assert.equal("hiddenSynthPresetGuard" in savedPreset.parameters, false);
-        assert.equal("midiIn" in savedPreset.parameters, false);
-        assert.equal("runtimeState" in savedPreset.parameters, false);
-        assert.equal("effectiveWarpState" in savedPreset.parameters, false);
-        assert.equal(
-            Object.keys(savedPreset.parameters).some((endpointID) => endpointID.startsWith("effective")),
-            false,
-            "saved synth presets must only contain real parameters, not runtime display endpoints",
-        );
+        assert.equal("hiddenSynthPresetGuard" in savedPreset.values, false);
+        assert.equal(BOUNCE_STATE_KEY in savedPreset.values, false);
         assert.deepEqual(
-            Object.keys(savedPreset.storedState).sort((left, right) => left.localeCompare(right)),
-            [ARTICULATION_STATE_KEY, BOUNCE_STATE_KEY, "modulation.v6"],
-            "saved synth presets must capture only the required stored-state adapters",
-        );
-        assert.equal(savedPreset.storedState[BOUNCE_STATE_KEY], null);
-        assert.deepEqual(
-            savedPreset.storedState[ARTICULATION_STATE_KEY],
+            JSON.parse(savedPreset.values[ARTICULATION_STATE_KEY]),
             editorBankToStoredArticulations(seededBank),
             "saved synth presets must include the actual non-default articulation bank",
         );
-        const savedModulationState = deserializeModulationState(savedPreset.storedState["modulation.v6"]);
-        assert.equal(savedPreset.parameters.mseg1Morph, 0.33);
-        assert.equal(savedPreset.parameters.env2Attack, 0.21);
-        assert.equal(savedPreset.parameters.env2Decay, 0.32);
-        assert.equal(savedPreset.parameters.env2Sustain, 0.43);
-        assert.equal(savedPreset.parameters.env2Release, 0.54);
+        const savedModulationState = deserializeModulationState(savedPreset.values["modulation.v6"]);
+        assert.equal(savedPreset.values.mseg1Morph, 0.33);
+        assert.equal(savedPreset.values.env2Attack, 0.21);
+        assert.equal(savedPreset.values.env2Decay, 0.32);
+        assert.equal(savedPreset.values.env2Sustain, 0.43);
+        assert.equal(savedPreset.values.env2Release, 0.54);
         assert.equal("morph" in savedModulationState.msegSlots[0], false);
         assert.deepEqual(savedModulationState.envelopeSlots[1], { name: "Sweep Env" });
-        assert.equal("attackSeconds" in savedModulationState.envelopeSlots[1], false);
         assert.deepEqual(
             routeSummary(savedModulationState.routes[0]),
             routeSummary(seededModulationState.routes[0]),
             "saved synth presets must include the actual non-default modulation state",
         );
-        assert.deepEqual(presetState.activePresetByEffect[SYNTH_PRESET_EFFECT_ID], {
-            presetID: savedPreset.presetID,
-            label: "Bright Test Synth",
-            dirty: false,
-        });
-        assert.equal(containsRetiredSynthPresetBaselineKey(snapshot), false);
+
+        await recallSynthPreset(page, "Init");
+        await waitForHarnessSnapshot(
+            page,
+            "Init replaced the saved sound",
+            (nextSnapshot) => Number(nextSnapshot.parameterValues.oscAPan) === 0
+                && Number(nextSnapshot.parameterValues.filterCutoff) === 1000
+                && readStoredArticulationEditorState(nextSnapshot).slots.length === 0
+                && readStoredModulationState(nextSnapshot).routes.length === 0,
+        );
+        await recallSynthPreset(page, "Bright Test Synth");
+        const recalled = await waitForHarnessSnapshot(
+            page,
+            "saved synth preset recalled",
+            (nextSnapshot) => Math.abs(Number(nextSnapshot.parameterValues.oscAPan) - 0.25) <= 1e-9
+                && Number(nextSnapshot.parameterValues.filterCutoff) === 2475
+                && readStoredArticulationEditorState(nextSnapshot).selectedSlotId === "bright-bow",
+        );
+        assert.equal(Math.abs(Number(recalled.parameterValues.env2Attack) - 0.21) <= 1e-9, true);
+        assert.deepEqual(
+            routeSummary(readStoredModulationState(recalled).routes[0]),
+            routeSummary(seededModulationState.routes[0]),
+        );
+        await waitForPresetBarDirtyState(page, false);
     } finally {
         await page.close();
     }
 });
 
-test("synth preset bar marks edits dirty and reverts without synth-local baseline state", async () => {
+test("synth preset bar marks edits dirty and reverts", async () => {
     const page = await openHarnessPage();
 
     try {
-        await page.waitForFunction(() => Boolean(document.querySelector("cosimo-preset-bar")?.shadowRoot));
+        await page.locator('[data-role="synth-preset-bar"]').waitFor();
 
         await page.evaluate(() => {
             const harness = window.__COSIMO_DESKTOP_HARNESS__;
@@ -1385,11 +1365,11 @@ test("synth preset bar marks edits dirty and reverts without synth-local baselin
         });
 
         await waitForPresetBarDirtyState(page, true);
-        await clickPresetBarAction(page, "revert");
+        await revertSynthPreset(page);
 
         const snapshot = await waitForHarnessSnapshot(
             page,
-            "shared synth preset reverted",
+            "synth preset reverted",
             (nextSnapshot) => Math.abs(Number(nextSnapshot.parameterValues.oscAPan) - 0.12) <= 1e-9
                 && Number(nextSnapshot.parameterValues.oscAWavetableSelect) === 3
                 && Math.abs(Number(nextSnapshot.parameterValues.oscBPan) + 0.34) <= 1e-9
@@ -1397,9 +1377,7 @@ test("synth preset bar marks edits dirty and reverts without synth-local baselin
                 && Math.abs(Number(nextSnapshot.parameterValues.oscCPan) - 0.56) <= 1e-9
                 && Number(nextSnapshot.parameterValues.oscCWavetableSelect) === 11
                 && Math.abs(Number(nextSnapshot.parameterValues.filterCutoff) - 2475) <= 1e-9
-                && Math.abs(Number(nextSnapshot.parameterValues.mseg1Morph) - 0.33) <= 1e-9
-                && !containsRetiredSynthPresetBaselineKey(nextSnapshot)
-                && readEffectPresetState(nextSnapshot).activePresetByEffect[SYNTH_PRESET_EFFECT_ID]?.dirty === false,
+                && Math.abs(Number(nextSnapshot.parameterValues.mseg1Morph) - 0.33) <= 1e-9,
         );
 
         assert.equal(Number(snapshot.parameterValues.oscAPan), 0.12);
@@ -1410,7 +1388,7 @@ test("synth preset bar marks edits dirty and reverts without synth-local baselin
         assert.equal(Number(snapshot.parameterValues.oscCWavetableSelect), 11);
         assert.equal(Number(snapshot.parameterValues.filterCutoff), 2475);
         assert.equal(Number(snapshot.parameterValues.mseg1Morph), 0.33);
-        assert.equal(containsRetiredSynthPresetBaselineKey(snapshot), false);
+        await waitForPresetBarDirtyState(page, false);
     } finally {
         await page.close();
     }
@@ -1420,7 +1398,7 @@ test("synth presets restore mapping dependencies before strict articulation rout
     const page = await openHarnessPage();
 
     try {
-        await page.waitForFunction(() => Boolean(document.querySelector("cosimo-preset-bar")?.shadowRoot));
+        await page.locator('[data-role="synth-preset-bar"]').waitFor();
 
         const routeId = "preset-dependent-route";
         const seededBank = {
@@ -1502,7 +1480,7 @@ test("synth presets restore mapping dependencies before strict articulation rout
         });
 
         await waitForPresetBarDirtyState(page, true);
-        await clickPresetBarAction(page, "revert");
+        await revertSynthPreset(page);
 
         const restored = await waitForHarnessSnapshot(
             page,
@@ -2997,10 +2975,9 @@ test("mobile MSEG editor expands the drawer into a dominant graph with working r
         assert.equal(layout.graphHeight >= layout.bounds.height * 0.48, true);
         assert.equal(layout.activeRole, "");
         assert.equal(await dialog.locator('[data-role="mseg-editor-done"]').count(), 0);
-        assert.equal(await page.evaluate(() => {
-            const shadow = document.querySelector("cosimo-preset-bar")?.shadowRoot;
-            return shadow?.activeElement === shadow?.querySelector('[data-action="shell-back"]');
-        }), true);
+        assert.equal(await page.evaluate(() => (
+            document.activeElement === document.querySelector('[data-role="synth-preset-bar"] [data-action="shell-back"]')
+        )), true);
 
         for (const role of ["mseg-shape-a", "mseg-shape-b", "mseg-editor-undo", "mseg-loop-toggle"]) {
             const target = dialog.locator(`[data-role="${role}"]`);

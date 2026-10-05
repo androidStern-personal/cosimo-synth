@@ -242,17 +242,12 @@ import {
     GLIDE_TIME_MAX_SECONDS,
     GLIDE_TIME_MIN_SECONDS,
     GLIDE_TIME_STEP_SECONDS,
-    SYNTH_PRESET_EFFECT_ID,
     useOscillatorSelectionViewModel,
     useSynthPatchViewModel,
     type SynthCallbackControlReadiness,
     type SynthPatchViewModel,
 } from "../shared/synth-hooks";
-import { createSynthPresetBar } from "../shared/effects/synth-preset-bar";
-import { createSynthStandaloneEffectPresetController } from "../shared/effects/synth-standalone-presets";
-import { createSynthPresetInitOptions } from "../shared/effects/synth-init-state";
-import { buildSynthPresetMigrations } from "../shared/effects/synth-preset-migrations";
-import type { EffectStoredStateAdapter } from "../shared/effects/effect-preset-v2";
+import { SynthPresetBar, type SynthPresetBarProps } from "../shared/synth-preset-bar";
 import { clearLaneSoloAudition } from "../shared/lane-solo-audition";
 import {
     ArticulationControlSurface,
@@ -2365,133 +2360,16 @@ function StatusHeader({ statusText }: HeaderProps) {
 function SynthPresetBarHost({
     isHidden,
     focusedEditorOpen = false,
-    storedStateAdapters,
-    wavetableTables,
-    polishMeter,
-    compactSynth = false,
-    backAvailable = false,
-    onShellBack,
-    perfTuningAvailable = false,
-    onOpenPerfTuning,
-    onBounceGuardReady,
-    bounceAudioAvailable,
-    onBounceAudio,
-    onBounceVideo,
-}: {
+    compactSynth,
+    ...barProps
+}: Omit<SynthPresetBarProps, "compact"> & {
     isHidden: boolean;
     focusedEditorOpen?: boolean;
-    storedStateAdapters: EffectStoredStateAdapter[];
-    wavetableTables: SynthPatchViewModel["tableOptions"];
-    polishMeter: SynthPatchViewModel["observedPolishMeter"];
-    /** ADR-026 compact synth composition: Back slot, centered name, … popover. */
-    compactSynth?: boolean;
-    backAvailable?: boolean;
-    onShellBack?: () => void;
-    /** Developer builds only: reveals the shell menu's Developer settings row. */
-    perfTuningAvailable?: boolean;
-    onOpenPerfTuning?: () => void;
-    onBounceGuardReady?: (
-        guard: ((continuation: () => void) => void) | null,
-    ) => void;
-    bounceAudioAvailable: boolean;
-    onBounceAudio: () => void;
-    onBounceVideo: (patchInput: unknown) => void;
+    /** ADR-026 compact synth composition: Back slot, centered name, … menu. */
+    compactSynth: boolean;
 }) {
-    const patchConnection = usePatchConnection();
-    const hostRef = useRef<HTMLDivElement | null>(null);
-    const presetBarRef = useRef<ReturnType<typeof createSynthPresetBar> | null>(null);
-    const onShellBackRef = useRef(onShellBack);
-    onShellBackRef.current = onShellBack;
-    const onOpenPerfTuningRef = useRef(onOpenPerfTuning);
-    onOpenPerfTuningRef.current = onOpenPerfTuning;
-    const onBounceGuardReadyRef = useRef(onBounceGuardReady);
-    onBounceGuardReadyRef.current = onBounceGuardReady;
-    const onBounceAudioRef = useRef(onBounceAudio);
-    onBounceAudioRef.current = onBounceAudio;
-    const onBounceVideoRef = useRef(onBounceVideo);
-    onBounceVideoRef.current = onBounceVideo;
-    const wavetableTablesRef = useRef(wavetableTables);
-    wavetableTablesRef.current = wavetableTables;
-    const presetController = useMemo(() => createSynthStandaloneEffectPresetController({
-        effectID: SYNTH_PRESET_EFFECT_ID,
-        legacyFileStorePluginID: "dev.cosimo.wavetable-synth",
-        patchConnection,
-        storedStateAdapters,
-        presetMigrations: buildSynthPresetMigrations,
-        synth: createSynthPresetInitOptions(patchConnection, storedStateAdapters, {
-            getShippedWavetableTables: () => wavetableTablesRef.current,
-        }),
-        onSoundReplacementApplied: (replacement) => {
-            if (replacement.kind !== "bounce") {
-                clearLaneSoloAudition(patchConnection);
-            }
-        },
-    }), [patchConnection, storedStateAdapters]);
-
-    useEffect(() => {
-        const host = hostRef.current;
-
-        if (!host) {
-            return;
-        }
-
-        const presetBar = createSynthPresetBar();
-        presetBar.controller = presetController;
-        const handleShellBack = () => onShellBackRef.current?.();
-        const handleBounceAudio = () => {
-            presetBar.requestBounceSoundReplacement(() => onBounceAudioRef.current());
-        };
-        const handleBounceVideo = (event: Event) => {
-            const detail = (event as CustomEvent<{ readonly patchInput: unknown }>).detail;
-            onBounceVideoRef.current(detail.patchInput);
-        };
-        presetBar.addEventListener("cosimo-shell-back", handleShellBack);
-        const handleOpenPerfTuning = () => onOpenPerfTuningRef.current?.();
-        presetBar.addEventListener("cosimo-open-perf-tuning", handleOpenPerfTuning);
-        presetBar.addEventListener("cosimo-bounce-audio", handleBounceAudio);
-        presetBar.addEventListener("cosimo-bounce-video", handleBounceVideo);
-        presetBarRef.current = presetBar;
-        host.replaceChildren(presetBar);
-        presetController.attach();
-        onBounceGuardReadyRef.current?.((continuation) => {
-            presetBar.requestBounceSoundReplacement(continuation);
-        });
-
-        return () => {
-            onBounceGuardReadyRef.current?.(null);
-            presetController.detach();
-            presetBar.removeEventListener("cosimo-shell-back", handleShellBack);
-            presetBar.removeEventListener("cosimo-open-perf-tuning", handleOpenPerfTuning);
-            presetBar.removeEventListener("cosimo-bounce-audio", handleBounceAudio);
-            presetBar.removeEventListener("cosimo-bounce-video", handleBounceVideo);
-            presetBar.controller = null;
-            presetBarRef.current = null;
-            presetBar.remove();
-        };
-    }, [presetController]);
-
-    useEffect(() => {
-        const presetBar = presetBarRef.current;
-        if (!presetBar) {
-            return;
-        }
-        presetBar.toggleAttribute("compact-synth", compactSynth);
-        presetBar.shellBackAvailable = compactSynth && backAvailable;
-        presetBar.perfTuningAvailable = perfTuningAvailable;
-        presetBar.audioBounceAvailable = bounceAudioAvailable;
-        presetBar.videoBounceAvailable = isVideoBounceAvailable();
-    }, [backAvailable, bounceAudioAvailable, compactSynth, perfTuningAvailable, presetController]);
-
-    useEffect(() => {
-        const presetBar = presetBarRef.current;
-        if (presetBar !== null) {
-            presetBar.polishMeterFrame = polishMeter;
-        }
-    }, [polishMeter, presetController]);
-
     return (
         <div
-            ref={hostRef}
             data-role="synth-preset-bar-host"
             hidden={isHidden}
             style={focusedEditorOpen ? { zIndex: 70 } : undefined}
@@ -2499,8 +2377,10 @@ function SynthPresetBarHost({
                 // The compact shell row is exactly the 40px token: the bar's own
                 // chrome is the only border, so the host adds none (ADR-026).
                 compactSynth ? "" : "border border-white/[0.06] "
-            }bg-black/20 [--knob-track-value-color:#87d7f5] [--preset-bar-border-radius:12px]`}
-        />
+            }bg-black/20`}
+        >
+            <SynthPresetBar compact={compactSynth} {...barProps} />
+        </div>
     );
 }
 
@@ -3926,9 +3806,7 @@ function MsegEditorModal({
         const modalRoot = backdropRef.current;
         const shellBack = compactShellBack
             ? modalRoot.parentElement
-                ?.querySelector<HTMLElement>('[data-role="synth-preset-bar-host"] cosimo-preset-bar')
-                ?.shadowRoot
-                ?.querySelector<HTMLButtonElement>('[data-action="shell-back"]') ?? null
+                ?.querySelector<HTMLButtonElement>('[data-role="synth-preset-bar-host"] [data-action="shell-back"]') ?? null
             : null;
         const siblings = Array.from(modalRoot.parentElement?.children ?? []).filter(
             (candidate): candidate is HTMLElement => candidate instanceof HTMLElement
@@ -5527,20 +5405,14 @@ function DesktopPatchViewBody({
         autoPreviewEnabled,
         oscillatorTargetsActive: !bounceController.state.sampled,
     });
-    const bounceGuardRef = useRef<((continuation: () => void) => void) | null>(null);
-    const handleBounceGuardReady = useCallback((
-        guard: ((continuation: () => void) => void) | null,
-    ) => {
-        bounceGuardRef.current = guard;
-    }, []);
-    const requestBounceGuard = useCallback((continuation: () => void) => {
-        const guard = bounceGuardRef.current;
-        if (guard) {
-            guard(continuation);
-        } else {
-            continuation();
-        }
-    }, []);
+    const handleBounceAudio = useCallback(() => {
+        void bounceController.bounce();
+    }, [bounceController]);
+    const { resetArticulationPatchBases } = synthView;
+    const handleSoundReplaced = useCallback((parameters: Readonly<Record<string, number>>) => {
+        clearLaneSoloAudition(patchConnection);
+        resetArticulationPatchBases(parameters);
+    }, [patchConnection, resetArticulationPatchBases]);
     const modRailAudition = useMemo<ModRailAuditionBindings>(() => ({
         onNoteKeyDown: synthView.handleStartNoteKeyAudition,
         onNoteKeyUp: synthView.handleStopNoteKeyAudition,
@@ -6212,7 +6084,6 @@ function DesktopPatchViewBody({
                                 onBounce={() => void bounceController.bounce()}
                                 onCancel={bounceController.cancel}
                                 onRevert={() => void bounceController.revert()}
-                                requestBounceGuard={requestBounceGuard}
                                 compact
                                 className="h-full"
                             />
@@ -6246,7 +6117,6 @@ function DesktopPatchViewBody({
                                 state={bounceController.state}
                                 onBounce={() => void bounceController.bounce()}
                                 onCancel={bounceController.cancel}
-                                requestBounceGuard={requestBounceGuard}
                                 compact
                                 showReadyAction={false}
                             />
@@ -6264,7 +6134,6 @@ function DesktopPatchViewBody({
                             onBounce={() => void bounceController.bounce()}
                             onCancel={bounceController.cancel}
                             onRevert={() => void bounceController.revert()}
-                            requestBounceGuard={requestBounceGuard}
                             className={DESKTOP_VOICE_VISUALIZATION_CARD_CLASS}
                         />
                     )}
@@ -6307,7 +6176,6 @@ function DesktopPatchViewBody({
                             state={bounceController.state}
                             onBounce={() => void bounceController.bounce()}
                             onCancel={bounceController.cancel}
-                            requestBounceGuard={requestBounceGuard}
                             showReadyAction={false}
                         />
                     </div>
@@ -6550,22 +6418,22 @@ function DesktopPatchViewBody({
                 isHidden={synthView.msegEditor.isOpen && !isCompactViewport}
                 focusedEditorOpen={polishEditorExpanded
                     || (isCompactViewport && synthView.msegEditor.isOpen)}
-                storedStateAdapters={synthView.presetStoredStateAdapters}
-                wavetableTables={synthView.tableOptions}
-                polishMeter={synthView.observedPolishMeter}
                 compactSynth={isCompactViewport}
                 backAvailable={polishEditorExpanded
                     || synthView.msegEditor.isOpen
                     || mobileReturnTarget !== null}
-                onShellBack={handleUniversalBack}
-                perfTuningAvailable={PERF_TUNING_AVAILABLE}
-                onOpenPerfTuning={openPerfTuning}
-                onBounceGuardReady={handleBounceGuardReady}
+                onBack={handleUniversalBack}
+                polishMeter={synthView.observedPolishMeter}
+                wavetableTables={synthView.tableOptions}
                 bounceAudioAvailable={bounceController.state.hydrated
                     && bounceController.state.captureReady
                     && !bounceController.state.busy}
-                onBounceAudio={() => void bounceController.bounce()}
+                onBounceAudio={handleBounceAudio}
+                videoBounceAvailable={isVideoBounceAvailable()}
                 onBounceVideo={handleBounceVideo}
+                developerSettingsAvailable={PERF_TUNING_AVAILABLE}
+                onOpenDeveloperSettings={openPerfTuning}
+                onSoundReplaced={handleSoundReplaced}
             />
             <PolishFullScreenEditor
                 open={polishEditorExpanded}
