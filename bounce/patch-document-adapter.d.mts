@@ -1,7 +1,8 @@
 import type { PatchConnectionLike } from "../kit/ui/cmajor-react";
+import type { PluginStateFields } from "../kit/ui/plugin-state-definition";
 import type { BouncePatchDocument } from "./document.mjs";
 
-/** Stored-state keys captured atomically for a Bounce transaction. */
+/** The plugin's stored documents a Bounce transaction captures and restores. */
 export const BOUNCE_PATCH_STORED_STATE_KEYS: readonly [
     "modulation.v6",
     "articulations.v4",
@@ -14,24 +15,25 @@ export const BOUNCE_PATCH_IO_TIMEOUT_MS: 8_000;
 /** Parse the parameter endpoint IDs from a Cmajor status payload. */
 export function parameterIDsFromPatchStatus(status: unknown): ReadonlyArray<string>;
 
-/** Read every host parameter and structured document at one logical press time. */
+/**
+ * Read every host parameter at the press and pair them with the plugin's
+ * current stored documents, as one immutable patch document.
+ */
 export function captureLiveBouncePatchDocument(
     connection: PatchConnectionLike,
-    options?: {
+    options: {
+        readonly storedState: Readonly<Record<string, unknown>>;
         readonly parameterIDs?: ReadonlyArray<string> | null;
-        readonly storedStateKeys?: ReadonlyArray<string>;
-        readonly storedStateDefaults?: Readonly<Record<string, unknown>>;
         readonly timeoutMilliseconds?: number;
     },
 ): Promise<BouncePatchDocument>;
 
-/** Queue a complete document, writing Source Mode only after its dependencies. */
-export function applyLiveBouncePatchDocument(
-    connection: PatchConnectionLike,
+/**
+ * The plugin-state edit that makes a patch document the current sound: every
+ * declared parameter the document holds, and every declared stored field it
+ * holds, parsed by that field's codec.
+ */
+export function bouncePatchDocumentChanges(
+    definition: PluginStateFields,
     document: unknown,
-): void;
-
-/** Focused stored-state parser exposed for the plain-Node adapter tests. */
-export const bouncePatchDocumentAdapterInternals: Readonly<{
-    fullStoredStateValues(value: unknown): Readonly<Record<string, unknown>>;
-}>;
+): Record<string, unknown>;

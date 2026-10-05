@@ -32,19 +32,19 @@ function oldPatchDocument() {
     };
     const lane = {
         format: "cosimo.lane",
-        version: 1,
-        order: ["filter", "drive", "ott", "chorus", "flanger", "phaser", "delay", "reverb"],
-        enabled: {
-            filter: true,
-            drive: false,
-            ott: true,
-            chorus: false,
-            flanger: false,
-            phaser: false,
-            delay: true,
-            reverb: true,
-        },
-        params: { marker: 0.731 },
+        version: 2,
+        output: { mix: 0.8, bypassed: false },
+        devices: { "filter#1": { params: { marker: 0.731 } }, "delay#1": { params: {} }, "reverb#1": { params: {} } },
+        chain: [
+            { kind: "device", deviceId: "filter#1", enabled: true },
+            {
+                kind: "parallel",
+                groupId: "group-1",
+                enabled: true,
+                branches: [[{ kind: "device", deviceId: "delay#1", enabled: true }]],
+            },
+            { kind: "device", deviceId: "reverb#1", enabled: false },
+        ],
     };
     const articulations = {
         format: "cosimo.articulations",
@@ -184,8 +184,19 @@ test("M4 publishes one neutral bounce.v1 transaction and Revert restores exact d
     assert.deepEqual(afterModulation.envelopeSlots, beforeModulation.envelopeSlots);
     assert.deepEqual(afterModulation.macroNames, beforeModulation.macroNames);
     const afterLane = JSON.parse(after.storedState[LANE_STATE_KEY]);
-    assert.equal(Object.values(afterLane.enabled).every((value) => value === false), true);
-    assert.equal(afterLane.params.marker, 0.731);
+    const beforeLane = JSON.parse(before.storedState[LANE_STATE_KEY]);
+    assert.deepEqual(afterLane.chain, [
+        { kind: "device", deviceId: "filter#1", enabled: false },
+        {
+            kind: "parallel",
+            groupId: "group-1",
+            enabled: false,
+            branches: [[{ kind: "device", deviceId: "delay#1", enabled: false }]],
+        },
+        { kind: "device", deviceId: "reverb#1", enabled: false },
+    ]);
+    assert.deepEqual(afterLane.devices, beforeLane.devices);
+    assert.deepEqual(afterLane.output, beforeLane.output);
     const afterArticulations = JSON.parse(after.storedState[ARTICULATIONS_STATE_KEY]);
     assert.deepEqual(afterArticulations.slots[0].routeAmounts, {});
     assert.equal(Object.hasOwn(afterArticulations.slots[0].overrides, "filterMode"), false);

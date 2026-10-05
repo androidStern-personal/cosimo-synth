@@ -18,10 +18,8 @@ import {
     buildModulationRuntimeEvents,
     parseModulationState,
 } from "./modulation";
-import {
-    buildLaneRuntimeEvents,
-    parseLaneState,
-} from "./lane-state";
+import { LANE_OUTPUT_CONTROL_ENDPOINT_ID, LANE_SLOT_PARAMS_ENDPOINT_ID, LANE_TOPOLOGY_ENDPOINT_ID } from "./lane-state";
+import { buildLaneRuntimeEventsV2, parseLaneStateV2 } from "./lane-state-v2";
 import {
     ARTICULATION_SNAPSHOT_ENDPOINT_ID,
 } from "./articulations";
@@ -210,7 +208,7 @@ function structuredRuntimeSetupEvents(document: PatchDocumentLike) {
     if (articulationsResult._tag === "err") throw articulationsResult.error;
     const articulations = articulationsResult.value;
 
-    const laneResult = parseLaneState(document.storedState["lane.v1"]);
+    const laneResult = parseLaneStateV2(document.storedState["lane.v1"]);
     if (laneResult._tag === "err") throw new Error(laneResult.message);
 
     let modulationSerial = 0;
@@ -245,7 +243,12 @@ function structuredRuntimeSetupEvents(document: PatchDocumentLike) {
             deliverySerial: articulationSerial -= 1,
         },
     }));
-    const laneEvents: SetupEvent[] = buildLaneRuntimeEvents(laneResult.value).map((event) => ({
+    // Output Trim reaches the engine as host parameters, already in the snapshot;
+    // the remaining lane events are the ones the live rack delivery sends.
+    const laneEventEndpoints: ReadonlyArray<string> = [LANE_OUTPUT_CONTROL_ENDPOINT_ID, LANE_SLOT_PARAMS_ENDPOINT_ID, LANE_TOPOLOGY_ENDPOINT_ID];
+    const laneEvents: SetupEvent[] = buildLaneRuntimeEventsV2(laneResult.value).filter((event) => (
+        laneEventEndpoints.includes(event.endpointID)
+    )).map((event) => ({
         endpointID: event.endpointID,
         value: event.value,
         // Let the topology commit and its resident devices settle before the

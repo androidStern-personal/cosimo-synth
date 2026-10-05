@@ -12,8 +12,9 @@ import { createBrowserBounceBankStore } from "../../bounce/browser-bank-store.mj
 import { captureBounceBank } from "../../bounce/capture.mjs";
 import {
     BOUNCE_STATE_KEY,
-    parseBounceDocument,
     readBounceDocumentFromPatch,
+    type BounceDocument,
+    type BouncePatchDocument,
 } from "../../bounce/document.mjs";
 import {
     allocateBounceRuntimeGeneration,
@@ -21,34 +22,24 @@ import {
     stageBounceBankInstall,
 } from "../../bounce/live-bank-install.mjs";
 import {
-    applyLiveBouncePatchDocument,
+    BOUNCE_PATCH_STORED_STATE_KEYS,
+    bouncePatchDocumentChanges,
     captureLiveBouncePatchDocument,
 } from "../../bounce/patch-document-adapter.mjs";
 import { BounceTransitionCoordinator } from "../../bounce/transition.mjs";
+import type { PluginStateFields, PluginStateJson } from "../../kit/ui/plugin-state-definition";
+import { usePluginState, usePluginStateSnapshot } from "../../kit/ui/plugin-state-react";
+import { editOutcome } from "../../kit/ui/presets";
 import { usePatchConnection, useResourceClient } from "./cmajor-react";
 import { getDefaultPatchRootUrl } from "./resource-client";
 import {
     createProductBounceCaptureSnapshot,
     type BounceRecipeProgress,
 } from "./bounce-capture-recipe";
-import {
-    createDefaultModulationState,
-    serializeModulationState,
-} from "./modulation";
-import {
-    createDefaultLaneState,
-    serializeLaneState,
-} from "./lane-state";
-import {
-    createEmptyArticulationsState,
-    serializeArticulationsV4,
-} from "./articulation-image";
+import { synthBounceReference, synthPluginState } from "./synth-plugin-state";
 
-const PRODUCT_STORED_STATE_DEFAULTS = Object.freeze({
-    "modulation.v6": serializeModulationState(createDefaultModulationState()),
-    "articulations.v4": serializeArticulationsV4(createEmptyArticulationsState()),
-    "lane.v1": serializeLaneState(createDefaultLaneState()),
-});
+const fields: PluginStateFields = synthPluginState;
+type StateSnapshot = ReturnType<typeof usePluginStateSnapshot>;
 
 export type BounceUIPhase =
     | "hydrating"
@@ -116,14 +107,13 @@ export type BounceUIState = {
     readonly completedFrames: number;
     readonly totalFrames: number;
     readonly preparation: BounceRecipeProgress | null;
-    readonly document: ReturnType<typeof parseBounceDocument> | null;
+    readonly document: BounceDocument | null;
     readonly bank: BounceBankView | null;
     readonly error: string | null;
 };
 
-const INITIAL_STATE: BounceUIState = Object.freeze({
+const INITIAL_STATE: Omit<BounceUIState, "captureReady"> = Object.freeze({
     hydrated: false,
-    captureReady: false,
     sampled: false,
     phase: "hydrating",
     busy: false,
@@ -150,15 +140,32 @@ function isAbort(cause: unknown) {
         ));
 }
 
-function fullStoredStateValues(value: unknown): Record<string, unknown> {
-    if (!value || typeof value !== "object" || Array.isArray(value)) return {};
-    const record = value as Record<string, unknown>;
-    return record.values && typeof record.values === "object" && !Array.isArray(record.values)
-        ? record.values as Record<string, unknown>
-        : record;
+/** Whether every document a Bounce captures has loaded into the plugin state. */
+function documentsLoaded(snapshot: StateSnapshot) {
+    return snapshot !== null && BOUNCE_PATCH_STORED_STATE_KEYS.every((key) => {
+        const current = snapshot.fields[key];
+        return current !== undefined && current.readiness.kind === "ready" && "value" in current;
+    });
 }
 
-function matchesBounceDocument(bank: BounceBankView, document: ReturnType<typeof parseBounceDocument>) {
+/** The current saved form of every document a Bounce captures. */
+function currentDocuments(snapshot: StateSnapshot): Record<string, PluginStateJson> {
+    if (snapshot === null || !documentsLoaded(snapshot)) {
+        throw new Error("The sound is still loading. Try again in a moment.");
+    }
+    const documents: Record<string, PluginStateJson> = {};
+    for (const key of BOUNCE_PATCH_STORED_STATE_KEYS) {
+        const field = fields[key];
+        const current = snapshot.fields[key];
+        if (field?.kind !== "stored" || current === undefined || !("value" in current)) {
+            throw new Error(`The synth state does not declare ${key}.`);
+        }
+        documents[key] = field.codec.encode(current.value);
+    }
+    return documents;
+}
+
+function matchesBounceDocument(bank: BounceBankView, document: BounceDocument) {
     return bank.sampleRate === document.capture.sampleRate
         && bank.roots.length === document.roots.length
         && bank.roots.every((root, index) => (
@@ -204,24 +211,37 @@ function recordTestDiagnostic(
     if (values.length > 64) values.splice(0, values.length - 64);
 }
 
-/** Browser product controller for snapshot -> workers -> OPFS -> live flip. */
+/**
+ * Browser product controller for snapshot -> workers -> OPFS -> live flip.
+ * Loading a bounced sound and reverting it are each one edit of the synth's
+ * plugin state, so each is one Undo entry.
+ */
 export function useBounceInPlace() {
     const connection = usePatchConnection();
     const resourceClient = useResourceClient();
     const store = useMemo(() => createBrowserBounceBankStore(), [connection]);
-    const [state, setState] = useState<BounceUIState>(INITIAL_STATE);
+    const [state, setState] = useState(INITIAL_STATE);
     const preparationAbortRef = useRef<AbortController | null>(null);
     const hydrationRevisionRef = useRef(0);
-    const captureStateKeysRef = useRef(new Set<string>());
+    const editor = usePluginState(fields);
+    const snapshot = usePluginStateSnapshot();
+    const reference = usePluginState(synthBounceReference);
+    // The transaction outlives the render that started it; edits use the
+    // latest editor so they are checked against the latest accepted values.
+    const editorRef = useRef(editor);
+    const snapshotRef = useRef(snapshot);
+    useEffect(() => {
+        editorRef.current = editor;
+        snapshotRef.current = snapshot;
+    });
 
-    const applyPatchDocument = useCallback((document: {
-        storedState: Readonly<Record<string, unknown>>;
-    }) => {
+    const applyPatchDocument = useCallback(async (document: BouncePatchDocument) => {
         const bounceValue = document.storedState[BOUNCE_STATE_KEY] ?? null;
         if (bounceValue !== null) {
             connection.acceptCommittedBounceDocument?.(bounceValue);
         }
-        return applyLiveBouncePatchDocument(connection, document);
+        const outcome = editOutcome(await editorRef.current.edit(bouncePatchDocumentChanges(fields, document)));
+        if (outcome.kind === "failed") throw new Error(outcome.message);
     }, [connection]);
 
     const coordinator = useMemo(() => new BounceTransitionCoordinator({
@@ -274,9 +294,9 @@ export function useBounceInPlace() {
         }));
     }), [coordinator]);
 
-    const presentStoredReference = useCallback(async (rawValue: unknown) => {
+    const presentReference = useCallback(async (document: BounceDocument | null) => {
         const revision = hydrationRevisionRef.current += 1;
-        if (rawValue === null || rawValue === undefined || rawValue === "") {
+        if (document === null) {
             setState((current) => ({
                 ...current,
                 hydrated: true,
@@ -285,22 +305,6 @@ export function useBounceInPlace() {
                 document: null,
                 bank: null,
                 error: null,
-            }));
-            return;
-        }
-        let document: ReturnType<typeof parseBounceDocument>;
-        try {
-            document = parseBounceDocument(rawValue);
-        } catch (cause) {
-            if (revision !== hydrationRevisionRef.current) return;
-            setState((current) => ({
-                ...current,
-                hydrated: true,
-                sampled: true,
-                phase: current.busy ? current.phase : "idle",
-                document: null,
-                bank: null,
-                error: `Saved Bounce reference is invalid: ${errorMessage(cause)}`,
             }));
             return;
         }
@@ -332,52 +336,32 @@ export function useBounceInPlace() {
         }
     }, [store]);
 
+    const referenceStatus = reference.state.status;
+    const referenceValue = "value" in reference.state ? reference.state.value : undefined;
+    const referenceError = reference.error?.message ?? null;
     useEffect(() => {
-        captureStateKeysRef.current = new Set();
-        const requiredCaptureKeys = ["modulation.v6", "articulations.v4", "lane.v1"];
-        const acceptCaptureKey = (key: string) => {
-            if (!requiredCaptureKeys.includes(key)) return;
-            captureStateKeysRef.current.add(key);
-            const captureReady = requiredCaptureKeys.every((candidate) => (
-                captureStateKeysRef.current.has(candidate)
-            ));
-            setState((current) => current.captureReady === captureReady
-                ? current
-                : { ...current, captureReady });
-        };
-        const handleStoredState = (message: unknown) => {
-            const event = message && typeof message === "object" && "event" in message
-                ? (message as { event: unknown }).event
-                : message;
-            if (!event || typeof event !== "object") return;
-            const record = event as Record<string, unknown>;
-            if (typeof record.key === "string") acceptCaptureKey(record.key);
-            if (record.key === BOUNCE_STATE_KEY) void presentStoredReference(record.value);
-        };
-        connection.addStoredStateValueListener?.(handleStoredState);
-        if (typeof connection.requestFullStoredState === "function") {
-            connection.requestFullStoredState((storedState) => {
-                const values = fullStoredStateValues(storedState);
-                // Missing structured keys in a never-edited sound mean their
-                // canonical defaults. A completed full-state reply makes that
-                // absence authoritative, rather than a hydration race.
-                Object.keys(PRODUCT_STORED_STATE_DEFAULTS).forEach(acceptCaptureKey);
-                Object.keys(values).forEach(acceptCaptureKey);
-                void presentStoredReference(values[BOUNCE_STATE_KEY] ?? null);
-            });
-        } else {
-            setState((current) => ({
-                ...current,
-                hydrated: true,
-                phase: "idle",
-                error: "Bounce state cannot hydrate because stored-state reads are unavailable.",
-            }));
+        if (referenceValue !== undefined) {
+            void presentReference(referenceValue);
+            return;
         }
-        return () => {
-            hydrationRevisionRef.current += 1;
-            connection.removeStoredStateValueListener?.(handleStoredState);
-        };
-    }, [connection, presentStoredReference]);
+        if (referenceStatus !== "invalid" && referenceStatus !== "unavailable") return;
+        hydrationRevisionRef.current += 1;
+        setState((current) => ({
+            ...current,
+            hydrated: true,
+            sampled: referenceStatus === "invalid",
+            phase: current.busy ? current.phase : "idle",
+            document: null,
+            bank: null,
+            error: referenceStatus === "invalid"
+                ? `Saved Bounce reference is invalid: ${referenceError ?? "it cannot be read."}`
+                : referenceError ?? "Bounce state is unavailable.",
+        }));
+    }, [presentReference, referenceError, referenceStatus, referenceValue]);
+
+    useEffect(() => () => {
+        hydrationRevisionRef.current += 1;
+    }, []);
 
     const bounce = useCallback(async () => {
         if (state.busy || preparationAbortRef.current !== null) return;
@@ -396,12 +380,12 @@ export function useBounceInPlace() {
             error: null,
         }));
         try {
-            // Both host reads are requested in the Bounce press turn. The
-            // resulting document is immutable before any resource/FFT work.
+            // The documents are read and both host reads are requested in the
+            // Bounce press turn. The resulting patch document is immutable
+            // before any resource/FFT work.
+            const storedState = currentDocuments(snapshotRef.current);
             const [patchDocument, engineStatus] = await Promise.all([
-                captureLiveBouncePatchDocument(connection, {
-                    storedStateDefaults: PRODUCT_STORED_STATE_DEFAULTS,
-                }),
+                captureLiveBouncePatchDocument(connection, { storedState }),
                 requestBounceEngineStatus(connection, { signal: abortController.signal }),
             ]);
             const previousBounceDocument = readBounceDocumentFromPatch(patchDocument);
@@ -547,11 +531,9 @@ export function useBounceInPlace() {
         }));
         try {
             const currentPatchDocument = await captureLiveBouncePatchDocument(connection, {
-                storedStateDefaults: PRODUCT_STORED_STATE_DEFAULTS,
+                storedState: currentDocuments(snapshotRef.current),
             });
-            const previousDocument = await coordinator.revert(currentPatchDocument);
-            const previousBounce = readBounceDocumentFromPatch(previousDocument);
-            await presentStoredReference(previousBounce ?? null);
+            await coordinator.revert(currentPatchDocument);
         } catch (cause) {
             setState((current) => ({
                 ...current,
@@ -561,12 +543,18 @@ export function useBounceInPlace() {
                 error: errorMessage(cause),
             }));
         }
-    }, [connection, coordinator, presentStoredReference, state.busy, state.document]);
+    }, [connection, coordinator, state.busy, state.document]);
 
     useEffect(() => () => {
         preparationAbortRef.current?.abort();
         coordinator.cancel();
     }, [coordinator]);
 
-    return useMemo(() => ({ state, bounce, cancel, revert }), [bounce, cancel, revert, state]);
+    const captureReady = documentsLoaded(snapshot);
+    return useMemo(() => ({
+        state: { ...state, captureReady } satisfies BounceUIState,
+        bounce,
+        cancel,
+        revert,
+    }), [bounce, cancel, captureReady, revert, state]);
 }

@@ -162,7 +162,7 @@ test("owner boot reads the current modulation document and the other declared sy
     const { bridge, restore, client } = await createModulationFixture(t, connection);
 
     assert.deepEqual(connection.requestedKeys, [
-        "modulation.v6", "lane.v1", "articulations.v4",
+        "modulation.v6", "lane.v1", "articulations.v4", "bounce.v1",
         "activePreset", "snapshotSlots", "activeSnapshot",
     ]);
     assert.deepEqual(connection.requestedKeys.filter(key => key.startsWith("modulation.")), [modulation.MODULATION_STATE_KEY],

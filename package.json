@@ -36,7 +36,7 @@
     "test:bounce:release": "node --test tests/test_bounce_amp_release.mjs",
     "test:bounce:sampler": "node --test tests/test_bounce_sampler.mjs",
     "test:bounce:capture": "node --test tests/test_bounce_capture_plan.mjs tests/test_bounce_offline_capture.mjs tests/test_bounce_recursion.mjs",
-    "test:bounce:transition": "node --test tests/test_bounce_transition.mjs tests/test_bounce_live_install.mjs",
+    "test:bounce:transition": "node --test tests/test_bounce_transition.mjs tests/test_bounce_live_install.mjs tests/test_bounce_state_edit.mjs",
     "test:bounce:persistence": "npm run web:build && node --test tests/test_bounce_persistence.mjs tests/test_bounce_persistence_browser.mjs tests/test_bounce_retention.mjs",
     "test:bounce:ui": "npm run web:build && node --test tests/test_bounce_waveform.mjs tests/test_bounce_ui_browser.mjs",
     "test:bounce:native:generated": "tests/native/run_bounce_generated_integration.sh",

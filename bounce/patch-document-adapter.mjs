@@ -19,11 +19,6 @@ function isRecord(value) {
     return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
-function fullStoredStateValues(value) {
-    if (!isRecord(value)) return {};
-    return isRecord(value.values) ? value.values : value;
-}
-
 function withTimeout(executor, timeoutMilliseconds, label) {
     return new Promise((resolve, reject) => {
         const timer = setTimeout(() => reject(new Error(`${label} timed out`)), timeoutMilliseconds);
@@ -104,81 +99,42 @@ async function requestParameterValues(connection, endpointIDs, timeoutMillisecon
     }, timeoutMilliseconds, "Bounce patch parameters");
 }
 
-async function requestStoredState(
-    connection,
-    storedStateKeys,
-    timeoutMilliseconds,
-    storedStateDefaults,
-) {
-    if (typeof connection.requestFullStoredState !== "function") {
-        throw new Error("Full patch stored-state reads are unavailable");
-    }
-    return withTimeout((resolve, reject) => {
-        connection.requestFullStoredState((state) => {
-            try {
-                const values = fullStoredStateValues(state);
-                const selected = {};
-                for (const key of storedStateKeys) {
-                    selected[key] = Object.hasOwn(values, key)
-                        ? values[key]
-                        : (Object.hasOwn(storedStateDefaults, key)
-                            ? storedStateDefaults[key]
-                            : (key === BOUNCE_STATE_KEY ? null : undefined));
-                    if (selected[key] === undefined) {
-                        throw new Error(`Patch stored state is missing ${key}`);
-                    }
-                }
-                resolve(selected);
-            } catch (cause) {
-                reject(cause);
-            }
-        });
-    }, timeoutMilliseconds, "Bounce patch stored state");
-}
-
-/** Read every host parameter and structured document at one logical press time. */
+/**
+ * Read every host parameter at the press and pair them with the plugin's
+ * current stored documents, as one immutable patch document.
+ */
 export async function captureLiveBouncePatchDocument(connection, {
+    storedState,
     parameterIDs = null,
-    storedStateKeys = BOUNCE_PATCH_STORED_STATE_KEYS,
-    storedStateDefaults = {},
     timeoutMilliseconds = BOUNCE_PATCH_IO_TIMEOUT_MS,
-} = {}) {
+}) {
+    for (const key of BOUNCE_PATCH_STORED_STATE_KEYS) {
+        if (!Object.hasOwn(storedState, key)) throw new Error(`The current sound is missing ${key}`);
+    }
     const resolvedParameterIDs = parameterIDs
         ? [...new Set(parameterIDs)].sort()
         : await requestParameterIDs(connection, timeoutMilliseconds);
-    // Listeners are attached before requests; Promise.all makes the two state
-    // domains part of one immutable logical snapshot even though the host APIs
-    // answer asynchronously.
-    const [parameters, storedState] = await Promise.all([
-        requestParameterValues(connection, resolvedParameterIDs, timeoutMilliseconds),
-        requestStoredState(
-            connection,
-            storedStateKeys,
-            timeoutMilliseconds,
-            storedStateDefaults,
-        ),
-    ]);
+    const parameters = await requestParameterValues(connection, resolvedParameterIDs, timeoutMilliseconds);
     return createBouncePatchDocument({ parameters, storedState });
 }
 
-/** Queue a whole document; Source Mode is last so its selected source is ready. */
-export function applyLiveBouncePatchDocument(connection, documentInput) {
+/**
+ * The plugin-state edit that makes a patch document the current sound: every
+ * declared parameter the document holds, and every declared stored field it
+ * holds, parsed by that field's codec.
+ */
+export function bouncePatchDocumentChanges(definition, documentInput) {
     const document = parseBouncePatchDocument(documentInput);
-    if (typeof connection.sendEventOrValue !== "function"
-        || typeof connection.sendStoredStateValue !== "function") {
-        throw new Error("Patch document writes are unavailable");
-    }
-    for (const [endpointID, value] of Object.entries(document.parameters)) {
-        if (endpointID !== "sourceMode") {
-            connection.sendEventOrValue(endpointID, value, 0, 0);
+    const changes = {};
+    for (const [key, field] of Object.entries(definition)) {
+        if (field.kind === "parameter") {
+            if (Object.hasOwn(document.parameters, field.endpoint)) changes[key] = document.parameters[field.endpoint];
+            continue;
         }
+        if (!Object.hasOwn(document.storedState, key)) continue;
+        const parsed = field.codec.parse(document.storedState[key]);
+        if (parsed.kind === "error") throw new Error(`The bounced sound's ${key} cannot be loaded: ${parsed.message}`);
+        changes[key] = parsed.value;
     }
-    for (const [key, value] of Object.entries(document.storedState)) {
-        connection.sendStoredStateValue(key, value);
-    }
-    connection.sendEventOrValue("sourceMode", document.parameters.sourceMode, 0, 0);
+    return changes;
 }
-
-export const bouncePatchDocumentAdapterInternals = Object.freeze({
-    fullStoredStateValues,
-});
