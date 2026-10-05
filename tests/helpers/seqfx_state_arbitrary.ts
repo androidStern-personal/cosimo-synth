@@ -14,7 +14,7 @@ import {
     isSeqFxAuxEligibleDefinition,
     isSeqFxIntegerParam,
     type SeqFxEffectType,
-} from "./seqfx-effect-definitions";
+} from "../../fx/seqfx/view/seqfx-effect-definitions";
 import {
     SEQFX_AUX_RATE_MODES,
     SEQFX_AUX_SHAPE_MAX,
@@ -29,7 +29,7 @@ import {
     SEQFX_PATTERN_COUNT,
     SEQFX_STATE_VERSION,
     SEQFX_STEP_COUNT,
-    parseStrictSeqFxStateV7,
+    parseStoredSeqFxState,
     serializeSeqFxState,
     type SeqFxState,
     type SeqFxStoredAux,
@@ -38,8 +38,8 @@ import {
     type SeqFxStoredChain,
     type SeqFxStoredMemories,
     type SeqFxStoredPattern,
-    type SeqFxStoredStateV7,
-} from "./seqfx-state";
+    type SeqFxStoredState,
+} from "../../fx/seqfx/view/seqfx-state";
 
 type FastCheck = typeof import("fast-check");
 type Arbitrary<T> = import("fast-check").Arbitrary<T>;
@@ -146,7 +146,7 @@ export function seqFxParameterVectorArbitrary(
 }
 
 /**
- * Generates the sparse aux document accepted by strict v7 parsing.
+ * Generates the sparse aux document accepted by strict parsing.
  *
  * @param fc - The caller's fast-check module.
  * @param effectType - The effect whose target ranges own aux end values.
@@ -316,29 +316,23 @@ function storedChainArbitrary(fc: FastCheck): Arbitrary<SeqFxStoredChain> {
 
 function storedPatternArbitrary(fc: FastCheck): Arbitrary<SeqFxStoredPattern> {
     return fc.record({
-        revision: fc.integer({ min: 1, max: 1_000_000 }),
         chains: fc.tuple(...Array.from({ length: SEQFX_LANE_COUNT }, () => storedChainArbitrary(fc))),
     });
 }
 
 /**
- * Generates a strict-parser-valid sparse v7 document with one randomized pattern.
+ * Generates a strict-parser-valid sparse document with one randomized pattern.
  *
  * @param fc - The caller's fast-check module.
- * @returns An arbitrary valid stored SeqFX v7 document.
+ * @returns An arbitrary valid stored SeqFX document.
  */
-export function seqFxStoredStateV7Arbitrary(fc: FastCheck): Arbitrary<SeqFxStoredStateV7> {
+export function seqFxStoredStateArbitrary(fc: FastCheck): Arbitrary<SeqFxStoredState> {
     return fc.record({
         focusPatternIndex: fc.integer({ min: 0, max: SEQFX_PATTERN_COUNT - 1 }),
         focusPattern: storedPatternArbitrary(fc),
-        revisions: fc.array(fc.integer({ min: 1, max: 1_000_000 }), {
-            minLength: SEQFX_PATTERN_COUNT,
-            maxLength: SEQFX_PATTERN_COUNT,
-        }),
-    }).map(({ focusPatternIndex, focusPattern, revisions }) => ({
+    }).map(({ focusPatternIndex, focusPattern }) => ({
         version: SEQFX_STATE_VERSION,
-        patterns: revisions.map((revision, patternIndex) => ({
-            revision: patternIndex === focusPatternIndex ? focusPattern.revision : revision,
+        patterns: Array.from({ length: SEQFX_PATTERN_COUNT }, (_unused, patternIndex) => ({
             chains: patternIndex === focusPatternIndex
                 ? focusPattern.chains
                 : Array.from({ length: SEQFX_LANE_COUNT }, () => ({ blocks: [] })),
@@ -354,9 +348,9 @@ export function seqFxStoredStateV7Arbitrary(fc: FastCheck): Arbitrary<SeqFxStore
  * @returns An arbitrary normalized dense SeqFX state.
  */
 export function seqFxStateArbitrary(fc: FastCheck): Arbitrary<SeqFxState> {
-    return seqFxStoredStateV7Arbitrary(fc).map((stored) => {
-        const accepted = parseStrictSeqFxStateV7(stored);
-        return parseStrictSeqFxStateV7(serializeSeqFxState(accepted));
+    return seqFxStoredStateArbitrary(fc).map((stored) => {
+        const accepted = parseStoredSeqFxState(stored);
+        return parseStoredSeqFxState(JSON.parse(serializeSeqFxState(accepted)));
     });
 }
 
@@ -378,7 +372,6 @@ export function seqFxNormalizationCandidateArbitrary(fc: FastCheck): Arbitrary<u
     const malformedDenseArbitrary = fc.record({
         version: fc.oneof(fc.integer({ min: -2, max: 10 }), fc.string()),
         patterns: fc.array(fc.record({
-            revision: fc.oneof(fc.integer({ min: -4, max: 20 }), fc.string()),
             lanes: fc.array(fc.record({
                 steps: fc.array(malformedStepArbitrary, { maxLength: 10 }),
             }), { maxLength: 6 }),

@@ -20,9 +20,13 @@ const artifactContracts = [
         label: "SeqFX worker",
         bundlePath: path.join(runtimeRoot, "worker.js"),
         expectedOwnedSources: [
-            "fx/seqfx/worker/source.ts",
-            "fx/seqfx/worker/seqfx-worker-service.ts",
+            "fx/seqfx/state.ts",
+            "fx/seqfx/pattern-upload.ts",
+            "kit/ui/plugin-state-cmajor.ts",
+        ],
+        forbiddenOwnedSources: [
             "ui/shared/patch-worker-services.ts",
+            "ui/shared/stored-state-runtime-mirror.ts",
         ],
         requiresDependencySources: false,
     },
@@ -192,6 +196,13 @@ test("SeqFX production app and worker bundles retain checkout-local source prove
                 ownedSourcePaths.includes(expectedSource),
                 true,
                 `${contract.label} map must retain ${expectedSource}`,
+            );
+        }
+        for (const forbiddenSource of contract.forbiddenOwnedSources ?? []) {
+            assert.equal(
+                ownedSourcePaths.includes(forbiddenSource),
+                false,
+                `${contract.label} must not bundle ${forbiddenSource}`,
             );
         }
         if (contract.requiresDependencySources) {

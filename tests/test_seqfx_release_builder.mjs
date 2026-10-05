@@ -59,12 +59,12 @@ test("release staging rejects embedded source maps, source content, and TypeScri
         "//# sourceMappingURL=app.js.map",
         '\"sourcesContent\":[\"export const leaked = true;\"]',
         "../../../../fx/seqfx/view/SeqFxPatchView.tsx",
-        "../../../../fx/seqfx/worker/seqfx-worker-service.ts",
+        "../../../../fx/seqfx/pattern-upload.ts",
     ].join("\0")));
 
     await assert.rejects(
         assertSeqFxDistributableExecutableIsSourceFree(executablePath),
-        /sourceMappingURL.*sourcesContent.*SeqFxPatchView\.tsx.*seqfx-worker-service\.ts/su,
+        /sourceMappingURL.*sourcesContent.*SeqFxPatchView\.tsx.*pattern-upload\.ts/su,
     );
 
     await writeFile(executablePath, Buffer.from("Mach-O fixture without private UI provenance"));

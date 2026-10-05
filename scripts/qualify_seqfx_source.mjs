@@ -14,9 +14,6 @@ const seqFxCanonicalRuntimePrebuiltEnvironmentKey = "SEQFX_CANONICAL_RUNTIME_PRE
 const patchViewLayoutContractName = "desktop and shared effect dev entries load React Grab only in interactive Vite dev mode";
 
 const testGroups = Object.freeze({
-    crossSurfaceNode: Object.freeze([
-        "tests/test_effect_snapshot_bank.mjs",
-    ]),
     patchViewLayoutContract: Object.freeze([
         "tests/test_patch_view_layout.mjs",
     ]),
@@ -28,16 +25,14 @@ const testGroups = Object.freeze({
         "tests/test_seqfx_factory_content.mjs",
         "tests/test_seqfx_fontaudio_assets.mjs",
         "tests/test_seqfx_patch_contract.mjs",
-        "tests/test_seqfx_preset_adapter.mjs",
-        "tests/test_seqfx_preset_migrations.mjs",
-        "tests/test_seqfx_runtime_bridge.mjs",
+        "tests/test_seqfx_plugin_state.mjs",
+        "tests/test_seqfx_session.mjs",
         "tests/test_seqfx_sparse_state.mjs",
         "tests/test_seqfx_state.mjs",
         "tests/test_seqfx_state_properties.mjs",
         "tests/test_seqfx_stutter_envelope.mjs",
         "tests/test_seqfx_talk_box_contract.mjs",
         "tests/test_seqfx_tape_stop_v2_trajectory.mjs",
-        "tests/test_seqfx_worker_service.mjs",
     ]),
     sourceBrowser: Object.freeze([sourceBrowserTest]),
     packagedBrowser: Object.freeze([
@@ -339,10 +334,6 @@ export const qualificationPhases = Object.freeze([
     {
         name: "Strict SeqFX TypeScript",
         run: () => runCommand(process.execPath, ["fx/seqfx/check-types.mjs"]),
-    },
-    {
-        name: "SeqFX cross-surface snapshot-bank contracts",
-        run: () => runNodeTests(testGroups.crossSurfaceNode),
     },
     {
         name: "SeqFX shared-effect interactive-tooling contract",

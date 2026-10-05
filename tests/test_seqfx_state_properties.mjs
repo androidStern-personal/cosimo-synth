@@ -9,7 +9,7 @@ import { loadUIModule } from "./helpers/load_ui_module.mjs";
 const repoRoot = path.resolve(import.meta.dirname, "..");
 
 const stateModulePromise = loadUIModule(repoRoot, "fx/seqfx/view/seqfx-state.ts");
-const arbitraryModulePromise = loadUIModule(repoRoot, "fx/seqfx/view/seqfx-state.arbitrary.ts");
+const arbitraryModulePromise = loadUIModule(repoRoot, "tests/helpers/seqfx_state_arbitrary.ts");
 
 function deepFreeze(value, seen = new WeakSet()) {
     if (value === null || typeof value !== "object" || seen.has(value)) {
@@ -93,8 +93,6 @@ function assertIndependentTopology(state, stateModule) {
     assert.equal(state.patterns.length, stateModule.SEQFX_PATTERN_COUNT);
 
     const oracleBlocks = state.patterns.map((pattern, patternIndex) => {
-        assert.equal(Number.isInteger(pattern.revision), true, `pattern ${patternIndex} revision integer`);
-        assert.equal(pattern.revision >= 1, true, `pattern ${patternIndex} revision positive`);
         assert.equal(Array.isArray(pattern.lanes), true, `pattern ${patternIndex} lanes`);
         assert.equal(pattern.lanes.length, stateModule.SEQFX_LANE_COUNT, `pattern ${patternIndex} lane count`);
         return pattern.lanes.map((lane, laneIndex) => {
@@ -105,7 +103,7 @@ function assertIndependentTopology(state, stateModule) {
     });
 
     stateModule.assertSeqFxStateValuesInRange(state);
-    const projected = stateModule.projectSeqFxStoredStateV7(state);
+    const projected = stateModule.projectStoredSeqFxState(state);
     assert.equal(projected.patterns.length, stateModule.SEQFX_PATTERN_COUNT);
     projected.patterns.forEach((pattern, patternIndex) => {
         assert.equal(pattern.chains.length, stateModule.SEQFX_LANE_COUNT);
@@ -178,7 +176,6 @@ function assertSemanticallyEquivalent(left, right, stateModule) {
     assert.equal(left.patterns.length, right.patterns.length);
     left.patterns.forEach((leftPattern, patternIndex) => {
         const rightPattern = right.patterns[patternIndex];
-        assert.equal(leftPattern.revision, rightPattern.revision, `pattern ${patternIndex} revision`);
         assert.equal(leftPattern.lanes.length, rightPattern.lanes.length, `pattern ${patternIndex} lane count`);
         leftPattern.lanes.forEach((leftLane, laneIndex) => {
             const rightLane = rightPattern.lanes[laneIndex];
@@ -222,9 +219,9 @@ test("SeqFX normalization is structurally idempotent for arbitrary candidates", 
     );
 });
 
-test("SeqFX strict v7 canonicalizes inherited ineligible Aux endpoints after a step parameter override", async () => {
+test("SeqFX strict parsing canonicalizes inherited ineligible Aux endpoints after a step parameter override", async () => {
     const stateModule = await stateModulePromise;
-    const storedState = stateModule.projectSeqFxStoredStateV7(stateModule.createDefaultSeqFxState());
+    const storedState = stateModule.projectStoredSeqFxState(stateModule.createDefaultSeqFxState());
     const filterType = stateModule.SEQFX_EFFECT_TYPES.filter;
     const overrideParams = [0, 20, 20, 0.1, 0.25, 0, 0, 0];
     storedState.patterns[0].chains[3].blocks = [{
@@ -234,36 +231,36 @@ test("SeqFX strict v7 canonicalizes inherited ineligible Aux endpoints after a s
         stepOverrides: [{ offset: 1, params: overrideParams }],
     }];
 
-    const accepted = stateModule.parseStrictSeqFxStateV7(storedState);
+    const accepted = stateModule.parseStoredSeqFxState(storedState);
     const overrideStep = accepted.patterns[0].lanes[3].steps[1];
     assert.deepEqual(overrideStep.params, overrideParams);
     assert.deepEqual(overrideStep.aux.targets[2], { enabled: false, end: overrideParams[2] });
     assert.deepEqual(overrideStep.aux.targets[4], { enabled: false, end: overrideParams[4] });
 
     const serialized = stateModule.serializeSeqFxState(accepted);
-    const canonical = stateModule.parseStrictSeqFxStateV7(serialized);
+    const canonical = stateModule.parseStoredSeqFxState(JSON.parse(serialized));
     assert.deepEqual(canonical, accepted);
     assert.equal(stateModule.serializeSeqFxState(canonical), serialized);
 });
 
-test("SeqFX accepted v7 states preserve semantics and reach an exact canonical fixed point", async () => {
+test("SeqFX accepted states preserve semantics and reach an exact canonical fixed point", async () => {
     const [stateModule, arbitraryModule] = await Promise.all([stateModulePromise, arbitraryModulePromise]);
 
     fc.assert(
-        fc.property(arbitraryModule.seqFxStoredStateV7Arbitrary(fc), (storedState) => {
+        fc.property(arbitraryModule.seqFxStoredStateArbitrary(fc), (storedState) => {
             deepFreeze(storedState);
-            const accepted = stateModule.parseStrictSeqFxStateV7(storedState);
+            const accepted = stateModule.parseStoredSeqFxState(storedState);
             assertIndependentTopology(accepted, stateModule);
             deepFreeze(accepted);
 
             const canonicalSerialized = stateModule.serializeSeqFxState(accepted);
-            const canonicalState = stateModule.parseStrictSeqFxStateV7(canonicalSerialized);
+            const canonicalState = stateModule.parseStoredSeqFxState(JSON.parse(canonicalSerialized));
             assertIndependentTopology(canonicalState, stateModule);
             assertSemanticallyEquivalent(canonicalState, accepted, stateModule);
             deepFreeze(canonicalState);
 
             const fixedPointSerialized = stateModule.serializeSeqFxState(canonicalState);
-            const fixedPointState = stateModule.parseStrictSeqFxStateV7(fixedPointSerialized);
+            const fixedPointState = stateModule.parseStoredSeqFxState(JSON.parse(fixedPointSerialized));
             assert.equal(fixedPointSerialized, canonicalSerialized);
             assert.deepEqual(fixedPointState, canonicalState);
         }),
@@ -273,7 +270,7 @@ test("SeqFX accepted v7 states preserve semantics and reach an exact canonical f
 
 test("SeqFX canonicalizes an explicit default remembered aux state to absence without semantic loss", async () => {
     const stateModule = await stateModulePromise;
-    const storedState = stateModule.projectSeqFxStoredStateV7(stateModule.createDefaultSeqFxState());
+    const storedState = stateModule.projectStoredSeqFxState(stateModule.createDefaultSeqFxState());
     const dirtyEffect = stateModule.SEQFX_EFFECT_TYPES.dirty;
     storedState.patterns[0].chains[0].blocks = [{
         startStep: 0,
@@ -285,15 +282,15 @@ test("SeqFX canonicalizes an explicit default remembered aux state to absence wi
     }];
     deepFreeze(storedState);
 
-    const accepted = stateModule.parseStrictSeqFxStateV7(storedState);
+    const accepted = stateModule.parseStoredSeqFxState(storedState);
     const acceptedStep = accepted.patterns[0].lanes[0].steps[0];
     assert.equal(Object.hasOwn(acceptedStep.effectAux, dirtyEffect), true);
 
     const canonicalSerialized = stateModule.serializeSeqFxState(accepted);
-    const canonicalState = stateModule.parseStrictSeqFxStateV7(canonicalSerialized);
+    const canonicalState = stateModule.parseStoredSeqFxState(JSON.parse(canonicalSerialized));
     const canonicalStep = canonicalState.patterns[0].lanes[0].steps[0];
     assert.equal(Object.hasOwn(canonicalStep.effectAux ?? {}, dirtyEffect), false);
     assertSemanticallyEquivalent(canonicalState, accepted, stateModule);
     assert.equal(stateModule.serializeSeqFxState(canonicalState), canonicalSerialized);
-    assert.deepEqual(stateModule.parseStrictSeqFxStateV7(canonicalSerialized), canonicalState);
+    assert.deepEqual(stateModule.parseStoredSeqFxState(JSON.parse(canonicalSerialized)), canonicalState);
 });

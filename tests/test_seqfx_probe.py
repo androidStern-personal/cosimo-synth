@@ -2519,7 +2519,7 @@ def test_product_preset_recall_invalidates_captured_history(
     initial_upload = product_events["initialUpload"]
     replacement_uploads = product_events["replacementUploads"]
     assert initial_upload["authoritative"] is False
-    assert len(replacement_uploads) >= 2
+    assert len(replacement_uploads) == 1
     assert all(upload["authoritative"] is True for upload in replacement_uploads)
     assert replacement_uploads[0]["revision"] > initial_upload["revision"]
 

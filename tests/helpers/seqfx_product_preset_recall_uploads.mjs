@@ -1,140 +1,83 @@
+// Prints the pattern uploads SeqFX's real state service sends for an edit and
+// then for a preset recall, so the DSP probe can play them back.
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { loadUIModule } from "./load_ui_module.mjs";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
-const stateModule = await loadUIModule(repoRoot, "fx/seqfx/view/seqfx-state.ts");
-const bridgeModule = await loadUIModule(repoRoot, "fx/seqfx/view/seqfx-runtime-bridge.ts");
-const adapterModule = await loadUIModule(repoRoot, "fx/seqfx/view/seqfx-preset-adapter.ts");
-const workerModule = await loadUIModule(repoRoot, "fx/seqfx/worker/seqfx-worker-service.ts");
-
+const { default: definition } = await loadUIModule(repoRoot, "fx/seqfx/state.ts");
+const { createCmajorPluginStateService } = await loadUIModule(repoRoot, "kit/ui/plugin-state-cmajor.ts");
 const {
     SEQFX_LANES,
-    SEQFX_STATE_KEY,
     applySeqFxBlockCreate,
     applySeqFxBlockParamEdit,
     createDefaultSeqFxState,
-    serializeSeqFxState,
-} = stateModule;
-const { SEQFX_ENDPOINTS, SeqFxRuntimeBridge } = bridgeModule;
-const { createSeqFxPresetStateAdapter } = adapterModule;
-const { createSeqFxWorkerService } = workerModule;
+    seqFxPatternsCodec,
+} = await loadUIModule(repoRoot, "fx/seqfx/view/seqfx-state.ts");
 
-class ProductPathPatchConnection {
-    constructor(storedState) {
-        this.storedState = { ...storedState };
-        this.parameters = { patternSelect: 0, rate: 2 };
-        this.events = [];
-        this.storedStateListeners = new Set();
-        this.parameterListeners = new Map();
-    }
-
-    addStoredStateValueListener(listener) {
-        this.storedStateListeners.add(listener);
-    }
-
-    removeStoredStateValueListener(listener) {
-        this.storedStateListeners.delete(listener);
-    }
-
-    requestFullStoredState(callback) {
-        callback({
-            parameters: { ...this.parameters },
-            values: { ...this.storedState },
-        });
-    }
-
-    requestStoredStateValue(key) {
-        this.emitStoredState(key, this.storedState[key]);
-    }
-
-    sendStoredStateValue(key, value) {
-        this.storedState[key] = value;
-        this.emitStoredState(key, value);
-    }
-
-    addParameterListener(endpointID, listener) {
-        const listeners = this.parameterListeners.get(endpointID) ?? new Set();
-        listeners.add(listener);
-        this.parameterListeners.set(endpointID, listeners);
-    }
-
-    removeParameterListener(endpointID, listener) {
-        this.parameterListeners.get(endpointID)?.delete(listener);
-    }
-
-    requestParameterValue(endpointID) {
-        this.emitParameter(endpointID, this.parameters[endpointID]);
-    }
-
-    sendEventOrValue(endpointID, value) {
-        this.events.push({ endpointID, value });
-        if (endpointID === SEQFX_ENDPOINTS.patternSelect) {
-            this.emitParameter(endpointID, value);
+const scope = { owner: "seqfx-probe", document: 0 };
+const sent = [];
+const listeners = new Set();
+const deliver = (body) => { for (const listener of listeners) listener(JSON.parse(JSON.stringify(body))); };
+const connection = {
+    addEventListener: (_type, listener) => listeners.add(listener),
+    removeEventListener: (_type, listener) => listeners.delete(listener),
+    sendMessageToServer(message) {
+        const body = JSON.parse(JSON.stringify(message.message));
+        sent.push(body);
+        if (body.kind === "publish") {
+            queueMicrotask(() => deliver({ kind: "published", request: body.request, scope: body.scope, result: { kind: "observed" } }));
         }
-    }
+    },
+};
+const settle = () => new Promise(setImmediate);
+const uploads = () => sent.filter((body) => body.kind === "publish").flatMap((body) => body.operations)
+    .filter((operation) => operation.kind === "event" && operation.endpoint === "patternUpload").map((operation) => operation.value);
 
-    emitStoredState(key, value) {
-        for (const listener of this.storedStateListeners) {
-            listener({ key, value });
-        }
-    }
-
-    emitParameter(endpointID, value) {
-        this.parameters[endpointID] = value;
-        for (const listener of this.parameterListeners.get(endpointID) ?? []) {
-            listener(value);
-        }
-    }
-}
-
-function patternUploads(connection) {
-    return connection.events
-        .filter(({ endpointID }) => endpointID === SEQFX_ENDPOINTS.patternUpload)
-        .map(({ value }) => value);
-}
-
-let initialState = applySeqFxBlockCreate(createDefaultSeqFxState(), {
-    patternIndex: 0,
-    lane: SEQFX_LANES.stutter,
-    startStep: 0,
-    length: 1,
-});
+let stutterState = applySeqFxBlockCreate(createDefaultSeqFxState(), { patternIndex: 0, lane: SEQFX_LANES.stutter, startStep: 0, length: 1 });
 for (const [paramIndex, value] of [8, 1, 0, 1].entries()) {
-    initialState = applySeqFxBlockParamEdit(initialState, {
-        patternIndex: 0,
-        lane: SEQFX_LANES.stutter,
-        startStep: 0,
-        paramIndex,
-        value,
-    });
+    stutterState = applySeqFxBlockParamEdit(stutterState, { patternIndex: 0, lane: SEQFX_LANES.stutter, startStep: 0, paramIndex, value });
 }
 
-const recalledState = structuredClone(initialState);
-recalledState.patterns[0].revision = initialState.patterns[0].revision + 1;
+const defects = [];
+const service = createCmajorPluginStateService(definition, connection, { onDefect: (error) => defects.push(error) });
+const starting = service.start();
+deliver({ kind: "opened", request: 1, scope, native: {
+    parameters: [
+        { endpoint: "enabled", value: 1, min: 0, max: 1, step: 1, defaultValue: 1 },
+        { endpoint: "globalMix", value: 1, min: 0, max: 1, step: 0, defaultValue: 1 },
+        { endpoint: "patternSelect", value: 0, min: 0, max: 11, step: 1, defaultValue: 0 },
+        { endpoint: "clockMode", value: 0, min: 0, max: 2, step: 1, defaultValue: 0 },
+        { endpoint: "manualBpm", value: 120, min: 20, max: 300, step: 0, defaultValue: 120 },
+        { endpoint: "rate", value: 2, min: 0, max: 2, step: 1, defaultValue: 1 },
+        { endpoint: "swing", value: 0, min: 0, max: 0.45, step: 0, defaultValue: 0 },
+        { endpoint: "loopStart", value: 0, min: 0, max: 31, step: 1, defaultValue: 0 },
+        { endpoint: "loopLength", value: 32, min: 1, max: 32, step: 1, defaultValue: 32 },
+    ],
+    values: {},
+} });
+await starting;
+await settle();
 
-const connection = new ProductPathPatchConnection({
-    [SEQFX_STATE_KEY]: serializeSeqFxState(initialState),
-});
-const worker = createSeqFxWorkerService(connection);
-const bridge = new SeqFxRuntimeBridge(connection);
-const adapter = createSeqFxPresetStateAdapter({ bridge, patchConnection: connection });
+// The user draws the stutter block: an ordinary edit.
+deliver({ kind: "command", address: { ...scope, client: 1, sequence: 1 },
+    command: { kind: "edit", key: "patterns", value: seqFxPatternsCodec.encode(stutterState) } });
+await settle();
+const initialUpload = uploads().at(-1);
 
-worker.start();
-bridge.attach();
-bridge.requestBootState();
-const initialUpload = patternUploads(connection).at(-1);
+// A preset is recalled, as PresetBar does. It keeps the playing stutter cell and
+// adds a filter block later in the bar, so only the recall itself can clear captured audio.
+const recalledState = applySeqFxBlockCreate(stutterState, { patternIndex: 0, lane: SEQFX_LANES.filter, startStep: 16, length: 2 });
+const before = uploads().length;
+deliver({ kind: "command", address: { ...scope, client: 1, sequence: 2 },
+    command: { kind: "edit-many", recall: true, edits: [{ key: "patterns", value: seqFxPatternsCodec.encode(recalledState) }] } });
+await settle();
+const replacementUploads = uploads().slice(before);
+await service.stop();
 
-connection.events = [];
-adapter.apply(serializeSeqFxState(recalledState));
-const replacementUploads = patternUploads(connection);
-
-bridge.detach();
-worker.stop();
-
-if (!initialUpload || replacementUploads.length === 0) {
-    throw new Error("The SeqFX product preset path did not produce the expected runtime uploads.");
+if (defects.length > 0 || !initialUpload || replacementUploads.length === 0) {
+    throw new Error(`The SeqFX preset recall path did not produce the expected uploads: ${defects.map(String).join("; ")}`);
 }
 
 process.stdout.write(JSON.stringify({ initialUpload, replacementUploads }));

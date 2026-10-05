@@ -4,10 +4,6 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { loadUIModule } from "./helpers/load_ui_module.mjs";
-import {
-    createLegacyV5StateWithBlock,
-    projectCompatibleDenseStateToLegacyV5Fixture,
-} from "./helpers/seqfx_legacy_v5_fixture.mjs";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const stateModule = await loadUIModule(repoRoot, "fx/seqfx/view/seqfx-state.ts");
@@ -17,7 +13,6 @@ const {
     SEQFX_LANE_COUNT,
     SEQFX_LANES,
     SEQFX_PATTERN_COUNT,
-    SEQFX_STATE_KEY,
     SEQFX_STEP_COUNT,
     SeqFxStateParseError,
     applySeqFxBlockAuxSourceEdit,
@@ -28,11 +23,10 @@ const {
     applySeqFxBlockParamEdit,
     applySeqFxBlockResize,
     applySeqFxParamEdit,
-    buildSeqPatternUpload,
+    buildSeqPatternContent,
     createDefaultSeqFxState,
-    parseSeqFxStoredState,
-    parseStrictSeqFxStateV7,
-    projectSeqFxStoredStateV7,
+    parseStoredSeqFxState,
+    projectStoredSeqFxState,
     serializeSeqFxState,
 } = stateModule;
 
@@ -60,41 +54,18 @@ function assertActiveUploadEqual(actual, expected) {
     });
 }
 
-test("legacy fixture builder keeps Crush holdFrames in predecessor range", () => {
-    assert.throws(() => createLegacyV5StateWithBlock({
-        patternIndex: 0,
-        lane: SEQFX_LANES.crusher,
-        startStep: 0,
-        length: 1,
-        params: [8, 48_000, 0, 0, 0, 0, 0, 0],
-    }), /holdFrames from 1 to 64/);
-
-    const legacy = createLegacyV5StateWithBlock({
-        patternIndex: 0,
-        lane: SEQFX_LANES.crusher,
-        startStep: 0,
-        length: 1,
-        params: [8, 1, 0, 0, 0, 0, 0, 0],
-    });
-    assert.deepEqual(
-        legacy.patterns[0].lanes[SEQFX_LANES.crusher].steps[0].params.slice(0, 2),
-        [8, 1],
-    );
-});
-
-test("sparse v7 Init is compact and names its key and version consistently", () => {
+test("sparse Init is compact and names its version", () => {
     const serialized = serializeSeqFxState(createDefaultSeqFxState());
     const stored = JSON.parse(serialized);
 
-    assert.equal(SEQFX_STATE_KEY, "seqfx.v7");
-    assert.equal(stored.version, 7);
+    assert.equal(stored.version, 8);
     assert.equal(stored.patterns.length, SEQFX_PATTERN_COUNT);
     assert.equal(stored.patterns[0].chains.length, SEQFX_LANE_COUNT);
     assert.ok(stored.patterns.every((pattern) => pattern.chains.every((chain) => chain.blocks.length === 0)));
     assert.ok(Buffer.byteLength(serialized) < 16 * 1024, `Init state was ${Buffer.byteLength(serialized)} bytes`);
 });
 
-test("sparse v7 omits the default one-step block length without changing recall", () => {
+test("sparse omits the default one-step block length without changing recall", () => {
     const state = applySeqFxBlockCreate(createDefaultSeqFxState(), {
         patternIndex: 0,
         lane: 0,
@@ -102,19 +73,19 @@ test("sparse v7 omits the default one-step block length without changing recall"
         length: 1,
         effectType: SEQFX_EFFECT_TYPES.flange,
     });
-    const stored = projectSeqFxStoredStateV7(state);
+    const stored = projectStoredSeqFxState(state);
     const block = stored.patterns[0].chains[0].blocks[0];
 
     assert.equal(block.startStep, 7);
     assert.equal(block.length, undefined);
     assert.equal(block.effectType, SEQFX_EFFECT_TYPES.flange);
     assert.deepEqual(
-        buildSeqPatternUpload(parseStrictSeqFxStateV7(stored), { patternIndex: 0, authoritative: true }),
-        buildSeqPatternUpload(state, { patternIndex: 0, authoritative: true }),
+        buildSeqPatternContent(parseStoredSeqFxState(stored), 0),
+        buildSeqPatternContent(state, 0),
     );
 });
 
-test("sparse v7 round trip preserves blocks, aux, effect memories, and rare per-step overrides", () => {
+test("sparse round trip preserves blocks, aux, effect memories, and rare per-step overrides", () => {
     let state = createDefaultSeqFxState();
     state = applySeqFxBlockCreate(state, {
         patternIndex: 2,
@@ -180,7 +151,7 @@ test("sparse v7 round trip preserves blocks, aux, effect memories, and rare per-
     const serialized = serializeSeqFxState(state);
     const stored = JSON.parse(serialized);
     const block = stored.patterns[2].chains[1].blocks[0];
-    const restored = parseStrictSeqFxStateV7(serialized);
+    const restored = parseStoredSeqFxState(stored);
 
     assert.deepEqual(
         { startStep: block.startStep, length: block.length, effectType: block.effectType },
@@ -191,111 +162,9 @@ test("sparse v7 round trip preserves blocks, aux, effect memories, and rare per-
     assert.equal(block.memories.params[String(SEQFX_EFFECT_TYPES.filter)][1], 777);
     assert.deepEqual(block.stepOverrides.map((override) => override.offset), [2]);
     assert.equal(restored.patterns[2].lanes[1].steps[6].params[2], 9);
-    assert.deepEqual(buildSeqPatternUpload(restored, { patternIndex: 2, authoritative: true }),
-        buildSeqPatternUpload(state, { patternIndex: 2, authoritative: true }));
+    assert.deepEqual(buildSeqPatternContent(restored, 2),
+        buildSeqPatternContent(state, 2));
     assert.equal(serializeSeqFxState(restored), serialized);
-});
-
-test("legacy v5 migration is idempotent and keeps the dense runtime upload audible-equivalent", () => {
-    let current = createDefaultSeqFxState();
-    current = applySeqFxBlockCreate(current, {
-        patternIndex: 5,
-        lane: 3,
-        startStep: 11,
-        length: 5,
-        effectType: SEQFX_EFFECT_TYPES.stutter,
-    });
-    current = applySeqFxParamEdit(current, {
-        patternIndex: 5,
-        lane: 3,
-        steps: [12, 13],
-        paramIndex: 1,
-        value: 1.25,
-    });
-    const legacy = projectCompatibleDenseStateToLegacyV5Fixture(current);
-    const migrated = parseSeqFxStoredState(JSON.stringify(legacy));
-    const v7 = serializeSeqFxState(migrated.state);
-    const reparsed = parseSeqFxStoredState(v7);
-
-    assert.equal(migrated.sourceVersion, 5);
-    assert.equal(migrated.migrated, true);
-    assert.equal(reparsed.sourceVersion, 7);
-    assert.equal(reparsed.migrated, false);
-    assert.equal(serializeSeqFxState(reparsed.state), v7);
-    assertActiveUploadEqual(
-        buildSeqPatternUpload(migrated.state, { patternIndex: 5, authoritative: true }),
-        buildSeqPatternUpload(current, { patternIndex: 5, authoritative: true }),
-    );
-});
-
-test("legacy Tape Stop blocks migrate through the documented canonical free-time mapping", () => {
-    let state = createDefaultSeqFxState();
-    state = applySeqFxBlockCreate(state, {
-        patternIndex: 0,
-        lane: 2,
-        startStep: 4,
-        length: 3,
-        effectType: SEQFX_EFFECT_TYPES.tapeStop,
-    });
-    for (const step of state.patterns[0].lanes[2].steps.slice(4, 7)) {
-        step.params = [2, 4, 0.5, 50, 1, 0, 0, 0];
-        step.aux.targets = step.params.map((end, index) => ({ enabled: index === 0, end }));
-    }
-
-    const migrated = parseSeqFxStoredState(JSON.stringify(
-        projectCompatibleDenseStateToLegacyV5Fixture(state),
-    )).state;
-    for (const step of migrated.patterns[0].lanes[2].steps.slice(4, 7)) {
-        assert.deepEqual(step.params, [8, 1, 1, 1, 0, 1, 750, 187.5]);
-        assert.ok(step.aux.targets.every((target) => target.enabled === false));
-        assert.deepEqual(step.aux.targets.map((target) => target.end), step.params);
-    }
-});
-
-test("legacy non-Tape blocks discard obsolete remembered Tape aux during migration", () => {
-    let state = createDefaultSeqFxState();
-    state = applySeqFxBlockCreate(state, {
-        patternIndex: 0,
-        lane: 1,
-        startStep: 3,
-        length: 2,
-        effectType: SEQFX_EFFECT_TYPES.filter,
-    });
-    const legacyTapeParams = [2, 4, 0.5, 50, 1, 0, 0, 0];
-    for (const step of state.patterns[0].lanes[1].steps.slice(3, 5)) {
-        step.effectParams = {
-            ...(step.effectParams ?? {}),
-            [SEQFX_EFFECT_TYPES.tapeStop]: [...legacyTapeParams],
-        };
-        step.effectAux = {
-            ...(step.effectAux ?? {}),
-            [SEQFX_EFFECT_TYPES.tapeStop]: {
-                source: structuredClone(step.aux.source),
-                targets: legacyTapeParams.map((end, index) => ({ enabled: index < 3, end })),
-            },
-        };
-    }
-
-    let migrated = parseSeqFxStoredState(JSON.stringify(
-        projectCompatibleDenseStateToLegacyV5Fixture(state),
-    )).state;
-    for (const step of migrated.patterns[0].lanes[1].steps.slice(3, 5)) {
-        const rememberedParams = step.effectParams?.[SEQFX_EFFECT_TYPES.tapeStop];
-        const rememberedAux = step.effectAux?.[SEQFX_EFFECT_TYPES.tapeStop];
-        assert.ok(rememberedParams);
-        assert.ok(rememberedAux);
-        assert.equal(rememberedAux.targets.some((target) => target.enabled), false);
-        assert.deepEqual(rememberedAux.targets.map((target) => target.end), rememberedParams);
-    }
-
-    migrated = applySeqFxBlockEffectEdit(migrated, {
-        patternIndex: 0,
-        lane: 1,
-        startStep: 3,
-        effectType: SEQFX_EFFECT_TYPES.tapeStop,
-    });
-    const upload = buildSeqPatternUpload(migrated, { patternIndex: 0, authoritative: true });
-    assert.equal(upload.auxEnabled[1].slice(3, 5).flat().some(Boolean), false);
 });
 
 test("growing and shrinking a block preserves retained sparse per-step overrides", () => {
@@ -341,65 +210,7 @@ test("growing and shrinking a block preserves retained sparse per-step overrides
     assert.equal(state.patterns[0].lanes[0].steps[6].active, false);
     assert.equal(state.patterns[0].lanes[0].steps[4].trigger, true);
     assert.equal(state.patterns[0].lanes[0].steps[5].trigger, false);
-    assert.equal(parseStrictSeqFxStateV7(serializeSeqFxState(state)).patterns[0].lanes[0].steps[5].params[1], 777);
-});
-
-test("legacy Crush blocks preserve 48 kHz hold behavior and aux endpoints in Original mode", () => {
-    let state = createDefaultSeqFxState();
-    state = applySeqFxBlockCreate(state, {
-        patternIndex: 0,
-        lane: 1,
-        startStep: 6,
-        length: 2,
-        effectType: SEQFX_EFFECT_TYPES.crusher,
-    });
-    for (const step of state.patterns[0].lanes[1].steps.slice(6, 8)) {
-        step.params = [6, 4, 12, 0, 0, 0, 0, 0];
-        step.aux.targets = step.params.map((end, index) => ({
-            enabled: index < 3,
-            end: index === 0 ? 8 : index === 1 ? 16 : index === 2 ? 24 : end,
-        }));
-    }
-
-    const migrated = parseSeqFxStoredState(JSON.stringify(
-        projectCompatibleDenseStateToLegacyV5Fixture(state),
-    )).state;
-    for (const step of migrated.patterns[0].lanes[1].steps.slice(6, 8)) {
-        assert.deepEqual(step.params, [6, 12_000, 12, 0, 0, 0, 0, 0]);
-        assert.deepEqual(step.aux.targets.map((target) => target.enabled), [true, true, true, false, false, false, false, false]);
-        assert.deepEqual(step.aux.targets.map((target) => target.end), [8, 3_000, 24, 0, 0, 0, 0, 0]);
-    }
-
-    const malformed = projectCompatibleDenseStateToLegacyV5Fixture(state);
-    malformed.patterns[0].lanes[1].steps[6].aux.targets[1].end = 0;
-    assert.throws(() => parseSeqFxStoredState(JSON.stringify(malformed)), (error) => {
-        assert.ok(error instanceof SeqFxStateParseError);
-        assert.equal(error.code, "invalid_number");
-        assert.equal(error.path, "$.patterns[0].lanes[1].steps[6].aux.targets[1].end");
-        assert.match(error.message, /1 to 64/);
-        return true;
-    });
-});
-
-test("strict v5 parsing rejects out-of-range legacy parameters instead of clamping them", () => {
-    let state = createDefaultSeqFxState();
-    state = applySeqFxBlockCreate(state, {
-        patternIndex: 0,
-        lane: SEQFX_LANES.filter,
-        startStep: 0,
-        length: 1,
-        effectType: SEQFX_EFFECT_TYPES.filter,
-    });
-    const malformed = projectCompatibleDenseStateToLegacyV5Fixture(state);
-    malformed.patterns[0].lanes[0].steps[0].params[1] = 999_999;
-
-    assert.throws(() => parseSeqFxStoredState(malformed), (error) => {
-        assert.ok(error instanceof SeqFxStateParseError);
-        assert.equal(error.code, "invalid_number");
-        assert.equal(error.path, "$.patterns[0].lanes[0].steps[0].params[1]");
-        assert.match(error.message, /20 to 20000/);
-        return true;
-    });
+    assert.equal(parseStoredSeqFxState(JSON.parse(serializeSeqFxState(state))).patterns[0].lanes[0].steps[5].params[1], 777);
 });
 
 test("a deliberately dense twelve-pattern v7 document stays below the host-state budget", () => {
@@ -434,12 +245,12 @@ test("a deliberately dense twelve-pattern v7 document stays below the host-state
         });
     });
 
-    const serialized = JSON.stringify(projectSeqFxStoredStateV7(state));
+    const serialized = JSON.stringify(projectStoredSeqFxState(state));
     assert.ok(Buffer.byteLength(serialized) < 256 * 1024, `Dense state was ${Buffer.byteLength(serialized)} bytes`);
-    assert.doesNotThrow(() => parseStrictSeqFxStateV7(serialized));
+    assert.doesNotThrow(() => parseStoredSeqFxState(JSON.parse(serialized)));
 });
 
-test("strict v7 parsing rejects overlap, bounds, unknown fields, and malformed aux with typed paths", () => {
+test("strict parsing rejects overlap, bounds, unknown fields, and malformed aux with typed paths", () => {
     const cases = [
         {
             mutate(stored) {
@@ -493,7 +304,7 @@ test("strict v7 parsing rejects overlap, bounds, unknown fields, and malformed a
     for (const fixture of cases) {
         const stored = JSON.parse(serializeSeqFxState(createDefaultSeqFxState()));
         fixture.mutate(stored);
-        assert.throws(() => parseStrictSeqFxStateV7(stored), (error) => {
+        assert.throws(() => parseStoredSeqFxState(stored), (error) => {
             assert.ok(error instanceof SeqFxStateParseError);
             assert.equal(error.code, fixture.code);
             assert.equal(error.path, fixture.path);
@@ -502,15 +313,3 @@ test("strict v7 parsing rejects overlap, bounds, unknown fields, and malformed a
     }
 });
 
-test("malformed legacy state never produces or rewrites a v7 document", () => {
-    const malformed = projectCompatibleDenseStateToLegacyV5Fixture(createDefaultSeqFxState());
-    malformed.patterns[0].lanes[0].steps.pop();
-
-    assert.throws(() => parseSeqFxStoredState(malformed), (error) => {
-        assert.ok(error instanceof SeqFxStateParseError);
-        assert.equal(error.code, "invalid_step_count");
-        assert.equal(error.path, "$.patterns[0].lanes[0].steps");
-        assert.match(error.message, /32 steps/i);
-        return true;
-    });
-});

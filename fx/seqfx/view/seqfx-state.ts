@@ -797,7 +797,9 @@ function normalizeParam(effectType: number, paramIndex: number, value: number): 
     const clamped = clamp(Number(value), limits[0], limits[1]);
 
     if (isSeqFxIntegerParam(effectType, paramIndex)) {
-        return Math.round(clamped);
+        // A tiny negative value rounds to -0, which must not differ from 0 once saved and read back.
+        const rounded = Math.round(clamped);
+        return Object.is(rounded, -0) ? 0 : rounded;
     }
 
     return clamped;
