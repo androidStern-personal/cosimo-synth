@@ -1,103 +1,57 @@
 import type { PatchConnectionLike } from "./cmajor-react";
 
+/** One long-lived part of a patch worker, such as wavetable loading or the plugin state. */
 export type PatchWorkerService = {
     start: () => unknown | Promise<unknown>;
     stop?: () => void | Promise<void>;
 };
 
-export type PatchWorkerServiceFactory =
-    | PatchWorkerService
-    | ((connection: PatchConnectionLike) => PatchWorkerService | Promise<PatchWorkerService>);
+/** Creates one service for the worker's connection. */
+export type PatchWorkerServiceFactory = (connection: PatchConnectionLike) => PatchWorkerService | Promise<PatchWorkerService>;
 
-export class PatchWorkerServiceHost {
-    private readonly connection: PatchConnectionLike;
-    private readonly serviceFactories: PatchWorkerServiceFactory[];
-    private readonly services: PatchWorkerService[] = [];
-    private started = false;
-
-    constructor(connection: PatchConnectionLike, serviceFactories: PatchWorkerServiceFactory[]) {
-        this.connection = connection;
-        this.serviceFactories = serviceFactories;
-    }
-
-    async start() {
-        if (this.started) {
-            return;
-        }
-
-        this.started = true;
-
+async function stopInReverse(services: readonly PatchWorkerService[]): Promise<unknown[]> {
+    const failures: unknown[] = [];
+    for (const service of [...services].reverse()) {
         try {
-            for (const serviceFactory of this.serviceFactories) {
-                const service = typeof serviceFactory === "function"
-                    ? await serviceFactory(this.connection)
-                    : serviceFactory;
-                this.services.push(service);
-                await service.start();
-            }
-        } catch (startError) {
-            const cleanupErrors: unknown[] = [];
-
-            for (const service of [...this.services].reverse()) {
-                try {
-                    await service.stop?.();
-                } catch (cleanupError) {
-                    cleanupErrors.push(cleanupError);
-                }
-            }
-
-            this.services.length = 0;
-            this.started = false;
-
-            if (cleanupErrors.length > 0) {
-                throw new AggregateError(
-                    [startError, ...cleanupErrors],
-                    "Patch worker service startup failed and cleanup also failed",
-                );
-            }
-
-            throw startError;
+            await service.stop?.();
+        } catch (error) {
+            failures.push(error);
         }
     }
-
-    async stop() {
-        if (!this.started) {
-            return;
-        }
-
-        this.started = false;
-        const cleanupErrors: unknown[] = [];
-        for (const service of [...this.services].reverse()) {
-            try {
-                await service.stop?.();
-            } catch (error) {
-                cleanupErrors.push(error);
-            }
-        }
-
-        this.services.length = 0;
-        if (cleanupErrors.length > 0) {
-            throw new AggregateError(cleanupErrors, "Patch worker service cleanup failed");
-        }
-    }
-
-    getServices() {
-        return [...this.services];
-    }
+    return failures;
 }
 
-export function createPatchWorkerServiceHost(
-    connection: PatchConnectionLike,
-    serviceFactories: PatchWorkerServiceFactory[],
-) {
-    return new PatchWorkerServiceHost(connection, serviceFactories);
-}
-
+/**
+ * Start a patch worker's services in order. If one fails to start, the ones
+ * already running are stopped. The returned stop() stops every service in
+ * reverse order, even when some of them fail to stop.
+ */
 export async function startPatchWorkerServices(
     connection: PatchConnectionLike,
-    serviceFactories: PatchWorkerServiceFactory[],
-) {
-    const host = createPatchWorkerServiceHost(connection, serviceFactories);
-    await host.start();
-    return host;
+    serviceFactories: readonly PatchWorkerServiceFactory[],
+): Promise<{ stop: () => Promise<void> }> {
+    const services: PatchWorkerService[] = [];
+    try {
+        for (const createService of serviceFactories) {
+            const service = await createService(connection);
+            services.push(service);
+            await service.start();
+        }
+    } catch (startError) {
+        const failures = await stopInReverse(services);
+        if (failures.length > 0) {
+            throw new AggregateError([startError, ...failures], "A patch worker service failed to start, and stopping the others also failed.");
+        }
+        throw startError;
+    }
+
+    let stopped = false;
+    return {
+        async stop() {
+            if (stopped) return;
+            stopped = true;
+            const failures = await stopInReverse(services.splice(0));
+            if (failures.length > 0) throw new AggregateError(failures, "Some patch worker services failed to stop.");
+        },
+    };
 }

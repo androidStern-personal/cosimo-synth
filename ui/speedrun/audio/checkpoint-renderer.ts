@@ -6,11 +6,12 @@ import {
     buildLaneRuntimeEventsV2,
 } from "../../shared/lane-state-v2";
 import { LANE_SLOT_PARAMS_ENDPOINT_ID } from "../../shared/lane-state";
+import { parseEffectOutputTrimHostEndpointID } from "../../shared/effect-output-trim";
 import { buildModulationRuntimeEvents } from "../../shared/modulation";
 import { getModulationArticulationCellIndex } from "../../shared/modulation-runtime-program";
 import { startPatchWorkerServices } from "../../shared/patch-worker-services";
 import { createModulationArticulationWorkerService } from "../../worker/modulation-articulation-worker-service";
-import { createRackStateWorkerService } from "../../worker/rack-state-worker-service";
+import { createSynthRackRestore } from "../../worker/synth-rack-restore";
 import { createWavetableWorkerController } from "../../worker/wavetable-worker";
 import { OSCILLATOR_IDS } from "../../shared/modulation-targets";
 import {
@@ -280,6 +281,15 @@ function sendPerformanceEvent(
     host.sendMIDIInputEvent("midiIn", code);
 }
 
+/** A recipe edits Output Trim in the rack, so a saved project would hold the same value in each host trim parameter. */
+function rackOutputTrimParameters(state: CumulativePatchState): Record<string, number> {
+    return Object.fromEntries(buildLaneRuntimeEventsV2(state.lane).flatMap((event) => (
+        parseEffectOutputTrimHostEndpointID(event.endpointID) !== null && typeof event.value === "number"
+            ? [[event.endpointID, event.value] as const]
+            : []
+    )));
+}
+
 async function yieldInstallTurn() {
     await new Promise<void>((resolve) => setTimeout(resolve, 0));
 }
@@ -296,12 +306,15 @@ export async function renderSpeedrunCheckpoint(
         articulations: job.state.articulations,
     }, job.resourceBaseURL);
     await host.initialise(job.sessionID, job.sampleRate);
-    host.setInitialParameters(job.state.parameters);
+    host.setInitialParameters({ ...job.state.parameters, ...rackOutputTrimParameters(job.state) });
     host.sendEventOrValue("tempo", { bpm: 120 });
 
+    const rackDefects: unknown[] = [];
     const services = await startPatchWorkerServices(host, [
         createModulationArticulationWorkerService,
-        createRackStateWorkerService,
+        () => createSynthRackRestore(host, {
+            onDefect: (cause) => { rackDefects.push(cause); },
+        }),
         () => createWavetableWorkerController(host, {
             maxFramesInFlight: 1,
             serviceLoadTimeoutMs: 20_000,
@@ -317,6 +330,10 @@ export async function renderSpeedrunCheckpoint(
         while (installFrameCount < maxInstallFrames) {
             await host.pump(128);
             installFrameCount += 128;
+            if (rackDefects.length > 0) {
+                const cause = rackDefects[0];
+                throw new SpeedrunInstallError("rack", cause instanceof Error ? cause.message : String(cause), { cause });
+            }
             const installState = host.getInstallationState();
             const failure = installationFailure(installState, expected);
             if (failure) throw failure;

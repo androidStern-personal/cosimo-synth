@@ -7,24 +7,10 @@ import {
 
 export const BOUNCE_BANK_GC_LOCK_NAME = "cosimo-bounce-bank-gc-v1";
 
-// Mirrors EFFECT_PRESET_V2_STATE_KIND/-_SCHEMA_VERSION in
-// ui/shared/effects/effect-preset-store-v2.ts. Declared locally because the
-// bounce module stays plain .mjs, runnable by bare Node without a TS loader.
-const EFFECT_PRESET_STATE_KIND = "cosimo.effectPresetState";
-const EFFECT_PRESET_STATE_VERSION = 2;
 const SHA256_PATTERN = /^[0-9a-f]{64}$/;
 
 function isRecord(value) {
     return value !== null && typeof value === "object" && !Array.isArray(value);
-}
-
-function parseJson(value, label) {
-    if (typeof value !== "string") return value;
-    try {
-        return JSON.parse(value);
-    } catch (cause) {
-        throw new Error(`${label} is not valid JSON: ${cause instanceof Error ? cause.message : cause}`);
-    }
 }
 
 function addBounceDocumentRoots(documentInput, digests) {
@@ -41,44 +27,16 @@ function addPatchDocumentRoots(documentInput, digests) {
     if (document !== null) addBounceDocumentRoots(document, digests);
 }
 
-function scanUserPresetState(rawValue, digests) {
-    if (rawValue === null || rawValue === undefined || rawValue === "") return;
-    const state = parseJson(rawValue, "effects.presets.v2");
-    if (!isRecord(state)
-        || state.kind !== EFFECT_PRESET_STATE_KIND
-        || state.version !== EFFECT_PRESET_STATE_VERSION
-        || !isRecord(state.userPresets)) {
-        throw new Error("effects.presets.v2 has an unrecognized schema");
-    }
-    for (const [effectID, presets] of Object.entries(state.userPresets)) {
-        if (!Array.isArray(presets)) {
-            throw new Error(`effects.presets.v2 bank ${effectID} is not an array`);
-        }
-        for (const [index, preset] of presets.entries()) {
-            if (!isRecord(preset) || !isRecord(preset.storedState)) {
-                throw new Error(`effects.presets.v2 ${effectID}[${index}] is malformed`);
-            }
-            const bounceValue = preset.storedState[BOUNCE_STATE_KEY];
-            if (bounceValue !== null && bounceValue !== undefined && bounceValue !== "") {
-                addBounceDocumentRoots(bounceValue, digests);
-            }
-        }
-    }
-}
-
 /**
  * Compute the complete browser retention root set. Only the live document's
  * direct Revert bank is retained: nested historical snapshots are beyond the
  * locked single-level contract and become eligible after their DSP slot is
- * overwritten. User presets retain both their audible bank and direct Revert
- * bank so a loaded preset preserves the same one-level behavior.
+ * overwritten. Presets and snapshots never hold a bounce document, so the live
+ * patch and the state saves still in flight are the only roots.
  */
 export function collectBounceBankRetentionRoots({
     livePatchDocument,
-    userPresetState = null,
-    userPresetStateKnown = true,
     inFlightPatchDocuments = [],
-    hasExternalPresetFileStore = false,
 } = {}) {
     const digests = new Set();
     const incompleteReasons = [];
@@ -86,20 +44,6 @@ export function collectBounceBankRetentionRoots({
         addPatchDocumentRoots(livePatchDocument, digests);
     } catch (cause) {
         incompleteReasons.push(`live-patch: ${cause instanceof Error ? cause.message : cause}`);
-    }
-    if (!userPresetStateKnown) {
-        incompleteReasons.push("user-preset-state-not-yet-scanned");
-    } else {
-        try {
-            scanUserPresetState(userPresetState, digests);
-        } catch (cause) {
-            incompleteReasons.push(`user-presets: ${cause instanceof Error ? cause.message : cause}`);
-        }
-    }
-    if (hasExternalPresetFileStore) {
-        // Native preset files require a platform store scan in M8. Browser GC
-        // never guesses while an unscanned file-backed catalog is present.
-        incompleteReasons.push("external-user-preset-files-not-scanned");
     }
     if (!Array.isArray(inFlightPatchDocuments)) {
         incompleteReasons.push("in-flight-state-save-index-is-invalid");
@@ -221,9 +165,3 @@ export async function retireSupersededBounceBanks({
     }
     return result ?? skippedResult("gc-lock-busy", roots);
 }
-
-export const bounceBankRetentionInternals = Object.freeze({
-    addBounceDocumentRoots,
-    scanUserPresetState,
-    validateStoreEntries,
-});

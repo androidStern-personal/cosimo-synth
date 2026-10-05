@@ -446,6 +446,7 @@ test("iOS patch manifest keeps the synth graph but switches to the mobile editor
         "cmajor/EffectsRack.cmajor",
         "cmajor/Enhancer.cmajor",
         "cmajor/Polish.cmajor",
+        "cmajor/EnhancerLiteSpectrumAnalyzer.cmajor",
         "cmajor/FilterSpectrumCommon.cmajor",
         "cmajor/FilterSpectrumAnalyzer.cmajor",
         "cmajor/Mseg.cmajor",
@@ -743,80 +744,6 @@ test("the Voice Enhancer reuses the Filter footprint with explicit stages and th
     assert.match(
         buildSource,
         /emitGeneratedPatchGuiModule\("ui\/shared\/voice-enhancer\.ts", "patch_gui\/voice-enhancer\.js"\)/,
-    );
-});
-
-test("legacy synth presets resolve an omitted Filter Mix to fully wet through an exact-contract migration", async () => {
-    const [{ buildCanonicalPluginStateContract }, { applyEffectPresetV2 }] = await Promise.all([
-        loadUIModule(repoRoot, "ui/shared/effects/effect-state-contract.ts"),
-        loadUIModule(repoRoot, "ui/shared/effects/effect-preset-v2.ts"),
-    ]);
-    const legacyParameters = [
-        { endpointID: "filterMode", type: "number", min: 0, max: 5, defaultValue: 0 },
-        { endpointID: "filterCutoff", type: "number", min: 20, max: 20_000, defaultValue: 1_000 },
-        { endpointID: "filterQ", type: "number", min: 0.1, max: 20, defaultValue: 0.707107 },
-    ];
-    const legacyContract = buildCanonicalPluginStateContract({
-        effectID: "wavetable-synth",
-        parameters: legacyParameters,
-    });
-    const currentContract = buildCanonicalPluginStateContract({
-        effectID: "wavetable-synth",
-        parameters: [
-            ...legacyParameters,
-            { endpointID: "filterMix", type: "number", min: 0, max: 1, defaultValue: 1 },
-        ],
-    });
-    const legacyPreset = {
-        kind: "cosimo.effectPreset",
-        version: 2,
-        effectID: "wavetable-synth",
-        presetID: "user.legacy-filter",
-        label: "Legacy Filter",
-        contract: legacyContract,
-        parameters: {
-            filterMode: 1,
-            filterCutoff: 2_400,
-            filterQ: 4,
-        },
-        storedState: {},
-    };
-    const writes = [];
-    const patchConnection = {
-        sendEventOrValue(endpointID, value) {
-            writes.push({ endpointID, value });
-        },
-    };
-
-    assert.throws(() => applyEffectPresetV2({
-        preset: legacyPreset,
-        currentContract,
-        patchConnection,
-    }), /no migration/i, "effect-preset v2 must not silently accept a missing current parameter");
-    assert.deepEqual(writes, []);
-
-    const normalized = applyEffectPresetV2({
-        preset: legacyPreset,
-        currentContract,
-        patchConnection,
-        migrations: [{
-            effectID: "wavetable-synth",
-            fromHash: legacyContract.hash,
-            toHash: currentContract.hash,
-            migrate(preset) {
-                return {
-                    ...preset,
-                    contract: currentContract,
-                    parameters: { ...preset.parameters, filterMix: 1 },
-                };
-            },
-        }],
-    });
-
-    assert.equal(normalized.parameters.filterMix, 1);
-    assert.deepEqual(
-        writes.filter(({ endpointID }) => endpointID === "filterMix"),
-        [{ endpointID: "filterMix", value: 1 }],
     );
 });
 

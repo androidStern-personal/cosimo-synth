@@ -26,7 +26,6 @@ const artifactContracts = [
         ],
         forbiddenOwnedSources: [
             "ui/shared/patch-worker-services.ts",
-            "ui/shared/stored-state-runtime-mirror.ts",
         ],
         requiresDependencySources: false,
     },

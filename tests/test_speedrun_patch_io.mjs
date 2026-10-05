@@ -14,7 +14,7 @@ function presetFile(name, values) {
 }
 
 function createSourceOnlyT78IntakeContext({ patchIO, contractModule }) {
-    const currentContract = contractModule.buildCanonicalPluginStateContract({
+    const currentContract = contractModule.buildSpeedrunContract({
         effectID: patchIO.SYNTH_CONTRACT_ID,
         parameters: [
             { endpointID: "voiceEnhancerFrequency", type: "number", min: 20, max: 20_000, defaultValue: 130 },

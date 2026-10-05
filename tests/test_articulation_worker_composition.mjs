@@ -14,13 +14,14 @@ test("production worker has one owner for ordered modulation then articulation r
     assert.match(workerSource, new RegExp(String.raw`return startPatchWorkerServices\(connection, \[\s*`
         + String.raw`\(\) => createWavetableWorkerController\(connection, \{ \.\.\.options, delivery: "shared" \}\),\s*`
         + String.raw`\(\) => createCmajorPluginStateService\(synthPluginState, connection, \{\s*onDefect: [^\n]+\s*\}\),\s*\]\);`));
-    for (const retiredService of [
+    // Neither the retired per-lane services nor the test page's rack-only restore run in production.
+    for (const excludedService of [
         "createModulationArticulationWorkerService",
         "createModulationWorkerService",
         "createArticulationWorkerService",
-        "createRackStateWorkerService",
+        "createSynthRackRestore",
     ]) {
-        assert.doesNotMatch(workerSource, new RegExp(String.raw`\b${retiredService}\b`));
+        assert.doesNotMatch(workerSource, new RegExp(String.raw`\b${excludedService}\b`));
     }
 
     // The plugin state restores the rack and modulation through their declared deliveries.

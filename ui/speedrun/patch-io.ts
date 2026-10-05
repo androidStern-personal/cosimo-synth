@@ -5,10 +5,7 @@ import {
     type ArticulationsState,
 } from "../shared/articulation-image";
 import type { PatchConnectionLike } from "../shared/cmajor-react";
-import type {
-    EffectParameterContract,
-    EffectPluginStateContract,
-} from "../shared/effects/effect-state-contract";
+import type { SpeedrunContract, SpeedrunContractParameter } from "./contract";
 import { LANE_STATE_KEY } from "../shared/lane-state";
 import {
     createDefaultLaneStateV2,
@@ -73,7 +70,7 @@ export type ParameterEndpointMetadata = {
 };
 
 export type PatchIntakeOptions = {
-    readonly currentContract: EffectPluginStateContract;
+    readonly currentContract: SpeedrunContract;
     readonly inputEndpoints?: ReadonlyArray<ParameterEndpointMetadata>;
 };
 
@@ -119,7 +116,7 @@ function finiteNumber(value: unknown): number | null {
 }
 
 function readEndpointAnnotation(
-    parameter: EffectParameterContract,
+    parameter: SpeedrunContractParameter,
     inputEndpoints: ReadonlyArray<ParameterEndpointMetadata>,
 ): EndpointAnnotation {
     const endpoint = inputEndpoints.find((candidate) => candidate.endpointID === parameter.endpointID);
@@ -435,7 +432,7 @@ function captureStoredState(connection: PatchConnectionLike, timeoutMs: number):
 
 function captureParameters(
     connection: PatchConnectionLike,
-    currentContract: EffectPluginStateContract,
+    currentContract: SpeedrunContract,
     timeoutMs: number,
 ): Promise<Record<string, unknown>> {
     if (

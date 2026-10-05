@@ -141,9 +141,7 @@ async function runBuild(configRelativePath) {
 
 if (shouldBuild("--desktop") || shouldBuild("--desktop-runtime") || shouldBuild("--ios")) {
     await emitGeneratedPatchGuiModule("ui/shared/resource-client.ts", "patch_gui/resource-client.js");
-    await emitGeneratedPatchGuiModule("ui/shared/patch-worker-services.ts", "patch_gui/patch-worker-services.js");
     await emitGeneratedPatchGuiModule("ui/shared/runtime-install-channel.ts", "patch_gui/runtime-install-channel.js");
-    await emitGeneratedPatchGuiModule("ui/shared/stored-state-runtime-mirror.ts", "patch_gui/stored-state-runtime-mirror.js");
     await emitGeneratedPatchGuiModule("ui/shared/mseg.ts", "patch_gui/mseg.js", { bundle: true });
     await emitGeneratedPatchGuiModule("ui/shared/mseg-controller.ts", "patch_gui/mseg-controller.js");
     await emitGeneratedPatchGuiModule("ui/shared/effect-output-trim.ts", "patch_gui/effect-output-trim.js");

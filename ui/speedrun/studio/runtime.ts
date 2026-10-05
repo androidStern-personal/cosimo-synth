@@ -1,6 +1,5 @@
-import { buildCanonicalPluginStateContract } from "../../shared/effects/effect-state-contract";
+import { buildSpeedrunContract } from "../contract";
 import { ARTICULATIONS_V4_STATE_KEY } from "../../shared/articulation-image";
-import { LANE_STATE_KEY } from "../../shared/lane-state";
 import { MODULATION_STATE_KEY } from "../../shared/modulation";
 import { getFactoryBankCatalogValue } from "../../shared/wavetable-bank";
 import type { WavetableCatalog } from "../recipe";
@@ -75,13 +74,13 @@ export async function loadSpeedrunStudioRuntime(): Promise<SpeedrunStudioRuntime
             : null;
         return endpoint.purpose === "parameter" && annotation?.hidden !== true;
     });
-    const currentContract = buildCanonicalPluginStateContract({
+    const currentContract = buildSpeedrunContract({
         effectID: SYNTH_CONTRACT_ID,
         parameters: visibleParameters,
         storedState: [
-            { key: MODULATION_STATE_KEY, schemaVersion: 6, required: true },
-            { key: ARTICULATIONS_V4_STATE_KEY, schemaVersion: 4, required: true },
-            { key: "bounce.v1", schemaVersion: 1, required: true },
+            { key: MODULATION_STATE_KEY, schemaVersion: 6 },
+            { key: ARTICULATIONS_V4_STATE_KEY, schemaVersion: 4 },
+            { key: "bounce.v1", schemaVersion: 1 },
         ],
     });
     if (currentContract.parameters.length === 0) {

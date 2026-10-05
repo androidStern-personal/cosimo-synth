@@ -22,7 +22,7 @@ export async function loadSpeedrunModules() {
         loadUIModule(repoRoot, "ui/speedrun/recipe.ts"),
         loadUIModule(repoRoot, "ui/speedrun/partial-states.ts"),
         loadUIModule(repoRoot, "ui/speedrun/timeline.ts"),
-        loadUIModule(repoRoot, "ui/shared/effects/effect-state-contract.ts"),
+        loadUIModule(repoRoot, "ui/speedrun/contract.ts"),
         loadUIModule(repoRoot, "ui/shared/modulation.ts"),
         loadUIModule(repoRoot, "ui/shared/articulation-image.ts"),
     ]);
@@ -47,13 +47,13 @@ export async function createCurrentSpeedrunContext() {
         endpoint.purpose === "parameter" && endpoint.annotation?.hidden !== true
     ));
     const { contractModule, patchIO } = await loadSpeedrunModules();
-    const currentContract = contractModule.buildCanonicalPluginStateContract({
+    const currentContract = contractModule.buildSpeedrunContract({
         effectID: patchIO.SYNTH_CONTRACT_ID,
         parameters: visibleParameters,
         storedState: [
-            { key: "modulation.v6", schemaVersion: 6, required: true },
-            { key: "articulations.v4", schemaVersion: 4, required: true },
-            { key: "bounce.v1", schemaVersion: 1, required: true },
+            { key: "modulation.v6", schemaVersion: 6 },
+            { key: "articulations.v4", schemaVersion: 4 },
+            { key: "bounce.v1", schemaVersion: 1 },
         ],
     });
     const options = { currentContract, inputEndpoints };

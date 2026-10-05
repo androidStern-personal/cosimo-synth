@@ -11,7 +11,6 @@ const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), ".."
 const programModulePromise = loadUIModule(repoRoot, "ui/shared/modulation-runtime-program.ts");
 const modulationModulePromise = loadUIModule(repoRoot, "ui/shared/modulation.ts");
 const targetsModulePromise = loadUIModule(repoRoot, "ui/shared/modulation-targets.ts");
-const runtimeMirrorModulePromise = loadUIModule(repoRoot, "ui/shared/stored-state-runtime-mirror.ts");
 
 const oscillatorTargets = [
     "wavetablePosition",
@@ -950,37 +949,4 @@ test("initial modulation restore uploads sources once and installs one atomic ro
     assert.equal(endpointCount(modulation.MODULATION_MSEG_PLAYBACK_ENDPOINT_ID), 3);
     assert.equal(endpointCount(programModule.MODULATION_PROGRAM_ENDPOINT_ID), 1);
     assert.equal(events.length, 10);
-});
-
-test("the runtime mirror gives a compiler the last successfully applied snapshot", async () => {
-    const { createStoredStateRuntimeMirror } = await runtimeMirrorModulePromise;
-    const listeners = new Set();
-    const events = [];
-    const connection = {
-        addStoredStateValueListener(listener) {
-            listeners.add(listener);
-        },
-        requestFullStoredState(callback) {
-            callback({ "counter.v1": 1 });
-        },
-        sendEventOrValue(endpointID, value) {
-            events.push({ endpointID, value });
-        },
-    };
-    const mirror = createStoredStateRuntimeMirror(connection, {
-        stateKey: "counter.v1",
-        deserializeStoredState: Number,
-        buildRuntimeEvents: ({ state }, previous) => [{
-            endpointID: "counterDelta",
-            value: previous === null ? state : state - previous.state,
-        }],
-    });
-
-    mirror.start();
-    for (const listener of listeners) listener({ key: "counter.v1", value: 4 });
-
-    assert.deepEqual(events, [
-        { endpointID: "counterDelta", value: 1 },
-        { endpointID: "counterDelta", value: 3 },
-    ]);
 });
