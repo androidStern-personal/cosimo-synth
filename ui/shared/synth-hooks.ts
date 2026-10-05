@@ -50,7 +50,6 @@ import {
 } from "./mseg";
 import {
     MODULATION_STATE_KEY,
-    MODULATION_STATE_VERSION,
     MODULATION_TARGET_OPTIONS,
     buildDisplayedMsegState,
     clampModulationRouteAmount,
@@ -59,9 +58,7 @@ import {
     createAvailableGeneratedRouteId,
     createDefaultEnvelope,
     createFirstAvailableModulationRoute,
-    normalizeModulationState,
     parseModulationState,
-    serializeModulationState,
     type ModulationEnvelope,
     type GeneratedModulationRouteInput,
     type ModulationRoute,
