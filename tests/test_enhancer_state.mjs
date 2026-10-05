@@ -119,6 +119,27 @@ test("the Enhancer saves both bands, routing, saturation mode, and de-emphasis",
     });
 });
 
+test("the Enhancer plugin declares one sound parameter per saved setting, under the same name", async () => {
+    const [enhancer, { default: definition }, pluginSource] = await Promise.all([
+        loadEnhancerState(),
+        loadUIModule(repoRoot, "fx/enhancer/state.ts"),
+        fs.readFile(path.join(repoRoot, "fx/enhancer/EnhancerPlugin.cmajor"), "utf8"),
+    ]);
+    const pluginParameters = [...pluginSource.matchAll(/^\s*input value float32 (\w+) \[\[/gm)].map(([, endpointID]) => endpointID);
+    const parameterFields = Object.entries(definition).filter(([, field]) => field.kind === "parameter");
+
+    assert.deepEqual(
+        parameterFields.map(([key, field]) => ({ key, endpoint: field.endpoint })),
+        enhancer.ENHANCER_SETTING_DESCRIPTORS.map(({ id, dspEndpointID }) => ({ key: id, endpoint: dspEndpointID })),
+    );
+    assert.deepEqual(parameterFields.map(([, field]) => field.endpoint), pluginParameters);
+    assert.ok(parameterFields.every(([, field]) => field.preset === undefined), "every setting is part of a preset and a snapshot");
+    assert.deepEqual(
+        Object.keys(definition).filter((key) => definition[key].kind !== "parameter").sort(),
+        ["activePreset", "activeSnapshot", "presetLibrary", "snapshotSlots"],
+    );
+});
+
 test("the unpublished always-M/S v1 document migrates without changing its sound", async () => {
     const enhancer = await loadEnhancerState();
     const legacy = {

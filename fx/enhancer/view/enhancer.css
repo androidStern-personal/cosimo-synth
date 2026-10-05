@@ -1,0 +1,90 @@
+:host {
+    display: block;
+    width: 980px;
+    min-height: 700px;
+    color: #f4efe6;
+    background:
+        radial-gradient(circle at 8% 0%, rgba(240, 184, 103, 0.14), transparent 32%),
+        radial-gradient(circle at 92% 0%, rgba(142, 197, 255, 0.13), transparent 32%),
+        linear-gradient(180deg, #16171c 0%, #0b0c10 100%);
+    font-family: "SF Mono", Menlo, Monaco, Consolas, monospace;
+}
+
+* { box-sizing: border-box; user-select: none; -webkit-user-select: none; }
+button, input { font: inherit; }
+
+/* The kit's preset and snapshot bars read the --editor-* colors. */
+.plugin-header {
+    --editor-accent-start: #f0b867; --editor-surface-bg: #0b0c10;
+    height: 40px; display: flex; align-items: center; justify-content: space-between; gap: 10px;
+    padding: 0 22px; border-bottom: 1px solid rgba(255,255,255,0.08);
+}
+.plugin-header .bk-preset-bar, .plugin-header .bk-snapshot-bar { font-size: 10px; }
+.plugin-header .bk-preset-bar select { width: 140px; }
+.history-controls { display: flex; gap: 6px; }
+.history-controls button { height: 24px; padding: 0 10px; border: 1px solid rgba(255,255,255,0.14); border-radius: 4px; color: #f0b867; background: transparent; font-size: 9px; letter-spacing: 0.06em; text-transform: uppercase; cursor: pointer; }
+.history-controls button:disabled { color: rgba(244,239,230,0.52); opacity: 0.5; cursor: default; }
+.history-controls button:focus-visible { outline: 2px solid #f0b867; outline-offset: 2px; }
+.status { margin: 0; padding: 22px; color: rgba(244,239,230,0.58); font-size: 11px; }
+.status[role="alert"] { color: #ff8a7a; }
+
+.shell { min-height: 660px; padding: 22px; }
+.topline { display: flex; align-items: flex-start; justify-content: space-between; gap: 24px; margin-bottom: 18px; }
+h1, p { margin: 0; }
+h1 { font: 600 27px/1.1 "Avenir Next", "Helvetica Neue", sans-serif; letter-spacing: 0.16em; }
+.subtitle { margin-top: 8px; color: rgba(244, 239, 230, 0.58); font-size: 11px; line-height: 1.5; letter-spacing: 0.04em; }
+.top-controls { width: min(360px, 42%); display: grid; gap: 10px; --band-accent: #d8d3c8; }
+.badges { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 7px; }
+.badge { border: 1px solid rgba(255,255,255,0.10); border-radius: 999px; padding: 7px 10px; color: rgba(244,239,230,0.72); background: rgba(255,255,255,0.035); font-size: 9px; letter-spacing: 0.09em; text-transform: uppercase; }
+.global-controls { display: grid; grid-template-columns: 1fr 1.2fr; gap: 9px; }
+.saturation-mode-panel, .de-emphasis-panel { border: 1px solid rgba(255,255,255,0.09); border-radius: 12px; padding: 11px 12px 9px; background: rgba(255,255,255,0.035); }
+.saturation-mode-panel > span { display: block; margin-bottom: 8px; color: rgba(244,239,230,0.63); font-size: 9px; letter-spacing: 0.08em; text-transform: uppercase; }
+.saturation-mode-panel .segmented { width: 100%; }
+.saturation-mode-panel button { flex: 1; padding: 0 7px; }
+.de-emphasis-panel p { margin-top: 7px; color: rgba(244,239,230,0.48); font-size: 8px; line-height: 1.4; text-align: right; }
+.response-panel { margin-bottom: 16px; overflow: hidden; border: 1px solid rgba(255,255,255,0.09); border-radius: 16px; padding: 13px 14px 5px; background: linear-gradient(180deg, rgba(255,255,255,0.045), rgba(255,255,255,0.018)); box-shadow: inset 0 1px 0 rgba(255,255,255,0.035); }
+.response-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 20px; padding: 0 5px 2px; }
+.response-title { color: rgba(244,239,230,0.82); font: 650 10px/1 "Avenir Next", "Helvetica Neue", sans-serif; letter-spacing: 0.14em; text-transform: uppercase; }
+.response-heading p { margin-top: 5px; color: rgba(244,239,230,0.46); font-size: 8px; letter-spacing: 0.025em; }
+.response-legend { display: flex; align-items: center; justify-content: flex-end; gap: 13px; color: rgba(244,239,230,0.56); font-size: 8px; letter-spacing: 0.055em; text-transform: uppercase; }
+.response-legend span { display: inline-flex; align-items: center; gap: 5px; white-space: nowrap; }
+.response-legend i { display: inline-block; width: 16px; height: 2px; border-radius: 9px; background: var(--response-accent, rgba(244,239,230,0.62)); }
+.response-legend .side-key i { height: 0; border-top: 1.5px dashed rgba(244,239,230,0.62); background: transparent; }
+.response-plot { display: block; width: 100%; height: 168px; overflow: visible; }
+.response-grid-line { fill: none; stroke: rgba(255,255,255,0.05); stroke-width: 1; vector-effect: non-scaling-stroke; }
+.response-grid-line.baseline { stroke: rgba(255,255,255,0.17); }
+.response-axis-label, .response-axis-unit { fill: rgba(244,239,230,0.35); font: 8px/1 "SF Mono", Menlo, monospace; }
+.response-axis-unit { text-transform: uppercase; letter-spacing: 0.08em; }
+.response-fill { fill: color-mix(in srgb, var(--response-accent) 10%, transparent); stroke: none; }
+.response-band { fill: none; stroke: var(--response-accent); stroke-width: 2.25; stroke-linecap: round; stroke-linejoin: round; vector-effect: non-scaling-stroke; filter: drop-shadow(0 0 6px color-mix(in srgb, var(--response-accent) 35%, transparent)); }
+.response-band.side { stroke-width: 1.5; stroke-dasharray: 6 4; opacity: 0.72; }
+.response-handle { fill: var(--response-accent); stroke: #111318; stroke-width: 2; vector-effect: non-scaling-stroke; }
+.response-handle.side { fill: #111318; stroke: var(--response-accent); stroke-width: 1.5; opacity: 0.9; }
+.bands { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+.band { min-width: 0; border: 1px solid rgba(255,255,255,0.09); border-radius: 18px; padding: 17px; background: rgba(255,255,255,0.035); box-shadow: inset 0 1px 0 rgba(255,255,255,0.035), 0 18px 44px rgba(0,0,0,0.18); }
+.band-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+.eyebrow { color: var(--band-accent); font: 700 12px/1 "Avenir Next", "Helvetica Neue", sans-serif; letter-spacing: 0.16em; text-transform: uppercase; }
+.band-header p { margin-top: 7px; color: rgba(244,239,230,0.52); font-size: 9px; line-height: 1.4; }
+.segmented { display: inline-flex; padding: 3px; border: 1px solid rgba(255,255,255,0.10); border-radius: 9px; background: rgba(0,0,0,0.28); }
+.segmented button { min-height: 27px; border: 0; border-radius: 6px; padding: 0 10px; color: rgba(244,239,230,0.52); background: transparent; cursor: pointer; font-size: 9px; letter-spacing: 0.06em; text-transform: uppercase; }
+.segmented button[aria-pressed="true"] { color: #111318; background: var(--band-accent); box-shadow: 0 4px 14px color-mix(in srgb, var(--band-accent) 28%, transparent); }
+.segmented button:focus-visible, input:focus-visible { outline: 2px solid var(--band-accent); outline-offset: 2px; }
+.control-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 13px 15px; min-height: 112px; margin-top: 18px; }
+.control { display: grid; gap: 8px; align-content: start; }
+.control-heading { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; color: rgba(244,239,230,0.63); font-size: 9px; letter-spacing: 0.08em; text-transform: uppercase; }
+output { color: #f4efe6; font-variant-numeric: tabular-nums; letter-spacing: 0; text-transform: none; }
+input[type="range"] { appearance: none; width: 100%; height: 16px; margin: 0; background: transparent; cursor: ew-resize; }
+input[type="range"]::-webkit-slider-runnable-track { height: 3px; border-radius: 99px; background: linear-gradient(90deg, color-mix(in srgb, var(--band-accent) 68%, #222) 0%, rgba(255,255,255,0.13) 100%); }
+input[type="range"]::-webkit-slider-thumb { appearance: none; width: 14px; height: 14px; margin-top: -5.5px; border: 2px solid #111318; border-radius: 50%; background: var(--band-accent); box-shadow: 0 0 0 1px rgba(255,255,255,0.18), 0 4px 12px rgba(0,0,0,0.35); }
+.control-error { margin: 0; color: #ff8a7a; font-size: 9px; }
+.band-footer { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 13px; padding-top: 13px; border-top: 1px solid rgba(255,255,255,0.07); color: rgba(244,239,230,0.56); font-size: 9px; letter-spacing: 0.08em; text-transform: uppercase; }
+.character button[aria-pressed="true"] { background: var(--band-accent); }
+.footnote { margin-top: 16px; color: rgba(244,239,230,0.48); font-size: 9px; line-height: 1.55; letter-spacing: 0.03em; text-align: center; }
+
+@media (max-width: 760px) {
+    :host { width: 100%; }
+    .bands { grid-template-columns: 1fr; }
+    .topline { align-items: stretch; flex-direction: column; }
+    .top-controls { width: 100%; }
+    .badges { justify-content: flex-start; }
+}

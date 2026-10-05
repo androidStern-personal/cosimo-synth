@@ -3,7 +3,7 @@
   "alias": "enhancer",
   "cmakeTarget": "CosimoEnhancer",
   "productName": "CosimoEnhancer",
+  "stateSource": "fx/enhancer/state.ts",
   "runtimeOut": "build/fx/enhancer_runtime",
-  "juceOut": "build/enhancer_juce",
-  "jitInstallRuntime": true
+  "juceOut": "build/enhancer_juce"
 }

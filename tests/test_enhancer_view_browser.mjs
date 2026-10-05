@@ -1,33 +1,37 @@
 import assert from "node:assert/strict";
+import { spawnSync } from "node:child_process";
+import { readFile } from "node:fs/promises";
+import path from "node:path";
 import test, { after, before } from "node:test";
 
 import { chromium } from "playwright";
 
-import { startStaticRepoServer } from "./helpers/desktop_harness_browser.mjs";
+import { startStaticRepoServer } from "../kit/tests/helpers/static_web_server.mjs";
+import { openStockControlsView } from "./helpers/stock_controls_view_harness.mjs";
 
-const initialValues = {
-    b1FreqHzIn: 130,
-    b1QIn: 0.71,
-    b1ModeIn: 0,
-    b1MidAmountIn: 0,
-    b1SideAmountIn: 0,
-    b1CurveIn: 1,
-    b2FreqHzIn: 9000,
-    b2QIn: 0.71,
-    b2ModeIn: 0,
-    b2MidAmountIn: 0,
-    b2SideAmountIn: 0,
-    b2CurveIn: 0,
-    saturationModeIn: 0,
-    deEmphasisIn: 1,
-};
+const repoRoot = path.resolve(import.meta.dirname, "..");
+const manifest = JSON.parse(await readFile(path.join(repoRoot, "fx/enhancer/Enhancer.cmajorpatch"), "utf8"));
+const sourceModule = "/fx/enhancer/view/source.tsx";
+const builtModule = "/build/fx/enhancer_runtime/view/app.js";
+
+// EnhancerPlugin.cmajor's parameters as the host reports them. Its ranges and
+// defaults are constants in cmajor/Enhancer.cmajor, so they are spelled out here.
+const parameter = (endpointID, min, max, init, extra = {}) => ({ endpointID, purpose: "parameter", annotation: { min, max, init, ...extra } });
+const choice = (endpointID, init) => parameter(endpointID, 0, 1, init, { discrete: true, step: 1 });
+const statusInputs = [
+    parameter("b1FreqHzIn", 20, 20_000, 130), parameter("b1QIn", 0.1, 10, 0.71), choice("b1ModeIn", 0),
+    parameter("b1MidAmountIn", 0, 1, 0), parameter("b1SideAmountIn", 0, 1, 0), choice("b1CurveIn", 1),
+    parameter("b2FreqHzIn", 20, 20_000, 9000), parameter("b2QIn", 0.1, 10, 0.71), choice("b2ModeIn", 0),
+    parameter("b2MidAmountIn", 0, 1, 0), parameter("b2SideAmountIn", 0, 1, 0), choice("b2CurveIn", 0),
+    choice("saturationModeIn", 0), parameter("deEmphasisIn", 0, 1, 1),
+];
 
 let server;
 let browser;
 
 before(async () => {
-    // Serves /fx TypeScript views bundled on the fly and the prebuilt
-    // /build/fx runtime; run `npm run fx:build -- enhancer` for the latter.
+    const build = spawnSync(process.execPath, ["kit/fx/build-effect.mjs", "enhancer"], { cwd: repoRoot, encoding: "utf8", timeout: 120000 });
+    assert.equal(build.status, 0, `npm run fx:build -- enhancer failed:\n${build.stdout}${build.stderr}`);
     server = await startStaticRepoServer({ bundleTypeScript: true });
     browser = await chromium.launch({ headless: true });
 });
@@ -37,180 +41,130 @@ after(async () => {
     await server?.stop();
 });
 
-async function openEnhancer(modulePath = "/fx/enhancer/view/source.ts") {
-    const page = await browser.newPage();
-    await page.goto(new URL("tests/helpers/module_test_shell.html", server.baseUrl).toString());
-    await page.evaluate(async ({ values, sourceModulePath }) => {
-        const parameterValues = new Map(Object.entries(values));
-        const listeners = new Map();
-        const sent = [];
-
-        const emit = (endpointID, value) => {
-            parameterValues.set(endpointID, value);
-            for (const listener of listeners.get(endpointID) ?? [])
-                listener(value);
-        };
-
-        const patchConnection = {
-            addParameterListener(endpointID, listener) {
-                const endpointListeners = listeners.get(endpointID) ?? new Set();
-                endpointListeners.add(listener);
-                listeners.set(endpointID, endpointListeners);
-            },
-            removeParameterListener(endpointID, listener) {
-                listeners.get(endpointID)?.delete(listener);
-            },
-            requestParameterValue(endpointID) {
-                queueMicrotask(() => emit(endpointID, parameterValues.get(endpointID)));
-            },
-            sendEventOrValue(endpointID, value) {
-                sent.push({ endpointID, value });
-                emit(endpointID, value);
-            },
-        };
-
-        const module = await import(sourceModulePath);
-        const view = module.default(patchConnection);
-        document.body.appendChild(view);
-        window.__ENHANCER_TEST__ = { emit, sent };
-    }, { values: initialValues, sourceModulePath: modulePath });
-    await page.locator("cosimo-enhancer-view").waitFor();
-    return page;
+async function openEnhancer(modulePath = sourceModule) {
+    const { page, errors } = await openStockControlsView(browser, server, { modulePath, manifest, statusInputs });
+    await page.locator(".band").first().waitFor();
+    return { page, errors };
 }
 
-function shadow(page, selector) {
-    return page.locator(`cosimo-enhancer-view >> ${selector}`);
+/** The parameter values the view wrote to the host, oldest first. */
+const writes = page => page.evaluate(() => window.__LAB__.hostMessages
+    .filter(message => message.type === "value").map(({ endpointID, value }) => ({ endpointID, value })));
+
+const automate = (page, values) => page.evaluate(values => {
+    for (const [endpointID, value] of Object.entries(values)) window.__LAB__.automate(endpointID, value);
+}, values);
+
+/** Drag a slider to each position in turn, as one pointer gesture. */
+async function dragSlider(page, endpointID, ...positions) {
+    const slider = page.locator(`[data-endpoint-id='${endpointID}'] input`);
+    await slider.dispatchEvent("pointerdown");
+    for (const position of positions) await slider.fill(String(position));
+    await page.evaluate(() => window.dispatchEvent(new PointerEvent("pointerup")));
 }
 
 test("each band independently switches between Stereo Amount and Mid/Side amounts", async () => {
-    const page = await openEnhancer();
-
+    const { page, errors } = await openEnhancer();
     try {
-        assert.equal(await shadow(page, "[data-band='1']").count(), 1);
-        assert.equal(await shadow(page, "[data-band='2']").count(), 1);
-        assert.equal(await shadow(page, "[data-band='1'] [data-role='primary-label']").textContent(), "Amount");
-        assert.equal(await shadow(page, "[data-band='1'] [data-role='side-control']").isHidden(), true);
-        assert.equal(await shadow(page, "[data-band='2'] [data-role='side-control']").isHidden(), true);
+        const band1 = page.locator("[data-band='1']");
+        const band2 = page.locator("[data-band='2']");
+        assert.equal(await band1.locator("[data-role='primary-label']").textContent(), "Amount");
+        assert.equal(await band1.locator("[data-role='side-control']").isHidden(), true);
+        assert.equal(await band2.locator("[data-role='side-control']").isHidden(), true);
 
-        await shadow(page, "[data-band='1'] [data-mode='mid-side']").click();
-        assert.equal(await shadow(page, "[data-band='1'] [data-role='primary-label']").textContent(), "Mid");
-        assert.equal(await shadow(page, "[data-band='1'] [data-role='side-control']").isVisible(), true);
-        assert.equal(await shadow(page, "[data-band='2'] [data-role='primary-label']").textContent(), "Amount");
-        assert.equal(await shadow(page, "[data-band='2'] [data-role='side-control']").isHidden(), true);
+        await band1.locator("[data-mode='mid-side']").click();
+        assert.equal(await band1.locator("[data-role='primary-label']").textContent(), "Mid");
+        await band1.locator("[data-role='side-control']").waitFor();
+        assert.equal(await band2.locator("[data-role='primary-label']").textContent(), "Amount");
+        assert.equal(await band2.locator("[data-role='side-control']").isHidden(), true);
 
-        await shadow(page, "[data-band='1'] [data-endpoint-id='b1MidAmountIn'] input").evaluate((input) => {
-            input.value = "0.72";
-            input.dispatchEvent(new Event("input", { bubbles: true }));
-        });
-        await shadow(page, "[data-band='1'] [data-endpoint-id='b1SideAmountIn'] input").evaluate((input) => {
-            input.value = "0.23";
-            input.dispatchEvent(new Event("input", { bubbles: true }));
-        });
-
-        const sent = await page.evaluate(() => window.__ENHANCER_TEST__.sent);
-        assert.deepEqual(sent.slice(-3), [
+        await dragSlider(page, "b1MidAmountIn", 0.72);
+        await dragSlider(page, "b1SideAmountIn", 0.23);
+        await page.waitForFunction(() => window.__LAB__.hostValue("b1SideAmountIn") === 0.23);
+        assert.deepEqual((await writes(page)).slice(-3), [
             { endpointID: "b1ModeIn", value: 1 },
             { endpointID: "b1MidAmountIn", value: 0.72 },
             { endpointID: "b1SideAmountIn", value: 0.23 },
         ]);
+        assert.deepEqual(errors, []);
     } finally {
         await page.close();
     }
 });
 
 test("de-emphasis is a real global control from no subtraction to full subtraction", async () => {
-    const page = await openEnhancer();
-
+    const { page } = await openEnhancer();
     try {
-        const control = shadow(page, "[data-endpoint-id='deEmphasisIn']");
+        const control = page.locator("[data-endpoint-id='deEmphasisIn']");
         assert.equal(await control.locator("output").textContent(), "100%");
 
-        await control.locator("input").evaluate((input) => {
-            input.value = "0";
-            input.dispatchEvent(new Event("input", { bubbles: true }));
-        });
-        assert.deepEqual(await page.evaluate(() => window.__ENHANCER_TEST__.sent.slice(-1)), [
-            { endpointID: "deEmphasisIn", value: 0 },
-        ]);
+        await dragSlider(page, "deEmphasisIn", 0);
+        await page.waitForFunction(() => window.__LAB__.hostValue("deEmphasisIn") === 0);
         assert.equal(await control.locator("output").textContent(), "0%");
 
-        await page.evaluate(() => window.__ENHANCER_TEST__.emit("deEmphasisIn", 0.37));
-        assert.equal(await control.locator("output").textContent(), "37%");
+        await automate(page, { deEmphasisIn: 0.37 });
+        await control.locator("output", { hasText: "37%" }).waitFor();
 
         await control.locator("input").dblclick();
-        assert.deepEqual(await page.evaluate(() => window.__ENHANCER_TEST__.sent.slice(-1)), [
-            { endpointID: "deEmphasisIn", value: 1 },
-        ]);
+        await page.waitForFunction(() => window.__LAB__.hostValue("deEmphasisIn") === 1);
+        assert.deepEqual((await writes(page)).slice(-1), [{ endpointID: "deEmphasisIn", value: 1 }]);
     } finally {
         await page.close();
     }
 });
 
 test("the global saturation mode switches between measured Subtle and Medium laws", async () => {
-    const page = await openEnhancer();
-
+    const { page } = await openEnhancer();
     try {
-        const subtle = shadow(page, "[data-saturation-mode='subtle']");
-        const medium = shadow(page, "[data-saturation-mode='medium']");
+        const subtle = page.locator("[data-saturation-mode='subtle']");
+        const medium = page.locator("[data-saturation-mode='medium']");
         assert.equal(await subtle.getAttribute("aria-pressed"), "true");
         assert.equal(await medium.getAttribute("aria-pressed"), "false");
 
         await medium.click();
-        assert.deepEqual(await page.evaluate(() => window.__ENHANCER_TEST__.sent.slice(-1)), [
-            { endpointID: "saturationModeIn", value: 1 },
-        ]);
-        assert.equal(await medium.getAttribute("aria-pressed"), "true");
+        await page.locator("[data-saturation-mode='medium'][aria-pressed='true']").waitFor();
+        assert.deepEqual((await writes(page)).slice(-1), [{ endpointID: "saturationModeIn", value: 1 }]);
 
-        await page.evaluate(() => window.__ENHANCER_TEST__.emit("saturationModeIn", 0));
-        assert.equal(await subtle.getAttribute("aria-pressed"), "true");
+        await automate(page, { saturationModeIn: 0 });
+        await page.locator("[data-saturation-mode='subtle'][aria-pressed='true']").waitFor();
     } finally {
         await page.close();
     }
 });
 
 test("the response plot follows Frequency, Q, Amount, and independent Side drive", async () => {
-    const page = await openEnhancer();
-
+    const { page } = await openEnhancer();
     try {
-        const primaryPath = shadow(page, "[data-response-band='1'][data-response-role='primary']");
-        const sidePath = shadow(page, "[data-response-band='1'][data-response-role='side']");
-        const primaryHandle = shadow(page, "[data-response-band='1'][data-response-role='primary-handle']");
-        const amountOutput = shadow(page, "[data-endpoint-id='b1MidAmountIn'] output");
+        const primaryPath = page.locator("[data-response-band='1'][data-response-role='primary']");
+        const sidePath = page.locator("[data-response-band='1'][data-response-role='side']");
+        const primaryHandle = page.locator("[data-response-band='1'][data-response-role='primary-handle']");
+        const amountOutput = page.locator("[data-endpoint-id='b1MidAmountIn'] output");
+        const pointsAboveSixDb = () => primaryPath.evaluate(path => [...(path.getAttribute("d") ?? "").matchAll(/[ML] ([\d.]+) ([\d.]+)/g)]
+            .filter(match => Number(match[2]) < 78).length);
 
         const dryPath = await primaryPath.getAttribute("d");
         assert.equal(await amountOutput.textContent(), "+0.0 dB");
         assert.equal(await sidePath.isHidden(), true);
 
-        await page.evaluate(() => {
-            window.__ENHANCER_TEST__.emit("b1FreqHzIn", 1000);
-            window.__ENHANCER_TEST__.emit("b1MidAmountIn", 1);
-            window.__ENHANCER_TEST__.emit("b1QIn", 0.1);
-        });
+        await automate(page, { b1FreqHzIn: 1000, b1MidAmountIn: 1, b1QIn: 0.1 });
+        await page.locator("[data-response-band='1'][data-response-role='primary'][aria-label*='Q 0.10']").waitFor();
         const widePath = await primaryPath.getAttribute("d");
-        const widePointsAboveSixDb = await primaryPath.evaluate((path) => (
-            [...(path.getAttribute("d") ?? "").matchAll(/[ML] ([\d.]+) ([\d.]+)/g)]
-                .filter((match) => Number(match[2]) < 78).length
-        ));
+        const wideCount = await pointsAboveSixDb();
 
-        await page.evaluate(() => window.__ENHANCER_TEST__.emit("b1QIn", 10));
+        await automate(page, { b1QIn: 10 });
+        await page.locator("[data-response-band='1'][data-response-role='primary'][aria-label*='Q 10.00']").waitFor();
         const narrowPath = await primaryPath.getAttribute("d");
-        const narrowPointsAboveSixDb = await primaryPath.evaluate((path) => (
-            [...(path.getAttribute("d") ?? "").matchAll(/[ML] ([\d.]+) ([\d.]+)/g)]
-                .filter((match) => Number(match[2]) < 78).length
-        ));
 
         assert.notEqual(widePath, dryPath);
         assert.notEqual(narrowPath, widePath);
-        assert.ok(widePointsAboveSixDb > narrowPointsAboveSixDb);
+        assert.ok(wideCount > await pointsAboveSixDb());
         assert.equal(await amountOutput.textContent(), "+12.0 dB");
         assert.equal(await primaryHandle.getAttribute("cy"), "12.00");
         assert.match(await primaryPath.getAttribute("aria-label"), /1\.00 kHz, Q 10\.00, \+12\.0 dB/);
 
-        await page.evaluate(() => {
-            window.__ENHANCER_TEST__.emit("b1ModeIn", 1);
-            window.__ENHANCER_TEST__.emit("b1SideAmountIn", 0.5);
-        });
-        assert.equal(await sidePath.isVisible(), true);
+        await automate(page, { b1ModeIn: 1, b1SideAmountIn: 0.5 });
+        await sidePath.waitFor();
+        await page.locator("[data-response-band='1'][data-response-role='side'][aria-label*='+6.0 dB']").waitFor();
         assert.match(await sidePath.getAttribute("aria-label"), /Band 1 Side: 1\.00 kHz, Q 10\.00, \+6\.0 dB/);
     } finally {
         await page.close();
@@ -218,17 +172,11 @@ test("the response plot follows Frequency, Q, Amount, and independent Side drive
 });
 
 test("the Frequency control spans Spectre's logarithmic 20 Hz to 20 kHz range", async () => {
-    const page = await openEnhancer();
-
+    const { page } = await openEnhancer();
     try {
-        const input = shadow(page, "[data-endpoint-id='b1FreqHzIn'] input");
-        await input.evaluate((slider) => {
-            slider.value = "0";
-            slider.dispatchEvent(new Event("input", { bubbles: true }));
-            slider.value = "1";
-            slider.dispatchEvent(new Event("input", { bubbles: true }));
-        });
-        assert.deepEqual(await page.evaluate(() => window.__ENHANCER_TEST__.sent.slice(-2)), [
+        await dragSlider(page, "b1FreqHzIn", 0, 1);
+        await page.waitForFunction(() => window.__LAB__.hostValue("b1FreqHzIn") === 20_000);
+        assert.deepEqual((await writes(page)).slice(-2), [
             { endpointID: "b1FreqHzIn", value: 20 },
             { endpointID: "b1FreqHzIn", value: 20_000 },
         ]);
@@ -237,45 +185,79 @@ test("the Frequency control spans Spectre's logarithmic 20 Hz to 20 kHz range", 
     }
 });
 
-test("the compiled production view used by the VST renders the same independent routing controls", async () => {
-    const page = await openEnhancer("/build/fx/enhancer_runtime/view/app.js");
-
+test("a slider drag is one Undo entry and one host gesture", async () => {
+    const { page } = await openEnhancer();
     try {
-        assert.equal(await shadow(page, "[data-endpoint-id='deEmphasisIn']").count(), 1);
-        assert.equal(await shadow(page, "[data-saturation-mode='medium']").count(), 1);
-        assert.equal(await shadow(page, ".response-panel").count(), 1);
-        await shadow(page, "[data-saturation-mode='medium']").click();
-        await shadow(page, "[data-band='2'] [data-mode='mid-side']").click();
-        assert.equal(await shadow(page, "[data-band='1'] [data-role='side-control']").isHidden(), true);
-        assert.equal(await shadow(page, "[data-band='2'] [data-role='side-control']").isVisible(), true);
-        assert.deepEqual(await page.evaluate(() => window.__ENHANCER_TEST__.sent.slice(-2)), [
+        await dragSlider(page, "b2QIn", 2, 3, 4);
+        await page.waitForFunction(() => window.__LAB__.hostValue("b2QIn") === 4);
+        const gestures = await page.evaluate(() => window.__LAB__.hostMessages.filter(message => message.type !== "value"));
+        assert.deepEqual(gestures, [{ type: "begin", endpointID: "b2QIn" }, { type: "end", endpointID: "b2QIn" }]);
+
+        await page.getByRole("button", { name: "Undo", exact: true }).click();
+        await page.waitForFunction(() => window.__LAB__.hostValue("b2QIn") === 0.71);
+        await page.locator("[data-endpoint-id='b2QIn'] output", { hasText: "0.71" }).waitFor();
+        assert.equal(await page.getByRole("button", { name: "Undo", exact: true }).isDisabled(), true, "the whole drag was one entry");
+    } finally {
+        await page.close();
+    }
+});
+
+test("a snapshot slot recalls the whole sound as one Undo entry", async () => {
+    const { page, errors } = await openEnhancer();
+    try {
+        const snapshots = page.getByRole("group", { name: "Snapshots" });
+        await snapshots.getByRole("button", { name: /^Snapshot A/ }).click();
+        await page.locator("[data-band='2'] [data-mode='mid-side']").click();
+        await page.locator("[data-saturation-mode='medium']").click();
+        await page.locator("[data-saturation-mode='medium'][aria-pressed='true']").waitFor();
+
+        await snapshots.getByRole("button", { name: /^Snapshot B/ }).click();
+        await page.locator("[data-band='1'] [data-curve='tube']").click();
+        await page.locator("[data-band='1'] [data-curve='tube'][aria-pressed='true']").waitFor();
+
+        await snapshots.getByRole("button", { name: /^Snapshot A/ }).click();
+        await page.locator("[data-band='1'] [data-curve='solid'][aria-pressed='true']").waitFor();
+        assert.equal(await page.locator("[data-band='2'] [data-mode='mid-side']").getAttribute("aria-pressed"), "true");
+        assert.equal(await page.locator("[data-saturation-mode='medium']").getAttribute("aria-pressed"), "true");
+
+        await page.getByRole("button", { name: "Undo", exact: true }).click();
+        await page.locator("[data-band='1'] [data-curve='tube'][aria-pressed='true']").waitFor();
+        assert.deepEqual(errors, []);
+    } finally {
+        await page.close();
+    }
+});
+
+test("the compiled production view used by the VST renders the same controls under the preset header", async () => {
+    const { page, errors } = await openEnhancer(builtModule);
+    try {
+        await page.getByRole("combobox", { name: "Preset" }).waitFor();
+        await page.getByRole("group", { name: "Snapshots" }).waitFor();
+        assert.equal(await page.locator("[data-endpoint-id='deEmphasisIn']").count(), 1);
+        assert.equal(await page.locator(".response-panel").count(), 1);
+        await page.locator("[data-saturation-mode='medium']").click();
+        await page.locator("[data-band='2'] [data-mode='mid-side']").click();
+        await page.locator("[data-band='2'] [data-role='side-control']").waitFor();
+        assert.equal(await page.locator("[data-band='1'] [data-role='side-control']").isHidden(), true);
+        assert.deepEqual((await writes(page)).slice(-2), [
             { endpointID: "saturationModeIn", value: 1 },
             { endpointID: "b2ModeIn", value: 1 },
         ]);
+        assert.deepEqual(errors, []);
     } finally {
         await page.close();
     }
 });
 
 test("host-restored modes and character values update the real control surface", async () => {
-    const page = await openEnhancer();
-
+    const { page } = await openEnhancer();
     try {
-        await page.evaluate(() => {
-            window.__ENHANCER_TEST__.emit("b1ModeIn", 1);
-            window.__ENHANCER_TEST__.emit("b2ModeIn", 0);
-            window.__ENHANCER_TEST__.emit("b1CurveIn", 0);
-            window.__ENHANCER_TEST__.emit("b2CurveIn", 1);
-            window.__ENHANCER_TEST__.emit("saturationModeIn", 1);
-        });
-
-        await assert.doesNotReject(async () => {
-            await shadow(page, "[data-band='1'] [data-mode='mid-side'][aria-pressed='true']").waitFor();
-            await shadow(page, "[data-band='2'] [data-mode='stereo'][aria-pressed='true']").waitFor();
-            await shadow(page, "[data-band='1'] [data-curve='tube'][aria-pressed='true']").waitFor();
-            await shadow(page, "[data-band='2'] [data-curve='solid'][aria-pressed='true']").waitFor();
-            await shadow(page, "[data-saturation-mode='medium'][aria-pressed='true']").waitFor();
-        });
+        await automate(page, { b1ModeIn: 1, b2ModeIn: 0, b1CurveIn: 0, b2CurveIn: 1, saturationModeIn: 1 });
+        await page.locator("[data-band='1'] [data-mode='mid-side'][aria-pressed='true']").waitFor();
+        await page.locator("[data-band='2'] [data-mode='stereo'][aria-pressed='true']").waitFor();
+        await page.locator("[data-band='1'] [data-curve='tube'][aria-pressed='true']").waitFor();
+        await page.locator("[data-band='2'] [data-curve='solid'][aria-pressed='true']").waitFor();
+        await page.locator("[data-saturation-mode='medium'][aria-pressed='true']").waitFor();
     } finally {
         await page.close();
     }
