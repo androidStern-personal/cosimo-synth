@@ -103,12 +103,8 @@ Copy this prompt into your coding agent:
 
 > Update Builder Kit to 0.2.0 using the kit-update skill. Follow this release's Update instructions in the target release's kit/CHANGELOG.md before merging. Preserve my plugin changes and check that my plugins still build. Then tell me which of the new state, Undo, preset and control features apply to my project.
 
-- **Required for every project:** take the new lockfile and tool pins through
-  the normal merge, run `npm ci`, then run `npm run kit:setup` when strict
-  doctor reports a tool mismatch.
-- **Required for a plugin made with 0.1.x:** rename `EffectParameterContract`
-  to `BrowserPreviewParameter` and keep every parameter ID unchanged. To keep
-  presets, snapshots or Undo, follow [Plugin state](docs/PLUGIN_STATE.md).
+Take the new lockfile and tool pins through the normal merge, run `npm ci`,
+then run `npm run kit:setup` when strict doctor reports a tool mismatch.
 
 ## 0.1.5 (2026-09-09) — Guided setup and safe updates
 
