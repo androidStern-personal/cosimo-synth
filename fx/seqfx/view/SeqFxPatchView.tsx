@@ -65,6 +65,14 @@ import definition from "../state";
 import { SEQFX_FACTORY_PATTERNS } from "./seqfx-factory-content";
 import type { SeqFxGlobalControls, SeqFxSession } from "./seqfx-session";
 
+// The grid computes its cell size once, as a length, and every row reuses it. That needs a
+// registered property, and browsers ignore @property rules inside the view's shadow root.
+try {
+    CSS.registerProperty({ name: "--seqfx-resolved-cell-size", syntax: "<length>", inherits: true, initialValue: "24px" });
+} catch {
+    // Already registered by an earlier load of this view in the same page.
+}
+
 type SelectedCell = {
     lane: number;
     step: number;

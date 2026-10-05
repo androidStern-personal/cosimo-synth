@@ -312,7 +312,7 @@ test("raw replacement retains every invalid stored display without accepting it,
             [{ kind: "stored", key: "curve", value: [0, 0.4, 1] }],
         ]);
         assert.equal(replacements.length, beforeReplacements + 1);
-        assert.deepEqual(replacements.at(-1).input, { value: [0, 0.4, 1], parameters: { gain: -2 } });
+        assert.deepEqual(replacements.at(-1).input, { value: [0, 0.4, 1], parameters: { gain: -2 }, reason: "edit" });
 
         await replace(2);
         for (const key of ["curve", "shape"]) {
@@ -355,7 +355,7 @@ test("recovering the same immutable stored primitive starts its previously waiti
         assert.equal(result.changed, true);
         assert.equal(result.historyEntry, undefined);
         assert.equal(replacements.length, 2, "readiness becoming valid must prepare even when primitive identity is unchanged");
-        assert.deepEqual(replacements[1].input, { value: 4, parameters: {} });
+        assert.deepEqual(replacements[1].input, { value: 4, parameters: {}, reason: "edit" });
         assert.deepEqual(replacements[1].target.scope, scope);
         assert.deepEqual(session.getSnapshot().fields.amount.application, { kind: "pending" });
         assert.deepEqual(publications.map(value => value.operations), [[{ kind: "stored", key: "amount", value: 4 }]]);

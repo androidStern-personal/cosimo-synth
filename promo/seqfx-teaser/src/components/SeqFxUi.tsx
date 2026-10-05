@@ -1,4 +1,4 @@
-import React, { useMemo } from "react";
+import React from "react";
 import { interpolate } from "remotion";
 import "../../../../ui/shared/editor-tokens.css";
 import "../../../../fx/seqfx/view/editor-tick-slider.css";
@@ -11,17 +11,15 @@ import {
   SeqFxPatchView,
   type SeqFxPromoControls,
 } from "../../../../fx/seqfx/view/SeqFxPatchView";
-import type { PatchConnectionLike } from "../../../../kit/ui/cmajor-react";
+import { SeqFxSession } from "../../../../fx/seqfx/view/seqfx-session";
 import {
   SEQFX_EFFECT_TYPES,
-  SEQFX_STATE_KEY,
   applySeqFxBlockAuxTargetEndEdit,
   applySeqFxBlockAuxTargetToggle,
   applySeqFxBlockCreate,
   applySeqFxBlockMixEdit,
   applySeqFxBlockParamEdit,
   createDefaultSeqFxState,
-  serializeSeqFxState,
   type SeqFxEffectType,
   type SeqFxState,
 } from "../../../../fx/seqfx/view/seqfx-state";
@@ -60,107 +58,6 @@ const INSPECTOR_TARGET: Record<EffectKey, { lane: number; step: number }> = {
   crusher: { lane: 2, step: 6 },
   stutter: { lane: 3, step: 6 },
 };
-
-type Listener = (value: unknown) => void;
-
-class PromoPatchConnection implements PatchConnectionLike {
-  storedState: Record<string, unknown>;
-  parameters: Record<string, unknown> = {
-    patternSelect: 0,
-    rate: 1,
-  };
-  status = {
-    details: {
-      inputs: [],
-    },
-  };
-
-  private statusListeners = new Set<Listener>();
-  private storedStateListeners = new Set<Listener>();
-  private parameterListeners = new Map<string, Set<Listener>>();
-  private endpointListeners = new Map<string, Set<Listener>>();
-
-  constructor(initialState: SeqFxState) {
-    this.storedState = {
-      [SEQFX_STATE_KEY]: serializeSeqFxState(initialState),
-    };
-  }
-
-  addStatusListener(listener: Listener) {
-    this.statusListeners.add(listener);
-  }
-
-  removeStatusListener(listener: Listener) {
-    this.statusListeners.delete(listener);
-  }
-
-  requestStatusUpdate() {
-    for (const listener of this.statusListeners) {
-      listener(this.status);
-    }
-  }
-
-  addStoredStateValueListener(listener: Listener) {
-    this.storedStateListeners.add(listener);
-  }
-
-  removeStoredStateValueListener(listener: Listener) {
-    this.storedStateListeners.delete(listener);
-  }
-
-  requestFullStoredState(callback: (state: Record<string, unknown>) => void) {
-    callback({
-      parameters: { ...this.parameters },
-      values: { ...this.storedState },
-    });
-  }
-
-  requestStoredStateValue(key: string) {
-    for (const listener of this.storedStateListeners) {
-      listener({ key, value: this.storedState[key] });
-    }
-  }
-
-  sendStoredStateValue(key: string, value: unknown) {
-    this.storedState[key] = value;
-    for (const listener of this.storedStateListeners) {
-      listener({ key, value });
-    }
-  }
-
-  addParameterListener(endpointID: string, listener: Listener) {
-    const listeners = this.parameterListeners.get(endpointID) ?? new Set<Listener>();
-    listeners.add(listener);
-    this.parameterListeners.set(endpointID, listeners);
-  }
-
-  removeParameterListener(endpointID: string, listener: Listener) {
-    this.parameterListeners.get(endpointID)?.delete(listener);
-  }
-
-  requestParameterValue(endpointID: string) {
-    for (const listener of this.parameterListeners.get(endpointID) ?? []) {
-      listener(this.parameters[endpointID] ?? 0);
-    }
-  }
-
-  sendEventOrValue(endpointID: string, value: unknown) {
-    this.parameters[endpointID] = value;
-    for (const listener of this.parameterListeners.get(endpointID) ?? []) {
-      listener(value);
-    }
-  }
-
-  addEndpointListener(endpointID: string, listener: Listener) {
-    const listeners = this.endpointListeners.get(endpointID) ?? new Set<Listener>();
-    listeners.add(listener);
-    this.endpointListeners.set(endpointID, listeners);
-  }
-
-  removeEndpointListener(endpointID: string, listener: Listener) {
-    this.endpointListeners.get(endpointID)?.delete(listener);
-  }
-}
 
 const setBlockParam = (
   state: SeqFxState,
@@ -391,7 +288,6 @@ export const SeqFxUi = ({
   scale = 1,
   compact = false,
 }: SeqFxUiProps) => {
-  const connection = useMemo(() => new PromoPatchConnection(state), [state]);
   const selected = selectedCell ?? selectionForEffect(inspectorEffect);
   const promoControls: SeqFxPromoControls = {
     state,
@@ -447,7 +343,6 @@ export const SeqFxUi = ({
               }}
             >
               <RealSeqFxView
-                connection={connection}
                 controls={promoControls}
                 showInspector={showInspector}
               />
@@ -462,17 +357,18 @@ export const SeqFxUi = ({
   );
 };
 
+// The promo shows fixed frames, so the view never edits through this session.
+const promoSession = new SeqFxSession();
+
 const RealSeqFxView = ({
-  connection,
   controls,
   showInspector,
 }: {
-  connection: PatchConnectionLike;
   controls: SeqFxPromoControls;
   showInspector: boolean;
 }) => (
   <div className={`seqfx-real-scope${showInspector ? "" : " seqfx-real-hide-inspector"}`}>
-    <SeqFxPatchView patchConnection={connection} promoControls={controls} />
+    <SeqFxPatchView session={promoSession} promoControls={controls} />
   </div>
 );
 

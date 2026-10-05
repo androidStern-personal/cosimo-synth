@@ -54,6 +54,8 @@ function render(session, { state = createDefaultSeqFxState(), parameters = {}, h
     return { log, sent, endpointListeners };
 }
 
+/** Let the edits of the current event reach the state owner. */
+const eventEnds = () => new Promise((resolve) => queueMicrotask(resolve));
 const patternSets = (log) => log.filter(([name, action]) => name === "patterns" && action === "set").map(([, , value]) => value);
 
 function monitorEvent(transportRunning) {
@@ -92,31 +94,37 @@ test("the monitor subscription delivers parsed frames until it is removed", () =
     assert.equal(endpointListeners.has("monitorOut"), false);
 });
 
-test("an edit shows at once: the next edit in the same event builds on it", () => {
+test("edits in one event build on each other and reach the state owner as one change", async () => {
     const session = new SeqFxSession();
-    const { log } = render(session);
+    render(session);
     session.createBlock({ patternIndex: 0, lane: SEQFX_LANES.filter, startStep: 0, length: 2 });
     session.createBlock({ patternIndex: 0, lane: SEQFX_LANES.crusher, startStep: 4, length: 1 });
-    const [first, second] = patternSets(log);
-    assert.equal(first.patterns[0].lanes[SEQFX_LANES.filter].steps[0].active, true);
-    assert.equal(second.patterns[0].lanes[SEQFX_LANES.filter].steps[0].active, true, "the second edit keeps the first");
-    assert.equal(second.patterns[0].lanes[SEQFX_LANES.crusher].steps[4].active, true);
+    assert.equal(session.getState().patterns[0].lanes[SEQFX_LANES.filter].steps[0].active, true, "the view reads its own edit at once");
+    const { log } = render(session);
+    assert.equal(session.getState().patterns[0].lanes[SEQFX_LANES.crusher].steps[4].active, true, "a render before the event ends keeps the unsent edits");
+    await eventEnds();
+    const sets = patternSets(log);
+    assert.equal(sets.length, 1);
+    assert.equal(sets[0].patterns[0].lanes[SEQFX_LANES.filter].steps[0].active, true);
+    assert.equal(sets[0].patterns[0].lanes[SEQFX_LANES.crusher].steps[4].active, true);
 });
 
-test("edits that change nothing send nothing, so they add no Undo entry", () => {
+test("edits that change nothing send nothing, so they add no Undo entry", async () => {
     const state = applySeqFxBlockCreate(createDefaultSeqFxState(), { patternIndex: 0, lane: SEQFX_LANES.filter, startStep: 4, length: 3 });
     const session = new SeqFxSession();
     const { log } = render(session, { state });
     session.resizeBlock({ patternIndex: 0, lane: SEQFX_LANES.filter, startStep: 4, length: 3 });
     session.moveBlock({ patternIndex: 0, lane: SEQFX_LANES.filter, startStep: 4, targetStartStep: 4 });
+    await eventEnds();
     assert.deepEqual(log, []);
     const empty = render(session);
     session.clearLoop();
     session.initPattern();
+    await eventEnds();
     assert.deepEqual(empty.log, []);
 });
 
-test("loop actions act on the selected pattern's loop with an in-memory clipboard", () => {
+test("loop actions act on the selected pattern's loop with an in-memory clipboard", async () => {
     let state = createDefaultSeqFxState();
     state = applySeqFxBlockCreate(state, { patternIndex: 0, lane: 0, startStep: 4, length: 3, effectType: SEQFX_EFFECT_TYPES.filter });
     state = applySeqFxBlockCreate(state, { patternIndex: 0, lane: 1, startStep: 10, length: 2, effectType: SEQFX_EFFECT_TYPES.crusher });
@@ -130,17 +138,20 @@ test("loop actions act on the selected pattern's loop with an in-memory clipboar
     assert.deepEqual(log, [], "copying writes nothing");
 
     session.clearLoop();
+    await eventEnds();
     assert.equal(patternSets(log).length, 1);
     assert.equal(patternSets(log)[0].patterns[0].lanes.flatMap((lane) => lane.steps).some((step) => step.active), false);
 
     ({ log } = render(session, { state, parameters: { loopStart: 16, loopLength: 8 } }));
     session.pasteLoop();
+    await eventEnds();
     const pasted = patternSets(log)[0];
     assert.deepEqual(pasted.patterns[0].lanes[0].steps.slice(16, 19).map((step) => step.active), [true, true, true]);
     assert.deepEqual(pasted.patterns[0].lanes[1].steps.slice(22, 24).map((step) => step.active), [true, true]);
 
     ({ log } = render(session, { state }));
     session.initPattern();
+    await eventEnds();
     const initialized = patternSets(log)[0];
     assert.equal(initialized.patterns[0].lanes.flatMap((lane) => lane.steps).some((step) => step.active), false);
     assert.equal(initialized.patterns[1].lanes[2].steps[7].active, true, "Init leaves the other patterns alone");

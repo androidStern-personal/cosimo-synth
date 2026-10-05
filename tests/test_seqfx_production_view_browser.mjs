@@ -5,6 +5,7 @@ import { readFile, stat } from "node:fs/promises";
 import path from "node:path";
 import { inflateSync } from "node:zlib";
 
+import { build } from "esbuild";
 import { chromium } from "playwright";
 
 import { buildPlugin, repoRoot } from "../kit/fx/build-effect.mjs";
@@ -24,6 +25,7 @@ let browser;
 let staticServer;
 let staticServerOrigin;
 let runtimeBuilt = false;
+let previewStateModule;
 
 async function setPhysicalSliderValue(locator, value) {
     await locator.evaluate((node, nextValue) => {
@@ -64,6 +66,12 @@ async function startStaticServer() {
             if (url.pathname === "/") {
                 response.writeHead(200, { "Content-Type": "text/html" });
                 response.end("<!doctype html><html><body></body></html>");
+                return;
+            }
+
+            if (url.pathname === "/preview-state.js") {
+                response.writeHead(200, { "Content-Type": "text/javascript" });
+                response.end(previewStateModule);
                 return;
             }
 
@@ -355,6 +363,27 @@ function patchConnectionSource() {
                 this.endpointListeners.get(endpointID)?.delete(listener);
             }
         }
+
+        // The kit's browser state owner stands in for the plugin worker; the mock records what it writes.
+        async function withStateOwner(patchConnection) {
+            const { createBrowserPreviewState } = await import("/preview-state.js");
+            const ranges = {
+                enabled: [0, 1, 1], globalMix: [0, 1, 0], patternSelect: [0, 11, 1], clockMode: [0, 2, 1], manualBpm: [20, 300, 0],
+                rate: [0, 2, 1], swing: [0, 0.45, 0], loopStart: [0, 31, 1], loopLength: [1, 32, 1],
+            };
+            const stateHost = createBrowserPreviewState({
+                snapshot: () => ({
+                    values: { ...patchConnection.storedState },
+                    parameters: Object.entries(ranges).map(([endpoint, [min, max, step]]) => ({
+                        endpoint, value: patchConnection.parameters[endpoint], min, max, step, defaultValue: patchConnection.parameters[endpoint],
+                    })),
+                }),
+                parameter: (endpoint, value) => patchConnection.sendEventOrValue(endpoint, value),
+                stored: (key, value) => { patchConnection.storedState[key] = value; },
+                gesture() {},
+            });
+            return Object.assign(patchConnection, stateHost.host);
+        }
     `;
 }
 
@@ -398,9 +427,9 @@ async function mountProductionView(page, {
         timeoutMs: hostTimeoutMs,
     }) => {
         // eslint-disable-next-line no-new-func
-        const definePatchConnection = new Function(`${patchConnectionClassSource}; return SeqFxProductionSmokePatchConnection;`);
-        const PatchConnection = definePatchConnection();
-        const patchConnection = new PatchConnection();
+        const definePatchConnection = new Function(`${patchConnectionClassSource}; return [SeqFxProductionSmokePatchConnection, withStateOwner];`);
+        const [PatchConnection, withStateOwner] = definePatchConnection();
+        const patchConnection = await withStateOwner(new PatchConnection());
         const root = document.getElementById("root");
 
         if (shouldForceProductionModule) {
@@ -623,6 +652,15 @@ function countVisiblePixels(png) {
 
 before(async () => {
     await ensureSeqFxProductionRuntime();
+    const bundled = await build({
+        entryPoints: [path.join(repoRoot, "kit/ui/preview/state.ts")],
+        bundle: true,
+        format: "esm",
+        write: false,
+        jsx: "automatic",
+        define: { "process.env.NODE_ENV": '"production"' },
+    });
+    previewStateModule = bundled.outputFiles[0].text;
     staticServer = await startStaticServer();
     staticServerOrigin = staticServer.origin;
     browser = await chromium.launch();
@@ -644,7 +682,7 @@ test("SeqFX Cmajor host-flow mounts a visible UI instead of a black viewport", a
         assert.equal(result.error, undefined, `expected Cmajor host-flow view creation not to throw: ${result.error}`);
         assert.equal(result.noView, undefined, "expected Cmajor host-flow view creation to return a view");
         await page.waitForFunction(() => {
-            const host = document.querySelector("cosimo-seqfx-react-view");
+            const host = document.querySelector("builder-kit-state-view");
             return Boolean(
                 host?.shadowRoot?.querySelector('[data-role="seqfx-root"]')
                     ?? document.querySelector('[data-role="seqfx-root"]'),
@@ -652,7 +690,7 @@ test("SeqFX Cmajor host-flow mounts a visible UI instead of a black viewport", a
         });
 
         const rootInfo = await page.evaluate(() => {
-            const host = document.querySelector("cosimo-seqfx-react-view");
+            const host = document.querySelector("builder-kit-state-view");
             const shadowRoot = host?.shadowRoot?.querySelector('[data-role="seqfx-root"]');
             const lightDomRoot = document.querySelector('[data-role="seqfx-root"]');
             const root = shadowRoot ?? lightDomRoot;
@@ -663,7 +701,7 @@ test("SeqFX Cmajor host-flow mounts a visible UI instead of a black viewport", a
                 text: root?.textContent,
             };
         });
-        assert.equal(rootInfo.hostTagName, "cosimo-seqfx-react-view");
+        assert.equal(rootInfo.hostTagName, "builder-kit-state-view");
         assert.equal(rootInfo.renderedInShadowRoot || rootInfo.renderedInLightDom, true);
         assert.match(rootInfo.text ?? "", /SeqFX/);
 
@@ -691,7 +729,7 @@ test("SeqFX production shadow-root host exposes the shared editor token palette"
         assert.equal(result.noView, undefined, "expected Cmajor host-flow view creation to return a view");
 
         const editorTokens = await page.evaluate(() => {
-            const host = document.querySelector("cosimo-seqfx-react-view");
+            const host = document.querySelector("builder-kit-state-view");
             const styles = host ? getComputedStyle(host) : null;
 
             return {
@@ -731,7 +769,7 @@ test("SeqFX packaged filter installs its styles and edits the shared cutoff band
             const bounds = surface?.getBoundingClientRect();
             return {
                 inShadowRoot: node.getRootNode() instanceof ShadowRoot,
-                styleCount: node.getRootNode().querySelectorAll('style[data-builder-kit-filter]').length,
+                styleCount: node.getRootNode().querySelectorAll('style[data-builder-kit-styles="filter"]').length,
                 surfaceWidth: bounds?.width ?? 0,
                 surfaceHeight: bounds?.height ?? 0,
                 overflow: node.scrollWidth > node.clientWidth + 1,
@@ -751,14 +789,14 @@ test("SeqFX packaged filter installs its styles and edits the shared cutoff band
         const startGrip = editor.locator('[data-role="filter-range-start-hit-target"]');
         await startGrip.focus();
         await page.keyboard.press("End");
-        await page.waitForFunction(() => document.querySelector("cosimo-seqfx-react-view")
+        await page.waitForFunction(() => document.querySelector("builder-kit-state-view")
             ?.shadowRoot?.querySelector('[data-role="filter-range-start-hit-target"]')?.getAttribute("aria-valuenow") === "20000");
         assert.equal(await endChip.textContent(), endBefore, "start edit must preserve the other endpoint");
 
         const mode = editor.locator('[data-role="filter-range-mode-cycle-button"]');
         const modeBefore = await mode.getAttribute("data-mode-label");
         await mode.click();
-        await page.waitForFunction((previous) => document.querySelector("cosimo-seqfx-react-view")
+        await page.waitForFunction((previous) => document.querySelector("builder-kit-state-view")
             ?.shadowRoot?.querySelector('[data-role="filter-range-mode-cycle-button"]')?.getAttribute("data-mode-label") !== previous,
         modeBefore);
         assert.deepEqual(pageErrors, []);
@@ -928,8 +966,9 @@ test("SeqFX packaged shadow-root flow renders implemented effect inspectors thro
         await page.getByRole("button", { name: "Chain 4 Ring block 1", exact: true }).waitFor();
         const ringFrequency = page.locator('[data-role="seqfx-param"][data-param="0"]');
         await ringFrequency.waitFor();
-        await ringFrequency.fill("440");
-        assert.equal(await ringFrequency.inputValue(), "440");
+        await setPhysicalSliderValue(ringFrequency, 440);
+        await page.waitForFunction(() => document.querySelector("builder-kit-state-view")?.shadowRoot
+            ?.querySelector('[data-role="seqfx-param"][data-param="0"]')?.getAttribute("data-physical-value") === "440");
         assert.equal(await page.locator('[data-role="seqfx-param"]').count(), 7);
         assert.equal(await page.locator('[data-role="seqfx-param"][data-param="1"] option').count(), 4);
         assert.ok(await page.locator('[data-role="seqfx-block-glyph"][data-effect="ring"] [data-role="seqfx-block-glyph-line"]').getAttribute("d"));
@@ -1120,7 +1159,7 @@ test("SeqFX Cmajor host-flow falls back to packaged UI when dev probe fetch cann
         assert.equal(result.noView, undefined, "expected Cmajor host-flow view creation to return a view");
         await page.waitForFunction(() => (
             Boolean(
-                document.querySelector("cosimo-seqfx-react-view")
+                document.querySelector("builder-kit-state-view")
                     ?.shadowRoot
                     ?.querySelector('[data-role="seqfx-root"]'),
             )
@@ -1144,7 +1183,7 @@ test("SeqFX Cmajor host-flow imports the packaged UI without constructing an abs
         assert.equal(result.noView, undefined, "expected Cmajor host-flow view creation to return a view");
         await page.waitForFunction(() => (
             Boolean(
-                document.querySelector("cosimo-seqfx-react-view")
+                document.querySelector("builder-kit-state-view")
                     ?.shadowRoot
                     ?.querySelector('[data-role="seqfx-root"]'),
             )
@@ -1161,14 +1200,14 @@ test("SeqFX production loader returns a visible error view if the packaged UI mo
         await page.goto(staticServerOrigin);
         const errorText = await page.evaluate(async ({ loaderPath, patchConnectionClassSource }) => {
             // eslint-disable-next-line no-new-func
-            const definePatchConnection = new Function(`${patchConnectionClassSource}; return SeqFxProductionSmokePatchConnection;`);
-            const PatchConnection = definePatchConnection();
+            const definePatchConnection = new Function(`${patchConnectionClassSource}; return [SeqFxProductionSmokePatchConnection, withStateOwner];`);
+            const [PatchConnection, withStateOwner] = definePatchConnection();
             const module = await import(`/${loaderPath}`);
             const createPatchView = module.createEffectPatchView({
                 source: "",
                 productionModule: "./missing-packaged-app.js",
             });
-            const view = await createPatchView(new PatchConnection());
+            const view = await createPatchView(await withStateOwner(new PatchConnection()));
             document.body.appendChild(view);
             return view.textContent;
         }, {
@@ -1218,8 +1257,8 @@ test("SeqFX production loader falls back when the dev-server status probe hangs"
             hangingDevOrigin,
         }) => {
             // eslint-disable-next-line no-new-func
-            const definePatchConnection = new Function(`${patchConnectionClassSource}; return SeqFxProductionSmokePatchConnection;`);
-            const PatchConnection = definePatchConnection();
+            const definePatchConnection = new Function(`${patchConnectionClassSource}; return [SeqFxProductionSmokePatchConnection, withStateOwner];`);
+            const [PatchConnection, withStateOwner] = definePatchConnection();
             const module = await import(`/${loaderPath}`);
             const createPatchView = module.createEffectPatchView({
                 devOrigin: hangingDevOrigin,
@@ -1229,7 +1268,7 @@ test("SeqFX production loader falls back when the dev-server status probe hangs"
             const root = document.getElementById("root");
 
             return await Promise.race([
-                createPatchView(new PatchConnection()).then((view) => {
+                createPatchView(await withStateOwner(new PatchConnection())).then((view) => {
                     root.appendChild(view);
                     return {
                         timedOut: false,
@@ -1252,13 +1291,13 @@ test("SeqFX production loader falls back when the dev-server status probe hangs"
         assert.equal(result.error, undefined, `expected loader to fall back to production, got ${result.error}`);
         await page.waitForFunction(() => (
             Boolean(
-                document.querySelector("cosimo-seqfx-react-view")
+                document.querySelector("builder-kit-state-view")
                     ?.shadowRoot
                     ?.querySelector('[data-role="seqfx-root"]'),
             )
         ));
         const rootText = await page.evaluate(() => (
-            document.querySelector("cosimo-seqfx-react-view")
+            document.querySelector("builder-kit-state-view")
                 ?.shadowRoot
                 ?.querySelector('[data-role="seqfx-root"]')
                 ?.textContent

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useSyncExternalStore } from "react";
 
 import {
     usePatchConnection,
@@ -179,6 +179,20 @@ function numberValue(control: PluginStateControl<number>, fallback: number): num
 export class SeqFxSession {
     private latest: Rendered | null = null;
     private state: SeqFxState | null = null;
+    /** Edits made in the current event, sent together as one change once the event finishes. */
+    private unsent = false;
+    /** Counts local edits, so the view redraws within the event that made them. */
+    private edits = 0;
+    private readonly editListeners = new Set<() => void>();
+
+    readonly subscribeToEdits = (listener: () => void) => {
+        this.editListeners.add(listener);
+        return () => {
+            this.editListeners.delete(listener);
+        };
+    };
+
+    readonly editCount = () => this.edits;
     private loopClipboard: SeqFxLoopClipboard | null = null;
     private variationIndex = 0;
     private liveEditActive = false;
@@ -187,7 +201,9 @@ export class SeqFxSession {
     /** Adopt this render's controls and the value it shows. */
     render(rendered: Rendered) {
         this.latest = rendered;
-        this.state = rendered.state;
+        if (!this.unsent) {
+            this.state = rendered.state;
+        }
     }
 
     private get rendered(): Rendered {
@@ -229,10 +245,12 @@ export class SeqFxSession {
     }
 
     undo() {
+        this.send();
         void this.rendered.history.undo();
     }
 
     redo() {
+        this.send();
         void this.rendered.history.redo();
     }
 
@@ -301,6 +319,7 @@ export class SeqFxSession {
 
     /** Group the pattern edits of one drag into a single Undo entry. */
     beginLiveEdit() {
+        this.send();
         if (!this.liveEditActive) {
             this.liveEditActive = true;
             void this.rendered.patterns.beginGesture();
@@ -308,6 +327,7 @@ export class SeqFxSession {
     }
 
     commitLiveEdit() {
+        this.send();
         if (this.liveEditActive) {
             this.liveEditActive = false;
             void this.rendered.patterns.endGesture();
@@ -479,13 +499,32 @@ export class SeqFxSession {
         return key === "loopLength" ? Math.min(value, SEQFX_STEP_COUNT - this.getGlobalControls().loopStart) : value;
     }
 
-    /** Show the edited patterns at once; the state owner saves them, sends them to the DSP and records Undo. */
+    /**
+     * Keep the edited patterns for the next edit in this event, then hand them to the state owner,
+     * which saves them, sends them to the DSP and records Undo. One user action that makes several
+     * edits, such as moving both ends of a filter range, becomes one change.
+     */
     private commit(next: SeqFxState) {
         if (seqFxPatternsCodec.equals(this.getState(), next)) {
             return;
         }
         this.state = next;
-        void this.rendered.patterns.setValue(next);
+        this.edits += 1;
+        if (!this.unsent) {
+            this.unsent = true;
+            queueMicrotask(() => this.send());
+        }
+        // A controlled input restores its old value after the event unless the view redraws now.
+        for (const listener of this.editListeners) {
+            listener();
+        }
+    }
+
+    private send() {
+        if (this.unsent) {
+            this.unsent = false;
+            void this.rendered.patterns.setValue(this.getState());
+        }
     }
 }
 
@@ -514,6 +553,7 @@ export function useSeqFxSession(): SeqFxSession | null {
         ? { patterns, controls, editor, history, connection, state: patterns.state.value }
         : null;
     const [session] = useState(() => new SeqFxSession());
+    useSyncExternalStore(session.subscribeToEdits, session.editCount);
     if (!rendered) {
         return null;
     }
