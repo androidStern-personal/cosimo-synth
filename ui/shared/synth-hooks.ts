@@ -2429,10 +2429,12 @@ export function useSynthPatchViewModel({
             slotIndex: selectedMsegSlot,
         });
     }, [msegState?.playback, observedMsegState, selectedMsegSlot]);
+    // ADSR values are host parameters with their own readiness; only the
+    // display name comes from the modulation document, which may still be opening.
     const selectedEnvelope = useMemo(() => {
         const name = modulationState?.envelopeSlots[selectedEnvelopeSlot]?.name;
         const bindings = envelopeEditorBindings[selectedEnvelopeSlot];
-        if (!modulationState || !bindings) return null;
+        if (!bindings) return null;
         return {
             name: selectedEnvelopeSlot === 3
                 ? "Amp Envelope"

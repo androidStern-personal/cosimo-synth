@@ -45,6 +45,7 @@ import {
     startDesktopHarnessServer,
     waitForHarnessReady,
 } from "./desktop_harness_browser.mjs";
+import { createSynthParameterFixture, synthParameterEndpoints } from "./synth_parameter_fixture.mjs";
 
 let server;
 
@@ -881,6 +882,20 @@ export async function showVoiceControls(page) {
     await page.locator('[aria-label="Glide"]').waitFor({ state: "visible" });
 }
 
+/**
+ * Every parameter the synth's state definition opens, with ranges and defaults
+ * read from the DSP source. The loaded wavetable position, table, and Glide
+ * differ from their authored defaults so reset paths have something to restore.
+ */
+function desktopFixtureHostParameters() {
+    const { readParameter } = createSynthParameterFixture({
+        oscAWavetablePosition: 0.28,
+        oscAWavetableSelect: 0,
+        glideTime: 0.15,
+    });
+    return synthParameterEndpoints.map(readParameter);
+}
+
 export async function openBuiltDesktopBundlePage({
     beforeGoto = null,
     compiledModuleUrl = "/patch_gui/desktop/index.js",
@@ -901,7 +916,7 @@ export async function openBuiltDesktopBundlePage({
         </html>
     `);
 
-    await page.evaluate(async (entryModuleUrl) => {
+    await page.evaluate(async ({ entryModuleUrl, hostParameters }) => {
         class TestPianoKeyboard extends HTMLElement {
             notes = [];
             naturalWidth = 22;
@@ -943,26 +958,9 @@ export async function openBuiltDesktopBundlePage({
             failurePhase: 0,
             failureReasonCode: 0,
         };
-        const parameterValues = new Map([
-            ["oscAWavetablePosition", 0.28],
-            ["oscAWavetableSelect", 0],
-            ["playMode", 0],
-            ["glideTime", 0.15],
-            ["globalTune", 0],
-            ["oscAVolumeDb", 0],
-            ["oscBVolumeDb", 0],
-            ["oscCVolumeDb", 0],
-            ["oscAMute", 0],
-            ["oscBMute", 1],
-            ["oscCMute", 1],
-        ]);
-        // Metadata matches cmajor/WavetableSynth.cmajor: the loaded Glide
-        // value is 0.15, while its authored reset default is zero.
-        const voiceMetadata = new Map([
-            ["playMode", { min: 0, max: 2, step: 1, init: 0 }],
-            ["glideTime", { min: 0, max: 2, step: 0, init: 0 }],
-            ["globalTune", { min: -24, max: 24, step: 0, init: 0 }],
-        ]);
+        const parameterValues = new Map(hostParameters.map(({ endpoint, value }) => [endpoint, value]));
+        const parameterMetadata = new Map(hostParameters.map(({ endpoint, min, max, step, defaultValue }) => (
+            [endpoint, { min, max, step, init: defaultValue }])));
         const resourceReads = [];
         const sentMessages = [];
         const parameterListeners = new Map();
@@ -1025,7 +1023,7 @@ export async function openBuiltDesktopBundlePage({
             },
             requestStatusUpdate() {
                 queueMicrotask(() => {
-                    statusListeners.forEach((listener) => listener({ details: { inputs: [...voiceMetadata].map(([endpointID, annotation]) => ({ endpointID, purpose: "parameter", annotation })) } }));
+                    statusListeners.forEach((listener) => listener({ details: { inputs: [...parameterMetadata].map(([endpointID, annotation]) => ({ endpointID, purpose: "parameter", annotation })) } }));
                 });
             },
             addStoredStateValueListener(listener) {
@@ -1047,8 +1045,8 @@ export async function openBuiltDesktopBundlePage({
         const { createMockPluginStateHost } = await import("/ui/shared/mock-plugin-state-host.ts");
         const stateHost = createMockPluginStateHost({
             readParameter: async endpoint => {
-                const annotation = voiceMetadata.get(endpoint);
-                if (!annotation || !parameterValues.has(endpoint)) throw new Error(`Missing fixture parameter ${endpoint}`);
+                const annotation = parameterMetadata.get(endpoint);
+                if (!annotation) throw new Error(`Missing fixture parameter ${endpoint}`);
                 return { endpoint, value: parameterValues.get(endpoint), min: annotation.min,
                     max: annotation.max, step: annotation.step, defaultValue: annotation.init };
             },
@@ -1089,7 +1087,7 @@ export async function openBuiltDesktopBundlePage({
         };
 
         mountPoint.replaceChildren(patchView);
-    }, compiledModuleUrl);
+    }, { entryModuleUrl: compiledModuleUrl, hostParameters: desktopFixtureHostParameters() });
 
     return page;
 }
@@ -1107,7 +1105,7 @@ export async function openDesktopEntryPageWithInjectedResourceClient() {
         </html>
     `);
 
-    await page.evaluate(async (samplesPerFrame) => {
+    await page.evaluate(async ({ samplesPerFrame, hostParameters }) => {
         class TestPianoKeyboard extends HTMLElement {
             handleExternalMIDI() {}
             handleKey() {}
@@ -1124,26 +1122,9 @@ export async function openDesktopEntryPageWithInjectedResourceClient() {
             resourceSamples[index] = Math.sin((index / resourceSamples.length) * Math.PI * 2);
         }
 
-        const parameterValues = new Map([
-            ["oscAWavetablePosition", 0.28],
-            ["oscAWavetableSelect", 0],
-            ["playMode", 0],
-            ["glideTime", 0.15],
-            ["globalTune", 0],
-            ["oscAVolumeDb", 0],
-            ["oscBVolumeDb", 0],
-            ["oscCVolumeDb", 0],
-            ["oscAMute", 0],
-            ["oscBMute", 1],
-            ["oscCMute", 1],
-        ]);
-        // Metadata matches cmajor/WavetableSynth.cmajor: the loaded Glide
-        // value is 0.15, while its authored reset default is zero.
-        const voiceMetadata = new Map([
-            ["playMode", { min: 0, max: 2, step: 1, init: 0 }],
-            ["glideTime", { min: 0, max: 2, step: 0, init: 0 }],
-            ["globalTune", { min: -24, max: 24, step: 0, init: 0 }],
-        ]);
+        const parameterValues = new Map(hostParameters.map(({ endpoint, value }) => [endpoint, value]));
+        const parameterMetadata = new Map(hostParameters.map(({ endpoint, min, max, step, defaultValue }) => (
+            [endpoint, { min, max, step, init: defaultValue }])));
         const resourceReads = [];
         const sentMessages = [];
         const parameterListeners = new Map();
@@ -1222,7 +1203,7 @@ export async function openDesktopEntryPageWithInjectedResourceClient() {
             },
             requestStatusUpdate() {
                 queueMicrotask(() => {
-                    statusListeners.forEach((listener) => listener({ details: { inputs: [...voiceMetadata].map(([endpointID, annotation]) => ({ endpointID, purpose: "parameter", annotation })) } }));
+                    statusListeners.forEach((listener) => listener({ details: { inputs: [...parameterMetadata].map(([endpointID, annotation]) => ({ endpointID, purpose: "parameter", annotation })) } }));
                 });
             },
             addStoredStateValueListener(listener) {
@@ -1288,8 +1269,8 @@ export async function openDesktopEntryPageWithInjectedResourceClient() {
         const { createMockPluginStateHost } = await import("/ui/shared/mock-plugin-state-host.ts");
         const stateHost = createMockPluginStateHost({
             readParameter: async endpoint => {
-                const annotation = voiceMetadata.get(endpoint);
-                if (!annotation || !parameterValues.has(endpoint)) throw new Error(`Missing fixture parameter ${endpoint}`);
+                const annotation = parameterMetadata.get(endpoint);
+                if (!annotation) throw new Error(`Missing fixture parameter ${endpoint}`);
                 return { endpoint, value: parameterValues.get(endpoint), min: annotation.min,
                     max: annotation.max, step: annotation.step, defaultValue: annotation.init };
             },
@@ -1323,7 +1304,7 @@ export async function openDesktopEntryPageWithInjectedResourceClient() {
         };
 
         mountPoint.replaceChildren(createDesktopPatchView(patchConnection, { resourceClient }));
-    }, TEST_SAMPLES_PER_FRAME);
+    }, { samplesPerFrame: TEST_SAMPLES_PER_FRAME, hostParameters: desktopFixtureHostParameters() });
 
     return page;
 }

@@ -336,7 +336,10 @@ test("route amount binding presents the canonical bridge value before the full m
             const snapshot = window.__COSIMO_DESKTOP_MODULE_HARNESS__?.getSnapshot?.();
             return snapshot?.bindingValue === 0 && snapshot?.parentAmount === 0;
         });
+        // A paused clock makes the 50 ms deferral window exact: an installed
+        // clock otherwise keeps flowing with wall time between page round trips.
         await page.clock.install();
+        await page.clock.pauseAt(Date.now() + 1_000);
 
         const accepted = await invokeHarness(page, "setAmount", 0.75);
         assert.equal(accepted, true);
@@ -696,12 +699,12 @@ test("owner articulation hydration accepts empty and valid saved values and reje
         assert.equal((await getHarnessSnapshot(page)).hasHydrated, false);
         await invokeHarness(page, "releaseStateOwner", "malformed");
         await page.waitForFunction(() => (
-            window.__COSIMO_DESKTOP_MODULE_HARNESS__?.getSnapshot?.().articulationReadiness.kind === "failed"
+            window.__COSIMO_DESKTOP_MODULE_HARNESS__?.getSnapshot?.().articulationReadiness.status === "invalid"
         ));
         snapshot = await getHarnessSnapshot(page);
         // The state owner preserves invalid saved data for explicit repair;
         // unlike the former GUI parser, it must not silently replace it with defaults.
-        assert.deepEqual(snapshot.articulationReadiness, { kind: "failed", reason: "invalid-state" });
+        assert.deepEqual(snapshot.articulationReadiness, { status: "invalid" });
         assert.equal(snapshot.hasHydrated, false);
         assert.equal(snapshot.canCapture, false);
         assert.equal(snapshot.captureDisabled, true);
@@ -712,7 +715,7 @@ test("owner articulation hydration accepts empty and valid saved values and reje
             window.__COSIMO_DESKTOP_MODULE_HARNESS__?.getSnapshot?.().hasHydrated === true
         ));
         snapshot = await getHarnessSnapshot(page);
-        assert.equal(snapshot.articulationReadiness.kind, "ready");
+        assert.equal(snapshot.articulationReadiness.status, "idle");
         assert.equal(snapshot.slotCount, 0, "an explicit valid public edit repairs the bank");
         assert.equal(snapshot.captureDisabled, false);
 
@@ -763,9 +766,9 @@ test("articulation readiness follows invalid restore and recovery on the same co
 
         const invalid = { kind: "not-articulations" };
         await invokeHarness(page, "restoreValidConnectionArticulations", invalid);
-        await page.waitForFunction(() => window.__COSIMO_DESKTOP_MODULE_HARNESS__?.getSnapshot?.().articulationReadiness.kind === "failed");
+        await page.waitForFunction(() => window.__COSIMO_DESKTOP_MODULE_HARNESS__?.getSnapshot?.().articulationReadiness.status === "invalid");
         let snapshot = await getHarnessSnapshot(page);
-        assert.deepEqual(snapshot.articulationReadiness, { kind: "failed", reason: "invalid-state" });
+        assert.deepEqual(snapshot.articulationReadiness, { status: "invalid" });
         assert.equal(snapshot.hasHydrated, false, "a formerly ready bank becomes unavailable without remounting its connection");
         assert.equal(snapshot.canCapture, false);
         assert.equal(snapshot.captureDisabled, true);
@@ -774,7 +777,7 @@ test("articulation readiness follows invalid restore and recovery on the same co
         await invokeHarness(page, "restoreValidConnectionBank", 2);
         await page.waitForFunction(() => {
             const current = window.__COSIMO_DESKTOP_MODULE_HARNESS__?.getSnapshot?.();
-            return current?.articulationReadiness.kind === "ready" && current.slotCount === 2 && current.hasHydrated;
+            return current?.articulationReadiness.status === "idle" && current.slotCount === 2 && current.hasHydrated;
         });
         snapshot = await getHarnessSnapshot(page);
         assert.equal(snapshot.canCapture, true);
@@ -783,7 +786,7 @@ test("articulation readiness follows invalid restore and recovery on the same co
         await page.locator('[data-role="owner-hydration-capture"]').click();
         await page.waitForFunction(() => {
             const current = window.__COSIMO_DESKTOP_MODULE_HARNESS__?.getSnapshot?.();
-            return current?.slotCount === 3 && current.articulationReadiness.pending === false;
+            return current?.slotCount === 3 && current.articulationReadiness.status === "idle";
         });
         snapshot = await getHarnessSnapshot(page);
         assert.equal(snapshot.articulationReadiness.value.slots.length, 3,

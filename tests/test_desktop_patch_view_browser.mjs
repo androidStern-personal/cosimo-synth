@@ -97,7 +97,12 @@ test("desktop harness renders the real React patch view and requests runtime syn
         assert.equal(await page.locator(".cosimo-stage canvas").count(), 1);
         await page.waitForSelector("text=Ready");
 
-        const snapshot = await getHarnessSnapshot(page);
+        // MSEG curves reach the DSP as shared data on inputs 3-8 (slot-major,
+        // shape A then B), not as events; boot installs every curve.
+        const msegDataInputs = [3, 4, 5, 6, 7, 8];
+        const snapshot = await waitForHarnessSnapshot(page, "boot MSEG curve installation", (nextSnapshot) => (
+            msegDataInputs.every((input) => nextSnapshot.installedMsegData.some((record) => record.input === input))
+        ));
         const runtimeSyncMessages = snapshot.sentMessages.filter(
             ({ endpointID }) => endpointID === "runtimeSyncRequest",
         );
@@ -107,7 +112,14 @@ test("desktop harness renders the real React patch view and requests runtime syn
             true,
             "The UI must request its initial runtime presentation state.",
         );
-        assert.equal(snapshot.sentMessages.some(({ endpointID }) => endpointID === "modulationMsegBuffer"), true);
+        const modulation = readStoredModulationState(snapshot);
+        for (const input of msegDataInputs) {
+            const slot = modulation.msegSlots[Math.floor((input - 3) / 2)];
+            const installed = snapshot.installedMsegData.findLast((record) => record.input === input);
+            assert.deepEqual(installed.samples, Array.from(renderMsegShape((input - 3) % 2 === 0 ? slot.shapeA : slot.shapeB)),
+                `MSEG data input ${input} carries the stored curve`);
+            assert.equal(installed.dspSessionId, snapshot.runtimeState.dspSessionId);
+        }
         assert.equal(snapshot.sentMessages.some(({ endpointID }) => endpointID === "modulationMsegPlayback"), true);
         assert.equal(snapshot.sentMessages.some(({ endpointID }) => endpointID === "modulationProgram"), true);
     } finally {
@@ -215,30 +227,51 @@ test("Global Tune stays continuous, brackets edits for host undo, and accepts ho
     }
 });
 
-test("desktop Vite harness installs React Grab and registers the official MCP plugin in dev mode", async () => {
-    const page = await openHarnessPage();
+async function readReactGrabState(page) {
+    return page.evaluate(() => {
+        const api = window.__REACT_GRAB__;
+        return {
+            webdriver: navigator.webdriver,
+            api: api && typeof api === "object"
+                ? {
+                    hasRegisterPlugin: typeof api.registerPlugin === "function",
+                    plugins: typeof api.getPlugins === "function" ? api.getPlugins() : null,
+                }
+                : null,
+        };
+    });
+}
 
+test("desktop Vite harness loads React Grab with its MCP plugin for a person and keeps automation hermetic", async () => {
+    const automatedPage = await openHarnessPage();
     try {
-        const reactGrabState = await page.evaluate(() => {
-            const api = window.__REACT_GRAB__;
-
-            if (!api || typeof api !== "object") {
-                return null;
-            }
-
-            return {
-                hasRegisterPlugin: typeof api.registerPlugin === "function",
-                hasGetPlugins: typeof api.getPlugins === "function",
-                plugins: typeof api.getPlugins === "function" ? api.getPlugins() : null,
-            };
-        });
-
-        assert.equal(reactGrabState?.hasRegisterPlugin, true);
-        assert.equal(reactGrabState?.hasGetPlugins, true);
-        assert.equal(Array.isArray(reactGrabState?.plugins), true);
-        assert.equal(reactGrabState.plugins.includes("mcp"), true);
+        assert.deepEqual(await readReactGrabState(automatedPage), { webdriver: true, api: null },
+            "automated browsers must not load React Grab's networked dev tooling");
     } finally {
-        await page.close();
+        await automatedPage.close();
+    }
+
+    const personPage = await openHarnessPage({
+        beforeGoto: async (page) => {
+            // React Grab fetches web fonts; keep this page on the local harness.
+            await page.route("**/*", (route) => {
+                const { hostname } = new URL(route.request().url());
+                return hostname === "127.0.0.1" || hostname === "localhost" ? route.continue() : route.abort();
+            });
+            await page.addInitScript(() => {
+                Object.defineProperty(Navigator.prototype, "webdriver", { configurable: true, get: () => false });
+            });
+        },
+    });
+    try {
+        await personPage.waitForFunction(() => window.__REACT_GRAB__?.getPlugins?.()?.includes?.("mcp") === true);
+        const state = await readReactGrabState(personPage);
+        assert.equal(state.webdriver, false);
+        assert.equal(state.api?.hasRegisterPlugin, true);
+        assert.equal(Array.isArray(state.api?.plugins), true);
+        assert.equal(state.api.plugins.includes("mcp"), true);
+    } finally {
+        await personPage.close();
     }
 });
 
@@ -3347,8 +3380,26 @@ test("articulation capture and recall edit only the selected oscillator", async 
     }
 });
 
+// The state framework reads every declared host parameter when the sound
+// opens, so a host reply can only be pending before the sound is editable.
+// These pages open on a bank captured from B while C's replies are withheld.
+async function openHarnessWithPendingHostValues({ articulations, pendingEndpoints, parameterValues = {} }) {
+    return openHarnessPage({
+        beforeGoto: (nextPage) => nextPage.addInitScript(({ bank, endpoints, values, key }) => {
+            const initial = window.__COSIMO_DESKTOP_HARNESS_INITIAL__ ?? {};
+            window.__COSIMO_DESKTOP_HARNESS_INITIAL__ = {
+                ...initial,
+                parameterValues: { ...initial.parameterValues, ...values },
+                storedState: { ...initial.storedState, [key]: bank },
+                deferredParameterResponses: endpoints,
+            };
+        }, { bank: articulations, endpoints: pendingEndpoints, values: parameterValues, key: ARTICULATION_STATE_KEY }),
+    });
+}
+
 test("cross-oscillator articulation bases stay authoritative through delayed host responses", async () => {
     const page = await openHarnessPage();
+    let bankCapturedFromB;
 
     try {
         await page.getByRole("tab", { name: "Oscillator B" }).click();
@@ -3362,7 +3413,8 @@ test("cross-oscillator articulation bases stay authoritative through delayed hos
             "first articulation captured from B",
             (snapshot) => JSON.parse(String(snapshot.storedState[ARTICULATION_STATE_KEY])).slots.length === 1,
         );
-        const firstBank = JSON.parse(String(firstCapture.storedState[ARTICULATION_STATE_KEY]));
+        bankCapturedFromB = firstCapture.storedState[ARTICULATION_STATE_KEY];
+        const firstBank = JSON.parse(String(bankCapturedFromB));
         assert.equal(
             Object.hasOwn(firstBank.slots[0].overrides, "oscB.mute"),
             false,
@@ -3434,23 +3486,12 @@ test("cross-oscillator articulation bases stay authoritative through delayed hos
         await page.close();
     }
 
-    const delayedMutePage = await openHarnessPage();
+    const delayedMutePage = await openHarnessWithPendingHostValues({
+        articulations: bankCapturedFromB,
+        pendingEndpoints: ["oscCMute"],
+    });
 
     try {
-        await delayedMutePage.getByRole("tab", { name: "Oscillator B" }).click();
-        await delayedMutePage.waitForSelector(
-            '[data-role="desktop-oscillator-presentation"][data-selected-oscillator-id="B"]',
-        );
-        await delayedMutePage.waitForSelector('[data-role="oscillator-mute"][aria-pressed="true"]');
-        await delayedMutePage.getByRole("button", { name: "Capture current parameters as a new articulation" }).click();
-        await waitForHarnessSnapshot(
-            delayedMutePage,
-            "first articulation captured from B before delayed C mute response",
-            (snapshot) => JSON.parse(String(snapshot.storedState[ARTICULATION_STATE_KEY])).slots.length === 1,
-        );
-        await delayedMutePage.evaluate(() => {
-            window.__COSIMO_DESKTOP_HARNESS__.deferParameterResponse("oscCMute");
-        });
         await delayedMutePage.getByRole("tab", { name: "Oscillator C" }).click();
         await delayedMutePage.waitForSelector(
             '[data-role="desktop-oscillator-presentation"][data-selected-oscillator-id="C"]',
@@ -3464,7 +3505,7 @@ test("cross-oscillator articulation bases stay authoritative through delayed hos
         );
         await clearHarnessDebugLog(delayedMutePage);
         await muteButton.evaluate((button) => button.click());
-        let pendingSnapshot = await getHarnessSnapshot(delayedMutePage);
+        const pendingSnapshot = await getHarnessSnapshot(delayedMutePage);
         assert.equal(Number(pendingSnapshot.parameterValues.oscCMute), 1);
         assert.equal(
             pendingSnapshot.sentMessages.some(({ endpointID }) => endpointID === "oscCMute"),
@@ -3479,66 +3520,19 @@ test("cross-oscillator articulation bases stay authoritative through delayed hos
         assert.equal(await articulationSurface.getAttribute("data-base-state"), "loading");
         assert.equal(await articulationSurface.getAttribute("aria-busy"), "true");
         assert.equal(
-            await delayedMutePage.locator('[data-role="articulation-card"]').first().getAttribute("aria-disabled"),
-            "true",
-        );
-        const auditionButton = delayedMutePage.locator('[data-role="articulation-card-play"]').first();
-        assert.equal(await auditionButton.isDisabled(), true, "audition must not play the wrong current sound while recall is unavailable");
-        await auditionButton.dispatchEvent("pointerdown", {
-            pointerId: 311,
-            pointerType: "mouse",
-            button: 0,
-            buttons: 1,
-        });
-        const blockedAuditionSnapshot = await getHarnessSnapshot(delayedMutePage);
-        assert.equal(blockedAuditionSnapshot.midiInputEvents.length, 0);
-        assert.equal(
-            blockedAuditionSnapshot.sentMessages.some(({ endpointID }) => /^osc[ABC]/.test(endpointID)),
-            false,
-            "a forced pending audition cannot recall any articulation parameters",
+            await delayedMutePage.locator('[data-role="articulation-card"]').count(),
+            0,
+            "no saved articulation can be auditioned or recalled while the sound it plays is still opening",
         );
         assert.equal(
             await captureButton.isDisabled(),
             true,
             "capture must stay unavailable until C's pre-edit mute baseline is host-confirmed",
         );
-        assert.equal(await delayedMutePage.locator('[data-role="articulation-update"]').isDisabled(), true);
-        assert.equal(await delayedMutePage.locator('[data-role="articulation-revert"]').isDisabled(), true);
-        await delayedMutePage.locator('[data-role="articulation-card"]').first().click({ button: "right", force: true });
-        const cardMenu = delayedMutePage.locator('[data-role="articulation-card-menu"]');
-        await cardMenu.waitFor();
-        assert.equal(await cardMenu.locator('[data-action="rename"]').isDisabled(), false);
-        for (const action of ["duplicate", "replace", "delete"]) {
-            const item = cardMenu.locator(`[data-action="${action}"]`);
-            assert.equal(await item.isDisabled(), true, `${action} must be visibly disabled while the base loads`);
-            assert.equal(await item.getAttribute("data-disabled-reason"), "base-loading");
-        }
-        await delayedMutePage.keyboard.press("Escape");
-        await delayedMutePage.getByRole("button", { name: "Expand articulation editor" }).click();
-        const rangeSegment = delayedMutePage.locator('[data-role="articulation-range-segment"]').first();
-        assert.equal(
-            await rangeSegment.getAttribute("aria-disabled"),
-            null,
-            "the movable/resizable range segment itself remains available while sound recall loads",
-        );
-        await rangeSegment.click({ button: "right", force: true });
-        const rangeMenu = delayedMutePage.locator('[data-role="articulation-range-menu"]');
-        await rangeMenu.waitFor();
-        const duplicateAfter = rangeMenu.locator('[data-action="duplicate-after"]');
-        assert.equal(await duplicateAfter.isDisabled(), true);
-        assert.equal(await duplicateAfter.getAttribute("data-disabled-reason"), "base-loading");
-        for (const action of ["replace", "insert-after", "delete"]) {
-            assert.equal(
-                await rangeMenu.locator(`[data-action="${action}"]`).isDisabled(),
-                false,
-                `${action} remains available because it only edits trigger ranges`,
-            );
-        }
-        await delayedMutePage.keyboard.press("Escape");
         await captureButton.evaluate((button) => button.click());
         assert.equal(
-            JSON.parse(String((await getHarnessSnapshot(delayedMutePage)).storedState[ARTICULATION_STATE_KEY])).slots.length,
-            1,
+            (await getHarnessSnapshot(delayedMutePage)).storedState[ARTICULATION_STATE_KEY],
+            bankCapturedFromB,
             "a forced click cannot persist a lossy slot while the base is unknown",
         );
 
@@ -3551,6 +3545,7 @@ test("cross-oscillator articulation bases stay authoritative through delayed hos
                 && document.querySelector('[data-role="oscillator-mute"]')?.getAttribute("aria-pressed") === "true"
         ));
         assert.equal(await articulationSurface.getAttribute("data-base-state"), "ready");
+        const auditionButton = delayedMutePage.locator('[data-role="articulation-card-play"]').first();
         assert.equal(await auditionButton.isDisabled(), false);
         await auditionButton.dispatchEvent("pointerdown", {
             pointerId: 312,
@@ -3570,7 +3565,10 @@ test("cross-oscillator articulation bases stay authoritative through delayed hos
         await delayedMutePage.waitForFunction(() => (
             window.__COSIMO_DESKTOP_HARNESS__.getSnapshot().midiInputEvents.length === 2
         ));
+        await delayedMutePage.getByRole("button", { name: "Expand articulation editor" }).click();
+        const rangeSegment = delayedMutePage.locator('[data-role="articulation-range-segment"]').first();
         await rangeSegment.click({ button: "right" });
+        const rangeMenu = delayedMutePage.locator('[data-role="articulation-range-menu"]');
         await rangeMenu.waitFor();
         assert.equal(await rangeMenu.locator('[data-action="duplicate-after"]').isDisabled(), false);
         await delayedMutePage.keyboard.press("Escape");
@@ -3592,7 +3590,6 @@ test("cross-oscillator articulation bases stay authoritative through delayed hos
         await delayedMutePage.close();
     }
 
-    const delayedAllPage = await openHarnessPage();
     const oscillatorCEndpoints = [
         "oscCWavetablePosition",
         "oscCPan",
@@ -3616,38 +3613,26 @@ test("cross-oscillator articulation bases stay authoritative through delayed hos
         "oscCUnisonPositionSpread",
         "oscCUnisonWarpSpread",
     ];
+    const delayedAllPage = await openHarnessWithPendingHostValues({
+        articulations: bankCapturedFromB,
+        pendingEndpoints: oscillatorCEndpoints,
+        parameterValues: { oscCVolumeDb: -9 },
+    });
 
     try {
-        await delayedAllPage.getByRole("tab", { name: "Oscillator B" }).click();
-        await delayedAllPage.waitForSelector(
-            '[data-role="desktop-oscillator-presentation"][data-selected-oscillator-id="B"]',
-        );
-        await delayedAllPage.getByRole("button", { name: "Capture current parameters as a new articulation" }).click();
-        await waitForHarnessSnapshot(
-            delayedAllPage,
-            "first articulation captured before C has been visited",
-            (snapshot) => JSON.parse(String(snapshot.storedState[ARTICULATION_STATE_KEY])).slots.length === 1,
-        );
-
-        await delayedAllPage.evaluate((endpointIDs) => {
-            window.__COSIMO_DESKTOP_HARNESS__.setParameterValue("oscCVolumeDb", -9);
-            endpointIDs.forEach((endpointID) => {
-                window.__COSIMO_DESKTOP_HARNESS__.deferParameterResponse(endpointID);
-            });
-        }, oscillatorCEndpoints);
         await delayedAllPage.getByRole("tab", { name: "Oscillator C" }).click();
         await delayedAllPage.waitForSelector(
             '[data-role="desktop-oscillator-presentation"][data-selected-oscillator-id="C"]',
         );
-        assert.equal(
-            await delayedAllPage.locator('[data-role="oscillator-level"]').getAttribute("aria-valuenow"),
-            "0",
-            "the screen remains stale while C's authoritative values are unavailable",
-        );
         const levelControl = delayedAllPage.getByRole("slider", { name: "Oscillator level" });
         const muteButton = delayedAllPage.getByRole("button", { name: "Mute selected oscillator" });
+        await delayedAllPage.waitForSelector('[data-role="oscillator-level"][data-host-state="loading"]');
+        assert.notEqual(
+            await levelControl.getAttribute("aria-valuenow"),
+            "-9",
+            "the screen cannot claim C's host level before its reply arrives",
+        );
         assert.equal(await levelControl.isDisabled(), true);
-        assert.equal(await levelControl.getAttribute("data-host-state"), "loading");
         assert.equal(await muteButton.isDisabled(), true);
         await clearHarnessDebugLog(delayedAllPage);
         await levelControl.evaluate((control) => control.dispatchEvent(new KeyboardEvent("keydown", { key: "End", bubbles: true })));
@@ -3666,8 +3651,8 @@ test("cross-oscillator articulation bases stay authoritative through delayed hos
         assert.equal(await captureButton.isDisabled(), true);
         await captureButton.evaluate((button) => button.click());
         assert.equal(
-            JSON.parse(String((await getHarnessSnapshot(delayedAllPage)).storedState[ARTICULATION_STATE_KEY])).slots.length,
-            1,
+            (await getHarnessSnapshot(delayedAllPage)).storedState[ARTICULATION_STATE_KEY],
+            bankCapturedFromB,
             "a stale screen snapshot cannot become a new articulation base",
         );
 
@@ -3715,6 +3700,7 @@ test("cross-oscillator articulation bases stay authoritative through delayed hos
         await delayedAllPage.close();
     }
 });
+
 
 test("global modulation-source drag maps the selected oscillator level control", async () => {
     const page = await openHarnessPage({
@@ -4896,11 +4882,14 @@ test("precision value entry keeps the focused draft when a host echo arrives", a
     }
 });
 
-test("desktop unison drag presents within 50 ms while committing the matching runtime value", async () => {
+// Wall-clock budgets here measured the machine, not the product. What a
+// drag owes the player is ordering: the optimistic value is on screen, and
+// the edit has left the view for the host, before the pointer event's task
+// ends, so neither can wait on a timer, a frame, or the host's reply.
+test("desktop unison drag presents and hands its edit to the host within the pointer event's task", async () => {
     const page = await openHarnessPage({
         beforeGoto: (nextPage) => nextPage.setViewportSize({ width: 1280, height: 720 }),
     });
-    const cdp = await page.context().newCDPSession(page);
 
     try {
         await page.locator('[data-role="keyboard-control-mode-voice"]').click();
@@ -4909,15 +4898,17 @@ test("desktop unison drag presents within 50 ms while committing the matching ru
         const bounds = await detuneInput.boundingBox();
         assert.ok(bounds);
         await page.evaluate(() => {
-            window.__COSIMO_UNISON_LATENCY__ = { armed: null, results: [] };
+            window.__COSIMO_UNISON_ORDER__ = { armed: null };
             const patchConnection = window.__COSIMO_DESKTOP_HARNESS__.patchConnection;
-            const sendEventOrValue = patchConnection.sendEventOrValue.bind(patchConnection);
-            patchConnection.sendEventOrValue = (endpointID, value) => {
-                const state = window.__COSIMO_UNISON_LATENCY__;
-                if (endpointID === "oscAUnisonDetune" && state?.armed?.handlerStartedAt) {
-                    state.armed.runtimeSentAt ??= performance.now();
+            const sendMessageToServer = patchConnection.sendMessageToServer.bind(patchConnection);
+            patchConnection.sendMessageToServer = (envelope) => {
+                const armed = window.__COSIMO_UNISON_ORDER__?.armed;
+                const command = envelope?.message?.kind === "command" ? envelope.message.command : null;
+                if (armed?.handled && command?.kind === "edit" && command.key === "oscAUnisonDetune") {
+                    armed.commandedValues.push(command.value);
+                    armed.commandedBeforeTaskEnd ??= !armed.taskEnded;
                 }
-                return sendEventOrValue(endpointID, value);
+                return sendMessageToServer(envelope);
             };
             const targetInput = document.querySelector('[data-role="unison-detune-control"] input');
             const nativeValue = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value");
@@ -4931,44 +4922,43 @@ test("desktop unison drag presents within 50 ms while committing the matching ru
                 },
                 set(nextValue) {
                     nativeValue.set.call(this, nextValue);
-                    const state = window.__COSIMO_UNISON_LATENCY__;
-                    const armed = state?.armed;
-                    if (!armed?.handlerStartedAt || armed.presented || String(nextValue) === armed.initialValue) {
+                    const armed = window.__COSIMO_UNISON_ORDER__?.armed;
+                    if (!armed?.handled || armed.presentedValue !== null || String(nextValue) === armed.initialValue) {
                         return;
                     }
-                    armed.presented = true;
-                    state.results.push({
-                        nativeQueueMs: armed.nativeQueueMs,
-                        handlerToCommitMs: performance.now() - armed.handlerStartedAt,
-                        handlerToRuntimeMs: armed.runtimeSentAt - armed.handlerStartedAt,
-                        totalMs: armed.nativeQueueMs + performance.now() - armed.handlerStartedAt,
-                        initialValue: armed.initialValue,
-                        presentedValue: String(nextValue),
-                    });
+                    armed.presentedValue = String(nextValue);
+                    armed.presentedBeforeTaskEnd = !armed.taskEnded;
                 },
             });
             document.addEventListener("pointermove", (event) => {
-                const state = window.__COSIMO_UNISON_LATENCY__;
+                const armed = window.__COSIMO_UNISON_ORDER__?.armed;
                 const input = event.composedPath().find((candidate) => (
                     candidate instanceof HTMLInputElement
                     && candidate.closest('[data-role="unison-detune-control"]')
                 ));
-                if (!state?.armed || state.armed.handled || !(input instanceof HTMLInputElement)) {
+                if (!armed || armed.handled || !(input instanceof HTMLInputElement)) {
                     return;
                 }
-
-                state.armed.handled = true;
-                const armed = state.armed;
-                const handlerStartedAt = performance.now();
-                armed.handlerStartedAt = handlerStartedAt;
-                armed.nativeQueueMs = handlerStartedAt - event.timeStamp;
+                armed.handled = true;
+                // A posted message runs as the next task, after this event's
+                // listeners and every microtask they queued.
+                const boundary = new MessageChannel();
+                boundary.port1.onmessage = () => {
+                    armed.taskEnded = true;
+                    boundary.port1.close();
+                };
+                boundary.port2.postMessage(null);
             }, { capture: true, passive: true });
         });
-        await cdp.send("Emulation.setCPUThrottlingRate", { rate: 20 });
         await detuneInput.evaluate((input) => {
-            window.__COSIMO_UNISON_LATENCY__.armed = {
+            window.__COSIMO_UNISON_ORDER__.armed = {
                 initialValue: input.value,
                 handled: false,
+                taskEnded: false,
+                presentedValue: null,
+                presentedBeforeTaskEnd: false,
+                commandedValues: [],
+                commandedBeforeTaskEnd: null,
             };
         });
 
@@ -4999,29 +4989,34 @@ test("desktop unison drag presents within 50 ms while committing the matching ru
             clientX: endX,
             clientY: y,
         });
-        await page.waitForFunction(() => window.__COSIMO_UNISON_LATENCY__?.results?.length === 1, null, { timeout: 10_000 });
+        await page.waitForFunction(() => window.__COSIMO_UNISON_ORDER__?.armed?.taskEnded === true);
 
-        const result = await page.evaluate(() => window.__COSIMO_UNISON_LATENCY__.results[0]);
-        const snapshot = await getHarnessSnapshot(page);
+        const order = await page.evaluate(() => window.__COSIMO_UNISON_ORDER__.armed);
+        assert.notEqual(order.presentedValue, null, "The drag must present a new value.");
+        assert.equal(order.presentedBeforeTaskEnd, true, `The drag value must be on screen within its pointer event's task: ${JSON.stringify(order)}`);
+        assert.equal(order.commandedBeforeTaskEnd, true, `The edit must leave the view within its pointer event's task: ${JSON.stringify(order)}`);
+        const snapshot = await waitForHarnessSnapshot(
+            page,
+            "unison drag value at the runtime boundary",
+            (nextSnapshot) => nextSnapshot.sentMessages.some(({ endpointID }) => endpointID === "oscAUnisonDetune"),
+        );
         const sentUnisonMessages = snapshot.sentMessages.filter(
             ({ endpointID }) => endpointID === "oscAUnisonDetune",
         );
-        assert.notEqual(result.presentedValue, result.initialValue);
-        assert.ok(sentUnisonMessages.length > 0, "The presented drag must also reach the runtime boundary.");
+        assert.equal(
+            Number(sentUnisonMessages.at(-1).value),
+            Number(order.commandedValues.at(-1)),
+            "The runtime must receive exactly the value the drag commanded.",
+        );
         assert.equal(
             Number(snapshot.parameterValues.oscAUnisonDetune),
             Number(sentUnisonMessages.at(-1).value),
             "The runtime value must match the last value sent by the drag.",
         );
-        assert.ok(
-            result.nativeQueueMs + result.handlerToRuntimeMs < 50,
-            `Expected unison runtime send <50ms, got ${JSON.stringify(result)}`,
-        );
-        assert.ok(result.totalMs < 50, `Expected unison value presentation <50ms, got ${JSON.stringify(result)}`);
         await page.waitForTimeout(100);
         assert.equal(
             await detuneInput.inputValue(),
-            result.presentedValue,
+            order.presentedValue,
             "The optimistic value must not snap back while the deferred runtime echo settles.",
         );
         await page.evaluate(() => {
@@ -5032,11 +5027,10 @@ test("desktop unison drag presents within 50 ms while committing the matching ru
         ));
         assert.equal(await detuneInput.inputValue(), "40 ct", "An authoritative host echo must replace the drag value.");
     } finally {
-        await cdp.send("Emulation.setCPUThrottlingRate", { rate: 1 }).catch(() => {});
-        await cdp.detach().catch(() => {});
         await page.close();
     }
 });
+
 
 test("precision fields end their host gesture when mouse movement reports no pressed button", async () => {
     const page = await openHarnessPage();
