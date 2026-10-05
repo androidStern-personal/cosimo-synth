@@ -273,6 +273,7 @@ export function createPluginStateClient<const Fields extends PluginStateFields>(
                     // A compound action waits for the owner's one coherent
                     // accepted projection; it never paints partial local drafts.
                     outbound = { kind: "edit-many", edits, ...(command.history === false ? { history: false as const } : {}),
+                        ...(command.recall === true ? { recall: true as const } : {}),
                         ...(command.gesture === undefined ? {} : { gesture: command.gesture }) };
                 }
                 if (command.kind === "edit" || command.kind === "recover") {

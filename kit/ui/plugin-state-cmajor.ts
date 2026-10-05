@@ -136,7 +136,7 @@ export function createCmajorPluginStateService<const Fields extends PluginStateF
             readonly plan: import("./plugin-state-definition").PluginStateSharedPlan; readonly target: EngineTarget;
         }>({
             async prepare(input, signal) {
-                const prepared = await authorPreparation(() => declaration.prepare(input.value, { resources, parameters: input.parameters, signal }));
+                const prepared = await authorPreparation(() => declaration.prepare(input.value, { resources, parameters: input.parameters, reason: input.reason, signal }));
                 if (prepared.kind === "error") return prepared;
                 const plan = prepared.value;
                 if (isPreparationFailure(plan)) return { kind: "error", error: plan.error };
@@ -174,7 +174,7 @@ export function createCmajorPluginStateService<const Fields extends PluginStateF
         const declaration = field.engine;
         const binding = createEngineBinding<PluginStateEngineInput & { readonly target: EngineTarget }, { readonly target: EngineTarget; readonly value: PluginStateJson }>({
             async prepare(input, signal) {
-                const prepared = await authorPreparation(() => declaration.prepare(input.value, { resources, parameters: input.parameters, signal }));
+                const prepared = await authorPreparation(() => declaration.prepare(input.value, { resources, parameters: input.parameters, reason: input.reason, signal }));
                 if (prepared.kind === "error") return prepared;
                 const payload = prepared.value;
                 if (isPreparationFailure(payload)) return { kind: "error", error: payload.error };
@@ -447,7 +447,7 @@ export function createCmajorPluginStateService<const Fields extends PluginStateF
             const binding = createEngineBinding<PluginStateEngineInput & { readonly target: EngineTarget }, { readonly value: unknown; readonly target: EngineTarget }>({
                 replacement: delivery.replacement,
                 async prepare(input, cancellation) {
-                    const prepared = await authorPreparation(() => declaration.prepare(input.value, { resources: preparationResources, parameters: input.parameters, signal: cancellation }));
+                    const prepared = await authorPreparation(() => declaration.prepare(input.value, { resources: preparationResources, parameters: input.parameters, reason: input.reason, signal: cancellation }));
                     if (prepared.kind === "error") return prepared;
                     const value = prepared.value;
                     return isPreparationFailure(value) ? { kind: "error", error: value.error } : { kind: "ok", value: { value, target: input.target } };

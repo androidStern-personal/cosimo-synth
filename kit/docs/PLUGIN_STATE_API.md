@@ -28,7 +28,7 @@ Every state, preset and snapshot name `kit/index.ts` exports. Anything not liste
 | `PluginStateValueResult<Value>` | type | What `parse` returns: `{ kind: "ok", value }` or `{ kind: "error", message }`. |
 | `PluginStateLifetime` | type | Where a stored value lives: `"project"`, `"instance"` or `"user"`. |
 | `PluginStateOptions` | type | The `definePluginState` options: `historyLimit` and `memoryBudgetBytes`. |
-| `PluginStatePrepareContext` | type | The second argument of `prepare`: `resources`, captured `parameters` and a cancellation `signal`. |
+| `PluginStatePrepareContext` | type | The second argument of `prepare`: `resources`, captured `parameters`, the change `reason` (`load`, `recall`, `history` or `edit`) and a cancellation `signal`. |
 | `PluginStateSharedPlan` | type | What `prepare` returns for variable-length shared data: a `length` and a synchronous `write`. |
 | `PluginStatePreparationFailure` | type | The value `preparationFailure` returns. |
 | `PluginStateControl<Value>` | type | One field's state, error, retry and edit actions; described below. |
@@ -191,13 +191,13 @@ type PluginStateRejectionReason =
 
 ```ts
 interface PluginStateEditor<Fields> {
-    edit(changes: PluginStateChanges<Fields>, options?: { readonly history?: boolean }): Promise<PluginStateEditResult>;
+    edit(changes: PluginStateChanges<Fields>, options?: { readonly history?: boolean; readonly recall?: boolean }): Promise<PluginStateEditResult>;
     beginGesture(keys: readonly (keyof Fields)[]): Promise<PluginStateEditResult>;
     endGesture(): Promise<PluginStateEditResult> | undefined;
 }
 ```
 
-`edit` applies the supplied declared fields together as one accepted change and one Undo entry. `edit(changes, { history: false })` applies the change without an Undo entry and leaves Redo intact. `beginGesture(keys)` opens one gesture over several fields; until `endGesture`, `edit` and those fields' `setValue` write into it, and `endGesture` records one Undo entry listing every field that moved. `beginGesture` rejects with `busy` while any of those fields is in another gesture or this editor already has one open; `endGesture` returns `undefined` when this editor has none.
+`edit` applies the supplied declared fields together as one accepted change and one Undo entry. `edit(changes, { history: false })` applies the change without an Undo entry and leaves Redo intact. `edit(changes, { recall: true })` marks a preset or snapshot replacing the sound, so preparation sees `reason: "recall"` ([details](PLUGIN_STATE.md#why-a-value-is-being-prepared)); it cannot write into a gesture. `beginGesture(keys)` opens one gesture over several fields; until `endGesture`, `edit` and those fields' `setValue` write into it, and `endGesture` records one Undo entry listing every field that moved. `beginGesture` rejects with `busy` while any of those fields is in another gesture or this editor already has one open; `endGesture` returns `undefined` when this editor has none.
 
 Undo/Redo are obtained separately through `usePluginHistory()`. They are not methods on `envelope`:
 

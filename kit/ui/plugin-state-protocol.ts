@@ -142,7 +142,8 @@ function command(input: unknown): PluginStateCommand | undefined {
     }
     if (input.kind === "edit-many") {
         if (!Array.isArray(input.edits) || input.edits.length === 0 || (input.history !== undefined && input.history !== false)
-            || (input.gesture !== undefined && (!counter(input.gesture) || input.history === false))) return undefined;
+            || (input.recall !== undefined && input.recall !== true)
+            || (input.gesture !== undefined && (!counter(input.gesture) || input.history === false || input.recall === true))) return undefined;
         const edits = [];
         const keys = new Set<string>();
         for (const edit of input.edits) {
@@ -152,6 +153,7 @@ function command(input: unknown): PluginStateCommand | undefined {
             edits.push({ key: edit.key, value: edit.value, ...(edit.expectedVersion !== undefined ? { expectedVersion: edit.expectedVersion } : {}) });
         }
         return { kind: "edit-many", edits, ...(input.history === false ? { history: false as const } : {}),
+            ...(input.recall === true ? { recall: true as const } : {}),
             ...(input.gesture !== undefined ? { gesture: input.gesture } : {}) };
     }
     if (input.kind === "begin" || input.kind === "end") {

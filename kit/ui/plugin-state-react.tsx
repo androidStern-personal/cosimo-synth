@@ -147,10 +147,13 @@ export type PluginStateChanges<Fields extends PluginStateFields> = {
 
 /** Edit several fields together, guarded by the values observed in this render. */
 export interface PluginStateEditor<Fields extends PluginStateFields> {
-    /** `history: false` applies the change without an Undo entry, for example to a library of saved items. */
+    /**
+     * `history: false` applies the change without an Undo entry, for example to a library of saved items.
+     * `recall: true` marks a stored sound replacing the current one; preparation sees reason "recall".
+     */
     edit<Changes extends PluginStateChanges<Fields>>(
         changes: Changes & { readonly [Key in Exclude<keyof Changes, keyof Fields>]: never },
-        options?: { readonly history?: boolean },
+        options?: { readonly history?: boolean; readonly recall?: boolean },
     ): Promise<PluginStateEditResult>;
     /**
      * Open one gesture over these fields, for a drag that moves several at once. Until endGesture,
@@ -232,8 +235,10 @@ function useDefinitionEditor(definition: PluginStateFields | null): PluginStateE
                 edits.push({ key, value, expectedVersion: field.version });
             }
             const open = ownedGesture(client, owner);
-            const inGesture = open !== undefined && options.history !== false && edits.every(edit => open.keys.includes(edit.key));
+            const inGesture = open !== undefined && options.history !== false && options.recall !== true
+                && edits.every(edit => open.keys.includes(edit.key));
             return client.dispatch({ kind: "edit-many", edits, ...(options.history === false ? { history: false as const } : {}),
+                ...(options.recall === true ? { recall: true as const } : {}),
                 ...(inGesture ? { gesture: open.gesture } : {}) }).then(projection.result);
         },
     };

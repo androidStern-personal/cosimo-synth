@@ -868,6 +868,36 @@ test("consecutive scalar edits retain each accepted baseline while native observ
     }
 });
 
+test("preparation learns whether a value was loaded, edited, recalled from a preset or snapshot, or restored by Undo", async () => {
+    const { definePluginState, parameter, storedValue } = await definitionModule;
+    const { createPluginStateSession } = await sessionModule;
+    const native = new RecordingNativePort();
+    const reasons = [];
+    const binding = { key: "curve", dependencies: ["gain"],
+        replace(input) { reasons.push(input.reason); }, cancel() {}, async stop() {},
+    };
+    const session = createPluginStateSession(definePluginState({
+        curve: storedValue({ initial: { points: [0, 1] }, codec: curveCodec }), gain: parameter("hostGain"),
+    }), { native, bindings: [binding], onDefect: error => assert.fail(`Unexpected defect: ${error}`) });
+    const scope = { owner: "reason-owner", document: 0 };
+    await session.dispatch({ kind: "opened", scope, native: {
+        parameters: [{ endpoint: "hostGain", value: 2.5, min: 0, max: 10, step: 0, defaultValue: 1 }], values: {},
+    } });
+    let sequence = 0;
+    const command = command => session.dispatch({ kind: "command", address: { ...scope, client: 1, sequence: ++sequence }, command });
+    assert.equal((await command({ kind: "edit", key: "curve", value: { points: [0, 0.4, 1] } })).kind, "accepted");
+    assert.equal((await command({ kind: "edit-many", edits: [{ key: "curve", value: { points: [1, 0] } }], recall: true })).kind, "accepted");
+    assert.equal((await command({ kind: "edit-many", edits: [{ key: "gain", value: 4 }], recall: true })).kind, "accepted",
+        "a recalled dependency re-prepares the value it feeds");
+    assert.equal((await command({ kind: "undo" })).kind, "accepted");
+    assert.equal((await command({ kind: "edit-many", edits: [{ key: "curve", value: { points: [0.5, 0.5] } }] })).kind, "accepted");
+    assert.deepEqual(reasons, ["load", "edit", "recall", "recall", "history", "edit"]);
+    assert.equal((await command({ kind: "begin", keys: ["curve"], gesture: 1 })).kind, "accepted");
+    assert.deepEqual(await command({ kind: "edit-many", edits: [{ key: "curve", value: { points: [0.25, 0.75] } }], recall: true, gesture: 1 }),
+        { kind: "rejected", reason: "invalid-command" }, "a recall cannot be part of a drag");
+    await session.stop();
+});
+
 test("boot and accepted curve edits capture engine inputs with coherent targets and preserve honest application evidence", async () => {
     const { definePluginState, parameter, storedValue } = await definitionModule;
     const { createPluginStateSession } = await sessionModule;
@@ -884,7 +914,7 @@ test("boot and accepted curve edits capture engine inputs with coherent targets 
         parameters: [{ endpoint: "hostGain", value: 2.5, min: 0, max: 10, step: 0, defaultValue: 1 }], values: {},
     } });
     const target0 = { scope, key: "curve", generation: 0 };
-    assert.deepEqual(replacements, [{ input: { value: { points: [0, 1] }, parameters: { gain: 2.5 } }, target: target0 }]);
+    assert.deepEqual(replacements, [{ input: { value: { points: [0, 1] }, parameters: { gain: 2.5 }, reason: "load" }, target: target0 }]);
     assert.deepEqual(session.getSnapshot().fields.curve.application, { kind: "pending" });
     assert.deepEqual(session.getSnapshot().fields.curve.target, target0);
     assert.equal(native.publications.length, 0, "generation zero boot does not invent a persisted write");
@@ -895,7 +925,7 @@ test("boot and accepted curve edits capture engine inputs with coherent targets 
     const target1 = { scope, key: "curve", generation: 1 };
     assert.equal(result.kind, "accepted");
     assert.equal(replacements.length, 2);
-    assert.deepEqual(replacements[1], { input: { value: { points: [0, 0.4, 1] }, parameters: { gain: 2.5 } }, target: target1 });
+    assert.deepEqual(replacements[1], { input: { value: { points: [0, 0.4, 1] }, parameters: { gain: 2.5 }, reason: "edit" }, target: target1 });
     assert.ok(Object.isFrozen(replacements[1].input));
     assert.ok(Object.isFrozen(replacements[1].input.parameters));
     assert.equal(seen.length, 1, "value, history, and target pending status change in one Jotai notification");

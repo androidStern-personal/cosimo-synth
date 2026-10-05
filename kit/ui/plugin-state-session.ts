@@ -1,7 +1,7 @@
 import { atom, createStore } from "jotai/vanilla";
 import { UndoHistory } from "./undo-history";
 import type { EngineApplication, EngineTarget } from "./plugin-state-engine";
-import { codecThrewMessage, savedInProject, type PluginStateFields, type PluginStateFieldValue, type PluginStateJson } from "./plugin-state-definition";
+import { codecThrewMessage, savedInProject, type PluginStateChangeReason, type PluginStateFields, type PluginStateFieldValue, type PluginStateJson } from "./plugin-state-definition";
 
 /** Native-assigned service lifetime and full-document identity. */
 export interface PluginStateScope {
@@ -74,6 +74,7 @@ export type PluginStateApplication = EngineApplication
 export interface PluginStateEngineInput {
     readonly value: unknown;
     readonly parameters: Readonly<Record<string, number>>;
+    readonly reason: PluginStateChangeReason;
 }
 
 /** A composed engine binding; dependency names are declared parameter field keys. */
@@ -113,6 +114,8 @@ export type PluginStateCommand = {
     readonly kind: "edit-many";
     readonly edits: readonly { readonly key: string; readonly value: unknown; readonly expectedVersion?: number }[];
     readonly history?: false;
+    /** A preset or snapshot is replacing the sound; preparation sees reason "recall". */
+    readonly recall?: true;
     /** Write into this client's open gesture, which must cover every edited key. */
     readonly gesture?: number;
 } | {
@@ -328,7 +331,9 @@ export function createPluginStateSession<const Fields extends PluginStateFields>
             }),
         };
     };
-    const commit = (next: Model, retryKey?: string) => {
+    // Why each engine binding last prepared, so a retry repeats that preparation faithfully.
+    const preparedReasons = new Map<string, PluginStateChangeReason>();
+    const commit = (next: Model, retryKey?: string, reason: PluginStateChangeReason = "edit") => {
         const previous = store.get(state);
         if (next.snapshot === previous.snapshot) { store.set(state, next); return; }
         const scope = next.snapshot.scope;
@@ -365,13 +370,16 @@ export function createPluginStateSession<const Fields extends PluginStateFields>
             }
             fields[binding.key] = Object.freeze({ ...field, target, application: Object.freeze({ kind: ready ? "pending" as const : "waiting-for-inputs" as const }) });
             if (ready && "value" in field) {
-                const input = Object.freeze({ value: field.value, parameters: Object.freeze(parameters) });
+                const prepared: PluginStateChangeReason = reset ? "load"
+                    : binding.key === retryKey ? preparedReasons.get(binding.key) ?? "edit" : reason;
+                preparedReasons.set(binding.key, prepared);
+                const input = Object.freeze({ value: field.value, parameters: Object.freeze(parameters), reason: prepared });
                 engineEffects.push(() => binding.replace(input, target));
             } else engineEffects.push(() => binding.cancel());
         }
         store.set(state, { ...next, snapshot: Object.freeze({ ...next.snapshot, fields: Object.freeze(fields) }) });
     };
-    const applyValues = (model: Model, changes: readonly { readonly key: string; readonly value: unknown }[], history: UndoHistory<HistoryEntry>, cause: "edit" | "history" | "recover"): PluginStateResult => {
+    const applyValues = (model: Model, changes: readonly { readonly key: string; readonly value: unknown }[], history: UndoHistory<HistoryEntry>, cause: "edit" | "recall" | "history" | "recover"): PluginStateResult => {
         if (!model.snapshot.scope) return { kind: "rejected", reason: "not-ready" };
         // Prepare all encodings before changing any accepted value. Native I/O
         // remains separately reported per field; local acceptance is one commit.
@@ -409,11 +417,11 @@ export function createPluginStateSession<const Fields extends PluginStateFields>
         const result: PluginStateResult = { kind: "accepted", revision: next.snapshot.revision,
             ...(only && "version" in only ? { version: only.version } : {}),
             ...(cause !== "history" ? { changed: true } : {}),
-            ...(cause === "edit" && history.undoEntry && history.undoEntry !== model.history.undoEntry
+            ...((cause === "edit" || cause === "recall") && history.undoEntry && history.undoEntry !== model.history.undoEntry
                 ? { historyEntry: historyReference(model.snapshot.scope, history.undoEntry) } : {}),
         };
         accepted = result;
-        commit({ ...next, publications, parameterIntents });
+        commit({ ...next, publications, parameterIntents }, undefined, cause === "recover" ? "edit" : cause);
         for (const publication of outgoing) { if (!stopped) ports.native.publish(publication); }
         return result;
     };
@@ -491,7 +499,7 @@ export function createPluginStateSession<const Fields extends PluginStateFields>
                 const { client } = event.address;
                 const gestureId = event.command.gesture;
                 if (!Array.isArray(event.command.edits) || event.command.edits.length === 0
-                    || (gestureId !== undefined && event.command.history === false)) return { kind: "rejected", reason: "invalid-command" };
+                    || (gestureId !== undefined && (event.command.history === false || event.command.recall))) return { kind: "rejected", reason: "invalid-command" };
                 const ownGesture = gestureId === undefined ? undefined
                     : model.gestures.find(gesture => gesture.client === client && gesture.gesture === gestureId);
                 if (gestureId !== undefined && !ownGesture) return { kind: "rejected", reason: "invalid-command" };
@@ -520,7 +528,7 @@ export function createPluginStateSession<const Fields extends PluginStateFields>
                 }
                 const recorded = event.command.history === false ? [] : changes.filter(({ key }) => historyParticipates(key));
                 return applyValues({ ...model, editOrder }, values, recorded.length
-                    ? model.history.record({ changes: recorded, order: editOrder }) : model.history, "edit");
+                    ? model.history.record({ changes: recorded, order: editOrder }) : model.history, event.command.recall ? "recall" : "edit");
             }
             if (event.command.kind === "begin" || event.command.kind === "end") {
                 const { keys, gesture: gestureId } = event.command;

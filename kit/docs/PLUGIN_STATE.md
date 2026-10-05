@@ -146,6 +146,26 @@ Recall sets the fields a preset contains; a field the preset lacks keeps its val
 
 A file from another plugin ID, or one that sets a field that is not a sound field, is refused with a message saying so. For a custom interface, `usePresets(definition)` and `useSnapshots(definition)` return the same lists, state and actions the bars use; see the [API reference](PLUGIN_STATE_API.md#presets-and-snapshots).
 
+## Why a value is being prepared
+
+The context passed to `prepare` carries `reason`, so the audio engine can treat a replaced sound differently from a live edit:
+
+| `reason` | When |
+|---|---|
+| `load` | The plugin opened, or the host loaded a project. |
+| `recall` | A preset was recalled or reverted, or a snapshot slot was selected. |
+| `history` | Undo or Redo restored the value. |
+| `edit` | Any other change, including host automation of a declared dependency. |
+
+```ts
+// PLUGIN AUTHOR: state.ts. Clear captured audio when a stored sound replaces this one, not while a control moves.
+prepare(pattern, { reason }) {
+    return { ...toUpload(pattern), restart: reason === "load" || reason === "recall" };
+}
+```
+
+`PresetBar`, `SnapshotBar`, `usePresets` and `useSnapshots` mark their recalls. A custom preset interface marks its own with `editor.edit(changes, { recall: true })`; a recall cannot be part of a gesture.
+
 ## Concurrent editing
 
 The hook captures the accepted field version behind each setter. Stale edits return a conflict. Queued updates from the same active gesture remain valid; another GUI or agent cannot write that field during the gesture. Other fields remain usable. Host automation retains authority and is not recorded as a user edit. Undo/Redo restore the recorded user values, including when automation subsequently changed them.

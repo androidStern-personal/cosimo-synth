@@ -114,7 +114,8 @@ export function useSnapshots(definition: PluginStateFields): Snapshots {
             if (!target) next[slot] = { values: saved };
             // snapshotSlots never records history, so this one edit's Undo entry
             // restores only the sound and the selected slot.
-            return editor.edit({ ...(target ? soundChanges(definition, target.values) : {}), snapshotSlots: next, activeSnapshot: slot }).then(editOutcome);
+            return editor.edit({ ...(target ? soundChanges(definition, target.values) : {}), snapshotSlots: next, activeSnapshot: slot },
+                { recall: true }).then(editOutcome);
         }),
         clear: slot => act(slot, slots => editor.edit({ snapshotSlots: { ...slots, [slot]: null }, ...(slot === active ? { activeSnapshot: null } : {}) },
             { history: false }).then(editOutcome)),

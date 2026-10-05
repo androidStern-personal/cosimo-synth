@@ -337,7 +337,7 @@ export function usePresets(definition: PluginStateFields): Presets {
 
     const writeLibrary = (presetsList: readonly Preset[], nextActive: Preset | null) =>
         editor.edit({ presetLibrary: { version: 1, presets: presetsList }, activePreset: nextActive }, { history: false }).then(editOutcome);
-    const load = (preset: Preset) => editor.edit({ ...soundChanges(definition, preset.values), activePreset: preset }).then(editOutcome);
+    const load = (preset: Preset) => editor.edit({ ...soundChanges(definition, preset.values), activePreset: preset }, { recall: true }).then(editOutcome);
     const userPreset = (id: string) => userPresets.find(preset => preset.id === id);
     const act = async (action: (saved: SoundValues) => PresetActionResult | Promise<PresetActionResult>) => {
         if (status !== "ready" || !current) return settle(failed(unavailableReason ?? "The plugin is still loading. Try again in a moment."));

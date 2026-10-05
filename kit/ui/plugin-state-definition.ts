@@ -103,10 +103,18 @@ export interface PluginStateParameter {
     readonly preset?: false;
 }
 
+/**
+ * Why a value is being prepared: `load` when the plugin opens or the host loads a project,
+ * `recall` when a preset or snapshot replaces the sound, `history` for Undo and Redo,
+ * and `edit` for every other change, including host automation of a dependency.
+ */
+export type PluginStateChangeReason = "load" | "recall" | "history" | "edit";
+
 /** Captured scalar inputs and portable cancellation for pure event preparation. */
 export interface PluginStatePrepareContext {
     readonly resources: import("./resource-client").ResourceClient;
     readonly parameters: Readonly<Record<string, number>>;
+    readonly reason: PluginStateChangeReason;
     readonly signal: EngineCancellation;
 }
 
