@@ -11,8 +11,7 @@ remain inactive evidence, not prerequisites for the next build.
 Keep the name **Enhance That**, bundle `EnhanceThat.vst3`, patch/bundle ID
 `dev.cosimo.enhancer-lite`, codes `CsEL` / `Cosi`, and processor CID
 `ABCDEF019182FAEB436F73694373454C`. The rename preserves saved sounds and stable
-parameter IDs. `previousProductName: CosimoEnhancerLite` enables recovery from
-the old filename; do not invent a new plugin identity to bypass an old copy.
+parameter IDs. Do not invent a new plugin identity to bypass an old copy.
 
 The eight sound controls remain Frequency, Q, Routing, Amount / Mid, Side,
 Character, Intensity and Shape. Keep their automation/gesture repairs: a changed
