@@ -55,6 +55,7 @@ test("a fresh synth shows Init, unmodified; recalling Init is one Undo entry", a
     const view = await open();
     const { page } = view;
     try {
+        await page.waitForFunction(() => document.querySelector('[data-role="synth-preset-bar"] select[aria-label="Preset"]')?.disabled === false);
         assert.equal(await presetSelect(page).inputValue(), "init", "a fresh synth starts on Init");
         assert.equal(await bar(page).getByText("No preset").count(), 0);
         assert.equal(await modified(page).count(), 0, "the starting sound is exactly Init");
@@ -225,8 +226,8 @@ test("the phone row shows the preset name and keeps the preset bar in the Sound 
     const view = await open({ compact: true });
     const { page } = view;
     try {
-        const name = bar(page).locator('[data-role="preset-name"]');
-        assert.equal(await name.textContent(), "Init", "a fresh synth shows Init, unmodified");
+        // The name reads "No preset" until the presets load; a fresh synth then shows Init, unmodified.
+        await page.waitForFunction(() => document.querySelector('[data-role="preset-name"]')?.textContent === "Init");
         assert.equal(await presetSelect(page).count(), 0, "the preset selector lives in the menu");
 
         await page.getByRole("button", { name: "Cutoff 2400" }).click();

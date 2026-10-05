@@ -5810,6 +5810,8 @@ test("mobile workspace keeps the synth preset bar visible and contained at 320px
     try {
         const host = page.locator('[data-role="synth-preset-bar-host"]');
         await host.waitFor();
+        // The name reads "No preset" until the presets load.
+        await host.locator('[data-role="preset-name"]').filter({ hasText: /^Init/ }).waitFor();
         const layout = await host.evaluate((element) => {
             const bounds = element.getBoundingClientRect();
             const panels = document.querySelector('[data-role="mobile-workspace-panels"]');
