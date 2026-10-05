@@ -1,4 +1,5 @@
-import type { PatchConnectionLike, EffectStoredStateAdapter } from "../../../kit/index";
+import type { PatchConnectionLike } from "../../../kit/index";
+import type { EffectStoredStateAdapter } from "../../../ui/shared/effects/effect-preset-v2";
 import {
     SPECTRAL_PARTIAL_SCHEMA_VERSION,
     SPECTRAL_PARTIAL_STATE_KEY,

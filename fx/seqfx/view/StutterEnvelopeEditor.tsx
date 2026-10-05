@@ -12,15 +12,15 @@ import {
     EDITOR_PLOT_TOP_PADDING_PX,
     EDITOR_VALUE_HANDLE_HALO_RADIUS_PX,
     EDITOR_VALUE_HANDLE_RADIUS_PX,
-    useEditorSurfaceSize,
-} from "../../../kit/index";
+    useElementSize,
+} from "../../../ui/shared/editor-tokens";
 import {
     adaptiveSampleEditorCurve,
     createEditorCurvePlotRect,
     editorCurveFillPathToBaseline,
     polylineToSvgPath,
     type EditorCurvePlotRect,
-} from "../../../kit/index";
+} from "../../../ui/shared/editor-curve-geometry";
 import {
     EditorCurveAxis,
     EditorCurveFill,
@@ -30,8 +30,8 @@ import {
     EditorCurvePath,
     EditorCurvePlotArea,
     EditorCurveSurface,
-} from "../../../kit/index";
-import { EditorTickSlider, ModBadge, type ModulationDirection } from "../../../kit/index";
+} from "../../../ui/shared/editor-curve-surface";
+import { EditorTickSlider, ModBadge, type ModulationDirection } from "./editor-tick-slider";
 import {
     STUTTER_DEFAULT_GATE,
     STUTTER_DEFAULT_SHAPE,
@@ -246,7 +246,7 @@ export function StutterEnvelopeEditor({
     const gateDragTargetRef = useRef<"start" | "end">("start");
     const morphPointerIdRef = useRef<number | null>(null);
     const morphDragTargetRef = useRef<"start" | "end">("start");
-    const size = useEditorSurfaceSize(viewportRef);
+    const size = useElementSize(viewportRef);
     const effectiveWidth = size.width;
     const effectiveHeight = size.height;
     const plot = useMemo(
@@ -541,10 +541,10 @@ export function StutterEnvelopeEditor({
                     <EditorCurveSurface
                         ref={surfaceRef}
                         className="seqfx-stutter-editor__surface"
-                        dataRole="seqfx-stutter-graph"
+                        data-role="seqfx-stutter-graph"
                         heightPx={effectiveHeight}
                         widthPx={effectiveWidth}
-                        ariaLabel="Cut envelope"
+                        aria-label="Cut envelope"
                         onPointerDown={handleGatePointerDown}
                         onPointerMove={handleGatePointerMove}
                         onPointerUp={endGateDrag}

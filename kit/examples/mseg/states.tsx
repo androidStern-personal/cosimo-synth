@@ -14,7 +14,7 @@ export function StatesExample() {
                 <Mseg.Surface className="envelope vertical" aria-label="Vertical envelope" orientation="vertical">
                     <Mseg.Grid />
                     <Mseg.Fill />
-                    <Mseg.Curve />
+                    <Mseg.Line />
                     <Mseg.Points />
                     <Mseg.TimeAxis scale={{ kind: 'notes', totalDivision: { numerator: 1, denominator: 1 } }} />
                 </Mseg.Surface>

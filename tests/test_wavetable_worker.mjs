@@ -3,10 +3,10 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
-import { stageCmajorWebRuntime } from "../kit/fx/vite.shared.mjs";
+import { stageCmajorWebRuntime } from "../ui/vite.shared.mjs";
 
-const stateRuntime = process.env.COSIMO_CMAJOR_SOURCE
-    ? path.join(process.env.COSIMO_CMAJOR_SOURCE, "javascript/cmaj_api")
+const stateRuntime = process.env.BUILDER_KIT_CMAJOR_SOURCE
+    ? path.join(process.env.BUILDER_KIT_CMAJOR_SOURCE, "javascript/cmaj_api")
     : stageCmajorWebRuntime(path.resolve(import.meta.dirname, ".."), {
     buildDirectory: path.resolve(import.meta.dirname, "../build/cmajor_web_runtime-worker-state-tests"),
 });

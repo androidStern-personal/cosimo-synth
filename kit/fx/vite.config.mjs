@@ -5,24 +5,36 @@ import { fileURLToPath } from "node:url";
 import react from "@vitejs/plugin-react";
 import { defineConfig } from "vite";
 
-import { serveJsonValue } from "./vite.shared.mjs";
 import { discoverEffectPlugins } from "./build-effect.mjs";
+import { isInsideDirectory } from "../scripts/common.mjs";
 
 const configDir = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(configDir, "../..");
 const fxRoot = path.join(repoRoot, "fx");
-const sharedHarnessPath = path.join(configDir, "browser-preview.html");
+const sharedHarnessPath = path.join(repoRoot, "kit/ui/preview/index.html");
 const devServerStartedAt = new Date().toISOString();
 const pluginDiscoveryTtlMs = 2000;
 
 let cachedPluginDescriptions = null;
 let cachedPluginDescriptionsAt = 0;
+const reportedFailures = new Set();
 
 // Discovery reads every fx/*/ directory; a short TTL keeps status requests
 // cheap while still picking up newly added plugins within a couple of seconds.
+// A plugin folder that fails to load is reported once and left out, so the
+// other plugins keep working while it is being edited.
 function describeEffectPlugins(now = Date.now()) {
     if (cachedPluginDescriptions === null || now - cachedPluginDescriptionsAt >= pluginDiscoveryTtlMs) {
-        cachedPluginDescriptions = Object.entries(discoverEffectPlugins()).map(([name, plugin]) => ({
+        const plugins = discoverEffectPlugins({
+            onPluginError: (_directory, error) => {
+                if (!reportedFailures.has(error.message)) {
+                    reportedFailures.add(error.message);
+                    console.error(error.message);
+                }
+            },
+        });
+
+        cachedPluginDescriptions = Object.entries(plugins).map(([name, plugin]) => ({
             name,
             patch: `/${plugin.patch}`,
             sourceModule: plugin.devModule,
@@ -33,28 +45,37 @@ function describeEffectPlugins(now = Date.now()) {
     return cachedPluginDescriptions;
 }
 
-function isLoopbackRequest(request) {
-    const remoteAddress = request.socket?.remoteAddress ?? "";
-
-    return remoteAddress === "127.0.0.1"
-        || remoteAddress === "::1"
-        || remoteAddress === "::ffff:127.0.0.1";
-}
-
 function serveEffectDevStatus() {
-    return serveJsonValue({
-        urlPath: "/__fx-dev-status",
-        valueFactory: ({ request }) => ({
-            kind: "fx-vite-dev-server",
-            startedAt: devServerStartedAt,
-            plugins: describeEffectPlugins(),
-            // The loader's probe needs only kind + plugins. The checkout path
-            // and pid identify this server to same-machine tooling (worktree
-            // disambiguation) and stay off the wire for other hosts, since the
-            // dev server listens on all interfaces.
-            ...(isLoopbackRequest(request) ? { repoRoot, pid: process.pid } : {}),
-        }),
-    });
+    return {
+        name: "fx-dev-status",
+        configureServer(server) {
+            server.middlewares.use((request, response, next) => {
+                if ((request.url ?? "").split("?")[0] !== "/__fx-dev-status") {
+                    next();
+                    return;
+                }
+
+                try {
+                    const status = {
+                        kind: "fx-vite-dev-server",
+                        startedAt: devServerStartedAt,
+                        plugins: describeEffectPlugins(),
+                        // The loader's probe needs only kind + plugins. The checkout path
+                        // and pid let tooling tell which worktree owns the shared port.
+                        repoRoot,
+                        pid: process.pid,
+                    };
+
+                    response.statusCode = 200;
+                    response.setHeader("Access-Control-Allow-Origin", "*");
+                    response.setHeader("Content-Type", "application/json; charset=utf-8");
+                    response.end(JSON.stringify(status));
+                } catch (error) {
+                    next(error);
+                }
+            });
+        },
+    };
 }
 
 function serveEffectHarnessHtml() {
@@ -80,7 +101,7 @@ function serveEffectHarnessHtml() {
                 // The URL shape promises a file under fx/, so contain the
                 // decoded path there too (an encoded ../ segment decodes after
                 // the shape check above).
-                if (harnessPath === null || !harnessPath.startsWith(fxRoot + path.sep)) {
+                if (harnessPath === null || !isInsideDirectory(fxRoot, harnessPath)) {
                     response.statusCode = 403;
                     response.end("Forbidden");
                     return;
@@ -89,7 +110,7 @@ function serveEffectHarnessHtml() {
                 try {
                     let source;
                     if (fs.existsSync(harnessPath)) {
-                        if (!fs.realpathSync(harnessPath).startsWith(fs.realpathSync(fxRoot) + path.sep)) {
+                        if (!isInsideDirectory(fs.realpathSync(fxRoot), fs.realpathSync(harnessPath))) {
                             response.statusCode = 403;
                             response.end("Forbidden");
                             return;
@@ -145,12 +166,15 @@ export default defineConfig(({ command }) => ({
         serveEffectDevStatus(),
     ],
     server: {
-        host: "0.0.0.0",
+        host: "127.0.0.1",
         port: 5175,
         strictPort: true,
         cors: true,
         fs: {
             allow: [repoRoot],
+            // Vite's defaults plus kit/feed.json, whose URL is a private
+            // capability that no plugin UI needs to read.
+            deny: [".env", ".env.*", "*.{crt,pem}", "**/.git/**", "**/kit/feed.json"],
         },
         watch: {
             usePolling: true,

@@ -139,7 +139,7 @@ import { KeyTrackStatus } from "../shared/key-track-status";
 import {
     EDITOR_HIT_RADIUS_PX,
     EDITOR_VALUE_HANDLE_RADIUS_PX,
-    useEditorSurfaceSize,
+    useElementSize,
 } from "../shared/editor-tokens";
 import {
     applyRollingAxisSample,
@@ -1805,7 +1805,7 @@ function DesktopEnvelopeEditor({
     compact?: boolean;
 }) {
     const svgRef = useRef<SVGSVGElement | null>(null);
-    const surfaceSize = useEditorSurfaceSize(svgRef);
+    const surfaceSize = useElementSize(svgRef);
     const activeDragRef = useRef<ActiveEnvelopeDrag | null>(null);
     const [activeHandle, setActiveHandle] = useState<EnvelopeDragTarget | null>(null);
     const [activeField, setActiveField] = useState<EnvelopeEditableField | null>(null);

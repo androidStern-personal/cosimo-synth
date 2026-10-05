@@ -48,7 +48,7 @@ preparedState({
 
 `resources` is the existing kit resource client (`readText`, `readBytes`, `readAudio`). Loading may be asynchronous; the final writer is synchronous. The loaded source belongs to this operation's closure, not an author-managed shared cache. The framework measures the plan, reserves final storage, calls its writer and publishes only when complete. A superseded load cannot write or publish after finishing late. Return `preparationFailure(...)` for a recoverable loading error; an unexpected throw becomes a non-retryable field error.
 
-The old `sharedData({input})` completed-buffer overload and `replaceData` upload helper were removed. New declarations have one direct-memory behavior. A specialized component can still select an explicit `PluginStateDelivery`; the older `engineData` protocol remains explicit for DSP components that actually use it.
+A component with its own transfer protocol can declare an explicit delivery instead; see [Plugin state](PLUGIN_STATE.md).
 
 ## Size and DSP access
 

@@ -1,5 +1,5 @@
 import type { PatchConnectionLike } from "./cmajor-react";
-import type { SharedDataCancellation } from "../../kit/ui/prepared-shared-data";
+import type { SharedDataCancellation } from "./prepared-shared-data";
 
 export const RUNTIME_INSTALL_ACK_ENDPOINT_ID = "runtimeInstallAck";
 export const RUNTIME_SYNC_REQUEST_ENDPOINT_ID = "runtimeSyncRequest";

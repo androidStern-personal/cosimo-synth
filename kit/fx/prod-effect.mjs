@@ -1,81 +1,34 @@
 import { access, mkdir, readFile, rm } from "node:fs/promises";
-import { readFileSync } from "node:fs";
 import path from "node:path";
-import { spawn, spawnSync } from "node:child_process";
+import { spawn } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import os from "node:os";
 
 import {
     availableEffectPluginNamesLine,
     buildPlugin,
-    effectPlugins,
+    getEffectPlugin,
     repoRoot,
     resolveBuildOutputRoot,
     resolvePluginNames,
 } from "./build-effect.mjs";
 import { assertPatchedChocWebViewBinary } from "../scripts/check_choc_markers.mjs";
-import { inspectTool, normalizePin } from "../scripts/toolchain.mjs";
-import { requireCurrentTool } from "../scripts/require_tool.mjs";
-import { formatVST3InstallCleanupWarning, formatVST3InstallFailure, installVST3Bundle } from "../scripts/install_vst3.mjs";
+import { isInsideDirectory, isMainModule, runCommand } from "../scripts/common.mjs";
+import { installVST3Bundle } from "../scripts/install_vst3.mjs";
+import { cmajOverrideVariable, resolveCmajExecutable } from "../scripts/toolchain.mjs";
 
 const scriptPath = fileURLToPath(import.meta.url);
-const toolchainManifestPath = path.join(repoRoot, "kit", "toolchain.json");
-const cmajCommandBuildSourceDirectory = path.join(repoRoot, "tools", "cmajor_command_build");
-const cmajCommandBuildDirectory = path.join(repoRoot, "build", "cmajor_command");
-const pinnedCmajExecutablePath = path.join(
-    cmajCommandBuildDirectory,
-    "bin",
-    process.platform === "win32" ? "cmaj.exe" : "cmaj",
-);
 
-/**
- * kit/toolchain.json pins the downloaded cmaj (artifact hash + local path).
- * Absent or unreadable means "no downloaded tool", never a crash: the
- * monorepo still builds cmaj from source without it.
- */
-export function readToolchainManifest(manifestPath = toolchainManifestPath) {
-    try {
-        return JSON.parse(readFileSync(manifestPath, "utf8"));
-    } catch (error) {
-        if (error && typeof error === "object" && error.code === "ENOENT")
-            return null;
-
-        throw new Error(`Could not read ${manifestPath}: ${error instanceof Error ? error.message : String(error)}`);
-    }
-}
-
-const toolchainManifest = readToolchainManifest();
-
-/** The hash-pinned cmaj that `npm run kit:setup` downloads (kit/toolchain.json cmaj.localPath). */
-export function getDownloadedCmajExecutablePath(toolchain = toolchainManifest) {
-    const localPath = toolchain?.cmaj?.localPath;
-
-    if (typeof localPath !== "string" || localPath === "")
-        return null;
-
-    return path.resolve(repoRoot, localPath);
-}
-
-const downloadedCmajExecutablePath = getDownloadedCmajExecutablePath();
-
-function absoluteReleaseToolOverride(environment, name, fallback) {
-    const value = environment[name];
-
-    if (value === undefined || value === "")
-        return fallback;
-
-    if (!path.isAbsolute(value))
-        throw new Error(`${name} must be an absolute executable path.`);
-
-    return value;
-}
-
-/** Release callers may provide already-attested CMake and Node paths. */
+/** BUILDER_KIT_CMAKE optionally names the exact CMake executable (absolute path) a build must use. */
 export function resolveProdBuildToolPaths(environment = process.env, platform = process.platform) {
+    const cmake = environment.BUILDER_KIT_CMAKE;
+
+    if (cmake !== undefined && cmake !== "" && !path.isAbsolute(cmake))
+        throw new Error(`BUILDER_KIT_CMAKE must be an absolute path to a cmake executable (got ${JSON.stringify(cmake)}).`);
+
     return {
-        cmake: absoluteReleaseToolOverride(environment, "COSIMO_RELEASE_CMAKE", "cmake"),
+        cmake: cmake || "cmake",
         codesign: platform === "darwin" ? "/usr/bin/codesign" : "codesign",
-        node: absoluteReleaseToolOverride(environment, "COSIMO_RELEASE_NODE", process.execPath),
     };
 }
 
@@ -89,28 +42,22 @@ function usage() {
         "",
         "Notes:",
         "  fx:prod:build creates a dedicated plugin bundle under build/.",
-        "  fx:prod:install copies an already-built dedicated VST3 bundle.",
+        "  fx:prod:install copies an already-built VST3 into ~/Library/Audio/Plug-Ins/VST3.",
         "  fx:prod:install does not write CmajPlugin.json and does not touch AU plugins.",
-        "  cmaj comes from build/kit-tools/cmaj (hash-pinned by kit/toolchain.json, npm run kit:setup)",
-        "  or, in the Cosimo monorepo, from the pinned source build under build/cmajor_command.",
-        "  COSIMO_PLUGIN_JOBS controls parallel plugin builds for 'all' (default: 3).",
-        "  COSIMO_CMAKE_JOBS controls CMake --parallel jobs per plugin (default: CPU budget / plugin jobs).",
+        "  cmaj is the hash-verified download from npm run kit:setup (build/kit-tools/cmaj);",
+        "  BUILDER_KIT_CMAJ=<absolute path> uses another cmaj, BUILDER_KIT_CMAKE=<absolute path> another cmake.",
+        "  BUILDER_KIT_PLUGIN_JOBS sets how many plugins 'all' builds in parallel (default: 3).",
+        "  BUILDER_KIT_CMAKE_JOBS sets CMake --parallel jobs per plugin (default: CPU count / plugin jobs).",
     ].join("\n");
 }
 
-function run(command, args, options = {}) {
-    const result = spawnSync(command, args, {
-        cwd: options.cwd ?? repoRoot,
-        stdio: options.capture ? ["ignore", "pipe", "pipe"] : "inherit",
-        encoding: "utf8",
-    });
+const missingToolFixes = {
+    cmake: "Install CMake 3.28 or newer, or source .builder-kit-install/env.sh from the project folder if the kit installer set this project up.",
+    codesign: "Install the Xcode Command Line Tools with xcode-select --install.",
+};
 
-    if (result.status !== 0) {
-        const output = [result.stdout, result.stderr].filter(Boolean).join("\n").trim();
-        throw new Error(output || `${command} ${args.join(" ")} failed.`);
-    }
-
-    return result.stdout?.trim() ?? "";
+function run(command, args, { capture = false } = {}) {
+    return runCommand(command, args, { capture, missingFix: missingToolFixes[path.basename(command)] });
 }
 
 function availableParallelism() {
@@ -133,8 +80,8 @@ function parsePositiveInteger(value, label) {
 
 export function resolveProdBuildParallelism(pluginCount, env = process.env, availableJobs = availableParallelism()) {
     const safeAvailableJobs = Math.max(1, Math.floor(availableJobs));
-    const requestedPluginJobs = parsePositiveInteger(env.COSIMO_PLUGIN_JOBS, "COSIMO_PLUGIN_JOBS");
-    const requestedCmakeJobs = parsePositiveInteger(env.COSIMO_CMAKE_JOBS, "COSIMO_CMAKE_JOBS");
+    const requestedPluginJobs = parsePositiveInteger(env.BUILDER_KIT_PLUGIN_JOBS, "BUILDER_KIT_PLUGIN_JOBS");
+    const requestedCmakeJobs = parsePositiveInteger(env.BUILDER_KIT_CMAKE_JOBS, "BUILDER_KIT_CMAKE_JOBS");
     const defaultPluginJobs = pluginCount > 1 ? Math.min(pluginCount, 3, safeAvailableJobs) : 1;
     const pluginJobs = Math.max(1, Math.min(pluginCount, requestedPluginJobs ?? defaultPluginJobs));
     const cmakeJobs = requestedCmakeJobs ?? Math.max(1, Math.floor(safeAvailableJobs / pluginJobs));
@@ -154,89 +101,6 @@ async function pathExists(nextPath) {
     }
 }
 
-/** The cmaj built from the monorepo's pinned fork (tools/cmajor_command_build). */
-export function getPinnedCmajExecutablePath() {
-    return pinnedCmajExecutablePath;
-}
-
-/** Every path a production build may use as its Cmajor command: pinned source build, hash-pinned download. */
-export function getAcceptedCmajExecutablePaths() {
-    return downloadedCmajExecutablePath === null
-        ? [pinnedCmajExecutablePath]
-        : [pinnedCmajExecutablePath, downloadedCmajExecutablePath];
-}
-
-export function validatePinnedCmajExecutable(candidate) {
-    const accepted = getAcceptedCmajExecutablePaths();
-    const match = typeof candidate === "string"
-        ? accepted.find((acceptedPath) => acceptedPath === path.resolve(candidate))
-        : undefined;
-
-    if (match === undefined) {
-        throw new Error(
-            "COSIMO_CMAJ_EXECUTABLE must be the Cmajor command built from the pinned source "
-            + "or the hash-pinned download from npm run kit:setup: "
-            + accepted.join(" or "),
-        );
-    }
-
-    return match;
-}
-
-/**
- * Picks the Cmajor command for a production build, in order:
- *   1. the downloaded cmaj at kit/toolchain.json cmaj.localPath, when the
- *      verified archive receipt and installed payload match the manifest
- *      (a mismatch fails closed rather than silently falling through);
- *   2. the monorepo's pinned source build (tools/cmajor_command_build);
- *   3. otherwise a clear error naming `npm run kit:setup`.
- * Paths are injectable so the policy is unit-testable without a real cmaj.
- */
-export async function resolvePinnedCmajSource({
-    toolchain = toolchainManifest,
-    downloadedExecutable = getDownloadedCmajExecutablePath(toolchain),
-    sourceProjectDirectory = cmajCommandBuildSourceDirectory,
-} = {}) {
-    const expectedSha256 = normalizePin(toolchain?.cmaj?.sha256);
-
-    if (downloadedExecutable !== null && expectedSha256 !== "" && await pathExists(downloadedExecutable)) {
-        const inspection = await inspectTool(toolchain, "cmaj", { localPath: downloadedExecutable });
-
-        if (inspection.status !== "current") {
-            throw new Error(
-                `${downloadedExecutable} does not match kit/toolchain.json `
-                + "and its verified installed payload. "
-                + "Run npm run kit:setup to download the pinned Cmajor command again.",
-            );
-        }
-
-        return { kind: "downloaded", executable: downloadedExecutable, sha256: inspection.pin };
-    }
-
-    if (await pathExists(path.join(sourceProjectDirectory, "CMakeLists.txt")))
-        return { kind: "source", executable: pinnedCmajExecutablePath };
-
-    const downloadedHint = downloadedExecutable === null
-        ? "kit/toolchain.json names no downloaded cmaj"
-        : expectedSha256 === ""
-            ? `kit/toolchain.json carries no cmaj.sha256, so ${downloadedExecutable} cannot be trusted`
-            : `${downloadedExecutable} is missing`;
-
-    throw new Error(
-        `No pinned Cmajor command is available: ${downloadedHint}, and there is no `
-        + `${path.relative(repoRoot, sourceProjectDirectory)} source project to build one from. `
-        + "Run npm run kit:setup to download the hash-pinned cmaj.",
-    );
-}
-
-export function createPinnedCmajConfigureArgs() {
-    return [
-        "-S", cmajCommandBuildSourceDirectory,
-        "-B", cmajCommandBuildDirectory,
-        "-DCMAKE_BUILD_TYPE=Release",
-    ];
-}
-
 export function createJuceGenerationConfigureArgs({
     cmakeSourceDirectory,
     cmakeBuildDirectory,
@@ -246,47 +110,16 @@ export function createJuceGenerationConfigureArgs({
     cmajExecutable,
     disableMicrophonePermission = false,
 }) {
-
-    const pinnedExecutable = validatePinnedCmajExecutable(cmajExecutable);
-
     return [
         "-S", cmakeSourceDirectory,
         "-B", cmakeBuildDirectory,
         "-DCMAKE_BUILD_TYPE=Release",
-        `-DCOSIMO_EFFECT_PATCH_PATH=${runtimePatchPath}`,
-        `-DCOSIMO_EFFECT_OUTPUT_DIR=${juceOutputDirectory}`,
-        `-DCOSIMO_EFFECT_PLUGIN_TARGET=${pluginTarget}`,
-        `-DCOSIMO_CMAJ_EXECUTABLE=${pinnedExecutable}`,
-        `-DCOSIMO_DISABLE_MICROPHONE_PERMISSION=${disableMicrophonePermission ? "ON" : "OFF"}`,
+        `-DBUILDER_KIT_EFFECT_PATCH_PATH=${runtimePatchPath}`,
+        `-DBUILDER_KIT_EFFECT_OUTPUT_DIR=${juceOutputDirectory}`,
+        `-DBUILDER_KIT_EFFECT_PLUGIN_TARGET=${pluginTarget}`,
+        `-DBUILDER_KIT_CMAJ_EXECUTABLE=${cmajExecutable}`,
+        `-DBUILDER_KIT_DISABLE_MICROPHONE_PERMISSION=${disableMicrophonePermission ? "ON" : "OFF"}`,
     ];
-}
-
-async function preparePinnedCmajExecutable(toolPaths, cmakeJobs, preparedExecutable = null) {
-    if (preparedExecutable !== null) {
-        const executable = validatePinnedCmajExecutable(preparedExecutable);
-        if (executable === downloadedCmajExecutablePath)
-            await requireCurrentTool("cmaj");
-
-        if (!await pathExists(executable))
-            throw new Error(`Pinned Cmajor command not found: ${executable}`);
-
-        return executable;
-    }
-
-    const source = await resolvePinnedCmajSource();
-
-    if (source.kind === "downloaded") {
-        console.log(`Using the hash-pinned Cmajor command at ${path.relative(repoRoot, source.executable)}`);
-        return source.executable;
-    }
-
-    run(toolPaths.cmake, createPinnedCmajConfigureArgs());
-    run(toolPaths.cmake, createCmakeBuildArgs(cmajCommandBuildDirectory, "cmaj", cmakeJobs));
-
-    if (!await pathExists(pinnedCmajExecutablePath))
-        throw new Error(`Pinned Cmajor command was not built: ${pinnedCmajExecutablePath}`);
-
-    return pinnedCmajExecutablePath;
 }
 
 export async function prepareJuceProjectOutput(juceOut, {
@@ -383,16 +216,13 @@ async function buildJuceProject(pluginName, plugin, options = {}) {
         verifyVST3Bundle(builtVST3, options.toolPaths);
     }
 
-    verifyPatchedWebView(getBuiltVST3BinaryPath(plugin));
+    assertPatchedChocWebViewBinary(getBuiltVST3BinaryPath(plugin));
 
     console.log(`Built ${pluginName} dedicated plugin project at ${path.relative(repoRoot, cmakeBuildDir)}`);
 }
 
 async function prodBuild(pluginName, options = {}) {
-    const plugin = effectPlugins[pluginName];
-
-    if (!plugin)
-        throw new Error(usage());
+    const plugin = getEffectPlugin(pluginName, usage);
 
     // Production bundles must ship no dev-server module path; plain fx:build
     // keeps view.devModule for the JIT-install/dev-server loop.
@@ -408,20 +238,12 @@ export function resolveProdPluginNames(pluginName) {
 }
 
 export function createProdBuildChildArgs(pluginName, options = {}) {
-    const args = [scriptPath, "build", pluginName];
-
-    if (options.clean)
-        args.push("--clean");
-
-    if (options.cmajExecutable)
-        args.push(`--prepared-cmaj-executable=${validatePinnedCmajExecutable(options.cmajExecutable)}`);
-
-    return args;
+    return [scriptPath, "build", pluginName, ...(options.clean ? ["--clean"] : [])];
 }
 
-function runChildProcess(args, env, nodeExecutable) {
+function runChildProcess(args, env) {
     return new Promise((resolve, reject) => {
-        const child = spawn(nodeExecutable, args, {
+        const child = spawn(process.execPath, args, {
             cwd: repoRoot,
             env,
             stdio: "inherit",
@@ -435,8 +257,8 @@ function runChildProcess(args, env, nodeExecutable) {
             }
 
             reject(new Error(signal
-                ? `${nodeExecutable} ${args.join(" ")} exited via ${signal}.`
-                : `${nodeExecutable} ${args.join(" ")} exited with code ${code}.`));
+                ? `${args.join(" ")} was stopped by ${signal}.`
+                : `${args.join(" ")} exited with code ${code}.`));
         });
     });
 }
@@ -474,12 +296,10 @@ async function runLimited(items, limit, task) {
 async function prodBuildAll(pluginNames, options) {
     const toolPaths = options.toolPaths ?? resolveProdBuildToolPaths();
     const { pluginJobs, cmakeJobs } = resolveProdBuildParallelism(pluginNames.length);
-    const cmajExecutable = await preparePinnedCmajExecutable(
-        toolPaths,
-        cmakeJobs,
-        options.cmajExecutable ?? null,
-    );
+    const cmajExecutable = await resolveCmajExecutable();
     const buildOptions = { ...options, toolPaths, cmajExecutable };
+
+    console.log(`Using cmaj at ${isInsideDirectory(repoRoot, cmajExecutable) ? path.relative(repoRoot, cmajExecutable) : cmajExecutable}`);
 
     if (pluginNames.length === 1) {
         await prodBuild(pluginNames[0], { ...buildOptions, cmakeJobs });
@@ -492,11 +312,9 @@ async function prodBuildAll(pluginNames, options) {
         createProdBuildChildArgs(pluginName, buildOptions),
         {
             ...process.env,
-            COSIMO_CMAKE_JOBS: String(cmakeJobs),
-            ...(path.isAbsolute(toolPaths.cmake) ? { COSIMO_RELEASE_CMAKE: toolPaths.cmake } : {}),
-            COSIMO_RELEASE_NODE: toolPaths.node,
+            BUILDER_KIT_CMAKE_JOBS: String(cmakeJobs),
+            [cmajOverrideVariable]: cmajExecutable,
         },
-        toolPaths.node,
     ));
 }
 
@@ -525,45 +343,29 @@ function verifyVST3Bundle(vst3Path, toolPaths) {
     run(toolPaths.codesign, ["--verify", "--deep", "--strict", "--verbose=4", vst3Path], { capture: true });
 }
 
-function verifyPatchedWebView(binaryPath) {
-    assertPatchedChocWebViewBinary(binaryPath);
-}
-
 async function installVST3(pluginName, plugin, options) {
     const builtVST3 = getBuiltVST3Path(plugin);
-    const installDir = path.join(process.env.HOME, "Library/Audio/Plug-Ins/VST3");
-    const installedVST3 = path.join(installDir, `${plugin.productName}.vst3`);
-    const identityProbe = path.join(repoRoot, plugin.juceOut, "_build", "identity_probe", "kit_vst3_identity_probe");
-    if (!await pathExists(identityProbe))
-        throw new Error(`The build-produced VST3 identity probe is missing. Run npm run fx:prod:build -- ${pluginName} before installing.`);
-    const result = await installVST3Bundle({
-        candidate: builtVST3, destination: installedVST3, identityProbe,
-        ...(plugin.previousProductName === undefined ? {} : {
-            previousDestination: path.join(installDir, `${plugin.previousProductName}.vst3`),
-        }),
-        dryRun: options.dryRun, codesign: options.toolPaths.codesign,
+
+    if (!await pathExists(builtVST3))
+        throw new Error(`${pluginName} has no built VST3 at ${path.relative(repoRoot, builtVST3)}. Run npm run fx:prod:build -- ${pluginName} first.`);
+
+    await installVST3Bundle({
+        bundle: builtVST3,
+        previousBundleName: plugin.previousProductName === undefined ? undefined : `${plugin.previousProductName}.vst3`,
+        dryRun: options.dryRun,
+        codesign: options.toolPaths.codesign,
+        log: console.log,
     });
-    if (result.status === "failed")
-        throw new Error(formatVST3InstallFailure(result.error));
-    console.log(`${result.status === "dry-run" ? "Would install" : "Installed"} ${result.identity.displayName} VST3: ${installedVST3}`);
-    if (result.recoveryDirectory)
-        console.log(`Installation verified; retained prior bundle or cleanup files at: ${result.recoveryDirectory}`);
-    if (result.cleanupWarning)
-        console.warn(formatVST3InstallCleanupWarning(result.cleanupWarning));
 }
 
 export function parseArgs(argv) {
-    const action = argv[2];
-    const pluginName = argv[3];
+    const [action, ...rest] = argv.slice(2);
     const flags = new Set();
-    let cmajExecutable = null;
+    let pluginName;
 
-    for (const argument of argv.slice(4)) {
-        if (argument.startsWith("--prepared-cmaj-executable=")) {
-            if (cmajExecutable !== null)
-                throw new Error("The prepared Cmajor executable may only be provided once.");
-
-            cmajExecutable = validatePinnedCmajExecutable(argument.slice(argument.indexOf("=") + 1));
+    for (const argument of rest) {
+        if (!argument.startsWith("-") && pluginName === undefined) {
+            pluginName = argument;
             continue;
         }
 
@@ -581,7 +383,6 @@ export function parseArgs(argv) {
         clean: flags.has("--clean"),
         dryRun: flags.has("--dry-run"),
         help: flags.has("--help") || flags.has("-h"),
-        cmajExecutable,
     };
 }
 
@@ -589,9 +390,14 @@ async function main() {
     try {
         const options = parseArgs(process.argv);
 
-        if (options.help || !options.action || !options.pluginName) {
+        if (options.help) {
             console.log(usage());
-            process.exitCode = options.help ? 0 : 1;
+            return;
+        }
+
+        if (!options.action || !options.pluginName) {
+            console.error(usage());
+            process.exitCode = 1;
             return;
         }
 
@@ -608,7 +414,7 @@ async function main() {
                 throw new Error("--clean is only valid with fx:prod:build.");
 
             for (const pluginName of pluginNames) {
-                await installVST3(pluginName, effectPlugins[pluginName], { ...options, toolPaths });
+                await installVST3(pluginName, getEffectPlugin(pluginName, usage), { ...options, toolPaths });
             }
             return;
         }
@@ -620,5 +426,5 @@ async function main() {
     }
 }
 
-if (process.argv[1] && path.resolve(process.argv[1]) === scriptPath)
+if (isMainModule(import.meta.url))
     await main();

@@ -6,8 +6,8 @@ project(
     LANGUAGES CXX C)
 
 get_filename_component(COSIMO_REPO_ROOT "${CMAKE_CURRENT_LIST_DIR}/../.." ABSOLUTE)
-include("${COSIMO_REPO_ROOT}/kit/cmake/CosimoDependencies.cmake")
-cosimo_add_production_dependencies()
+include("${COSIMO_REPO_ROOT}/kit/cmake/dependencies.cmake")
+builder_kit_dependencies()
 
 if (NOT DEFINED COSIMO_PATCH_PATH OR COSIMO_PATCH_PATH STREQUAL "")
     message(FATAL_ERROR "COSIMO_PATCH_PATH must point to WavetableSynth.cmajorpatch")
@@ -29,7 +29,7 @@ endif()
 set(CMAJ_VERSION ${PROJECT_VERSION})
 set(JUCE_ENABLE_MODULE_SOURCE_GROUPS ON)
 
-add_subdirectory("${COSIMO_JUCE_SOURCE_DIR}" juce)
+add_subdirectory("${BUILDER_KIT_JUCE_SOURCE_DIR}" juce)
 
 juce_add_plugin(CosimoDesktopNative
     PRODUCT_NAME "CosimoDesktopNative"
@@ -76,8 +76,8 @@ target_compile_definitions(CosimoDesktopNative PRIVATE
 )
 
 target_include_directories(CosimoDesktopNative PRIVATE
-    "${COSIMO_CMAJOR_SOURCE_DIR}/include"
-    "${COSIMO_CHOC_SOURCE_DIR}"
+    "${BUILDER_KIT_CMAJOR_SOURCE_DIR}/include"
+    "${BUILDER_KIT_CHOC_SOURCE_DIR}"
     "${CMAKE_CURRENT_LIST_DIR}/../../native/three_oscillator_renderer"
     "${CMAKE_CURRENT_LIST_DIR}/../../native/bounce"
     "${CMAKE_CURRENT_LIST_DIR}/../../native/three_oscillator_renderer/third_party/xsimd/include"

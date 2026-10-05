@@ -8,14 +8,15 @@
   "files": [
     "cmajor/EnhancerLiteSpectrumAnalyzer.cmajor",
     "tests/test_enhancer_lite_state.mjs",
+    "tests/test_enhancer_lite_preview_browser.mjs",
     "tests/test_enhancer_lite_view_browser.mjs"
   ],
   "requiredOutputs": [
     "kit/AGENTS.md",
     "kit/fx/build-effect.mjs",
-    "kit/cmake/CosimoDependencies.cmake",
+    "kit/cmake/dependencies.cmake",
     "kit/docs/PLUGIN_ARCHITECTURE.md",
-    "kit/skills/cosimo-make-plugin/SKILL.md",
+    "kit/skills/make-plugin/SKILL.md",
     "kit/skills/kit-update/SKILL.md",
     "kit/kit.json",
     "kit/index.ts",

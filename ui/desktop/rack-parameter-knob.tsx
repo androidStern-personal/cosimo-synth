@@ -51,7 +51,7 @@ import {
     type RackRouteEffectiveness,
 } from "../shared/rack-route-presentation";
 import { useModSourceValue } from "../shared/mod-source-live";
-import { KnobRoot, KnobControl, KnobRange, KnobMarker, useKnob, type KnobScale } from "../../kit/index";
+import { KnobRoot, KnobControl, KnobRange, KnobMarker, useKnob, type ValueScale } from "../../kit/index";
 import { clearUiTimeout, uiTimeout } from "../shared/ui-timers";
 import {
     effectOutputTrimNormalizedValue,
@@ -309,7 +309,7 @@ function ParameterKnobSurface({
     bindingRef.current = binding;
     const gestureBase = useRef(binding.value);
     const pointerType = useRef("mouse");
-    const scale = useMemo<KnobScale>(() => descriptor.valueKind === "effect-output-trim-db"
+    const scale = useMemo<ValueScale>(() => descriptor.valueKind === "effect-output-trim-db"
         ? { toPosition: effectOutputTrimNormalizedValue, fromPosition: effectOutputTrimValueFromNormalized }
         : descriptor.scale === "log" ? "log" : "linear", [descriptor.valueKind, descriptor.scale]);
     const patternStem = useId().replaceAll(":", "");

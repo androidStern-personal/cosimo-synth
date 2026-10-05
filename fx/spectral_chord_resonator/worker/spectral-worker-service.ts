@@ -1,5 +1,5 @@
 import type { PatchConnectionLike } from "../../../kit/index";
-import { createStoredStateRuntimeMirror } from "../../../kit/index";
+import { createStoredStateRuntimeMirror } from "../../../ui/shared/stored-state-runtime-mirror";
 import {
     SPECTRAL_PARTIAL_STATE_KEY,
     buildPartialShapeUpload,

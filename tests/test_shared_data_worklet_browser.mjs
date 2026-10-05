@@ -7,12 +7,12 @@ import path from 'node:path';
 import { chromium } from 'playwright';
 import { build } from 'esbuild';
 
-const source = process.env.COSIMO_CMAJOR_SOURCE;
-assert.ok(source, 'Set COSIMO_CMAJOR_SOURCE to the authored Cmajor checkout');
+const source = process.env.BUILDER_KIT_CMAJOR_SOURCE;
+assert.ok(source, 'Set BUILDER_KIT_CMAJOR_SOURCE to the authored Cmajor checkout');
 const generator = process.env.CMAJOR_SHARED_GENERATOR ?? path.resolve('build/shared_data_codegen/source/shared_memory_generator');
 const directory = await mkdtemp(path.join(tmpdir(), 'cmajor-shared-worklet-'));
 const generated = path.join(directory, 'generated.js');
-await build({entryPoints:[path.resolve('kit/ui/prepared-shared-data.ts')],outfile:path.join(directory,'prepare.js'),bundle:true,format:'esm',platform:'browser',target:'es2022',logLevel:'silent'});
+await build({entryPoints:[path.resolve('ui/shared/prepared-shared-data.ts')],outfile:path.join(directory,'prepare.js'),bundle:true,format:'esm',platform:'browser',target:'es2022',logLevel:'silent'});
 execFileSync(generator, [path.join(source, 'tests/shared_memory_codegen/browser.cmajor'), generated,
     JSON.stringify({ SIMD: 'simd-only', sharedMemory: { maximumPages: 256 } })]);
 for (const [fixture, filename, options] of [

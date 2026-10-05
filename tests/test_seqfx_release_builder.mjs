@@ -8,7 +8,7 @@ import test from "node:test";
 import { fileURLToPath } from "node:url";
 import { deflateSync, gunzipSync, inflateSync } from "node:zlib";
 
-import { readCmajorPin } from "../kit/scripts/toolchain.mjs";
+import { readCmajorPin } from "../scripts/export_kit.mjs";
 import {
     adHocVst3SigningArgs,
     attestMatchingVst3Metadata,
@@ -315,9 +315,9 @@ async function createNativeDependencyCheckoutFixture(context) {
     await writeFile(cmakeCachePath, [
         `CMAKE_HOME_DIRECTORY:INTERNAL=${cmakeHome}`,
         "CMAKE_COMMAND:INTERNAL=/approved/cmake",
-        `COSIMO_CMAJ_EXECUTABLE:FILEPATH=${path.join(repositoryRoot, "build", "cmajor_command", "bin", "cmaj")}`,
-        `CPM_PACKAGE_cosimo_cmajor_SOURCE_DIR:INTERNAL=${cmajorPath}`,
-        `CPM_PACKAGE_cosimo_juce_SOURCE_DIR:INTERNAL=${jucePath}`,
+        `BUILDER_KIT_CMAJ_EXECUTABLE:FILEPATH=${path.join(repositoryRoot, "build", "cmajor_command", "bin", "cmaj")}`,
+        `CPM_PACKAGE_builder_kit_cmajor_SOURCE_DIR:INTERNAL=${cmajorPath}`,
+        `CPM_PACKAGE_builder_kit_juce_SOURCE_DIR:INTERNAL=${jucePath}`,
         "",
     ].join("\n"), "utf8");
 
@@ -415,10 +415,10 @@ test("release config freezes the existing beta identity and current native outpu
         "build/seqfx_juce/_build/plugin/CosimoSeqFX_artefacts/Release/VST3/CosimoSeqFX.vst3",
     );
     assert.deepEqual(seqFxReleaseConfig.nativeDependencies, {
-        declarationPath: "kit/cmake/CosimoDependencies.cmake",
+        declarationPath: "kit/cmake/dependencies.cmake",
         cmajor: {
-            cpmName: "cosimo_cmajor",
-            sourceDirectoryCacheKey: "CPM_PACKAGE_cosimo_cmajor_SOURCE_DIR",
+            cpmName: "builder_kit_cmajor",
+            sourceDirectoryCacheKey: "CPM_PACKAGE_builder_kit_cmajor_SOURCE_DIR",
             repository: "https://github.com/androidStern-personal/cmajor.git",
             revision: currentCmajorCommit,
         },
@@ -428,8 +428,8 @@ test("release config freezes the existing beta identity and current native outpu
             submodulePath: "include/choc",
         },
         juce: {
-            cpmName: "cosimo_juce",
-            sourceDirectoryCacheKey: "CPM_PACKAGE_cosimo_juce_SOURCE_DIR",
+            cpmName: "builder_kit_juce",
+            sourceDirectoryCacheKey: "CPM_PACKAGE_builder_kit_juce_SOURCE_DIR",
             repository: "https://github.com/juce-framework/JUCE.git",
             revision: "501c07674e1ad693085a7e7c398f205c2677f5da",
         },

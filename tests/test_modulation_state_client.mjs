@@ -11,7 +11,7 @@ export { modulationStateCodec } from "./ui/shared/synth-modulation-state";
 export { createPluginStateClient } from "./kit/ui/plugin-state-client";
 export { createPluginStateSession } from "./kit/ui/plugin-state-session";
 export { definePluginState, parameter, storedValue } from "./kit/ui/plugin-state-definition";
-export { subscribeToUserEdits, runProgrammaticWrites } from "./kit/ui/user-edit-bus";
+export { subscribeToUserEdits, runProgrammaticWrites } from "./ui/shared/user-edit-bus";
 `, resolveDir: root }, bundle: true, format: "esm", platform: "node", target: "es2022", write: false });
 const api = await import(`data:text/javascript;base64,${Buffer.from(bundled.outputFiles[0].text).toString("base64")}`);
 const key = api.MODULATION_STATE_KEY;
@@ -138,7 +138,7 @@ test("another client's gesture rejects the optimistic B draft and only accepted 
     const edits = [];
     const unsubscribe = api.subscribeToUserEdits({ onParameterEdit: edit => edits.push(edit) });
     try {
-        assert.equal((await other.dispatch({ kind: "begin", key, gesture: 81 })).kind, "accepted");
+        assert.equal((await other.dispatch({ kind: "begin", keys: [key], gesture: 81 })).kind, "accepted");
         const proposed = { ...f.boot.msegSlots[0].shapeB, points: f.boot.msegSlots[0].shapeB.points.map(point => ({ ...point, y: 0.5 })) };
         const rejected = bridge.setMsegSlotShape(0, 1, proposed);
         assert.deepEqual(bridge.getState().msegSlots[0].shapeB, proposed);
@@ -146,7 +146,7 @@ test("another client's gesture rejects the optimistic B draft and only accepted 
         assert.deepEqual(await rejected, { kind: "rejected", reason: "busy" });
         assert.deepEqual(bridge.getState(), f.boot);
         assert.deepEqual(edits, []);
-        assert.equal((await other.dispatch({ kind: "end", key, gesture: 81 })).kind, "accepted");
+        assert.equal((await other.dispatch({ kind: "end", keys: [key], gesture: 81 })).kind, "accepted");
         const accepted = bridge.setMsegSlotShape(0, 1, proposed);
         assert.deepEqual(edits, []);
         assert.equal((await accepted).changed, true);
@@ -331,11 +331,11 @@ test("only an explicit local route-amount submission emits routeAmount; whole do
         assert.deepEqual(kinds, ["routeAmount", "general", "general"]);
         assert.equal((await f.client.dispatch({ kind: "undo" })).kind, "accepted");
         assert.deepEqual(kinds, ["routeAmount", "general", "general", "general"]);
-        assert.equal((await other.dispatch({ kind: "begin", key, gesture: 97 })).kind, "accepted");
+        assert.equal((await other.dispatch({ kind: "begin", keys: [key], gesture: 97 })).kind, "accepted");
         assert.deepEqual(await bridge.setRouteAmountById(route.id, -0.4), { kind: "rejected", reason: "busy" });
         assert.deepEqual(kinds, ["routeAmount", "general", "general", "general", "routeAmount", "general"], "only the optimistic local change carries its hint; authoritative rollback cannot inherit it");
         assert.deepEqual(amounts, [0.5, 0.6, 0.7, 0.6, -0.4, 0.6]);
-        assert.equal((await other.dispatch({ kind: "end", key, gesture: 97 })).kind, "accepted");
+        assert.equal((await other.dispatch({ kind: "end", keys: [key], gesture: 97 })).kind, "accepted");
     } finally { await bridge.stop(); await f.stop(); }
 });
 
@@ -370,14 +370,14 @@ test("route additions return identity only after acceptance and duplicate identi
             assert.equal(f.publications.length, writes);
         }
         const other = f.createClient();
-        assert.equal((await other.dispatch({ kind: "begin", key, gesture: 110 })).kind, "accepted");
+        assert.equal((await other.dispatch({ kind: "begin", keys: [key], gesture: 110 })).kind, "accepted");
         const blocked = api.createDefaultRoute({ id: "busy-candidate", sourceKind: "env", sourceSlot: 3, targetKind: "oscA.pan", amount: 0.7 });
         const proposal = bridge.addRoute(blocked);
         assert.equal(bridge.getState().routes.at(-1).id, blocked.id);
         assert.deepEqual(await proposal, { kind: "rejected", reason: "busy" });
         assert.deepEqual(bridge.getState().routes, [first, next]);
         assert.equal(f.publications.length, writes);
-        await other.dispatch({ kind: "end", key, gesture: 110 });
+        await other.dispatch({ kind: "end", keys: [key], gesture: 110 });
         assert.equal((await f.client.dispatch({ kind: "undo", expectedEntry: added.historyEntry })).kind, "accepted");
         assert.deepEqual(bridge.getState().routes, [first]);
     } finally { await bridge.stop(); await f.stop(); }

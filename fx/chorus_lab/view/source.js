@@ -1,4 +1,6 @@
-import { createEffectHeader, EffectSnapshotBankController, createStandaloneEffectPresetController } from "../../../kit/index.ts";
+import { createEffectHeader } from "../../../ui/shared/effects/effect-header.ts";
+import { EffectSnapshotBankController } from "../../../ui/shared/effects/effect-snapshot-bank.ts";
+import { createStandaloneEffectPresetController } from "../../../ui/shared/effects/standalone-effect-presets.ts";
 import { CHORUS_FACTORY_PRESETS } from "./factory-presets.js";
 
 class ChorusLabView extends HTMLElement {

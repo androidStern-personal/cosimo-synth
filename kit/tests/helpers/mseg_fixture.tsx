@@ -33,7 +33,7 @@ export function mount(host: HTMLElement) {
                 style={{ width: 400, height: 220, color: 'cyan' }}
             >
                 <Mseg.Surface aria-label="Fixture envelope">
-                    <Mseg.Curve />
+                    <Mseg.Line />
                     <Mseg.Points />
                     <Mseg.Playhead position={source} />
                     <Mseg.Playhead position={source} stroke="orange" />

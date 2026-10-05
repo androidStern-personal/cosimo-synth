@@ -1,13 +1,64 @@
-import { createContext, useCallback, useContext, useEffect, useMemo, useSyncExternalStore, type ReactNode } from "react";
+import { createContext, useCallback, useContext, useEffect, useMemo, useState, useSyncExternalStore, type ReactNode } from "react";
 import type { Atom } from "jotai/vanilla";
 import { selectAtom } from "jotai/vanilla/utils";
 import type { PluginStateFields, PluginStateParameter, PluginStateStored, PluginStateFieldValue } from "./plugin-state-definition";
 import type { createPluginStateClient, PluginStateClientResult } from "./plugin-state-client";
-import type { PluginStateNativeParameter, PluginStateScope, PluginStateFieldSnapshot, PluginStateHistoryEntry as NativeHistoryEntry } from "./plugin-state-session";
+import type { PluginStateNativeParameter, PluginStateScope, PluginStateFieldSnapshot, PluginStateSnapshot, PluginStateHistoryEntry as NativeHistoryEntry } from "./plugin-state-session";
 
 type Client = ReturnType<typeof createPluginStateClient<PluginStateFields>>;
 const Context = createContext<{ definition: PluginStateFields; client: Client } | null>(null);
 const gestureCounters = new WeakMap<Client, number>();
+
+/** A gesture this view opened, over one or more fields, and the control or editor that opened it. */
+type OpenGesture = { readonly scope: PluginStateScope; readonly gesture: number; readonly keys: readonly string[]; readonly owner: object };
+const openGestures = new WeakMap<Client, Map<string, OpenGesture>>();
+
+function gesturesOf(client: Client): Map<string, OpenGesture> {
+    let gestures = openGestures.get(client);
+    if (!gestures) { gestures = new Map(); openGestures.set(client, gestures); }
+    return gestures;
+}
+
+function releaseGesture(client: Client, open: OpenGesture): void {
+    const gestures = gesturesOf(client);
+    for (const key of open.keys) if (gestures.get(key) === open) gestures.delete(key);
+}
+
+/** The open gesture covering a field; a gesture from a replaced document is forgotten. */
+function openGestureFor(client: Client, key: string): OpenGesture | undefined {
+    const open = gesturesOf(client).get(key);
+    if (!open) return undefined;
+    const snapshot = client.getSnapshot();
+    const scope = snapshot.kind === "ready" ? snapshot.state.scope : null;
+    if (scope && scope.owner === open.scope.owner && scope.document === open.scope.document) return open;
+    releaseGesture(client, open);
+    return undefined;
+}
+
+function ownedGesture(client: Client, owner: object): OpenGesture | undefined {
+    for (const [key, open] of gesturesOf(client)) if (open.owner === owner) return openGestureFor(client, key);
+    return undefined;
+}
+
+function beginOpenGesture(client: Client, owner: object, keys: readonly string[], projection: ReturnType<typeof projectionFor>): Promise<PluginStateEditResult> {
+    if (ownedGesture(client, owner) || keys.some(key => openGestureFor(client, key))) return Promise.resolve({ kind: "rejected", reason: "busy" });
+    const snapshot = client.getSnapshot();
+    if (snapshot.kind !== "ready" || !snapshot.state.scope) return Promise.resolve({ kind: "rejected", reason: "not-ready" });
+    const gesture = (gestureCounters.get(client) ?? 0) + 1;
+    gestureCounters.set(client, gesture);
+    const open: OpenGesture = Object.freeze({ scope: snapshot.state.scope, gesture, keys: Object.freeze([...keys]), owner });
+    for (const key of keys) gesturesOf(client).set(key, open);
+    return client.dispatch({ kind: "begin", keys: open.keys, gesture }).then(result => {
+        if (result.kind !== "accepted") releaseGesture(client, open);
+        return projection.result(result);
+    });
+}
+
+function endOpenGesture(client: Client, open: OpenGesture | undefined, projection: ReturnType<typeof projectionFor>): Promise<PluginStateEditResult> | undefined {
+    if (!open) return undefined;
+    releaseGesture(client, open);
+    return client.dispatch({ kind: "end", keys: open.keys, gesture: open.gesture }).then(projection.result);
+}
 
 declare const historyReference: unique symbol;
 /** Retain and pass back to guarded Undo/Redo; object equality is not an eligibility test. */
@@ -96,9 +147,18 @@ export type PluginStateChanges<Fields extends PluginStateFields> = {
 
 /** Edit several fields together, guarded by the values observed in this render. */
 export interface PluginStateEditor<Fields extends PluginStateFields> {
+    /** `history: false` applies the change without an Undo entry, for example to a library of saved items. */
     edit<Changes extends PluginStateChanges<Fields>>(
         changes: Changes & { readonly [Key in Exclude<keyof Changes, keyof Fields>]: never },
+        options?: { readonly history?: boolean },
     ): Promise<PluginStateEditResult>;
+    /**
+     * Open one gesture over these fields, for a drag that moves several at once. Until endGesture,
+     * edit() and each field control's setValue on these fields write into it.
+     */
+    beginGesture(keys: readonly (keyof Fields & string)[]): Promise<PluginStateEditResult>;
+    /** Seal the gesture as one Undo entry listing every field that moved. Returns undefined when none is open. */
+    endGesture(): Promise<PluginStateEditResult> | undefined;
 }
 
 /** Shared history with optional opaque guards for an editor's remembered entry. */
@@ -145,11 +205,20 @@ function useDefinitionEditor(definition: PluginStateFields | null): PluginStateE
     const context = useContext(Context);
     const client = definition && context ? context.client : null;
     const source = useClientValue(client, client?.reactivity.snapshot ?? null, connectingClient);
+    // Identifies the gesture this editor opened across renders; unmounting ends it.
+    const [owner] = useState(() => ({}));
+    useEffect(() => () => { if (client) void endOpenGesture(client, ownedGesture(client, owner), projectionFor(client)); }, [client, owner]);
     if (!client || !definition) return null;
     if (definition !== context?.definition) throw new Error("The definition does not belong to this plugin state provider.");
     const projection = projectionFor(client);
     return {
-        edit(changes) {
+        beginGesture(keys) {
+            if (keys.length === 0 || new Set(keys).size !== keys.length || !keys.every(key => Object.hasOwn(definition, key)))
+                return Promise.resolve({ kind: "rejected", reason: "invalid-command" });
+            return beginOpenGesture(client, owner, keys, projection);
+        },
+        endGesture: () => endOpenGesture(client, ownedGesture(client, owner), projection),
+        edit(changes, options = {}) {
             const current = client.getSnapshot();
             if (source.kind !== "ready" || !source.state.scope) return Promise.resolve({ kind: "rejected", reason: "not-ready" });
             if (current.kind !== "ready" || current.state.scope?.owner !== source.state.scope.owner
@@ -162,7 +231,10 @@ function useDefinitionEditor(definition: PluginStateFields | null): PluginStateE
                 if (!field || field.readiness.kind !== "ready" || !("version" in field)) return Promise.resolve({ kind: "rejected", reason: "not-ready" });
                 edits.push({ key, value, expectedVersion: field.version });
             }
-            return client.dispatch({ kind: "edit-many", edits }).then(projection.result);
+            const open = ownedGesture(client, owner);
+            const inGesture = open !== undefined && options.history !== false && edits.every(edit => open.keys.includes(edit.key));
+            return client.dispatch({ kind: "edit-many", edits, ...(options.history === false ? { history: false as const } : {}),
+                ...(inGesture ? { gesture: open.gesture } : {}) }).then(projection.result);
         },
     };
 }
@@ -242,41 +314,23 @@ export function useOptionalPluginState<Field extends PluginStateParameter | Plug
     const renderedVersion = renderedField && "version" in renderedField ? renderedField.version : undefined;
     const actions = useMemo(() => {
         if (!client || !definition || !projection || key === undefined) return null;
-        let active: { readonly scope: PluginStateScope; readonly gesture: number } | undefined;
-        const currentGesture = () => {
-            const snapshot = client.getSnapshot();
-            const scope = snapshot.kind === "ready" ? snapshot.state.scope : null;
-            if (active && (!scope || scope.owner !== active.scope.owner || scope.document !== active.scope.document)) active = undefined;
-            return active;
-        };
+        const owner = {};
         return {
             /** Group subsequent edits into one Undo entry. */
-            beginGesture(): Promise<PluginStateEditResult> {
-                if (currentGesture()) return Promise.resolve({ kind: "rejected", reason: "busy" });
-                const snapshot = client.getSnapshot();
-                if (snapshot.kind !== "ready" || !snapshot.state.scope) return Promise.resolve({ kind: "rejected", reason: "not-ready" });
-                const gesture = (gestureCounters.get(client) ?? 0) + 1;
-                gestureCounters.set(client, gesture);
-                active = { scope: snapshot.state.scope, gesture };
-                return client.dispatch({ kind: "begin", key, gesture }).then(result => {
-                    if (result.kind !== "accepted" && active?.gesture === gesture) active = undefined;
-                    return projection.result(result);
-                });
-            },
-            /** Show a draft immediately and request the edit through the state client. */
+            beginGesture: (): Promise<PluginStateEditResult> => beginOpenGesture(client, owner, [key], projection),
+            /** Show a draft immediately and request the edit through the state client, inside any gesture covering this field. */
             edit(value: PluginStateFieldValue<Field>, expectedVersion?: number): Promise<PluginStateEditResult> {
-                const gesture = currentGesture()?.gesture;
+                const gesture = openGestureFor(client, key)?.gesture;
                 const snapshot = client.getSnapshot();
                 const field = snapshot.kind === "ready" ? snapshot.state.fields[key] : undefined;
                 if (definition[key]?.kind === "stored" && field?.readiness.kind === "failed" && field.readiness.reason === "invalid-state")
                     return client.dispatch({ kind: "recover", key, value, expectedVersion: 0 }).then(projection.result);
                 return client.dispatch({ kind: "edit", key, value, expectedVersion, ...(gesture === undefined ? {} : { gesture }) }).then(projection.result);
             },
-            /** Finish the current group; safe to call again after pointer cancellation. */
-            endGesture(): Promise<PluginStateEditResult> | undefined {
-                const gesture = currentGesture()?.gesture;
-                active = undefined;
-                return gesture === undefined ? undefined : client.dispatch({ kind: "end", key, gesture }).then(projection.result);
+            /** Finish this control's own gesture; safe to call again after pointer cancellation. */
+            endGesture: (): Promise<PluginStateEditResult> | undefined => {
+                const open = openGestureFor(client, key);
+                return endOpenGesture(client, open?.owner === owner ? open : undefined, projection);
             },
         };
     }, [client, key, definition, projection]);
@@ -355,7 +409,25 @@ export function usePluginHistory(): PluginStateHistory {
             canUndoEntry: (entry?: PluginStateHistoryEntry) => eligible("undo", entry), canRedoEntry: (entry?: PluginStateHistoryEntry) => eligible("redo", entry),
         };
     }, [client, projection]);
+    const undoEntry = useEntryReference(projection, history.undoEntry);
+    const redoEntry = useEntryReference(projection, history.redoEntry);
     return { canUndo: history.canUndo, canRedo: history.canRedo,
-        ...(history.undoEntry ? { undoEntry: projection.reference(history.undoEntry) } : {}),
-        ...(history.redoEntry ? { redoEntry: projection.reference(history.redoEntry) } : {}), ...actions };
+        ...(undoEntry ? { undoEntry } : {}), ...(redoEntry ? { redoEntry } : {}), ...actions };
+}
+
+/** One token per history entry, so memoized consumers see a stable identity across renders. */
+function useEntryReference(projection: ReturnType<typeof projectionFor>, entry: NativeHistoryEntry | undefined) {
+    // The entry object is recreated with every snapshot; these three values identify it.
+    const owner = entry?.scope.owner, document = entry?.scope.document, id = entry?.id;
+    return useMemo(() => entry && projection.reference(entry), [projection, owner, document, id]);
+}
+
+/**
+ * The accepted state this view last rendered, for kit hooks that read many fields
+ * at once. Null until the GUI is attached.
+ */
+export function usePluginStateSnapshot(): PluginStateSnapshot<PluginStateFields> | null {
+    const { client } = useClient();
+    const source = useClientValue(client, client.reactivity.snapshot);
+    return source.kind === "ready" ? source.state : null;
 }

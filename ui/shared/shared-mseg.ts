@@ -1,4 +1,4 @@
-import { prepareSharedData, type SharedDataConnection, type SharedDataCancellation } from "../../kit/ui/prepared-shared-data";
+import { prepareSharedData, type SharedDataConnection, type SharedDataCancellation } from "./prepared-shared-data";
 import { MSEG_PADDED_SAMPLES, renderMsegShapeInto, type MsegShape } from "./mseg";
 import type { RuntimeInstallCommand } from "./runtime-install-channel";
 

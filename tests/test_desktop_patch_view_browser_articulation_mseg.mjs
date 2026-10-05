@@ -2621,59 +2621,31 @@ test("desktop filter graph cycles graph, bars, and round-bars analyzers while ke
     const page = await openHarnessPage();
 
     try {
+        // The analyzer paints to a canvas; the display maths (band smoothing,
+        // peak hold, geometry) is covered by test_shared_frontend_logic.mjs.
         const analyzerModeChip = page.locator('button[aria-label^="Cycle analyzer view"]').first();
-
-        await page.waitForFunction(() => {
-            const rendered = window.__COSIMO_DESKTOP_HARNESS__.getRenderedState();
-            return rendered.filterGraphState && rendered.filterGraphState.spectrum;
-        });
-
-        let renderedState = await getHarnessRenderedState(page);
-        assert.equal(renderedState.filterGraphState.spectrum.hasSpectrum, false);
-
-        await page.evaluate(() => {
-            const magnitudes = Array.from({ length: 64 }, (_, index) => (
-                index === 2 ? 0.03 : index === 3 ? 0.022 : 1e-5
-            ));
-            window.__COSIMO_DESKTOP_HARNESS__.emitFilterSpectrum({
-                sampleRateHz: 44_100,
-                magnitudes,
-            });
-        });
-
-        await page.waitForFunction(() => {
-            const spectrum = window.__COSIMO_DESKTOP_HARNESS__.getRenderedState().filterGraphState?.spectrum;
-            return spectrum?.hasSpectrum === true
-                && Array.isArray(spectrum?.bandMagnitudesDb)
-                && spectrum.bandMagnitudesDb.length > 0;
-        });
-
-        renderedState = await getHarnessRenderedState(page);
-        const lowHeavySpectrum = renderedState.filterGraphState.spectrum;
-        assert.equal(lowHeavySpectrum.hasSpectrum, true);
-        assert.equal(lowHeavySpectrum.renderMode, "graph");
-        assert.equal(lowHeavySpectrum.sourceBinCount, 64);
-        assert.equal(lowHeavySpectrum.bandCount, 120);
-        assert.ok(lowHeavySpectrum.graphPointCount > lowHeavySpectrum.bandCount);
-        assert.equal(lowHeavySpectrum.bandMagnitudesDb.length, 120);
-        assert.equal(lowHeavySpectrum.smoothedMagnitudesDb.length, 120);
-        assert.equal(lowHeavySpectrum.peakMagnitudesDb.length, 120);
-        assert.deepEqual(lowHeavySpectrum.renderGeometry, {
-            kind: "graph",
-            pointCount: lowHeavySpectrum.graphPointCount,
-            peakPointCount: lowHeavySpectrum.graphPointCount,
-        });
-        assert.deepEqual(
-            lowHeavySpectrum.frequencyTicks.map(({ label }) => label),
-            ["20", "50", "100", "200", "500", "1k", "2k", "5k", "10k", "20k"],
+        const canvas = await page.locator('[data-role="cosimo-filter-editor"] [data-role="filter-spectrum-canvas"]').elementHandle();
+        assert.ok(canvas, "Expected the filter spectrum canvas.");
+        const image = () => canvas.evaluate((node) => node.toDataURL());
+        const hasPixels = () => canvas.evaluate((node) => (
+            Array.from(node.getContext("2d").getImageData(0, 0, node.width, node.height).data).some((value) => value !== 0)
+        ));
+        const waitForRepaint = (previousImage) => page.waitForFunction(
+            ([node, previous]) => node.toDataURL() !== previous,
+            [canvas, previousImage],
         );
-        assert.deepEqual(
-            lowHeavySpectrum.dbTicks.map(({ label }) => label),
-            ["-18", "-36", "-54", "-72", "-90"],
-        );
-        assert.ok(Math.max(...lowHeavySpectrum.bandMagnitudesDb) > Math.min(...lowHeavySpectrum.bandMagnitudesDb));
-        const previousBandMagnitudesDb = [...lowHeavySpectrum.bandMagnitudesDb];
-        const previousSmoothedMagnitudesDb = [...lowHeavySpectrum.smoothedMagnitudesDb];
+        const emitSpectrum = (peaks) => page.evaluate((peakMagnitudes) => {
+            const magnitudes = Array.from({ length: 64 }, (_, index) => peakMagnitudes[index] ?? 1e-5);
+            window.__COSIMO_DESKTOP_HARNESS__.emitFilterSpectrum({ sampleRateHz: 44_100, magnitudes });
+        }, peaks);
+
+        assert.equal(await hasPixels(), false);
+
+        const emptyImage = await image();
+        await emitSpectrum({ 2: 0.03, 3: 0.022 });
+        await waitForRepaint(emptyImage);
+        assert.equal(await hasPixels(), true);
+        const lowHeavyImage = await image();
 
         await page.evaluate(() => {
             window.__COSIMO_DESKTOP_HARNESS__.patchConnection.emitEndpoint("filterSpectrum", {
@@ -2682,94 +2654,28 @@ test("desktop filter graph cycles graph, bars, and round-bars analyzers while ke
             });
         });
         await page.waitForTimeout(50);
-
-        renderedState = await getHarnessRenderedState(page);
-        assert.deepEqual(renderedState.filterGraphState.spectrum, lowHeavySpectrum);
+        assert.equal(await image(), lowHeavyImage, "a malformed spectrum message leaves the analyzer unchanged");
 
         await analyzerModeChip.click();
-        await page.waitForFunction(() => {
-            const spectrum = window.__COSIMO_DESKTOP_HARNESS__.getRenderedState().filterGraphState?.spectrum;
-            return spectrum?.renderMode === "bars" && spectrum?.renderGeometry?.kind === "bars" && spectrum?.renderGeometry?.rounded === false;
-        });
-
-        renderedState = await getHarnessRenderedState(page);
-        assert.equal(renderedState.filterGraphState.spectrum.renderMode, "bars");
-        assert.deepEqual(renderedState.filterGraphState.spectrum.renderGeometry, {
-            kind: "bars",
-            barCount: renderedState.filterGraphState.spectrum.bandCount,
-            rounded: false,
-        });
+        assert.match(await analyzerModeChip.getAttribute("aria-label"), /currently Bars\)/u);
+        await waitForRepaint(lowHeavyImage);
+        const barsImage = await image();
 
         await analyzerModeChip.click();
-        await page.waitForFunction(() => {
-            const spectrum = window.__COSIMO_DESKTOP_HARNESS__.getRenderedState().filterGraphState?.spectrum;
-            return spectrum?.renderMode === "round-bars" && spectrum?.renderGeometry?.kind === "bars" && spectrum?.renderGeometry?.rounded === true;
-        });
-
-        renderedState = await getHarnessRenderedState(page);
-        assert.equal(renderedState.filterGraphState.spectrum.renderMode, "round-bars");
-        assert.deepEqual(renderedState.filterGraphState.spectrum.renderGeometry, {
-            kind: "bars",
-            barCount: renderedState.filterGraphState.spectrum.bandCount,
-            rounded: true,
-        });
+        assert.match(await analyzerModeChip.getAttribute("aria-label"), /currently Round Bars\)/u);
+        await waitForRepaint(barsImage);
 
         await analyzerModeChip.click();
-        await page.waitForFunction(() => {
-            const spectrum = window.__COSIMO_DESKTOP_HARNESS__.getRenderedState().filterGraphState?.spectrum;
-            return spectrum?.renderMode === "graph" && spectrum?.renderGeometry?.kind === "graph";
-        });
+        assert.match(await analyzerModeChip.getAttribute("aria-label"), /currently Graph\)/u);
 
-        await page.evaluate(() => {
-            const magnitudes = Array.from({ length: 64 }, (_, index) => (
-                index === 60 ? 0.03 : index === 58 ? 0.022 : 1e-5
-            ));
-            window.__COSIMO_DESKTOP_HARNESS__.emitFilterSpectrum({
-                sampleRateHz: 44_100,
-                magnitudes,
-            });
-        });
+        const graphImage = await image();
+        await emitSpectrum({ 60: 0.03, 58: 0.022 });
+        await waitForRepaint(graphImage);
+        const highHeavyImage = await image();
 
-        await page.waitForFunction((previousSpectrum) => {
-            const spectrum = window.__COSIMO_DESKTOP_HARNESS__.getRenderedState().filterGraphState?.spectrum;
-            if (!spectrum?.hasSpectrum) {
-                return false;
-            }
-
-            return JSON.stringify(spectrum.bandMagnitudesDb) !== JSON.stringify(previousSpectrum);
-        }, previousBandMagnitudesDb);
-
-        renderedState = await getHarnessRenderedState(page);
-        const highHeavySpectrum = renderedState.filterGraphState.spectrum;
-        assert.notDeepEqual(highHeavySpectrum.bandMagnitudesDb, previousBandMagnitudesDb);
-        assert.notDeepEqual(highHeavySpectrum.smoothedMagnitudesDb, previousSmoothedMagnitudesDb);
-        assert.equal(highHeavySpectrum.renderMode, "graph");
-        assert.equal(highHeavySpectrum.renderGeometry.kind, "graph");
-
-        await page.evaluate(() => {
-            const magnitudes = Array.from({ length: 64 }, (_, index) => (
-                index === 60 ? 0.009 : index === 58 ? 0.006 : 1e-5
-            ));
-            window.__COSIMO_DESKTOP_HARNESS__.emitFilterSpectrum({
-                sampleRateHz: 44_100,
-                magnitudes,
-            });
-        });
-
-        await page.waitForFunction((previousSpectrum) => {
-            const spectrum = window.__COSIMO_DESKTOP_HARNESS__.getRenderedState().filterGraphState?.spectrum;
-            if (!spectrum?.hasSpectrum) {
-                return false;
-            }
-
-            return JSON.stringify(spectrum.bandMagnitudesDb) !== JSON.stringify(previousSpectrum);
-        }, highHeavySpectrum.bandMagnitudesDb);
-
-        renderedState = await getHarnessRenderedState(page);
-        const decayingSpectrum = renderedState.filterGraphState.spectrum;
-        const peakBandIndex = highHeavySpectrum.peakBandIndex;
-        assert.ok(decayingSpectrum.smoothedMagnitudesDb[peakBandIndex] > decayingSpectrum.bandMagnitudesDb[peakBandIndex]);
-        assert.ok(decayingSpectrum.peakMagnitudesDb[peakBandIndex] >= decayingSpectrum.smoothedMagnitudesDb[peakBandIndex]);
+        await emitSpectrum({ 60: 0.009, 58: 0.006 });
+        await waitForRepaint(highHeavyImage);
+        assert.equal(await hasPixels(), true);
     } finally {
         await page.close();
     }

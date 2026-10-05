@@ -1,101 +1,42 @@
-:where(.filter-range-editor) {
-    --filter-spectrum-rgb: 0 180 216;
-    /* Surface */
-    --editor-surface-bg: #e4ded3;
-    --editor-surface-border: #1c1c1c;
-    --editor-surface-ink: #1c1c1c;
-    --editor-surface-ink-muted: #6f716d;
-
-    /* Plot structure */
-    --editor-grid-stroke: rgba(28, 28, 28, 0.12);
-    --editor-axis-stroke: rgba(28, 28, 28, 0.44);
-    --editor-zone-fill: rgba(28, 28, 28, 0.05);
-    --editor-zone-stroke: rgba(28, 28, 28, 0.32);
-
-    /* Primary curve / envelope */
-    --editor-curve-stroke: #1c1c1c;
-    --editor-curve-stroke-width: 2.6;
-    --editor-curve-fill: rgba(0, 180, 216, 0.22);
-    --editor-curve-preview-stroke: #f4923a;
-    --editor-curve-preview-stroke-width: 1.8;
-
-    /* Canonical accent pair (from filter range handles) */
-    --editor-accent-start: #00b4d8;
-    --editor-accent-start-ink: #1c1c1c;
-    --editor-accent-start-border: rgba(0, 100, 140, 0.35);
-    --editor-accent-end: #e8604c;
-    --editor-accent-end-ink: #f0ece6;
-    --editor-accent-end-border: rgba(200, 40, 20, 0.28);
-    --editor-accent-range: #f2d16b;
-    --editor-accent-range-ink: #1c1c1c;
-
-    /* Primary draggable handle (filter-style: halo + dark center + light stroke) */
-    --editor-handle-fill: #1c1c1c;
-    --editor-handle-stroke: #f0ece6;
-    --editor-handle-stroke-width: 2;
-    --editor-handle-halo-fill: rgba(240, 236, 230, 0.72);
-    --editor-handle-halo-stroke: #1c1c1c;
-    --editor-handle-halo-stroke-width: 1.2;
-
-    /* Typography
-       One font stack, one weight. Every label/chip/readout uses these. */
-    --editor-label-font: Menlo, Monaco, "Liberation Mono", monospace;
-    --editor-label-weight: 800;
-    --editor-label-letter-spacing: 0;
-    --editor-label-size-sm: 10px;
-    --editor-label-size-md: 11px;
-
-    /* Chips (value readouts that ride on the plot) */
-    --editor-chip-ink: #f0ece6;
-    --editor-chip-bg: #1c1c1c;
-    --editor-chip-border: rgba(28, 28, 28, 0.28);
-    --editor-chip-radius: 3px;
-    --editor-chip-padding: 3px 6px;
-
-    /* Overlay pills (auxiliary controls like slices/speed or Q readout) */
-    --editor-pill-bg: rgba(240, 236, 230, 0.92);
-    --editor-pill-border: rgba(28, 28, 28, 0.42);
-    --editor-pill-shadow: 0 2px 6px rgba(28, 28, 28, 0.1);
-    --editor-pill-radius: 6px;
-}
-
+/* The filter reads the shared --editor-* theme properties (see FILTERS_API.md).
+   Each var() carries this editor's default, so a theme set on any ancestor applies. */
 .filter-range-editor .editor-curve-surface {
     display: block;
     width: 100%;
     height: 100%;
     overflow: visible;
-    color: var(--editor-surface-ink);
+    color: var(--editor-surface-ink, #1c1c1c);
 }
 
 .filter-range-editor .editor-curve-plot-area {
-    fill: var(--editor-zone-fill);
-    stroke: var(--editor-zone-stroke);
+    fill: var(--editor-zone-fill, rgba(28, 28, 28, 0.05));
+    stroke: var(--editor-zone-stroke, rgba(28, 28, 28, 0.32));
     stroke-width: 1;
 }
 
 .filter-range-editor .editor-curve-grid-line {
-    stroke: var(--editor-grid-stroke);
+    stroke: var(--editor-grid-stroke, rgba(28, 28, 28, 0.12));
     stroke-width: 1;
     shape-rendering: crispEdges;
 }
 
 .filter-range-editor .editor-curve-axis {
-    stroke: var(--editor-axis-stroke);
+    stroke: var(--editor-axis-stroke, rgba(28, 28, 28, 0.44));
     stroke-width: 1;
     shape-rendering: crispEdges;
 }
 
 .filter-range-editor .editor-curve-path {
     fill: none;
-    stroke: var(--editor-curve-stroke);
+    stroke: var(--editor-curve-stroke, #1c1c1c);
     stroke-linecap: round;
     stroke-linejoin: round;
-    stroke-width: var(--editor-curve-stroke-width);
+    stroke-width: var(--editor-curve-stroke-width, 2.6);
 }
 
 .filter-range-editor .editor-curve-path--preview {
-    stroke: var(--editor-curve-preview-stroke);
-    stroke-width: var(--editor-curve-preview-stroke-width);
+    stroke: var(--editor-curve-preview-stroke, #f4923a);
+    stroke-width: var(--editor-curve-preview-stroke-width, 1.8);
     opacity: 0.95;
 }
 
@@ -104,23 +45,23 @@
 }
 
 .filter-range-editor .editor-curve-path--highlight {
-    stroke: var(--editor-accent-range);
+    stroke: var(--editor-accent-range, #f2d16b);
 }
 
 .filter-range-editor .editor-curve-fill {
-    fill: var(--editor-curve-fill);
+    fill: var(--editor-curve-fill, rgba(0, 180, 216, 0.22));
 }
 
 .filter-range-editor .editor-curve-handle-halo {
-    fill: var(--editor-handle-halo-fill);
-    stroke: var(--editor-handle-halo-stroke);
-    stroke-width: var(--editor-handle-halo-stroke-width);
+    fill: var(--editor-handle-halo-fill, rgba(240, 236, 230, 0.72));
+    stroke: var(--editor-handle-halo-stroke, #1c1c1c);
+    stroke-width: var(--editor-handle-halo-stroke-width, 1.2);
 }
 
 .filter-range-editor .editor-curve-handle {
-    fill: var(--editor-handle-fill);
-    stroke: var(--editor-handle-stroke);
-    stroke-width: var(--editor-handle-stroke-width);
+    fill: var(--editor-handle-fill, #1c1c1c);
+    stroke: var(--editor-handle-stroke, #f0ece6);
+    stroke-width: var(--editor-handle-stroke-width, 2);
     cursor: grab;
 }
 
@@ -129,20 +70,20 @@
 }
 
 .filter-range-editor .editor-curve-handle--range-start {
-    fill: var(--editor-accent-start);
-    stroke: var(--editor-surface-ink);
+    fill: var(--editor-accent-start, #00b4d8);
+    stroke: var(--editor-surface-ink, #1c1c1c);
     stroke-width: 1.5;
 }
 
 .filter-range-editor .editor-curve-handle--range-end {
-    fill: var(--editor-accent-end);
-    stroke: var(--editor-surface-ink);
+    fill: var(--editor-accent-end, #e8604c);
+    stroke: var(--editor-surface-ink, #1c1c1c);
     stroke-width: 1.5;
 }
 
 .filter-range-editor .editor-curve-handle--secondary {
-    fill: var(--editor-accent-range);
-    stroke: var(--editor-surface-ink);
+    fill: var(--editor-accent-range, #f2d16b);
+    stroke: var(--editor-surface-ink, #1c1c1c);
     stroke-width: 1.5;
 }
 
@@ -163,7 +104,7 @@
     max-width: 100%;
     min-height: 0;
     border: 0;
-    background: var(--editor-surface-bg);
+    background: var(--editor-surface-bg, #e4ded3);
     /* Reserved vertical space below the plot for axis labels / handles.
        Must stay in sync with FILTER_RANGE_PLOT_BOTTOM_PADDING_* in the TSX. */
     --editor-bottom-reserve: 40px;
@@ -207,20 +148,20 @@
     width: 22px;
     height: 22px;
     padding: 0;
-    border: 1px solid var(--filter-mode-border, color-mix(in srgb, var(--editor-surface-ink) 38%, transparent));
+    border: 1px solid var(--filter-mode-border, color-mix(in srgb, var(--editor-surface-ink, #1c1c1c) 38%, transparent));
     border-radius: 3px;
-    color: var(--editor-surface-ink);
-    background: var(--filter-mode-background, color-mix(in srgb, var(--editor-surface-bg) 90%, var(--editor-surface-ink)));
+    color: var(--editor-surface-ink, #1c1c1c);
+    background: var(--filter-mode-background, color-mix(in srgb, var(--editor-surface-bg, #e4ded3) 90%, var(--editor-surface-ink, #1c1c1c)));
     cursor: pointer;
     touch-action: manipulation;
 }
 
 .filter-range-editor__mode-cycle:hover {
-    background: var(--filter-mode-hover-background, color-mix(in srgb, var(--editor-surface-bg) 85%, var(--editor-surface-ink)));
+    background: var(--filter-mode-hover-background, color-mix(in srgb, var(--editor-surface-bg, #e4ded3) 85%, var(--editor-surface-ink, #1c1c1c)));
 }
 
 .filter-range-editor__mode-cycle:active {
-    background: var(--filter-mode-active-background, color-mix(in srgb, var(--editor-surface-bg) 80%, var(--editor-surface-ink)));
+    background: var(--filter-mode-active-background, color-mix(in srgb, var(--editor-surface-bg, #e4ded3) 80%, var(--editor-surface-ink, #1c1c1c)));
 }
 
 .filter-range-editor__mode-cycle svg {
@@ -238,7 +179,7 @@
 
 .filter-range-editor__range-band {
     fill: rgba(0, 180, 216, 0.22);
-    stroke: var(--editor-accent-start);
+    stroke: var(--editor-accent-start, #00b4d8);
     stroke-width: 1.5;
 }
 
@@ -249,8 +190,8 @@
 }
 
 .filter-range-editor__preview-handle {
-    fill: var(--editor-curve-preview-stroke);
-    stroke: var(--editor-surface-ink);
+    fill: var(--editor-curve-preview-stroke, #f4923a);
+    stroke: var(--editor-surface-ink, #1c1c1c);
     stroke-width: 1.4;
 }
 
@@ -261,11 +202,11 @@
 
 .filter-range-editor__frequency-label {
     pointer-events: none;
-    fill: var(--editor-surface-ink-muted);
-    font-family: var(--editor-label-font);
-    font-size: var(--editor-label-size-sm);
-    font-weight: var(--editor-label-weight);
-    letter-spacing: var(--editor-label-letter-spacing);
+    fill: var(--editor-surface-ink-muted, #6f716d);
+    font-family: var(--editor-label-font, Menlo, Monaco, "Liberation Mono", monospace);
+    font-size: var(--editor-label-size-sm, 10px);
+    font-weight: var(--editor-label-weight, 800);
+    letter-spacing: var(--editor-label-letter-spacing, 0);
 }
 
 /* Handle chips rendered inside the SVG plot, capping the dashed guide lines. */
@@ -274,36 +215,36 @@
 }
 
 .filter-range-editor__handle-chip--center {
-    fill: var(--editor-chip-bg);
+    fill: var(--editor-chip-bg, #1c1c1c);
 }
 
 .filter-range-editor__handle-chip--start {
-    fill: var(--editor-accent-start);
+    fill: var(--editor-accent-start, #00b4d8);
 }
 
 .filter-range-editor__handle-chip--end {
-    fill: var(--editor-accent-end);
+    fill: var(--editor-accent-end, #e8604c);
 }
 
 .filter-range-editor__handle-chip-text {
-    font-family: var(--editor-label-font);
-    font-size: var(--editor-label-size-sm);
-    font-weight: var(--editor-label-weight);
-    letter-spacing: var(--editor-label-letter-spacing);
+    font-family: var(--editor-label-font, Menlo, Monaco, "Liberation Mono", monospace);
+    font-size: var(--editor-label-size-sm, 10px);
+    font-weight: var(--editor-label-weight, 800);
+    letter-spacing: var(--editor-label-letter-spacing, 0);
     pointer-events: none;
     user-select: none;
 }
 
 .filter-range-editor__handle-chip-text--center {
-    fill: var(--editor-chip-ink);
+    fill: var(--editor-chip-ink, #f0ece6);
 }
 
 .filter-range-editor__handle-chip-text--start {
-    fill: var(--editor-accent-start-ink);
+    fill: var(--editor-accent-start-ink, #1c1c1c);
 }
 
 .filter-range-editor__handle-chip-text--end {
-    fill: var(--editor-accent-end-ink);
+    fill: var(--editor-accent-end-ink, #f0ece6);
 }
 
 /* Secondary chip layer — bottom-anchored chips (center Hz+Q and range span).
@@ -322,10 +263,10 @@
     display: flex;
     align-items: center;
     gap: 3px;
-    font-family: var(--editor-label-font);
-    font-size: var(--editor-label-size-sm);
-    font-weight: var(--editor-label-weight);
-    letter-spacing: var(--editor-label-letter-spacing);
+    font-family: var(--editor-label-font, Menlo, Monaco, "Liberation Mono", monospace);
+    font-size: var(--editor-label-size-sm, 10px);
+    font-weight: var(--editor-label-weight, 800);
+    letter-spacing: var(--editor-label-letter-spacing, 0);
     line-height: 1.15;
     white-space: nowrap;
     transform: translateX(-50%);
@@ -336,15 +277,15 @@
     flex-direction: column;
     gap: 1px;
     padding: 3px 7px;
-    border-radius: var(--editor-chip-radius);
-    color: var(--editor-chip-ink);
-    background: var(--editor-chip-bg);
-    font-size: var(--editor-label-size-md);
+    border-radius: var(--editor-chip-radius, 3px);
+    color: var(--editor-chip-ink, #f0ece6);
+    background: var(--editor-chip-bg, #1c1c1c);
+    font-size: var(--editor-label-size-md, 11px);
 }
 
 .filter-range-editor__chip-q {
     font-size: 9px;
-    font-weight: var(--editor-label-weight);
+    font-weight: var(--editor-label-weight, 800);
     letter-spacing: 0;
     opacity: 0.62;
 }
@@ -386,21 +327,21 @@
 
 .filter-range-editor__readout span {
     margin: 0;
-    color: var(--editor-surface-ink-muted);
-    font-family: var(--editor-label-font);
-    font-size: var(--editor-label-size-sm);
-    font-weight: var(--editor-label-weight);
-    letter-spacing: var(--editor-label-letter-spacing);
+    color: var(--editor-surface-ink-muted, #6f716d);
+    font-family: var(--editor-label-font, Menlo, Monaco, "Liberation Mono", monospace);
+    font-size: var(--editor-label-size-sm, 10px);
+    font-weight: var(--editor-label-weight, 800);
+    letter-spacing: var(--editor-label-letter-spacing, 0);
     text-transform: uppercase;
 }
 
 .filter-range-editor__readout strong {
     min-width: 0;
-    color: var(--editor-surface-ink);
-    font-family: var(--editor-label-font);
+    color: var(--editor-surface-ink, #1c1c1c);
+    font-family: var(--editor-label-font, Menlo, Monaco, "Liberation Mono", monospace);
     font-size: 13px;
-    font-weight: var(--editor-label-weight);
-    letter-spacing: var(--editor-label-letter-spacing);
+    font-weight: var(--editor-label-weight, 800);
+    letter-spacing: var(--editor-label-letter-spacing, 0);
     overflow-wrap: anywhere;
 }
 
@@ -438,6 +379,6 @@
 .filter-range-editor[data-disabled] .editor-curve-hit-target,
 .filter-range-editor[data-readonly] .editor-curve-hit-target { cursor: default; }
 .filter-range-editor .editor-curve-hit-target:focus-visible,
-.filter-range-editor [role="slider"]:focus-visible { outline: none; stroke: var(--editor-accent-start); stroke-width: 2; }
+.filter-range-editor [role="slider"]:focus-visible { outline: none; stroke: var(--editor-accent-start, #00b4d8); stroke-width: 2; }
 
 .filter-range-editor[data-has-range="false"] .filter-range-editor__readout { grid-template-columns: repeat(2, minmax(0, 1fr)); }

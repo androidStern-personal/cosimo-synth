@@ -9,8 +9,8 @@ import { stageCustomerStateFixture } from "./helpers/build_customer_state_fixtur
 import { loadUIModule } from '../kit/tests/helpers/load_ui_module.mjs';
 
 const root = path.resolve(import.meta.dirname, '..');
-const source = process.env.COSIMO_CMAJOR_SOURCE;
-assert.ok(source, 'Set COSIMO_CMAJOR_SOURCE to the authored Cmajor checkout');
+const source = process.env.BUILDER_KIT_CMAJOR_SOURCE;
+assert.ok(source, 'Set BUILDER_KIT_CMAJOR_SOURCE to the authored Cmajor checkout');
 const buildRoot = path.join(root, 'build/shared_state_native_final');
 await mkdir(buildRoot, { recursive: true });
 const staging = await stageCustomerStateFixture(buildRoot, "plugin_state_shared_data", "shared_mseg");

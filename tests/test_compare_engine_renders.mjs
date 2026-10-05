@@ -68,11 +68,11 @@ test("determinism self-check is explicit and captures current source and toolcha
         const { stdout: expectedCommitOutput } = await execFileAsync("git", ["-C", repoRoot, "rev-parse", "HEAD"], { encoding: "utf8" });
         const [packageSource, dependencySource] = await Promise.all([
             readFile(path.join(repoRoot, "package.json"), "utf8"),
-            readFile(path.join(repoRoot, "kit", "cmake", "CosimoDependencies.cmake"), "utf8"),
+            readFile(path.join(repoRoot, "kit", "cmake", "dependencies.cmake"), "utf8"),
         ]);
         const packageJson = JSON.parse(packageSource);
-        const expectedCmajorPin = /NAME\s+cosimo_cmajor\b[\s\S]*?GIT_TAG\s+"([^"]+)"/u.exec(dependencySource)?.[1];
-        const expectedJucePin = /NAME\s+cosimo_juce\b[\s\S]*?GIT_TAG\s+"([^"]+)"/u.exec(dependencySource)?.[1];
+        const expectedCmajorPin = /NAME\s+builder_kit_cmajor\b[\s\S]*?GIT_TAG\s+"([^"]+)"/u.exec(dependencySource)?.[1];
+        const expectedJucePin = /NAME\s+builder_kit_juce\b[\s\S]*?GIT_TAG\s+"([^"]+)"/u.exec(dependencySource)?.[1];
         assert.equal(report.mode, "self-check");
         assert.equal(report.status, "error");
         assert.equal(report.engines[0].realPath, report.engines[1].realPath);

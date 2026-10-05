@@ -1,5 +1,7 @@
 import {
+    forwardRef,
     type CSSProperties,
+    type HTMLAttributes,
     type KeyboardEvent as ReactKeyboardEvent,
     type PointerEvent as ReactPointerEvent,
     useCallback,
@@ -10,7 +12,8 @@ import {
     useState,
 } from "react";
 
-import { retainFilterStyles } from "./filter-styles";
+import css from "./filter-editor.css?inline";
+import { isStepKey, stepForKey, type KeyboardStep } from "./keyboard-steps";
 import { useFilterSpectrum, type FilterSpectrum } from "./filter-spectrum-view";
 import {
     FILTER_CUTOFF_MAX_HZ,
@@ -30,25 +33,17 @@ import {
     normalizedToFilterQ,
 } from "./filter-response";
 import {
-    createDefaultCurveProfile,
-    evaluateCurveProfile,
-    invertCurveProfile,
-} from "./curve-lab";
-import {
     EDITOR_DRAG_START_THRESHOLD_PX,
     EDITOR_HIT_RADIUS_PX,
     EDITOR_PLOT_BOTTOM_PADDING_PX,
     EDITOR_PLOT_TOP_PADDING_PX,
     EDITOR_RANGE_HANDLE_RADIUS_PX,
-    editorPlotGutter,
-    useEditorSurfaceSize,
-    type EditorSurfaceSize,
-} from "./editor-tokens";
-import {
     createEditorCurvePlotRect,
+    editorPlotGutter,
     polylineToSvgPath,
 } from "./editor-curve-geometry";
 import {
+    EditorCurveAxis,
     EditorCurveHandle,
     EditorCurveHandleHalo,
     EditorCurveHitTarget,
@@ -56,39 +51,41 @@ import {
     EditorCurvePlotArea,
     EditorCurveSurface,
 } from "./editor-curve-surface";
+import { retainStyles } from "./styles";
+import { useElementSize, type ElementSize } from "./use-element-size";
 
-export type FilterRangeMode = "off" | "lowpass" | "highpass" | "bandpass" | "notch" | "peak";
+export type FilterMode = "off" | "lowpass" | "highpass" | "bandpass" | "notch" | "peak";
 export type FilterRangePolarity = "bipolar" | "unipolar";
 
-export type FilterRangeValue = {
-    mode: FilterRangeMode;
+export type FilterValue = {
+    mode: FilterMode;
     cutoffHz: number;
     q: number;
 };
 
-export type FilterRangeModeOption = {
+export type FilterModeOption = {
     label: string;
-    value: FilterRangeMode;
+    value: FilterMode;
 };
 
-export type FilterRangeEndpoints = {
+export type FilterRange = {
     startCutoffHz: number;
     endCutoffHz: number;
 };
 
-export type FilterRangePreview = Partial<FilterRangeValue> & {
+export type FilterPreview = Partial<FilterValue> & {
     active?: boolean;
     label?: string;
 };
 
-export type FilterRangeQScale = {
+export type FilterQScale = {
     qToSurface: (qValue: number) => number;
     surfaceToQ: (surfaceValue: number) => number;
 };
 
-export type FilterRangeEditTarget = "value" | "range-start" | "range-end"
+/** The grip a gesture edits. */
+export type FilterEditTarget = "value" | "range-start" | "range-end"
     | "modulation-start" | "modulation-end" | "modulation-base" | "modulation-center";
-export type FilterValue = FilterRangeValue;
 export type FilterEndpoint = Pick<FilterValue, "cutoffHz" | "q">;
 export type FilterModulationEndpoints = { start: FilterEndpoint; end: FilterEndpoint };
 export type FilterModulation = FilterModulationEndpoints & {
@@ -100,12 +97,11 @@ export type FilterModulation = FilterModulationEndpoints & {
     baseHandleMode?: "value" | "start";
     color?: string;
 };
-export type FilterEditTarget = FilterRangeEditTarget;
 export type FilterModulationTarget = "start" | "end" | "base" | "center";
 export type { FilterSpectrum } from "./filter-spectrum-view";
 
-type FilterEditorCommonProps = {
-    value: FilterRangeValue;
+type FilterEditorCommonProps = Omit<HTMLAttributes<HTMLDivElement>, "onChange" | "children"> & {
+    value: FilterValue;
     onModulationChange?: (next: FilterModulationEndpoints, target: FilterModulationTarget) => void;
     spectrum?: FilterSpectrum | null;
     disabled?: boolean;
@@ -113,31 +109,26 @@ type FilterEditorCommonProps = {
     /** Geometry spacing, in CSS pixels. Defaults reserve space for the axis and cutoff band. */
     plotPadding?: { horizontal?: number; top?: number; bottom?: number };
     rangePolarity?: FilterRangePolarity;
-    preview?: FilterRangePreview | null;
-    modeOptions?: FilterRangeModeOption[];
+    preview?: FilterPreview | null;
+    modeOptions?: FilterModeOption[];
     showModeControls?: boolean;
     showHandleChips?: boolean;
     showReadout?: boolean;
     sampleRateHz?: number;
-    qScale?: FilterRangeQScale;
-    className?: string;
-    style?: CSSProperties;
-    ariaLabel?: string;
-    onValueChange?: (nextValue: FilterRangeValue) => void;
-    onRangeChange?: (nextRange: FilterRangeEndpoints) => void;
-    onEditStart?: (target: FilterRangeEditTarget) => void;
-    onEditEnd?: (target: FilterRangeEditTarget) => void;
+    qScale?: FilterQScale;
+    onValueChange?: (nextValue: FilterValue) => void;
+    onRangeChange?: (nextRange: FilterRange) => void;
+    /** Like every kit control; `target` names the grip, for hosts that route grips to different parameters. */
+    onGestureStart?: (target: FilterEditTarget) => void;
+    onGestureEnd?: (cancelled: boolean, target: FilterEditTarget) => void;
 };
 
 /** Use either the cutoff band or the two-dimensional endpoint presentation. */
 export type FilterEditorProps = FilterEditorCommonProps & (
-    | { range?: FilterRangeEndpoints | null; modulation?: null }
+    | { range?: FilterRange | null; modulation?: null }
     | { range?: null; modulation?: FilterModulation | null }
 );
-export type FilterRangeEditorProps = FilterEditorProps;
-
-export const FILTER_RANGE_RESONANCE_CURVE_TARGET_ID = "filter-resonance-handle";
-export const FILTER_RANGE_MODE_OPTIONS: FilterRangeModeOption[] = [
+export const FILTER_MODE_OPTIONS: FilterModeOption[] = [
     { label: "LP", value: "lowpass" },
     { label: "HP", value: "highpass" },
     { label: "BP", value: "bandpass" },
@@ -145,7 +136,7 @@ export const FILTER_RANGE_MODE_OPTIONS: FilterRangeModeOption[] = [
     { label: "Peak", value: "peak" },
 ];
 
-type Size = EditorSurfaceSize;
+type Size = ElementSize;
 
 type PlotPath = {
     path: string;
@@ -160,7 +151,7 @@ type PlotPath = {
 
 type DragState = {
     pointerId: number;
-    target: FilterRangeEditTarget;
+    target: FilterEditTarget;
     startClientX: number;
     startClientY: number;
     pointerOffsetX: number;
@@ -171,10 +162,9 @@ type DragState = {
 
 const FILTER_RANGE_RESPONSE_POINT_COUNT = 360;
 const DEFAULT_SAMPLE_RATE_HZ = 44_100;
+/** Keyboard step as a fraction of the cutoff travel (horizontal) and the Q surface (vertical). */
 const KEYBOARD_CUTOFF_STEP = 0.01;
 const KEYBOARD_Q_STEP = 0.025;
-const KEYBOARD_FAST_MULTIPLIER = 5;
-const MODULATION_RANGE_OCTAVE_LIMIT = 20;
 /**
  * Vertical space reserved below the plot for the range band handles + axis labels
  * when a range is shown.
@@ -203,7 +193,7 @@ function joinClasses(...classes: Array<string | null | undefined | false>) {
     return classes.filter(Boolean).join(" ");
 }
 
-export function filterRangeModeToResponseMode(mode: FilterRangeMode) {
+export function filterModeToResponseMode(mode: FilterMode) {
     if (mode === "lowpass") return FILTER_MODE_LOWPASS;
     if (mode === "highpass") return FILTER_MODE_HIGHPASS;
     if (mode === "bandpass") return FILTER_MODE_BANDPASS;
@@ -212,7 +202,7 @@ export function filterRangeModeToResponseMode(mode: FilterRangeMode) {
     return FILTER_MODE_OFF;
 }
 
-export function responseModeToFilterRangeMode(mode: number): FilterRangeMode {
+export function responseModeToFilterMode(mode: number): FilterMode {
     if (mode === FILTER_MODE_LOWPASS) return "lowpass";
     if (mode === FILTER_MODE_HIGHPASS) return "highpass";
     if (mode === FILTER_MODE_BANDPASS) return "bandpass";
@@ -221,7 +211,7 @@ export function responseModeToFilterRangeMode(mode: number): FilterRangeMode {
     return "off";
 }
 
-export function clampFilterRangeValue(value: FilterRangeValue): FilterRangeValue {
+export function clampFilterValue(value: FilterValue): FilterValue {
     return {
         mode: value.mode,
         cutoffHz: clampFilterCutoffHz(value.cutoffHz),
@@ -229,33 +219,28 @@ export function clampFilterRangeValue(value: FilterRangeValue): FilterRangeValue
     };
 }
 
-export function clampFilterRangeEndpoints(range: FilterRangeEndpoints): FilterRangeEndpoints {
+export function clampFilterRange(range: FilterRange): FilterRange {
     return {
         startCutoffHz: clampFilterCutoffHz(range.startCutoffHz),
         endCutoffHz: clampFilterCutoffHz(range.endCutoffHz),
     };
 }
 
-export function createDefaultFilterRangeQScale(): FilterRangeQScale {
-    const resonanceCurve = createDefaultCurveProfile(FILTER_RANGE_RESONANCE_CURVE_TARGET_ID);
+// The default Q response is a logistic curve that spends most of the drag
+// surface on low and moderate resonance, where small changes are audible.
+const Q_CURVE_SLOPE = 11.1;
+const Q_CURVE_CENTER = 0.84;
+const logistic = (x: number) => 1 / (1 + Math.exp(-Q_CURVE_SLOPE * (x - Q_CURVE_CENTER)));
+const LOGISTIC_LOW = logistic(0);
+const LOGISTIC_SPAN = logistic(1) - LOGISTIC_LOW;
 
-    return {
-        qToSurface(qValue) {
-            return invertCurveProfile(
-                FILTER_RANGE_RESONANCE_CURVE_TARGET_ID,
-                resonanceCurve,
-                filterQToNormalized(qValue),
-            );
-        },
-        surfaceToQ(surfaceValue) {
-            return normalizedToFilterQ(
-                evaluateCurveProfile(FILTER_RANGE_RESONANCE_CURVE_TARGET_ID, resonanceCurve, surfaceValue),
-            );
-        },
-    };
-}
-
-export const DEFAULT_FILTER_RANGE_Q_SCALE = createDefaultFilterRangeQScale();
+export const DEFAULT_FILTER_Q_SCALE: FilterQScale = {
+    surfaceToQ: surface => normalizedToFilterQ((logistic(clamp(surface, 0, 1)) - LOGISTIC_LOW) / LOGISTIC_SPAN),
+    qToSurface: q => {
+        const level = LOGISTIC_LOW + (filterQToNormalized(q) * LOGISTIC_SPAN);
+        return clamp(Q_CURVE_CENTER - (Math.log((1 / level) - 1) / Q_CURVE_SLOPE), 0, 1);
+    },
+};
 
 export function geometricCenterCutoffHz(startCutoffHz: number, endCutoffHz: number) {
     const start = clampFilterCutoffHz(startCutoffHz);
@@ -267,91 +252,6 @@ export function cutoffRangeOctaves(startCutoffHz: number, endCutoffHz: number) {
     const start = clampFilterCutoffHz(startCutoffHz);
     const end = clampFilterCutoffHz(endCutoffHz);
     return Math.abs(Math.log2(end / start));
-}
-
-export function cutoffsFromBaseModulationOctaves({
-    baseCutoffHz,
-    amountOctaves,
-    polarity,
-}: {
-    baseCutoffHz: number;
-    amountOctaves: number;
-    polarity: FilterRangePolarity;
-}): FilterRangeEndpoints {
-    const base = clampFilterCutoffHz(baseCutoffHz);
-    const amount = clamp(finiteNumber(amountOctaves, 0), -MODULATION_RANGE_OCTAVE_LIMIT, MODULATION_RANGE_OCTAVE_LIMIT);
-
-    if (polarity === "bipolar") {
-        const ratio = 2 ** Math.abs(amount);
-        return {
-            startCutoffHz: clampFilterCutoffHz(base / ratio),
-            endCutoffHz: clampFilterCutoffHz(base * ratio),
-        };
-    }
-
-    return {
-        startCutoffHz: base,
-        endCutoffHz: clampFilterCutoffHz(base * (2 ** amount)),
-    };
-}
-
-export function cutoffsFromBipolarRangeHandleCutoff({
-    baseCutoffHz,
-    handleCutoffHz,
-}: {
-    baseCutoffHz: number;
-    handleCutoffHz: number;
-}): FilterRangeEndpoints {
-    const base = clampFilterCutoffHz(baseCutoffHz);
-    const handle = clampFilterCutoffHz(handleCutoffHz);
-    const amountOctaves = Math.abs(Math.log2(handle / base));
-
-    return cutoffsFromBaseModulationOctaves({
-        baseCutoffHz: base,
-        amountOctaves,
-        polarity: "bipolar",
-    });
-}
-
-export function modulationOctavesFromCutoffRange({
-    baseCutoffHz,
-    range,
-    polarity,
-}: {
-    baseCutoffHz: number;
-    range: FilterRangeEndpoints;
-    polarity: FilterRangePolarity;
-}) {
-    const base = clampFilterCutoffHz(baseCutoffHz);
-    const safeRange = clampFilterRangeEndpoints(range);
-
-    if (polarity === "bipolar") {
-        return Math.max(
-            Math.abs(Math.log2(safeRange.startCutoffHz / base)),
-            Math.abs(Math.log2(safeRange.endCutoffHz / base)),
-        );
-    }
-
-    return Math.log2(safeRange.endCutoffHz / base);
-}
-
-export function cutoffsFromCenterRangeOctaves({
-    centerCutoffHz,
-    rangeOctaves,
-    direction,
-}: {
-    centerCutoffHz: number;
-    rangeOctaves: number;
-    direction: 1 | -1;
-}): FilterRangeEndpoints {
-    const center = clampFilterCutoffHz(centerCutoffHz);
-    const ratio = 2 ** (clamp(finiteNumber(rangeOctaves, 0), 0, 20) * 0.5);
-    const lowCutoffHz = clampFilterCutoffHz(center / ratio);
-    const highCutoffHz = clampFilterCutoffHz(center * ratio);
-
-    return direction >= 0
-        ? { startCutoffHz: lowCutoffHz, endCutoffHz: highCutoffHz }
-        : { startCutoffHz: highCutoffHz, endCutoffHz: lowCutoffHz };
 }
 
 function buildMagnitudePath(
@@ -399,7 +299,7 @@ function createResponsePath({
     bottomPadding,
     horizontalPadding,
 }: {
-    value: FilterRangeValue;
+    value: FilterValue;
     sampleRateHz: number;
     size: Size;
     topPadding: number;
@@ -407,7 +307,7 @@ function createResponsePath({
     horizontalPadding?: number;
 }) {
     const model = createFilterResponseModel({
-        mode: filterRangeModeToResponseMode(value.mode),
+        mode: filterModeToResponseMode(value.mode),
         cutoffHz: value.cutoffHz,
         q: value.q,
         sampleRate: sampleRateHz,
@@ -429,7 +329,7 @@ function pointForCutoffAndQ({
     cutoffHz: number;
     q: number;
     plot: PlotPath;
-    qScale: FilterRangeQScale;
+    qScale: FilterQScale;
 }) {
     const cutoffNormalized = filterCutoffHzToNormalized(cutoffHz);
     const qSurface = clamp(qScale.qToSurface(q), 0, 1);
@@ -448,7 +348,7 @@ function cutoffForSurfaceX(plotX: number, plot: PlotPath) {
     ));
 }
 
-function qForSurfaceY(plotY: number, plot: PlotPath, qScale: FilterRangeQScale) {
+function qForSurfaceY(plotY: number, plot: PlotPath, qScale: FilterQScale) {
     const nextQSurface = clamp(
         1 - ((plotY - plot.plotTop) / Math.max(1, plot.plotHeight)),
         0,
@@ -457,42 +357,17 @@ function qForSurfaceY(plotY: number, plot: PlotPath, qScale: FilterRangeQScale) 
     return clampFilterQ(qScale.surfaceToQ(nextQSurface));
 }
 
-function cutoffFromKeyboard(currentCutoffHz: number, event: ReactKeyboardEvent<SVGCircleElement>) {
-    const step = KEYBOARD_CUTOFF_STEP * (event.shiftKey ? KEYBOARD_FAST_MULTIPLIER : 1);
-    const normalized = filterCutoffHzToNormalized(currentCutoffHz);
-
-    if (event.key === "ArrowLeft") {
-        return normalizedToFilterCutoffHz(clamp(normalized - step, 0, 1));
-    }
-
-    if (event.key === "ArrowRight") {
-        return normalizedToFilterCutoffHz(clamp(normalized + step, 0, 1));
-    }
-
-    if (event.key === "Home") {
-        return normalizedToFilterCutoffHz(0);
-    }
-
-    if (event.key === "End") {
-        return normalizedToFilterCutoffHz(1);
-    }
-
-    return null;
+/** One keyboard step of a cutoff, in normalized cutoff travel; Home and End reach its ends. */
+function cutoffAfterKey(cutoffHz: number, edit: KeyboardStep) {
+    if (edit.kind !== "step") return normalizedToFilterCutoffHz(edit.kind === "min" ? 0 : 1);
+    return normalizedToFilterCutoffHz(clamp(filterCutoffHzToNormalized(cutoffHz) + (edit.steps * KEYBOARD_CUTOFF_STEP), 0, 1));
 }
 
-function qFromKeyboard(currentQ: number, event: ReactKeyboardEvent<SVGCircleElement>, qScale: FilterRangeQScale) {
-    const step = KEYBOARD_Q_STEP * (event.shiftKey ? KEYBOARD_FAST_MULTIPLIER : 1);
-    const surface = clamp(qScale.qToSurface(currentQ), 0, 1);
-
-    if (event.key === "ArrowDown") {
-        return clampFilterQ(qScale.surfaceToQ(clamp(surface - step, 0, 1)));
-    }
-
-    if (event.key === "ArrowUp") {
-        return clampFilterQ(qScale.surfaceToQ(clamp(surface + step, 0, 1)));
-    }
-
-    return null;
+/** A keyboard edit of a two-dimensional grip: horizontal steps move cutoff, vertical steps move Q. */
+function endpointAfterKey(endpoint: FilterEndpoint, edit: KeyboardStep, qScale: FilterQScale): FilterEndpoint {
+    if (edit.kind !== "step" || edit.axis === "horizontal") return { ...endpoint, cutoffHz: cutoffAfterKey(endpoint.cutoffHz, edit) };
+    const surface = clamp(qScale.qToSurface(endpoint.q), 0, 1);
+    return { ...endpoint, q: clampFilterQ(qScale.surfaceToQ(clamp(surface + (edit.steps * KEYBOARD_Q_STEP), 0, 1))) };
 }
 
 function formatHz(value: number) {
@@ -537,20 +412,20 @@ function filterRangeChipStyle(surfaceX: number) {
     } as CSSProperties;
 }
 
-function isRangeEditable(props: FilterRangeEditorProps) {
+function isRangeEditable(props: FilterEditorProps) {
     return !props.disabled && !props.readOnly && Boolean(props.range && props.onRangeChange);
 }
 
-function isValueEditable(props: FilterRangeEditorProps) {
+function isValueEditable(props: FilterEditorProps) {
     return !props.disabled && !props.readOnly && Boolean(props.onValueChange);
 }
 
-function getFilterRangeModeLabel(mode: FilterRangeMode, options: FilterRangeModeOption[]) {
+function getFilterRangeModeLabel(mode: FilterMode, options: FilterModeOption[]) {
     return options.find((option) => option.value === mode)?.label
         ?? (mode === "off" ? "Off" : mode);
 }
 
-function getNextFilterRangeMode(currentMode: FilterRangeMode, options: FilterRangeModeOption[]) {
+function getNextFilterRangeMode(currentMode: FilterMode, options: FilterModeOption[]) {
     if (options.length === 0) {
         return currentMode;
     }
@@ -626,7 +501,7 @@ function FilterRangeHandleChip({
     );
 }
 
-function FilterRangeModeGlyph({ mode }: { mode: FilterRangeMode }) {
+function FilterRangeModeGlyph({ mode }: { mode: FilterMode }) {
     switch (mode) {
         case "lowpass":
             return (
@@ -709,7 +584,9 @@ function FilterRangeModeGlyph({ mode }: { mode: FilterRangeMode }) {
     }
 }
 
-export function FilterEditor(props: FilterEditorProps) {
+type OpenGesture = { readonly target: FilterEditTarget; readonly keyboard: boolean };
+
+export const FilterEditor = forwardRef<HTMLDivElement, FilterEditorProps>(function FilterEditor(props, ref) {
     const {
         value,
         range = null,
@@ -721,40 +598,57 @@ export function FilterEditor(props: FilterEditorProps) {
         plotPadding,
         rangePolarity = "bipolar",
         preview = null,
-        modeOptions = FILTER_RANGE_MODE_OPTIONS,
+        modeOptions = FILTER_MODE_OPTIONS,
         showModeControls = false,
         showHandleChips = false,
         showReadout = false,
         sampleRateHz = DEFAULT_SAMPLE_RATE_HZ,
-        qScale = DEFAULT_FILTER_RANGE_Q_SCALE,
+        qScale = DEFAULT_FILTER_Q_SCALE,
         className,
-        style,
-        ariaLabel = "Filter range editor",
+        "aria-label": ariaLabel = "Filter editor",
         onValueChange,
         onRangeChange,
-        onEditStart,
-        onEditEnd,
+        onGestureStart,
+        onGestureEnd,
+        ...rootProps
     } = props;
     const viewportRef = useRef<HTMLDivElement | null>(null);
     const surfaceRef = useRef<SVGSVGElement | null>(null);
     const dragStateRef = useRef<DragState | null>(null);
     const applyDragPositionRef = useRef<(clientX: number, clientY: number) => void>(() => undefined);
-    const onEditStartRef = useRef(onEditStart);
-    const onEditEndRef = useRef(onEditEnd);
-    onEditStartRef.current = onEditStart;
-    onEditEndRef.current = onEditEnd;
-    const [activeDragTarget, setActiveDragTarget] = useState<FilterRangeEditTarget | null>(null);
-    const size = useEditorSurfaceSize(viewportRef);
-    useLayoutEffect(() => viewportRef.current ? retainFilterStyles(viewportRef.current) : undefined, []);
+    const callbacks = useRef({ onGestureStart, onGestureEnd });
+    callbacks.current = { onGestureStart, onGestureEnd };
+    // One gesture is open at a time. A held key or a drag keeps it open; switching
+    // grips closes the previous one first.
+    const openGestureRef = useRef<OpenGesture | null>(null);
+    const endGesture = useCallback((cancelled: boolean) => {
+        const open = openGestureRef.current;
+        if (!open) return;
+        openGestureRef.current = null;
+        callbacks.current.onGestureEnd?.(cancelled, open.target);
+    }, []);
+    const beginGesture = useCallback((target: FilterEditTarget, keyboard: boolean) => {
+        if (openGestureRef.current?.target === target) return;
+        endGesture(false);
+        openGestureRef.current = { target, keyboard };
+        callbacks.current.onGestureStart?.(target);
+    }, [endGesture]);
+    const [activeDragTarget, setActiveDragTarget] = useState<FilterEditTarget | null>(null);
+    const size = useElementSize(viewportRef);
+    useLayoutEffect(() => viewportRef.current ? retainStyles(viewportRef.current, "filter", css) : undefined, []);
     const modulationEditable = !disabled && !readOnly && Boolean(onModulationChange);
-    const modulationTravel = modulation ? {
+    // Keyed on fields rather than the object: callers usually pass `modulation`
+    // inline, and a fresh object would recompute both travel curves every render.
+    const modulationTravel = useMemo(() => modulation ? {
         ...modulation,
         start: { cutoffHz: clampFilterCutoffHz(modulation.start.cutoffHz), q: clampFilterQ(modulation.start.q) },
         end: { cutoffHz: clampFilterCutoffHz(modulation.end.cutoffHz), q: clampFilterQ(modulation.end.q) },
         showStartHandle: modulation.showStartHandle ?? true,
         centerHandle: modulation.showCenterHandle ?? true,
-        accent: modulation.color ?? "var(--filter-modulation-color, var(--editor-accent-start))",
-    } : null;
+        accent: modulation.color ?? "var(--filter-modulation-color, var(--editor-accent-start, #00b4d8))",
+    } : null, [modulation === null, modulation?.start.cutoffHz, modulation?.start.q,
+        modulation?.end.cutoffHz, modulation?.end.q, modulation?.axes, modulation?.showStartHandle,
+        modulation?.showCenterHandle, modulation?.baseHandleMode, modulation?.color]);
     const safeSampleRateHz = Math.max(1, Math.round(finiteNumber(sampleRateHz, DEFAULT_SAMPLE_RATE_HZ)));
     const hasRangeView = Boolean(range);
     const plotBottomPadding = plotPadding?.bottom ?? (hasRangeView
@@ -766,13 +660,14 @@ export function FilterEditor(props: FilterEditorProps) {
     const plotTopPadding = plotPadding?.top ?? (showHandleChips && hasRangeView
         ? FILTER_RANGE_PLOT_TOP_PADDING_WITH_CHIPS
         : EDITOR_PLOT_TOP_PADDING_PX);
-    const safeValue = useMemo(() => clampFilterRangeValue(value), [value]);
+    // Keyed on fields for the same reason as modulationTravel.
+    const safeValue = useMemo(() => clampFilterValue(value), [value.mode, value.cutoffHz, value.q]);
     const safeRange = useMemo(() => {
         if (!range) {
             return null;
         }
 
-        const clampedRange = clampFilterRangeEndpoints(range);
+        const clampedRange = clampFilterRange(range);
         if (rangePolarity === "unipolar") {
             return {
                 startCutoffHz: safeValue.cutoffHz,
@@ -782,12 +677,12 @@ export function FilterEditor(props: FilterEditorProps) {
 
         return clampedRange;
     }, [range, rangePolarity, safeValue.cutoffHz]);
-    const previewValue = useMemo<FilterRangeValue | null>(() => {
+    const previewValue = useMemo<FilterValue | null>(() => {
         if (!preview || preview.active === false) {
             return null;
         }
 
-        return clampFilterRangeValue({
+        return clampFilterValue({
             mode: preview.mode ?? safeValue.mode,
             cutoffHz: preview.cutoffHz ?? safeValue.cutoffHz,
             q: preview.q ?? safeValue.q,
@@ -803,8 +698,7 @@ export function FilterEditor(props: FilterEditorProps) {
             horizontalPadding: plotPadding?.horizontal,
         })
     ), [plotPadding?.horizontal, plotBottomPadding, plotTopPadding, safeSampleRateHz, safeValue, size]);
-    const { spectrumCanvasRef, spectrumDisplay, spectrumGeometry, spectrumBands,
-        spectrumGraphPoints, spectrumFrequencyTicks, spectrumDbTicks, spectrumRenderMode } = useFilterSpectrum(spectrum, size, baseResponse.path);
+    const { spectrumCanvasRef } = useFilterSpectrum(spectrum, size, baseResponse.path);
     const previewResponse = useMemo(() => (
         previewValue
             ? createResponsePath({
@@ -938,12 +832,9 @@ export function FilterEditor(props: FilterEditorProps) {
             return 0;
         }
 
+        // A unipolar band is signed: it shows which way the cutoff moves from the base.
         return rangePolarity === "unipolar"
-            ? modulationOctavesFromCutoffRange({
-                baseCutoffHz: safeValue.cutoffHz,
-                range: safeRange,
-                polarity: "unipolar",
-            })
+            ? Math.log2(safeRange.endCutoffHz / safeValue.cutoffHz)
             : cutoffRangeOctaves(safeRange.startCutoffHz, safeRange.endCutoffHz);
     }, [rangePolarity, safeRange, safeValue.cutoffHz]);
     const rangeDirection = safeRange && safeRange.endCutoffHz < safeRange.startCutoffHz ? "down" : "up";
@@ -1026,49 +917,35 @@ export function FilterEditor(props: FilterEditorProps) {
     const handleValueKeyDown = (event: ReactKeyboardEvent<SVGCircleElement>) => {
         const target = modulationTravel?.baseHandleMode === "start" ? "modulation-base" : "value";
         if (target === "value" ? !isValueEditable(props) : !modulationEditable) return;
-        const nextCutoffHz = cutoffFromKeyboard(safeValue.cutoffHz, event);
-        const nextQ = qFromKeyboard(safeValue.q, event, qScale);
-
-        if (nextCutoffHz === null && nextQ === null) {
-            return;
-        }
-
+        const edit = stepForKey(event);
+        if (!edit) return;
         event.preventDefault();
-        onEditStartRef.current?.(target);
-        const next = { ...safeValue, cutoffHz: nextCutoffHz ?? safeValue.cutoffHz, q: nextQ ?? safeValue.q };
+        beginGesture(target, true);
+        const next = { ...safeValue, ...endpointAfterKey(safeValue, edit, qScale) };
         if (target === "modulation-base") setTravelEndpoint("base", next);
         else onValueChange?.(next);
-        onEditEndRef.current?.(target);
     };
 
+    // A cutoff band grip edits one quantity, so every step key moves its cutoff.
     const handleRangeKeyDown = (
-        target: FilterRangeEditTarget,
+        target: "range-start" | "range-end",
         event: ReactKeyboardEvent<SVGCircleElement>,
     ) => {
-        if (!safeRange || !isRangeEditable(props)) {
-            return;
-        }
-
-        const currentCutoffHz = target === "range-start"
-            ? safeRange.startCutoffHz
-            : safeRange.endCutoffHz;
-        const nextCutoffHz = cutoffFromKeyboard(currentCutoffHz, event);
-
-        if (nextCutoffHz === null) {
-            return;
-        }
-
+        if (!safeRange || !isRangeEditable(props)) return;
+        const edit = stepForKey(event);
+        if (!edit) return;
         event.preventDefault();
-        onEditStartRef.current?.(target);
-        onRangeChange?.(
-            target === "range-start"
-                ? { ...safeRange, startCutoffHz: nextCutoffHz }
-                : { ...safeRange, endCutoffHz: nextCutoffHz },
-        );
-        onEditEndRef.current?.(target);
+        beginGesture(target, true);
+        onRangeChange?.(target === "range-start"
+            ? { ...safeRange, startCutoffHz: cutoffAfterKey(safeRange.startCutoffHz, edit) }
+            : { ...safeRange, endCutoffHz: cutoffAfterKey(safeRange.endCutoffHz, edit) });
     };
 
-    const endDrag = useCallback((pointerId?: number) => {
+    const handleKeyUp = (event: ReactKeyboardEvent<SVGSVGElement>) => {
+        if (isStepKey(event.key) && openGestureRef.current?.keyboard) endGesture(false);
+    };
+
+    const endDrag = useCallback((cancelled: boolean, pointerId?: number) => {
         const dragState = dragStateRef.current;
 
         if (!dragState || (pointerId !== undefined && dragState.pointerId !== pointerId)) {
@@ -1085,12 +962,10 @@ export function FilterEditor(props: FilterEditorProps) {
             // Capture may already be gone after cancellation, blur, or unmount.
         }
 
-        if (dragState.hasMoved || dragState.target.startsWith("modulation-")) {
-            onEditEndRef.current?.(dragState.target);
-        }
+        if (dragState.hasMoved || dragState.target.startsWith("modulation-")) endGesture(cancelled);
 
         setActiveDragTarget(null);
-    }, []);
+    }, [endGesture]);
 
     const updateDragFromPointer = useCallback((event: Pick<
         PointerEvent,
@@ -1103,7 +978,7 @@ export function FilterEditor(props: FilterEditorProps) {
         }
 
         if (event.pointerType === "mouse" && event.buttons === 0) {
-            endDrag(event.pointerId);
+            endDrag(false, event.pointerId);
             return;
         }
 
@@ -1115,11 +990,11 @@ export function FilterEditor(props: FilterEditorProps) {
 
         if (!dragState.hasMoved) {
             dragState.hasMoved = true;
-            if (!dragState.target.startsWith("modulation-")) onEditStartRef.current?.(dragState.target);
+            if (!dragState.target.startsWith("modulation-")) beginGesture(dragState.target, false);
         }
 
         applyDragPositionRef.current(event.clientX, event.clientY);
-    }, [endDrag]);
+    }, [beginGesture, endDrag]);
 
     useEffect(() => {
         const handleFallbackPointerMove = (event: PointerEvent) => {
@@ -1133,11 +1008,11 @@ export function FilterEditor(props: FilterEditorProps) {
             }
             updateDragFromPointer(event);
         };
-        const handlePointerEnd = (event: PointerEvent) => endDrag(event.pointerId);
-        const handleBlur = () => endDrag();
+        const handlePointerEnd = (event: PointerEvent) => endDrag(event.type === "pointercancel", event.pointerId);
+        const handleBlur = () => endDrag(true);
         const handleVisibilityChange = () => {
             if (document.visibilityState !== "visible") {
-                endDrag();
+                endDrag(true);
             }
         };
 
@@ -1152,17 +1027,18 @@ export function FilterEditor(props: FilterEditorProps) {
             window.removeEventListener("pointercancel", handlePointerEnd, true);
             window.removeEventListener("blur", handleBlur);
             document.removeEventListener("visibilitychange", handleVisibilityChange);
-            endDrag();
+            endDrag(true);
+            endGesture(true);
         };
-    }, [endDrag, updateDragFromPointer]);
+    }, [endDrag, endGesture, updateDragFromPointer]);
 
     const beginDrag = (
-        target: FilterRangeEditTarget,
+        target: FilterEditTarget,
         event: ReactPointerEvent<SVGCircleElement>,
         origin: { x: number; y: number },
     ) => {
         event.preventDefault();
-        endDrag();
+        endDrag(true);
         try {
             surfaceRef.current?.setPointerCapture(event.pointerId);
         } catch {
@@ -1182,114 +1058,55 @@ export function FilterEditor(props: FilterEditorProps) {
             dragStateRef.current.travelAnchor = { startPoint: travelGeometry.trueStartPoint, endPoint: travelGeometry.trueEndPoint };
         }
         // Endpoint consumers snapshot the fixed endpoint before any write.
-        if (target.startsWith("modulation-")) onEditStartRef.current?.(target);
+        if (target.startsWith("modulation-")) beginGesture(target, false);
         setActiveDragTarget(target);
     };
     const valueEditable = isValueEditable(props);
     const rangeEditable = isRangeEditable(props);
     useEffect(() => {
-        const target = dragStateRef.current?.target;
+        const target = dragStateRef.current?.target ?? openGestureRef.current?.target;
         if (!target) return;
         const editable = target === "value" ? valueEditable
             : target.startsWith("modulation-") ? modulationEditable && Boolean(modulation)
             : rangeEditable;
-        if (!editable) endDrag();
-    }, [valueEditable, rangeEditable, modulationEditable, Boolean(modulation), endDrag]);
+        if (editable) return;
+        endDrag(true);
+        endGesture(true);
+    }, [valueEditable, rangeEditable, modulationEditable, Boolean(modulation), endDrag, endGesture]);
     const beginTravelEndpointDrag = (side: "start" | "end", x: number, y: number) =>
         (event: ReactPointerEvent<SVGCircleElement>) => {
             if (modulationEditable) beginDrag(`modulation-${side}`, event, { x, y });
         };
     const handleTravelKeyDown = (side: "start" | "end", event: ReactKeyboardEvent<SVGCircleElement>) => {
         if (!modulationTravel || !modulationEditable) return;
-        const current = modulationTravel[side];
-        const cutoffHz = cutoffFromKeyboard(current.cutoffHz, event);
-        const q = qFromKeyboard(current.q, event, qScale);
-        if (cutoffHz === null && q === null) return;
+        const edit = stepForKey(event);
+        if (!edit) return;
         event.preventDefault();
-        onEditStartRef.current?.(`modulation-${side}`);
-        setTravelEndpoint(side, { cutoffHz: cutoffHz ?? current.cutoffHz, q: q ?? current.q });
-        onEditEndRef.current?.(`modulation-${side}`);
+        beginGesture(`modulation-${side}`, true);
+        setTravelEndpoint(side, endpointAfterKey(modulationTravel[side], edit, qScale));
     };
-
-    const debugState = useMemo(() => ({
-        base: {
-            mode: baseResponse.model.mode,
-            cutoffHz: baseResponse.model.cutoffHz,
-            q: baseResponse.model.q,
-            peakIndex: baseResponse.model.peakIndex,
-            minIndex: baseResponse.model.minIndex,
-        },
-        live: {
-            hasActive: Boolean(previewValue),
-            mode: (previewResponse?.model ?? baseResponse.model).mode,
-            cutoffHz: (previewResponse?.model ?? baseResponse.model).cutoffHz,
-            q: (previewResponse?.model ?? baseResponse.model).q,
-            peakIndex: (previewResponse?.model ?? baseResponse.model).peakIndex,
-            minIndex: (previewResponse?.model ?? baseResponse.model).minIndex,
-        },
-        handle: {
-            x: handlePoint.x,
-            y: handlePoint.y,
-            cutoffNormalized: handlePoint.cutoffNormalized,
-            qNormalized: handlePoint.qSurface,
-            isDragging: activeDragTarget !== null,
-        },
-        plot: {
-            left: baseResponse.path.plotLeft,
-            right: baseResponse.path.plotRight,
-            top: baseResponse.path.plotTop,
-            bottom: baseResponse.path.plotBottom,
-            width: baseResponse.path.plotWidth,
-            height: baseResponse.path.plotHeight,
-        },
-        spectrum: spectrumDisplay ? {
-            hasSpectrum: true,
-            renderMode: spectrumRenderMode,
-            sampleRateHz: spectrumDisplay.sampleRateHz,
-            sourceBinCount: spectrumDisplay.sourceBinCount,
-            bandCount: spectrumDisplay.bands.length,
-            graphPointCount: spectrumDisplay.graphPoints.length,
-            peakBandIndex: spectrumDisplay.peakBandIndex,
-            peakGraphPointIndex: spectrumDisplay.peakGraphPointIndex,
-            bandMagnitudesDb: spectrumDisplay.bandMagnitudesDb,
-            smoothedMagnitudesDb: spectrumDisplay.smoothedMagnitudesDb,
-            peakMagnitudesDb: spectrumDisplay.peakMagnitudesDb,
-            renderGeometry: spectrumGeometry ? (
-                spectrumGeometry.kind === "graph"
-                    ? {
-                        kind: "graph",
-                        pointCount: spectrumGeometry.pointCount,
-                        peakPointCount: spectrumGeometry.peakPointCount,
-                    }
-                    : {
-                        kind: "bars",
-                        barCount: spectrumGeometry.barCount,
-                        rounded: spectrumGeometry.rounded,
-                    }
-            ) : null,
-            frequencyTicks: spectrumDisplay.frequencyTicks,
-            dbTicks: spectrumDisplay.dbTicks,
-        } : {
-            hasSpectrum: false,
-            renderMode: spectrumRenderMode,
-            sampleRateHz: null,
-            sourceBinCount: 0,
-            bandCount: spectrumBands.length,
-            graphPointCount: spectrumGraphPoints.length,
-            peakBandIndex: -1,
-            peakGraphPointIndex: -1,
-            bandMagnitudesDb: [],
-            smoothedMagnitudesDb: [],
-            peakMagnitudesDb: [],
-            renderGeometry: null,
-            frequencyTicks: spectrumFrequencyTicks,
-            dbTicks: spectrumDbTicks,
-        },
-    }), [baseResponse, previewResponse, previewValue, handlePoint, activeDragTarget, spectrumBands,
-        spectrumDbTicks, spectrumDisplay, spectrumFrequencyTicks, spectrumGeometry, spectrumGraphPoints, spectrumRenderMode]);
+    // The center grip moves both endpoints by the same screen distance as a drag would.
+    const handleCenterKeyDown = (event: ReactKeyboardEvent<SVGCircleElement>) => {
+        if (!modulationEditable || !travelGeometry) return;
+        const edit = stepForKey(event);
+        if (!edit) return;
+        event.preventDefault();
+        const plot = baseResponse.path;
+        const dx = edit.kind === "min" ? -Infinity : edit.kind === "max" ? Infinity
+            : edit.axis === "horizontal" ? edit.steps * KEYBOARD_CUTOFF_STEP * plot.plotWidth : 0;
+        const dy = edit.kind === "step" && edit.axis === "vertical" ? -edit.steps * KEYBOARD_Q_STEP * plot.plotHeight : 0;
+        const a = travelGeometry.trueStartPoint, b = travelGeometry.trueEndPoint;
+        const x = clamp(dx, plot.plotLeft - Math.min(a.x, b.x), plot.plotRight - Math.max(a.x, b.x));
+        const y = clamp(dy, plot.plotTop - Math.min(a.y, b.y), plot.plotBottom - Math.max(a.y, b.y));
+        beginGesture("modulation-center", true);
+        translateTravel(stateAtPlotPoint(a.x + x, a.y + y), stateAtPlotPoint(b.x + x, b.y + y));
+    };
+    const valueTabIndex = disabled ? -1 : 0;
 
     return (
         <div
+            {...rootProps}
+            ref={ref}
             className={joinClasses("filter-range-editor", className)}
             data-active-drag-target={activeDragTarget ?? undefined}
             data-filter-mode={safeValue.mode}
@@ -1297,7 +1114,6 @@ export function FilterEditor(props: FilterEditorProps) {
             data-role="filter-range-editor"
             data-show-chips={showHandleChips ? "true" : "false"}
             data-has-range={hasRangeView ? "true" : "false"}
-            style={style}
             data-disabled={disabled || undefined}
             data-readonly={readOnly || undefined}
             data-slot="filter-editor"
@@ -1314,9 +1130,9 @@ export function FilterEditor(props: FilterEditorProps) {
                         type="button"
                         disabled={!isValueEditable(props)}
                         onClick={() => {
-                            onEditStartRef.current?.("value");
+                            beginGesture("value", false);
                             onValueChange?.({ ...safeValue, mode: getNextFilterRangeMode(safeValue.mode, modeOptions) });
-                            onEditEndRef.current?.("value");
+                            endGesture(false);
                         }}
                     >
                         <FilterRangeModeGlyph mode={safeValue.mode} />
@@ -1324,9 +1140,9 @@ export function FilterEditor(props: FilterEditorProps) {
                 ) : null}
                 <EditorCurveSurface
                     ref={surfaceRef}
-                    ariaLabel={ariaLabel}
+                    aria-label={ariaLabel}
                     className="filter-range-editor__surface"
-                    dataRole="filter-range-editor-surface"
+                    data-role="filter-range-editor-surface"
                     heightPx={size.height}
                     role="group"
                     style={{
@@ -1336,9 +1152,11 @@ export function FilterEditor(props: FilterEditorProps) {
                     }}
                     widthPx={size.width}
                     onPointerMove={(event) => updateDragFromPointer(event.nativeEvent)}
-                    onPointerUp={(event) => endDrag(event.pointerId)}
-                    onPointerCancel={(event) => endDrag(event.pointerId)}
-                    onLostPointerCapture={(event) => endDrag(event.pointerId)}
+                    onPointerUp={(event) => endDrag(false, event.pointerId)}
+                    onPointerCancel={(event) => endDrag(true, event.pointerId)}
+                    onLostPointerCapture={(event) => endDrag(true, event.pointerId)}
+                    onKeyUp={handleKeyUp}
+                    onBlur={() => { if (openGestureRef.current?.keyboard) endGesture(true); }}
                 >
                     <EditorCurvePlotArea plot={baseResponse.path} />
                     {[0.2, 0.4, 0.6, 0.8].map((tick) => (
@@ -1363,16 +1181,16 @@ export function FilterEditor(props: FilterEditorProps) {
                             y2={baseResponse.path.plotTop + (baseResponse.path.plotHeight * tick)}
                         />
                     ))}
-                    <line
-                        className="editor-curve-axis filter-range-editor__axis"
+                    <EditorCurveAxis
+                        className="filter-range-editor__axis"
                         data-role="filter-range-editor-axis"
                         x1={baseResponse.path.plotLeft}
                         x2={baseResponse.path.plotRight}
                         y1={baseResponse.path.plotBottom}
                         y2={baseResponse.path.plotBottom}
                     />
-                    <line
-                        className="editor-curve-axis filter-range-editor__axis"
+                    <EditorCurveAxis
+                        className="filter-range-editor__axis"
                         data-role="filter-range-editor-axis"
                         x1={baseResponse.path.plotLeft}
                         x2={baseResponse.path.plotLeft}
@@ -1449,7 +1267,9 @@ export function FilterEditor(props: FilterEditorProps) {
                                         className="filter-range-editor__range-hit-target"
                                         data-role="filter-range-start-hit-target"
                                         role="slider"
-                                        tabIndex={isRangeEditable(props) ? 0 : undefined}
+                                        tabIndex={valueTabIndex}
+                                        aria-disabled={disabled || undefined}
+                                        aria-readonly={!isRangeEditable(props) && !disabled || undefined}
                                         cx={rangeGeometry.startX}
                                         cy={rangeGeometry.bandY}
                                         onKeyDown={(event) => handleRangeKeyDown("range-start", event)}
@@ -1476,7 +1296,9 @@ export function FilterEditor(props: FilterEditorProps) {
                                 className="filter-range-editor__range-hit-target"
                                 data-role="filter-range-end-hit-target"
                                 role="slider"
-                                tabIndex={isRangeEditable(props) ? 0 : undefined}
+                                tabIndex={valueTabIndex}
+                                aria-disabled={disabled || undefined}
+                                aria-readonly={!isRangeEditable(props) && !disabled || undefined}
                                 cx={rangeGeometry.endX}
                                 cy={rangeGeometry.bandY}
                                 onKeyDown={(event) => handleRangeKeyDown("range-end", event)}
@@ -1517,7 +1339,7 @@ export function FilterEditor(props: FilterEditorProps) {
                         className="filter-range-editor__value-hit-target"
                         data-role="filter-range-value-hit-target"
                         role="slider"
-                        tabIndex={(modulationTravel?.baseHandleMode === "start" ? modulationEditable : isValueEditable(props)) ? 0 : undefined}
+                        tabIndex={valueTabIndex}
                         aria-disabled={disabled || undefined}
                         aria-readonly={readOnly || !onValueChange || undefined}
                         cx={handlePoint.x}
@@ -1608,7 +1430,7 @@ export function FilterEditor(props: FilterEditorProps) {
                                         height="10"
                                         rx="2"
                                         transform={`rotate(45 ${travelGeometry.centerPoint.x} ${travelGeometry.centerPoint.y})`}
-                                        fill="var(--filter-modulation-handle-fill, var(--editor-surface-bg))"
+                                        fill="var(--filter-modulation-handle-fill, var(--editor-surface-bg, #e4ded3))"
                                         stroke={modulationTravel.accent}
                                         strokeWidth="1.6"
                                         pointerEvents="none"
@@ -1620,7 +1442,7 @@ export function FilterEditor(props: FilterEditorProps) {
                                         aria-valuemin={FILTER_CUTOFF_MIN_HZ}
                                         aria-valuemax={FILTER_CUTOFF_MAX_HZ}
                                         aria-valuenow={Math.round(safeValue.cutoffHz)}
-                                        tabIndex={modulationEditable ? 0 : undefined}
+                                        tabIndex={valueTabIndex}
                                         aria-disabled={disabled || undefined}
                                         aria-readonly={readOnly || !onModulationChange || undefined}
                                         cx={travelGeometry.centerPoint.x}
@@ -1631,20 +1453,7 @@ export function FilterEditor(props: FilterEditorProps) {
                                         onPointerDown={(event) => {
                                             if (modulationEditable) beginDrag("modulation-center", event, travelGeometry.centerPoint);
                                         }}
-                                        onKeyDown={(event) => {
-                                            if (!modulationEditable) return;
-                                            const step = event.shiftKey ? 5 : 1;
-                                            const dx = event.key === "ArrowRight" ? step * 4 : event.key === "ArrowLeft" ? -step * 4 : 0;
-                                            const dy = event.key === "ArrowDown" ? step * 4 : event.key === "ArrowUp" ? -step * 4 : 0;
-                                            if (!dx && !dy) return;
-                                            event.preventDefault();
-                                            const a = travelGeometry.trueStartPoint, b = travelGeometry.trueEndPoint, plot = baseResponse.path;
-                                            const x = clamp(dx, plot.plotLeft - Math.min(a.x, b.x), plot.plotRight - Math.max(a.x, b.x));
-                                            const y = clamp(dy, plot.plotTop - Math.min(a.y, b.y), plot.plotBottom - Math.max(a.y, b.y));
-                                            onEditStartRef.current?.("modulation-center");
-                                            translateTravel(stateAtPlotPoint(a.x + x, a.y + y), stateAtPlotPoint(b.x + x, b.y + y));
-                                            onEditEndRef.current?.("modulation-center");
-                                        }}
+                                        onKeyDown={handleCenterKeyDown}
                                     />
                                 </g>
                             ) : null}
@@ -1689,7 +1498,7 @@ export function FilterEditor(props: FilterEditorProps) {
                                         cx={point.x}
                                         cy={point.y}
                                         r="6.5"
-                                        fill={side === "end" ? modulationTravel.accent : "var(--filter-modulation-handle-fill, var(--editor-surface-bg))"}
+                                        fill={side === "end" ? modulationTravel.accent : "var(--filter-modulation-handle-fill, var(--editor-surface-bg, #e4ded3))"}
                                         fillOpacity={parked ? 0.35 : side === "end" ? 1 : 0.9}
                                         stroke={side === "end" ? "rgb(255 255 255 / 0.5)" : modulationTravel.accent}
                                         strokeWidth={side === "end" ? 1.4 : 2}
@@ -1703,7 +1512,7 @@ export function FilterEditor(props: FilterEditorProps) {
                                         aria-valuemin={FILTER_CUTOFF_MIN_HZ}
                                         aria-valuemax={FILTER_CUTOFF_MAX_HZ}
                                         aria-valuenow={Math.round(state.cutoffHz)}
-                                        tabIndex={modulationEditable ? 0 : undefined}
+                                        tabIndex={valueTabIndex}
                                         aria-disabled={disabled || undefined}
                                         aria-readonly={readOnly || !onModulationChange || undefined}
                                         cx={point.x}
@@ -1767,7 +1576,6 @@ export function FilterEditor(props: FilterEditorProps) {
                     </div>
                 ) : null}
             </div>
-            <pre data-role="filter-graph-debug" hidden>{JSON.stringify(debugState)}</pre>
             {showReadout ? (
                 <div className="filter-range-editor__readout" data-role="filter-range-readout" aria-label="Filter values">
                     <div data-role="filter-range-readout-center">
@@ -1794,7 +1602,4 @@ export function FilterEditor(props: FilterEditorProps) {
             ) : null}
         </div>
     );
-}
-
-/** Compatibility name for the cutoff-band presentation. */
-export const FilterRangeEditor = FilterEditor;
+});

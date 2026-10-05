@@ -1,6 +1,6 @@
 import { atom, createStore } from "jotai/vanilla";
 import { isBoundedStateJson, parseHistoryEntry } from "./plugin-state-protocol";
-import type { PluginStateFields } from "./plugin-state-definition";
+import { codecThrewMessage, type PluginStateFields } from "./plugin-state-definition";
 import type {
     PluginStateCommand, PluginStateResult, PluginStateScope, PluginStateSnapshot,
     PluginStateFieldSnapshot, PluginStateReceipt,
@@ -82,6 +82,19 @@ export function createPluginStateClient<const Fields extends PluginStateFields>(
         // SAFETY: keys are the definition's keys; parsed adapter values retain
         // their field type and may only be replaced by an equal prior field value.
         return Object.freeze({ ...incoming, fields: Object.freeze(fields) }) as PluginStateSnapshot<Fields>;
+    };
+    /** Parse and encode one outgoing edit value. A throwing author codec rejects only this edit. */
+    const parseOutbound = (key: string, value: unknown): { readonly kind: "ok"; readonly value: unknown; readonly encoded: unknown } | { readonly kind: "error" } => {
+        const field = definition[key];
+        if (field?.kind !== "stored")
+            return typeof value === "number" && Number.isFinite(value) ? { kind: "ok", value, encoded: value } : { kind: "error" };
+        try {
+            const parsed = field.codec.parse(value);
+            return parsed.kind === "ok" ? { kind: "ok", value: parsed.value, encoded: field.codec.encode(parsed.value) } : { kind: "error" };
+        } catch (error) {
+            ports.onDefect(new Error(codecThrewMessage(key), { cause: error }));
+            return { kind: "error" };
+        }
     };
     const redraw = () => {
         if (!base) return;
@@ -253,15 +266,14 @@ export function createPluginStateClient<const Fields extends PluginStateFields>(
                         if (!Object.hasOwn(definition, edit.key) || !field || keys.has(edit.key)) return Promise.resolve({ kind: "rejected", reason: "invalid-command" });
                         keys.add(edit.key);
                         if (!current || current.readiness.kind !== "ready" || !("value" in current)) return Promise.resolve({ kind: "rejected", reason: "not-ready" });
-                        const parsed = field.kind === "stored" ? field.codec.parse(edit.value)
-                            : typeof edit.value === "number" && Number.isFinite(edit.value)
-                                ? { kind: "ok" as const, value: edit.value } : { kind: "error" as const };
+                        const parsed = parseOutbound(edit.key, edit.value);
                         if (parsed.kind === "error") return Promise.resolve({ kind: "rejected", reason: "invalid-value" });
-                        edits.push({ ...edit, value: field.kind === "stored" ? field.codec.encode(parsed.value) : parsed.value });
+                        edits.push({ ...edit, value: parsed.encoded });
                     }
                     // A compound action waits for the owner's one coherent
                     // accepted projection; it never paints partial local drafts.
-                    outbound = { kind: "edit-many", edits };
+                    outbound = { kind: "edit-many", edits, ...(command.history === false ? { history: false as const } : {}),
+                        ...(command.gesture === undefined ? {} : { gesture: command.gesture }) };
                 }
                 if (command.kind === "edit" || command.kind === "recover") {
                     const field = definition[command.key];
@@ -273,12 +285,10 @@ export function createPluginStateClient<const Fields extends PluginStateFields>(
                         if ("version" in current && current.version !== 0) return Promise.resolve({ kind: "rejected", reason: "stale-version" });
                         if (current.readiness.kind !== "failed" || current.readiness.reason !== "invalid-state") return Promise.resolve({ kind: "rejected", reason: "not-ready" });
                     } else if (!current || current.readiness.kind !== "ready" || !("value" in current)) return Promise.resolve({ kind: "rejected", reason: "not-ready" });
-                    const parsed = field.kind === "stored" ? field.codec.parse(command.value)
-                        : typeof command.value === "number" && Number.isFinite(command.value)
-                            ? { kind: "ok" as const, value: command.value } : { kind: "error" as const };
+                    const parsed = parseOutbound(command.key, command.value);
                     if (parsed.kind === "error") return Promise.resolve({ kind: "rejected", reason: "invalid-value" });
                     draft = { key: command.key, value: parsed.value };
-                    outbound = { ...command, value: field.kind === "stored" ? field.codec.encode(parsed.value) : parsed.value };
+                    outbound = { ...command, value: parsed.encoded };
                 }
                 if (!isBoundedStateJson({ kind: "command", scope, client, sequence: nextSequence + 1, command: outbound }))
                     return Promise.resolve({ kind: "rejected", reason: command.kind === "edit" || command.kind === "recover" ? "invalid-value" : "invalid-command" });

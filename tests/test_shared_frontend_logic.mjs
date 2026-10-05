@@ -22,8 +22,12 @@ async function loadFilterResponseModule() {
     return await loadUIModule(repoRoot, "ui/shared/filter-response.ts");
 }
 
-async function loadFilterRangeEditorModule() {
-    return await loadUIModule(repoRoot, "kit/ui/filter-range-editor.tsx");
+async function loadFilterModulationRangeModule() {
+    return await loadUIModule(repoRoot, "ui/shared/filter-modulation-range.ts");
+}
+
+async function loadFilterEditorModule() {
+    return await loadUIModule(repoRoot, "kit/ui/filter-editor.tsx");
 }
 
 async function loadFilterSpectrumModule() {
@@ -480,7 +484,7 @@ test("filter range helpers use geometric centers and preserve range direction", 
         cutoffRangeOctaves,
         cutoffsFromCenterRangeOctaves,
         geometricCenterCutoffHz,
-    } = await loadFilterRangeEditorModule();
+    } = await loadFilterModulationRangeModule();
 
     assert.equal(Math.round(geometricCenterCutoffHz(200, 3200)), 800);
     assert.equal(cutoffRangeOctaves(200, 3200), 4);
@@ -507,7 +511,7 @@ test("filter range helpers model Cosimo unipolar and bipolar cutoff modulation i
         cutoffsFromBaseModulationOctaves,
         cutoffsFromBipolarRangeHandleCutoff,
         modulationOctavesFromCutoffRange,
-    } = await loadFilterRangeEditorModule();
+    } = await loadFilterModulationRangeModule();
 
     assert.deepEqual(cutoffsFromBaseModulationOctaves({
         baseCutoffHz: 1000,
@@ -565,9 +569,8 @@ test("filter range helpers model Cosimo unipolar and bipolar cutoff modulation i
 });
 
 test("filter range default resonance scale preserves Cosimo's tuned handle response", async () => {
-    const { createDefaultFilterRangeQScale } = await loadFilterRangeEditorModule();
+    const { DEFAULT_FILTER_Q_SCALE: qScale } = await loadFilterEditorModule();
     const { filterQToNormalized } = await loadFilterResponseModule();
-    const qScale = createDefaultFilterRangeQScale();
     const evaluateExpectedSigmoid = (input) => {
         const x = Math.min(1, Math.max(0, input));
         const slope = 11.1;
@@ -598,25 +601,25 @@ test("filter range default resonance scale preserves Cosimo's tuned handle respo
 
 test("filter range value and endpoint clamps keep values in the filter domain", async () => {
     const {
-        clampFilterRangeEndpoints,
-        clampFilterRangeValue,
-        filterRangeModeToResponseMode,
-        responseModeToFilterRangeMode,
-    } = await loadFilterRangeEditorModule();
+        clampFilterRange,
+        clampFilterValue,
+        filterModeToResponseMode,
+        responseModeToFilterMode,
+    } = await loadFilterEditorModule();
     const {
         FILTER_MODE_HIGHPASS,
         FILTER_Q_MAX,
         FILTER_Q_MIN,
     } = await loadFilterResponseModule();
 
-    assert.deepEqual(clampFilterRangeEndpoints({
+    assert.deepEqual(clampFilterRange({
         startCutoffHz: -10,
         endCutoffHz: 45_000,
     }), {
         startCutoffHz: 20,
         endCutoffHz: 20_000,
     });
-    assert.deepEqual(clampFilterRangeValue({
+    assert.deepEqual(clampFilterValue({
         mode: "highpass",
         cutoffHz: 0,
         q: -20,
@@ -625,7 +628,7 @@ test("filter range value and endpoint clamps keep values in the filter domain", 
         cutoffHz: 20,
         q: FILTER_Q_MIN,
     });
-    assert.deepEqual(clampFilterRangeValue({
+    assert.deepEqual(clampFilterValue({
         mode: "peak",
         cutoffHz: 99_000,
         q: 99,
@@ -634,9 +637,9 @@ test("filter range value and endpoint clamps keep values in the filter domain", 
         cutoffHz: 20_000,
         q: FILTER_Q_MAX,
     });
-    assert.equal(filterRangeModeToResponseMode("highpass"), FILTER_MODE_HIGHPASS);
-    assert.equal(responseModeToFilterRangeMode(FILTER_MODE_HIGHPASS), "highpass");
-    assert.equal(responseModeToFilterRangeMode(999), "off");
+    assert.equal(filterModeToResponseMode("highpass"), FILTER_MODE_HIGHPASS);
+    assert.equal(responseModeToFilterMode(FILTER_MODE_HIGHPASS), "highpass");
+    assert.equal(responseModeToFilterMode(999), "off");
 });
 
 test("filter spectrum normalization accepts wrapped payloads and rejects malformed messages", async () => {

@@ -18,11 +18,8 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { deflateSync, gzipSync, inflateSync } from "node:zlib";
 
-import {
-    effectPlugins,
-    repoRoot,
-    seqFxDistributableRuntimeEnvironmentKey,
-} from "../kit/fx/build-effect.mjs";
+import { getEffectPlugin, repoRoot } from "../kit/fx/build-effect.mjs";
+import { sourceCmajCMakeArguments, sourceCmajExecutable } from "./source_cmaj.mjs";
 import { findChocMarkerViolations } from "../kit/scripts/check_choc_markers.mjs";
 import {
     seqFxArtifactBaseName,
@@ -301,7 +298,7 @@ function declaredCpmPackage(cmakeSource, expected, label, variables = new Map())
     }
 
     // GIT_TAG / GIT_REPOSITORY may be literals or `${VARIABLE}` references to
-    // the data-only declarations (COSIMO_CMAJOR_PINNED_COMMIT in the module,
+    // the data-only declarations (BUILDER_KIT_CMAJOR_PINNED_COMMIT in the module,
     // the source URLs in dependency-sources.cmake).
     const revision = resolveCmakeValue(requireUniqueCmakeField(matches[0], "GIT_TAG", label), variables, label);
 
@@ -590,7 +587,7 @@ export async function assertNativeBuildUsedReleaseToolchain(
     const cachePath = path.join(repositoryRoot, config.paths.nativeBuildCmakeCache);
     const cacheSource = await readFile(cachePath, "utf8");
     const observedCmake = requireUniqueCmakeCacheValue(cacheSource, "CMAKE_COMMAND");
-    const observedCmaj = requireUniqueCmakeCacheValue(cacheSource, "COSIMO_CMAJ_EXECUTABLE");
+    const observedCmaj = requireUniqueCmakeCacheValue(cacheSource, "BUILDER_KIT_CMAJ_EXECUTABLE");
     const expectedCmaj = path.join(
         repositoryRoot,
         "build",
@@ -632,7 +629,7 @@ function expectedBuiltVst3Path(plugin) {
 export function releaseContractErrors(
     config,
     patchManifest,
-    plugin = effectPlugins[config.productKey],
+    plugin = getEffectPlugin(config.productKey),
 ) {
     const errors = [];
     const requiredStrings = [
@@ -2700,7 +2697,9 @@ async function buildReleaseArtifacts({
         : null;
 
     // fx:prod:build always strips view.devModule from the runtime manifest;
-    // the distributable key additionally suppresses runtime source maps.
+    // FX_DISTRIBUTABLE_RUNTIME additionally suppresses runtime source maps.
+    for (const args of sourceCmajCMakeArguments())
+        run(toolchain.privateInvocationPaths.cmake, args);
     run(toolchain.privateInvocationPaths.node, [
         "kit/fx/prod-effect.mjs",
         "build",
@@ -2708,9 +2707,9 @@ async function buildReleaseArtifacts({
         "--clean",
     ], {
         env: {
-            COSIMO_RELEASE_CMAKE: toolchain.privateInvocationPaths.cmake,
-            COSIMO_RELEASE_NODE: toolchain.privateInvocationPaths.node,
-            [seqFxDistributableRuntimeEnvironmentKey]: "1",
+            BUILDER_KIT_CMAKE: toolchain.privateInvocationPaths.cmake,
+            BUILDER_KIT_CMAJ: sourceCmajExecutable,
+            FX_DISTRIBUTABLE_RUNTIME: "1",
         },
     });
     assertSourceStateUnchanged(gitState, getReleaseGitState());
@@ -2795,7 +2794,7 @@ export async function main(argv = process.argv) {
     try {
         const config = seqFxReleaseConfig;
         const patchManifest = await readPatchManifest(config);
-        const plugin = effectPlugins[config.productKey];
+        const plugin = getEffectPlugin(config.productKey);
 
         assertReleaseContract(config, patchManifest, plugin);
         const declaredNativeDependencies = await readDeclaredNativeDependencyProvenance(config);

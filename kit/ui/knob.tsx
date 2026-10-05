@@ -1,12 +1,20 @@
 import { createContext, forwardRef, useCallback, useContext, useEffect, useId, useLayoutEffect, useMemo, useRef, useState,
     type HTMLAttributes, type InputHTMLAttributes, type ReactNode, type SVGProps } from "react";
 import { Slot } from "@radix-ui/react-slot";
-import { knobDomain, type KnobScale } from "./knob-scale";
+import css from "./knob.css?inline";
+import { isStepKey, stepForKey } from "./keyboard-steps";
 import { knobAnnulus, knobArcPoint, knobSector } from "./knob-geometry";
 import { animateLiveNumber, type LiveNumber } from "./live-value";
 import { useParameterGesture, type ParameterGestureChannel } from "./parameter-gesture";
 import type { RollingAxis } from "./rolling-axis-classifier";
-import { retainKnobStyles } from "./knob-styles";
+import { retainStyles } from "./styles";
+import { scaleKind, valueDomain, type ValueScale } from "./value-scale";
+
+// Theme colors with the default dial's own palette as fallback.
+const VALUE_COLOR = "var(--editor-accent-start, #d2fa6a)";
+const RANGE_COLOR = "var(--editor-accent-end, #67bcda)";
+const INDICATOR_COLOR = "var(--editor-surface-ink, #f6f7f5)";
+const TRACK_COLOR = "var(--editor-surface-bg, #181a1c)";
 
 /** One controlled numeric quantity; value, bounds and step share canonical units. */
 export type KnobValueOptions = {
@@ -15,7 +23,7 @@ export type KnobValueOptions = {
     readonly min?: number;
     readonly max?: number;
     readonly step?: number;
-    readonly scale?: KnobScale;
+    readonly scale?: ValueScale;
     readonly onGestureStart?: () => void;
     readonly onGestureEnd?: (cancelled: boolean) => void;
 };
@@ -30,12 +38,16 @@ export type KnobRootProps = KnobValueOptions & Omit<HTMLAttributes<HTMLDivElemen
 type Interaction = { readonly isDragging: boolean; readonly activeAxis: RollingAxis | null };
 type Context = {
     readonly value: number;
-    readonly domain: ReturnType<typeof knobDomain>;
+    readonly domain: ReturnType<typeof valueDomain>;
+    readonly scale: ValueScale;
     readonly format: (value: number) => string;
     readonly disabled: boolean;
     readonly readOnly: boolean;
     readonly controlId: string;
     readonly labelId: string;
+    /** KnobLabel registers itself so the control only references a label that exists. */
+    readonly hasLabel: boolean;
+    readonly setHasLabel: (mounted: boolean) => void;
     readonly options: { current: KnobValueOptions };
     readonly interaction: Interaction;
     readonly setInteraction: (state: Interaction) => void;
@@ -56,7 +68,7 @@ export const KnobRoot = forwardRef<HTMLDivElement, KnobRootProps>(function KnobR
     const id = useId();
     const attach = useCallback((node: HTMLDivElement | null) => {
         if (!node) return;
-        const release = retainKnobStyles(node);
+        const release = retainStyles(node, "knob", css);
         // React 19 accepts callback-ref cleanup, including callbacks passed through forwardRef.
         const releaseRef: unknown = typeof ref === "function" ? ref(node) : undefined;
         if (ref && typeof ref !== "function") ref.current = node;
@@ -67,13 +79,14 @@ export const KnobRoot = forwardRef<HTMLDivElement, KnobRootProps>(function KnobR
             else if (ref) ref.current = null;
         };
     }, [ref]);
-    const domain = useMemo(() => knobDomain({ min, max, step, scale }), [min, max, step, scale]);
+    const domain = useMemo(() => valueDomain({ min, max, step, scale }), [min, max, step, scale]);
     if (!Number.isFinite(value)) throw new RangeError("Knob value must be finite.");
     const options = useRef<KnobValueOptions>({ value, onValueChange });
     options.current = { value, onValueChange, min, max, step, scale, onGestureStart, onGestureEnd };
     const [interaction, setInteraction] = useState<Interaction>({ isDragging: false, activeAxis: null });
-    const context: Context = { value, domain, options, disabled, readOnly, format: formatValue,
-        controlId: `${id}-control`, labelId: `${id}-label`, interaction, setInteraction };
+    const [hasLabel, setHasLabel] = useState(false);
+    const context: Context = { value, domain, scale, options, disabled, readOnly, format: formatValue,
+        controlId: `${id}-control`, labelId: `${id}-label`, hasLabel, setHasLabel, interaction, setInteraction };
     return <KnobContext.Provider value={context}>
         <div {...props} ref={attach} className={`bk-knob ${className}`} data-slot="knob-root"
             data-disabled={disabled || undefined} data-readonly={readOnly || undefined}
@@ -126,14 +139,16 @@ export const KnobControl = forwardRef<HTMLElement, KnobControlProps>(function Kn
         keyboardFinish.current = null;
         finish?.(cancelled);
     }, []);
-    // A reconfiguration cannot leave an edit bracket open against the old quantity.
+    // A reconfiguration cannot leave an edit bracket open against the old
+    // quantity. Each gesture captured its domain at pointer-down, so the keys
+    // are the domain's values rather than object identities.
     useLayoutEffect(() => () => {
         gesture.cancelGesture(); finishKeyboard(true);
-    }, [gesture, finishKeyboard, readOnly, context.domain, sensitivity, keyboardStep,
-        typeof drag === "string" ? drag : "two-axis",
+    }, [gesture, finishKeyboard, readOnly, context.domain.min, context.domain.max, context.domain.step, scaleKind(context.scale),
+        sensitivity, keyboardStep, typeof drag === "string" ? drag : "two-axis",
         typeof drag === "object" && drag.horizontal === "value", typeof drag === "object" && drag.vertical === "value",
-        secondaryHorizontal?.min, secondaryHorizontal?.max, secondaryHorizontal?.scale, secondaryHorizontal?.step, secondaryHorizontal?.sensitivity,
-        secondaryVertical?.min, secondaryVertical?.max, secondaryVertical?.scale, secondaryVertical?.step, secondaryVertical?.sensitivity]);
+        secondaryHorizontal?.min, secondaryHorizontal?.max, scaleKind(secondaryHorizontal?.scale), secondaryHorizontal?.step, secondaryHorizontal?.sensitivity,
+        secondaryVertical?.min, secondaryVertical?.max, scaleKind(secondaryVertical?.scale), secondaryVertical?.step, secondaryVertical?.sensitivity]);
 
     const startPointer: NonNullable<HTMLAttributes<HTMLElement>["onPointerDown"]> = event => {
         onPointerDown?.(event);
@@ -153,7 +168,7 @@ export const KnobControl = forwardRef<HTMLElement, KnobControlProps>(function Kn
                 const latest = typeof mapping === "string" ? "value" : mapping[axis];
                 return latest === "value" ? current.current.options.current : (latest ?? options);
             };
-            const domain = quantity === "value" ? current.current.domain : knobDomain({
+            const domain = quantity === "value" ? current.current.domain : valueDomain({
                 min: options.min ?? 0, max: options.max ?? 1, step: options.step, scale: options.scale });
             let previous = options.value;
             return {
@@ -185,17 +200,16 @@ export const KnobControl = forwardRef<HTMLElement, KnobControlProps>(function Kn
         onKeyDown?.(event);
         if (event.defaultPrevented || readOnly) return;
         if (event.key === "Escape") { gesture.cancelGesture(); finishKeyboard(true); return; }
-        const direction = ["ArrowUp", "ArrowRight", "PageUp"].includes(event.key) ? 1
-            : ["ArrowDown", "ArrowLeft", "PageDown"].includes(event.key) ? -1 : 0;
-        if (!direction && event.key !== "Home" && event.key !== "End") return;
+        const { domain, value, options } = current.current;
+        // A step finer than the snapping step would snap straight back, so stepped values ignore Shift.
+        const edit = stepForKey({ key: event.key, shiftKey: event.shiftKey && domain.step === undefined });
+        if (!edit) return;
         event.preventDefault();
         gesture.cancelGesture();
-        const { domain, value, options } = current.current;
-        const page = event.key.startsWith("Page") ? 10 : 1;
         const unitStep = keyboardStep ?? domain.step;
-        const next = event.key === "Home" ? domain.min : event.key === "End" ? domain.max
-            : unitStep !== undefined ? domain.snap(value + direction * unitStep * page * (event.shiftKey && domain.step === undefined ? 0.1 : 1))
-                : domain.fromPosition(domain.toPosition(value) + direction * 0.01 * page * (event.shiftKey ? 0.1 : 1));
+        const next = edit.kind === "min" ? domain.min : edit.kind === "max" ? domain.max
+            : unitStep !== undefined ? domain.snap(value + edit.steps * unitStep)
+                : domain.fromPosition(domain.toPosition(value) + edit.steps * 0.01);
         if (next === value || !Number.isFinite(next)) return;
         if (!keyboardFinish.current) {
             const end = options.current.onGestureEnd;
@@ -208,7 +222,8 @@ export const KnobControl = forwardRef<HTMLElement, KnobControlProps>(function Kn
         ...props, className: `bk-knob-control ${className}`, style: { ...style, touchAction: "none" },
         id: props.id ?? context.controlId, role: "slider", tabIndex: context.disabled ? -1 : (props.tabIndex ?? 0),
         "aria-label": props["aria-label"],
-        "aria-labelledby": props["aria-labelledby"] ?? (props["aria-label"] ? undefined : context.labelId),
+        "aria-labelledby": props["aria-labelledby"] ?? (props["aria-label"] || !context.hasLabel ? undefined : context.labelId),
+        "aria-orientation": drag === "horizontal" ? "horizontal" as const : drag === "vertical" ? "vertical" as const : undefined,
         "aria-valuemin": context.domain.min, "aria-valuemax": context.domain.max,
         "aria-valuenow": context.value, "aria-valuetext": context.format(context.value),
         "aria-disabled": context.disabled || undefined, "aria-readonly": context.readOnly || undefined,
@@ -217,8 +232,7 @@ export const KnobControl = forwardRef<HTMLElement, KnobControlProps>(function Kn
         onPointerDown: startPointer, onKeyDown: keyDown,
         onKeyUp: (event: React.KeyboardEvent<HTMLElement>) => {
             onKeyUp?.(event);
-            if (["ArrowUp", "ArrowRight", "ArrowDown", "ArrowLeft", "PageUp", "PageDown", "Home", "End"].includes(event.key))
-                finishKeyboard(false);
+            if (isStepKey(event.key)) finishKeyboard(false);
         },
         onBlur: (event: React.FocusEvent<HTMLElement>) => { onBlur?.(event); gesture.cancelGesture(); finishKeyboard(true); },
         onContextMenu: (event: React.MouseEvent<HTMLElement>) => { gesture.cancelGesture(); onContextMenu?.(event); },
@@ -230,6 +244,8 @@ export const KnobControl = forwardRef<HTMLElement, KnobControlProps>(function Kn
 /** Optional accessible label; its visual placement belongs to the composition. */
 export const KnobLabel = forwardRef<HTMLLabelElement, HTMLAttributes<HTMLLabelElement>>(function KnobLabel(props, ref) {
     const context = useContextValue();
+    const { setHasLabel } = context;
+    useLayoutEffect(() => { setHasLabel(true); return () => setHasLabel(false); }, [setHasLabel]);
     return <label {...props} ref={ref} id={context.labelId} htmlFor={context.controlId} data-slot="knob-label" />;
 });
 
@@ -248,11 +264,11 @@ export const KnobDial = forwardRef<SVGSVGElement, SVGProps<SVGSVGElement>>(funct
     const handle = knobArcPoint(position, 25);
     return <svg viewBox="-3 -3 106 106" aria-hidden="true" {...props} ref={ref} data-slot="knob-dial">
         <defs><pattern id={id} width="4" height="4" patternUnits="userSpaceOnUse">
-            <circle cx="2" cy="2" r="0.85" fill="var(--knob-color)" />
+            <circle cx="2" cy="2" r="0.85" fill={VALUE_COLOR} />
         </pattern></defs>
         <path d={knobSector(0, 1, 34)} fill={`url(#${id})`} opacity=".32" />
-        <path d={knobSector(origin, position, 34)} fill="var(--knob-color)" data-slot="knob-fill" />
-        <circle cx={handle.x} cy={handle.y} r="2.5" fill="var(--knob-indicator)" stroke="var(--knob-ink)" strokeWidth="1" />
+        <path d={knobSector(origin, position, 34)} fill={VALUE_COLOR} data-slot="knob-fill" />
+        <circle cx={handle.x} cy={handle.y} r="2.5" fill={INDICATOR_COLOR} stroke={TRACK_COLOR} strokeWidth="1" />
         {children}
     </svg>;
 });
@@ -262,7 +278,7 @@ export const KnobRange = forwardRef<SVGPathElement, Omit<SVGProps<SVGPathElement
     readonly from: number; readonly to: number; readonly innerRadius?: number; readonly outerRadius?: number;
 }>(function KnobRange({ from, to, innerRadius = 40, outerRadius = 48, ...props }, ref) {
     const { domain } = useContextValue();
-    return <path fill="var(--knob-range-color)" {...props} ref={ref} data-slot="knob-range"
+    return <path fill={RANGE_COLOR} {...props} ref={ref} data-slot="knob-range"
         d={knobAnnulus(domain.toPosition(from), domain.toPosition(to), innerRadius, outerRadius)} />;
 });
 
@@ -288,7 +304,7 @@ export const KnobMarker = forwardRef<SVGCircleElement, SVGProps<SVGCircleElement
             element.setAttribute("cx", String(point.x)); element.setAttribute("cy", String(point.y));
         });
     }, [element, value, domain, radius, smoothingMs]);
-    return <circle r="2.4" fill="var(--knob-indicator)" {...props} ref={attach} data-slot="knob-marker"
+    return <circle r="2.4" fill={INDICATOR_COLOR} {...props} ref={attach} data-slot="knob-marker"
         style={{ ...style, visibility: "hidden", pointerEvents: "none" }} />;
 });
 

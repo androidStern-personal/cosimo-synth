@@ -3,8 +3,17 @@ cmake_minimum_required(VERSION 3.16)
 project(CosimoT26EnhancerWrapperProbe LANGUAGES CXX OBJCXX)
 
 get_filename_component(COSIMO_REPO_ROOT "${CMAKE_CURRENT_LIST_DIR}/../.." ABSOLUTE)
-include("${COSIMO_REPO_ROOT}/kit/cmake/CosimoDependencies.cmake")
-cosimo_add_t26_research_juce()
+include("${COSIMO_REPO_ROOT}/kit/cmake/dependencies.cmake")
+
+# The T26 research probe builds against JUCE 7, not the kit's pinned JUCE.
+CPMAddPackage(
+    NAME cosimo_t26_juce
+    GIT_REPOSITORY "${BUILDER_KIT_JUCE_GIT_URL}"
+    GIT_TAG "b08520c2de1771af3dfcbfbc0e0b6b0b5eb083b0"
+    GIT_SHALLOW FALSE
+    DOWNLOAD_ONLY YES
+)
+set(COSIMO_T26_JUCE_SOURCE_DIR "${cosimo_t26_juce_SOURCE_DIR}")
 
 set(COSIMO_T26_PROBE_OUTPUT_DIR "${CMAKE_BINARY_DIR}/direct" CACHE PATH
     "Destination for the T26 research probe")

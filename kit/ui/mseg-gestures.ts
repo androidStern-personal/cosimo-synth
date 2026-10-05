@@ -12,14 +12,6 @@ export type MsegGestureController<Result> = {
     deletePoint(index: number): Result;
     setSegmentCurvePower(index: number, power: number): Result;
 };
-type Timers = {
-    setTimeout(callback: () => void, delay: number): number;
-    clearTimeout(handle: number): void;
-};
-const browserTimers: Timers = {
-    setTimeout: (callback, delay) => window.setTimeout(callback, delay),
-    clearTimeout: handle => window.clearTimeout(handle),
-};
 const clamp = (value: number, min: number, max: number) => Math.max(min, Math.min(max, value));
 
 type ActiveMsegPointPointerState = {
@@ -57,7 +49,7 @@ type ActiveMsegPointerState =
 export function useMsegGestures<Result>({
     shape, controller, surfaceRef, edit, finishGesture,
     orientation = "horizontal", curveEditActivationMode = "immediate", curveEditHoldDelayMs = 350,
-    onCurveEditHoldActivated = null, timers = browserTimers,
+    onCurveEditHoldActivated = null,
     selectedPoint, onSelectedPointChange, onSelectedSegmentChange,
 }: {
     shape: Shape | null;
@@ -70,19 +62,14 @@ export function useMsegGestures<Result>({
     curveEditActivationMode?: "immediate" | "hold-or-drag";
     curveEditHoldDelayMs?: number;
     onCurveEditHoldActivated?: (() => void) | null;
-    timers?: Timers;
-    selectedPoint?: number;
-    onSelectedPointChange?: (index: number) => void;
-    onSelectedSegmentChange?: (index: number) => void;
+    selectedPoint: number;
+    onSelectedPointChange(index: number): void;
+    onSelectedSegmentChange(index: number): void;
 }) {
-    const [localSelectedPoint, setLocalSelectedPoint] = useState(0);
-    const selectedPointIndex = selectedPoint ?? localSelectedPoint;
-    const selectionCallbacks = useRef({selectedPointIndex, onSelectedPointChange, onSelectedSegmentChange});
-    selectionCallbacks.current = {selectedPointIndex, onSelectedPointChange, onSelectedSegmentChange};
-    const setSelectedPointIndex = useCallback((next: number | ((previous: number) => number)) => {
-        const index = typeof next === "function" ? next(selectionCallbacks.current.selectedPointIndex) : next;
-        setLocalSelectedPoint(index);
-        if (index !== selectionCallbacks.current.selectedPointIndex) selectionCallbacks.current.onSelectedPointChange?.(index);
+    const selectionCallbacks = useRef({selectedPoint, onSelectedPointChange, onSelectedSegmentChange});
+    selectionCallbacks.current = {selectedPoint, onSelectedPointChange, onSelectedSegmentChange};
+    const setSelectedPointIndex = useCallback((index: number) => {
+        if (index !== selectionCallbacks.current.selectedPoint) selectionCallbacks.current.onSelectedPointChange(index);
     }, []);
     const [hoveredSegmentIndex, setHoveredSegmentIndex] = useState(-1);
     const [activeSegmentIndex, setActiveSegmentIndex] = useState(-1);
@@ -90,10 +77,10 @@ export function useMsegGestures<Result>({
 
     const clearPendingSegmentTimer = useCallback((pointerState: ActiveMsegPointerState | null) => {
         if (pointerState?.kind === "pending-segment" && pointerState.holdTimeoutId !== null) {
-            timers.clearTimeout(pointerState.holdTimeoutId);
+            window.clearTimeout(pointerState.holdTimeoutId);
             pointerState.holdTimeoutId = null;
         }
-    }, [timers]);
+    }, []);
 
     const cancelActivePointer = useCallback((pointerId?: number) => {
         const activePointer = activePointerRef.current;
@@ -114,19 +101,6 @@ export function useMsegGestures<Result>({
         setHoveredSegmentIndex(-1);
         setActiveSegmentIndex(-1);
     }, [clearPendingSegmentTimer, surfaceRef, finishGesture]);
-
-    useEffect(() => {
-        if (!shape) {
-            return;
-        }
-
-        if (selectedPoint !== undefined) return;
-        setSelectedPointIndex((previousIndex) => clamp(
-            previousIndex,
-            0,
-            Math.max(0, shape.points.length - 1),
-        ));
-    }, [shape, selectedPoint, setSelectedPointIndex]);
 
     const resolvePointerLocation = useCallback((clientX: number, clientY: number) => {
         if (!shape || !surfaceRef.current) {
@@ -173,29 +147,7 @@ export function useMsegGestures<Result>({
         return pointerLocation;
     }, [resolvePointerLocation]);
 
-    useEffect(() => {
-        const handleEscapeKey = (event: KeyboardEvent) => {
-            if (event.key === "Escape") {
-                cancelActivePointer();
-            }
-        };
-        const handleBlur = () => cancelActivePointer();
-        const handleVisibilityChange = () => {
-            if (document.visibilityState !== "visible") {
-                cancelActivePointer();
-            }
-        };
-
-        window.addEventListener("keydown", handleEscapeKey);
-        window.addEventListener("blur", handleBlur);
-        document.addEventListener("visibilitychange", handleVisibilityChange);
-        return () => {
-            window.removeEventListener("keydown", handleEscapeKey);
-            window.removeEventListener("blur", handleBlur);
-            document.removeEventListener("visibilitychange", handleVisibilityChange);
-            cancelActivePointer();
-        };
-    }, [cancelActivePointer]);
+    useEffect(() => () => cancelActivePointer(), [cancelActivePointer]);
 
     const applyCurveEditFromClientCoordinates = useCallback((segmentIndex: number, clientX: number, clientY: number) => {
         if (!surfaceRef.current || !controller.current) {
@@ -266,7 +218,7 @@ export function useMsegGestures<Result>({
         }
 
         if (pointerLocation.segmentIndex >= 0) {
-            selectionCallbacks.current.onSelectedSegmentChange?.(pointerLocation.segmentIndex);
+            selectionCallbacks.current.onSelectedSegmentChange(pointerLocation.segmentIndex);
             setActiveSegmentIndex(pointerLocation.segmentIndex);
             setHoveredSegmentIndex(pointerLocation.segmentIndex);
             if (curveEditActivationMode === "immediate") {
@@ -276,7 +228,7 @@ export function useMsegGestures<Result>({
                     segmentIndex: pointerLocation.segmentIndex,
                 };
             } else {
-                const holdTimeoutId = timers.setTimeout(() => {
+                const holdTimeoutId = window.setTimeout(() => {
                     const activePointer = activePointerRef.current;
                     if (
                         !activePointer
@@ -334,7 +286,6 @@ export function useMsegGestures<Result>({
         controller,
         shape,
         onCurveEditHoldActivated,
-        timers,
         orientation,
         surfaceRef,
         updateHoveredSegmentIndex,
@@ -497,6 +448,6 @@ export function useMsegGestures<Result>({
         surfaceRef,
     ]);
 
-    return { selectedPointIndex, hoveredSegmentIndex, activeSegmentIndex,
+    return { hoveredSegmentIndex, activeSegmentIndex,
         cancelGesture: cancelActivePointer, handlePointerDown, handlePointerMove, handlePointerLeave, handlePointerUp };
 }

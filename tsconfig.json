@@ -17,6 +17,7 @@
     "fx/**/*.ts",
     "fx/**/*.tsx",
     "kit/index.ts",
+    "kit/ui/style-modules.d.ts",
     "kit/ui/**/*.ts",
     "kit/ui/**/*.tsx",
     "ui/**/*.d.ts",

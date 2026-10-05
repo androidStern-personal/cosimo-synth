@@ -4,17 +4,14 @@ export {
     renderMsegShapeInto as renderInto,
     MSEG_PADDED_SAMPLES as sampleCount,
 } from './mseg'
-import type { MsegShape } from './mseg'
-import { MsegCurve } from './mseg-composition'
-export type Curve = MsegShape
-export const Curve = MsegCurve
-export type { MsegPoint as Point, MsegPlayback as Playback } from './mseg'
+export type { MsegShape as Curve, MsegPoint as Point } from './mseg'
 export { msegCurveCodec as curveCodec, msegState as state } from './mseg-state'
 export {
     MsegEditor as Editor,
     MsegRoot as Root,
     MsegSurface as Surface,
     MsegGrid as Grid,
+    MsegLine as Line,
     MsegFill as Fill,
     MsegPoints as Points,
     MsegPlot as Plot,

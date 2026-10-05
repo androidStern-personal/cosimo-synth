@@ -1,7 +1,10 @@
 {
-  "name": "builder-kit-monorepo",
+  "name": "builder-kit-project",
   "private": true,
   "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
   "scripts": {
     "kit:new": "node kit/scripts/new_plugin.mjs",
     "kit:doctor": "node kit/scripts/doctor.mjs",
@@ -10,28 +13,18 @@
     "fx:build": "node kit/fx/build-effect.mjs",
     "fx:prod:build": "node kit/fx/prod-effect.mjs build",
     "fx:prod:install": "node kit/fx/prod-effect.mjs install",
-    "fx:jit:install": "./kit/scripts/install_fx_cmajplugin.sh",
-    "cmajplugin:build": "./kit/scripts/build_cmajplugin_vst3.sh",
-    "cmajplugin:install": "./kit/scripts/install_cmajplugin_vst3.sh",
-    "ui:knobs:dev": "vite --config kit/examples/knobs/vite.config.mjs",
-    "ui:knobs:build": "vite build --config kit/examples/knobs/vite.config.mjs",
-    "test:knobs": "node --test kit/tests/test_knob_browser.mjs",
-    "ui:filters:dev": "vite --config kit/examples/filters/vite.config.mjs",
-    "ui:filters:build": "vite build --config kit/examples/filters/vite.config.mjs",
-    "test:filters": "node --test kit/tests/test_filter_browser.mjs",
-    "ui:mseg:dev": "vite --config kit/examples/mseg/vite.config.mjs",
-    "ui:mseg:build": "vite build --config kit/examples/mseg/vite.config.mjs",
-    "test:mseg": "node --test kit/tests/test_mseg_editor_browser.mjs kit/tests/test_mseg_composition_browser.mjs",
+    "fx:jit:install": "node kit/scripts/cmajplugin.mjs jit-install",
+    "cmajplugin:install": "node kit/scripts/cmajplugin.mjs install",
     "typecheck": "tsc --noEmit",
     "test": "node kit/scripts/test_unit.mjs",
-    "test:kit:native-install": "node --test kit/tests/vst3_install_native.test.mjs",
-    "test:browser": "node --test kit/tests/test_effect_browser_preview_browser.mjs tests/test_enhancer_lite_view_browser.mjs",
-    "ui:docs:dev": "vite --config kit/examples/vite.config.mjs",
-    "ui:docs:build": "vite build --config kit/examples/vite.config.mjs",
-    "ui:sliders:dev": "vite --config kit/examples/sliders/vite.config.mjs",
-    "ui:sliders:build": "vite build --config kit/examples/sliders/vite.config.mjs",
+    "test:browser": "node --test \"kit/tests/**/*_browser.mjs\" \"tests/**/*_browser.mjs\"",
+    "test:dsp": "node kit/scripts/test_dsp.mjs",
+    "test:knobs": "node --test kit/tests/test_knob_browser.mjs",
+    "test:filters": "node --test kit/tests/test_filter_browser.mjs",
+    "test:mseg": "node --test kit/tests/test_mseg_editor_browser.mjs kit/tests/test_mseg_composition_browser.mjs",
     "test:sliders": "node --test kit/tests/test_slider_browser.mjs",
-    "test:controls-docs": "node --test kit/tests/test_controls_docs_browser.mjs"
+    "ui:docs:dev": "vite --config kit/examples/vite.config.mjs",
+    "ui:docs:build": "vite build --config kit/examples/vite.config.mjs"
   },
   "devDependencies": "__DEV_DEPENDENCIES__"
 }

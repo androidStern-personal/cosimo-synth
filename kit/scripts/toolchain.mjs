@@ -1,22 +1,21 @@
-// Shared reader/hasher for the Builder Kit tool contracts.
+// Reader and hasher for the Builder Kit tool contracts.
 //
-// kit/feed.json names the feed base URL (empty in the monorepo, stamped by the
-// export) and kit/toolchain.json pins the prebuilt `cmaj` and `CmajPlugin.vst3`
-// artifacts: feed-relative artifact path, sha256 of the archive (written by
-// kit:release), local install path under build/kit-tools/, and the tool ranges
-// a customer machine must satisfy. kit:doctor reads through this module and
-// kit:setup installs through it.
+// kit/feed.json names the download feed and kit/toolchain.json pins the
+// prebuilt `cmaj` and `CmajPlugin.vst3` archives: feed-relative artifact path,
+// sha256 of the archive, local install path under build/kit-tools/, and the
+// tool ranges a machine must satisfy. kit:doctor reads through this module,
+// kit:setup installs through it, and the build commands find their verified
+// tools with resolveCmajExecutable and requireCurrentTool.
 
+import { spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { createReadStream, existsSync, readFileSync } from "node:fs";
-import { lstat, mkdir, readdir, readlink, writeFile } from "node:fs/promises";
+import { constants, createReadStream, existsSync } from "node:fs";
+import { access, lstat, mkdir, readdir, readlink, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
-import { redact } from "./redacted.mjs";
 
-const scriptDir = path.dirname(fileURLToPath(import.meta.url));
+import { isPlainObject, projectRoot, readJson } from "./common.mjs";
 
-export const repoRoot = path.resolve(scriptDir, "../..");
+export const repoRoot = projectRoot;
 export const toolKeys = ["cmaj", "cmajPlugin"];
 export const kitToolsRelativeDir = "build/kit-tools";
 export const juceAcknowledgmentFileName = "juce-terms-acknowledged.json";
@@ -38,54 +37,9 @@ export function juceAcknowledgmentPath(root = repoRoot) {
     return path.join(kitToolsDir(root), juceAcknowledgmentFileName);
 }
 
-export function readJsonFile(filePath) {
-    let text;
-
-    try {
-        text = readFileSync(filePath, "utf8");
-    } catch (error) {
-        throw new Error(`Could not read ${filePath}: ${error instanceof Error ? error.message : String(error)}`);
-    }
-
-    try {
-        return JSON.parse(text);
-    } catch (error) {
-        throw new Error(`Could not parse ${filePath}: ${error instanceof Error ? error.message : String(error)}`);
-    }
-}
-
-function isPlainObject(value) {
-    return value !== null && typeof value === "object" && !Array.isArray(value);
-}
-
-/** The Cmajor fork pin (commit + URL) as declared under kit/cmake. */
-export function readCmajorPin(kitRoot = path.join(repoRoot, "kit")) {
-    const dependencies = readFileSync(path.join(kitRoot, "cmake/CosimoDependencies.cmake"), "utf8");
-    const block = dependencies.match(/NAME\s+cosimo_cmajor\b([\s\S]*?)\)/);
-    if (!block) throw new Error("CosimoDependencies.cmake: no CPMAddPackage block named cosimo_cmajor.");
-    // The tag is either a literal commit or the shared COSIMO_CMAJOR_PINNED_COMMIT
-    // variable (one pin for the plugin and toolchain packages).
-    let commit = block[1].match(/GIT_TAG\s+"([0-9a-f]{40})"/)?.[1] ?? null;
-    if (!commit && /GIT_TAG\s+"\$\{COSIMO_CMAJOR_PINNED_COMMIT\}"/.test(block[1])) {
-        commit = dependencies.match(/set\(COSIMO_CMAJOR_PINNED_COMMIT\s+"([0-9a-f]{40})"\)/)?.[1] ?? null;
-    }
-    if (!commit) throw new Error("CosimoDependencies.cmake: cosimo_cmajor GIT_TAG must be a full 40-hex commit (literal or COSIMO_CMAJOR_PINNED_COMMIT).");
-
-    let url = block[1].match(/GIT_REPOSITORY\s+"(https?:\/\/[^"]+)"/)?.[1] ?? null;
-    if (!url) {
-        const sourcesPath = path.join(kitRoot, "cmake/dependency-sources.cmake");
-        if (existsSync(sourcesPath)) {
-            const sources = readFileSync(sourcesPath, "utf8");
-            url = sources.match(/set\(COSIMO_CMAJOR_GIT_URL\s+"([^"]+)"\)/)?.[1] ?? null;
-        }
-    }
-    if (!url) throw new Error("Could not find the Cmajor fork URL (GIT_REPOSITORY or COSIMO_CMAJOR_GIT_URL) under kit/cmake.");
-    return { commit, url };
-}
-
 /** Read and shape-check kit/toolchain.json. Every tool needs an artifact path and a localPath under build/. */
 export function readToolchain(filePath = toolchainPath()) {
-    const toolchain = readJsonFile(filePath);
+    const toolchain = readJson(filePath);
 
     if (!isPlainObject(toolchain))
         throw new Error(`${filePath} must contain a JSON object.`);
@@ -112,22 +66,24 @@ export function readToolchain(filePath = toolchainPath()) {
     return toolchain;
 }
 
-/** Read kit/feed.json; returns a structurally redacted base URL (wrapping "" when unset). */
+/** Read kit/feed.json; "" when no feed is configured. */
 export function readFeedBaseUrl(filePath = feedPath()) {
     let feed;
     try {
-        feed = readJsonFile(filePath);
+        feed = readJson(filePath);
     } catch {
-        // JSON.parse diagnostics may quote source text. The feed can contain a
-        // capability-bearing URL, so this boundary must replace them entirely.
-        throw new Error(`Could not read or parse ${filePath}.`);
+        // JSON.parse diagnostics quote the source text, and the feed URL carries
+        // the delivery's access path, so the message names only the file.
+        throw new Error(`Could not read or parse ${filePath}. Restore it from your delivery (kit-update skill).`);
     }
 
     if (!isPlainObject(feed))
         throw new Error(`${filePath} must contain a JSON object.`);
 
-    return redact(normalizeBaseUrl(feed.baseUrl, filePath));
+    return normalizeBaseUrl(feed.baseUrl, filePath);
 }
+
+const loopbackHosts = new Set(["127.0.0.1", "localhost", "[::1]"]);
 
 export function normalizeBaseUrl(value, label = "feed baseUrl") {
     if (value === undefined || value === null)
@@ -146,11 +102,12 @@ export function normalizeBaseUrl(value, label = "feed baseUrl") {
     try {
         parsed = new URL(trimmed);
     } catch {
-        throw new Error(`${label} must be an absolute http(s) URL.`);
+        throw new Error(`${label} must be an absolute https URL.`);
     }
 
-    if (parsed.protocol !== "https:" && parsed.protocol !== "http:")
-        throw new Error(`${label} must be an absolute http(s) URL.`);
+    // Plain http is accepted only on this machine, for local test feeds.
+    if (parsed.protocol !== "https:" && !(parsed.protocol === "http:" && loopbackHosts.has(parsed.hostname)))
+        throw new Error(`${label} must be an absolute https URL.`);
 
     return trimmed.replace(/\/+$/, "");
 }
@@ -221,7 +178,7 @@ function readReceipt(filePath) {
         return null;
 
     try {
-        const receipt = readJsonFile(filePath);
+        const receipt = readJson(filePath);
         return isPlainObject(receipt) ? receipt : null;
     } catch {
         return null;
@@ -288,6 +245,56 @@ export async function inspectTool(toolchain, key, { root = repoRoot, localPath: 
     }
 
     return result;
+}
+
+const toolFixes = {
+    missing: "Run npm run kit:setup to download it.",
+    stale: "It does not match kit/toolchain.json; run npm run kit:setup to download the pinned version again.",
+    unpinned: "kit/toolchain.json carries no sha256 for it, so it cannot be verified. Install the kit from a release delivery (kit-update skill).",
+};
+
+/** The verified local path of one pinned tool, or an error naming the fix. */
+export async function requireCurrentTool(key, { root = repoRoot } = {}) {
+    const inspection = await inspectTool(readToolchain(toolchainPath(root)), key, { root });
+
+    if (inspection.status !== "current")
+        throw new Error(`${key} at ${inspection.relativePath} is ${inspection.status}. ${toolFixes[inspection.status]}`);
+
+    return inspection.localPath;
+}
+
+export const cmajOverrideVariable = "BUILDER_KIT_CMAJ";
+
+/**
+ * The Cmajor command a build uses: BUILDER_KIT_CMAJ when set (an absolute
+ * path to an executable; for a maintainer's source build of the same pinned
+ * fork), otherwise the hash-verified download at kit/toolchain.json
+ * cmaj.localPath.
+ */
+export async function resolveCmajExecutable({ root = repoRoot, environment = process.env } = {}) {
+    const override = environment[cmajOverrideVariable];
+
+    if (override === undefined || override === "")
+        return requireCurrentTool("cmaj", { root });
+
+    if (!path.isAbsolute(override))
+        throw new Error(`${cmajOverrideVariable} must be an absolute path to a cmaj executable (got ${JSON.stringify(override)}).`);
+
+    const downloaded = path.resolve(root, readToolchain(toolchainPath(root)).cmaj.localPath);
+
+    // Naming the downloaded tool explicitly must not skip its hash check.
+    if (path.resolve(override) === downloaded)
+        return requireCurrentTool("cmaj", { root });
+
+    try {
+        if (!(await stat(override)).isFile())
+            throw new Error("not a file");
+        await access(override, constants.X_OK);
+    } catch {
+        throw new Error(`${cmajOverrideVariable} names ${override}, which is not an executable file. Unset it to use the cmaj from npm run kit:setup.`);
+    }
+
+    return override;
 }
 
 // ---------------------------------------------------------------------------
@@ -361,4 +368,46 @@ export function satisfiesRange(version, range) {
         return actual ? null : false;
 
     return compareVersions(actual, parseVersion(match[2])) >= 0;
+}
+
+// ---------------------------------------------------------------------------
+// The machine against toolchain.requirements (os, arch, minMacOS).
+
+const platformNames = { darwin: "macOS", linux: "Linux", win32: "Windows" };
+
+/** The running machine in the vocabulary toolchain.requirements uses. */
+export function describeMachine({ platform = process.platform, arch = process.arch } = {}) {
+    let macOSVersion = null;
+
+    if (platform === "darwin") {
+        const probe = spawnSync("sw_vers", ["-productVersion"], { encoding: "utf8", timeout: 10000 });
+        if (!probe.error && probe.status === 0)
+            macOSVersion = probe.stdout.match(/\d+\.\d+(?:\.\d+)?/)?.[0] ?? null;
+    }
+
+    return { os: platformNames[platform] ?? platform, arch, macOSVersion };
+}
+
+/**
+ * Compare a machine with toolchain.requirements. Each *Ok is null when the
+ * requirement is absent or the machine fact is unknown; problems holds one
+ * plain sentence per failed requirement.
+ */
+export function checkPlatform(requirements, machine) {
+    const osOk = requirements.os ? requirements.os === machine.os : null;
+    const archOk = requirements.arch ? requirements.arch === machine.arch : null;
+    const macOSOk = requirements.minMacOS && machine.macOSVersion
+        ? satisfiesRange(machine.macOSVersion, `>=${requirements.minMacOS}`) !== false
+        : null;
+    const problems = [];
+
+    if (osOk === false)
+        problems.push(`This machine runs ${machine.os}/${machine.arch}; the kit targets ${requirements.os}/${requirements.arch ?? "any arch"}.`);
+    else if (archOk === false)
+        problems.push(`This machine is ${machine.arch}; the kit targets ${requirements.arch}.`);
+
+    if (macOSOk === false)
+        problems.push(`macOS ${machine.macOSVersion} is older than the required ${requirements.minMacOS}.`);
+
+    return { osOk, archOk, macOSOk, problems };
 }

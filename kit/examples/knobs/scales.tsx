@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { Knob, formatFrequencyDisplay, type KnobScale } from "../../index";
+import { Knob, formatFrequencyDisplay, type ValueScale } from "../../index";
 import "./examples.css";
 
 const db = (value: number) => `${value > 0 ? "+" : ""}${value.toFixed(1)} dB`;
@@ -11,7 +11,7 @@ export function ScalesExample() {
     const [mode, setMode] = useState(1);
     const [response, setResponse] = useState(25);
     // A custom curve still uses canonical values at the public interface.
-    const scale = useMemo<KnobScale>(() => ({
+    const scale = useMemo<ValueScale>(() => ({
         toPosition: value => Math.sqrt(value / 100),
         fromPosition: position => position ** 2 * 100,
     }), []);

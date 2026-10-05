@@ -1,4 +1,5 @@
-import type { PatchConnectionLike, EffectStoredStateAdapter } from "../../../kit/index";
+import type { PatchConnectionLike } from "../../../kit/index";
+import type { EffectStoredStateAdapter } from "../../../ui/shared/effects/effect-preset-v2";
 import {
     SEQFX_STATE_KEY,
     SEQFX_STATE_VERSION,

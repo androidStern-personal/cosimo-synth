@@ -7,6 +7,5 @@
   "juceOut": "build/seqfx_juce",
   "disableMicrophonePermission": true,
   "workerSource": "fx/seqfx/worker/source.ts",
-  "workerOut": "worker.js",
-  "visualReviewAdapter": "scripts/visual-review/seqfx.mjs"
+  "workerOut": "worker.js"
 }

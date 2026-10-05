@@ -10,7 +10,7 @@ const root = path.resolve(import.meta.dirname, '..')
 const temp = await mkdtemp(path.join(tmpdir(), 'mseg-position-dsp-'))
 try {
     const cache = await readFile(path.join(root, 'build/cmajor_external_codegen-host/CMakeCache.txt'), 'utf8')
-    const source = cache.match(/^CPM_PACKAGE_cosimo_cmajor_toolchain_SOURCE_DIR:INTERNAL=(.+)$/m)?.[1]
+    const source = cache.match(/^CPM_PACKAGE_builder_kit_cmajor_toolchain_SOURCE_DIR:INTERNAL=(.+)$/m)?.[1]
     assert.ok(source, 'Configure the worktree-local pinned Cmajor generator first.')
     await writeFile(path.join(temp, 'mseg.cmajor'), await readFile(path.join(root, 'kit/cmajor/mseg.cmajor')))
     await writeFile(

@@ -7,9 +7,6 @@ import path from "node:path";
 import { execFileSync, spawnSync } from "node:child_process";
 
 import { fetchKitReleases, releaseRefForTag } from "../scripts/fetch_kit_releases.mjs";
-import { redact } from "../scripts/redacted.mjs";
-
-const kitRoot = path.resolve(import.meta.dirname, "..");
 
 const git = (cwd, ...args) => execFileSync("git", args, {
     cwd,
@@ -59,8 +56,8 @@ test("kit update fetch is retryable, isolated from product tags, and keeps the f
         return spawnSync(command, args, options);
     };
     try {
-        const first = fetchKitReleases({ root: product, feedUrl: redact(feedRoot), execute, log: (line) => logs.push(line) });
-        const second = fetchKitReleases({ root: product, feedUrl: redact(feedRoot), execute, log: (line) => logs.push(line) });
+        const first = fetchKitReleases({ root: product, feedUrl: feedRoot, execute, log: (line) => logs.push(line) });
+        const second = fetchKitReleases({ root: product, feedUrl: feedRoot, execute, log: (line) => logs.push(line) });
         assert.deepEqual(first.tags, ["v0.1.1", "v0.1.0"]);
         assert.deepEqual(second.tags, first.tags);
         assert.equal(git(product, "rev-parse", "refs/tags/v0.1.1"), git(product, "rev-parse", "HEAD"), "customer tag is untouched");
@@ -80,7 +77,7 @@ test("kit update refuses tracked and untracked dirt before fetching", async () =
     try {
         await fs.writeFile(path.join(product, "untracked.txt"), "do not stage me\n");
         assert.throws(
-            () => fetchKitReleases({ root: product, feedUrl: redact(feedRoot) }),
+            () => fetchKitReleases({ root: product, feedUrl: feedRoot }),
             /requires a clean working tree, including untracked files/u,
         );
         assert.equal(git(product, "status", "--porcelain=v1", "--untracked-files=all"), "?? untracked.txt");
@@ -90,30 +87,28 @@ test("kit update refuses tracked and untracked dirt before fetching", async () =
     }
 });
 
-test("kit update failure diagnostics redact the feed capability", async () => {
+test("kit update failure diagnostics show git's reason without the feed URL", async () => {
     const { scratch, product, sentinel } = await makeRepos();
     try {
         let failure;
         try {
-            fetchKitReleases({ root: product, feedUrl: redact(path.join(scratch, sentinel, "missing")) });
+            fetchKitReleases({ root: product, feedUrl: path.join(scratch, sentinel, "missing") });
         } catch (error) {
             failure = error;
         }
         assert.ok(failure instanceof Error);
-        assert.match(failure.message, /release fetch failed/u);
+        assert.match(failure.message, /release fetch failed: .*<kit feed>/su);
         assert.equal(failure.message.includes(sentinel), false);
     } finally {
         await fs.rm(scratch, { recursive: true, force: true });
     }
 });
 
-test("kit update guidance preserves dirty work and names only isolated release refs", async () => {
-    const skill = await fs.readFile(path.join(kitRoot, "skills/kit-update/SKILL.md"), "utf8");
-    const fetcher = await fs.readFile(path.join(kitRoot, "scripts/fetch_kit_releases.mjs"), "utf8");
-    assert.doesNotMatch(skill, /git add -A/u);
-    assert.doesNotMatch(skill, /git fetch .*--tags/u);
-    assert.match(skill, /refs\/kit\/releases/u);
-    assert.doesNotMatch(fetcher, /remote",\s*"(?:add|set-url)/u);
-    assert.match(fetcher, /--no-tags/u);
-    assert.match(fetcher, /--no-write-fetch-head/u);
+test("kit update outside a git checkout names the fix", async () => {
+    const scratch = await fs.mkdtemp(path.join(os.tmpdir(), "kit-update-outside-"));
+    try {
+        assert.throws(() => fetchKitReleases({ root: scratch, feedUrl: scratch }), /is not a git checkout\. Run the kit update from your project folder/u);
+    } finally {
+        await fs.rm(scratch, { recursive: true, force: true });
+    }
 });

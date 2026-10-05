@@ -32,12 +32,12 @@ test('instance fields survive replacement without native serialization and exclu
         await f.command({kind:'edit',key:'project',value:1});
         await f.command({kind:'undo'});
         const history=f.owner.getSnapshot().history;
-        await f.command({kind:'begin',key:'session',gesture:1});
+        await f.command({kind:'begin',keys:['session'],gesture:1});
         const edited=await f.command({kind:'edit',key:'session',value:7,gesture:1});
         assert.equal(edited.historyEntry,undefined);
         assert.deepEqual(f.owner.getSnapshot().history,history,'an excluded active gesture must not block unrelated Redo');
         await f.command({kind:'redo'});
-        await f.command({kind:'end',key:'session',gesture:1});
+        await f.command({kind:'end',keys:['session'],gesture:1});
         assert.equal(f.owner.getSnapshot().fields.project.value,1);
         assert.equal(f.publications.some(p=>p.operations.some(op=>op.key==='session')),false);
         await f.replace({project:4,session:99});
@@ -57,9 +57,9 @@ test('configured history bounds apply to completed edits and interleaved gesture
         await f.command({kind:'undo'});await f.command({kind:'undo'});await f.command({kind:'undo'});
         assert.equal(f.owner.getSnapshot().fields.a.value,1);
         assert.equal(f.owner.getSnapshot().history.canUndo,false);
-        await f.command({kind:'begin',key:'a',gesture:1});await f.command({kind:'begin',key:'b',gesture:2});
+        await f.command({kind:'begin',keys:['a'],gesture:1});await f.command({kind:'begin',keys:['b'],gesture:2});
         await f.command({kind:'edit',key:'a',value:5,gesture:1});await f.command({kind:'edit',key:'b',value:6,gesture:2});
-        await f.command({kind:'end',key:'b',gesture:2});await f.command({kind:'end',key:'a',gesture:1});
+        await f.command({kind:'end',keys:['b'],gesture:2});await f.command({kind:'end',keys:['a'],gesture:1});
         await f.command({kind:'undo'});
         assert.equal(f.owner.getSnapshot().fields.b.value,0,'latest edit wins over gesture release order');
         await f.command({kind:'undo'});assert.equal(f.owner.getSnapshot().fields.a.value,1);
@@ -83,7 +83,7 @@ test('a failed save retry preserves value version/history and cannot retry again
         const failedAgain=f.owner.getSnapshot().fields.a;
         assert.equal((await f.command(guard)).kind,'rejected','old retry cannot act on a newer same-value failure');
         const nextGuard={...guard,expectedPersistenceRequest:failedAgain.persistenceRequest};
-        await f.command({kind:'begin',key:'a',gesture:1});await f.command({kind:'end',key:'a',gesture:1});
+        await f.command({kind:'begin',keys:['a'],gesture:1});await f.command({kind:'end',keys:['a'],gesture:1});
         assert.equal((await f.command(nextGuard)).kind,'accepted','empty gesture retains current save failure');
         await f.receipt(f.publications.at(-1),{kind:'observed'});
         const count=f.publications.length;
@@ -122,7 +122,7 @@ test('own queued gesture versions remain valid until actual host automation adva
     const command=command=>owner.dispatch({kind:'command',address:{...scope,client:1,sequence:++sequence},command});
     try {
         await owner.dispatch({kind:'opened',scope,native:{values:{},parameters:[{endpoint:'gain',value:1,min:0,max:10,step:1,defaultValue:1}]}});
-        await command({kind:'begin',key:'gain',gesture:1});
+        await command({kind:'begin',keys:['gain'],gesture:1});
         for(const value of [2,3])assert.equal((await command({kind:'edit',key:'gain',gesture:1,value,expectedVersion:0})).kind,'accepted');
         for(const [index,value] of [7,3].entries())await owner.dispatch({kind:'parameter',scope,endpoint:'gain',value,intent:intent(),origin:'external',observation:index+3});
         const count=publications.length;
@@ -130,11 +130,11 @@ test('own queued gesture versions remain valid until actual host automation adva
         assert.equal(publications.length,count);
         const version=owner.getSnapshot().fields.gain.version;
         assert.equal((await command({kind:'edit',key:'gain',gesture:1,value:8,expectedVersion:version})).kind,'accepted');
-        await command({kind:'end',key:'gain',gesture:1});
-        await command({kind:'begin',key:'gain',gesture:2});
+        await command({kind:'end',keys:['gain'],gesture:1});
+        await command({kind:'begin',keys:['gain'],gesture:2});
         await command({kind:'edit',key:'gain',gesture:2,value:6});
         await owner.dispatch({kind:'parameter',scope,endpoint:'gain',value:9,intent:intent(),origin:'external',observation:7});
-        await command({kind:'end',key:'gain',gesture:2});
+        await command({kind:'end',keys:['gain'],gesture:2});
         assert.equal(owner.getSnapshot().fields.gain.value,9);
         await command({kind:'undo'});assert.equal(owner.getSnapshot().fields.gain.value,8);
         await command({kind:'redo'});assert.equal(owner.getSnapshot().fields.gain.value,6,'Redo restores the last user edit, not subsequent host automation');

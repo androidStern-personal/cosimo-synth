@@ -43,7 +43,7 @@ export function PlaybackExample() {
                 <Mseg.Surface className="envelope" style={{ height: 230 }} aria-label="Engine envelope">
                     <Mseg.Grid />
                     <Mseg.Fill />
-                    <Mseg.Curve />
+                    <Mseg.Line />
                     <Mseg.Points />
                     <Mseg.Playhead position={engine?.position ?? null} stroke="#f9cf8c" strokeWidth={3} />
                 </Mseg.Surface>

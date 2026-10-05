@@ -41,6 +41,8 @@ type EditorContext = MsegEditing & {
     readonly disabled: boolean
     readonly readOnly: boolean
     readonly current: { current: MsegShape }
+    /** Surfaces register their pointer cleanup so one cancellation ends every interaction. */
+    onCancel(listener: () => void): () => void
 }
 const EditingContext = createContext<EditorContext | null>(null)
 /** Internal context; public consumers get only the editing interface. */
@@ -100,6 +102,13 @@ export const MsegRoot = forwardRef<HTMLDivElement, MsegRootProps>(function MsegR
         readOnly,
     }
     const finish = useRef<((cancelled: boolean) => void) | null>(null)
+    const cancelListeners = useRef(new Set<() => void>())
+    const onCancel = useCallback((listener: () => void) => {
+        cancelListeners.current.add(listener)
+        return () => {
+            cancelListeners.current.delete(listener)
+        }
+    }, [])
     const endGesture = useCallback((cancelled = false) => {
         const close = finish.current
         finish.current = null
@@ -157,11 +166,16 @@ export const MsegRoot = forwardRef<HTMLDivElement, MsegRootProps>(function MsegR
         },
         [ref],
     )
+    // Escape, leaving the window or hiding the page cancels whatever is in progress,
+    // wherever focus is: a drag does not move focus to the surface.
     useEffect(() => {
         const document = rootElement.current?.ownerDocument,
             view = document?.defaultView
         if (!document || !view) return
-        const cancel = () => endGesture(true)
+        const cancel = () => {
+            for (const listener of cancelListeners.current) listener()
+            endGesture(true)
+        }
         const key = (event: KeyboardEvent) => {
             if (event.key === 'Escape') cancel()
         }
@@ -180,7 +194,7 @@ export const MsegRoot = forwardRef<HTMLDivElement, MsegRootProps>(function MsegR
     }, [endGesture])
     return (
         <EditingContext.Provider
-            value={{ value, selection, select, edit, beginGesture, endGesture, disabled, readOnly, current }}
+            value={{ value, selection, select, edit, beginGesture, endGesture, disabled, readOnly, current, onCancel }}
         >
             <div
                 {...props}

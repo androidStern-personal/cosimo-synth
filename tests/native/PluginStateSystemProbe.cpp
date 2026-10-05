@@ -12,6 +12,7 @@
 
 #include "cmajor/helpers/cmaj_Patch.h"
 #include "NativeMessageLoop.h"
+#include "PluginStateUpdates.h"
 #include "cmajor/helpers/cmaj_PatchWorker_QuickJS.h"
 #include "choc/gui/choc_MessageLoop.h"
 
@@ -80,10 +81,11 @@ struct RecordingView final : cmaj::PatchView
 
     Value state() const
     {
-        for (auto message = bodies.rbegin(); message != bodies.rend(); ++message)
-            if ((*message)["kind"].toString() == "attached" || (*message)["kind"].toString() == "update")
-                return Value ((*message)["state"]);
-        return {};
+        Value state;
+        for (const auto& message : bodies)
+            if (message["kind"].toString() == "attached" || message["kind"].toString() == "update")
+                state = native_test::foldPluginState (state, message);
+        return state;
     }
 
     Value receipt (const View& address) const
@@ -441,7 +443,8 @@ void testFullRestore (Fixture& f)
                      && ! state["history"]["canRedo"].getWithDefault<bool> (true), "preset replacement retained old-document history");
             require (! state["fields"]["gain"].hasObjectMember ("gesture"), "restore retained an old gesture");
             for (const auto& body : view->bodies)
-                if (body["kind"].toString() == "update" && sameScope (body["scope"], view->scope))
+                if (body["kind"].toString() == "update" && sameScope (body["scope"], view->scope)
+                     && ! body["state"]["fields"]["gain"].hasObjectMember ("valueUnchanged"))
                 {
                     require (body["state"]["fields"]["gain"]["value"].getWithDefault<double> (999) == -2,
                              "old host FIFO value entered a new-document snapshot");

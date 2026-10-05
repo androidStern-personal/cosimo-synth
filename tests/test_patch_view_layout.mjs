@@ -243,7 +243,7 @@ test("generated desktop and iPhone UI artifacts carry the exact T74/T75 source c
                 "ui/desktop/effects-rack-workspace.tsx",
                 "ui/desktop/DesktopPatchView.tsx",
                 "ui/desktop/polish-fullscreen-editor.tsx",
-                "kit/ui/cmajor-react.ts",
+                "ui/shared/cmajor-react.ts",
                 "ui/shared/enhancer-spectrum.ts",
                 "ui/shared/enhancer-spectrum-graph.tsx",
                 "ui/shared/polish-telemetry.ts",
@@ -262,7 +262,7 @@ test("generated desktop and iPhone UI artifacts carry the exact T74/T75 source c
                 "sampleRateHz",
             ],
             sourcePaths: [
-                "kit/ui/cmajor-react.ts",
+                "ui/shared/cmajor-react.ts",
                 "ui/shared/enhancer-spectrum.ts",
                 "ui/shared/polish-telemetry.ts",
                 "ui/shared/synth-hooks.ts",
@@ -846,7 +846,7 @@ test("all continuous MSEG and envelope controls are public host parameters", asy
 
 test("desktop and iPhone React UI tooling are wired for Vite dev and build loops", async () => {
     const packageJson = JSON.parse(await fs.readFile(path.join(repoRoot, "package.json"), "utf8"));
-    const sharedViteHelpers = await fs.readFile(path.join(repoRoot, "kit", "fx", "vite.shared.mjs"), "utf8");
+    const sharedViteHelpers = await fs.readFile(path.join(repoRoot, "ui", "vite.shared.mjs"), "utf8");
     const viteConfig = await fs.readFile(path.join(repoRoot, "ui", "vite.desktop.config.mjs"), "utf8");
     const iosViteConfig = await fs.readFile(path.join(repoRoot, "ios_auv3", "vite.config.mjs"), "utf8");
     const workerViteConfig = await fs.readFile(path.join(repoRoot, "ui", "vite.worker.config.mjs"), "utf8");
@@ -993,11 +993,11 @@ test("desktop and shared effect dev entries load React Grab only in interactive 
         "utf8",
     );
     const effectDevTools = await fs.readFile(
-        path.join(repoRoot, "kit", "ui", "effects", "effect-dev-tools.js"),
+        path.join(repoRoot, "kit", "ui", "dev-inspector.js"),
         "utf8",
     );
     const effectViewLoader = await fs.readFile(
-        path.join(repoRoot, "kit", "ui", "effects", "effect-view-loader.js"),
+        path.join(repoRoot, "kit", "ui", "view-loader.js"),
         "utf8",
     );
 
@@ -1009,8 +1009,8 @@ test("desktop and shared effect dev entries load React Grab only in interactive 
     assert.match(effectDevTools, /if \(import\.meta\.env\.DEV && navigator\.webdriver !== true\) \{/);
     assert.match(effectDevTools, /await import\("react-grab"\);/);
     assert.match(effectDevTools, /await import\("@react-grab\/mcp\/client"\);/);
-    assert.match(effectViewLoader, /EFFECT_DEV_TOOLS_MODULE_PATH = "\/kit\/ui\/effects\/effect-dev-tools\.js"/);
-    assert.match(effectViewLoader, /await loadEffectDevTools\(devOrigin\);/);
+    assert.match(effectViewLoader, /DEV_INSPECTOR_MODULE_PATH = "\/kit\/ui\/dev-inspector\.js"/);
+    assert.match(effectViewLoader, /await loadDevInspector\(devOrigin\);/);
 });
 
 test("desktop standalone loader is emitted from source and stays host-configurable after repeated builds", async () => {
@@ -1201,7 +1201,7 @@ test("desktop dev plug-in build enables the webview dev server and regenerates t
     assert.match(buildScript, /CosimoDesktopNative_artefacts\/Release\/VST3\/CosimoDesktopNative\.vst3/);
     assert.match(buildScript, /CosimoDesktopNative_artefacts\/Release\/Standalone\/CosimoDesktopNative\.app/);
     assert.match(buildScript, /rm -rf "\$vst3_bundle"\s+cp -R "\$vst3_built" "\$vst3_bundle"/s);
-    assert.match(buildScript, /kit\/tools\/cmajor_runtime_build/);
+    assert.match(buildScript, /"\$repo_root\/tools\/cmajor_runtime_build"/);
     assert.match(buildScript, /--target CmajPerformer/);
     assert.match(buildScript, /cp "\$runtime_dylib" "\$vst3_bundle\/Contents\/Resources\/libCmajPerformer\.dylib"/);
     assert.doesNotMatch(buildScript, /cmajor\.dmg/);

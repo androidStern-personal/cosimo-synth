@@ -319,7 +319,7 @@ test("metadata-only delete Undo follows the shared gesture lock before restoring
         const created = await f.adapter.commands.createSource("macro");
         assert.equal(created._tag, "ok");
         assert.equal((await f.adapter.commands.deleteSource(created.value))._tag, "ok");
-        assert.equal((await f.other.client.dispatch({ kind: "begin", key: "globalTune", gesture: 1 })).kind, "accepted");
+        assert.equal((await f.other.client.dispatch({ kind: "begin", keys: ["globalTune"], gesture: 1 })).kind, "accepted");
         f.rawSends.length = 0; f.rawWrites.length = 0;
         const refused = await f.adapter.commands.undoDeleteSource();
         assert.equal(refused._tag, "err");
@@ -327,7 +327,7 @@ test("metadata-only delete Undo follows the shared gesture lock before restoring
         assert.equal(f.adapter.getSnapshot().patch.sources.some(source => source.id === created.value), false);
         assert.deepEqual(f.rawSends, []);
         assert.deepEqual(f.rawWrites, []);
-        assert.equal((await f.other.client.dispatch({ kind: "end", key: "globalTune", gesture: 1 })).kind, "accepted");
+        assert.equal((await f.other.client.dispatch({ kind: "end", keys: ["globalTune"], gesture: 1 })).kind, "accepted");
         assert.equal((await f.adapter.commands.undoDeleteSource())._tag, "ok");
         assert.equal(f.adapter.getSnapshot().patch.sources.some(source => source.id === created.value), true);
         assert.deepEqual(f.session.getSnapshot().fields[key].value, f.bank);

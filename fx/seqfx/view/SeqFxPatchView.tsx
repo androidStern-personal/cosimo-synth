@@ -1,31 +1,35 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent as ReactKeyboardEvent, type MouseEvent, type PointerEvent, type ReactNode } from "react";
 
 import type { PatchConnectionLike } from "../../../kit/index";
-import { createEffectHeader, EffectSnapshotBankController, createStandaloneEffectPresetController } from "../../../kit/index";
+import { createEffectHeader } from "../../../ui/shared/effects/effect-header";
+import { EffectSnapshotBankController } from "../../../ui/shared/effects/effect-snapshot-bank";
+import { createStandaloneEffectPresetController } from "../../../ui/shared/effects/standalone-effect-presets";
 import {
     FilterEditor,
-    type FilterRangeEndpoints,
-    type FilterRangeMode,
-    type FilterRangeModeOption,
-    type FilterRangeValue,
+    type FilterRange,
+    type FilterMode,
+    type FilterModeOption,
+    type FilterValue,
+} from "../../../kit/index";
+import {
     cutoffRangeOctaves,
     cutoffsFromCenterRangeOctaves,
     geometricCenterCutoffHz,
-} from "../../../kit/index";
-import { EditorTickSlider, ModBadge, type ModulationDirection } from "../../../kit/index";
+} from "../../../ui/shared/filter-modulation-range";
+import { EditorTickSlider, ModBadge, type ModulationDirection } from "./editor-tick-slider";
 import {
     parameterEntrySpecForFrequency,
     parameterEntrySpecForMilliseconds,
     parameterEntrySpecForScalar,
     parameterEntrySpecForSeconds,
     type ParameterEntrySpec,
-} from "../../../ui/shared/parameter-value-entry";
+} from "../../../kit/index";
 import {
     EDITOR_PLOT_BOTTOM_PADDING_PX,
     EDITOR_PLOT_TOP_PADDING_PX,
     EDITOR_RANGE_HANDLE_RADIUS_PX,
-    useEditorSurfaceSize,
-} from "../../../kit/index";
+    useElementSize,
+} from "../../../ui/shared/editor-tokens";
 import {
     adaptiveSampleEditorCurve,
     createEditorCurvePlotRect,
@@ -33,7 +37,7 @@ import {
     normalizedCurvePointToPlotPoint,
     polylineToSvgPath,
     type EditorCurvePlotRect,
-} from "../../../kit/index";
+} from "../../../ui/shared/editor-curve-geometry";
 import {
     EditorCurveAxis,
     EditorCurveFill,
@@ -41,7 +45,7 @@ import {
     EditorCurvePath,
     EditorCurvePlotArea,
     EditorCurveSurface,
-} from "../../../kit/index";
+} from "../../../ui/shared/editor-curve-surface";
 import { AuxSource, auxSourceMonitorPoint, buildAuxSourcePreviewPath } from "./AuxSource";
 import { CrusherEditor, type CrusherModulation } from "./CrusherEditor";
 import { SeqFxGlobalControlSurface } from "./SeqFxGlobalControls";
@@ -2100,26 +2104,26 @@ export function SeqFxBlockGlyph({
     }
 }
 
-const SEQFX_FILTER_MODE_OPTIONS: FilterRangeModeOption[] = [
+const SEQFX_FILTER_MODE_OPTIONS: FilterModeOption[] = [
     { label: "LP", value: "lowpass" },
     { label: "HP", value: "highpass" },
     { label: "BP", value: "bandpass" },
 ];
 
-function seqFxFilterModeToRangeMode(mode: number): FilterRangeMode {
+function seqFxFilterModeToRangeMode(mode: number): FilterMode {
     const roundedMode = Math.round(mode);
     if (roundedMode === 1) return "highpass";
     if (roundedMode === 2) return "bandpass";
     return "lowpass";
 }
 
-function filterRangeModeToSeqFxMode(mode: FilterRangeMode) {
+function filterRangeModeToSeqFxMode(mode: FilterMode) {
     if (mode === "highpass") return 1;
     if (mode === "bandpass") return 2;
     return 0;
 }
 
-function filterRangeValueFromSeqFxStep(step: SeqFxStep): FilterRangeValue {
+function filterRangeValueFromSeqFxStep(step: SeqFxStep): FilterValue {
     const startCutoffHz = step.params[FILTER_PARAM_CUTOFF] ?? 2_000;
     const cutoffTarget = step.aux.targets[FILTER_PARAM_CUTOFF];
     const endCutoffHz = cutoffTarget?.enabled ? cutoffTarget.end : startCutoffHz;
@@ -2131,7 +2135,7 @@ function filterRangeValueFromSeqFxStep(step: SeqFxStep): FilterRangeValue {
     };
 }
 
-function filterRangeEndpointsFromSeqFxStep(step: SeqFxStep): FilterRangeEndpoints {
+function filterRangeEndpointsFromSeqFxStep(step: SeqFxStep): FilterRange {
     const startCutoffHz = step.params[FILTER_PARAM_CUTOFF] ?? 2_000;
     const cutoffTarget = step.aux.targets[FILTER_PARAM_CUTOFF];
     return {
@@ -4727,7 +4731,7 @@ export function SeqFxPatchView({
         });
     }
 
-    function setFilterValue(nextValue: FilterRangeValue) {
+    function setFilterValue(nextValue: FilterValue) {
         if (!inspectedCell) {
             return;
         }
@@ -4759,7 +4763,7 @@ export function SeqFxPatchView({
         setFilterRange(nextRange);
     }
 
-    function setFilterRange(nextRange: FilterRangeEndpoints) {
+    function setFilterRange(nextRange: FilterRange) {
         setParam(FILTER_PARAM_CUTOFF, nextRange.startCutoffHz);
 
         if (!inspectedBlock) {
@@ -5330,7 +5334,7 @@ export function SeqFxPatchView({
                                                 </div>
                                             ) : null}
                                             <FilterEditor
-                                                ariaLabel="SeqFX filter range editor"
+                                                aria-label="SeqFX filter range editor"
                                                 modeOptions={SEQFX_FILTER_MODE_OPTIONS}
                                                 range={filterRangeEndpointsFromSeqFxStep(inspectedCell)}
                                                 rangePolarity="bipolar"

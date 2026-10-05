@@ -477,8 +477,8 @@ export function normalizeFilterSpectrumMessage(message: unknown): FilterSpectrum
         return null;
     }
 
-    // The live engine emits raw analysis windows; the mock, recorded
-    // telemetry, and synthetic gallery frames still carry magnitudes.
+    // The live engine emits raw analysis windows; mock, recorded and
+    // generated frames carry magnitudes instead.
     const samples = (payload as { samples?: unknown }).samples;
     if (isSampleArray(samples) && samples.length >= 8) {
         return {
@@ -520,14 +520,6 @@ export function buildFilterSpectrumDbTicks() {
         db,
         normalizedY: dbToNormalizedY(db),
     }));
-}
-
-export function cycleFilterSpectrumRenderMode(currentMode: FilterSpectrumRenderMode): FilterSpectrumRenderMode {
-    const currentIndex = FILTER_SPECTRUM_RENDER_MODE_OPTIONS.findIndex((option) => option.value === currentMode);
-    const nextIndex = currentIndex >= 0
-        ? (currentIndex + 1) % FILTER_SPECTRUM_RENDER_MODE_OPTIONS.length
-        : 0;
-    return FILTER_SPECTRUM_RENDER_MODE_OPTIONS[nextIndex].value;
 }
 
 export function createFilterSpectrumDisplayFrame({

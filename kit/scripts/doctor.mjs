@@ -6,20 +6,25 @@
 // supports, the machine against kit/toolchain.json (OS/arch/tool ranges), the
 // selected compiler/Git and installer-owned Node/npm/CMake paths, the pinned
 // cmaj / CmajPlugin.vst3 at their local paths, feed reachability, the
-// plugin registry (fx/ discovery, every <Name>.plugin.json's schemaVersion,
-// legacy two-file configs), product-owner.json, node_modules, and the JUCE
+// plugin registry (fx/ discovery: every plugin folder that fails to load is a
+// problem naming its file), product-owner.json, node_modules, and the JUCE
 // acknowledgment. The default is a concise human readiness report; --json
-// prints the full machine-readable report instead. Problems flip `ok`; warnings
-// (legacy plugin configs, placeholder owner identity) do not. Exits 0 always,
-// unless --strict and a problem was found. Never writes.
+// prints the full machine-readable report instead. Problems flip `ok`;
+// warnings (an unreachable feed while every tool is current, placeholder
+// owner identity) do not. Exits 0 always, unless --strict and a problem was
+// found. Never writes.
 
-import { existsSync, readdirSync, readFileSync, realpathSync } from "node:fs";
+import { existsSync, realpathSync } from "node:fs";
 import { spawnSync } from "node:child_process";
 import os from "node:os";
 import path from "node:path";
-import { fileURLToPath, pathToFileURL } from "node:url";
+
+import { discoverEffectPlugins } from "../fx/build-effect.mjs";
+import { isInsideDirectory, isMainModule, placeholderOwnerKeys, readJsonObject, readKitManifest } from "./common.mjs";
 
 import {
+    checkPlatform,
+    describeMachine,
     feedPath,
     inspectTool,
     juceAcknowledgmentPath,
@@ -31,7 +36,6 @@ import {
     toolchainPath,
     toolKeys,
 } from "./toolchain.mjs";
-import { redact, reveal } from "./redacted.mjs";
 
 const feedTimeoutMs = 8000;
 
@@ -87,18 +91,6 @@ function checkTool(name, probe, range) {
     };
 }
 
-function platformName(platform = process.platform) {
-    return { darwin: "macOS", linux: "Linux", win32: "Windows" }[platform] ?? platform;
-}
-
-function macOSVersion(platform = process.platform) {
-    if (platform !== "darwin")
-        return null;
-
-    const probe = commandVersion("sw_vers", ["-productVersion"]);
-    return probe.present ? probe.version : null;
-}
-
 function xcodeCommandLineTools(platform = process.platform, required) {
     if (platform !== "darwin")
         return { required: required === true, applicable: false, present: null, path: null, ok: true };
@@ -128,27 +120,26 @@ function appleCompiler(platform = process.platform) {
     return probe;
 }
 
-function insideDirectory(directory, candidate) {
+function resolvesInside(directory, candidate) {
     if (typeof candidate !== "string" || !path.isAbsolute(candidate))
         return false;
 
     try {
-        const relative = path.relative(realpathSync(directory), realpathSync(candidate));
-        return relative !== "" && relative !== ".." && !relative.startsWith(`..${path.sep}`) && !path.isAbsolute(relative);
+        return isInsideDirectory(realpathSync(directory), realpathSync(candidate));
     } catch {
         return false;
     }
 }
 
 async function checkFeed(baseUrl, { offline, fetchImpl = globalThis.fetch }) {
-    if (reveal(baseUrl) === "")
+    if (baseUrl === "")
         return { configured: false, checked: false, reachable: null, status: null, error: null, reason: "kit/feed.json baseUrl is empty" };
 
     if (offline)
         return { configured: true, checked: false, reachable: null, status: null, error: null, reason: "--offline" };
 
     try {
-        const response = await fetchImpl(`${reveal(baseUrl)}/kit.git/HEAD`, {
+        const response = await fetchImpl(`${baseUrl}/kit.git/HEAD`, {
             method: "HEAD",
             signal: AbortSignal.timeout(feedTimeoutMs),
             redirect: "follow",
@@ -163,8 +154,10 @@ async function checkFeed(baseUrl, { offline, fetchImpl = globalThis.fetch }) {
             error: reachable ? null : status === null ? "unexpected response" : `HTTP ${status}`,
             reason: null,
         };
-    } catch {
-        return { configured: true, checked: true, reachable: false, status: null, error: "request failed", reason: null };
+    } catch (error) {
+        // The cause code (ENOTFOUND, ECONNREFUSED) says why without echoing the URL.
+        const reason = error?.cause?.code ?? (error?.name === "TimeoutError" ? "timed out" : "network error");
+        return { configured: true, checked: true, reachable: false, status: null, error: `request failed (${reason})`, reason: null };
     }
 }
 
@@ -173,42 +166,24 @@ function readJsonObjectOrNull(filePath) {
         return { present: false, value: null, error: null };
 
     try {
-        const value = JSON.parse(readFileSync(filePath, "utf8"));
-
-        if (value === null || typeof value !== "object" || Array.isArray(value))
-            return { present: true, value: null, error: `${filePath} must contain a JSON object.` };
-
-        return { present: true, value, error: null };
+        return { present: true, value: readJsonObject(filePath), error: null };
     } catch (error) {
-        return { present: true, value: null, error: `Could not parse ${filePath}: ${error instanceof Error ? error.message : String(error)}` };
+        return { present: true, value: null, error: error.message };
     }
 }
-
-const kitSchemaKeys = ["plugin", "toolchain", "feed"];
 
 /** kit/kit.json: the kit version and the config schema versions this kit reads. */
 function checkKitManifest(root) {
     const kitPath = path.join(root, "kit", "kit.json");
-    const { present, value, error } = readJsonObjectOrNull(kitPath);
-    const result = { path: kitPath, version: null, schemaVersions: null, error };
 
-    if (!present)
-        result.error = `${kitPath} is missing; this checkout does not carry a complete kit.`;
-    else if (value) {
-        const schemaVersions = value.schemaVersions;
-        const wellFormed = typeof value.version === "string" && /^\d+\.\d+\.\d+/.test(value.version)
-            && schemaVersions && typeof schemaVersions === "object"
-            && kitSchemaKeys.every((key) => Number.isInteger(schemaVersions[key]));
+    if (!existsSync(kitPath))
+        return { path: kitPath, version: null, schemaVersions: null, error: `${kitPath} is missing; this checkout does not carry a complete kit. Restore it from the kit release (kit-update skill).` };
 
-        if (wellFormed) {
-            result.version = value.version;
-            result.schemaVersions = Object.fromEntries(kitSchemaKeys.map((key) => [key, schemaVersions[key]]));
-        } else {
-            result.error = `${kitPath} must carry "version" and integer "schemaVersions" for ${kitSchemaKeys.join("/")}.`;
-        }
+    try {
+        return { path: kitPath, ...readKitManifest(root), error: null };
+    } catch (error) {
+        return { path: kitPath, version: null, schemaVersions: null, error: error.message };
     }
-
-    return result;
 }
 
 /**
@@ -221,14 +196,7 @@ function checkProductOwner(root) {
     const templatePath = path.join(root, "kit", "template", "root", "product-owner.json");
     const owner = readJsonObjectOrNull(ownerPath);
     const template = readJsonObjectOrNull(templatePath);
-    const placeholderKeys = [];
-
-    if (owner.value && template.value) {
-        for (const [key, placeholder] of Object.entries(template.value)) {
-            if (owner.value[key] === placeholder)
-                placeholderKeys.push(key);
-        }
-    }
+    const placeholderKeys = owner.value && template.value ? placeholderOwnerKeys(owner.value, template.value) : [];
 
     return {
         path: ownerPath,
@@ -240,81 +208,16 @@ function checkProductOwner(root) {
     };
 }
 
-/**
- * Every plugin config file under fx/*, read directly (not through discovery)
- * so schema and legacy findings survive a registry that fails to load.
- */
-function inspectPluginConfigs(root, supportedSchemaVersion) {
-    const fxRoot = path.join(root, "fx");
-    const configs = [];
-
-    if (!existsSync(fxRoot))
-        return configs;
-
-    const relative = (filePath) => path.relative(root, filePath).split(path.sep).join("/");
-    const directoryNames = readdirSync(fxRoot, { withFileTypes: true })
-        .filter((entry) => entry.isDirectory())
-        .map((entry) => entry.name)
-        .sort();
-
-    for (const directoryName of directoryNames) {
-        const directoryPath = path.join(fxRoot, directoryName);
-        const fileNames = readdirSync(directoryPath, { withFileTypes: true })
-            .filter((entry) => entry.isFile())
-            .map((entry) => entry.name)
-            .sort();
-
-        for (const fileName of fileNames) {
-            const filePath = path.join(directoryPath, fileName);
-
-            if (fileName.endsWith(".plugin.json")) {
-                const { value, error } = readJsonObjectOrNull(filePath);
-                const schemaVersion = Number.isInteger(value?.schemaVersion) ? value.schemaVersion : null;
-                const supported = schemaVersion !== null && supportedSchemaVersion !== null
-                    ? schemaVersion <= supportedSchemaVersion
-                    : null;
-
-                configs.push({
-                    path: relative(filePath),
-                    patch: relative(filePath.replace(/\.plugin\.json$/, ".cmajorpatch")),
-                    kind: "plugin",
-                    schemaVersion,
-                    supported,
-                    error,
-                });
-            } else if (fileName.endsWith(".build.json")) {
-                configs.push({
-                    path: relative(filePath),
-                    patch: relative(filePath.replace(/\.build\.json$/, ".cmajorpatch")),
-                    kind: "legacy-build-sidecar",
-                    schemaVersion: null,
-                    supported: true,
-                    error: null,
-                });
-            } else if (fileName === "product.json") {
-                configs.push({
-                    path: relative(filePath),
-                    patch: null,
-                    kind: "legacy-product-identity",
-                    schemaVersion: null,
-                    supported: true,
-                    error: null,
-                });
-            }
-        }
-    }
-
-    return configs;
-}
-
-/** Validate the plugin registry through the same discovery fx:build uses; any thrown error is the report. */
-async function checkRegistry(root, supportedSchemaVersion) {
-    const modulePath = path.join(root, "kit", "fx", "build-effect.mjs");
-    const configs = inspectPluginConfigs(root, supportedSchemaVersion);
+/** Discover plugins as fx:build does; each plugin folder that fails to load is reported separately. */
+function checkRegistry(root) {
+    const failures = [];
 
     try {
-        const module = await import(pathToFileURL(modulePath).href);
-        const targets = Object.entries(module.effectPlugins).map(([alias, plugin]) => ({
+        const plugins = discoverEffectPlugins({
+            fxRoot: path.join(root, "fx"),
+            onPluginError: (_directory, error) => failures.push(error.message),
+        });
+        const targets = Object.entries(plugins).map(([alias, plugin]) => ({
             alias,
             patch: plugin.patch,
             cmakeTarget: plugin.cmakeTarget,
@@ -322,9 +225,9 @@ async function checkRegistry(root, supportedSchemaVersion) {
             includeInAll: plugin.includeInAll !== false,
         }));
 
-        return { ok: true, error: null, targets, configs };
+        return { ok: failures.length === 0, errors: failures, targets };
     } catch (error) {
-        return { ok: false, error: error instanceof Error ? error.message : String(error), targets: [], configs };
+        return { ok: false, errors: [...failures, error.message], targets: [] };
     }
 }
 
@@ -337,7 +240,7 @@ function toolProblem(inspection) {
         case "stale":
             return `${label} does not match the kit/toolchain.json pin (run npm run kit:setup).`;
         case "unpinned":
-            return `${label} is present but kit/toolchain.json carries no sha256 to verify it against.`;
+            return `${label} is present but kit/toolchain.json carries no sha256 to verify it against. Install the kit from a release delivery (kit-update skill).`;
         default:
             return null;
     }
@@ -365,7 +268,7 @@ export async function collectDoctorReport({ root = repoRoot, offline = false, fe
     };
 
     let toolchain = null;
-    let baseUrl = redact("");
+    let baseUrl = "";
 
     report.kit = { ...checkKitManifest(root), productOwner: checkProductOwner(root) };
 
@@ -390,32 +293,24 @@ export async function collectDoctorReport({ root = repoRoot, offline = false, fe
     }
 
     const requirements = toolchain?.requirements ?? {};
-    const osName = platformName(platform);
-    const macOS = macOSVersion(platform);
-    const macOSOk = requirements.minMacOS && macOS ? satisfiesRange(macOS, `>=${requirements.minMacOS}`) !== false : null;
+    const machine = describeMachine({ platform, arch });
+    const platformCheck = checkPlatform(requirements, machine);
 
     report.platform = {
-        os: osName,
+        os: machine.os,
         arch,
         release: os.release(),
-        macOSVersion: macOS,
+        macOSVersion: machine.macOSVersion,
         requirements: {
             os: requirements.os ?? null,
             minMacOS: requirements.minMacOS ?? null,
             arch: requirements.arch ?? null,
         },
-        osOk: requirements.os ? requirements.os === osName : null,
-        archOk: requirements.arch ? requirements.arch === arch : null,
-        macOSOk,
+        osOk: platformCheck.osOk,
+        archOk: platformCheck.archOk,
+        macOSOk: platformCheck.macOSOk,
     };
-
-    if (report.platform.osOk === false)
-        problems.push(`This machine runs ${osName}/${arch}; the kit targets ${requirements.os}/${requirements.arch ?? "any arch"}.`);
-    else if (report.platform.archOk === false)
-        problems.push(`This machine is ${arch}; the kit targets ${requirements.arch}.`);
-
-    if (macOSOk === false)
-        problems.push(`macOS ${macOS} is older than the required ${requirements.minMacOS}.`);
+    problems.push(...platformCheck.problems);
 
     report.tools.node = checkTool("node", { present: true, version: process.versions.node }, requirements.node);
     report.tools.node.path = commandPath("node") ?? process.execPath;
@@ -425,25 +320,34 @@ export async function collectDoctorReport({ root = repoRoot, offline = false, fe
     report.tools.compiler = checkTool("Apple Clang", appleCompiler(platform), requirements.compiler);
     report.tools.xcodeCommandLineTools = xcodeCommandLineTools(platform, requirements.xcodeCommandLineTools);
 
+    // The kit installer provisions Node, npm and CMake inside the project; a
+    // source checkout uses the machine's own, so the fix differs.
+    const installerManaged = existsSync(path.join(root, ".builder-kit-install", "receipt"));
+    const runtimeRoot = path.join(root, ".builder-kit-install", "runtime");
+    const useProjectRuntime = "From the project root, source .builder-kit-install/env.sh, then rerun kit:doctor.";
+    const runtimeFix = (tool) => installerManaged
+        ? useProjectRuntime
+        : `Install ${tool.name} ${tool.required} (${tool.name === "cmake" ? "https://cmake.org/download/" : "https://nodejs.org"}), then rerun kit:doctor.`;
+    const appleToolsFix = "Install or repair the Xcode Command Line Tools (xcode-select --install), then rerun kit:doctor.";
+
     for (const tool of [report.tools.node, report.tools.npm, report.tools.cmake, report.tools.git, report.tools.compiler]) {
+        const fix = ["node", "npm", "cmake"].includes(tool.name) ? runtimeFix(tool) : appleToolsFix;
+
         if (!tool.present)
-            problems.push(`${tool.name} was not found (required ${tool.required}). ${["node", "npm", "cmake"].includes(tool.name) ? "From the project root, source .builder-kit-install/env.sh and rerun the supplied installation command." : "Install or repair Apple Command Line Tools, then rerun kit:doctor."}`);
+            problems.push(`${tool.name} was not found (required ${tool.required}). ${fix}`);
         else if (!tool.ok)
-            problems.push(`${tool.name} ${tool.version} does not satisfy ${tool.required}.`);
+            problems.push(`${tool.name} ${tool.version} does not satisfy ${tool.required}. ${fix}`);
     }
 
     if (!report.tools.xcodeCommandLineTools.ok)
         problems.push("Xcode Command Line Tools are required. Run xcode-select --install, finish the installation and agreement prompts yourself, then rerun kit:doctor.");
 
-    const installerManaged = existsSync(path.join(root, ".builder-kit-install", "receipt"));
-    const runtimeRoot = path.join(root, ".builder-kit-install", "runtime");
-
     for (const key of ["node", "npm", "cmake"]) {
         const tool = report.tools[key];
-        tool.projectLocal = installerManaged ? insideDirectory(runtimeRoot, tool.path) : null;
+        tool.projectLocal = installerManaged ? resolvesInside(runtimeRoot, tool.path) : null;
 
         if (tool.present && tool.projectLocal === false)
-            problems.push(`${tool.name} resolves outside this project's verified runtime (${tool.path ?? "unknown path"}). From the project root, source .builder-kit-install/env.sh, then rerun kit:doctor.`);
+            problems.push(`${tool.name} resolves outside this project's verified runtime (${tool.path ?? "unknown path"}). ${useProjectRuntime}`);
     }
 
     if (toolchain) {
@@ -460,31 +364,20 @@ export async function collectDoctorReport({ root = repoRoot, offline = false, fe
 
     report.feed = await checkFeed(baseUrl, { offline, fetchImpl });
 
-    if (report.feed.checked && !report.feed.reachable)
-        problems.push(`Feed is not reachable: ${report.feed.error}.`);
+    // The feed matters only for repairs: with every tool current, an offline
+    // machine is ready to build, so an unreachable feed is a warning.
+    if (report.feed.checked && !report.feed.reachable) {
+        const toolsCurrent = toolKeys.every((key) => report.toolchain[key]?.status === "current");
+        const message = `The kit feed is not reachable: ${report.feed.error}. Check the internet connection; if it persists, contact support.`;
 
-    report.registry = await checkRegistry(root, report.kit.schemaVersions?.plugin ?? null);
-
-    if (!report.registry.ok)
-        problems.push(`Plugin registry discovery failed: ${report.registry.error}`);
-
-    for (const config of report.registry.configs) {
-        if (config.kind === "plugin") {
-            if (config.error)
-                problems.push(config.error);
-            else if (config.schemaVersion === null)
-                problems.push(`${config.path} has no integer "schemaVersion" (this kit supports ${report.kit.schemaVersions?.plugin ?? "?"}).`);
-            else if (config.supported === false)
-                problems.push(`${config.path} uses plugin config schema ${config.schemaVersion}, newer than this kit supports (${report.kit.schemaVersions.plugin}); update the kit (kit-update skill).`);
-        } else if (config.kind === "legacy-build-sidecar") {
-            warnings.push(`${config.path} is a legacy build sidecar; fold it into ${config.patch.replace(/\.cmajorpatch$/, ".plugin.json")} (still accepted this release, removed in the next).`);
-        } else {
-            warnings.push(`${config.path} is a legacy product identity file; move it into the "product" object of the patch's <Name>.plugin.json (still accepted this release, removed in the next).`);
-        }
+        (toolsCurrent ? warnings : problems).push(message);
     }
 
+    report.registry = checkRegistry(root);
+    problems.push(...report.registry.errors);
+
     if (!report.nodeModules.present)
-        problems.push("node_modules is missing. From the project root, source .builder-kit-install/env.sh and run npm run kit:setup.");
+        problems.push(`node_modules is missing. ${installerManaged ? "From the project root, source .builder-kit-install/env.sh and run npm run kit:setup." : "Run npm ci from the project root."}`);
 
     const acknowledgment = readJuceAcknowledgment(root);
 
@@ -599,5 +492,5 @@ async function main() {
         process.exitCode = 1;
 }
 
-if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url))
+if (isMainModule(import.meta.url))
     await main();

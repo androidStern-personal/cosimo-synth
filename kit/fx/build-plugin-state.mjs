@@ -15,6 +15,8 @@ export const options=getDefinitionOptions(definition);
 export const resources=sharedStateResources(definition).map(resource=>({...resource,storage:definition[resource.key].engine.storage,native:definition[resource.key].engine.native}));`,
             resolveDir: repoRoot, sourcefile: "plugin-state-build.ts", loader: "ts" },
         outfile: output, bundle: true, platform: "node", format: "esm", logLevel: "silent",
+        // Declarations never render; component styles would only leave a stray file behind.
+        loader: { ".css": "empty" },
     });
     let declaration;
     try { declaration = await import(`${pathToFileURL(output).href}?build=${Date.now()}`); }

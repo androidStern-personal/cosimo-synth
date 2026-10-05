@@ -32,6 +32,6 @@ The playback example includes a Cmajor Reader host and frozen compiled assets in
 
 ## Styling and composition
 
-Use ordinary CSS and SVG props for size, colors and stroke widths. Compose `Mseg.Root` and `Mseg.Surface` with optional `Grid`, `Fill`, `Curve`, `Points`, `Playhead` and `TimeAxis` layers. JSX order controls drawing order.
+Use ordinary CSS and SVG props for size, colors and stroke widths. Compose `Mseg.Root` and `Mseg.Surface` with optional `Grid`, `Fill`, `Line`, `Points`, `Playhead` and `TimeAxis` layers. The shared `--editor-accent-start` property sets the default color, as it does for every kit control. JSX order controls drawing order.
 
 See the [API reference](MSEG_API.md) for custom handles, live position and the included preparer/Reader. For saving, audio data and shared Undo, use [plugin state](PLUGIN_STATE.md).

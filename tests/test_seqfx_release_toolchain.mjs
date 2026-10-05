@@ -91,11 +91,11 @@ test("release toolchain ignores poisoned PATH and emits only the allowed child e
     const environment = {
         ...process.env,
         CMAKE_TOOLCHAIN_FILE: "/tmp/poison.cmake",
-        COSIMO_CMAKE_JOBS: "4",
+        BUILDER_KIT_CMAKE_JOBS: "4",
         COSIMO_DEVELOPER_ID_APPLICATION: "application identity",
         COSIMO_DEVELOPER_ID_INSTALLER: "installer identity",
         COSIMO_NOTARY_PROFILE: "notary profile",
-        COSIMO_PLUGIN_JOBS: "2",
+        BUILDER_KIT_PLUGIN_JOBS: "2",
         COSIMO_RELEASE_CMAKE: currentCmakePath,
         CPM_SOURCE_CACHE: "/tmp/approved-cpm-cache",
         DYLD_INSERT_LIBRARIES: "/tmp/poison.dylib",
@@ -112,9 +112,9 @@ test("release toolchain ignores poisoned PATH and emits only the allowed child e
     const toolchain = await resolveSeqFxReleaseToolchain({ environment, repositoryRoot: repoRoot });
 
     assert.deepEqual(toolchain.childEnvironment, {
-        COSIMO_CMAKE_JOBS: "4",
+        BUILDER_KIT_CMAKE_JOBS: "4",
+        BUILDER_KIT_PLUGIN_JOBS: "2",
         COSIMO_NOTARY_PROFILE: "notary profile",
-        COSIMO_PLUGIN_JOBS: "2",
         CPM_SOURCE_CACHE: "/tmp/approved-cpm-cache",
         HOME: process.env.HOME,
         LANG: "C",

@@ -6,7 +6,12 @@ import { pathToFileURL } from "node:url";
 
 import { chromium } from "playwright";
 
-import { buildPlugin, effectPlugins, effectPluginTargetNames, repoRoot } from "../kit/fx/build-effect.mjs";
+import { buildPlugin, getEffectPlugins, effectPluginTargetNames, repoRoot } from "../kit/fx/build-effect.mjs";
+
+// The plugins with a representative browser-review adapter, by alias.
+const visualReviewAdapters = Object.freeze({
+    seqfx: "scripts/visual-review/seqfx.mjs",
+});
 
 const REVIEW_ORIGIN = "http://plugin-visual-review.local";
 const REVIEW_SIZES = Object.freeze([
@@ -16,9 +21,7 @@ const REVIEW_SIZES = Object.freeze([
 ]);
 
 function supportedTargetNames() {
-    return Object.entries(effectPlugins)
-        .filter(([, plugin]) => typeof plugin.visualReviewAdapter === "string")
-        .map(([pluginName]) => pluginName);
+    return Object.keys(visualReviewAdapters).filter((pluginName) => Object.hasOwn(getEffectPlugins(), pluginName));
 }
 
 function usage() {
@@ -34,10 +37,10 @@ function parseArguments(arguments_) {
         throw new Error(usage());
 
     const [pluginName, outputArgument] = arguments_;
-    const plugin = effectPlugins[pluginName];
+    const plugin = getEffectPlugins()[pluginName];
     if (!plugin)
         throw new Error(`Unknown plugin target "${pluginName}".\n${usage()}`);
-    if (typeof plugin.visualReviewAdapter !== "string") {
+    if (!Object.hasOwn(visualReviewAdapters, pluginName)) {
         throw new Error(
             `Plugin target "${pluginName}" has no representative browser-review adapter.\n${usage()}`,
         );
@@ -102,16 +105,14 @@ async function installRuntimeRoutes(page, runtimeRoot) {
     });
 }
 
-async function loadAdapter(plugin) {
-    const adapterPath = path.resolve(repoRoot, plugin.visualReviewAdapter);
-    if (!pathWithin(repoRoot, adapterPath))
-        throw new Error(`Visual-review adapter escapes the repository: ${plugin.visualReviewAdapter}`);
+async function loadAdapter(pluginName) {
+    const adapterPath = path.resolve(repoRoot, visualReviewAdapters[pluginName]);
 
     const module = await import(pathToFileURL(adapterPath));
     const adapter = module.default;
     for (const method of ["installConnection", "prepare", "prepareViewport", "assertRepresentative"]) {
         if (typeof adapter?.[method] !== "function")
-            throw new Error(`${plugin.visualReviewAdapter} must export adapter.${method}().`);
+            throw new Error(`${visualReviewAdapters[pluginName]} must export adapter.${method}().`);
     }
     return adapter;
 }
@@ -159,7 +160,7 @@ async function mountProductionView(page, manifest, adapter) {
 }
 
 async function capturePluginReview(pluginName, plugin, outputDirectory) {
-    const adapter = await loadAdapter(plugin);
+    const adapter = await loadAdapter(pluginName);
     await buildPlugin(pluginName);
 
     const runtimeRoot = path.join(repoRoot, plugin.runtimeOut);

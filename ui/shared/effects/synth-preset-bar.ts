@@ -1,12 +1,12 @@
 import {
     DEFAULT_PRESET_BAR_ELEMENT_NAME,
     PresetBar,
-} from "../../../kit/ui/effects/preset-bar";
+} from "./preset-bar";
 import type {
     StandaloneEffectPresetController,
     StandaloneEffectPresetMutationResult,
     StandaloneEffectPresetState,
-} from "../../../kit/ui/effects/standalone-effect-presets";
+} from "./standalone-effect-presets";
 import type { SynthStandaloneEffectPresetController } from "./synth-standalone-presets";
 import {
     createSoundShareURL,

@@ -1,7 +1,7 @@
 ---
 name: kit-update
 description: >-
-  Use when a Builder Kit customer repo should take a newer kit release — "update the kit", "is there a new kit version", "merge the latest kit tag", or when kit:doctor reports the kit is behind the feed. Drives the whole update: checkpoint, fetch the feed's kit.git, inspect local changes, git merge the release tag, resolve mechanical conflicts, verify with kit:doctor / npm test / fx:build, and production-build + install only when everything is green. Not for creating or editing plugins (use $cosimo-make-plugin) and not for cutting kit releases.
+  Use when a Builder Kit project should take a newer kit release — "update the kit", "is there a new kit version", "merge the latest kit tag". Drives the whole update: checkpoint, fetch the feed's kit.git, inspect local changes, git merge the release tag, resolve mechanical conflicts, verify with kit:doctor / npm test / fx:build, and production-build + install only when everything is green. Not for creating or editing plugins (use $make-plugin) and not for cutting kit releases.
 ---
 
 # Kit Update
@@ -21,34 +21,14 @@ description: >-
 - Ask the user only when a conflict is genuinely mixed. Everything else is
   mechanical: do it and report it.
 
-### First update from 0.1.4
-
-The 0.1.4 installer generated an untracked `package-lock.json`, while its
-shipped update helper refuses every dirty tree before fetching. The corrected
-helper in a newer release is therefore not automatically reachable from that
-checkout. For this first update, the release operator must give the customer
-the reviewed target release's standalone
-`kit/scripts/preserve_legacy_package_lock.mjs` outside the old checkout. Do not
-recreate the helper, paste an improvised cleanup command, or rerun the original
-installer as an update.
-
-From the exact old project root, invoke the supplied file with
-`node <reviewed-helper-path> --root "$PWD"`. It proceeds only when the generated
-lock is the sole dirty path and exactly matches the completed installer receipt.
-It preserves those bytes under `.builder-kit-install/update-preserved/`, then
-returns the source tree to clean status so the old fetch helper below can run.
-Name the preserved path in the update report. If the reviewed helper was not
-supplied, or it refuses any check, stop with every customer path untouched.
-
 ## 1. Establish A Safe Starting Point
 
 1. `git status --porcelain` and `git branch --show-current`. Refuse to start
    from a detached HEAD or with `.git/MERGE_HEAD` / `.git/REBASE_HEAD` present —
    tell the user to finish or abandon that operation first.
-2. Apart from the explicitly supplied 0.1.4 bridge above, if the tree is dirty,
-   stop. Do not stage, stash, commit, or remove it on the user's behalf. Show
-   the changed paths and ask them to decide what to keep and commit themselves,
-   then rerun the update.
+2. If the tree is dirty, stop. Do not stage, stash, commit, or remove it on
+   the user's behalf. Show the changed paths and ask them to decide what to
+   keep and commit themselves, then rerun the update.
 3. From a clean tree, create `git branch update-checkpoint-<YYYY-MM-DD>` at HEAD (suffix `-<HHMM>` if the
    name exists). This is the return point; name it in the final report.
 
@@ -76,9 +56,10 @@ supplied, or it refuses any check, stop with every customer path untouched.
    `git diff --stat <last-ref> <target-ref>`.
 4. What the customer changed since the last tag, so it is carried forward
    knowingly: `git diff --stat <last-ref> HEAD`. Note every kit-owned path in that
-   list (anything under `kit/`, `.agents/skills/`, `cmajor/`, `ui/`, or root
-   `package.json`, `tsconfig.json`, `.gitignore`, `AGENTS.md`, `LICENSE`,
-   `THIRD_PARTY_NOTICES.md`, or other shipped root guidance). Also inspect the
+   list: anything under `kit/` or `.agents/skills/`, and the root files the kit
+   ships (`package.json`, `package-lock.json`, `tsconfig.json`, `.gitignore`,
+   `AGENTS.md`, `README.md`, `UPDATING.md`, `SUPPORT.md`, `WAVEFOLD.md`,
+   `LICENSE`, `THIRD_PARTY_NOTICES.md`). Also inspect the
    included example and its tests: upstream may have changed them since the
    customer started modifying them. Conflicts are possible wherever both sides
    touched a path, regardless of ownership.
@@ -161,6 +142,11 @@ recovery: `git worktree add -b <new-recovery-branch> <new-folder> <checkpoint>`.
 Do not reset or delete the failed branch. The new worktree needs its own setup
 and verification before installation. The currently installed plugin remains
 unchanged until a verified replacement is explicitly installed.
+
+To go back to the previous release after an update that passed, switch to the
+checkpoint branch and cherry-pick the customer's plugin commits made since the
+update. Do not reset or delete the updated branch. Then verify and install as
+in step 6.
 
 ## 7. Report
 

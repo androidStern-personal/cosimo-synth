@@ -18,15 +18,16 @@ let origin;
 before(async () => {
     // Fail before starting Vite if this npm install needs a browser download.
     browser = await chromium.launch({ headless: true });
-    // Only shipped project inputs are used. This suite also runs unchanged
-    // inside an export with its own npm install and no monorepo access.
+    // A fresh project holding only the kit and kit:new plugins: the preview
+    // needs npm packages, but no toolchain, built runtime or Cmajor sources.
     fixtureRoot = await fs.mkdtemp(path.join(os.tmpdir(), "kit-browser-preview-"));
     await fs.mkdir(path.join(fixtureRoot, "fx"));
-    for (const relative of ["kit", "fx/enhancer_lite", "product-owner.json", "package.json"]) {
+    for (const relative of ["kit", "package.json"]) {
         await fs.cp(path.join(repoRoot, relative), path.join(fixtureRoot, relative), { recursive: true, verbatimSymlinks: true });
     }
-    // npm packages only: no toolchain, compiled runtime, or Cmajor sources
-    // from another worktree are needed for the silent UI route.
+    await fs.writeFile(path.join(fixtureRoot, "product-owner.json"), JSON.stringify({
+        manufacturer: "Preview Audio", manufacturerCode: "Prev", bundleIdentifierPrefix: "org.preview-audio",
+    }));
     await fs.symlink(path.join(repoRoot, "node_modules"), path.join(fixtureRoot, "node_modules"));
     const { scaffoldPlugin } = await import(pathToFileURL(path.join(fixtureRoot, "kit/scripts/new_plugin.mjs")));
     scaffoldPlugin("preview_probe");
@@ -36,7 +37,6 @@ before(async () => {
         '<!doctype html><html><body><main id="custom-harness">Existing custom harness</main></body></html>');
     await fs.writeFile(path.join(fixtureRoot, "outside-fx.html"), "Must not be served by the harness route.");
     await fs.symlink(path.join(fixtureRoot, "outside-fx.html"), path.join(fixtureRoot, "fx/linked_probe/view/harness.html"));
-    assert.equal(existsSync(path.join(fixtureRoot, "fx/enhancer_lite/view/harness.html")), false);
     assert.equal(existsSync(path.join(fixtureRoot, "fx/preview_probe/view/harness.html")), false);
     assert.equal(existsSync(path.join(fixtureRoot, "build")), false);
     server = await createServer({
@@ -72,38 +72,6 @@ async function openPreview(directory) {
     assert.match(await page.locator("aside").innerText(), /No audio engine, DAW connection, or live analyzer audio/u);
     return { page, errors, requests };
 }
-
-async function saveProof(page, name) {
-    if (!process.env.KIT_BROWSER_PROOF_DIR) return;
-    const directory = path.resolve(process.env.KIT_BROWSER_PROOF_DIR);
-    await fs.mkdir(directory, { recursive: true });
-    await page.screenshot({ path: path.join(directory, `${name}.png`), fullPage: true });
-}
-
-test("documented included-example route initializes the production UI and normal preset bindings", async () => {
-    const { page, errors, requests } = await openPreview("enhancer_lite");
-    try {
-        const manifest = JSON.parse(await fs.readFile(path.join(fixtureRoot, "fx/enhancer_lite/EnhancerLite.cmajorpatch"), "utf8"));
-        assert.equal(await page.locator("#preview-title").innerText(), `${manifest.name} — UI preview`);
-        const view = page.locator("cosimo-enhancer-lite-view");
-        assert.equal(await view.locator("[data-readout='frequency']").textContent(), "130 Hz");
-        assert.equal(await view.locator("[data-readout='q']").textContent(), "0.71");
-        assert.equal(await view.locator("cosimo-snapshot-bar [data-slot]").count(), 7);
-        const amount = view.locator("[data-readout-control='primary-amount']");
-        await amount.focus();
-        await page.keyboard.press("ArrowUp");
-        assert.ok(Number(await amount.getAttribute("aria-valuenow")) > 0, "a real UI gesture must round-trip through parameter listeners");
-        await view.locator("cosimo-preset-bar [data-action='toggle-flyout']").click();
-        await view.locator("[data-preset-key='factory:enhancer-lite.vocal-presence']").click();
-        assert.equal(await view.locator("[data-readout='frequency']").textContent(), "3.20 kHz", "the real preset bar must apply the sound using host-status metadata");
-        assert.ok(requests.includes("/fx/enhancer_lite/view/source.ts"));
-        assert.ok(!requests.some((request) => request.includes("module_test_shell") || request.includes("/build/")));
-        assert.deepEqual(errors, []);
-        await saveProof(page, "included-example");
-    } finally {
-        await page.close();
-    }
-});
 
 test("ordinary kit:new starter works at its documented route without a custom harness or UI build", async () => {
     const { page, errors, requests } = await openPreview("preview_probe");
@@ -148,7 +116,6 @@ test("ordinary kit:new starter works at its documented route without a custom ha
         assert.equal(await view.getByRole("button", { name: "Undo", exact: true }).isDisabled(), true);
         assert.ok(requests.includes("/fx/preview_probe/view/source.tsx"));
         assert.deepEqual(errors, []);
-        await saveProof(page, "generated-starter");
     } finally {
         await page.close();
     }

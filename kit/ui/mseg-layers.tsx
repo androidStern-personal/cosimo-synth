@@ -13,7 +13,11 @@ import {
 } from './mseg'
 import { buildMsegSegmentPath, buildMsegSurfacePaths } from './mseg-editor-geometry'
 import { animateLiveNumber, type LiveNumber } from './live-value'
+import { stepForKey } from './keyboard-steps'
 import { useMsegContext, useMsegDrawing } from './mseg-context'
+
+/** Normalized time or value change per keyboard step on a focused point. */
+const POINT_KEY_STEP = 0.01
 
 export const MsegGrid = forwardRef<SVGGElement, SVGProps<SVGGElement>>(function MsegGrid(props, ref) {
     const { width, height } = useMsegDrawing()
@@ -39,8 +43,9 @@ export const MsegGrid = forwardRef<SVGGElement, SVGProps<SVGGElement>>(function 
         </g>
     )
 })
-export type MsegCurveProps = SVGProps<SVGPathElement> & { readonly value?: MsegShape }
-export const MsegCurve = forwardRef<SVGPathElement, MsegCurveProps>(function MsegCurve({ value, ...props }, ref) {
+/** A shape layer draws the edited curve unless `value` supplies another one, such as a reference. */
+export type MsegShapeLayerProps = SVGProps<SVGPathElement> & { readonly value?: MsegShape }
+export const MsegLine = forwardRef<SVGPathElement, MsegShapeLayerProps>(function MsegLine({ value, ...props }, ref) {
     const editor = useMsegContext(),
         drawing = useMsegDrawing()
     const { curvePath } = buildMsegSurfacePaths((value ?? editor.value).points, drawing.width, drawing.height, drawing)
@@ -51,12 +56,12 @@ export const MsegCurve = forwardRef<SVGPathElement, MsegCurveProps>(function Mse
             strokeWidth={2}
             {...props}
             ref={ref}
-            data-slot="mseg-curve"
+            data-slot="mseg-line"
             d={curvePath}
         />
     )
 })
-export const MsegFill = forwardRef<SVGPathElement, MsegCurveProps>(function MsegFill({ value, ...props }, ref) {
+export const MsegFill = forwardRef<SVGPathElement, MsegShapeLayerProps>(function MsegFill({ value, ...props }, ref) {
     const editor = useMsegContext(),
         drawing = useMsegDrawing()
     const { fillPath } = buildMsegSurfacePaths((value ?? editor.value).points, drawing.width, drawing.height, drawing)
@@ -146,31 +151,42 @@ export const MsegPoints = forwardRef<SVGGElement, MsegPointsProps>(function Mseg
                         : selected
                           ? 'selected'
                           : 'default'
+                // A point edits two values, which no ARIA role models. It is a slider over
+                // its value, with time in the value text and Left/Right moving it in time.
                 const handleProps: SVGProps<SVGGElement> = {
                     transform: `translate(${coordinates.x},${coordinates.y})`,
-                    role: 'button',
+                    role: 'slider',
+                    'aria-roledescription': 'envelope point',
                     tabIndex: editor.disabled ? -1 : 0,
-                    'aria-label': `Point ${index + 1}: time ${point.x.toFixed(2)}, value ${point.y.toFixed(2)}`,
-                    'aria-pressed': selected,
-                    'aria-disabled': editor.disabled || editor.readOnly || undefined,
+                    'aria-label': `Point ${index + 1}`,
+                    'aria-valuemin': 0,
+                    'aria-valuemax': 1,
+                    'aria-valuenow': point.y,
+                    'aria-valuetext': `time ${point.x.toFixed(2)}, value ${point.y.toFixed(2)}`,
+                    'aria-current': selected || undefined,
+                    'aria-disabled': editor.disabled || undefined,
+                    'aria-readonly': editor.readOnly || undefined,
                     onFocus: () => editor.select({ kind: 'point', index }),
                     onKeyDown: (event) => {
                         if (editor.disabled || editor.readOnly) return
-                        const step = event.shiftKey ? 0.001 : 0.01
                         if (event.key === 'Delete' || event.key === 'Backspace') {
                             event.preventDefault()
                             editor.edit((value) => deleteMsegPoint(value, index))
-                        } else if (['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(event.key)) {
-                            event.preventDefault()
-                            event.stopPropagation()
-                            editor.beginGesture()
-                            editor.edit((value) => {
-                                const current = value.points[index]
-                                const dx = event.key === 'ArrowLeft' ? -step : event.key === 'ArrowRight' ? step : 0
-                                const dy = event.key === 'ArrowDown' ? -step : event.key === 'ArrowUp' ? step : 0
-                                return moveMsegPoint(value, index, current.x + dx, current.y + dy)
-                            })
+                            return
                         }
+                        const step = stepForKey(event)
+                        if (!step) return
+                        event.preventDefault()
+                        event.stopPropagation()
+                        editor.beginGesture()
+                        editor.edit((value) => {
+                            const current = value.points[index]
+                            if (step.kind !== 'step') return moveMsegPoint(value, index, step.kind === 'min' ? 0 : 1, current.y)
+                            const delta = step.steps * POINT_KEY_STEP
+                            return step.axis === 'horizontal'
+                                ? moveMsegPoint(value, index, current.x + delta, current.y)
+                                : moveMsegPoint(value, index, current.x, current.y + delta)
+                        })
                     },
                 }
                 return (

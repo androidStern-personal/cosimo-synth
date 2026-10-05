@@ -123,7 +123,7 @@ test("actual full host restore fences an acknowledged old edit's pending effects
 
 test("client stop seals its accepted gesture while its native view survives, before any reattachment", { timeout: 15_000 }, async () => {
     const previous = await page.evaluate(() => ({ scope: window.fixture.agent.getSnapshot().state.scope, client: window.fixture.agent.getSnapshot().client }));
-    await accepted({ kind: "begin", key: "curve", gesture: 17 });
+    await accepted({ kind: "begin", keys: ["curve"], gesture: 17 });
     await accepted({ kind: "edit", key: "curve", gesture: 17, value: { points: [1, 0.7, 0] } });
     await expectValues(-2, [1, 0.7, 0]);
     assert.equal(JSON.parse(await page.getByTestId("history").textContent()).canUndo, false);

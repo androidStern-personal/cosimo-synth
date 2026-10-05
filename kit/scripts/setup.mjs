@@ -2,26 +2,30 @@
 //
 //   node kit/scripts/setup.mjs [--accept-juce-terms] [--dry-run] [--force]
 //
-// 1. Shows the JUCE licensing notice and requires either --accept-juce-terms
+// 1. Refuses a machine outside kit/toolchain.json requirements (OS, arch,
+//    minimum macOS), since the pinned tools would not run there.
+// 2. Shows the JUCE licensing notice and requires either --accept-juce-terms
 //    or an existing build/kit-tools/juce-terms-acknowledged.json (written on
 //    acceptance with a timestamp).
-// 2. Downloads the pinned cmaj and CmajPlugin.vst3 archives from
+// 3. Downloads the pinned cmaj and CmajPlugin.vst3 archives from
 //    kit/feed.json baseUrl + kit/toolchain.json artifact path, verifies the
 //    archive sha256 against the pin, extracts to localPath, chmod +x cmaj, and
 //    writes an install receipt beside the tool. Already-current tools are
 //    skipped. Nothing is downloaded without a pinned hash or a feed URL.
-// 3. Runs npm ci against the tracked lockfile when node_modules is missing.
+// 4. Runs npm ci against the tracked lockfile when node_modules is missing.
 //
 // --dry-run prints the plan and writes nothing (no acknowledgment either).
 
 import { chmod, mkdir, readdir, rename, rm, writeFile } from "node:fs/promises";
 import { existsSync } from "node:fs";
-import { spawnSync } from "node:child_process";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
+
+import { isMainModule, runCommand } from "./common.mjs";
 
 import {
     artifactUrl,
+    checkPlatform,
+    describeMachine,
     feedPath,
     hashInstalledPayload,
     inspectTool,
@@ -39,7 +43,6 @@ import {
     writeJuceAcknowledgment,
     writeReceipt,
 } from "./toolchain.mjs";
-import { ensureRedacted, redact, reveal } from "./redacted.mjs";
 
 const juceAcknowledgmentInstructions = [
     "Read the JUCE licensing notice above. If you agree, run this command from your Builder Kit project folder:",
@@ -59,21 +62,31 @@ export function parseSetupArguments(argv) {
     return options;
 }
 
+function describeRequirements(requirements) {
+    const os = requirements.os ?? "any OS";
+    const version = requirements.minMacOS ? ` ${requirements.minMacOS} or newer` : "";
+    const arch = requirements.arch ? ` on ${requirements.arch}` : "";
+
+    return `${os}${version}${arch}`;
+}
+
 /**
  * Decide what setup would do, without touching the network or the disk.
+ * `platform.problems` lists every toolchain requirement this machine misses.
  * Each tool step is one of: skip (current), download, refuse-unpinned,
- * refuse-no-feed. Refusals are reported as errors by runSetup before any
- * download starts.
+ * refuse-no-feed. runSetup reports platform problems and refusals as errors
+ * before any download starts.
  */
-export async function planSetup({ root = repoRoot, force = false, acceptJuceTerms = false } = {}) {
+export async function planSetup({ root = repoRoot, force = false, acceptJuceTerms = false, machine = describeMachine() } = {}) {
     const toolchain = readToolchain(toolchainPath(root));
+    const platformCheck = checkPlatform(toolchain.requirements, machine);
     const baseUrl = readFeedBaseUrl(feedPath(root));
     const acknowledgment = readJuceAcknowledgment(root);
     const tools = [];
 
     for (const key of toolKeys) {
         const inspection = await inspectTool(toolchain, key, { root });
-        const step = { key, inspection, request: null, action: null, reason: null };
+        const step = { key, inspection, action: null, reason: null };
 
         if (inspection.status === "current" && !force) {
             step.action = "skip";
@@ -82,13 +95,12 @@ export async function planSetup({ root = repoRoot, force = false, acceptJuceTerm
             step.action = "refuse-unpinned";
             step.reason = `kit/toolchain.json carries no sha256 for ${key}; refusing to download an unverifiable artifact. `
                 + "Pins are written by kit:release, so an unpinned toolchain means an unreleased kit checkout.";
-        } else if (reveal(baseUrl) === "") {
+        } else if (baseUrl === "") {
             step.action = "refuse-no-feed";
             step.reason = "kit/feed.json baseUrl is empty, so there is nowhere to download from. "
-                + "The export stamps the feed URL; in the Cosimo monorepo cmaj is built from source instead.";
+                + "Delivered kits carry this URL; install from the command you were given, or ask the kit owner for a fresh copy.";
         } else {
             step.action = "download";
-            step.request = redact(artifactUrl(reveal(baseUrl), inspection.artifact));
             step.reason = inspection.status === "missing"
                 ? "missing"
                 : force ? "--force" : `present but ${inspection.status}`;
@@ -99,7 +111,12 @@ export async function planSetup({ root = repoRoot, force = false, acceptJuceTerm
 
     return {
         root,
-        feedConfigured: reveal(baseUrl) !== "",
+        platform: {
+            machine,
+            required: describeRequirements(toolchain.requirements),
+            problems: platformCheck.problems,
+        },
+        feedConfigured: baseUrl !== "",
         juce: {
             acknowledged: acknowledgment !== null,
             acknowledgedAt: acknowledgment?.acknowledgedAt ?? null,
@@ -114,12 +131,17 @@ export async function planSetup({ root = repoRoot, force = false, acceptJuceTerm
 export function formatSetupPlan(plan) {
     const lines = [];
 
+    if (plan.platform.problems.length > 0)
+        lines.push(`Platform: REFUSE - ${plan.platform.problems.join(" ")} The pinned tools need ${plan.platform.required}.`);
+    else
+        lines.push(`Platform: ${plan.platform.machine.os}/${plan.platform.machine.arch} meets ${plan.platform.required}`);
+
     if (plan.juce.acknowledged)
         lines.push(`JUCE terms: acknowledged ${plan.juce.acknowledgedAt}`);
     else if (plan.juce.willAcknowledge)
         lines.push(`JUCE terms: will record acknowledgment in ${path.relative(plan.root, plan.juce.path)}`);
     else
-        lines.push(juceAcknowledgmentInstructions);
+        lines.push("JUCE terms: not acknowledged yet");
 
     for (const step of plan.tools) {
         const target = path.relative(plan.root, step.inspection.localPath);
@@ -141,16 +163,24 @@ export function formatSetupPlan(plan) {
     return lines.join("\n");
 }
 
+const retryAdvice = "Check the internet connection and retry; if it keeps failing, contact support with this message.";
+
+// Messages name the artifact, never the request URL: the URL carries the
+// delivery's access path and these messages end up in logs and support mail.
 async function fetchBytes(request, artifact, fetchImpl) {
     let response;
     try {
-        response = await fetchImpl(reveal(request), { redirect: "follow" });
-    } catch {
-        throw new Error(`Download failed for ${artifact}: feed request failed.`);
+        response = await fetchImpl(request, { redirect: "follow" });
+    } catch (error) {
+        const reason = error?.cause?.code ?? (error?.name === "TimeoutError" ? "timed out" : "network error");
+        throw new Error(`Download failed for ${artifact}: the feed could not be reached (${reason}). ${retryAdvice}`);
     }
 
+    if (new URL(response.url || request).protocol !== new URL(request).protocol)
+        throw new Error(`Download failed for ${artifact}: the feed redirected to a different protocol. Contact support with this message.`);
+
     if (!response.ok)
-        throw new Error(`Download failed for ${artifact}: feed responded HTTP ${response.status}.`);
+        throw new Error(`Download failed for ${artifact}: the feed responded HTTP ${response.status}. ${response.status === 403 || response.status === 404 ? "Your delivery may be out of date; contact support with this message." : retryAdvice}`);
 
     try {
         return Buffer.from(await response.arrayBuffer());
@@ -160,8 +190,7 @@ async function fetchBytes(request, artifact, fetchImpl) {
 }
 
 /** Download one archive and verify it against the pin before anything is written next to the tools. */
-export async function downloadVerifiedArtifact(requestInput, pin, { artifact = "tool artifact", fetchImpl = globalThis.fetch, log = () => {} } = {}) {
-    const request = ensureRedacted(requestInput);
+export async function downloadVerifiedArtifact(request, pin, { artifact = "tool artifact", fetchImpl = globalThis.fetch, log = () => {} } = {}) {
     log(`Downloading ${artifact} from the configured feed.`);
 
     const bytes = await fetchBytes(request, artifact, fetchImpl);
@@ -177,23 +206,11 @@ export async function downloadVerifiedArtifact(requestInput, pin, { artifact = "
     return bytes;
 }
 
-function runCommand(command, args, options = {}) {
-    const result = spawnSync(command, args, { encoding: "utf8", stdio: options.stdio ?? ["ignore", "pipe", "pipe"], cwd: options.cwd });
-
-    if (result.error)
-        throw new Error(`${command} ${args.join(" ")} failed: ${result.error.message}`);
-
-    if (result.status !== 0) {
-        const output = [result.stdout, result.stderr].filter(Boolean).join("\n").trim();
-        throw new Error(output || `${command} ${args.join(" ")} exited ${result.status}.`);
-    }
-}
-
-function extractArchive(archivePath, stagingDir, platform = process.platform) {
+function extractArchive(archivePath, stagingDir) {
     if (archivePath.endsWith(".tar.gz") || archivePath.endsWith(".tgz")) {
         runCommand("tar", ["-xzf", archivePath, "-C", stagingDir]);
     } else if (archivePath.endsWith(".zip")) {
-        if (platform === "darwin")
+        if (process.platform === "darwin")
             runCommand("/usr/bin/ditto", ["-x", "-k", archivePath, stagingDir]);
         else
             runCommand("unzip", ["-q", "-o", archivePath, "-d", stagingDir]);
@@ -208,7 +225,7 @@ function extractArchive(archivePath, stagingDir, platform = process.platform) {
  * entry), replace the old install, chmod +x a single-file tool, and write
  * the receipt that lets kit:doctor and the next kit:setup recognise it.
  */
-export async function installArtifact({ key, artifact, bytes, pin, localPath, platform = process.platform, now = new Date() }) {
+export async function installArtifact({ key, artifact, bytes, pin, localPath, now = new Date() }) {
     const archiveSha256 = normalizePin(pin);
     if (archiveSha256 === "" || sha256Bytes(bytes) !== archiveSha256)
         throw new Error(`sha256 mismatch for ${artifact}; nothing was installed.`);
@@ -222,7 +239,7 @@ export async function installArtifact({ key, artifact, bytes, pin, localPath, pl
 
     try {
         await writeFile(archivePath, bytes);
-        extractArchive(archivePath, stagingDir, platform);
+        extractArchive(archivePath, stagingDir);
 
         const entries = (await readdir(stagingDir)).filter((entry) => !entry.startsWith("."));
         const wanted = path.basename(localPath);
@@ -258,13 +275,9 @@ export async function installArtifact({ key, artifact, bytes, pin, localPath, pl
     return localPath;
 }
 
-function npmCommand(platform = process.platform) {
-    return platform === "win32" ? "npm.cmd" : "npm";
-}
-
 /**
- * Execute setup. Refusals (unpinned hash, empty feed) fail before any download
- * so a partially pinned toolchain never half-installs.
+ * Execute setup. Refusals (unsupported machine, unpinned hash, empty feed)
+ * fail before any download so a partially pinned toolchain never half-installs.
  */
 export async function runSetup({
     root = repoRoot,
@@ -273,28 +286,35 @@ export async function runSetup({
     force = false,
     fetchImpl = globalThis.fetch,
     log = console.log,
-    platform = process.platform,
+    machine = describeMachine(),
     now = () => new Date(),
-    runNpmInstall = (cwd) => runCommand(npmCommand(platform), ["ci", "--no-audit", "--no-fund"], { cwd, stdio: "inherit" }),
+    runNpmInstall = (cwd) => runCommand("npm", ["ci", "--no-audit", "--no-fund"], { cwd, capture: false }),
 } = {}) {
     for (const line of juceNoticeLines())
         log(line);
 
     log("");
 
-    const plan = await planSetup({ root, force, acceptJuceTerms });
+    const plan = await planSetup({ root, force, acceptJuceTerms, machine });
+    const juceAccepted = plan.juce.acknowledged || plan.juce.willAcknowledge;
 
     log(formatSetupPlan(plan));
     log("");
 
     if (dryRun) {
+        if (!juceAccepted)
+            log(juceAcknowledgmentInstructions);
         log("Dry run: nothing was written.");
         return { plan, installed: [], skipped: plan.tools.filter((step) => step.action === "skip").map((step) => step.key), dryRun: true };
     }
 
-    if (!plan.juce.acknowledged && !plan.juce.willAcknowledge) {
-        throw new Error(juceAcknowledgmentInstructions);
+    if (plan.platform.problems.length > 0) {
+        throw new Error(`${plan.platform.problems.join(" ")} The pinned cmaj and CmajPlugin.vst3 need `
+            + `${plan.platform.required}; run kit:setup on a machine that meets this. Nothing was downloaded.`);
     }
+
+    if (!juceAccepted)
+        throw new Error(juceAcknowledgmentInstructions);
 
     const refusals = plan.tools.filter((step) => step.action.startsWith("refuse"));
 
@@ -317,7 +337,10 @@ export async function runSetup({
             continue;
         }
 
-        const bytes = await downloadVerifiedArtifact(step.request, step.inspection.pin, {
+        // The URL is built here, not kept in the plan, so the plan (which is
+        // printed and returned) never carries the delivery's access path.
+        const request = artifactUrl(readFeedBaseUrl(feedPath(root)), step.inspection.artifact);
+        const bytes = await downloadVerifiedArtifact(request, step.inspection.pin, {
             artifact: step.inspection.artifact,
             fetchImpl,
             log,
@@ -329,7 +352,6 @@ export async function runSetup({
             bytes,
             pin: step.inspection.pin,
             localPath: step.inspection.localPath,
-            platform,
             now: now(),
         });
 
@@ -357,5 +379,5 @@ async function main() {
     }
 }
 
-if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url))
+if (isMainModule(import.meta.url))
     await main();

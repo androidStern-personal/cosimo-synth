@@ -1,10 +1,10 @@
 import { useState } from 'react'
-import { FilterEditor, type FilterValue, type FilterRangeEndpoints } from '../../index'
+import { FilterEditor, type FilterValue, type FilterRange } from '../../index'
 import './examples.css'
 
 export function BandExample() {
     const [value, setValue] = useState<FilterValue>({ mode: 'lowpass', cutoffHz: 1200, q: 3 })
-    const [range, setRange] = useState<FilterRangeEndpoints>({ startCutoffHz: 300, endCutoffHz: 4800 })
+    const [range, setRange] = useState<FilterRange>({ startCutoffHz: 300, endCutoffHz: 4800 })
     const [unipolar, setUnipolar] = useState(false)
     return <div className="filter-example">
         <FilterEditor value={value} range={range} rangePolarity={unipolar ? 'unipolar' : 'bipolar'}

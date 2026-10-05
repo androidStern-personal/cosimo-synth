@@ -11,7 +11,8 @@ import {
     type RefObject,
 } from "react";
 
-import { Mseg, FilterEditor, responseModeToFilterRangeMode } from "../../kit/index";
+import { Mseg, FilterEditor } from "../../kit/index";
+import { responseModeToFilterMode } from "../../kit/ui/filter-editor";
 import { buildMsegSurfacePaths } from "../../kit/ui/mseg-editor-geometry";
 
 import type { PatchControlBinding } from "./patch-controls";
@@ -855,9 +856,9 @@ export function EditableMsegSurface({
             aria-label="MSEG curve">
             <Mseg.Grid className="cosimo-grid-line" opacity={1}/>
             {reference && <><Mseg.Fill value={reference} data-role="mseg-reference-fill" data-shape-identity={other} className={`cosimo-reference-curve-fill cosimo-mseg-shape-${other}-fill`} fillOpacity={1}/>
-                <Mseg.Curve value={reference} data-role="mseg-reference-curve" data-shape-identity={other} className={`cosimo-reference-curve-line cosimo-mseg-shape-${other}-curve-line`}/></>}
+                <Mseg.Line value={reference} data-role="mseg-reference-curve" data-shape-identity={other} className={`cosimo-reference-curve-line cosimo-mseg-shape-${other}-curve-line`}/></>}
             <Mseg.Fill data-role="mseg-base-fill" data-shape-identity={shape} className={`cosimo-curve-fill cosimo-mseg-shape-${shape}-fill`} fillOpacity={1}/>
-            <Mseg.Curve data-role="mseg-base-curve" data-shape-identity={shape} className={`cosimo-curve-line cosimo-mseg-shape-${shape}-curve-line`}/>
+            <Mseg.Line data-role="mseg-base-curve" data-shape-identity={shape} className={`cosimo-curve-line cosimo-mseg-shape-${shape}-curve-line`}/>
             {morph && <Mseg.Plot samples={morph} data-role="mseg-effective-curve" className={joinClasses("cosimo-mseg-effective-curve-line", realizedMorphEmphasis === "active" && "is-active")}/>}
             <Mseg.SegmentHighlight data-role="mseg-highlight-segment" className={`cosimo-curve-line cosimo-curve-line-highlight cosimo-mseg-shape-${shape}-curve-line`}/>
             <Mseg.Points data-role="mseg-edit-points" data-shape-identity={shape} renderPoint={({index, state, position, handleProps}) => <g {...handleProps} transform={undefined}>
@@ -1039,14 +1040,23 @@ export function ModulationAmountField({
 
 export function FilterResponseGraph(props: FilterResponseGraphProps) {
     const { modulationTravel: travel } = props;
+    const base = { mode: props.baseMode, cutoffHz: props.baseCutoffHz, q: props.baseQ };
+    // The desktop harness reads the base and live filter state the graph was given.
+    const graphState = {
+        base,
+        live: props.liveHasActive
+            ? { hasActive: true, mode: props.liveMode, cutoffHz: props.liveCutoffHz, q: props.liveQ }
+            : { hasActive: false, ...base },
+    };
     return <div className={joinClasses("cosimo-filter-editor relative h-full w-full", props.className)}
         data-role="cosimo-filter-editor"
+        data-filter-graph={JSON.stringify(graphState)}
         data-resonance-curve={JSON.stringify(props.resonanceCurveDebugState ?? { familyId: "linear", coefficients: {} })}
         data-cutoff-route-storage={travel?.cutoffRouteStorageAmount}>
         <FilterEditor
             className="cosimo-filter-editor__control"
-            value={{ mode: responseModeToFilterRangeMode(props.baseMode), cutoffHz: props.baseCutoffHz, q: props.baseQ }}
-            preview={props.liveHasActive ? { mode: responseModeToFilterRangeMode(props.liveMode), cutoffHz: props.liveCutoffHz, q: props.liveQ } : null}
+            value={{ mode: responseModeToFilterMode(props.baseMode), cutoffHz: props.baseCutoffHz, q: props.baseQ }}
+            preview={props.liveHasActive ? { mode: responseModeToFilterMode(props.liveMode), cutoffHz: props.liveCutoffHz, q: props.liveQ } : null}
             plotPadding={{ horizontal: 18, top: 16, bottom: 16 }}
             qScale={{ qToSurface: props.resonanceNormalizedFromQ ?? filterQToNormalized,
                 surfaceToQ: props.resonanceQFromSurface ?? normalizedToFilterQ }}
@@ -1061,11 +1071,11 @@ export function FilterResponseGraph(props: FilterResponseGraphProps) {
                 if (target === "center") props.onTravelTranslate?.(next.start, next.end);
                 else props.onTravelEndpointSet?.(target, target === "end" ? next.end : next.start);
             } : undefined}
-            onEditStart={(target) => {
+            onGestureStart={(target) => {
                 if (target === "value") props.onGestureStart?.();
                 else if (target.startsWith("modulation-")) props.onTravelGestureStart?.(target.slice(11) as FilterTravelGestureSide);
             }}
-            onEditEnd={(target) => {
+            onGestureEnd={(_cancelled, target) => {
                 if (target === "value") props.onGestureEnd?.();
                 else if (target.startsWith("modulation-")) props.onTravelGestureEnd?.();
             }}

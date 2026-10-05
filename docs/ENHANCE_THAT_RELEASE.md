@@ -53,16 +53,16 @@ After the selected AU passes its host/customer qualification, use
 
 ```sh
 node scripts/build_enhance_that_release.mjs --plan --include-au
-COSIMO_CMAKE_JOBS=4 node scripts/build_enhance_that_release.mjs \
+BUILDER_KIT_CMAKE_JOBS=4 node scripts/build_enhance_that_release.mjs \
   --unsigned --include-au
 ```
 
 For an explicitly VST3-only release, set `au_decision` to the agreed reason:
 
 ```sh
-COSIMO_CMAKE_JOBS=4 node scripts/build_enhance_that_release.mjs \
+BUILDER_KIT_CMAKE_JOBS=4 node scripts/build_enhance_that_release.mjs \
   --unsigned --verify-repeatable-packaging --au-deferred "$au_decision"
-COSIMO_CMAKE_JOBS=4 COSIMO_NOTARY_PROFILE="$notary_profile" \
+BUILDER_KIT_CMAKE_JOBS=4 COSIMO_NOTARY_PROFILE="$notary_profile" \
   node scripts/build_enhance_that_release.mjs --release --au-deferred "$au_decision"
 ```
 

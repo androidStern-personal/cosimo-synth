@@ -11,7 +11,7 @@ import { renderBootstrap, renderInstallation, installationRuntimes, publicInstal
 import { prepareInstallation } from "../scripts/prepare_builder_kit_install.mjs";
 import { createBareMirror } from "../scripts/release_builder_kit.mjs";
 import { completeInstallation } from "../kit/scripts/complete_install.mjs";
-import { redact, reveal } from "../kit/scripts/redacted.mjs";
+import { redact, reveal } from "../scripts/redacted.mjs";
 import { juceNoticeLines } from "../kit/scripts/toolchain.mjs";
 
 const sourceRoot = path.resolve(import.meta.dirname, "..");

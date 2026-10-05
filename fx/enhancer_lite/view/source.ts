@@ -1,30 +1,28 @@
-import { createElement, useLayoutEffect, useRef, useState } from "react";
-import { createStatefulPatchView, usePluginState, usePluginHistory, usePatchConnection,
-    type PluginStateControl } from "../../../kit/index";
+import { createElement, useLayoutEffect, useRef } from "react";
+import { createStatefulPatchView, usePluginState, usePluginHistory, usePatchConnection, PresetBar, SnapshotBar,
+    type BrowserPreviewParameter, type PatchConnectionLike, type PluginStateControl, type PluginStateEditor } from "../../../kit/index";
 import definition from "../state";
-import { createPortal, flushSync } from "react-dom";
+import { flushSync } from "react-dom";
 import {
     ENHANCER_LITE_SETTING_DESCRIPTORS,
     type EnhancerLiteShape,
     type EnhancerLiteSettingDescriptor,
-} from "./enhancer-lite-state";
+} from "./controls";
 import {
-    ENHANCER_FREQUENCY_TICKS as ENHANCER_LITE_FREQUENCY_TICKS,
-    ENHANCER_SPECTRUM_PLOT as ENHANCER_LITE_PLOT,
-    advanceEnhancerSpectrum as advanceEnhancerLiteSpectrum,
-    createEnhancerFrequencyPath,
-    enhancerBellResponseDb,
-    enhancerFrequencyAfterClientDrag,
-    enhancerFrequencyTicksForWidth,
-    enhancerFrequencyX as enhancerLiteFrequencyX,
-    enhancerGainY as enhancerLiteGainY,
-    formatEnhancerFrequencyTick,
-    type EnhancerSpectrumDisplay as EnhancerLiteSpectrumDisplay,
-} from "../../../kit/index";
-import {
-    ENHANCER_LITE_ANALYZER_ENDPOINTS,
-    ENHANCER_LITE_DB_ROWS,
-    enhancerLiteShelfGainY,
+    ANALYZER_ENDPOINTS,
+    DB_ROWS,
+    FREQUENCY_TICKS,
+    SPECTRUM_PLOT,
+    advanceSpectrum,
+    bellResponseDb,
+    formatFrequencyTick,
+    frequencyAfterDrag,
+    frequencyPath,
+    frequencyTicksForWidth,
+    frequencyToX,
+    gainToY,
+    shelfGainToY,
+    type SpectrumDisplay,
 } from "./spectrum";
 import {
     ENHANCER_LITE_GESTURE_POLICY,
@@ -32,15 +30,6 @@ import {
     enhancerLiteFrequencyFromHorizontalPixels,
     enhancerLiteQFromUpwardPixels,
 } from "./gesture-policy";
-import {
-    EffectSnapshotBankController,
-    createEffectHeader,
-    createStandaloneEffectPresetController,
-    type EffectParameterContract,
-    type PatchConnectionLike,
-    type StandaloneEffectPresetController,
-} from "../../../kit/index";
-import { ENHANCER_LITE_FACTORY_PRESETS } from "./factory-presets.js";
 
 /** Silent browser preview uses the same parameter definitions as this view. */
 export const browserPreviewParameters = ENHANCER_LITE_SETTING_DESCRIPTORS.map((descriptor) => (
@@ -62,14 +51,11 @@ export const browserPreviewParameters = ENHANCER_LITE_SETTING_DESCRIPTORS.map((d
             step: 1,
             text: descriptor.choices.join("|"),
         }
-)) satisfies EffectParameterContract[];
+)) satisfies BrowserPreviewParameter[];
 
 type EndpointListener = (message: unknown) => void;
 
-/**
- * The kit's patch-connection shape, with the members this view calls itself
- * made required. The preset and snapshot controllers take the same object.
- */
+/** The kit's patch-connection shape, with the members this view calls itself made required. */
 type EnhancerLitePatchConnection = PatchConnectionLike & Required<Pick<
     PatchConnectionLike,
     | "addParameterListener"
@@ -79,9 +65,6 @@ type EnhancerLitePatchConnection = PatchConnectionLike & Required<Pick<
     | "removeEndpointListener"
     | "sendEventOrValue"
 >>;
-
-/** Sound/state contract key; saved-preset folders use the live plugin identity. */
-const effectID = "enhancer-lite";
 
 type NumericDescriptor = Extract<EnhancerLiteSettingDescriptor, { readonly kind: "number" }>;
 type ResponseRole = "primary" | "side";
@@ -94,7 +77,8 @@ type NumberControl = NumericDescriptor & {
 };
 
 type ResponseDrag = {
-    readonly gestureEndpointIDs: Set<string>;
+    /** The drag's one gesture over frequency, amount and Q opens on the first value it changes. */
+    gestureOpen: boolean;
     readonly pointerID: number;
     readonly role: ResponseRole;
     readonly originClientX: number;
@@ -120,7 +104,7 @@ function requireNumberDescriptor(
 ): NumericDescriptor {
     const descriptor = ENHANCER_LITE_SETTING_DESCRIPTORS.find((candidate) => candidate.id === id);
     if (!descriptor || descriptor.kind !== "number")
-        throw new Error(`Enhancer Lite state is missing ${id}.`);
+        throw new Error(`No numeric control named ${id}.`);
 
     return descriptor;
 }
@@ -235,7 +219,7 @@ function responseDb(
     amount: number,
 ): number {
     return shape === "bell"
-        ? enhancerBellResponseDb(frequencyHz, centreHz, q, amount)
+        ? bellResponseDb(frequencyHz, centreHz, q, amount)
         : shelfResponseDb(shape, frequencyHz, centreHz, q, amount);
 }
 
@@ -246,17 +230,17 @@ function responsePath(
     amount: number,
     closeArea = false,
 ): string {
-    const path = createEnhancerFrequencyPath((frequencyHz) => {
+    const path = frequencyPath((frequencyHz) => {
         const gainDb = responseDb(shape, frequencyHz, centreHz, q, amount);
         return shape === "bell"
-            ? enhancerLiteGainY(gainDb)
-            : enhancerLiteShelfGainY(gainDb);
+            ? gainToY(gainDb)
+            : shelfGainToY(gainDb);
     });
     if (closeArea) {
-        const baseline = enhancerLiteGainY(0).toFixed(2);
+        const baseline = gainToY(0).toFixed(2);
         return `${path} L ${(
-            ENHANCER_LITE_PLOT.width - ENHANCER_LITE_PLOT.right
-        ).toFixed(2)} ${baseline} L ${ENHANCER_LITE_PLOT.left.toFixed(2)} ${baseline} Z`;
+            SPECTRUM_PLOT.width - SPECTRUM_PLOT.right
+        ).toFixed(2)} ${baseline} L ${SPECTRUM_PLOT.left.toFixed(2)} ${baseline} Z`;
     }
     return path;
 }
@@ -266,39 +250,23 @@ class EnhancerLiteView extends HTMLElement {
     readonly root: ShadowRoot;
     readonly values = new Map(endpointInitialValues);
     readonly endpointListeners: Array<{ readonly endpointID: string; readonly listener: EndpointListener }> = [];
-    readonly spectrumDisplays = new Map<SpectrumRole, EnhancerLiteSpectrumDisplay>();
-    // The kit's preset bar and A-G snapshots, mounted as one header above the
-    // Lite surface. Both controllers address the eight sound endpoints the
-    // patch exposes as parameters; the hidden analyzer endpoints stay out.
-    readonly presetController: StandaloneEffectPresetController;
-    readonly snapshotController: EffectSnapshotBankController;
-    readonly effectHeader: ReturnType<typeof createEffectHeader>;
+    readonly spectrumDisplays = new Map<SpectrumRole, SpectrumDisplay>();
     hasAttached = false;
     drag: ResponseDrag | undefined;
     readoutDrag: ReadoutDrag | undefined;
     frequencyTickResizeObserver: ResizeObserver | undefined;
 
-    constructor(patchConnection: EnhancerLitePatchConnection, public controls: ReadonlyMap<string, PluginStateControl<number>>) {
+    constructor(
+        patchConnection: EnhancerLitePatchConnection,
+        public controls: ReadonlyMap<string, PluginStateControl<number>>,
+        public editor: PluginStateEditor<typeof definition>,
+    ) {
         super();
         this.patchConnection = patchConnection;
-        this.presetController = createStandaloneEffectPresetController({
-            effectID,
-            legacyFileStorePluginID: "dev.cosimo.enhancer-lite",
-            patchConnection,
-            factoryPresets: ENHANCER_LITE_FACTORY_PRESETS,
-        });
-        this.snapshotController = new EffectSnapshotBankController({
-            effectID,
-            patchConnection,
-        });
-        this.effectHeader = createEffectHeader();
-        this.effectHeader.presetController = this.presetController;
-        this.effectHeader.snapshotController = this.snapshotController;
         this.root = this.attachShadow({ mode: "open" });
         this.root.innerHTML = this.getMarkup();
-        this.requireElement<HTMLElement>(".shell").before(this.effectHeader);
         this.bindControls();
-        this.updateControls(controls);
+        this.updateControls(controls, editor);
         this.renderAll();
     }
 
@@ -308,13 +276,13 @@ class EnhancerLiteView extends HTMLElement {
 
         this.hasAttached = true;
         for (const role of ["input", "output"] as const) {
-            const endpointID = ENHANCER_LITE_ANALYZER_ENDPOINTS[role];
+            const endpointID = ANALYZER_ENDPOINTS[role];
             const listener: EndpointListener = (message) => this.renderSpectrum(role, message);
             this.endpointListeners.push({ endpointID, listener });
             this.patchConnection.addEndpointListener(endpointID, listener);
         }
         this.patchConnection.sendEventOrValue(
-            ENHANCER_LITE_ANALYZER_ENDPOINTS.enabled,
+            ANALYZER_ENDPOINTS.enabled,
             1,
             0,
         );
@@ -324,24 +292,13 @@ class EnhancerLiteView extends HTMLElement {
         });
         this.frequencyTickResizeObserver.observe(responsePlot);
         this.renderFrequencyTickDensity();
-
-        // The header drops its bar bindings whenever it leaves the document,
-        // so rebind before the controllers come back to life.
-        this.effectHeader.presetController = this.presetController;
-        this.effectHeader.snapshotController = this.snapshotController;
-        this.snapshotController.attach();
-        this.presetController.attach();
     }
 
     disconnectedCallback(): void {
-        this.snapshotController.detach();
-        this.presetController.detach();
-        this.effectHeader.presetController = null;
-        this.effectHeader.snapshotController = null;
         this.endReadoutDrag();
         this.endResponseDrag();
         this.patchConnection.sendEventOrValue(
-            ENHANCER_LITE_ANALYZER_ENDPOINTS.enabled,
+            ANALYZER_ENDPOINTS.enabled,
             0,
             0,
         );
@@ -421,21 +378,25 @@ class EnhancerLiteView extends HTMLElement {
         );
     }
 
-    sendValue(endpointID: string, value: number, gestureEndpointIDs?: Set<string>): void {
+    changes(endpointID: string, value: number): boolean {
         const previous = this.values.get(endpointID);
-        if (previous !== undefined && Math.abs(previous - value) <= 1e-9)
+        return previous === undefined || Math.abs(previous - value) > 1e-9;
+    }
+
+    sendValue(endpointID: string, value: number, gestureEndpointIDs?: Set<string>): void {
+        if (!this.changes(endpointID, value))
             return;
 
         const control = this.controls.get(endpointID);
         if (!control) throw new Error(`No state control for ${endpointID}.`);
-        const pointerGestureEndpointIDs = (this.readoutDrag ?? this.drag)?.gestureEndpointIDs;
+        const readoutGestureEndpointIDs = this.readoutDrag?.gestureEndpointIDs;
         const gestureOwner = gestureEndpointIDs ?? (
-            pointerGestureEndpointIDs?.has(endpointID) ? pointerGestureEndpointIDs : undefined
+            readoutGestureEndpointIDs?.has(endpointID) ? readoutGestureEndpointIDs : undefined
         );
-        // A pointer gesture may edit frequency, amount and Q. Begin each
-        // endpoint only when it changes, and keep it touched until release.
-        // Keyboard edits to an already-touched endpoint share that ownership:
+        // A readout drag begins its endpoint's gesture when the value first
+        // changes. Keyboard edits to that endpoint share it until release:
         // JUCE does not nest gestures, so an atomic end would close the drag.
+        // Edits to fields under the graph drag's gesture join that gesture.
         if (gestureOwner && !gestureOwner.has(endpointID)) {
             gestureOwner.add(endpointID);
             void control.beginGesture();
@@ -452,9 +413,24 @@ class EnhancerLiteView extends HTMLElement {
         for (const endpointID of endpointIDs) void this.controls.get(endpointID)?.endGesture();
     }
 
+    /** One graph drag moves frequency, amount and Q together, so it is one gesture and one Undo entry. */
+    sendResponseDragValues(drag: ResponseDrag, values: readonly (readonly [NumberControl, number])[]): void {
+        const changed = values.filter(([control, value]) => this.changes(control.dspEndpointID, value));
+        if (changed.length === 0)
+            return;
+
+        if (!drag.gestureOpen) {
+            drag.gestureOpen = true;
+            void this.editor.beginGesture(["frequency", drag.role === "side" ? "sideAmount" : "amount", "q"]);
+        }
+        for (const [control, value] of changed)
+            this.sendValue(control.dspEndpointID, value);
+    }
+
     /** Render the hook's projection; this map never accepts host or local edits itself. */
-    updateControls(controls: ReadonlyMap<string, PluginStateControl<number>>): void {
+    updateControls(controls: ReadonlyMap<string, PluginStateControl<number>>, editor: PluginStateEditor<typeof definition>): void {
         this.controls = controls;
+        this.editor = editor;
         for (const [endpointID, control] of controls) {
             if (!("value" in control.state) || this.values.get(endpointID) === control.state.value) continue;
             this.values.set(endpointID, control.state.value);
@@ -626,7 +602,7 @@ class EnhancerLiteView extends HTMLElement {
         event.currentTarget.toggleAttribute("data-dragging", true);
         const amountControl = role === "side" ? sideAmountControl : midAmountControl;
         this.drag = {
-            gestureEndpointIDs: new Set(),
+            gestureOpen: false,
             pointerID: event.pointerId,
             role,
             originClientX: event.clientX,
@@ -645,8 +621,8 @@ class EnhancerLiteView extends HTMLElement {
 
         event.preventDefault();
         if (event.shiftKey) {
-            this.sendValue(
-                qControl.dspEndpointID,
+            this.sendResponseDragValues(drag, [[
+                qControl,
                 clamp(
                     enhancerLiteQFromUpwardPixels(
                         drag.originQ,
@@ -655,14 +631,13 @@ class EnhancerLiteView extends HTMLElement {
                     qControl.min,
                     qControl.max,
                 ),
-                drag.gestureEndpointIDs,
-            );
+            ]]);
             return;
         }
 
         const plotBounds = this.requireElement<SVGSVGElement>(".response-plot")
             .getBoundingClientRect();
-        const frequencyHz = enhancerFrequencyAfterClientDrag(
+        const frequencyHz = frequencyAfterDrag(
             drag.originFrequencyHz,
             drag.originClientX,
             event.clientX,
@@ -676,16 +651,10 @@ class EnhancerLiteView extends HTMLElement {
             drag.originClientY - event.clientY,
         );
         const amountControl = drag.role === "side" ? sideAmountControl : midAmountControl;
-        this.sendValue(
-            frequencyControl.dspEndpointID,
-            clamp(frequencyHz, frequencyControl.min, frequencyControl.max),
-            drag.gestureEndpointIDs,
-        );
-        this.sendValue(
-            amountControl.dspEndpointID,
-            clamp(amount, amountControl.min, amountControl.max),
-            drag.gestureEndpointIDs,
-        );
+        this.sendResponseDragValues(drag, [
+            [frequencyControl, clamp(frequencyHz, frequencyControl.min, frequencyControl.max)],
+            [amountControl, clamp(amount, amountControl.min, amountControl.max)],
+        ]);
     }
 
     endResponseDrag(pointerID?: number, releaseCapture = true): void {
@@ -694,7 +663,8 @@ class EnhancerLiteView extends HTMLElement {
             return;
 
         this.drag = undefined;
-        this.endParameterGestures(drag.gestureEndpointIDs);
+        if (drag.gestureOpen)
+            void this.editor.endGesture();
         drag.captureTarget.toggleAttribute("data-dragging", false);
         if (releaseCapture && drag.captureTarget.hasPointerCapture(drag.pointerID))
             drag.captureTarget.releasePointerCapture(drag.pointerID);
@@ -791,7 +761,7 @@ class EnhancerLiteView extends HTMLElement {
 
     renderSpectrum(role: SpectrumRole, message: unknown): void {
         const previous = this.spectrumDisplays.get(role) ?? null;
-        const next = advanceEnhancerLiteSpectrum(message, previous, performance.now());
+        const next = advanceSpectrum(message, previous, performance.now());
         if (!next)
             return;
 
@@ -799,8 +769,8 @@ class EnhancerLiteView extends HTMLElement {
         this.requireElement<SVGPathElement>(`[data-spectrum-role='${role}']`)
             .setAttribute("d", next.path);
         this.requireElement<HTMLElement>(`[data-spectrum-peak='${role}']`).textContent =
-            next.peakDbfs <= ENHANCER_LITE_PLOT.minimumLevelDbfs + 0.05
-                ? `<${ENHANCER_LITE_PLOT.minimumLevelDbfs} dB`
+            next.peakDbfs <= SPECTRUM_PLOT.minimumLevelDbfs + 0.05
+                ? `<${SPECTRUM_PLOT.minimumLevelDbfs} dB`
                 : `${next.peakDbfs.toFixed(1)} dB`;
     }
 
@@ -864,18 +834,18 @@ class EnhancerLiteView extends HTMLElement {
         primaryPath.setAttribute("d", responsePath(shape, frequencyHz, q, primaryAmount));
         sidePath.setAttribute("d", responsePath(shape, frequencyHz, q, sideAmount));
         fillPath.setAttribute("d", responsePath(shape, frequencyHz, q, primaryAmount, true));
-        const handleX = enhancerLiteFrequencyX(frequencyHz).toFixed(2);
-        const primaryHandleY = enhancerLiteGainY(primaryAmount * 12).toFixed(2);
-        const sideHandleY = enhancerLiteGainY(sideAmount * 12).toFixed(2);
+        const handleX = frequencyToX(frequencyHz).toFixed(2);
+        const primaryHandleY = gainToY(primaryAmount * 12).toFixed(2);
+        const sideHandleY = gainToY(sideAmount * 12).toFixed(2);
         primaryHandle.setAttribute("cx", handleX);
         primaryHandle.setAttribute("cy", primaryHandleY);
         sideHandle.setAttribute("cx", handleX);
         sideHandle.setAttribute("cy", sideHandleY);
         if (shape !== "bell") {
-            const primaryCurveY = enhancerLiteShelfGainY(
+            const primaryCurveY = shelfGainToY(
                 shelfResponseDb(shape, frequencyHz, frequencyHz, q, primaryAmount),
             ).toFixed(2);
-            const sideCurveY = enhancerLiteShelfGainY(
+            const sideCurveY = shelfGainToY(
                 shelfResponseDb(shape, frequencyHz, frequencyHz, q, sideAmount),
             ).toFixed(2);
             primaryGuide.setAttribute("d", `M ${handleX} ${primaryHandleY} V ${primaryCurveY}`);
@@ -916,7 +886,7 @@ class EnhancerLiteView extends HTMLElement {
     renderFrequencyTickDensity(): void {
         const plot = this.requireElement<SVGSVGElement>(".response-plot");
         const visibleFrequencies = new Set(
-            enhancerFrequencyTicksForWidth(plot.getBoundingClientRect().width)
+            frequencyTicksForWidth(plot.getBoundingClientRect().width)
                 .map((tick) => tick.frequencyHz),
         );
         for (const tick of this.root.querySelectorAll<SVGElement>(
@@ -930,17 +900,17 @@ class EnhancerLiteView extends HTMLElement {
     }
 
     responsePlotMarkup(): string {
-        const verticalGrid = ENHANCER_LITE_FREQUENCY_TICKS.map((frequencyHz) => {
-            const x = enhancerLiteFrequencyX(frequencyHz).toFixed(2);
-            const label = formatEnhancerFrequencyTick(frequencyHz);
-            return `<path class="grid-line" data-frequency-grid-hz="${frequencyHz}" d="M ${x} ${ENHANCER_LITE_PLOT.top} V ${enhancerLiteGainY(0).toFixed(2)}"></path>
-                    <text class="axis-label frequency" data-frequency-hz="${frequencyHz}" x="${x}" y="${ENHANCER_LITE_PLOT.height - 7}" text-anchor="middle">${label}</text>`;
+        const verticalGrid = FREQUENCY_TICKS.map((frequencyHz) => {
+            const x = frequencyToX(frequencyHz).toFixed(2);
+            const label = formatFrequencyTick(frequencyHz);
+            return `<path class="grid-line" data-frequency-grid-hz="${frequencyHz}" d="M ${x} ${SPECTRUM_PLOT.top} V ${gainToY(0).toFixed(2)}"></path>
+                    <text class="axis-label frequency" data-frequency-hz="${frequencyHz}" x="${x}" y="${SPECTRUM_PLOT.height - 7}" text-anchor="middle">${label}</text>`;
         }).join("");
-        const horizontalGrid = ENHANCER_LITE_DB_ROWS.map(({ gainDb, levelDbfs }, index) => {
-            const y = enhancerLiteGainY(gainDb).toFixed(2);
-            return `<path class="grid-line${gainDb === 0 ? " baseline" : ""}" data-grid-row="${index}" d="M ${ENHANCER_LITE_PLOT.left} ${y} H ${ENHANCER_LITE_PLOT.width - ENHANCER_LITE_PLOT.right}"></path>
-                    <text class="axis-label gain" data-gain-db="${gainDb}" x="${ENHANCER_LITE_PLOT.left - 8}" y="${Number(y) + 3}" text-anchor="end">${gainDb > 0 ? `+${gainDb}` : gainDb}</text>
-                    <text class="axis-label level" data-level-dbfs="${levelDbfs}" x="${ENHANCER_LITE_PLOT.width - ENHANCER_LITE_PLOT.right + 8}" y="${Number(y) + 3}" text-anchor="start">${levelDbfs}</text>`;
+        const horizontalGrid = DB_ROWS.map(({ gainDb, levelDbfs }, index) => {
+            const y = gainToY(gainDb).toFixed(2);
+            return `<path class="grid-line${gainDb === 0 ? " baseline" : ""}" data-grid-row="${index}" d="M ${SPECTRUM_PLOT.left} ${y} H ${SPECTRUM_PLOT.width - SPECTRUM_PLOT.right}"></path>
+                    <text class="axis-label gain" data-gain-db="${gainDb}" x="${SPECTRUM_PLOT.left - 8}" y="${Number(y) + 3}" text-anchor="end">${gainDb > 0 ? `+${gainDb}` : gainDb}</text>
+                    <text class="axis-label level" data-level-dbfs="${levelDbfs}" x="${SPECTRUM_PLOT.width - SPECTRUM_PLOT.right + 8}" y="${Number(y) + 3}" text-anchor="start">${levelDbfs}</text>`;
         }).join("");
         return `
             <section class="response-panel" aria-label="Enhance That response">
@@ -952,14 +922,14 @@ class EnhancerLiteView extends HTMLElement {
                     </span>
                     <span class="gesture-hint">DRAG FREQ + AMOUNT&nbsp;&nbsp;·&nbsp;&nbsp;SHIFT DRAG Q</span>
                 </div>
-                <svg class="response-plot" viewBox="0 0 ${ENHANCER_LITE_PLOT.width} ${ENHANCER_LITE_PLOT.height}" preserveAspectRatio="none" role="application" aria-label="Draggable frequency and amount plot with input and output spectra">
+                <svg class="response-plot" viewBox="0 0 ${SPECTRUM_PLOT.width} ${SPECTRUM_PLOT.height}" preserveAspectRatio="none" role="application" aria-label="Draggable frequency and amount plot with input and output spectra">
                     ${verticalGrid}
                     ${horizontalGrid}
-                    <text class="axis-label shelf-overflow" data-shelf-overflow="high" x="${ENHANCER_LITE_PLOT.left - 8}" y="9" text-anchor="end" hidden>+30</text>
-                    <text class="axis-label shelf-overflow" data-shelf-overflow="low" x="${ENHANCER_LITE_PLOT.left - 8}" y="270" text-anchor="end" hidden>-18</text>
-                    <path class="grid-line baseline" d="M ${ENHANCER_LITE_PLOT.left} ${enhancerLiteGainY(0).toFixed(2)} H ${ENHANCER_LITE_PLOT.width - ENHANCER_LITE_PLOT.right}"></path>
+                    <text class="axis-label shelf-overflow" data-shelf-overflow="high" x="${SPECTRUM_PLOT.left - 8}" y="9" text-anchor="end" hidden>+30</text>
+                    <text class="axis-label shelf-overflow" data-shelf-overflow="low" x="${SPECTRUM_PLOT.left - 8}" y="270" text-anchor="end" hidden>-18</text>
+                    <path class="grid-line baseline" d="M ${SPECTRUM_PLOT.left} ${gainToY(0).toFixed(2)} H ${SPECTRUM_PLOT.width - SPECTRUM_PLOT.right}"></path>
                     <text class="axis-unit gain" x="8" y="12">GAIN</text>
-                    <text class="axis-unit level" x="${ENHANCER_LITE_PLOT.width - 5}" y="12" text-anchor="end">dBFS</text>
+                    <text class="axis-unit level" x="${SPECTRUM_PLOT.width - 5}" y="12" text-anchor="end">dBFS</text>
                     <path class="spectrum-trace input" data-spectrum-role="input"></path>
                     <path class="spectrum-trace output" data-spectrum-role="output"></path>
                     <path class="response-fill" data-response-role="fill"></path>
@@ -978,11 +948,9 @@ class EnhancerLiteView extends HTMLElement {
         return `
             <style>
                 :host {
-                    /* The kit header's accent token, set to Lite's primary neon. */
-                    --knob-track-value-color: #00f0ff;
                     display: block;
                     width: 820px;
-                    min-height: 560px;
+                    min-height: 520px;
                     color: #f4fbff;
                     background: #000000;
                     font-family: "SF Mono", Menlo, Monaco, Consolas, monospace;
@@ -994,10 +962,6 @@ class EnhancerLiteView extends HTMLElement {
                 .topline { display: flex; align-items: flex-end; justify-content: space-between; gap: 20px; margin-bottom: 14px; }
                 h1 { margin: 0; color: #ffffff; font-size: 26px; font-weight: 700; letter-spacing: 0.16em; text-transform: uppercase; line-height: 1; }
                 .tag { margin-top: 7px; color: #00f0ff; font-size: 9px; letter-spacing: 0.14em; text-transform: uppercase; }
-                .history-controls { display: flex; gap: 6px; }
-                .history-controls button { min-height: 25px; padding: 4px 10px; border: 1px solid #123b43; border-radius: 4px; color: #00f0ff; background: #000000; font-size: 9px; letter-spacing: 0.06em; text-transform: uppercase; cursor: pointer; }
-                .history-controls button:disabled { color: #526a70; cursor: default; }
-                .history-controls button:focus-visible { outline: 2px solid #00f0ff; outline-offset: 2px; }
                 .engine-label { color: #b7ff27; font-size: 9px; letter-spacing: 0.12em; text-transform: uppercase; }
                 .response-panel { border: 1px solid #123b43; border-radius: 12px; padding: 12px 12px 5px; background: #000000; box-shadow: 0 0 22px rgba(0,240,255,0.08); }
                 .plot-heading { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 16px; padding: 0 4px 4px; color: #00f0ff; font-size: 9px; letter-spacing: 0.11em; }
@@ -1074,7 +1038,6 @@ class EnhancerLiteView extends HTMLElement {
                         <div class="tag">ONE BAND // STEREO + M/S</div>
                     </div>
                     <div class="engine-label">4X IIR // FAST CURVE</div>
-                    <div data-history-mount></div>
                 </header>
                 ${this.responsePlotMarkup()}
                 <div class="control-deck">
@@ -1133,35 +1096,54 @@ function View() {
         ["saturationModeIn", usePluginState(definition.intensity)],
         ["shapeIn", usePluginState(definition.shape)],
     ]);
+    const editor = usePluginState(definition);
     const history = usePluginHistory();
     const mount = useRef<HTMLDivElement>(null);
     const panel = useRef<EnhancerLiteView | null>(null);
-    const [historyMount, setHistoryMount] = useState<HTMLElement | null>(null);
     const ready = [...controls.values()].every(control => "value" in control.state);
     useLayoutEffect(() => {
         if (!ready || !mount.current) return;
         const required = ["addParameterListener", "removeParameterListener", "requestParameterValue",
             "addEndpointListener", "removeEndpointListener", "sendEventOrValue"] as const;
         for (const method of required) if (typeof connection[method] !== "function") throw new Error(`Missing patch connection ${method}.`);
-        const elementName = "cosimo-enhancer-lite-view";
+        const elementName = "enhance-that-view";
         if (!customElements.get(elementName)) customElements.define(elementName, EnhancerLiteView);
         // SAFETY: all required panel connection methods were checked above.
-        const view = new EnhancerLiteView(connection as EnhancerLitePatchConnection, controls);
+        const view = new EnhancerLiteView(connection as EnhancerLitePatchConnection, controls, editor);
         panel.current = view;
         mount.current.append(view);
-        setHistoryMount(view.requireElement<HTMLElement>("[data-history-mount]"));
-        return () => { view.remove(); panel.current = null; setHistoryMount(null); };
+        return () => { view.remove(); panel.current = null; };
     }, [connection, ready]);
-    useLayoutEffect(() => { panel.current?.updateControls(controls); });
-    return createElement("div", null,
+    useLayoutEffect(() => { panel.current?.updateControls(controls, editor); });
+    return createElement("div", { className: "enhance-that" },
+        createElement("header", { className: "plugin-header" },
+            createElement(PresetBar, { definition }),
+            createElement(SnapshotBar, { definition }),
+            createElement("nav", { "aria-label": "Edit history", className: "history-controls" },
+                createElement("button", { type: "button", disabled: !history.canUndo, onClick: () => { void history.undo(); } }, "Undo"),
+                createElement("button", { type: "button", disabled: !history.canRedo, onClick: () => { void history.redo(); } }, "Redo"))),
         ready ? null : createElement("p", { role: "status" }, [...controls.values()].some(control => control.state.status === "invalid" || control.state.status === "unavailable") ? "Controls unavailable" : "Connecting"),
         createElement("div", { ref: mount }),
-        historyMount ? createPortal(createElement("nav", { "aria-label": "Edit history", className: "history-controls" },
-            createElement("button", { disabled: !history.canUndo, onClick: () => { void history.undo(); } }, "Undo"),
-            createElement("button", { disabled: !history.canRedo, onClick: () => { void history.redo(); } }, "Redo")), historyMount) : null,
         ...[...controls.entries()].flatMap(([key, control]) => control.error
             ? [createElement("p", { key, role: "alert" }, control.error.message)] : []));
 }
 
+/** The header shares the panel's neon palette; the kit bars read the shared --editor-* color properties. */
+const headerCss = `
+    :host { color: #f4fbff; background: #000000; font-family: "SF Mono", Menlo, Monaco, Consolas, monospace; }
+    .enhance-that { width: 820px; max-width: 100%; }
+    .plugin-header {
+        --editor-accent-start: #00f0ff; --editor-surface-bg: #000000;
+        box-sizing: border-box; height: 40px; display: flex; align-items: center; justify-content: space-between; gap: 10px;
+        padding: 0 16px; border-bottom: 1px solid #123b43;
+    }
+    .plugin-header .bk-preset-bar, .plugin-header .bk-snapshot-bar { font-size: 10px; }
+    .plugin-header .bk-preset-bar select { width: 128px; }
+    .history-controls { display: flex; gap: 6px; }
+    .history-controls button { height: 24px; padding: 0 10px; border: 1px solid #123b43; border-radius: 4px; color: #00f0ff; background: #000000; font: inherit; font-size: 9px; letter-spacing: 0.06em; text-transform: uppercase; cursor: pointer; }
+    .history-controls button:disabled { color: #526a70; cursor: default; }
+    .history-controls button:focus-visible { outline: 2px solid #00f0ff; outline-offset: 2px; }
+`;
+
 /** Preserve the existing panel while the public wrapper owns state and GUI lifetime. */
-export default createStatefulPatchView({ definition, View });
+export default createStatefulPatchView({ definition, View, css: headerCss });

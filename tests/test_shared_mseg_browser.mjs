@@ -7,7 +7,7 @@ import { chromium } from 'playwright';
 import { build as bundle } from 'esbuild';
 import { buildSharedMsegFixture } from './helpers/build_shared_mseg_fixture.mjs';
 
-const cmaj=process.env.COSIMO_CMAJ_EXECUTABLE??path.resolve('build/cmajor_command/bin/cmaj');
+const cmaj=process.env.BUILDER_KIT_CMAJ_EXECUTABLE??path.resolve('build/cmajor_command/bin/cmaj');
 const {staging,manifest,runtime}=await buildSharedMsegFixture();
 await bundle({entryPoints:[path.join(staging,'fx/shared_mseg/view/browser.tsx')],outfile:path.join(runtime,'view/browser.js'),
     bundle:true,format:'esm',platform:'browser',jsx:'automatic',target:'es2022',logLevel:'silent'});

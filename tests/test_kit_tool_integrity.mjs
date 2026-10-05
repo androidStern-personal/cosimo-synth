@@ -4,12 +4,10 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import os from "node:os";
 import { spawnSync } from "node:child_process";
-import { exportKit } from "../kit/scripts/export_kit.mjs";
+import { exportKit } from "../scripts/export_kit.mjs";
 import { runSetup, planSetup } from "../kit/scripts/setup.mjs";
-import { inspectTool, readToolchain, sha256Bytes } from "../kit/scripts/toolchain.mjs";
-import { requireCurrentTool } from "../kit/scripts/require_tool.mjs";
+import { inspectTool, readToolchain, requireCurrentTool, resolveCmajExecutable, sha256Bytes } from "../kit/scripts/toolchain.mjs";
 import { collectDoctorReport } from "../kit/scripts/doctor.mjs";
-import { resolvePinnedCmajSource } from "../kit/fx/prod-effect.mjs";
 
 const repoRoot = path.resolve(import.meta.dirname, "..");
 const markers = "chocHostKeyboard\n__chocHostKeyboardBridgeInstalled\n__chocUserFiles\nchocUserFiles\n";
@@ -20,8 +18,8 @@ async function withCustomer(run) {
     try {
         await exportKit(root);
         // This is a current-code consumer fixture, not an export provenance proof.
-        await fs.cp(path.join(repoRoot, "kit/scripts"), path.join(root, "kit/scripts"), { recursive: true });
-        await fs.copyFile(path.join(repoRoot, "kit/fx/prod-effect.mjs"), path.join(root, "kit/fx/prod-effect.mjs"));
+        for (const directory of ["kit/scripts", "kit/fx"])
+            await fs.cp(path.join(repoRoot, directory), path.join(root, directory), { recursive: true, force: true });
         await fs.symlink(path.join(repoRoot, "node_modules"), path.join(root, "node_modules"));
         const source = path.join(scratch, "source");
         await fs.mkdir(path.join(source, "CmajPlugin.vst3/Contents/MacOS"), { recursive: true });
@@ -45,15 +43,23 @@ async function withCustomer(run) {
         await fs.writeFile(path.join(root, "kit/toolchain.json"), JSON.stringify(toolchain));
         await fs.writeFile(path.join(root, "kit/feed.json"), '{"baseUrl":"https://feed.example/SYNTHETIC-TOOL-COHORT"}');
         const setup = () => runSetup({
-            root, acceptJuceTerms: true, platform: "linux", log: () => {},
+            root, acceptJuceTerms: true, machine: { os: "macOS", arch: "arm64", macOSVersion: "15.0" }, log: () => {},
             fetchImpl: async (url) => ({ ok: true, arrayBuffer: async () => archives.get(url.split("/SYNTHETIC-TOOL-COHORT/")[1]) }),
         });
         await setup();
         const cmaj = path.join(root, toolchain.cmaj.localPath);
         const plugin = path.join(root, toolchain.cmajPlugin.localPath);
-        const production = () => resolvePinnedCmajSource({ toolchain, downloadedExecutable: cmaj, sourceProjectDirectory: path.join(scratch, "no-source-fallback") });
-        const install = () => spawnSync("bash", [path.join(root, "kit/scripts/install_cmajplugin_vst3.sh"), "--dry-run"], { cwd: root, encoding: "utf8" });
-        await run({ root, scratch, toolchain, cmaj, plugin, setup, production, install });
+        // codesign is macOS-only; a stand-in that accepts every bundle lets the
+        // installers run here while the hash checks stay real.
+        const fakeBin = path.join(scratch, "bin");
+        await fs.mkdir(fakeBin);
+        await fs.symlink(process.execPath, path.join(fakeBin, "node"));
+        await fs.writeFile(path.join(fakeBin, "codesign"), "#!/bin/sh\nexit 0\n", { mode: 0o755 });
+        const env = { ...process.env, HOME: path.join(scratch, "home"), PATH: `${fakeBin}:/usr/bin:/bin`, BUILDER_KIT_CMAJ: "" };
+        const production = () => resolveCmajExecutable({ root, environment: {} });
+        const cmajplugin = (...args) => spawnSync(process.execPath, [path.join(root, "kit/scripts/cmajplugin.mjs"), ...args], { cwd: root, env, encoding: "utf8" });
+        const install = () => cmajplugin("install", "--dry-run");
+        await run({ root, scratch, toolchain, cmaj, plugin, setup, production, install, cmajplugin, env });
     } finally {
         await fs.rm(scratch, { recursive: true, force: true });
     }
@@ -62,7 +68,7 @@ async function withCustomer(run) {
 test("verified setup archives work through production, doctor, setup, and installer consumers", async () => {
     await withCustomer(async ({ root, toolchain, cmaj, production, install }) => {
         assert.notEqual(sha256Bytes(await fs.readFile(cmaj)), toolchain.cmaj.sha256, "archive and executable hashes are different identities");
-        assert.equal((await production()).executable, cmaj);
+        assert.equal(await production(), cmaj);
         const doctor = await collectDoctorReport({ root, offline: true });
         for (const key of ["cmaj", "cmajPlugin"]) {
             assert.equal(doctor.toolchain[key].status, "current");
@@ -75,18 +81,16 @@ test("verified setup archives work through production, doctor, setup, and instal
 });
 
 test("customer setup then generic install then JIT validation needs no global cmaj", async () => {
-    await withCustomer(async ({ root, scratch, cmaj, setup }) => {
-        const fakeBin = path.join(scratch, "bin");
-        const fakeHome = path.join(scratch, "home");
+    await withCustomer(async ({ root, scratch, cmaj, setup, cmajplugin, env }) => {
         const calls = path.join(scratch, "cmaj-calls.txt");
-        await fs.mkdir(fakeBin);
-        await fs.symlink(process.execPath, path.join(fakeBin, "node"));
-        await fs.writeFile(path.join(fakeBin, "codesign"), "#!/bin/sh\nexit 0\n", { mode: 0o755 });
-        const env = { ...process.env, HOME: fakeHome, PATH: `${fakeBin}:/usr/bin:/bin`, KIT_TEST_CMAJ_CALLS: calls };
+        env.KIT_TEST_CMAJ_CALLS = calls;
         assert.equal(spawnSync("cmaj", ["--version"], { env }).error?.code, "ENOENT");
-        const install = spawnSync("/bin/bash", [path.join(root, "kit/scripts/install_cmajplugin_vst3.sh")], { cwd: root, env, encoding: "utf8" });
+        const install = cmajplugin("install");
         assert.equal(install.status, 0, install.stderr);
-        const jit = (...args) => spawnSync("/bin/bash", [path.join(root, "kit/scripts/install_fx_cmajplugin.sh"), "enhancer-lite", "--dry-run", ...args], { cwd: root, env, encoding: "utf8" });
+        assert.match(install.stdout, /Installed CmajPlugin\.vst3: .*Library\/Audio\/Plug-Ins\/VST3\/CmajPlugin\.vst3/u);
+        const jit = (extraEnv = {}) => spawnSync(process.execPath, [path.join(root, "kit/scripts/cmajplugin.mjs"), "jit-install", "enhancer-lite", "--dry-run"], {
+            cwd: root, env: { ...env, ...extraEnv }, encoding: "utf8",
+        });
         const first = jit();
         assert.equal(first.status, 0, first.stderr);
         assert.match(await fs.readFile(calls, "utf8"), /^play --dry-run --stop-on-error .*\.cmajorpatch\n$/u);
@@ -94,27 +98,27 @@ test("customer setup then generic install then JIT validation needs no global cm
         const rejected = jit();
         assert.notEqual(rejected.status, 0);
         assert.match(rejected.stderr, /kit:setup/u);
+        assert.notEqual(jit({ BUILDER_KIT_CMAJ: cmaj }).status, 0, "naming the downloaded cmaj explicitly keeps its hash check");
         await setup();
         assert.equal(jit().status, 0);
         assert.equal((await fs.readFile(calls, "utf8")).trim().split("\n").length, 2, "tampered command was never executed");
-        assert.notEqual(jit("--from-source").status, 0, "customers do not have the maintainer source project");
-        await fs.mkdir(path.join(root, "tools/cmajor_command_build"), { recursive: true });
-        await fs.writeFile(path.join(root, "tools/cmajor_command_build/CMakeLists.txt"), "# source-build fixture\n");
-        await fs.mkdir(path.join(root, "build/cmajor_command/bin"), { recursive: true });
-        await fs.copyFile(cmaj, path.join(root, "build/cmajor_command/bin/cmaj"));
-        assert.equal(jit("--from-source").status, 0, "explicit maintainer route selects only the repo source build");
-        assert.equal(await fs.stat(path.join(fakeHome, "Library/Audio/Plug-Ins/VST3/CmajPlugin.vst3")).then(() => true), true);
+        assert.match(jit({ BUILDER_KIT_CMAJ: "relative/cmaj" }).stderr, /BUILDER_KIT_CMAJ must be an absolute path/u);
+        const maintainerCmaj = path.join(scratch, "maintainer-cmaj");
+        await fs.copyFile(cmaj, maintainerCmaj);
+        await fs.chmod(maintainerCmaj, 0o755);
+        assert.equal(jit({ BUILDER_KIT_CMAJ: maintainerCmaj }).status, 0, "BUILDER_KIT_CMAJ selects a maintainer's own cmaj");
+        assert.equal(await fs.stat(path.join(env.HOME, "Library/Audio/Plug-Ins/VST3/CmajPlugin.vst3")).then(() => true), true);
     });
 });
 
-test("production prepared-command argument cannot bypass downloaded payload verification", async () => {
+test("BUILDER_KIT_CMAJ naming a tampered download cannot bypass its verification", async () => {
     await withCustomer(async ({ root, scratch, cmaj }) => {
         await fs.appendFile(cmaj, "# altered\n");
         const cmake = path.join(scratch, "cmake");
         const calls = path.join(scratch, "must-not-run-cmaj");
         await fs.writeFile(cmake, "#!/bin/sh\nexit 87\n", { mode: 0o755 });
-        const result = spawnSync(process.execPath, [path.join(root, "kit/fx/prod-effect.mjs"), "build", "enhancer-lite", `--prepared-cmaj-executable=${cmaj}`], {
-            cwd: root, encoding: "utf8", env: { ...process.env, COSIMO_RELEASE_CMAKE: cmake, KIT_TEST_CMAJ_CALLS: calls },
+        const result = spawnSync(process.execPath, [path.join(root, "kit/fx/prod-effect.mjs"), "build", "enhancer-lite"], {
+            cwd: root, encoding: "utf8", env: { ...process.env, BUILDER_KIT_CMAJ: cmaj, BUILDER_KIT_CMAKE: cmake, KIT_TEST_CMAJ_CALLS: calls },
         });
         assert.notEqual(result.status, 0);
         assert.match(result.stderr, /kit:setup/u);
@@ -148,7 +152,7 @@ for (const [label, key, alter] of [
             assert.equal((await planSetup({ root })).tools.find((step) => step.key === key).action, "download");
             assert.deepEqual((await setup()).installed, [key]);
             assert.equal((await inspectTool(toolchain, key, { root })).status, "current");
-            assert.equal((await production()).executable, fixture.cmaj);
+            assert.equal(await production(), fixture.cmaj);
             assert.equal(install().status, 0);
         });
     });

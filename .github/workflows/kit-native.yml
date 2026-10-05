@@ -24,12 +24,15 @@ on:
       - "package-lock.json"
       - "product-owner.json"
       - "scripts/builder-kit-export-policy.json"
+      - "scripts/export_kit.mjs"
       - "scripts/release_builder_kit.mjs"
       - "tests/test_builder_kit_native_qualification.mjs"
       - "tests/tools/qualify_builder_kit_native.mjs"
   push:
     branches:
       - master
+      - "claude/**"
+      - "codex/**"
     paths:
       - ".github/workflows/kit-native.yml"
       - "kit/cmake/**"
@@ -47,6 +50,7 @@ on:
       - "package-lock.json"
       - "product-owner.json"
       - "scripts/builder-kit-export-policy.json"
+      - "scripts/export_kit.mjs"
       - "scripts/release_builder_kit.mjs"
       - "tests/test_builder_kit_native_qualification.mjs"
       - "tests/tools/qualify_builder_kit_native.mjs"
@@ -78,10 +82,13 @@ jobs:
             tests/test_kit_export.mjs \
             tests/test_kit_tool_integrity.mjs
 
+  # Runs on the owner's Apple-silicon runner (label builder-kit-native), which
+  # holds the Builder Kit Keychain capability, so pull request code never
+  # runs there; pushes to master and the candidate branches do.
   native:
     name: Exported kit on Apple silicon
     needs: contract
-    if: ${{ github.event_name != 'pull_request' && vars.BUILDER_KIT_NATIVE_ENABLED == 'true' }}
+    if: ${{ github.event_name != 'pull_request' }}
     runs-on:
       - self-hosted
       - macOS
@@ -110,12 +117,3 @@ jobs:
             --report "$REPORT_PATH"
           echo "Exported-customer Mac native qualification passed. The safe local report remains at $REPORT_PATH." >> "$GITHUB_STEP_SUMMARY"
 
-  native-pending:
-    name: Native gate pending runner configuration
-    needs: contract
-    if: ${{ github.event_name != 'pull_request' && vars.BUILDER_KIT_NATIVE_ENABLED != 'true' }}
-    runs-on: ubuntu-latest
-    steps:
-      - run: |
-          echo "No native build ran." >> "$GITHUB_STEP_SUMMARY"
-          echo "BK-24C needs an approved Apple-silicon self-hosted runner with the existing Builder Kit Keychain capability, the builder-kit-native label, and an absolute BUILDER_KIT_NATIVE_DESTINATION_CONFIG repository variable." >> "$GITHUB_STEP_SUMMARY"

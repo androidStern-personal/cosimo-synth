@@ -1,16 +1,14 @@
 import fs from "node:fs";
-import { cp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
+import { cp, mkdir, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import react from "@vitejs/plugin-react";
-import { build } from "vite";
-import { buildPluginState } from "./build-plugin-state.mjs";
+
+import { isInsideDirectory, isMainModule, isPlainObject, readJsonObject, readKitManifest } from "../scripts/common.mjs";
 
 const scriptDir = path.dirname(fileURLToPath(import.meta.url));
 export const repoRoot = path.resolve(scriptDir, "../..");
 const defaultFxRoot = path.join(repoRoot, "fx");
-export const seqFxCanonicalRuntimePrebuiltEnvironmentKey = "SEQFX_CANONICAL_RUNTIME_PREBUILT";
-export const seqFxDistributableRuntimeEnvironmentKey = "SEQFX_DISTRIBUTABLE_RUNTIME";
+/** Set to "1" to build a runtime without UI and worker source maps (for distribution). */
 export const effectDistributableRuntimeEnvironmentKey = "FX_DISTRIBUTABLE_RUNTIME";
 
 /**
@@ -18,75 +16,56 @@ export const effectDistributableRuntimeEnvironmentKey = "FX_DISTRIBUTABLE_RUNTIM
  *
  * Every `fx/<dir>/<Name>.cmajorpatch` is a build target (a directory may hold
  * several; all of them are enumerated, sorted by directory then patch file
- * name). Per-patch configuration lives in ONE optional JSON file next to the
- * patch named `<Name>.plugin.json` (the patch file name with `.cmajorpatch`
- * replaced by `.plugin.json`):
+ * name). Per-patch configuration lives in one optional JSON file next to the
+ * patch, `<Name>.plugin.json`:
  *
  *   {
  *     "schemaVersion": 1,             // required; must not exceed kit/kit.json schemaVersions.plugin
  *     "alias", "cmakeTarget", "productName", "previousProductName",
  *     "product": { ...identity... },  // optional; presence makes identity authoritative
- *     "runtimeOut", "juceOut", "workerSource", "workerOut", "includeInAll",
- *     "jitInstallRuntime", "visualReviewAdapter",
- *     "disableMicrophonePermission"
+ *     "runtimeOut", "juceOut", "stateSource", "workerSource", "workerOut",
+ *     "includeInAll", "jitInstallRuntime", "disableMicrophonePermission"
  *   }
  *
  * Every field except schemaVersion is optional and falls back to a derivation:
  *
  * - alias (registry key/CLI name): directory name, lowercased, with runs of
  *   non-alphanumerics collapsed to `-`. A directory holding more than one
- *   patch must disambiguate with explicit aliases; duplicate aliases fail
- *   discovery loudly.
+ *   patch must disambiguate with explicit aliases.
  * - cmakeTarget / productName (the install filename, `<productName>.vst3`):
  *   the patch manifest `name` (falling back to the patch file base name) with
- *   non-alphanumerics removed, e.g. "OTT Lab" -> "OTTLab".
+ *   non-alphanumerics removed, e.g. "Enhance That" -> "EnhanceThat".
  * - runtimeOut / juceOut: `build/fx/<alias>_runtime` and `build/<alias>_juce`
  *   with `-` mapped to `_` in the alias.
- * - jitInstallRuntime (whether `fx:jit:install` must build and point the
- *   generic VST3 at the built runtime patch instead of the source patch):
- *   true when the target has a worker bundle, else false.
+ * - jitInstallRuntime (whether `fx:jit:install` points the generic VST3 at
+ *   the built runtime patch instead of the source patch): true when the
+ *   target has a state module or worker bundle.
  *
- * Config-only fields: workerSource/workerOut (repo-relative worker entry and
- * its bundled file name), includeInAll (false excludes the target from the
- * `all` build set), visualReviewAdapter, and
- * disableMicrophonePermission. A malformed or unknown-key config fails
- * discovery, and so does an orphan config (a `*.plugin.json` whose name
- * matches no `.cmajorpatch` in its directory — typically a renamed patch or a
- * case typo), so configuration can never be silently ignored. A config whose
- * schemaVersion is newer than this kit supports fails discovery naming the
- * kit update as the fix. A malformed patch manifest does not fail discovery
- * (derivations fall back to the patch file name and the build reports the
- * parse error later), matching the dev server's tolerance for in-progress
- * patches.
+ * A malformed or unknown-key config, a config newer than this kit, and a
+ * `*.plugin.json` whose name matches no patch all fail, naming the file. One
+ * broken plugin directory fails only the commands that need it (its own
+ * alias and `all`); the dev server and other plugins keep working. A
+ * malformed patch manifest does not fail discovery: derivations fall back to
+ * the patch file name and the build reports the parse error.
  *
  * Manifest source/resources/worker/sourceTransformer entries that escape the
  * patch directory (`../`, e.g. a shared `.cmajor` file) are copied flat into
  * the runtime output directory under their base names, and the runtime
- * manifest is rewritten to match, so nothing is ever written outside the
- * runtime directory. See planRuntimePatchEntries.
+ * manifest is rewritten to match. See planRuntimePatchEntries.
  *
  * Product identity lives in the config's optional `product` object
  * (productName = display name, manufacturerName, bundleIdentifier, 4-char
- * pluginCode/manufacturerCode, semantic version, optional supportUrl and
- * wordmark/accent tokens). When the object is present — even empty — it is
- * authoritative: absent identity fields derive from the plugin name and the
- * root `product-owner.json` (manufacturer, manufacturerCode,
- * bundleIdentifierPrefix, optional pluginCodePrefix/supportUrl), with the
+ * pluginCode/manufacturerCode, semantic version, optional supportUrl). When
+ * the object is present, even empty, it is authoritative: absent fields
+ * derive from the plugin name and the root `product-owner.json`, with the
  * display name and version taken from the patch manifest when it carries
- * them. Discovery validates the result (fail closed), derives the
- * manifest-facing identity (`plugin.identity`), requires the patch manifest
- * to agree, and the build writes the identity into the runtime patch
- * manifest. Without a `product` object the patch manifest is authoritative
- * for identity, unchanged. Bundle identifiers and plugin codes are
- * collision-checked across ALL discovered plugins (config-driven or
- * manifest-only); duplicates fail discovery naming both claiming patches.
- *
- * Legacy two-file configuration (`<Name>.build.json` build sidecar plus a
- * directory-level `product.json` with `patch`/`outputFileName` keys) is still
- * read for one release so older checkouts keep building; `kit:doctor` warns
- * about it. A patch may not mix the two schemes.
+ * them. Discovery validates the result, requires the patch manifest to agree,
+ * and the build writes the identity into the runtime patch manifest. Without
+ * a `product` object the patch manifest is authoritative for identity. Bundle
+ * identifiers and plugin codes are collision-checked across all discovered
+ * plugins.
  */
-const sidecarKeyValidators = {
+const buildKeyValidators = {
     alias: (value) => typeof value === "string" && /^[a-z0-9][a-z0-9-]*$/.test(value) && value !== "all",
     cmakeTarget: isBuildIdentifier,
     productName: isBuildIdentifier,
@@ -96,7 +75,6 @@ const sidecarKeyValidators = {
     workerSource: isRepoRelativeSourcePath,
     stateSource: isRepoRelativeSourcePath,
     workerOut: isPlainFileName,
-    visualReviewAdapter: isRepoRelativeSourcePath,
     includeInAll: (value) => typeof value === "boolean",
     disableMicrophonePermission: (value) => typeof value === "boolean",
     jitInstallRuntime: (value) => typeof value === "boolean",
@@ -104,10 +82,6 @@ const sidecarKeyValidators = {
 
 function isNonEmptyString(value) {
     return typeof value === "string" && value.length > 0;
-}
-
-function isPlainObject(value) {
-    return value !== null && typeof value === "object" && !Array.isArray(value);
 }
 
 /**
@@ -152,7 +126,7 @@ export function resolveBuildOutputRoot(value, label) {
     const buildRoot = path.join(repoRoot, "build");
     const resolved = path.resolve(repoRoot, value);
 
-    if (resolved === buildRoot || !resolved.startsWith(buildRoot + path.sep))
+    if (!isInsideDirectory(buildRoot, resolved))
         throw new Error(`${label} must resolve strictly inside ${buildRoot} (got ${resolved}).`);
 
     return resolved;
@@ -162,40 +136,10 @@ function isSemanticVersion(value) {
     return isNonEmptyString(value) && /^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/.test(value);
 }
 
-// ---------------------------------------------------------------------------
-// kit/kit.json — the kit's own version and the config schema versions it reads.
-
-export const kitManifestFileName = "kit.json";
-export const kitManifestPath = path.join(repoRoot, "kit", kitManifestFileName);
-const kitSchemaKeys = ["plugin", "toolchain", "feed"];
-
-/** Read and shape-check kit/kit.json (version + schemaVersions.plugin/toolchain/feed). */
-export function readKitManifest(filePath = kitManifestPath) {
-    let manifest;
-
-    try {
-        manifest = JSON.parse(fs.readFileSync(filePath, "utf8"));
-    } catch (error) {
-        throw new Error(`Could not read ${filePath}: ${error.message}`);
-    }
-
-    const schemaVersions = manifest?.schemaVersions;
-    const wellFormed = isPlainObject(manifest)
-        && isSemanticVersion(manifest.version)
-        && isPlainObject(schemaVersions)
-        && kitSchemaKeys.every((key) => Number.isInteger(schemaVersions[key]) && schemaVersions[key] >= 1);
-
-    if (!wellFormed) {
-        throw new Error(
-            `${filePath} must contain {"version": "<semver>", "schemaVersions": {"plugin": <int>, "toolchain": <int>, "feed": <int>}}.`,
-        );
-    }
-
-    return { version: manifest.version, schemaVersions: { ...schemaVersions } };
+/** The plugin config schema this kit reads: its own kit/kit.json schemaVersions.plugin. */
+function supportedPluginSchemaVersion() {
+    return readKitManifest(repoRoot).schemaVersions.plugin;
 }
-
-export const kitManifest = readKitManifest();
-export const supportedPluginSchemaVersion = kitManifest.schemaVersions.plugin;
 
 // ---------------------------------------------------------------------------
 // product-owner.json — the identity every plugin in this repository inherits.
@@ -207,7 +151,7 @@ function isFourCharCode(value) {
     return isNonEmptyString(value) && /^[A-Za-z0-9]{4}$/.test(value) && /[A-Z]/.test(value);
 }
 
-/** Reverse-DNS bundle identifier (or prefix), e.g. "dev.cosimo.enhancer-lite" / "dev.cosimo". */
+/** Reverse-DNS bundle identifier (or prefix), e.g. "com.example.demo-verb" / "com.example". */
 function isBundleIdentifier(value) {
     return isNonEmptyString(value) && /^[A-Za-z][A-Za-z0-9-]*(\.[A-Za-z][A-Za-z0-9-]*)+$/.test(value);
 }
@@ -225,20 +169,6 @@ function isHttpUrl(value) {
     }
 
     return parsed.protocol === "https:" || parsed.protocol === "http:";
-}
-
-function isCssHexColor(value) {
-    return isNonEmptyString(value) && /^#[0-9a-fA-F]{6}$/.test(value);
-}
-
-/** Wordmarks are read relative to the plugin directory and must not escape it. */
-function isPluginRelativeFilePath(value) {
-    if (!isNonEmptyString(value) || path.isAbsolute(value))
-        return false;
-
-    const normalized = path.posix.normalize(value);
-
-    return normalized !== "." && normalized !== ".." && !normalized.startsWith("../");
 }
 
 const productOwnerKeyValidators = {
@@ -266,16 +196,7 @@ export function readProductOwner(root = repoRoot) {
     if (!fs.existsSync(ownerPath))
         return null;
 
-    let owner;
-
-    try {
-        owner = JSON.parse(fs.readFileSync(ownerPath, "utf8"));
-    } catch (error) {
-        throw new Error(`Could not parse ${ownerPath}: ${error.message}`);
-    }
-
-    if (!isPlainObject(owner))
-        throw new Error(`${ownerPath} must contain a JSON object.`);
+    const owner = readJsonObject(ownerPath);
 
     for (const [key, value] of Object.entries(owner)) {
         const validate = productOwnerKeyValidators[key];
@@ -360,36 +281,18 @@ const productKeyValidators = {
     manufacturerCode: isFourCharCode,
     version: isSemanticVersion,
     supportUrl: isHttpUrl,
-    wordmark: isPluginRelativeFilePath,
-    accentColor: isCssHexColor,
 };
 
-/** Legacy product.json additionally binds a patch and owns the install filename. */
-const legacyProductKeyValidators = {
-    ...productKeyValidators,
-    patch: (value) => isPlainFileName(value) && value.endsWith(".cmajorpatch"),
-    outputFileName: isBuildIdentifier,
-};
 
-const requiredLegacyProductKeys = [
-    "productName",
-    "manufacturerName",
-    "bundleIdentifier",
-    "pluginCode",
-    "manufacturerCode",
-    "version",
-    "outputFileName",
-];
-
-function validateProductObject(product, validators, label) {
+function validateProductObject(product, label) {
     if (!isPlainObject(product))
         throw new Error(`${label} must be a JSON object.`);
 
     for (const [key, value] of Object.entries(product)) {
-        const validate = validators[key];
+        const validate = productKeyValidators[key];
 
         if (!validate)
-            throw new Error(`${label} has unknown key "${key}". Known keys: ${Object.keys(validators).join(", ")}.`);
+            throw new Error(`${label} has unknown key "${key}". Known keys: ${Object.keys(productKeyValidators).join(", ")}.`);
 
         if (!validate(value))
             throw new Error(`${label} has an invalid "${key}" value.`);
@@ -437,12 +340,6 @@ function resolveProductIdentity({ product, manifest, directoryName, alias, owner
 
     if (supportUrl !== undefined)
         identity.supportUrl = supportUrl;
-
-    if (product.wordmark !== undefined)
-        identity.wordmark = product.wordmark;
-
-    if (product.accentColor !== undefined)
-        identity.accentColor = product.accentColor;
 
     for (const [key, value] of Object.entries(identity)) {
         if (!productKeyValidators[key](value))
@@ -518,33 +415,16 @@ function readManifestForDiscovery(patchPath) {
 }
 
 // ---------------------------------------------------------------------------
-// Per-patch configuration: <Name>.plugin.json, or the legacy pair.
+// Per-patch configuration: <Name>.plugin.json.
 
 export const pluginConfigSuffix = ".plugin.json";
-export const legacyBuildSidecarSuffix = ".build.json";
-export const legacyProductIdentityFileName = "product.json";
 
-function readJsonObject(filePath) {
-    let value;
-
-    try {
-        value = JSON.parse(fs.readFileSync(filePath, "utf8"));
-    } catch (error) {
-        throw new Error(`Could not parse ${filePath}: ${error.message}`);
-    }
-
-    if (!isPlainObject(value))
-        throw new Error(`${filePath} must contain a JSON object.`);
-
-    return value;
-}
-
-function validateBuildFields(fields, filePath, validators) {
+function validateBuildFields(fields, filePath) {
     for (const [key, value] of Object.entries(fields)) {
-        const validate = validators[key];
+        const validate = buildKeyValidators[key];
 
         if (!validate)
-            throw new Error(`${filePath} has unknown key "${key}". Known keys: ${Object.keys(validators).join(", ")}.`);
+            throw new Error(`${filePath} has unknown key "${key}". Known keys: schemaVersion, product, ${Object.keys(buildKeyValidators).join(", ")}.`);
 
         if (!validate(value))
             throw new Error(`${filePath} has an invalid "${key}" value.`);
@@ -557,153 +437,49 @@ function validateBuildFields(fields, filePath, validators) {
         throw new Error(`${filePath} cannot combine "stateSource" and "workerSource". The framework builds the worker for the declared state module.`);
 }
 
-const pluginConfigKeyValidators = {
-    schemaVersion: (value) => Number.isInteger(value) && value >= 1,
-    ...sidecarKeyValidators,
-    product: isPlainObject,
-};
-
 /**
- * Read and validate one `<Name>.plugin.json`. The schemaVersion gate runs
- * first so a config written for a newer kit reports the real fix (update the
- * kit) instead of an unknown-key error.
+ * Read and validate one `<Name>.plugin.json`, or the empty configuration when
+ * the patch has none. The schemaVersion gate runs first so a config written
+ * for a newer kit reports the real fix (update the kit) instead of an
+ * unknown-key error.
  */
-function readPluginConfig(configPath, directoryPath) {
+function readPluginConfig(patchPath) {
+    const configPath = patchPath.replace(/\.cmajorpatch$/, pluginConfigSuffix);
+
+    if (!fs.existsSync(configPath))
+        return { configPath: null, build: {}, product: null };
+
     const config = readJsonObject(configPath);
+    const supported = supportedPluginSchemaVersion();
 
     if (config.schemaVersion === undefined)
-        throw new Error(`${configPath} is missing required key "schemaVersion" (this kit supports ${supportedPluginSchemaVersion}).`);
+        throw new Error(`${configPath} is missing required key "schemaVersion" (this kit supports ${supported}).`);
 
-    if (!pluginConfigKeyValidators.schemaVersion(config.schemaVersion))
+    if (!Number.isInteger(config.schemaVersion) || config.schemaVersion < 1)
         throw new Error(`${configPath} has an invalid "schemaVersion" value.`);
 
-    if (config.schemaVersion > supportedPluginSchemaVersion) {
+    if (config.schemaVersion > supported) {
         throw new Error(
-            `${configPath} uses plugin config schema ${config.schemaVersion}, newer than this kit supports (${supportedPluginSchemaVersion}). `
+            `${configPath} uses plugin config schema ${config.schemaVersion}, newer than this kit supports (${supported}). `
             + "Update the kit (kit-update skill) before building this plugin.",
         );
     }
 
-    const { schemaVersion, product, ...build } = config;
+    const { schemaVersion: _schemaVersion, product, ...build } = config;
 
-    validateBuildFields(build, configPath, pluginConfigKeyValidators);
+    validateBuildFields(build, configPath);
 
-    if (product !== undefined) {
-        validateProductObject(product, productKeyValidators, `${configPath} "product"`);
+    if (product !== undefined)
+        validateProductObject(product, `${configPath} "product"`);
 
-        if (product.wordmark !== undefined && !fs.existsSync(path.join(directoryPath, product.wordmark)))
-            throw new Error(`${configPath} names a wordmark file that does not exist: ${JSON.stringify(product.wordmark)}.`);
-    }
-
-    return { configPath, schemaVersion, legacy: false, build, product: product ?? null, outputFileName: undefined };
-}
-
-function readLegacyBuildSidecar(sidecarPath) {
-    if (!fs.existsSync(sidecarPath))
-        return {};
-
-    const sidecar = readJsonObject(sidecarPath);
-
-    validateBuildFields(sidecar, sidecarPath, sidecarKeyValidators);
-
-    return sidecar;
-}
-
-/**
- * Read and validate a directory's legacy `product.json`, resolving which patch
- * it identifies. Returns null when the file is absent.
- */
-function readLegacyProductIdentity(directoryPath, patchFileNames) {
-    const productPath = path.join(directoryPath, legacyProductIdentityFileName);
-
-    if (!fs.existsSync(productPath))
-        return null;
-
-    const product = readJsonObject(productPath);
-
-    validateProductObject(product, legacyProductKeyValidators, productPath);
-
-    for (const key of requiredLegacyProductKeys) {
-        if (product[key] === undefined)
-            throw new Error(`${productPath} is missing required key "${key}".`);
-    }
-
-    if (product.wordmark !== undefined && !fs.existsSync(path.join(directoryPath, product.wordmark)))
-        throw new Error(`${productPath} names a wordmark file that does not exist: ${JSON.stringify(product.wordmark)}.`);
-
-    let boundPatchFileName;
-
-    if (product.patch !== undefined) {
-        if (!patchFileNames.includes(product.patch)) {
-            throw new Error(
-                `${productPath} binds to ${JSON.stringify(product.patch)}, which matches no .cmajorpatch in its directory.`,
-            );
-        }
-
-        boundPatchFileName = product.patch;
-    } else if (patchFileNames.length === 1) {
-        boundPatchFileName = patchFileNames[0];
-    } else {
-        throw new Error(
-            `${productPath} is ambiguous: its directory holds ${patchFileNames.length} patches. `
-            + 'Set its "patch" key to the .cmajorpatch this identity belongs to.',
-        );
-    }
-
-    const { patch: _boundPatch, outputFileName, ...identityConfig } = product;
-
-    return { productPath, boundPatchFileName, product: identityConfig, outputFileName };
-}
-
-/** Resolve one patch's configuration: the single plugin.json, or the legacy sidecar + product.json pair. */
-function readPatchConfig({ directoryPath, patchPath, patchFileName, legacyProduct }) {
-    const configPath = patchPath.replace(/\.cmajorpatch$/, pluginConfigSuffix);
-    const sidecarPath = patchPath.replace(/\.cmajorpatch$/, legacyBuildSidecarSuffix);
-    const boundLegacyProduct = legacyProduct?.boundPatchFileName === patchFileName ? legacyProduct : null;
-
-    if (fs.existsSync(configPath)) {
-        if (fs.existsSync(sidecarPath)) {
-            throw new Error(
-                `${patchPath} has both ${path.basename(configPath)} and the legacy ${path.basename(sidecarPath)}; `
-                + `fold the sidecar into ${path.basename(configPath)} and delete it.`,
-            );
-        }
-
-        if (boundLegacyProduct) {
-            throw new Error(
-                `${patchPath} has both ${path.basename(configPath)} and the legacy ${legacyProductIdentityFileName}; `
-                + `move the identity into the "product" object of ${path.basename(configPath)} and delete ${legacyProductIdentityFileName}.`,
-            );
-        }
-
-        return readPluginConfig(configPath, directoryPath);
-    }
-
-    const build = readLegacyBuildSidecar(sidecarPath);
-
-    if (boundLegacyProduct && build.productName !== undefined) {
-        throw new Error(
-            `${boundLegacyProduct.productPath} owns the install filename for ${patchPath} (its "outputFileName"); `
-            + 'remove "productName" from the build sidecar.',
-        );
-    }
-
-    return {
-        configPath: fs.existsSync(sidecarPath) ? sidecarPath : boundLegacyProduct?.productPath ?? null,
-        schemaVersion: null,
-        legacy: fs.existsSync(sidecarPath) || Boolean(boundLegacyProduct),
-        build,
-        product: boundLegacyProduct?.product ?? null,
-        outputFileName: boundLegacyProduct?.outputFileName,
-        legacyProductPath: boundLegacyProduct?.productPath,
-    };
+    return { configPath, build, product: product ?? null };
 }
 
 function createDiscoveredPlugin({ patch, manifest, config, directoryName, patchFileName, owner, root }) {
     const { build } = config;
     const alias = build.alias ?? deriveAlias(directoryName);
 
-    if (!sidecarKeyValidators.alias(alias))
+    if (!buildKeyValidators.alias(alias))
         throw new Error(`Could not derive a usable plugin alias for ${patch}.`);
 
     const outputStem = alias.replaceAll("-", "_");
@@ -713,7 +489,7 @@ function createDiscoveredPlugin({ patch, manifest, config, directoryName, patchF
         runtimeOut: build.runtimeOut ?? `build/fx/${outputStem}_runtime`,
         juceOut: build.juceOut ?? `build/${outputStem}_juce`,
         cmakeTarget: build.cmakeTarget ?? buildIdentifier,
-        productName: config.outputFileName ?? build.productName ?? buildIdentifier,
+        productName: build.productName ?? buildIdentifier,
     };
 
     if (!isBuildIdentifier(plugin.cmakeTarget) || !isBuildIdentifier(plugin.productName))
@@ -726,12 +502,10 @@ function createDiscoveredPlugin({ patch, manifest, config, directoryName, patchF
     }
 
     if (config.product !== null) {
-        const configLabel = path.basename(config.legacyProductPath ?? config.configPath);
-        const label = config.legacyProductPath ?? config.configPath;
+        const configLabel = path.basename(config.configPath);
+        const label = config.configPath;
 
-        plugin.product = config.legacy
-            ? config.product
-            : resolveProductIdentity({ product: config.product, manifest, directoryName, alias, owner, root, label });
+        plugin.product = resolveProductIdentity({ product: config.product, manifest, directoryName, alias, owner, root, label });
         plugin.identity = deriveProductIdentity(plugin.product);
 
         // The source patch is what dev servers and JIT installs load, so a
@@ -754,9 +528,6 @@ function createDiscoveredPlugin({ patch, manifest, config, directoryName, patchF
     if (build.disableMicrophonePermission === true)
         plugin.disableMicrophonePermission = true;
 
-    if (build.visualReviewAdapter !== undefined)
-        plugin.visualReviewAdapter = build.visualReviewAdapter;
-
     if (build.workerSource) {
         plugin.workerSource = build.workerSource;
         plugin.workerOut = build.workerOut ?? "worker.js";
@@ -777,21 +548,56 @@ function createDiscoveredPlugin({ patch, manifest, config, directoryName, patchF
     return { alias, plugin };
 }
 
-/** Fail closed on a config file whose name matches no patch — its settings would otherwise be silently ignored. */
-function assertNoOrphanConfigs(directoryPath, fileNames, patchFileNames, suffix) {
-    const claimedNames = new Set(patchFileNames.map((fileName) => fileName.replace(/\.cmajorpatch$/, suffix)));
+/** Fail closed on a config file whose name matches no patch: its settings would otherwise be silently ignored. */
+function assertNoOrphanConfigs(directoryPath, fileNames, patchFileNames) {
+    const claimedNames = new Set(patchFileNames.map((fileName) => fileName.replace(/\.cmajorpatch$/, pluginConfigSuffix)));
 
     for (const fileName of fileNames) {
-        if (fileName.endsWith(suffix) && !claimedNames.has(fileName)) {
+        if (fileName.endsWith(pluginConfigSuffix) && !claimedNames.has(fileName)) {
             throw new Error(
                 `${path.join(directoryPath, fileName)} matches no .cmajorpatch in its directory. `
-                + `Name plugin configs <PatchName>${suffix} after the patch they configure.`,
+                + `Name plugin configs <PatchName>${pluginConfigSuffix} after the patch they configure.`,
             );
         }
     }
 }
 
-export function discoverEffectPlugins({ fxRoot = defaultFxRoot } = {}) {
+/** Every plugin one fx/ directory declares; throws on the first defect. */
+function discoverDirectory({ directoryPath, directoryName, registryRoot, owner }) {
+    const fileNames = fs.readdirSync(directoryPath, { withFileTypes: true })
+        .filter((entry) => entry.isFile())
+        .map((entry) => entry.name);
+    const patchFileNames = fileNames
+        .filter((fileName) => fileName.endsWith(".cmajorpatch"))
+        .sort();
+
+    assertNoOrphanConfigs(directoryPath, fileNames, patchFileNames);
+
+    return patchFileNames.map((patchFileName) => {
+        const patchPath = path.join(directoryPath, patchFileName);
+        const patch = path.relative(registryRoot, patchPath).split(path.sep).join("/");
+        const manifest = readManifestForDiscovery(patchPath);
+        const config = readPluginConfig(patchPath);
+        const { alias, plugin } = createDiscoveredPlugin({
+            patch,
+            manifest,
+            config,
+            directoryName,
+            patchFileName,
+            owner,
+            root: registryRoot,
+        });
+
+        return { alias, plugin, patch, claims: readManifestIdentityClaims(manifest, plugin.identity) };
+    });
+}
+
+/**
+ * Discover every plugin under fxRoot. A defect in one directory throws, unless
+ * `onPluginError(directoryPath, error)` is given: then that directory is
+ * skipped and discovery continues. Alias and identity collisions always throw.
+ */
+export function discoverEffectPlugins({ fxRoot = defaultFxRoot, onPluginError } = {}) {
     const registryRoot = path.dirname(fxRoot);
     const plugins = {};
     const patchesByAlias = new Map();
@@ -809,41 +615,25 @@ export function discoverEffectPlugins({ fxRoot = defaultFxRoot } = {}) {
 
     for (const directoryName of directoryNames) {
         const directoryPath = path.join(fxRoot, directoryName);
-        const fileNames = fs.readdirSync(directoryPath, { withFileTypes: true })
-            .filter((entry) => entry.isFile())
-            .map((entry) => entry.name);
-        const patchFileNames = fileNames
-            .filter((fileName) => fileName.endsWith(".cmajorpatch"))
-            .sort();
+        let discovered;
 
-        assertNoOrphanConfigs(directoryPath, fileNames, patchFileNames, pluginConfigSuffix);
-        assertNoOrphanConfigs(directoryPath, fileNames, patchFileNames, legacyBuildSidecarSuffix);
+        try {
+            discovered = discoverDirectory({ directoryPath, directoryName, registryRoot, owner });
+        } catch (error) {
+            if (!onPluginError)
+                throw error;
 
-        const legacyProduct = readLegacyProductIdentity(directoryPath, patchFileNames);
+            onPluginError(directoryPath, error);
+            continue;
+        }
 
-        for (const patchFileName of patchFileNames) {
-            const patchPath = path.join(directoryPath, patchFileName);
-            const patch = path.relative(registryRoot, patchPath).split(path.sep).join("/");
-            const manifest = readManifestForDiscovery(patchPath);
-            const config = readPatchConfig({ directoryPath, patchPath, patchFileName, legacyProduct });
-            const { alias, plugin } = createDiscoveredPlugin({
-                patch,
-                manifest,
-                config,
-                directoryName,
-                patchFileName,
-                owner,
-                root: registryRoot,
-            });
-
+        for (const { alias, plugin, patch, claims } of discovered) {
             if (patchesByAlias.has(alias)) {
                 throw new Error(
                     `Effect plugin alias "${alias}" is claimed by both ${patchesByAlias.get(alias)} and ${patch}. `
                     + `Give each patch a unique alias in its <PatchName>${pluginConfigSuffix} config.`,
                 );
             }
-
-            const claims = readManifestIdentityClaims(manifest, plugin.identity);
 
             for (const [claimKey, claimedPatches, description] of [
                 ["bundleIdentifier", patchesByBundleIdentifier, "bundle identifier"],
@@ -875,9 +665,9 @@ export function discoverEffectPlugins({ fxRoot = defaultFxRoot } = {}) {
 
 /**
  * The bundle identifiers and plugin codes every discovered plugin claims,
- * mapped to the claiming patch. Product.json identities and manifest-only
- * identities both count — this is what scaffolding checks new identity
- * candidates against.
+ * mapped to the claiming patch. Config-driven and manifest-only identities
+ * both count; this is what scaffolding checks new identity candidates
+ * against.
  */
 export function collectEffectIdentityClaims({ fxRoot = defaultFxRoot } = {}) {
     const registryRoot = path.dirname(fxRoot);
@@ -898,39 +688,88 @@ export function collectEffectIdentityClaims({ fxRoot = defaultFxRoot } = {}) {
     return { bundleIdentifiers, pluginCodes };
 }
 
-export const effectPlugins = discoverEffectPlugins();
+let registry = null;
+
+/**
+ * This checkout's plugins, discovered on first use. Directories that fail to
+ * load are kept as failures so only the commands that need them fail.
+ */
+function loadRegistry() {
+    if (registry === null) {
+        const failures = [];
+        const plugins = discoverEffectPlugins({
+            onPluginError: (directoryPath, error) => failures.push({ alias: deriveAlias(path.basename(directoryPath)), error }),
+        });
+
+        registry = { plugins, failures };
+    }
+
+    return registry;
+}
+
+export function getEffectPlugins() {
+    return loadRegistry().plugins;
+}
+
+/** Plugin folders whose configuration could not be read, one message each (they name the file). */
+export function effectPluginLoadFailures() {
+    return loadRegistry().failures.map(({ error }) => error.message);
+}
 
 export function effectPluginNames() {
-    return Object.entries(effectPlugins)
+    return Object.entries(getEffectPlugins())
         .filter(([, plugin]) => plugin.includeInAll !== false)
         .map(([pluginName]) => pluginName);
 }
 
 export function effectPluginTargetNames() {
-    return Object.keys(effectPlugins);
+    return Object.keys(getEffectPlugins());
 }
 
 export function availableEffectPluginNamesLine() {
     return ["all", ...effectPluginTargetNames()].join(", ");
 }
 
+function failuresNote() {
+    const failures = effectPluginLoadFailures();
+
+    return failures.length === 0 ? "" : `\n\nThese plugin folders could not be loaded:\n${failures.map((message) => `  ${message}`).join("\n")}`;
+}
+
 export function usage() {
-    return `Usage: npm run fx:build -- <plugin>\n\nAvailable plugins: ${availableEffectPluginNamesLine()}`;
+    return `Usage: npm run fx:build -- <plugin>\n\nAvailable plugins: ${availableEffectPluginNamesLine()}${failuresNote()}`;
+}
+
+/** One discovered plugin; a plugin whose folder failed to load throws that failure. */
+export function getEffectPlugin(pluginName, createUsage = usage) {
+    const { plugins, failures } = loadRegistry();
+
+    if (Object.hasOwn(plugins, pluginName))
+        return plugins[pluginName];
+
+    const failure = failures.find((entry) => entry.alias === pluginName);
+
+    throw failure ? failure.error : new Error(`Unknown plugin ${JSON.stringify(pluginName ?? "")}.\n\n${createUsage()}`);
 }
 
 export function resolvePluginNames(pluginName, createUsage = usage) {
-    if (pluginName === "all")
+    if (pluginName === "all") {
+        const failures = effectPluginLoadFailures();
+
+        if (failures.length > 0)
+            throw new Error(`Cannot build all plugins until these plugin folders load:\n${failures.map((message) => `  ${message}`).join("\n")}`);
+
         return effectPluginNames();
+    }
 
-    if (effectPlugins[pluginName])
-        return [pluginName];
+    getEffectPlugin(pluginName, createUsage);
 
-    throw new Error(createUsage());
+    return [pluginName];
 }
 
-/** Everything kit/scripts/install_fx_cmajplugin.sh needs to JIT-install one target. */
-export function createJitInstallPlan(pluginName, plugins = effectPlugins) {
-    const plugin = plugins[pluginName];
+/** Everything `npm run fx:jit:install` needs to point the generic VST3 at one target. */
+export function createJitInstallPlan(pluginName, plugins = null) {
+    const plugin = plugins === null ? getEffectPlugin(pluginName) : plugins[pluginName];
 
     if (!plugin) {
         throw new Error(
@@ -947,23 +786,9 @@ export function createJitInstallPlan(pluginName, plugins = effectPlugins) {
     };
 }
 
-export function shouldReuseSeqFxCanonicalRuntime(
-    pluginName,
-    environment = process.env,
-    { stripDevModule = false } = {},
-) {
-    // A prebuilt canonical runtime keeps view.devModule, so a build that must
-    // strip it (fx:prod:build) can never reuse one — it rebuilds instead.
-    return !stripDevModule
-        && pluginName === "seqfx"
-        && environment[seqFxCanonicalRuntimePrebuiltEnvironmentKey] === "1";
-}
-
 /** Keep local source maps unless the caller explicitly builds a distributable runtime. */
-export function shouldEmitEffectRuntimeSourceMaps(pluginName, environment = process.env) {
-    return environment[effectDistributableRuntimeEnvironmentKey] !== "1"
-        && (pluginName !== "seqfx"
-            || environment[seqFxDistributableRuntimeEnvironmentKey] !== "1");
+export function shouldEmitEffectRuntimeSourceMaps(environment = process.env) {
+    return environment[effectDistributableRuntimeEnvironmentKey] !== "1";
 }
 
 function asList(value) {
@@ -1122,6 +947,8 @@ function createProductionBundleConfig({ entry, fileName, outDir, plugins = [], s
 }
 
 async function buildWorker(plugin, runtimeRoot, { sourcemap }) {
+    const { build } = await import("vite");
+
     if (!plugin.workerSource && !plugin.stateSource) {
         return;
     }
@@ -1134,15 +961,15 @@ async function buildWorker(plugin, runtimeRoot, { sourcemap }) {
             if (id !== `\0${generatedEntry}`) return undefined;
             const source = JSON.stringify(path.join(repoRoot, plugin.stateSource));
             const adapter = JSON.stringify(path.join(repoRoot, "kit/ui/plugin-state-cmajor.ts"));
-            const services = JSON.stringify(path.join(repoRoot, "kit/ui/patch-worker-services.ts"));
             return `import definition from ${source};
 import { createCmajorPluginStateService } from ${adapter};
-import { startPatchWorkerServices } from ${services};
-export default connection => startPatchWorkerServices(connection, [
-    () => createCmajorPluginStateService(definition, connection, {
+export default async connection => {
+    const service = createCmajorPluginStateService(definition, connection, {
         onDefect: error => console.error(error instanceof Error ? error.stack ?? error.message : String(error)),
-    }),
-]);`;
+    });
+    await service.start();
+    return service;
+};`;
         },
     }] : [];
     const workerEntry = plugin.stateSource ? generatedEntry : path.join(repoRoot, plugin.workerSource);
@@ -1157,15 +984,6 @@ export default connection => startPatchWorkerServices(connection, [
     }));
 }
 
-export async function readPatchManifest(patchPath) {
-    const manifestText = await readFile(patchPath, "utf8");
-
-    try {
-        return JSON.parse(manifestText);
-    } catch (error) {
-        throw new Error(`Could not parse ${patchPath}: ${error.message}`);
-    }
-}
 
 function getView(manifest, patchPath) {
     if (!manifest?.view || typeof manifest.view !== "object" || Array.isArray(manifest.view))
@@ -1175,26 +993,25 @@ function getView(manifest, patchPath) {
 }
 
 export async function buildPlugin(pluginName, { environment = process.env, stripDevModule = false } = {}) {
-    const plugin = effectPlugins[pluginName];
-
-    if (!plugin)
-        throw new Error(usage());
-
-    if (shouldReuseSeqFxCanonicalRuntime(pluginName, environment, { stripDevModule })) {
-        console.log("Reusing aggregate-prebuilt SeqFX canonical runtime");
-        return;
-    }
+    const plugin = getEffectPlugin(pluginName);
+    // Vite, React and esbuild load here so discovery-only commands (kit:doctor,
+    // kit:new, --targets) work before npm dependencies are installed.
+    const [{ build }, { default: react }, { buildPluginState }] = await Promise.all([
+        import("vite"),
+        import("@vitejs/plugin-react"),
+        import("./build-plugin-state.mjs"),
+    ]);
 
     const patchPath = path.join(repoRoot, plugin.patch);
     const patchRoot = path.dirname(patchPath);
     const runtimeRoot = resolveBuildOutputRoot(plugin.runtimeOut, `${pluginName} runtimeOut`);
     const runtimeViewRoot = path.join(runtimeRoot, "view");
-    const sharedLoaderPath = path.join(repoRoot, "kit/ui/effects/effect-view-loader.js");
-    const manifest = await readPatchManifest(patchPath);
+    const sharedLoaderPath = path.join(repoRoot, "kit/ui/view-loader.js");
+    const manifest = readJsonObject(patchPath);
     const view = getView(manifest, patchPath);
     const devModule = normalizeRepoPath(view.devModule, `${pluginName} view.devModule`);
     const sourceEntry = path.join(repoRoot, devModule);
-    const sourcemap = shouldEmitEffectRuntimeSourceMaps(pluginName, environment);
+    const sourcemap = shouldEmitEffectRuntimeSourceMaps(environment);
     const entryPlans = planRuntimePatchEntries(manifest, {
         reservedTargets: [path.basename(patchPath)],
     });
@@ -1251,6 +1068,8 @@ async function main() {
 
         if (firstArgument === "--targets") {
             console.log(effectPluginTargetNames().join("\n"));
+            for (const message of effectPluginLoadFailures())
+                console.error(message);
             return;
         }
 
@@ -1269,5 +1088,5 @@ async function main() {
     }
 }
 
-if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url))
+if (isMainModule(import.meta.url))
     await main();

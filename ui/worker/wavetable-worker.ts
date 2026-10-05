@@ -22,7 +22,7 @@ import {
     type ResourceClientInput,
 } from "../shared/resource-client";
 import { startPatchWorkerServices } from "../shared/patch-worker-services";
-import { prepareSharedData, type SharedDataConnection } from "../../kit/ui/prepared-shared-data";
+import { prepareSharedData, type SharedDataConnection } from "../shared/prepared-shared-data";
 import { PACKED_WAVETABLE_BYTES, preparePackedWavetable } from "../shared/packed-wavetable";
 
 const runtimeSyncRequestEndpointID = "runtimeSyncRequest";

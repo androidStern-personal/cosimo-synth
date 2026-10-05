@@ -76,6 +76,50 @@ test("public compound edits remain pending until receipt and one Undo restores b
     } finally { await page.evaluate(() => window.publicState?.dispose()); await close(page); }
 });
 
+test("an editor gesture over two fields takes edits from the editor and the field controls and seals one Undo entry", async () => {
+    const page = await browser.newPage();
+    browserErrors.set(page, []);
+    page.on("pageerror", error => browserErrors.get(page).push(error.message));
+    try {
+        await page.goto(new URL("kit/tests/helpers/module_test_shell.html", server.baseUrl).href);
+        await page.evaluate(async () => {
+            const { mount } = await import("/kit/tests/helpers/plugin_state_public_react.tsx");
+            window.publicState = await mount(document.getElementById("mount"));
+        });
+        await page.waitForFunction(() => "value" in window.publicState.current().control.state, undefined, { timeout: 2000 });
+        const results = await page.evaluate(async () => {
+            const state = window.publicState;
+            const begin = await state.current().editor.beginGesture(["gain", "other"]);
+            const competing = await state.current().control.beginGesture();
+            const fromControl = await state.current().control.setValue(3);
+            const fromEditor = await state.current().editor.edit({ gain: 4, other: 7 });
+            const undoDuring = await state.current().history.undo();
+            const end = await state.current().editor.endGesture();
+            const again = state.current().editor.endGesture();
+            return { begin, competing, fromControl, fromEditor, undoDuring, end, again: again === undefined };
+        });
+        assert.deepEqual(results, {
+            begin: { kind: "accepted" }, competing: { kind: "rejected", reason: "busy" },
+            fromControl: { kind: "accepted", changed: true }, fromEditor: { kind: "accepted", changed: true },
+            undoDuring: { kind: "rejected", reason: "busy" }, end: { kind: "accepted", historyEntry: {} }, again: true,
+        });
+        await page.waitForFunction(() => window.publicState.current().control.state.value === 4 && window.publicState.current().other.state.value === 7);
+        assert.deepEqual(await page.evaluate(() => window.publicState.current().history.undo()), { kind: "accepted" });
+        await page.waitForFunction(() => window.publicState.current().control.state.value === 2 && window.publicState.current().other.state.value === 0);
+        assert.equal(await page.evaluate(() => window.publicState.current().history.canUndo), false, "the gesture created exactly one Undo entry");
+
+        assert.deepEqual(await page.evaluate(async () => {
+            const state = window.publicState;
+            await state.current().editor.beginGesture(["gain", "other"]);
+            await state.current().editor.edit({ gain: 8, other: 9 });
+            await state.current().editor.edit({ gain: 2, other: 0 });
+            return state.current().editor.endGesture();
+        }), { kind: "accepted" }, "a gesture returned to its origin seals nothing");
+        assert.equal(await page.evaluate(() => window.publicState.current().history.canUndo), false);
+        assert.deepEqual(await page.evaluate(() => window.publicState.defects()), []);
+    } finally { await page.evaluate(() => window.publicState?.dispose()); await close(page); }
+});
+
 test("public compound edit closures reject one stale field atomically and cannot cross a document reset", async () => {
     const page = await browser.newPage();
     browserErrors.set(page, []);
@@ -213,6 +257,37 @@ test("public hook results hide transport identities while opaque history referen
         assert.deepEqual(await page.evaluate(() => window.publicState.current().history.undo(window.rememberedHistory)), { kind: "rejected", reason: "stale-history" });
         assert.deepEqual(await page.evaluate(() => window.publicState.current().history.undo({})), { kind: "rejected", reason: "stale-history" });
         assert.deepEqual(await page.evaluate(() => window.publicState.defects()), []);
+    } finally { await page.evaluate(() => window.publicState.dispose()); await close(page); }
+});
+
+test("an Undo entry keeps one opaque identity across renders until the history head changes", async () => {
+    const page = await browser.newPage();
+    browserErrors.set(page, []);
+    page.on("pageerror", error => browserErrors.get(page).push(error.message));
+    await page.goto(new URL("kit/tests/helpers/module_test_shell.html", server.baseUrl).href);
+    await page.evaluate(async () => {
+        const { mount } = await import("/kit/tests/helpers/plugin_state_public_react.tsx");
+        window.publicState = await mount(document.getElementById("mount"));
+    });
+    try {
+        await page.waitForFunction(() => "value" in window.publicState.current().control.state);
+        await page.evaluate(() => window.publicState.current().control.setValue(4));
+        await page.waitForFunction(() => window.publicState.current().control.state.value === 4);
+        const identity = await page.evaluate(async () => {
+            const before = window.publicState.current();
+            await window.publicState.settleSaves();
+            await new Promise(resolve => setTimeout(resolve, 20));
+            const after = window.publicState.current();
+            return { rerendered: before !== after, same: before.history.undoEntry === after.history.undoEntry };
+        });
+        assert.deepEqual(identity, { rerendered: true, same: true });
+        const replaced = await page.evaluate(async () => {
+            const before = window.publicState.current().history.undoEntry;
+            await window.publicState.current().other.setValue(3);
+            await new Promise(resolve => setTimeout(resolve, 20));
+            return window.publicState.current().history.undoEntry !== before;
+        });
+        assert.equal(replaced, true, "a new history head gets a new token");
     } finally { await page.evaluate(() => window.publicState.dispose()); await close(page); }
 });
 
@@ -401,10 +476,10 @@ test("removing a control ends its own drag once, while document replacement disc
         await page.getByText("Toggle control", { exact: true }).click();
         let commands = (await messages(page)).sent.filter(message => message.kind === "command");
         assert.deepEqual(commands.map(message => message.command), [
-            { kind: "begin", key: "gain", gesture: 1 },
+            { kind: "begin", keys: ["gain"], gesture: 1 },
             { kind: "edit", key: "gain", value: 4, expectedVersion: 0, gesture: 1 },
             { kind: "edit", key: "gain", value: 7, expectedVersion: 0, gesture: 1 },
-            { kind: "end", key: "gain", gesture: 1 },
+            { kind: "end", keys: ["gain"], gesture: 1 },
         ]);
         await page.getByText("Toggle control", { exact: true }).click();
         await page.getByText("Begin", { exact: true }).click();
@@ -420,9 +495,9 @@ test("removing a control ends its own drag once, while document replacement disc
         await page.evaluate(() => window.unmount());
         commands = (await messages(page)).sent.filter(message => message.kind === "command");
         assert.deepEqual(commands.slice(-3), [
-            { kind: "command", scope: nextScope, client: 2, sequence: 1, command: { kind: "begin", key: "gain", gesture: 3 } },
+            { kind: "command", scope: nextScope, client: 2, sequence: 1, command: { kind: "begin", keys: ["gain"], gesture: 3 } },
             { kind: "command", scope: nextScope, client: 2, sequence: 2, command: { kind: "edit", key: "gain", value: 4, expectedVersion: 0, gesture: 3 } },
-            { kind: "command", scope: nextScope, client: 2, sequence: 3, command: { kind: "end", key: "gain", gesture: 3 } },
+            { kind: "command", scope: nextScope, client: 2, sequence: 3, command: { kind: "end", keys: ["gain"], gesture: 3 } },
         ]);
         assert.deepEqual((await messages(page)).defects, []);
     } finally { await close(page); }
@@ -470,9 +545,9 @@ test("the public view factory owns mounting, drag cleanup, fresh attachment on r
         assert.equal(traffic.listeners, 0);
         assert.deepEqual(traffic.trace, ["subscribe", "send:attach", "send:begin", "send:edit", "send:end", "send:detach", "unsubscribe"]);
         assert.deepEqual(traffic.sent.slice(1, -1).map(message => message.message.command), [
-            { kind: "begin", key: "gain", gesture: 1 },
+            { kind: "begin", keys: ["gain"], gesture: 1 },
             { kind: "edit", key: "gain", value: 4, expectedVersion: 0, gesture: 1 },
-            { kind: "end", key: "gain", gesture: 1 },
+            { kind: "end", keys: ["gain"], gesture: 1 },
         ]);
         assert.deepEqual(traffic.sent.at(-1).message, { kind: "detach", scope, client: 2 });
         await page.evaluate(() => window.viewHarness.append());

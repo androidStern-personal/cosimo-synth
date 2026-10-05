@@ -1,9 +1,12 @@
-// Builder Kit release (plan 5.2, Andrew-side; not exported). Turns the
-// current monorepo state into one customer-facing release on the static feed:
+// Builder Kit release (maintainer-only; not exported). Turns one clean source
+// commit into one customer-facing release on the static feed. The runbook is
+// docs/builder-kit/RELEASING.md.
 //
 //   1. export the kit to a staging dir with the feed URL stamped in
-//      kit/feed.json, run the export gates, and prove a second copy
-//      (proveExport: canonical typecheck/test, Enhancer Lite build, update-flow merge);
+//      kit/feed.json, run the export gates, require a "## <version>" section
+//      in kit/CHANGELOG.md and date it in the staged export, and prove a
+//      copy of it (proveExport: canonical typecheck/test, Enhance That build,
+//      update-flow merge);
 //   2. on macOS build the pinned `cmaj` and the JIT dev loader
 //      `CmajPlugin.vst3`, archive them, hash them, and record the hashes in
 //      the staged kit/toolchain.json;
@@ -25,7 +28,9 @@
 // --dry-run does everything local that this platform allows (export, proof,
 // lineage commit + tag on a throwaway clone, mirrors from local sources,
 // manifest), skips every network step and the tool builds on non-macOS, and
-// prints the staging layout. The staging dir is kept in every mode.
+// prints the staging layout. It stamps a stand-in cohort into the feed URL and
+// never reads the Keychain, so it also runs on Linux and in CI. The staging
+// dir is kept in every mode.
 
 import fs from "node:fs/promises";
 import { createReadStream, existsSync } from "node:fs";
@@ -35,12 +40,11 @@ import path from "node:path";
 import { execFileSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 
-import { exportKit as defaultExportKit, proveExport as defaultProveExport } from "../kit/scripts/export_kit.mjs";
-import { readCmajorPin } from "../kit/scripts/toolchain.mjs";
-import { ensureRedacted, redact, reveal } from "../kit/scripts/redacted.mjs";
+import { buildCmajPlugin } from "./build_cmajplugin.mjs";
 import { renderBootstrap } from "./builder-kit-install.mjs";
-
-export { readCmajorPin } from "../kit/scripts/toolchain.mjs";
+import { exportKit as defaultExportKit, proveExport as defaultProveExport, readCmajorPin } from "./export_kit.mjs";
+import { ensureRedacted, redact, reveal } from "./redacted.mjs";
+import { buildSourceCmaj } from "./source_cmaj.mjs";
 
 export const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -51,14 +55,14 @@ export const usage = [
     "         [--cmajor-source <url|path>] [--choc-source <url|path>]",
     "",
     "  --dry-run       local steps only (no push, no rclone, no tool builds off macOS); prints the staging layout",
-    "                  (destination capability is still read from macOS Keychain)",
+    "                  (uses a stand-in cohort in the feed URL and does not read the Keychain)",
     "  --skip-tools    do not build cmaj/CmajPlugin.vst3; a real release then needs --tools-dir with the archives",
     "  --tools-dir     directory holding prebuilt tool archives named as in kit/toolchain.json",
     "  --staging       staging directory (default: a fresh dir under the OS temp dir); must be outside the monorepo",
     "  --cmajor-source / --choc-source",
     "                  override where the cmajor/choc mirrors are cloned from (default: the pinned fork URLs)",
     "  --destination-config",
-    "                  JSON containing non-secret feedOrigin and rcloneRoot; the cohort capability comes from Keychain",
+    "                  JSON containing non-secret feedOrigin and rcloneRoot; a real release reads the cohort capability from Keychain",
 ].join("\n");
 
 const semverPattern = /^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/;
@@ -144,6 +148,9 @@ export function assertFeedMatchesPrefix(feedUrl, r2) {
 
 export const defaultKeychainService = "builder-kit-feed-cohort";
 
+/** The cohort a dry run stamps into its feed URL; nothing is published under it. */
+export const dryRunCohort = "dry-run";
+
 export function readCapabilityFromKeychain({
     service = defaultKeychainService,
     execute = execFileSync,
@@ -204,6 +211,12 @@ export function createReleaseDestination(config, capabilityInput) {
     return Object.freeze({ feedUrl, r2Target });
 }
 
+/** Only publishing needs the real cohort, so a dry run never reads the Keychain. */
+export function releaseDestination(options, config, { readCapability = readCapabilityFromKeychain } = {}) {
+    const capability = options.dryRun ? redact(dryRunCohort) : readCapability({ service: config.keychainService });
+    return createReleaseDestination(config, capability);
+}
+
 // ---------------------------------------------------------------------------
 // Small helpers
 
@@ -221,7 +234,30 @@ export function readSourceState(root = repoRoot) {
     return {
         sha: git(root, "rev-parse", "HEAD"),
         status: git(root, "status", "--porcelain=v1", "--untracked-files=all"),
+        // The release date is the source commit's date, so a retried release
+        // stages byte-identical files.
+        date: git(root, "show", "-s", "--format=%cs", "HEAD"),
     };
+}
+
+/**
+ * Require exactly one "## <version>" heading in kit/CHANGELOG.md and add the
+ * release date to it: "## 0.2.0 — Title" becomes "## 0.2.0 (2026-10-04) — Title".
+ */
+export function stampChangelog(text, version, date) {
+    const escaped = version.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&");
+    const heading = new RegExp(`^## ${escaped}(?=$|\\s)(.*)$`, "gmu");
+    const count = [...text.matchAll(heading)].length;
+
+    if (count === 0) {
+        throw new Error(`kit/CHANGELOG.md has no "## ${version}" section, so ${version} cannot be released. `
+            + `Add a "## ${version} — <title>" section listing what this release adds, changes and removes, then commit it.`);
+    }
+    if (count > 1) {
+        throw new Error(`kit/CHANGELOG.md has ${count} "## ${version}" sections. Merge them into one, then commit it.`);
+    }
+
+    return text.replace(heading, (_, rest) => `## ${version} (${date})${rest}`);
 }
 
 export function assertSourceState(expectedSha, state) {
@@ -563,17 +599,10 @@ export async function hashToolArchives(toolsDir, toolchain) {
 
 /** Build the pinned cmaj and CmajPlugin.vst3 on macOS and archive them. */
 export async function buildToolArtifacts({ toolsDir, toolchain, log }) {
-    const cmajBuildDir = path.join(repoRoot, "build/cmajor_command");
-    const jobs = String(process.env.COSIMO_CMAKE_JOBS ?? Math.max(1, os.availableParallelism()));
-    log(`Building pinned cmaj (${toolchain.cmaj.forkCommit.slice(0, 9)}) in ${cmajBuildDir}`);
-    runCommand("cmake", ["-S", path.join(repoRoot, "tools/cmajor_command_build"), "-B", cmajBuildDir, "-DCMAKE_BUILD_TYPE=Release"]);
-    runCommand("cmake", ["--build", cmajBuildDir, "--config", "Release", "--target", "cmaj", "--parallel", jobs]);
-    const cmajBinary = path.join(cmajBuildDir, "bin/cmaj");
-
-    const pluginBuildDir = path.join(repoRoot, "build/cmajplugin-source");
-    log(`Building CmajPlugin.vst3 in ${pluginBuildDir}`);
-    runCommand("bash", [path.join(repoRoot, "kit/scripts/build_cmajplugin_vst3.sh"), pluginBuildDir]);
-    const vst3Bundle = path.join(pluginBuildDir, "cmajplugin/CmajPlugin_artefacts/Release/VST3/CmajPlugin.vst3");
+    log(`Building pinned cmaj (${toolchain.cmaj.forkCommit.slice(0, 9)})`);
+    const cmajBinary = buildSourceCmaj();
+    log("Building CmajPlugin.vst3");
+    const vst3Bundle = buildCmajPlugin(path.join(repoRoot, "build/cmajplugin-source"), { log });
 
     return packageToolArtifacts({ cmajBinary, vst3Bundle, toolsDir, toolchain });
 }
@@ -760,7 +789,8 @@ export async function runRelease(options, {
 
     // Preflight.
     assertFeedMatchesPrefix(feedUrl, destination.r2Target);
-    assertSourceState(sourceSha, await getSourceState());
+    const sourceState = await getSourceState();
+    assertSourceState(sourceSha, sourceState);
     if (!dryRun && platform !== "darwin" && !skipTools) {
         throw new Error("A real release builds cmaj and CmajPlugin.vst3, which needs macOS. Use --dry-run here, or --skip-tools with --tools-dir.");
     }
@@ -781,7 +811,7 @@ export async function runRelease(options, {
     await fs.mkdir(feedRoot, { recursive: true });
     log(`Staging in ${stagingRoot}`);
 
-    // 1. Export + gates, then prove a separate copy (the proof dirties its tree).
+    // 1. Export + gates, then prove a copy (the proof builds and commits in its tree).
     const exported = await exportKit(exportRoot, { force: true, feedUrl: reveal(feedUrl), sourceCommit: sourceSha });
     await stampFeed(exportRoot, feedUrl, log);
     if (exported.sourceCommit !== sourceSha) {
@@ -791,15 +821,15 @@ export async function runRelease(options, {
     if (kitManifest.version !== version) {
         throw new Error(`Requested release version ${version} does not match exported kit/kit.json version ${kitManifest.version}.`);
     }
+    const changelogPath = path.join(exportRoot, "kit/CHANGELOG.md");
+    await fs.writeFile(changelogPath, stampChangelog(await fs.readFile(changelogPath, "utf8"), version, sourceState.date));
     log(`Exported ${exported.fileCount} files from ${exported.sourceCommit.slice(0, 9)}`);
-    await exportKit(proofRoot, { force: true, feedUrl: reveal(feedUrl), sourceCommit: sourceSha });
-    await stampFeed(proofRoot, feedUrl, () => {});
-    await proveExport(proofRoot);
-    log("Export proof passed (canonical typecheck/test, enhancer-lite build, update-flow merge).");
+    await proveExport(exportRoot, { proofRoot });
+    log(`Export proof passed in ${proofRoot} (canonical typecheck/test, enhancer-lite build, update-flow merge).`);
     assertSourceState(sourceSha, await getSourceState());
 
     // The pin comes from the exported kit (what customers receive is what we
-    // mirror). The export points COSIMO_CMAJOR_GIT_URL at the feed's own
+    // mirror). The export points BUILDER_KIT_CMAJOR_GIT_URL at the feed's own
     // cmajor.git, so the mirror's source is the upstream fork the monorepo
     // declares.
     const cmajor = await readCmajorPin(path.join(exportRoot, "kit"));
@@ -809,7 +839,7 @@ export async function runRelease(options, {
     const toolchain = await readJson(path.join(exportRoot, "kit/toolchain.json"));
     assertVersionedToolArtifacts(toolchain, version);
     if (toolchain.cmaj.forkCommit !== cmajor.commit) {
-        throw new Error(`kit/toolchain.json cmaj.forkCommit ${toolchain.cmaj.forkCommit} != CosimoDependencies.cmake pin ${cmajor.commit}.`);
+        throw new Error(`kit/toolchain.json cmaj.forkCommit ${toolchain.cmaj.forkCommit} != dependencies.cmake pin ${cmajor.commit}.`);
     }
 
     // 2. Tools.
@@ -944,8 +974,8 @@ if (invokedDirectly) {
     try {
         const options = parseArgs(process.argv.slice(2));
         const config = await readDestinationConfig(options.destinationConfig);
-        const capability = readCapabilityFromKeychain({ service: config.keychainService });
-        const destination = createReleaseDestination(config, capability);
+        const destination = releaseDestination(options, config);
+        if (options.dryRun) console.log(`[dry-run] Feed URL uses the stand-in cohort "${dryRunCohort}"; the Keychain is not read.`);
         await runRelease(options, { destination });
     } catch (error) {
         console.error(error.message);

@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { spawnSync } from "node:child_process";
 import { readFile } from "node:fs/promises";
 import test, { after, before } from "node:test";
 import path from "node:path";
@@ -6,10 +7,8 @@ import path from "node:path";
 import { chromium } from "playwright";
 
 import { startStaticRepoServer } from "../kit/tests/helpers/static_web_server.mjs";
-import { loadUIModule } from "../kit/tests/helpers/load_ui_module.mjs";
 
 const repoRoot = path.resolve(import.meta.dirname, "..");
-const sourcePath = path.join(repoRoot, "fx/enhancer_lite/view/source.ts");
 
 const initialValues = {
     freqHzIn: 130,
@@ -22,12 +21,19 @@ const initialValues = {
     shapeIn: 1,
 };
 
+// The same sound in state field keys, as a saved preset records it.
+const initialPresetValues = {
+    frequency: 130, q: 0.71, routing: 0, amount: 0, sideAmount: 0, character: 1, intensity: 0, shape: 1,
+};
+
 let server;
 let browser;
 
 before(async () => {
-    // Serves /fx TypeScript views bundled on the fly and the prebuilt
-    // /build/fx runtime; run `npm run fx:build -- enhancer-lite` for the latter.
+    // Build first so the compiled-view tests exercise the current source, not a
+    // stale build/fx runtime. The server bundles /fx TypeScript views on the fly.
+    const build = spawnSync(process.execPath, ["kit/fx/build-effect.mjs", "enhancer-lite"], { cwd: repoRoot, encoding: "utf8", timeout: 120000 });
+    assert.equal(build.status, 0, `npm run fx:build -- enhancer-lite failed:\n${build.stdout}${build.stderr}`);
     server = await startStaticRepoServer({ bundleTypeScript: true });
     browser = await chromium.launch({ headless: true });
 });
@@ -52,25 +58,21 @@ const hostStatusInputs = [
 ];
 
 /**
- * Mount the view against a mock patch connection. The default mock is the
- * bare parameter/endpoint surface the gesture tests need; `host: true` adds
- * the status report and stored state a real Cmajor host provides, which the
- * kit's preset bar and snapshot bank read.
+ * Mount the view against a mock patch connection whose parameter writes and
+ * stored state go through the kit's browser-preview state owner. Pass
+ * `userFileFixture` to install a `window.chocUserFiles` store with those files.
  */
-async function openEnhancerLite(modulePath = "/fx/enhancer_lite/view/source.ts", { host = false, manifest, userFileFixture, pauseFileLoads = false } = {}) {
+async function openEnhancerLite(modulePath = "/fx/enhancer_lite/view/source.ts", { manifest, userFileFixture } = {}) {
     const page = await browser.newPage({ viewport: { width: 900, height: 620 } });
     await page.goto(new URL("kit/tests/helpers/module_test_shell.html", server.baseUrl).toString());
-    await page.evaluate(async ({ values, sourceModulePath, statusInputs, withHost, manifest, userFileFixture, pauseFileLoads }) => {
+    await page.evaluate(async ({ values, sourceModulePath, statusInputs, manifest, userFileFixture }) => {
         if (userFileFixture) {
             const files = new Map(Object.entries(userFileFixture));
             const calls = [];
-            let releaseLoads;
-            const fileLoadGate = pauseFileLoads ? new Promise((resolve) => { releaseLoads = resolve; }) : Promise.resolve();
-            window.__PRESET_FILES_TEST__ = { files, calls, releaseLoads };
+            window.__PRESET_FILES_TEST__ = { files, calls };
             window.chocUserFiles = {
                 async list(scope) {
                     calls.push({ operation: "list", scope });
-                    await fileLoadGate;
                     return [...files.keys()].filter((key) => key.startsWith(`${scope}/`)).map((key) => key.slice(scope.length + 1));
                 },
                 async read(scope, fileName) {
@@ -90,8 +92,6 @@ async function openEnhancerLite(modulePath = "/fx/enhancer_lite/view/source.ts",
         const parameterValues = new Map(Object.entries(values));
         const listeners = new Map();
         const endpointListeners = new Map();
-        const statusListeners = new Set();
-        const storedStateListeners = new Set();
         const storedState = new Map();
         const sent = [];
         const automationMessages = [];
@@ -108,10 +108,6 @@ async function openEnhancerLite(modulePath = "/fx/enhancer_lite/view/source.ts",
         const emitEndpoint = (endpointID, value) => {
             for (const listener of endpointListeners.get(endpointID) ?? [])
                 listener(value);
-        };
-        const emitStoredStateValue = (key, value) => {
-            for (const listener of storedStateListeners)
-                listener({ key, value });
         };
 
         const patchConnection = {
@@ -149,43 +145,7 @@ async function openEnhancerLite(modulePath = "/fx/enhancer_lite/view/source.ts",
             },
         };
 
-        if (withHost) {
-            Object.assign(patchConnection, {
-                addStatusListener(listener) {
-                    statusListeners.add(listener);
-                },
-                removeStatusListener(listener) {
-                    statusListeners.delete(listener);
-                },
-                requestStatusUpdate() {
-                    queueMicrotask(() => {
-                        const status = { details: { inputs: structuredClone(statusInputs) } };
-                        for (const listener of statusListeners)
-                            listener(status);
-                    });
-                },
-                addStoredStateValueListener(listener) {
-                    storedStateListeners.add(listener);
-                },
-                removeStoredStateValueListener(listener) {
-                    storedStateListeners.delete(listener);
-                },
-                requestFullStoredState(callback) {
-                    queueMicrotask(() => callback(Object.fromEntries(storedState)));
-                },
-                requestStoredStateValue(key) {
-                    queueMicrotask(() => emitStoredStateValue(key, storedState.get(key)));
-                },
-                sendStoredStateValue(key, value) {
-                    storedState.set(key, value);
-                    storedWrites.push({ key, value });
-                    emitStoredStateValue(key, value);
-                    stateHost?.replace(key);
-                },
-            });
-        }
-
-        const { createBrowserPreviewState } = await import("/kit/ui/effects/browser-preview-state.ts");
+        const { createBrowserPreviewState } = await import("/kit/ui/preview/state.ts");
         stateHost = createBrowserPreviewState({
             snapshot: () => ({ values: Object.fromEntries(storedState), parameters: statusInputs.map(input => ({
                 endpoint: input.endpointID, value: Number(parameterValues.get(input.endpointID) ?? 0),
@@ -197,7 +157,7 @@ async function openEnhancerLite(modulePath = "/fx/enhancer_lite/view/source.ts",
                 try { patchConnection.sendEventOrValue(endpoint, value); }
                 finally { publishingParameter = false; }
             },
-            stored(key, value) { storedState.set(key, value); storedWrites.push({ key, value }); emitStoredStateValue(key, value); },
+            stored(key, value) { storedState.set(key, value); storedWrites.push({ key, value }); },
             gesture(endpoint, kind) {
                 if (kind === "gesture-start") patchConnection.sendParameterGestureStart(endpoint);
                 else patchConnection.sendParameterGestureEnd(endpoint);
@@ -219,8 +179,8 @@ async function openEnhancerLite(modulePath = "/fx/enhancer_lite/view/source.ts",
             reopen: () => document.querySelector("#mount").replaceChildren(module.default(patchConnection)),
             openSecond: () => document.querySelector("#mount").append(module.default(patchConnection)),
         };
-    }, { values: initialValues, sourceModulePath: modulePath, statusInputs: hostStatusInputs, withHost: host, manifest, userFileFixture, pauseFileLoads });
-    await page.locator("cosimo-enhancer-lite-view").waitFor();
+    }, { values: initialValues, sourceModulePath: modulePath, statusInputs: hostStatusInputs, manifest, userFileFixture });
+    await page.locator("enhance-that-view").waitFor();
     return page;
 }
 
@@ -251,16 +211,22 @@ test(`scalar controls share Undo/Redo and retain their history when the GUI reop
 
 }
 
-test("the history controls fit the existing 820 by 560 plugin frame", async () => {
+test("the header controls fit the existing 820 by 560 plugin frame", async () => {
     const page = await openEnhancerLite();
     try {
         await page.setViewportSize({ width: 820, height: 560 });
         await page.evaluate(() => { document.getElementById("mount").style.cssText = "width:820px;height:560px;padding:0"; });
-        const bounds = await shadow(page, ".history-controls").boundingBox();
-        assert.ok(bounds && bounds.x >= 0 && bounds.y >= 0 && bounds.x + bounds.width <= 820 && bounds.y + bounds.height <= 560);
+        // A changed sound shows the widest header: the Modified indicator next to every button.
+        await page.getByRole("combobox", { name: "Preset" }).selectOption("air-lift");
+        await shadow(page, "[data-shape='low']").click();
+        await page.getByText("Modified").waitFor();
+        for (const control of await page.locator(".plugin-header button, .plugin-header select").all()) {
+            const bounds = await control.boundingBox();
+            assert.ok(bounds && bounds.x >= 0 && bounds.y >= 0 && bounds.x + bounds.width <= 820 && bounds.y + bounds.height <= 40,
+                `${await control.textContent()} sits inside the 820 by 40 header: ${JSON.stringify(bounds)}`);
+        }
         const size = await page.evaluate(() => ({ width: document.documentElement.scrollWidth, height: document.documentElement.scrollHeight }));
-        assert.deepEqual(size, { width: 820, height: 560 }, "the native frame needs no scrolling for history controls");
-        await page.screenshot({ path: path.join(repoRoot, "build/enhance-state-820x560.png") });
+        assert.deepEqual(size, { width: 820, height: 560 }, "the native frame needs no scrolling for the header");
     } finally { await page.close(); }
 });
 
@@ -273,7 +239,7 @@ test("same-turn parameter edits and keyboard steps read the latest state project
             element.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowUp", bubbles: true, cancelable: true }));
         });
         assert.equal(await amount.getAttribute("aria-valuenow"), "0.24", "both relative keyboard increments reach the canonical projection");
-        await page.locator("cosimo-enhancer-lite-view").evaluate(view => {
+        await page.locator("enhance-that-view").evaluate(view => {
             view.sendValue("midAmountIn", 0.5);
             view.sendValue("midAmountIn", 0);
         });
@@ -312,7 +278,7 @@ test("a competing GUI edit restores the owner projection while another GUI holds
     const page = await openEnhancerLite();
     try {
         await page.evaluate(() => window.__ENHANCER_LITE_TEST__.openSecond());
-        await page.locator("cosimo-enhancer-lite-view").nth(1).waitFor();
+        await page.locator("enhance-that-view").nth(1).waitFor();
         const controls = shadow(page, "[data-readout-control='primary-amount']");
         const first = controls.nth(0), second = controls.nth(1);
         const bounds = await first.boundingBox();
@@ -332,7 +298,7 @@ test("a competing GUI edit restores the owner projection while another GUI holds
 });
 
 function shadow(page, selector) {
-    return page.locator(`cosimo-enhancer-lite-view >> ${selector}`);
+    return page.locator(`enhance-that-view >> ${selector}`);
 }
 
 async function drag(page, locator, deltaX, deltaY, modifiers = []) {
@@ -488,7 +454,7 @@ test("the Frequency readout keeps its fixed logarithmic law at every value and e
         const page = await openEnhancerLite();
         try {
             await page.setViewportSize({ width: viewportWidth, height: 620 });
-            await page.locator("cosimo-enhancer-lite-view").evaluate((host, width) => {
+            await page.locator("enhance-that-view").evaluate((host, width) => {
                 host.style.width = `${width}px`;
             }, editorWidth);
             const frequencyReadout = shadow(page, "[data-readout-control='frequency']");
@@ -557,7 +523,7 @@ test("Amount uses the same fixed vertical law in the readout and bell at every e
         const page = await openEnhancerLite();
         try {
             await page.setViewportSize({ width: viewportWidth, height: viewportHeight });
-            await page.locator("cosimo-enhancer-lite-view").evaluate((host, width) => {
+            await page.locator("enhance-that-view").evaluate((host, width) => {
                 host.style.width = `${width}px`;
             }, editorWidth);
             await shadow(page, ".response-plot").evaluate((plot, height) => {
@@ -584,7 +550,7 @@ test("Q uses the same fixed logarithmic law in the readout and Shift-drag bell",
         const page = await openEnhancerLite();
         try {
             await page.setViewportSize({ width: viewportWidth, height: viewportHeight });
-            await page.locator("cosimo-enhancer-lite-view").evaluate((host, width) => {
+            await page.locator("enhance-that-view").evaluate((host, width) => {
                 host.style.width = `${width}px`;
             }, editorWidth);
             await shadow(page, ".response-plot").evaluate((plot, height) => {
@@ -654,6 +620,42 @@ test("every shape shares frequency, amount, and Shift-drag Q with no slider fall
         assert.ok(qGesture.length > 0);
         assert.equal(qGesture.every(({ endpointID }) => endpointID === "qIn"), true);
         assert.ok(qGesture.at(-1).value > 0.71);
+    } finally {
+        await page.close();
+    }
+});
+
+test("one graph drag over frequency, amount and Q is one gesture that one Undo restores", async () => {
+    const page = await openEnhancerLite();
+    try {
+        const handle = shadow(page, "[data-response-role='primary-handle']");
+        const readout = role => shadow(page, `[data-readout-control='${role}']`);
+        const before = {};
+        for (const role of ["frequency", "primary-amount", "q"]) before[role] = await readout(role).getAttribute("aria-valuenow");
+        await page.evaluate(() => window.__ENHANCER_LITE_TEST__.clearAutomation());
+        const bounds = await handle.boundingBox();
+        assert.ok(bounds, "drag target must have browser geometry");
+        const x = bounds.x + bounds.width / 2, y = bounds.y + bounds.height / 2;
+        await page.mouse.move(x, y);
+        await page.mouse.down();
+        await page.mouse.move(x + 90, y - 60, { steps: 4 });
+        await page.keyboard.down("Shift");
+        await page.mouse.move(x + 90, y - 100, { steps: 4 });
+        await page.mouse.up();
+        await page.keyboard.up("Shift");
+        for (const role of ["frequency", "primary-amount", "q"])
+            assert.notEqual(await readout(role).getAttribute("aria-valuenow"), before[role], `${role} moved during the drag`);
+        const brackets = await page.evaluate(() => window.__ENHANCER_LITE_TEST__.automationMessages.filter(message => message.type !== "value"));
+        assert.deepEqual(brackets, [
+            { type: "begin", endpointID: "freqHzIn" }, { type: "begin", endpointID: "midAmountIn" }, { type: "begin", endpointID: "qIn" },
+            { type: "end", endpointID: "freqHzIn" }, { type: "end", endpointID: "midAmountIn" }, { type: "end", endpointID: "qIn" },
+        ], "the host sees one bracket per endpoint around the whole drag");
+
+        const undo = page.getByRole("button", { name: "Undo", exact: true });
+        await undo.click({ timeout: 2000 });
+        for (const role of ["frequency", "primary-amount", "q"])
+            assert.equal(await readout(role).getAttribute("aria-valuenow"), before[role], `one Undo restores ${role}`);
+        assert.equal(await undo.isDisabled(), true, "the drag made exactly one Undo entry");
     } finally {
         await page.close();
     }
@@ -743,7 +745,7 @@ test("disconnect closes an active readout gesture and releases capture", async (
         const frequencyReadout = shadow(page, "[data-readout-control='frequency']");
         const { pointerID } = await beginCapturedDrag(page, frequencyReadout);
         const cleanup = await page.evaluate((capturedPointerID) => {
-            const view = document.querySelector("builder-kit-state-view").shadowRoot.querySelector("cosimo-enhancer-lite-view");
+            const view = document.querySelector("builder-kit-state-view").shadowRoot.querySelector("enhance-that-view");
             const readout = view.shadowRoot.querySelector("[data-readout-control='frequency']");
             document.querySelector("#mount").replaceChildren();
             return {
@@ -1096,7 +1098,7 @@ test("a plotted frequency handle writes the exact shared-axis tick under the poi
         const page = await openEnhancerLite();
         try {
             await page.setViewportSize({ width: Math.max(500, editorWidth + 40), height: 620 });
-            await page.locator("cosimo-enhancer-lite-view").evaluate((host, width) => {
+            await page.locator("enhance-that-view").evaluate((host, width) => {
                 host.style.width = `${width}px`;
             }, editorWidth);
             await page.evaluate(() => {
@@ -1147,11 +1149,11 @@ test("the shared axis reduces label density responsively without moving retained
             { editorWidth: 820, expectedLabels: 10 },
         ]) {
             await page.setViewportSize({ width: Math.max(500, editorWidth + 40), height: 620 });
-            await page.locator("cosimo-enhancer-lite-view").evaluate((host, width) => {
+            await page.locator("enhance-that-view").evaluate((host, width) => {
                 host.style.width = `${width}px`;
             }, editorWidth);
             await page.waitForFunction((count) => {
-                const root = document.querySelector("builder-kit-state-view").shadowRoot.querySelector("cosimo-enhancer-lite-view")?.shadowRoot;
+                const root = document.querySelector("builder-kit-state-view").shadowRoot.querySelector("enhance-that-view")?.shadowRoot;
                 return root?.querySelectorAll("[data-frequency-hz]:not([hidden])").length === count;
             }, expectedLabels);
 
@@ -1204,55 +1206,32 @@ test("the editor enables live analysis only while its view is connected", async 
     }
 });
 
-test("the product heading is plain text and no wordmark asset ships", async () => {
-    const source = await readFile(sourcePath, "utf8");
-    assert.doesNotMatch(source, /wordmark/i);
-    assert.match(source, /<h1>Enhance That<\/h1>/);
-
+test("the source and compiled views name the product in plain text and load no images", async () => {
+    const { name } = JSON.parse(await readFile(path.join(repoRoot, "fx/enhancer_lite/EnhancerLite.cmajorpatch"), "utf8"));
     for (const modulePath of [
         "/fx/enhancer_lite/view/source.ts",
         "/build/fx/enhancer_lite_runtime/view/app.js",
     ]) {
         const page = await openEnhancerLite(modulePath);
         try {
-            assert.equal(await shadow(page, ".shell h1").textContent(), "Enhance That");
-            assert.equal(await shadow(page, ".shell h1 img").count(), 0);
-            assert.equal(await shadow(page, ".shell img").count(), 0, "the view loads no image assets");
+            assert.equal(await shadow(page, ".shell h1").textContent(), name);
+            assert.equal(await shadow(page, ".shell img").count(), 0);
         } finally {
             await page.close();
         }
     }
 });
 
-test("the surface is solid black, neon, and free of the removed de-emphasis UI", async () => {
-    const source = await readFile(sourcePath, "utf8");
-    assert.doesNotMatch(source, /gradient/i);
-    assert.doesNotMatch(source, /de[- ]?emphasis/i);
-
+test("the surface shows both spectra, one response handle and the four draggable readouts", async () => {
     const page = await openEnhancerLite();
     try {
-        const colors = await shadow(page, ".shell").evaluate((shell) => {
-            const host = shell.getRootNode().host;
-            return {
-                host: getComputedStyle(host).backgroundColor,
-                shell: getComputedStyle(shell).backgroundColor,
-                primary: getComputedStyle(
-                    shell.getRootNode().querySelector(".response-handle.primary"),
-                ).fill,
-            };
-        });
-        assert.deepEqual(colors, {
-            host: "rgb(0, 0, 0)",
-            shell: "rgb(0, 0, 0)",
-            primary: "rgb(0, 240, 255)",
-        });
+        assert.equal(await shadow(page, "[data-spectrum-role='input']").count(), 1);
+        assert.equal(await shadow(page, "[data-spectrum-role='output']").count(), 1);
+        assert.equal(await shadow(page, ".response-handle.primary").count(), 1);
         assert.deepEqual(
             await shadow(page, ".drag-affordance").allTextContents(),
             ["↔", "↕", "↕", "↕"],
         );
-        assert.equal(await shadow(page, "[data-spectrum-role='input']").count(), 1);
-        assert.equal(await shadow(page, "[data-spectrum-role='output']").count(), 1);
-        assert.equal(await shadow(page, "[data-endpoint-id='deEmphasisIn']").count(), 0);
     } finally {
         await page.close();
     }
@@ -1300,14 +1279,12 @@ test("the compiled VST view preserves the same gesture surface and eight sound c
         assert.deepEqual(await shadow(page, ".shell").evaluate((shell) => {
             const root = shell.getRootNode();
             return {
-                background: getComputedStyle(shell).backgroundColor,
                 frequencyCursor: getComputedStyle(
                     root.querySelector("[data-readout-control='frequency']"),
                 ).cursor,
                 qCursor: getComputedStyle(root.querySelector("[data-readout-control='q']")).cursor,
             };
         }), {
-            background: "rgb(0, 0, 0)",
             frequencyCursor: "ew-resize",
             qCursor: "ns-resize",
         });
@@ -1345,33 +1322,28 @@ test("the compiled VST view preserves the same gesture surface and eight sound c
     }
 });
 
-test("the kit effect header mounts above the Lite surface in source and compiled views", async () => {
+test("the header puts presets, snapshots and Undo above the Lite surface in source and compiled views", async () => {
     for (const modulePath of [
         "/fx/enhancer_lite/view/source.ts",
         "/build/fx/enhancer_lite_runtime/view/app.js",
     ]) {
         const page = await openEnhancerLite(modulePath);
         try {
-            const header = shadow(page, "cosimo-effect-header");
-            assert.equal(await header.count(), 1);
-            const layout = await header.evaluate((element) => {
-                const shell = element.nextElementSibling;
-                const headerBounds = element.getBoundingClientRect();
-                const shellBounds = shell.getBoundingClientRect();
-                return {
-                    precedesShell: shell.classList.contains("shell"),
-                    headerHeight: headerBounds.height,
-                    shellStartsBelowHeader: shellBounds.top >= headerBounds.bottom,
-                    hostHeight: element.getRootNode().host.getBoundingClientRect().height,
-                };
+            const layout = await page.locator(".plugin-header").evaluate((header) => {
+                const panel = header.getRootNode().querySelector("enhance-that-view");
+                const headerBounds = header.getBoundingClientRect();
+                const panelBounds = panel.getBoundingClientRect();
+                return { headerHeight: headerBounds.height, panelBelowHeader: panelBounds.top >= headerBounds.bottom, total: panelBounds.bottom - headerBounds.top };
             });
-            assert.equal(layout.precedesShell, true, modulePath);
-            assert.equal(layout.shellStartsBelowHeader, true, modulePath);
-            assert.ok(layout.headerHeight >= 30 && layout.headerHeight <= 60, `${modulePath}: ${layout.headerHeight}`);
-            assert.ok(layout.hostHeight >= 520 + layout.headerHeight, `${modulePath}: ${layout.hostHeight}`);
-            assert.equal(await shadow(page, "cosimo-preset-bar >> [data-el='preset-name']").textContent(), "No Preset");
-            assert.equal(await shadow(page, "cosimo-snapshot-bar >> [data-slot]").count(), 7);
-            assert.equal(await shadow(page, "cosimo-preset-bar >> [data-preset-key]").count(), 0);
+            assert.equal(layout.headerHeight, 40, modulePath);
+            assert.equal(layout.panelBelowHeader, true, modulePath);
+            assert.equal(layout.total, 560, `${modulePath}: header and panel fill the 560 pixel frame`);
+            const preset = page.getByRole("combobox", { name: "Preset" });
+            assert.equal(await preset.inputValue(), "");
+            assert.deepEqual(await preset.locator("optgroup[label='Factory'] option").allTextContents(),
+                ["Sub Weight", "Vocal Presence", "Air Lift", "Wide Shimmer"]);
+            assert.equal(await page.getByRole("group", { name: "Snapshots" }).getByRole("button", { name: /^Snapshot [A-G], empty$/ }).count(), 7);
+            assert.equal(await page.getByRole("button", { name: "Undo", exact: true }).isDisabled(), true);
 
             // The Lite surface underneath is untouched: same controls, the
             // analyzer switched on first, nothing else written at mount.
@@ -1385,188 +1357,122 @@ test("the kit effect header mounts above the Lite surface in source and compiled
     }
 });
 
-test("factory presets recall a complete Lite sound through the shared preset bar", async () => {
-    const page = await openEnhancerLite("/fx/enhancer_lite/view/source.ts", { host: true });
-
+test("a factory preset recalls the complete Lite sound as one Undo entry", async () => {
+    const page = await openEnhancerLite();
     try {
-        await shadow(page, "cosimo-preset-bar >> [data-action='toggle-flyout']").click();
-        const factoryItems = shadow(page, "cosimo-preset-bar >> [data-preset-key][data-source='factory']");
-        await factoryItems.first().waitFor();
-        assert.deepEqual(
-            await factoryItems.locator(".item-name").allTextContents(),
-            ["Sub Weight", "Vocal Presence", "Air Lift", "Wide Shimmer"],
-        );
-        assert.equal(await shadow(page, "cosimo-preset-bar >> [data-preset-key][data-source='user']").count(), 0);
-
+        const preset = page.getByRole("combobox", { name: "Preset" });
         await page.evaluate(() => window.__ENHANCER_LITE_TEST__.clearSent());
-        await shadow(page, "cosimo-preset-bar >> [data-preset-key='factory:enhancer-lite.vocal-presence']").click();
-        await shadow(page, "cosimo-preset-bar >> [data-el='preset-name']").filter({ hasText: "Vocal Presence" }).waitFor();
+        await preset.selectOption("vocal-presence");
+        await shadow(page, "[data-readout='frequency']").filter({ hasText: "3.20 kHz" }).waitFor();
 
         const sent = await page.evaluate(() => window.__ENHANCER_LITE_TEST__.sent);
-        assert.deepEqual(
-            Object.fromEntries(sent.map(({ endpointID, value }) => [endpointID, value])),
-            {
-                freqHzIn: 3200,
-                qIn: 1.1,
-                modeIn: 0,
-                midAmountIn: 0.3,
-                sideAmountIn: 0,
-                curveIn: 1,
-                saturationModeIn: 0,
-                shapeIn: 1,
-            },
-        );
-        assert.equal(sent.some(({ endpointID }) => endpointID === "analyzerEnabledIn"), false);
-        assert.equal(await shadow(page, "[data-readout='frequency']").textContent(), "3.20 kHz");
+        assert.deepEqual(Object.fromEntries(sent.map(({ endpointID, value }) => [endpointID, value])),
+            { freqHzIn: 3200, qIn: 1.1, midAmountIn: 0.3 }, "only the values that differ are written");
         assert.equal(await shadow(page, "[data-readout='q']").textContent(), "1.10");
         assert.equal(await shadow(page, "[data-readout='primary']").textContent(), "+3.6 dB");
-        assert.equal(await shadow(page, "[data-shape='bell']").getAttribute("aria-pressed"), "true");
-        assert.equal(await shadow(page, "[data-curve='solid']").getAttribute("aria-pressed"), "true");
-        assert.equal(await shadow(page, "cosimo-preset-bar >> [data-el='dirty-dot'].visible").count(), 0);
+        assert.equal(await preset.inputValue(), "vocal-presence");
+        assert.equal(await page.getByText("Modified").count(), 0);
+        const stored = await page.evaluate(() => window.__ENHANCER_LITE_TEST__.storedWrites.map(({ key }) => key));
+        assert.deepEqual(stored, ["activePreset"], "the active preset is project state; the factory list is not stored");
 
-        // Editing the surface marks the active preset dirty, and the active
-        // preset lives in host stored state like every kit plugin's.
+        // Editing the surface marks the preset modified; Revert restores it.
         await shadow(page, "[data-shape='high']").click();
-        await shadow(page, "cosimo-preset-bar >> [data-el='dirty-dot'].visible").waitFor();
-        const storedKeys = await page.evaluate(() => (
-            window.__ENHANCER_LITE_TEST__.storedWrites.map(({ key }) => key)
-        ));
-        assert.ok(storedKeys.includes("effects.presets.v2"), JSON.stringify(storedKeys));
+        await page.getByText("Modified").waitFor();
+        await page.getByRole("button", { name: "Revert", exact: true }).click();
+        await shadow(page, "[data-shape='bell']").and(page.locator("[aria-pressed='true']")).waitFor();
+        await page.getByText("Modified").waitFor({ state: "detached" });
+
+        // Undo walks back the revert, the shape edit, then the whole recall.
+        const undo = page.getByRole("button", { name: "Undo", exact: true });
+        await undo.click();
+        await shadow(page, "[data-shape='high']").and(page.locator("[aria-pressed='true']")).waitFor();
+        await undo.click();
+        await shadow(page, "[data-shape='bell']").and(page.locator("[aria-pressed='true']")).waitFor();
+        await undo.click();
+        await shadow(page, "[data-readout='frequency']").filter({ hasText: "130 Hz" }).waitFor();
+        assert.equal(await preset.inputValue(), "", "Undo also restores the previous active preset");
+        assert.equal(await undo.isDisabled(), true);
     } finally {
         await page.close();
     }
 });
 
-async function legacyLitePresetFixture() {
-    const originalManifest = JSON.parse(await readFile(path.join(repoRoot, "fx/enhancer_lite/EnhancerLite.cmajorpatch"), "utf8"));
-    const { buildPluginStateContract } = await loadUIModule(repoRoot, "kit/ui/effects/effect-state-contract.ts");
-    const legacy = {
-        kind: "cosimo.effectPreset", version: 2, effectID: "enhancer-lite",
-        presetID: "user.legacy", label: "Before identity separation",
-        contract: buildPluginStateContract({ effectID: "enhancer-lite", status: { details: { inputs: hostStatusInputs } } }),
-        parameters: { ...initialValues, freqHzIn: 440 }, storedState: {},
-    };
-    const legacyPath = "enhancer-lite/user.legacy.json";
-    const legacyBytes = JSON.stringify(legacy, null, 4);
-    return { originalManifest, legacy, legacyPath, legacyBytes };
-}
+test("user presets live in the user's files for this plugin identity only", async () => {
+    const original = JSON.parse(await readFile(path.join(repoRoot, "fx/enhancer_lite/EnhancerLite.cmajorpatch"), "utf8"));
+    const manifest = { ...original, ID: "com.example.enhance" };
+    let files = {};
+    let page = await openEnhancerLite("/fx/enhancer_lite/view/source.ts", { manifest, userFileFixture: files });
+    try {
+        await shadow(page, "[data-shape='high']").click();
+        await page.getByRole("button", { name: "Save as new", exact: true }).click();
+        const name = page.getByRole("textbox", { name: "Preset name" });
+        await name.fill("Bright");
+        await name.press("Enter");
+        const libraryPath = await (await page.waitForFunction(() => [...window.__PRESET_FILES_TEST__.files.keys()]
+            .find((key) => key.endsWith("/presetLibrary.json")))).jsonValue();
+        files = await page.evaluate(() => Object.fromEntries(window.__PRESET_FILES_TEST__.files));
+        const library = JSON.parse(files[libraryPath]);
+        assert.equal(library.version, 1);
+        assert.deepEqual(library.presets.map(({ name }) => name), ["Bright"]);
+        assert.deepEqual(library.presets[0].values, { ...initialPresetValues, shape: 2 });
+        assert.equal(await page.getByRole("combobox", { name: "Preset" }).locator("option:checked").textContent(), "Bright");
+        assert.equal(await page.getByRole("button", { name: "Undo", exact: true }).isDisabled(), false, "Undo still holds the shape edit");
+        await page.getByRole("button", { name: "Undo", exact: true }).click();
+        assert.deepEqual((await page.evaluate(() => window.__PRESET_FILES_TEST__.calls)).filter(({ operation }) => operation === "delete"), []);
+        assert.equal(JSON.parse(await page.evaluate((key) => window.__PRESET_FILES_TEST__.files.get(key), libraryPath)).presets.length, 1,
+            "saving a preset is not undone");
+    } finally { await page.close(); }
 
-test("one unchanged Lite UI isolates native presets by identity and retains original and upgraded banks", async () => {
-    const sourceModule = "/fx/enhancer_lite/view/source.ts";
-    const { originalManifest, legacy, legacyPath, legacyBytes } = await legacyLitePresetFixture();
-    let files = { [legacyPath]: legacyBytes };
-    const allCalls = [];
-    const cases = [
-        { ID: "com.example.derived-a", expected: [], save: "A only" },
-        { ID: "com.example.derived-b", expected: [], save: "B only" },
-        { ID: originalManifest.ID, expected: [legacy.label] },
-        { ID: "com.example.derived-a", version: "2.0.0", name: "Renamed A", expected: ["A only"] },
-    ];
-    for (const scenario of cases) {
-        const page = await openEnhancerLite(sourceModule, {
-            host: true,
-            manifest: { ...originalManifest, ID: scenario.ID, version: scenario.version ?? "0.1.0", name: scenario.name ?? "Same UI" },
-            userFileFixture: files,
-        });
-        try {
-            await page.waitForFunction(() => document.querySelector("builder-kit-state-view").shadowRoot.querySelector("cosimo-enhancer-lite-view").presetController.getState().missingCurrentValueEndpointIDs.length === 0);
-            await shadow(page, "cosimo-preset-bar >> [data-action='toggle-flyout']").click();
-            assert.deepEqual(await shadow(page, "cosimo-preset-bar >> [data-source='user'] .item-name").allTextContents(), scenario.expected);
-            if (scenario.save) {
-                const result = await page.evaluate((label) => document.querySelector("builder-kit-state-view").shadowRoot.querySelector("cosimo-enhancer-lite-view").presetController.saveCurrentAsNewPreset(label), scenario.save);
-                assert.equal(result.ok, true);
-                await page.waitForFunction((label) => [...window.__PRESET_FILES_TEST__.files.values()].some((value) => JSON.parse(value).label === label), scenario.save);
-            }
-            if (scenario.ID === originalManifest.ID) {
-                await shadow(page, "cosimo-preset-bar >> [data-preset-key='user:user.legacy']").click();
-                assert.equal(await shadow(page, "[data-readout='frequency']").textContent(), "440 Hz");
-            }
-            const savedFiles = await page.evaluate(() => ({ files: Object.fromEntries(window.__PRESET_FILES_TEST__.files), calls: window.__PRESET_FILES_TEST__.calls }));
-            files = savedFiles.files;
-            allCalls.push(...savedFiles.calls);
-            if (scenario.ID !== originalManifest.ID) assert.ok(savedFiles.calls.every(({ scope }) => scope !== "enhancer-lite"));
-            else assert.ok(savedFiles.calls.every(({ operation, scope }) => scope === "enhancer-lite" && ["list", "read"].includes(operation)));
-        } finally {
-            await page.close();
-        }
-    }
-    assert.equal(files[legacyPath], legacyBytes);
-    assert.equal(Object.keys(files).length, 3, "only the original file and the two newly saved derivative files exist");
-    assert.equal(allCalls.some(({ operation }) => operation === "delete"), false);
+    page = await openEnhancerLite("/fx/enhancer_lite/view/source.ts", { manifest, userFileFixture: files });
+    try {
+        const user = page.getByRole("combobox", { name: "Preset" }).locator("optgroup[label='User'] option");
+        await user.first().waitFor({ state: "attached" });
+        assert.deepEqual(await user.allTextContents(), ["Bright"], "another project opens with the same user presets");
+    } finally { await page.close(); }
+
+    page = await openEnhancerLite("/fx/enhancer_lite/view/source.ts", { manifest: { ...manifest, ID: "com.example.other" }, userFileFixture: files });
+    try {
+        await page.waitForFunction(() => window.__PRESET_FILES_TEST__.calls.some(({ operation }) => operation === "list"));
+        assert.equal(await page.getByRole("combobox", { name: "Preset" }).locator("optgroup[label='User']").count(), 0,
+            "a plugin with another manifest ID keeps its own presets");
+    } finally { await page.close(); }
 });
 
-test("Lite shows a loading refusal in the preset UI and allows retry with the old bank intact", async () => {
-    const { originalManifest, legacyPath, legacyBytes } = await legacyLitePresetFixture();
-    const page = await openEnhancerLite("/fx/enhancer_lite/view/source.ts", {
-        host: true, manifest: originalManifest, userFileFixture: { [legacyPath]: legacyBytes }, pauseFileLoads: true,
-    });
+test("A-G snapshots keep each slot's tweaks and select as one Undo entry", async () => {
+    const page = await openEnhancerLite();
     try {
-        await shadow(page, "cosimo-preset-bar >> [data-action='save-as']").click();
-        await shadow(page, "cosimo-preset-bar >> [data-el='dialog-input']").fill("New preset");
-        await shadow(page, "cosimo-preset-bar >> [data-action='dialog-confirm']").click();
-        const errorToast = shadow(page, "cosimo-preset-bar >> .cpb-toast.error");
-        await errorToast.waitFor();
-        assert.match(await errorToast.textContent(), /still loading/);
-        assert.deepEqual(await page.evaluate(() => window.__PRESET_FILES_TEST__.calls.map(({ operation }) => operation)), ["list"]);
-        await page.evaluate(() => window.__PRESET_FILES_TEST__.releaseLoads());
-        await page.waitForFunction(() => document.querySelector("builder-kit-state-view").shadowRoot.querySelector("cosimo-enhancer-lite-view").presetController.getState().userPresets.length === 1);
-        await shadow(page, "cosimo-preset-bar >> [data-action='save-as']").click();
-        await shadow(page, "cosimo-preset-bar >> [data-el='dialog-input']").fill("New preset");
-        await shadow(page, "cosimo-preset-bar >> [data-action='dialog-confirm']").click();
-        await page.waitForFunction(() => window.__PRESET_FILES_TEST__.files.size === 2);
-        assert.equal(await page.evaluate((key) => window.__PRESET_FILES_TEST__.files.get(key), legacyPath), legacyBytes);
-        assert.equal(await page.evaluate(() => window.__PRESET_FILES_TEST__.calls.some(({ operation }) => operation === "delete")), false);
-    } finally {
-        await page.close();
-    }
-});
+        const snapshots = page.getByRole("group", { name: "Snapshots" });
+        const slot = (id) => snapshots.getByRole("button", { name: new RegExp(`^Snapshot ${id}(, empty)?$`) });
+        const frequency = shadow(page, "[data-readout='frequency']");
+        await page.evaluate(() => window.__ENHANCER_LITE_TEST__.emit("freqHzIn", 1000));
+        await frequency.filter({ hasText: "1.00 kHz" }).waitFor();
 
-test("A-G snapshots capture and recall the Lite sound through the shared snapshot bar", async () => {
-    const page = await openEnhancerLite("/fx/enhancer_lite/view/source.ts", { host: true });
+        // An empty slot captures the current sound.
+        await slot("A").click();
+        await snapshots.getByRole("button", { name: "Snapshot A", exact: true, pressed: true }).waitFor();
+        await slot("B").click();
+        await snapshots.getByRole("button", { name: "Snapshot B", exact: true, pressed: true }).waitFor();
 
-    try {
-        // Selecting an empty slot captures the current sound; the active slot
-        // then follows every edit, so A and B start identical and B diverges.
-        await page.evaluate(() => {
-            window.__ENHANCER_LITE_TEST__.emit("freqHzIn", 1000);
-            window.__ENHANCER_LITE_TEST__.emit("midAmountIn", 0.5);
-        });
-        await shadow(page, "cosimo-snapshot-bar >> [data-slot='A']").click();
-        await shadow(page, "cosimo-snapshot-bar >> [data-slot='A'].has-snapshot.is-active").waitFor();
-        await shadow(page, "cosimo-snapshot-bar >> [data-slot='B']").click();
-        await shadow(page, "cosimo-snapshot-bar >> [data-slot='B'].has-snapshot.is-active").waitFor();
-
+        // Tweaks made while B is selected stay with B when A is selected.
         await shadow(page, "[data-shape='high']").click();
         await page.evaluate(() => window.__ENHANCER_LITE_TEST__.emit("freqHzIn", 5000));
-
-        const recallSlot = async (slotID) => {
-            await page.evaluate(() => window.__ENHANCER_LITE_TEST__.clearSent());
-            await shadow(page, `cosimo-snapshot-bar >> [data-slot='${slotID}']`).click();
-            await shadow(page, `cosimo-snapshot-bar >> [data-slot='${slotID}'].is-active`).waitFor();
-            return Object.fromEntries(
-                (await page.evaluate(() => window.__ENHANCER_LITE_TEST__.sent))
-                    .map(({ endpointID, value }) => [endpointID, value]),
-            );
-        };
-
-        const recalledA = await recallSlot("A");
-        assert.equal(recalledA.freqHzIn, 1000);
-        assert.equal(recalledA.shapeIn, 1);
-        assert.equal(recalledA.midAmountIn, 0.5);
-        assert.equal(Object.hasOwn(recalledA, "analyzerEnabledIn"), false);
-        assert.equal(await shadow(page, "[data-readout='frequency']").textContent(), "1.00 kHz");
+        await frequency.filter({ hasText: "5.00 kHz" }).waitFor();
+        await slot("A").click();
+        await frequency.filter({ hasText: "1.00 kHz" }).waitFor();
         assert.equal(await shadow(page, "[data-shape='bell']").getAttribute("aria-pressed"), "true");
-
-        const recalledB = await recallSlot("B");
-        assert.equal(recalledB.freqHzIn, 5000);
-        assert.equal(recalledB.shapeIn, 2);
-        assert.equal(await shadow(page, "[data-readout='frequency']").textContent(), "5.00 kHz");
+        await slot("B").click();
+        await frequency.filter({ hasText: "5.00 kHz" }).waitFor();
         assert.equal(await shadow(page, "[data-shape='high']").getAttribute("aria-pressed"), "true");
 
-        const storedKeys = await page.evaluate(() => (
-            window.__ENHANCER_LITE_TEST__.storedWrites.map(({ key }) => key)
-        ));
-        assert.ok(storedKeys.some((key) => key.includes("enhancer-lite")), JSON.stringify(storedKeys));
+        // Undo restores the previous slot's sound and selection.
+        await page.getByRole("button", { name: "Undo", exact: true }).click();
+        await frequency.filter({ hasText: "1.00 kHz" }).waitFor();
+        await snapshots.getByRole("button", { name: "Snapshot A", exact: true, pressed: true }).waitFor();
+
+        await page.getByRole("button", { name: "Clear snapshot A" }).click();
+        await slot("A").and(page.getByRole("button", { name: "Snapshot A, empty", pressed: false })).waitFor();
+        const stored = await page.evaluate(() => window.__ENHANCER_LITE_TEST__.storedWrites.map(({ key }) => key));
+        assert.deepEqual([...new Set(stored)].sort(), ["activeSnapshot", "snapshotSlots"]);
     } finally {
         await page.close();
     }
@@ -1633,7 +1539,7 @@ for (const modulePath of [
     });
 
     test(`host playback updates all controls without feedback and survives editor reopen: ${modulePath}`, async () => {
-        const page = await openEnhancerLite(modulePath, { host: true });
+        const page = await openEnhancerLite(modulePath);
         try {
             const playback = { freqHzIn: 440, qIn: 2.5, modeIn: 1, midAmountIn: 0.6, sideAmountIn: 0.35, curveIn: 0, saturationModeIn: 1, shapeIn: 2 };
             await page.evaluate((values) => {

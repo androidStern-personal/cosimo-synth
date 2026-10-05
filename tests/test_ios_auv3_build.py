@@ -180,13 +180,13 @@ def _cmajor_web_api_root() -> Path:
             str(REPO_ROOT / "kit" / "tools" / "cmajor_web_runtime"),
             "-B",
             str(build_dir),
-            f"-DCOSIMO_CMAJOR_WEB_RUNTIME_DIR={output_dir}",
+            f"-DBUILDER_KIT_CMAJOR_WEB_RUNTIME_DIR={output_dir}",
         ],
         cwd=REPO_ROOT,
         check=True,
     )
     subprocess.run(
-        ["cmake", "--build", str(build_dir), "--target", "cosimo_cmajor_web_runtime"],
+        ["cmake", "--build", str(build_dir), "--target", "builder_kit_cmajor_web_runtime"],
         cwd=REPO_ROOT,
         check=True,
     )
@@ -859,18 +859,18 @@ def test_ios_auv3_cmake_declares_the_repo_owned_shell_and_bundle_copy_contract()
     assert "LANGUAGES CXX C OBJC OBJCXX" in cmake
     assert "FORMATS Standalone AUv3" in cmake
     assert "generate_ios_auv3_plugin.sh" in cmake_text
-    assert "kit/cmake/CosimoDependencies.cmake" in cmake_text
-    assert "cosimo_add_production_dependencies()" in cmake_text
+    assert "kit/cmake/dependencies.cmake" in cmake_text
+    assert "builder_kit_dependencies()" in cmake_text
     assert "CosimoPluginMain.cpp" in cmake_text
     assert "CosimoSharedWavetableLibrary.mm" in cmake_text
     assert "BounceNativeDriver.cpp" in cmake_text
     assert "BounceNativePlatform.cpp" in cmake_text
     assert "BounceNativeBankStore.cpp" in cmake_text
     assert "CmajorBounceOfflinePerformer.cpp" in cmake_text
-    assert "COSIMO_CMAJOR_SOURCE_DIR" in cmake_text
-    assert '"${COSIMO_CMAJOR_SOURCE_DIR}/include"' in cmake_text
-    assert '"${COSIMO_CHOC_SOURCE_DIR}"' in cmake_text
-    assert '"${COSIMO_CMAJOR_SOURCE_DIR}/javascript/cmaj_api"' in cmake_text
+    assert "BUILDER_KIT_CMAJOR_SOURCE_DIR" in cmake_text
+    assert '"${BUILDER_KIT_CMAJOR_SOURCE_DIR}/include"' in cmake_text
+    assert '"${BUILDER_KIT_CHOC_SOURCE_DIR}"' in cmake_text
+    assert '"${BUILDER_KIT_CMAJOR_SOURCE_DIR}/javascript/cmaj_api"' in cmake_text
     assert "COSIMO_CMAJOR_RUNTIME_DIR" not in cmake_text
     assert "COSIMO_REACT_UI_FILES" in cmake_text
     assert "COSIMO_WORKER_UI_FILES" in cmake_text
@@ -880,7 +880,6 @@ def test_ios_auv3_cmake_declares_the_repo_owned_shell_and_bundle_copy_contract()
     assert '${COSIMO_REPO_ROOT}/package.json' in cmake_text
     assert '${COSIMO_REPO_ROOT}/ui/build.mjs' in cmake_text
     assert '${COSIMO_REPO_ROOT}/ui/vite.shared.mjs' in cmake_text
-    assert '${COSIMO_REPO_ROOT}/kit/fx/vite.shared.mjs' in cmake_text
     assert '${COSIMO_REPO_ROOT}/ui/vite.worker.config.mjs' in cmake_text
     assert '${COSIMO_REPO_ROOT}/ios_auv3/vite.config.mjs' in cmake_text
     assert "copy_directory" in cmake_text
@@ -1880,7 +1879,7 @@ def test_repo_owned_patch_shell_keeps_the_bridge_entrypoints_the_ui_depends_on()
 
 def test_ios_ui_dev_server_configuration_exists() -> None:
     package_json = json.loads(PACKAGE_JSON.read_text(encoding="utf-8"))
-    shared_vite_helpers = (REPO_ROOT / "kit" / "fx" / "vite.shared.mjs").read_text(encoding="utf-8")
+    shared_vite_helpers = (REPO_ROOT / "ui" / "vite.shared.mjs").read_text(encoding="utf-8")
     vite_config = IOS_VITE_CONFIG.read_text(encoding="utf-8")
 
     assert package_json["scripts"]["ios:ui:dev"] == "vite --config ios_auv3/vite.config.mjs"
@@ -1938,7 +1937,7 @@ def test_ios_auv3_xcode_project_script_generates_an_xcode_project(tmp_path: Path
     fake_juce = _write_fake_juce_checkout(tmp_path / "fake-juce")
     build_dir = tmp_path / "xcode-build"
     env = os.environ.copy()
-    env["CPM_cosimo_juce_SOURCE"] = str(fake_juce)
+    env["CPM_builder_kit_juce_SOURCE"] = str(fake_juce)
     env["COSIMO_IOS_SYSROOT"] = "iphonesimulator"
 
     result = subprocess.run(

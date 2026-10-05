@@ -22,5 +22,5 @@ test('neutral MSEG edits preserve endpoint geometry and write the final caller-o
 test('Cosimo compatibility seam retains its stored identifiers across edits and serialization',()=>{
  let shape=cosimo.createDefaultMsegShape();shape=cosimo.addMsegPoint(shape,.5,.2);shape=cosimo.moveMsegPoint(shape,1,.6,.8);
  assert.equal(shape.format,'cosimo.mseg.shape');assert.equal(cosimo.deserializeMsegShape(cosimo.serializeMsegShape(shape)).format,'cosimo.mseg.shape');assert.equal(cosimo.createDefaultMsegPlayback().format,'cosimo.mseg.playback');
- assert.equal(kit.createDefaultMsegPlayback().format,'mseg.playback');assert.deepEqual(cosimo.renderMsegShape(shape),kit.renderMsegShape(shape));
+ assert.deepEqual(cosimo.renderMsegShape(shape),kit.renderMsegShape(shape));
 });

@@ -20,13 +20,18 @@ export function mount(host: HTMLElement) {
     const first = signal(), second = signal();
     const changes: number[] = [], gestures: string[] = [], callbackBases: number[] = [];
     let renders = 0;
-    let configure: (options: { disabled?: boolean; source?: 'first' | 'second' }) => void = () => {};
+    type Options = { disabled?: boolean; source?: 'first' | 'second'; inlineScale?: boolean };
+    let configure: (options: Options) => void = () => {};
     function View() {
         renders += 1;
         const [value, setValue] = useState(100);
-        const [options, setOptions] = useState<{ disabled?: boolean; source?: 'first' | 'second' }>({});
+        const [options, setOptions] = useState<Options>({});
         configure = patch => setOptions(previous => ({ ...previous, ...patch }));
-        return <KnobRoot value={value} min={10} max={1000} scale="log" disabled={options.disabled}
+        // inlineScale writes the same log mapping as a fresh object on every render.
+        const scale = options.inlineScale
+            ? { toPosition: (hz: number) => Math.log(hz / 10) / Math.log(100), fromPosition: (position: number) => 10 * 100 ** position }
+            : 'log';
+        return <KnobRoot value={value} min={10} max={1000} scale={scale} disabled={options.disabled}
             onValueChange={next => { callbackBases.push(value); changes.push(next); setValue(next); }}
             onGestureStart={() => gestures.push('start')} onGestureEnd={cancelled => gestures.push(cancelled ? 'cancel' : 'end')}>
             <KnobLabel>Fixture frequency</KnobLabel>

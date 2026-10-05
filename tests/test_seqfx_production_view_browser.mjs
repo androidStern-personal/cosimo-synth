@@ -165,7 +165,10 @@ async function ensureSeqFxProductionRuntime() {
         return;
     }
 
-    await buildPlugin("seqfx");
+    // scripts/qualify_seqfx_source.mjs builds the canonical runtime once and
+    // sets SEQFX_CANONICAL_RUNTIME_PREBUILT=1 for the suites that inspect it.
+    if (process.env.SEQFX_CANONICAL_RUNTIME_PREBUILT !== "1")
+        await buildPlugin("seqfx");
 
     await stat(path.join(repoRoot, RUNTIME_LOADER_PATH));
     await stat(path.join(repoRoot, RUNTIME_APP_PATH));

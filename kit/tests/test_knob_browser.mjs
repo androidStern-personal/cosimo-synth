@@ -10,10 +10,10 @@ import ts from 'typescript';
 const root = path.resolve(import.meta.dirname, '../..');
 let server, browser, base;
 before(async () => {
-    server = await createServer({ configFile: path.join(root, 'kit/examples/knobs/vite.config.mjs'),
+    server = await createServer({ configFile: path.join(root, 'kit/examples/vite.config.mjs'),
         server: { host: '127.0.0.1', port: 0, strictPort: false, open: false }, logLevel: 'error' });
     await server.listen();
-    base = `http://127.0.0.1:${server.httpServer.address().port}`;
+    base = `http://127.0.0.1:${server.httpServer.address().port}/knobs/`;
     browser = await chromium.launch({ headless: true });
 });
 after(async () => { await browser?.close(); await server?.close(); });
@@ -241,7 +241,7 @@ test('public controls style a plugin shadow root, replace live sources and relea
     const host=page.locator('#knob-fixture'), knob=host.getByRole('slider',{name:'Fixture frequency'});
     await knob.waitFor();
     assert.equal(await knob.evaluate(el=>getComputedStyle(el).width),'120px');
-    assert.equal(await page.evaluate(()=>document.querySelector('#knob-fixture').shadowRoot.querySelectorAll('style[data-builder-kit-knob]').length),1);
+    assert.equal(await page.evaluate(()=>document.querySelector('#knob-fixture').shadowRoot.querySelectorAll('style[data-builder-kit-styles=knob]').length),1);
     await page.waitForFunction(()=>window.knobFixture.first.count()===1);
     const renders=await page.evaluate(()=>window.knobFixture.renders());
     await page.evaluate(()=>window.knobFixture.first.set(1000));
@@ -255,7 +255,7 @@ test('public controls style a plugin shadow root, replace live sources and relea
     assert.equal(await marker.getAttribute('data-active'),'true','replaced source cannot hide the new marker');
     await page.evaluate(()=>window.knobFixture.unmount());
     assert.equal(await page.evaluate(()=>window.knobFixture.second.count()),0);
-    assert.equal(await page.evaluate(()=>document.querySelector('#knob-fixture').shadowRoot.querySelectorAll('style[data-builder-kit-knob]').length),0);
+    assert.equal(await page.evaluate(()=>document.querySelector('#knob-fixture').shadowRoot.querySelectorAll('style[data-builder-kit-styles=knob]').length),0);
     assert.deepEqual(await page.evaluate(()=>window.knobFixture.changes),[],'live updates never edit base state');
 }));
 
@@ -285,6 +285,21 @@ test('unmount during a drag and Escape release all editing ownership',async()=>w
     await page.waitForFunction(()=>!document.querySelector('#gestures [role=slider]'));
     await page.mouse.up();assert.equal(await section.getByRole('button',{name:'Undo (2)'}).count(),1);
     assert.equal((await section.getByRole('log').textContent()).match(/cancelled/g)?.length,2);
+}));
+
+test('a custom scale written inline keeps one drag alive across the re-renders it causes',async()=>withPage(async page=>{
+    await page.evaluate(async url=>{const {mount}=await import(url);const host=document.createElement('div');host.id='knob-fixture';document.body.appendChild(host);window.knobFixture=mount(host);},`/@fs/${path.join(root,'kit/tests/helpers/knob_fixture.tsx')}`);
+    const knob=page.locator('#knob-fixture').getByRole('slider',{name:'Fixture frequency'});await knob.waitFor();
+    const renders=await page.evaluate(()=>{window.knobFixture.configure({inlineScale:true});return window.knobFixture.renders();});
+    await page.waitForFunction(count=>window.knobFixture.renders()>count,renders);await knob.scrollIntoViewIfNeeded();
+    const b=await knob.boundingBox(),x=b.x+b.width/2,y=b.y+b.height/2;
+    await page.mouse.move(x,y);await page.mouse.down();await page.mouse.move(x,y-10);await page.mouse.move(x,y-60,{steps:5});
+    await page.waitForFunction(()=>window.knobFixture.changes.length>1);
+    assert.deepEqual(await page.evaluate(()=>window.knobFixture.gestures),['start']);
+    await page.mouse.up();
+    assert.deepEqual(await page.evaluate(()=>window.knobFixture.gestures),['start','end']);
+    assert.ok(await value(knob)>100);
+    await page.evaluate(()=>window.knobFixture.unmount());
 }));
 
 test('pointer frames use current controlled callbacks rather than the pointer-down closure',async()=>withPage(async page=>{
@@ -373,4 +388,12 @@ test('secondary drag sensitivity is independent of the base drag sensitivity', a
     await drag(page, knob, 54, 0);
     assert.ok(Math.abs(await value(knob) - .7) < .005);
     assert.ok(Math.abs(Number(await depth.inputValue()) - .45) < .005);
+}));
+
+test('a knob references only a rendered label and reports its drag orientation', () => withPage(async page => {
+    const dangling = await page.locator('[data-slot=knob-control][aria-labelledby]').evaluateAll(nodes => nodes
+        .filter(node => !node.getAttribute('aria-labelledby').split(' ').every(id => node.ownerDocument.getElementById(id))).length);
+    assert.equal(dangling, 0);
+    assert.equal(await page.locator('#default [role=slider]').first().getAttribute('aria-orientation'), 'vertical');
+    assert.equal(await page.locator('#horizontal [role=slider]').first().getAttribute('aria-orientation'), 'horizontal');
 }));

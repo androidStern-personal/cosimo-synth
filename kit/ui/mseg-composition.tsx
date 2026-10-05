@@ -1,7 +1,7 @@
 import { forwardRef } from 'react'
 import { MsegRoot, type MsegRootProps } from './mseg-context'
 import { MsegSurface, type MsegSurfaceProps } from './mseg-surface'
-import { MsegCurve, MsegFill, MsegGrid, MsegPoints, MsegSegmentHighlight, MsegTimeAxis } from './mseg-layers'
+import { MsegFill, MsegGrid, MsegLine, MsegPoints, MsegSegmentHighlight, MsegTimeAxis } from './mseg-layers'
 import type { MsegTimeAxisScale } from './mseg'
 export { MsegRoot, useMsegEditor } from './mseg-context'
 export type { MsegRootProps, MsegEditing, MsegSelection } from './mseg-context'
@@ -23,7 +23,7 @@ export const MsegEditor = forwardRef<HTMLDivElement, MsegEditorProps>(function M
             <MsegSurface aria-label={props['aria-label'] ?? 'Envelope'} {...surfaceProps}>
                 <MsegGrid />
                 <MsegFill />
-                <MsegCurve />
+                <MsegLine />
                 <MsegSegmentHighlight />
                 <MsegPoints />
                 {timeAxisScale && <MsegTimeAxis scale={timeAxisScale} />}

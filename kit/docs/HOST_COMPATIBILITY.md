@@ -5,8 +5,10 @@ Use this reference when loading an effect through the generic `CmajPlugin` in a 
 ## Supported JIT path
 
 1. `npm run kit:setup` downloads and verifies the pinned `cmaj` and generic `CmajPlugin.vst3` payloads.
-2. `npm run cmajplugin:install` installs that pinned generic VST3 and verifies the expected patched CHOC keyboard-bridge markers. Maintainers may instead build from the pinned source with `npm run cmajplugin:build` and explicitly install with `npm run cmajplugin:install -- --from-source`.
+2. `npm run cmajplugin:install` installs that pinned generic VST3 and verifies its signature and the expected patched CHOC keyboard-bridge markers.
 3. `npm run fx:jit:install -- <alias>` validates the effect with the verified `cmaj`, validates the installed generic VST3, and writes only its VST3 `CmajPlugin.json` association. It does not install or replace the loader and never touches an AU.
+
+The pinned download is the only supported copy of the generic loader; the kit has no command that builds it from source.
 
 Only one generic VST3 association is active at a time. Use a dedicated production VST3 for final product identity, packaging, signing, distribution, and release qualification.
 

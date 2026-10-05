@@ -1,4 +1,6 @@
-import { forwardRef, useCallback, useLayoutEffect, useRef, useState, type SVGProps } from 'react'
+import { forwardRef, useCallback, useEffect, useLayoutEffect, useRef, useState, type SVGProps } from 'react'
+import css from './mseg.css?inline'
+import { isStepKey, stepForKey } from './keyboard-steps'
 import {
     addMsegPoint,
     deleteMsegPoint,
@@ -8,8 +10,12 @@ import {
     type MsegSurfaceOrientation,
 } from './mseg'
 import { useMsegGestures } from './mseg-gestures'
-import { retainMsegStyles } from './mseg-styles'
 import { MsegDrawingContext, useMsegContext } from './mseg-context'
+import { retainStyles } from './styles'
+import { useElementSize } from './use-element-size'
+
+/** Curve-power change per keyboard step on a selected segment. */
+const CURVE_POWER_KEY_STEP = 0.5
 
 export type MsegSurfaceProps = SVGProps<SVGSVGElement> & {
     readonly orientation?: MsegSurfaceOrientation | 'auto'
@@ -52,9 +58,12 @@ export const MsegSurface = forwardRef<SVGSVGElement, MsegSurfaceProps>(function 
         },
         [ref],
     )
-    useLayoutEffect(() => (surfaceRef.current ? retainMsegStyles(surfaceRef.current) : undefined), [])
-    const [size, setSize] = useState({ width: 1, height: 1 })
+    useLayoutEffect(() => (surfaceRef.current ? retainStyles(surfaceRef.current, 'mseg', css) : undefined), [])
+    const size = useElementSize(surfaceRef)
     const [autoOrientation, setAutoOrientation] = useState<MsegSurfaceOrientation>('horizontal')
+    useLayoutEffect(() => {
+        setAutoOrientation((previous) => resolveMsegSurfaceOrientation(size.width, size.height, previous))
+    }, [size.width, size.height])
     const orientation = requestedOrientation === 'auto' ? autoOrientation : requestedOrientation
     const controller = useRef({
         getShape: () => latest.current.current.current,
@@ -86,20 +95,7 @@ export const MsegSurface = forwardRef<SVGSVGElement, MsegSurfaceProps>(function 
         onSelectedPointChange: setSelectedPoint,
         onSelectedSegmentChange: setSelectedSegment,
     })
-    useLayoutEffect(() => {
-        const element = surfaceRef.current
-        if (!element) return
-        const resize = () => {
-            const bounds = element.getBoundingClientRect()
-            const next = { width: Math.max(1, bounds.width), height: Math.max(1, bounds.height) }
-            setSize((previous) => (previous.width === next.width && previous.height === next.height ? previous : next))
-            setAutoOrientation((previous) => resolveMsegSurfaceOrientation(next.width, next.height, previous))
-        }
-        const observer = new ResizeObserver(resize)
-        observer.observe(element)
-        resize()
-        return () => observer.disconnect()
-    }, [])
+    useEffect(() => editor.onCancel(gestures.cancelGesture), [editor.onCancel, gestures.cancelGesture])
     useLayoutEffect(() => {
         gestures.cancelGesture()
     }, [editor.disabled, editor.readOnly, orientation, gestures.cancelGesture])
@@ -133,7 +129,7 @@ export const MsegSurface = forwardRef<SVGSVGElement, MsegSurfaceProps>(function 
                 }}
                 onKeyUp={(event) => {
                     onKeyUp?.(event)
-                    if (event.key.startsWith('Arrow')) editor.endGesture()
+                    if (isStepKey(event.key)) editor.endGesture()
                 }}
                 onKeyDown={(event) => {
                     onKeyDown?.(event)
@@ -149,27 +145,24 @@ export const MsegSurface = forwardRef<SVGSVGElement, MsegSurfaceProps>(function 
                             ),
                         )
                         editor.select({ kind: 'segment', index })
-                    } else if (
-                        selection?.kind === 'segment' &&
-                        (event.key === 'ArrowUp' || event.key === 'ArrowDown')
-                    ) {
-                        event.preventDefault()
-                        editor.beginGesture()
-                        const delta = (event.key === 'ArrowUp' ? 1 : -1) * (event.shiftKey ? 0.05 : 0.5)
-                        editor.edit((value) =>
-                            setMsegSegmentCurvePower(
-                                value,
-                                selection.index,
-                                value.points[selection.index].curvePower + delta,
-                            ),
-                        )
-                    } else if (event.key === 'Insert') {
+                        return
+                    }
+                    if (event.key === 'Insert') {
                         event.preventDefault()
                         editor.edit((value) => addMsegPoint(value, 0.5, 0.5))
-                    } else if (event.key === 'Escape') {
-                        gestures.cancelGesture()
-                        editor.endGesture(true)
+                        return
                     }
+                    const step = stepForKey(event)
+                    if (selection?.kind !== 'segment' || step?.kind !== 'step' || step.axis !== 'vertical') return
+                    event.preventDefault()
+                    editor.beginGesture()
+                    editor.edit((value) =>
+                        setMsegSegmentCurvePower(
+                            value,
+                            selection.index,
+                            value.points[selection.index].curvePower + step.steps * CURVE_POWER_KEY_STEP,
+                        ),
+                    )
                 }}
                 onPointerDown={(event) => {
                     onPointerDown?.(event)

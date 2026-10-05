@@ -1,5 +1,6 @@
 #include <CoreFoundation/CoreFoundation.h>
 #include "../../tools/desktop_native/Source/cmaj_PatchLoaderPlugin.cpp"
+#include "PluginStateUpdates.h"
 #include <chrono>
 
 namespace
@@ -29,7 +30,7 @@ struct StateView final : cmaj::PatchView
         const auto kind = body["kind"].toString();
         if (kind == "owner-changed") ownerOpened = true;
         if (kind == "attached") attached = choc::value::Value (body);
-        if (kind == "attached" || kind == "update") state = choc::value::Value (body["state"]);
+        if (kind == "attached" || kind == "update") state = native_test::foldPluginState (state, body);
     }
     bool ownerOpened = false;
     choc::value::Value attached, state;

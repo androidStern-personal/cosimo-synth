@@ -1,23 +1,17 @@
 #!/usr/bin/env node
 /**
- * The single source of truth for the patched-CHOC WebView marker check.
+ * The patched-CHOC WebView marker check, shared by every build and install
+ * command (`node kit/scripts/check_choc_markers.mjs <binary>` from a shell).
  *
  * The pinned CHOC fork already guarantees the patched WebView at source level,
  * so this byte-level probe of a built binary is a sanity check that a stale or
- * unpatched build did not slip through — not a security gate. Markers are
+ * unpatched build did not slip through, not a security gate. Markers are
  * matched as raw byte substrings (`grep -a -F` semantics), which is stricter
  * than strings(1).
- *
- * Callers:
- * - kit/fx/prod-effect.mjs, scripts/build_seqfx_beta_release.mjs, and
- *   scripts/seqfx-release-config.mjs import the lists and check from here.
- * - kit/scripts/install_fx_cmajplugin.sh, kit/scripts/build_cmajplugin_vst3.sh,
- *   and kit/scripts/install_cmajplugin_vst3.sh run
- *   `node kit/scripts/check_choc_markers.mjs <binary>`.
  */
 import fs from "node:fs";
-import path from "node:path";
-import { fileURLToPath } from "node:url";
+
+import { isMainModule } from "./common.mjs";
 
 export const requiredChocWebViewMarkers = Object.freeze([
     "chocHostKeyboard",
@@ -26,6 +20,9 @@ export const requiredChocWebViewMarkers = Object.freeze([
     "chocUserFiles",
 ]);
 
+// These are markers of an older revision of the Cmajor fork's keyboard bridge,
+// rejected because a binary that still carries them forwards DAW keyboard input
+// with the old, unreliable bridge.
 export const forbiddenChocWebViewMarkers = Object.freeze([
     "cosimoKeyboard",
     "cosimoKeyboardProbe",
@@ -52,8 +49,9 @@ export function assertPatchedChocWebViewBinary(binaryPath) {
 
     if (forbidden.length > 0) {
         throw new Error([
-            `Binary still contains old keyboard probe marker(s): ${binaryPath}`,
-            `Forbidden marker(s): ${forbidden.join(", ")}`,
+            `Binary was built from an outdated keyboard bridge: ${binaryPath}`,
+            `Outdated marker(s): ${forbidden.join(", ")}`,
+            "Run npm run kit:setup for the pinned tools, then rebuild or reinstall.",
         ].join("\n"));
     }
 }
@@ -75,5 +73,5 @@ function main() {
     }
 }
 
-if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url))
+if (isMainModule(import.meta.url))
     main();

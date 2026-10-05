@@ -9,9 +9,9 @@ import { createModulationEditorFixture, createModulationProjectionHost } from ".
 import { createRoot, type Root } from "react-dom/client";
 
 import desktopCssText from "../../ui/desktop/styles.css?inline";
-import editorTokensCssText from "../../kit/ui/editor-tokens.css?inline";
-import editorCurveSurfaceCssText from "../../kit/ui/editor-curve-surface.css?inline";
-import filterRangeEditorCssText from "../../kit/ui/filter-range-editor.css?inline";
+import editorTokensCssText from "../../ui/shared/editor-tokens.css?inline";
+import editorCurveSurfaceCssText from "../../ui/shared/editor-curve-surface.css?inline";
+import filterRangeEditorCssText from "../../kit/ui/filter-editor.css?inline";
 import {
     PatchConnectionProvider,
     usePatchEndpoint,
@@ -19,7 +19,7 @@ import {
     usePatchVisualEndpoint,
     type PatchConnectionLike,
 } from "../../ui/shared/cmajor-react";
-import { acquireAnalyzerActivity } from "../../kit/ui/analyzer-activity";
+import { acquireAnalyzerActivity } from "../../ui/shared/analyzer-activity";
 import {
     advancePolishTelemetryDisplay,
     createPolishTelemetryDisplay,
@@ -46,17 +46,19 @@ import {
     WavetableStageSection,
 } from "../../ui/shared/synth-components";
 import {
-    FilterRangeEditor,
-    type FilterRangeEndpoints,
-    type FilterRangeMode,
+    FilterEditor,
+    type FilterRange,
+    type FilterMode,
     type FilterRangePolarity,
-    type FilterRangeValue,
+    type FilterValue,
+} from "../../kit/ui/filter-editor";
+import {
     cutoffRangeOctaves,
     cutoffsFromBaseModulationOctaves,
     cutoffsFromCenterRangeOctaves,
     geometricCenterCutoffHz,
     modulationOctavesFromCutoffRange,
-} from "../../kit/ui/filter-range-editor";
+} from "../../ui/shared/filter-modulation-range";
 import {
     useFactoryBankCatalog,
     useFactoryTableFrames,
@@ -99,7 +101,7 @@ import {
     serializeModulationState,
     type ModulationRouteUpdate,
 } from "../../ui/shared/modulation";
-import { useStandaloneEffectPresets } from "../../kit/ui/effects/use-standalone-effect-presets";
+import { useStandaloneEffectPresets } from "../../ui/shared/effects/use-standalone-effect-presets";
 import {
     buildCanonicalPluginStateContract,
     buildPluginStateContract,
@@ -2621,7 +2623,7 @@ export async function installMsegEditorInteractionsHookHarness(target: HTMLEleme
         async newEditorSession() { (document.getElementById("new-editor-session") as HTMLButtonElement).click(); await owner.drain(); },
         async holdFacadeGesture() { return owner.modulation.beginGesture(); },
         async endFacadeGesture() { return owner.modulation.endGesture(); },
-        async peerGesture(begin: boolean) { return owner.other.dispatch({ kind: begin ? "begin" : "end", key: "modulation.v6", gesture: 90 }); },
+        async peerGesture(begin: boolean) { return owner.other.dispatch({ kind: begin ? "begin" : "end", keys: ["modulation.v6"], gesture: 90 }); },
         async peerRenameShape(name: string) {
             const bank = owner.modulation.getState();
             if (!bank) throw new Error("Modulation owner is not ready.");
@@ -3511,7 +3513,7 @@ export async function installSharedFilterRangeEditorHarness(target: HTMLElement)
 
     const state = {
         value: {
-            mode: "lowpass" as FilterRangeMode,
+            mode: "lowpass" as FilterMode,
             cutoffHz: geometricCenterCutoffHz(200, 3200),
             q: 4,
         },
@@ -3519,20 +3521,20 @@ export async function installSharedFilterRangeEditorHarness(target: HTMLElement)
             startCutoffHz: 200,
             endCutoffHz: 3200,
         },
-        valueLog: [] as FilterRangeValue[],
-        rangeLog: [] as FilterRangeEndpoints[],
+        valueLog: [] as FilterValue[],
+        rangeLog: [] as FilterRange[],
         editLog: [] as string[],
         rangePolarity: "bipolar" as FilterRangePolarity,
         previewActive: true,
     };
     let setHarnessRangePolarity: ((nextPolarity: FilterRangePolarity) => void) | null = null;
     let setHarnessPreviewActive: ((nextPreviewActive: boolean) => void) | null = null;
-    let setHarnessValue: ((nextValue: Partial<FilterRangeValue>) => void) | null = null;
+    let setHarnessValue: ((nextValue: Partial<FilterValue>) => void) | null = null;
 
     const mounted = mountHarness(target, (root) => {
         function Harness() {
-            const [value, setValue] = useState<FilterRangeValue>(state.value);
-            const [range, setRange] = useState<FilterRangeEndpoints>(state.range);
+            const [value, setValue] = useState<FilterValue>(state.value);
+            const [range, setRange] = useState<FilterRange>(state.range);
             const [rangePolarity, setRangePolarity] = useState<FilterRangePolarity>(state.rangePolarity);
             const [previewActive, setPreviewActive] = useState(state.previewActive);
             const preview = useMemo(() => ({
@@ -3580,7 +3582,7 @@ export async function installSharedFilterRangeEditorHarness(target: HTMLElement)
                 };
             }, [value.cutoffHz]);
 
-            const updateValue = (nextValue: FilterRangeValue) => {
+            const updateValue = (nextValue: FilterValue) => {
                 const modulationAmount = modulationOctavesFromCutoffRange({
                     baseCutoffHz: value.cutoffHz,
                     range,
@@ -3602,13 +3604,13 @@ export async function installSharedFilterRangeEditorHarness(target: HTMLElement)
                 setRange(nextRange);
             };
 
-            const updateRange = (nextRange: FilterRangeEndpoints) => {
+            const updateRange = (nextRange: FilterRange) => {
                 state.rangeLog.push(cloneValue(nextRange));
                 setRange(nextRange);
             };
 
             return (
-                <FilterRangeEditor
+                <FilterEditor
                     className="filter-range-editor-test"
                     value={value}
                     range={range}
@@ -3619,8 +3621,8 @@ export async function installSharedFilterRangeEditorHarness(target: HTMLElement)
                     showReadout
                     onValueChange={updateValue}
                     onRangeChange={updateRange}
-                    onEditStart={(targetName) => state.editLog.push(`start:${targetName}`)}
-                    onEditEnd={(targetName) => state.editLog.push(`end:${targetName}`)}
+                    onGestureStart={(targetName) => state.editLog.push(`start:${targetName}`)}
+                    onGestureEnd={(_cancelled, targetName) => state.editLog.push(`end:${targetName}`)}
                 />
             );
         }
@@ -3725,7 +3727,7 @@ export async function installSharedFilterRangeEditorHarness(target: HTMLElement)
         setPreviewActive(nextPreviewActive: boolean) {
             setHarnessPreviewActive?.(nextPreviewActive);
         },
-        setValue(nextValue: Partial<FilterRangeValue>) {
+        setValue(nextValue: Partial<FilterValue>) {
             setHarnessValue?.(nextValue);
         },
         async unmount() {

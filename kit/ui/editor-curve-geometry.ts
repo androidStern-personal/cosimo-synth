@@ -1,16 +1,30 @@
-import {
-    EDITOR_PLOT_BOTTOM_PADDING_PX,
-    EDITOR_PLOT_TOP_PADDING_PX,
-    editorPlotGutter,
-} from "./editor-tokens";
+// Layout for SVG curve editors such as the filter editor, in CSS pixels. Geometry
+// code positions plots and hit targets with these, so they live here rather than in CSS.
+
+export const EDITOR_PLOT_TOP_PADDING_PX = 20;
+export const EDITOR_PLOT_BOTTOM_PADDING_PX = 40;
+/** Visible radius of the primary value handle. */
+export const EDITOR_VALUE_HANDLE_RADIUS_PX = 9.5;
+/** Visible radius of the halo behind the primary handle. */
+export const EDITOR_VALUE_HANDLE_HALO_RADIUS_PX = 14;
+/** Visible radius of range endpoint handles. */
+export const EDITOR_RANGE_HANDLE_RADIUS_PX = 8.5;
+/** Invisible hit-target radius, sized for a comfortable touch target. */
+export const EDITOR_HIT_RADIUS_PX = 22;
+/** Pointer travel before a press on a handle becomes a drag. */
+export const EDITOR_DRAG_START_THRESHOLD_PX = 1.5;
+
+const PLOT_GUTTER_RATIO = 0.05;
+const PLOT_GUTTER_MIN_PX = 10;
+
+/** Left and right plot gutter for a surface width; wide enough that axis labels never collide. */
+export function editorPlotGutter(surfaceWidthPx: number): number {
+    return Math.max(PLOT_GUTTER_MIN_PX, surfaceWidthPx * PLOT_GUTTER_RATIO);
+}
 
 export type EditorCurvePoint = {
     x: number;
     y: number;
-};
-
-export type EditorCurveSamplePoint = EditorCurvePoint & {
-    t?: number;
 };
 
 export type EditorCurvePlotRect = {
@@ -30,27 +44,12 @@ export type EditorCurvePlotRectOptions = {
     bottomReservePx?: number;
 };
 
-export type AdaptiveEditorCurveOptions = {
-    evaluate: (t: number) => EditorCurvePoint;
-    plot: EditorCurvePlotRect;
-    breakpoints?: number[];
-    tolerancePx?: number;
-    maxDepth?: number;
-};
-
-const DEFAULT_ADAPTIVE_TOLERANCE_PX = 0.5;
-const DEFAULT_ADAPTIVE_MAX_DEPTH = 12;
-
 function finiteNumber(value: number, fallback: number): number {
     return Number.isFinite(value) ? value : fallback;
 }
 
 function clamp(value: number, min: number, max: number): number {
     return Math.min(max, Math.max(min, value));
-}
-
-function formatCoordinate(value: number, precision: number): string {
-    return value.toFixed(Math.max(0, Math.round(precision)));
 }
 
 export function createEditorCurvePlotRect(
@@ -86,161 +85,12 @@ export function createEditorCurvePlotRect(
     };
 }
 
-export function normalizedCurvePointToPlotPoint(
-    point: EditorCurvePoint,
-    plot: EditorCurvePlotRect,
-): EditorCurvePoint {
-    const normalizedX = clamp(finiteNumber(point.x, 0), 0, 1);
-    const normalizedY = clamp(finiteNumber(point.y, 0), 0, 1);
-
-    return {
-        x: plot.plotLeft + (plot.plotWidth * normalizedX),
-        y: plot.plotBottom - (plot.plotHeight * normalizedY),
-    };
-}
-
-export function plotPointToNormalizedCurvePoint(
-    point: EditorCurvePoint,
-    plot: EditorCurvePlotRect,
-): EditorCurvePoint {
-    return {
-        x: clamp((finiteNumber(point.x, plot.plotLeft) - plot.plotLeft) / plot.plotWidth, 0, 1),
-        y: clamp(1 - ((finiteNumber(point.y, plot.plotBottom) - plot.plotTop) / plot.plotHeight), 0, 1),
-    };
-}
-
 export function polylineToSvgPath(
-    polyline: Array<EditorCurvePoint>,
+    polyline: ReadonlyArray<EditorCurvePoint>,
     precision = 3,
 ): string {
-    if (polyline.length === 0) {
-        return "";
-    }
-
+    const digits = Math.max(0, Math.round(precision));
     return polyline.map((point, pointIndex) => (
-        `${pointIndex === 0 ? "M" : "L"} ${formatCoordinate(point.x, precision)} ${formatCoordinate(point.y, precision)}`
+        `${pointIndex === 0 ? "M" : "L"} ${point.x.toFixed(digits)} ${point.y.toFixed(digits)}`
     )).join(" ");
-}
-
-export function editorCurveFillPathToBaseline(
-    polyline: Array<EditorCurvePoint>,
-    plot: EditorCurvePlotRect,
-    precision = 3,
-    baselineY = plot.plotBottom,
-): string {
-    if (polyline.length === 0) {
-        return "";
-    }
-
-    const first = polyline[0];
-    const last = polyline[polyline.length - 1];
-    return [
-        polylineToSvgPath(polyline, precision),
-        `L ${formatCoordinate(last.x, precision)} ${formatCoordinate(baselineY, precision)}`,
-        `L ${formatCoordinate(first.x, precision)} ${formatCoordinate(baselineY, precision)}`,
-        "Z",
-    ].join(" ");
-}
-
-export function distanceSquaredToLineSegment(
-    targetX: number,
-    targetY: number,
-    fromX: number,
-    fromY: number,
-    toX: number,
-    toY: number,
-): number {
-    const deltaX = toX - fromX;
-    const deltaY = toY - fromY;
-    const segmentLengthSquared = (deltaX * deltaX) + (deltaY * deltaY);
-
-    if (segmentLengthSquared <= 1e-12) {
-        const pointDeltaX = targetX - fromX;
-        const pointDeltaY = targetY - fromY;
-        return (pointDeltaX * pointDeltaX) + (pointDeltaY * pointDeltaY);
-    }
-
-    const projection = clamp(
-        (((targetX - fromX) * deltaX) + ((targetY - fromY) * deltaY)) / segmentLengthSquared,
-        0,
-        1,
-    );
-    const closestX = fromX + (deltaX * projection);
-    const closestY = fromY + (deltaY * projection);
-    const pointDeltaX = targetX - closestX;
-    const pointDeltaY = targetY - closestY;
-    return (pointDeltaX * pointDeltaX) + (pointDeltaY * pointDeltaY);
-}
-
-export function adaptiveSampleEditorCurve({
-    breakpoints = [],
-    evaluate,
-    plot,
-    tolerancePx = DEFAULT_ADAPTIVE_TOLERANCE_PX,
-    maxDepth = DEFAULT_ADAPTIVE_MAX_DEPTH,
-}: AdaptiveEditorCurveOptions): EditorCurveSamplePoint[] {
-    const safeToleranceSquared = Math.max(0, finiteNumber(tolerancePx, DEFAULT_ADAPTIVE_TOLERANCE_PX));
-    const toleranceSquared = safeToleranceSquared * safeToleranceSquared;
-    const safeMaxDepth = Math.max(0, Math.round(finiteNumber(maxDepth, DEFAULT_ADAPTIVE_MAX_DEPTH)));
-
-    const sampleAt = (t: number): EditorCurveSamplePoint => ({
-        ...normalizedCurvePointToPlotPoint(evaluate(clamp(t, 0, 1)), plot),
-        t: clamp(t, 0, 1),
-    });
-
-    const boundaries = [
-        0,
-        ...breakpoints
-            .map((breakpoint) => clamp(finiteNumber(breakpoint, 0), 0, 1))
-            .filter((breakpoint) => breakpoint > 0 && breakpoint < 1)
-            .sort((left, right) => left - right),
-        1,
-    ].filter((breakpoint, index, values) => (
-        index === 0 || Math.abs(breakpoint - values[index - 1]) > 1e-9
-    ));
-    const start = sampleAt(boundaries[0]);
-    const polyline: EditorCurveSamplePoint[] = [start];
-
-    const appendAdaptiveSamples = (
-        startT: number,
-        endT: number,
-        startPoint: EditorCurveSamplePoint,
-        endPoint: EditorCurveSamplePoint,
-        depth: number,
-    ) => {
-        if (depth >= safeMaxDepth) {
-            polyline.push(endPoint);
-            return;
-        }
-
-        const midpointT = startT + ((endT - startT) * 0.5);
-        const midpoint = sampleAt(midpointT);
-        const errorSquared = distanceSquaredToLineSegment(
-            midpoint.x,
-            midpoint.y,
-            startPoint.x,
-            startPoint.y,
-            endPoint.x,
-            endPoint.y,
-        );
-
-        if (errorSquared <= toleranceSquared) {
-            polyline.push(endPoint);
-            return;
-        }
-
-        appendAdaptiveSamples(startT, midpointT, startPoint, midpoint, depth + 1);
-        appendAdaptiveSamples(midpointT, endT, midpoint, endPoint, depth + 1);
-    };
-
-    for (let index = 0; index + 1 < boundaries.length; index += 1) {
-        const startT = boundaries[index];
-        const endT = boundaries[index + 1];
-        const startPoint = polyline[polyline.length - 1];
-        const endPoint = sampleAt(endT);
-
-        appendAdaptiveSamples(startT, endT, startPoint, endPoint, 0);
-    }
-
-    return polyline;
 }

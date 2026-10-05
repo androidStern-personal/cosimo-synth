@@ -27,9 +27,9 @@ export function MorphExample() {
             <Mseg.Root key={editing} value={editing === 'A' ? a : b} onValueChange={editing === 'A' ? setA : setB}>
                 <Mseg.Surface aria-label={`Shape ${editing}`} className="envelope" style={{ height: 230 }}>
                     <Mseg.Grid />
-                    <Mseg.Curve value={editing === 'A' ? b : a} stroke="#b398da" opacity={0.45} />
+                    <Mseg.Line value={editing === 'A' ? b : a} stroke="#b398da" opacity={0.45} />
                     <Mseg.Fill />
-                    <Mseg.Curve />
+                    <Mseg.Line />
                     <Mseg.Plot samples={samples} stroke="#eab67b" strokeWidth={3} />
                     <Mseg.Points />
                 </Mseg.Surface>

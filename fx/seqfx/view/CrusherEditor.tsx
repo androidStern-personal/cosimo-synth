@@ -5,25 +5,25 @@ import {
     type PointerEvent as ReactPointerEvent,
 } from "react";
 
-import { EditorTickSlider, ModBadge, type ModulationDirection } from "../../../kit/index";
+import { EditorTickSlider, ModBadge, type ModulationDirection } from "./editor-tick-slider";
 import {
     EDITOR_PLOT_BOTTOM_PADDING_PX,
     EDITOR_PLOT_TOP_PADDING_PX,
-    useEditorSurfaceSize,
-} from "../../../kit/index";
+    useElementSize,
+} from "../../../ui/shared/editor-tokens";
 import {
     createEditorCurvePlotRect,
     editorCurveFillPathToBaseline,
     polylineToSvgPath,
     type EditorCurvePlotRect,
-} from "../../../kit/index";
+} from "../../../ui/shared/editor-curve-geometry";
 import {
     EditorCurveAxis,
     EditorCurveFill,
     EditorCurvePath,
     EditorCurvePlotArea,
     EditorCurveSurface,
-} from "../../../kit/index";
+} from "../../../ui/shared/editor-curve-surface";
 import {
     CRUSHER_BITS_MAX,
     CRUSHER_BITS_MIN,
@@ -183,7 +183,7 @@ export function CrusherEditor({
 }: CrusherEditorProps) {
     const resolved = resolveValue(value);
     const viewportRef = useRef<HTMLDivElement | null>(null);
-    const size = useEditorSurfaceSize(viewportRef);
+    const size = useElementSize(viewportRef);
     const effectiveWidth = size.width;
     const effectiveHeight = size.height;
     const plot = useMemo(
@@ -256,10 +256,10 @@ export function CrusherEditor({
                 <div ref={viewportRef} className="seqfx-crusher-editor__viewport">
                     <EditorCurveSurface
                         className="seqfx-crusher-editor__surface"
-                        dataRole="seqfx-crusher-graph"
+                        data-role="seqfx-crusher-graph"
                         heightPx={effectiveHeight}
                         widthPx={effectiveWidth}
-                        ariaLabel="Crusher waveform preview"
+                        aria-label="Crusher waveform preview"
                     >
                         <EditorCurvePlotArea plot={plot} />
                         {gridXs.map((x, index) => (

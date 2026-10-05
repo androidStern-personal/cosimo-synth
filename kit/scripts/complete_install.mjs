@@ -1,39 +1,34 @@
 // The post-bootstrap boundary. The Bash installer has already verified the
 // release commit and provisioned its private runtime before invoking this file.
+import { createHash } from "node:crypto";
 import { lstat, readFile, readdir, rename, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
-import { fileURLToPath } from "node:url";
-import { runSetup } from "./setup.mjs";
+
+import { isMainModule } from "./common.mjs";
 import { collectDoctorReport } from "./doctor.mjs";
-import { dependencyFingerprint } from "./preserve_legacy_package_lock.mjs";
+import { runSetup } from "./setup.mjs";
 import { readFeedBaseUrl, readToolchain, repoRoot } from "./toolchain.mjs";
-import { redact, reveal } from "./redacted.mjs";
 
 const failure = (code) => ({ ok: false, error: { code } });
 
-function doctorFailure(report) {
-    const details = [];
-    const safeVersion = (text) => typeof text === "string" && /^[0-9><=~^.* |x-]+$/u.test(text) ? text : "the required version";
-    if (report.platform.osOk === false || report.platform.archOk === false || report.platform.macOSOk === false) details.push("Requires macOS 15 or newer on Apple silicon.");
-    for (const name of ["node", "npm", "cmake", "git", "compiler"]) {
-        const tool = report.tools[name];
-        const label = name === "compiler" ? "Apple Clang" : name;
-        if (!tool.present) details.push(`${label} is missing. ${["node", "npm", "cmake"].includes(name) ? "Source .builder-kit-install/env.sh from the project root, then retry." : "Install or repair Apple Command Line Tools, then retry."}`);
-        else if (!tool.ok) details.push(`${label} ${safeVersion(tool.version)} does not satisfy ${safeVersion(tool.required)}.`);
-        else if (tool.projectLocal === false) details.push(`${label} is outside the verified project runtime. Source .builder-kit-install/env.sh from the project root, then retry.`);
+/** A stage's own error for the customer. This process holds the access credential, so it is removed from the text. */
+function stageFailure(stage, error, secrets) {
+    let message = error instanceof Error ? error.message : String(error);
+    for (const secret of secrets.filter(Boolean))
+        message = message.replaceAll(secret, "<access credential>");
+    return { ok: false, error: { code: stage, details: [message] } };
+}
+
+/** Identifies the dependency inputs a completed npm install was made from. */
+async function dependencyFingerprint(root) {
+    const hash = createHash("sha256");
+    for (const name of ["package.json", "package-lock.json"]) {
+        hash.update(name);
+        try { hash.update(await readFile(path.join(root, name))); }
+        catch (error) { if (error.code !== "ENOENT") throw error; }
     }
-    if (!report.tools.xcodeCommandLineTools.ok) details.push("Run xcode-select --install, finish the Command Line Tools installation and agreement prompts yourself, then retry.");
-    for (const key of ["cmaj", "cmajPlugin"]) {
-        const status = report.toolchain[key]?.status;
-        if (["missing", "stale", "unpinned"].includes(status)) details.push(`${key} is ${status}; its verified setup artifact is required.`);
-    }
-    if (!report.feed.configured) details.push("The kit download feed is not configured.");
-    else if (report.feed.checked && !report.feed.reachable) details.push(Number.isInteger(report.feed.status) ? `The kit feed returned HTTP ${report.feed.status}. Check access and connectivity.` : "The kit feed could not be reached. Check connectivity.");
-    if (!report.registry.ok) details.push("Plugin discovery failed; inspect the project's patch manifests and plugin configurations.");
-    if (!report.nodeModules.present) details.push("npm dependencies are missing.");
-    if (details.length === 0) details.push("A kit configuration check failed; ask your coding agent to inspect kit:doctor.");
-    return { ok: false, error: { code: "final-checks", details } };
+    return hash.digest("hex");
 }
 
 async function writableSetupPathsAreLocal(root) {
@@ -45,7 +40,7 @@ async function writableSetupPathsAreLocal(root) {
     for (const [relative, kind] of paths) {
         try {
             const metadata = await lstat(path.join(root, relative));
-            if (metadata.isSymbolicLink() || (kind === "directory" ? !metadata.isDirectory() : !metadata.isFile() || metadata.nlink !== 1)) return false;
+            if (metadata.isSymbolicLink() || (kind === "directory" ? !metadata.isDirectory() : !metadata.isFile())) return false;
         } catch (error) { if (error.code !== "ENOENT") throw error; }
     }
     // setup writes acknowledgment, receipt and download files at this level;
@@ -55,8 +50,7 @@ async function writableSetupPathsAreLocal(root) {
     catch (error) { if (error.code !== "ENOENT") throw error; }
     for (const entry of entries) {
         const metadata = await lstat(path.join(root, "build/kit-tools", entry));
-        if (metadata.isSymbolicLink() || (!metadata.isFile() && !metadata.isDirectory())
-            || (metadata.isFile() && metadata.nlink !== 1)) return false;
+        if (metadata.isSymbolicLink() || (!metadata.isFile() && !metadata.isDirectory())) return false;
     }
     return true;
 }
@@ -67,13 +61,13 @@ export async function completeInstallation({ root = repoRoot, log = console.log,
         return failure("juce-acknowledgment-required");
 
     const env = process.env;
-    const expectedFeed = redact(env.BUILDER_KIT_EXPECTED_FEED ?? "");
-    if (reveal(expectedFeed) === "" || !/^[0-9a-f]{64}$/u.test(env.BUILDER_KIT_EXPECTED_CMAJ_SHA256 ?? "")
+    const expectedFeed = env.BUILDER_KIT_EXPECTED_FEED ?? "";
+    if (expectedFeed === "" || !/^[0-9a-f]{64}$/u.test(env.BUILDER_KIT_EXPECTED_CMAJ_SHA256 ?? "")
         || !/^[0-9a-f]{64}$/u.test(env.BUILDER_KIT_EXPECTED_PLUGIN_SHA256 ?? "")) return failure("missing-delivery-pins");
     let stage = "release-contract";
     try {
         const toolchain = readToolchain(path.join(root, "kit/toolchain.json"));
-        if (reveal(readFeedBaseUrl(path.join(root, "kit/feed.json"))) !== reveal(expectedFeed)
+        if (readFeedBaseUrl(path.join(root, "kit/feed.json")) !== expectedFeed
             || toolchain.cmaj.sha256 !== env.BUILDER_KIT_EXPECTED_CMAJ_SHA256
             || toolchain.cmajPlugin.sha256 !== env.BUILDER_KIT_EXPECTED_PLUGIN_SHA256) return failure("release-contract");
         if (!await writableSetupPathsAreLocal(root)) return {
@@ -94,11 +88,12 @@ export async function completeInstallation({ root = repoRoot, log = console.log,
         const installDependencies = () => {
             log("Builder Kit: installing npm dependencies");
             const result = npm(["ci", "--no-audit", "--no-fund"]);
-            if (result.error || result.status !== 0) throw new Error("npm-ci-failed");
+            if (result.error || result.status !== 0)
+                throw new Error("npm ci failed. Source .builder-kit-install/env.sh, then run npm ci in the project folder to see npm's own output.");
             installedDependencies = true;
         };
         stage = "setup";
-        await runSetup({ root, acceptJuceTerms, runNpmInstall: installDependencies, log: () => {} });
+        await runSetup({ root, acceptJuceTerms, runNpmInstall: installDependencies, log });
         stage = "npm-dependencies";
         const receipt = path.join(root, ".builder-kit-install/npm-ready");
         let previousFingerprint = "";
@@ -121,17 +116,15 @@ export async function completeInstallation({ root = repoRoot, log = console.log,
 
         stage = "final-checks";
         const doctor = await collectDoctorReport({ root });
-        if (!doctor.ok) return doctorFailure(doctor);
+        if (!doctor.ok) return { ok: false, error: { code: "final-checks", details: doctor.problems } };
         log("Builder Kit: setup and strict environment checks passed");
         return { ok: true };
-    } catch {
-        // Existing setup/npm/Git errors can include child-process output. Do
-        // not propagate it across this credential-bearing delivery boundary.
-        return failure(stage);
+    } catch (error) {
+        return stageFailure(stage, error, [expectedFeed, env.BUILDER_KIT_ACCESS]);
     }
 }
 
-if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+if (isMainModule(import.meta.url)) {
     if (process.argv.length !== 3 || process.argv[2] !== "--accept-juce-terms") {
         console.error("Explicit --accept-juce-terms acknowledgment is required.");
         process.exitCode = 1;

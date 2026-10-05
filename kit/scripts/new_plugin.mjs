@@ -6,7 +6,8 @@
  * patch manifest, its DSP source, the single `<PatchName>.plugin.json` config
  * (build settings plus the `product` identity object), a `view/index.js`
  * symlink to the shared kit loader, a `state.ts` declaration and editable `view/source.tsx` wired to the
- * createStatefulPatchView convention, and a starter node test under tests/. Discovery
+ * createStatefulPatchView convention, and a starter node test under tests/ that
+ * loads the state declaration and checks it against the DSP. Discovery
  * is scan-driven, so no shared file is edited; the new plugin is a build
  * target immediately.
  *
@@ -20,7 +21,6 @@
  */
 import fs from "node:fs";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
 import {
     collectEffectIdentityClaims,
     derivePluginBaseName,
@@ -32,14 +32,13 @@ import {
     productOwnerFileName,
     productOwnerPath,
     readProductOwner,
-    supportedPluginSchemaVersion,
 } from "../fx/build-effect.mjs";
+import { isMainModule, placeholderOwnerKeys, readKitManifest } from "./common.mjs";
 
-const scriptDir = path.dirname(fileURLToPath(import.meta.url));
-const repoRoot = path.resolve(scriptDir, "../..");
+const repoRoot = path.resolve(import.meta.dirname, "../..");
 const defaultFxRoot = path.join(repoRoot, "fx");
 const defaultTestsRoot = path.join(repoRoot, "tests");
-const kitLoaderSymlinkTarget = "../../../kit/ui/effects/effect-view-loader.js";
+const kitLoaderSymlinkTarget = "../../../kit/ui/view-loader.js";
 const starterVersion = "0.1.0";
 
 export function usage() {
@@ -100,6 +99,16 @@ export function planPluginScaffold(rawName, { fxRoot = defaultFxRoot, testsRoot 
         );
     }
 
+    const placeholders = placeholderOwnerKeys(ownerFile.owner);
+
+    if (placeholders.length > 0) {
+        throw new Error(
+            `Refusing to scaffold: ${productOwnerPath(root)} still holds the template's placeholder `
+            + `${placeholders.length === 1 ? "value" : "values"} for ${placeholders.join(", ")}. `
+            + "Replace them with your company's own values, then run kit:new again.",
+        );
+    }
+
     const identity = deriveOwnedIdentity(names, ownerFile.owner);
     const pluginDirectory = path.join(fxRoot, names.directoryName);
     const starterTestPath = path.join(testsRoot, `test_${names.directoryName}_state.mjs`);
@@ -152,8 +161,8 @@ function createPatchManifest(plan) {
         view: {
             src: "view/index.js",
             devModule: `/fx/${plan.directoryName}/view/source.tsx`,
-            width: 520,
-            height: 320,
+            width: 640,
+            height: 360,
             resizable: true,
         },
     };
@@ -161,7 +170,7 @@ function createPatchManifest(plan) {
 
 function createPluginConfig(plan) {
     return {
-        schemaVersion: supportedPluginSchemaVersion,
+        schemaVersion: readKitManifest().schemaVersions.plugin,
         alias: plan.alias,
         cmakeTarget: plan.patchBaseName,
         productName: plan.patchBaseName,
@@ -203,23 +212,30 @@ processor ${plan.patchBaseName}  [[ main ]]
 }
 
 function createStateSource() {
-    return `import { definePluginState, parameter } from "../../kit/index";
+    return `import { definePluginState, parameter, presets, snapshots } from "../../kit/index";
 
-// The endpoint name matches the automatable gainDb input in the DSP.
-export default definePluginState({ gain: parameter("gainDb") });
+export default definePluginState({
+    // The endpoint name matches the automatable gainDb input in the DSP.
+    gain: parameter("gainDb"),
+    // Add factory presets here; each one sets every sound field, such as { gain: -6 }.
+    ...presets({ factory: [] }),
+    ...snapshots(),
+});
 `;
 }
 
 function createViewSource(plan) {
     return `// Editable with \`npm run fx:dev\`; bundled by \`npm run fx:build -- ${plan.alias}\`.
-import { createStatefulPatchView, usePluginState, usePluginHistory } from "../../../kit/index";
-import type { EffectParameterContract } from "../../../kit/index";
+import { createStatefulPatchView, usePluginState, usePluginHistory, PresetBar, SnapshotBar } from "../../../kit/index";
+import type { BrowserPreviewParameter } from "../../../kit/index";
 import definition from "../state";
 
-/** The silent preview's parameter metadata matches the DSP endpoint. */
+/** gainDb's range in the DSP; the silent browser preview and the slider both read it. */
+const gainRange = { min: -24, max: 24 };
+
 export const browserPreviewParameters = [{
-    endpointID: "gainDb", type: "number", min: -24, max: 24, defaultValue: 0,
-}] satisfies EffectParameterContract[];
+    endpointID: "gainDb", type: "number", ...gainRange, defaultValue: 0,
+}] satisfies BrowserPreviewParameter[];
 
 function View() {
     const gain = usePluginState(definition.gain);
@@ -227,19 +243,23 @@ function View() {
     if (!("value" in gain.state)) return <p role="status">{gain.state.status}</p>;
     const value = gain.state.value;
     return <main>
+        <header>
+            <PresetBar definition={definition} />
+            <SnapshotBar definition={definition} />
+            <nav aria-label="Edit history">
+                <button disabled={!history.canUndo} onClick={() => { void history.undo(); }}>Undo</button>
+                <button disabled={!history.canRedo} onClick={() => { void history.redo(); }}>Redo</button>
+            </nav>
+        </header>
         <h1>${plan.displayName}</h1>
         <label htmlFor="gain">Gain</label>
-        <input id="gain" type="range" min={gain.state.metadata?.min ?? -24} max={gain.state.metadata?.max ?? 24} step="0.1"
+        <input id="gain" type="range" min={gain.state.metadata?.min ?? gainRange.min} max={gain.state.metadata?.max ?? gainRange.max} step="0.1"
             value={value}
             onPointerDown={event => { event.currentTarget.setPointerCapture(event.pointerId); void gain.beginGesture(); }}
             onPointerUp={() => { void gain.endGesture(); }}
             onPointerCancel={() => { void gain.endGesture(); }}
             onChange={event => { void gain.setValue(Number(event.currentTarget.value)); }} />
         <output data-readout>{value >= 0 ? "+" : ""}{value.toFixed(1)} dB</output>
-        <nav aria-label="Edit history">
-            <button disabled={!history.canUndo} onClick={() => { void history.undo(); }}>Undo</button>
-            <button disabled={!history.canRedo} onClick={() => { void history.redo(); }}>Redo</button>
-        </nav>
         {gain.error && <p role="alert">{gain.error.message}</p>}
         {gain.retry && <button onClick={() => { void gain.retry?.(); }}>Retry</button>}
     </main>;
@@ -247,11 +267,12 @@ function View() {
 
 export default createStatefulPatchView({ definition, View, css: \`
     :host { color: #f4efe6; background: #17171d; font-family: monospace; }
-    main { box-sizing: border-box; min-height: 320px; padding: 24px; }
+    main { box-sizing: border-box; min-height: 360px; padding: 24px; }
+    header { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; margin-bottom: 24px; }
+    nav { display: flex; gap: 8px; }
     h1 { margin: 0 0 18px; font-size: 18px; text-transform: uppercase; }
     label, output { display: block; margin: 8px 0; }
-    input { width: 100%; }
-    nav { display: flex; gap: 8px; margin-top: 20px; }
+    input[type=range] { width: 100%; }
 \` });
 `;
 }
@@ -261,57 +282,50 @@ function createStarterTest(plan) {
 import fs from "node:fs/promises";
 import path from "node:path";
 import test from "node:test";
-import { pathToFileURL } from "node:url";
+
+import { getEffectPlugin } from "../kit/fx/build-effect.mjs";
+import { loadUIModule } from "../kit/tests/helpers/load_ui_module.mjs";
 
 const repoRoot = path.resolve(import.meta.dirname, "..");
+const pluginDirectory = "fx/${plan.directoryName}";
 
-async function loadDiscovery() {
-    return import(pathToFileURL(path.join(repoRoot, "kit/fx/build-effect.mjs")));
-}
+test("${plan.directoryName} is discovered with its state module and product identity", () => {
+    const plugin = getEffectPlugin("${plan.alias}");
 
-test("${plan.directoryName} is discovered with its product identity", async () => {
-    const { effectPlugins } = await loadDiscovery();
-    const plugin = effectPlugins["${plan.alias}"];
-
-    assert.ok(plugin, "discovery must include ${plan.alias}");
-    assert.equal(plugin.patch, "fx/${plan.directoryName}/${plan.patchBaseName}.cmajorpatch");
-    assert.equal(plugin.productName, "${plan.patchBaseName}");
-    assert.deepEqual(plugin.identity, {
-        ID: "${plan.bundleIdentifier}",
-        name: "${plan.displayName}",
-        manufacturer: ${JSON.stringify(plan.manufacturer)},
-        version: "${starterVersion}",
-        plugin: { pluginCode: "${plan.pluginCode}", manufacturerCode: "${plan.manufacturerCode}" },
-    });
+    assert.equal(plugin.patch, \`\${pluginDirectory}/${plan.patchBaseName}.cmajorpatch\`);
+    assert.equal(plugin.stateSource, \`\${pluginDirectory}/state.ts\`);
+    assert.equal(plugin.identity.ID, "${plan.bundleIdentifier}");
+    assert.equal(plugin.identity.plugin.pluginCode, "${plan.pluginCode}");
 });
 
-test("${plan.directoryName} keeps the kit view loader conventions", async () => {
-    const manifest = JSON.parse(
-        await fs.readFile(path.join(repoRoot, "fx/${plan.directoryName}/${plan.patchBaseName}.cmajorpatch"), "utf8"),
-    );
+test("${plan.directoryName} state loads and every declared parameter is a DSP input", async () => {
+    // definePluginState validates the declaration, including the factory presets.
+    const { default: definition } = await loadUIModule(repoRoot, \`\${pluginDirectory}/state.ts\`);
+    const dsp = await fs.readFile(path.join(repoRoot, pluginDirectory, "${plan.patchBaseName}.cmajor"), "utf8");
+    const parameters = Object.values(definition).filter((field) => field.kind === "parameter");
 
-    assert.equal(manifest.view.src, "view/index.js");
-    assert.equal(manifest.view.devModule, "/fx/${plan.directoryName}/view/source.tsx");
-    assert.equal(
-        await fs.realpath(path.join(repoRoot, "fx/${plan.directoryName}/view/index.js")),
-        await fs.realpath(path.join(repoRoot, "kit/ui/effects/effect-view-loader.js")),
-    );
-
-    for (const sourceFile of manifest.source)
-        await fs.access(path.join(repoRoot, "fx/${plan.directoryName}", sourceFile));
+    assert.ok(parameters.length > 0, "state.ts declares at least one parameter");
+    for (const { endpoint } of parameters)
+        assert.match(dsp, new RegExp(\`input value [^;]*\\\\b\${endpoint}\\\\b\`), \`\${endpoint} is an input value in the DSP\`);
+    assert.ok(Array.isArray(definition.presetLibrary.factory), "the factory preset list is declared");
 });
 `;
 }
 
 export function nextSteps(plan) {
+    const commands = [
+        ["npm run fx:dev", `live UI: http://127.0.0.1:5175/fx/${plan.directoryName}/view/harness.html`],
+        [`npm run fx:build -- ${plan.alias}`, `self-contained runtime under build/fx/${plan.directoryName}_runtime`],
+        [`node --test tests/test_${plan.directoryName}_state.mjs`, "the starter test"],
+    ];
+    const width = Math.max(...commands.map(([command]) => command.length));
+
     return [
         `Scaffolded fx/${plan.directoryName} (alias "${plan.alias}").`,
         "",
-        "Gain edits and pointer drags use shared Undo/Redo; extend state.ts for new controls.",
+        "Gain edits, presets and snapshots share Undo/Redo; extend state.ts for new controls.",
         "Next steps:",
-        `  npm run fx:dev                    # live UI: http://127.0.0.1:5175/fx/${plan.directoryName}/view/harness.html`,
-        `  npm run fx:build -- ${plan.alias}    # self-contained runtime under build/fx/${plan.directoryName}_runtime`,
-        `  node --test tests/test_${plan.directoryName}_state.mjs`,
+        ...commands.map(([command, comment]) => `  ${command.padEnd(width)}  # ${comment}`),
         "",
         `Build settings and identity live in fx/${plan.directoryName}/${plan.patchBaseName}${pluginConfigSuffix}`,
         "(keep the patch manifest in agreement with its \"product\" object).",
@@ -361,5 +375,5 @@ async function main() {
     }
 }
 
-if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url))
+if (isMainModule(import.meta.url))
     await main();

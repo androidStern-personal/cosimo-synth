@@ -215,7 +215,7 @@ async function openPackagedEnhancerLite() {
         const module = await import("/build/fx/enhancer_lite_runtime/view/app.js");
         document.querySelector("#mount").replaceChildren(await module.default(patchConnection));
     });
-    await page.locator("cosimo-enhancer-lite-view").waitFor();
+    await page.locator("enhance-that-view").waitFor();
     await page.waitForFunction(() => (
         window.__CHOC_HOST_KEYBOARD_MESSAGES__?.some(({ action }) => action === "installed")
     ));
@@ -308,9 +308,8 @@ test("the exact CHOC router reaches the native seam from the packaged Enhancer L
             assertForwardedPair(await pressAndRead(page, frequency), " ", "spacebar-transport");
         });
 
-        const saveAs = page.locator('cosimo-effect-header [data-action="save-as"]');
-        await saveAs.click();
-        const presetName = page.locator('cosimo-effect-header [data-el="dialog-input"]');
+        await page.getByRole("button", { name: "Save as new", exact: true }).click();
+        const presetName = page.getByRole("textbox", { name: "Preset name" });
         await presetName.waitFor();
         await t.test("real preset-name text entry discards Space inside the plugin", async () => {
             await page.waitForTimeout(50);

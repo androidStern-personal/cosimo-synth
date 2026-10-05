@@ -46,7 +46,8 @@ try {
     receive({ kind: "published", scope, request: events()[0].request, result: { kind: "observed" } });
     await new Promise(setImmediate);
     assert.deepEqual(snapshot().fields.shape.application, { kind: "sent", proof: "native-publication-processed" });
-    assert.equal(snapshot().fields.shape.value, 1);
+    assert.equal(snapshot().fields.shape.valueUnchanged, true, "a status-only update does not resend the value");
+    assert.equal(sent.filter(message => message.kind === "update").findLast(message => "value" in message.state.fields.shape).state.fields.shape.value, 1);
     assert.equal(snapshot().history.canUndo, true);
     assert.deepEqual(defects, []);
 } finally { await service.stop(); }

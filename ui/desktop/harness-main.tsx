@@ -109,16 +109,16 @@ function clearKeyboardDebug() {
 }
 
 function readFilterGraphState() {
-    const rawDebug = getDesktopViewRoot()?.querySelector('[data-role="filter-graph-debug"]')?.textContent ?? null;
+    const editor = getDesktopViewRoot()?.querySelector('[data-role="cosimo-filter-editor"]');
+    const graph = editor?.getAttribute("data-filter-graph");
 
-    if (!rawDebug) {
+    if (!editor || !graph) {
         return null;
     }
 
     try {
-        const parsed = JSON.parse(rawDebug);
-        const curve = getDesktopViewRoot()?.querySelector('[data-role="cosimo-filter-editor"]')?.getAttribute("data-resonance-curve");
-        return { ...parsed, resonanceCurve: curve ? JSON.parse(curve) : null };
+        const curve = editor.getAttribute("data-resonance-curve");
+        return { ...JSON.parse(graph), resonanceCurve: curve ? JSON.parse(curve) : null };
     } catch {
         return null;
     }

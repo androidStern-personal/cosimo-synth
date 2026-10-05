@@ -10,8 +10,8 @@ const args = process.argv.slice(2);
 for (const arg of args) {
     if (!["--prod", "--dry-run"].includes(arg)) throw new Error(`Unknown deployment option: ${arg}`);
 }
-if (args.includes("--prod") && process.env.COSIMO_CMAJOR_SOURCE) {
-    throw new Error("Production uses the committed Cmajor pin. Unset COSIMO_CMAJOR_SOURCE; use preview deployment for local Cmajor development.");
+if (args.includes("--prod") && process.env.BUILDER_KIT_CMAJOR_SOURCE) {
+    throw new Error("Production uses the committed Cmajor pin. Unset BUILDER_KIT_CMAJOR_SOURCE; use preview deployment for local Cmajor development.");
 }
 
 function run(command, arguments_, environment = process.env) {

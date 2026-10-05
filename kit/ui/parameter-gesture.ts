@@ -11,8 +11,6 @@ import {
 
 /** Default calibration: pointer travel crossing a value range end to end. */
 export const PARAMETER_GESTURE_BASE_PIXELS_PER_FULL_RANGE = 220;
-/** Default calibration: pointer travel crossing a secondary span end to end. */
-export const PARAMETER_GESTURE_MODULATION_PIXELS_PER_FULL_SPAN = 360;
 /** Hold-still delay before a gesture becomes a parameter menu request. */
 export const PARAMETER_GESTURE_LONG_PRESS_MS = 500;
 
@@ -71,7 +69,7 @@ type ActiveParameterGesture = {
     removeListeners: () => void;
 };
 
-export function pointerTypeOfEvent(event: PointerEvent | ReactPointerEvent<HTMLElement>): RollingAxisPointerType {
+function pointerTypeOfEvent(event: PointerEvent | ReactPointerEvent<HTMLElement>): RollingAxisPointerType {
     return event.pointerType === "touch" ? "touch" : event.pointerType === "pen" ? "pen" : "mouse";
 }
 

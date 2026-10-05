@@ -14,6 +14,5 @@
   },
   "stateSource": "fx/enhancer_lite/state.ts",
   "runtimeOut": "build/fx/enhancer_lite_runtime",
-  "juceOut": "build/enhancer_lite_juce",
-  "jitInstallRuntime": true
+  "juceOut": "build/enhancer_lite_juce"
 }

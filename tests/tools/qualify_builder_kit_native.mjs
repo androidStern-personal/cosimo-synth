@@ -21,12 +21,11 @@ import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { exportKit } from "../../kit/scripts/export_kit.mjs";
-import { reveal } from "../../kit/scripts/redacted.mjs";
+import { exportKit, readCmajorPin } from "../../scripts/export_kit.mjs";
+import { reveal } from "../../scripts/redacted.mjs";
 import {
     createReleaseDestination,
     readCapabilityFromKeychain,
-    readCmajorPin,
     readDestinationConfig,
 } from "../../scripts/release_builder_kit.mjs";
 
@@ -300,7 +299,6 @@ async function readPlugin(root, directory, configName = null) {
         config,
         configPath: path.join(root, directory, chosen),
         directory,
-        identityProbe: path.join(root, juceOut, "_build/identity_probe/kit_vst3_identity_probe"),
         juceRoot: path.join(root, juceOut),
         patchName,
         productName,
@@ -310,7 +308,7 @@ async function readPlugin(root, directory, configName = null) {
 }
 
 async function snapshotPlugin(plugin) {
-    for (const required of [plugin.runtimeRoot, plugin.juceRoot, plugin.bundle, plugin.binary, plugin.identityProbe]) {
+    for (const required of [plugin.runtimeRoot, plugin.juceRoot, plugin.bundle, plugin.binary]) {
         if (!await pathExists(required)) throw new Error(`Required native output is missing: ${path.relative(path.dirname(plugin.runtimeRoot), required)}`);
     }
     const runtime = await listTree(plugin.runtimeRoot);
@@ -366,15 +364,18 @@ async function assertProductionArtifact(plugin, run, secrets) {
     await run(process.execPath, [path.join(plugin.root, "kit/scripts/check_choc_markers.mjs"), plugin.binary], {
         cwd: path.dirname(plugin.bundle), label: "CHOC marker verification",
     });
-    const identityOutput = await run(plugin.identityProbe, [plugin.bundle], { cwd: path.dirname(plugin.bundle), label: "VST3 identity probe" });
-    const identity = JSON.parse(identityOutput.trim());
-    assert.equal(identity.bundleIdentifier, plugin.config.product.bundleIdentifier);
+    const bundleIdentifier = (await run("/usr/bin/plutil", ["-extract", "CFBundleIdentifier", "raw", "-o", "-", path.join(plugin.bundle, "Contents/Info.plist")], {
+        cwd: path.dirname(plugin.bundle), label: "Info.plist bundle identifier",
+    })).trim();
+    const moduleInfo = JSON.parse((await readFile(path.join(plugin.bundle, "Contents/Resources/moduleinfo.json"), "utf8")).replace(/,(\s*[}\]])/gu, "$1"));
+    const processor = moduleInfo.Classes.find((entry) => entry.Category === "Audio Module Class");
+    assert.equal(bundleIdentifier, plugin.config.product.bundleIdentifier);
     // The pinned generator currently advertises the compact native target
     // name. Human/runtime naming is checked independently above; changing
     // this native contract belongs to the separate product-naming decision.
-    assert.equal(identity.displayName, plugin.productName);
-    assert.match(identity.processorClassId, /^[0-9A-F]{32}$/u);
-    return { bundleIdentifier: identity.bundleIdentifier, displayName: identity.displayName, processorClassId: identity.processorClassId };
+    assert.equal(processor?.Name, plugin.productName);
+    assert.match(processor?.CID ?? "", /^[0-9A-F]{32}$/u);
+    return { bundleIdentifier, displayName: processor.Name, processorClassId: processor.CID };
 }
 
 function phaseSummary(label, trace, snapshot, identity) {

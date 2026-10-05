@@ -1,5 +1,5 @@
 import type { PatchConnectionLike } from "../../../kit/index";
-import { createStoredStateRuntimeMirror } from "../../../kit/index";
+import { createStoredStateRuntimeMirror } from "../../../ui/shared/stored-state-runtime-mirror";
 import {
     SEQFX_STATE_UPDATE_INTENT_KEY,
     parseSeqFxStateUpdateIntent,

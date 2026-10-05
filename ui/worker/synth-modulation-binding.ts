@@ -1,4 +1,5 @@
-import type { PluginStateDelivery, PluginStateDeliveryOutcome, PluginStateSubmission, PatchConnectionLike } from "../../kit/index";
+import type { PatchConnectionLike } from "../../kit/index";
+import type { PluginStateDelivery, PluginStateDeliveryOutcome, PluginStateSubmission } from "../../kit/ui/plugin-state-definition";
 import { ARTICULATIONS_V4_STATE_KEY } from "../shared/articulation-image";
 import { serializeArticulationTriggerConfig } from "../shared/articulations";
 import type { ModulationState } from "../shared/modulation";

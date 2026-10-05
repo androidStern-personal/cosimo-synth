@@ -102,7 +102,7 @@ async function readSourceProvenance(engineRealPath) {
     ]);
     let dependencySource = "";
     try {
-        dependencySource = await readFile(path.join(gitRoot, "kit", "cmake", "CosimoDependencies.cmake"), "utf8");
+        dependencySource = await readFile(path.join(gitRoot, "kit", "cmake", "dependencies.cmake"), "utf8");
     } catch {
         // A comparator can inspect an artifact from outside a Cosimo checkout.
     }
@@ -113,8 +113,8 @@ async function readSourceProvenance(engineRealPath) {
         branch,
         dirty: status !== null && status.length > 0,
         toolchain: {
-            cmajorGitTag: readPinnedGitTag(dependencySource, "cosimo_cmajor"),
-            juceGitTag: readPinnedGitTag(dependencySource, "cosimo_juce"),
+            cmajorGitTag: readPinnedGitTag(dependencySource, "builder_kit_cmajor"),
+            juceGitTag: readPinnedGitTag(dependencySource, "builder_kit_juce"),
         },
     };
 }

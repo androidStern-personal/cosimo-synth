@@ -31,7 +31,7 @@ Adjust the import path for your project. Styles are included and scoped to the c
 
 ## Styling and composition
 
-Set `className` or `style` on the control. `--knob-size`, `--knob-color`, `--knob-range-color` and `--knob-indicator` style the default dial.
+Set `className` or `style` on the control. `--knob-size` sets the default dial's size; the shared `--editor-accent-start`, `--editor-accent-end`, `--editor-surface-ink` and `--editor-surface-bg` properties set its colors, as they do for every kit control.
 
 For custom artwork, compose `KnobRoot`, `KnobControl`, `KnobLabel` and the optional value/range/marker parts. The control keeps its input behavior; your artwork and application own their presentation.
 

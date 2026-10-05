@@ -11,13 +11,13 @@ const moduleCache = new Map();
  * matching what the Vite dev server hands the browser.
  */
 const stringImportQueryPlugin = {
-    name: "cosimo-string-import-query",
+    name: "string-import-query",
     setup(builder) {
         builder.onResolve({ filter: /\?(?:inline|raw)$/ }, (args) => ({
             path: path.resolve(args.resolveDir, args.path.replace(/\?(?:inline|raw)$/, "")),
-            namespace: "cosimo-string-import",
+            namespace: "string-import",
         }));
-        builder.onLoad({ filter: /.*/, namespace: "cosimo-string-import" }, async (args) => ({
+        builder.onLoad({ filter: /.*/, namespace: "string-import" }, async (args) => ({
             contents: await fs.readFile(args.path, "utf8"),
             loader: "text",
         }));

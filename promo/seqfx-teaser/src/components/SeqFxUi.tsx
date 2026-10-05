@@ -1,8 +1,8 @@
 import React, { useMemo } from "react";
 import { interpolate } from "remotion";
-import "../../../../kit/ui/editor-tokens.css";
-import "../../../../kit/ui/editor-tick-slider.css";
-import "../../../../kit/ui/filter-range-editor.css";
+import "../../../../ui/shared/editor-tokens.css";
+import "../../../../fx/seqfx/view/editor-tick-slider.css";
+import "../../../../kit/ui/filter-editor.css";
 import "../../../../fx/seqfx/view/crusher-editor.css";
 import "../../../../fx/seqfx/view/stutter-envelope-editor.css";
 import "../../../../fx/seqfx/view/styles.css";

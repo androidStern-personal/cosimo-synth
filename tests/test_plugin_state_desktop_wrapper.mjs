@@ -8,7 +8,7 @@ import { stageCustomerStateFixture, buildCustomerStateFixture } from "./helpers/
 const root = path.resolve(import.meta.dirname, "..");
 
 test("actual desktop factory runs its worker, consumes articulation and reapplies identical saved state", async () => {
-    const source = process.env.COSIMO_CMAJOR_SOURCE;
+    const source = process.env.BUILDER_KIT_CMAJOR_SOURCE;
     const runtime = process.env.COSIMO_CMAJOR_RUNTIME_LIBRARY;
     assert.ok(source && runtime, "Set the qualified Cmajor source and runtime explicitly");
     const build = path.join(root, "build/plugin_state_desktop_qualification");
@@ -26,12 +26,12 @@ test("actual desktop factory runs its worker, consumes articulation and reapplie
     catch (error) { if (error.code !== "ENOENT") throw error; }
     const configureArgs = ["-S", path.join(root, "tools/desktop_native"), "-B", build, `-DCOSIMO_PATCH_PATH=${manifestPath}`];
     if (cache !== undefined) {
-        const configuredSource = cache.match(/^CPM_cosimo_cmajor_SOURCE:[^=]+=(.*)$/m)?.[1];
+        const configuredSource = cache.match(/^CPM_builder_kit_cmajor_SOURCE:[^=]+=(.*)$/m)?.[1];
         assert.equal(configuredSource, source, "Build must use the assigned source checkout");
     } else {
         const juce = process.env.COSIMO_PLUGIN_STATE_JUCE_SOURCE;
         assert.ok(juce, "A fresh task build requires an explicit qualified JUCE source");
-        configureArgs.push(`-DCPM_cosimo_cmajor_SOURCE=${source}`, `-DCPM_cosimo_juce_SOURCE=${juce}`,
+        configureArgs.push(`-DCPM_builder_kit_cmajor_SOURCE=${source}`, `-DCPM_builder_kit_juce_SOURCE=${juce}`,
             "-DCMAKE_BUILD_TYPE=Release");
     }
     const configured = spawnSync("cmake", configureArgs, {

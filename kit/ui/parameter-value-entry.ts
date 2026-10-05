@@ -1,14 +1,9 @@
 /**
- * Generic parameter value entry: the spec model plus formatting and parsing of
- * typed values. Product-specific spec builders (rack parameters, modulation
- * amounts, key track, mobile voice) live with their product; this module knows
- * only units, ranges, and text.
+ * Exact-value text entry. A spec names a quantity's range, step and unit;
+ * formatParameterEntry turns a stored value into display text and an editing
+ * draft, and parseParameterEntry turns typed text back into a clamped, stepped
+ * value or a message that says what to type instead.
  */
-
-export type ParameterEntryChoice = {
-    readonly value: number;
-    readonly label: string;
-};
 
 export type ParameterEntryBounds = {
     readonly min: number;
@@ -20,88 +15,58 @@ export type ParameterEntryBounds = {
 export type FrequencyParameterEntrySpec = ParameterEntryBounds & {
     readonly _tag: "frequency";
     readonly defaultUnit: "Hz";
+    /** "log" also accepts a percentage of the range, measured on a log scale. */
     readonly percentScale: "log" | null;
 };
 
+/** "x" is a multiplier, such as a playback speed of 1.5x. */
 export type ScalarParameterEntryUnit = "" | "%" | "BPM" | "Q" | "dB" | "°" | "st" | "oct" | "ct" | "x";
 
 export type ScalarParameterEntrySpec = ParameterEntryBounds & {
     readonly _tag: "scalar";
     readonly defaultUnit: ScalarParameterEntryUnit;
+    /** Stored value per displayed unit, e.g. 0.01 for a 0-1 value shown in %. */
     readonly canonicalPerDisplayedUnit: number;
     readonly digits: number;
 };
 
+/** A time stored in seconds. */
 export type SecondsParameterEntrySpec = ParameterEntryBounds & {
     readonly _tag: "seconds";
     readonly defaultUnit: "ms" | "s";
 };
 
+/** A time stored in milliseconds. */
 export type MillisecondsParameterEntrySpec = ParameterEntryBounds & {
     readonly _tag: "milliseconds";
     readonly defaultUnit: "ms" | "s";
 };
 
-export type PanParameterEntrySpec = ParameterEntryBounds & {
-    readonly _tag: "pan";
-    readonly defaultUnit: "%";
-};
-
-export type ChoiceParameterEntrySpec = ParameterEntryBounds & {
-    readonly _tag: "choice";
-    readonly defaultUnit: "choice";
-    readonly choices: ReadonlyArray<ParameterEntryChoice>;
-};
-
-export type AmountParameterEntryUnit = "%" | "oct" | "st" | "dB" | "Q" | "s" | "ms" | "Hz" | "°";
-
-export type AmountParameterEntrySpec = ParameterEntryBounds & {
-    readonly _tag: "amount";
-    readonly defaultUnit: AmountParameterEntryUnit;
-    readonly canonicalPerDisplayedUnit: number;
-    readonly digits: number;
-    readonly percentMeaning: "native" | "depth";
-    readonly baseValue: number | null;
-    readonly physicalIntervalUnit: "frequency" | "milliseconds" | null;
-};
-
-export type TempoSyncParameterEntrySpec = ParameterEntryBounds & {
-    readonly _tag: "tempoSync";
-    readonly defaultUnit: "Hz" | "ms" | "s";
-    readonly freeSpec: FrequencyParameterEntrySpec | MillisecondsParameterEntrySpec;
-    readonly divisions: ReadonlyArray<ParameterEntryChoice>;
-};
-
-/** One editable quantity's accepted vocabulary and canonical storage domain. */
+/** One editable quantity's accepted vocabulary and stored range. */
 export type ParameterEntrySpec =
     | FrequencyParameterEntrySpec
     | ScalarParameterEntrySpec
     | SecondsParameterEntrySpec
-    | MillisecondsParameterEntrySpec
-    | PanParameterEntrySpec
-    | ChoiceParameterEntrySpec
-    | AmountParameterEntrySpec
-    | TempoSyncParameterEntrySpec;
+    | MillisecondsParameterEntrySpec;
 
-/** Source values needed to derive a displayed-default time entry spec. */
 export type SecondsParameterEntrySpecInput = {
     readonly minSeconds: number;
     readonly maxSeconds: number;
     readonly stepSeconds: number;
     readonly currentSeconds: number;
+    /** Unit for a bare number; defaults to ms below one second so typing matches the readout. */
     readonly displayUnit?: "ms" | "s";
 };
 
-/** Source values needed for a millisecond-backed time entry spec. */
 export type MillisecondsParameterEntrySpecInput = {
     readonly minMilliseconds: number;
     readonly maxMilliseconds: number;
     readonly stepMilliseconds: number;
     readonly currentMilliseconds: number;
+    /** Unit for a bare number; defaults to s from one second up so typing matches the readout. */
     readonly displayUnit?: "ms" | "s";
 };
 
-/** Source values needed for a frequency entry spec. */
 export type FrequencyParameterEntrySpecInput = {
     readonly minHz: number;
     readonly maxHz: number;
@@ -109,7 +74,6 @@ export type FrequencyParameterEntrySpecInput = {
     readonly allowLogPercent: boolean;
 };
 
-/** Source values needed for a scalar entry spec. */
 export type ScalarParameterEntrySpecInput = {
     readonly min: number;
     readonly max: number;
@@ -119,65 +83,35 @@ export type ScalarParameterEntrySpecInput = {
     readonly digits?: number;
 };
 
-/** The live endpoint needed to interpret a signed physical modulation interval. */
-export type ModulationAmountBaseBindingSpec = {
-    readonly endpointID: string;
-    readonly initialValue: number;
-};
-
-/** Canonical text shown for a value at rest and while editing. */
+/** Text shown for a value at rest, the draft placed in the field while editing, and its unit. */
 export type FormattedParameterEntry = {
     readonly display: string;
     readonly draft: string;
     readonly unit: string;
 };
 
-/** A normal numeric parameter write produced by exact-value entry. */
 export type ParameterValueCommit = {
     readonly _tag: "value";
     readonly value: number;
-    readonly mode: "free" | null;
 };
 
-/** A compound tempo-sync write produced by exact-value entry. */
-export type ParameterTempoDivisionCommit = {
-    readonly _tag: "tempoDivision";
-    readonly mode: "sync";
-    readonly divisionValue: number;
-    readonly divisionLabel: string;
-};
-
-/** Every write exact-value entry can request. */
-export type ParameterEntryCommit = ParameterValueCommit | ParameterTempoDivisionCommit;
-
-/** A successful exact-value parse and the canonical value echoed to the field. */
+/** A successful parse, with the stored value echoed back as text. */
 export type AcceptedParameterEntry = {
     readonly _tag: "accepted";
-    readonly commit: ParameterEntryCommit;
+    readonly commit: ParameterValueCommit;
     readonly echo: FormattedParameterEntry;
 };
 
-/** A user-correctable exact-value rejection. */
+/** A parse the user can correct; `message` says what to type. */
 export type RejectedParameterEntry = {
     readonly _tag: "rejected";
     readonly message: string;
 };
 
-/** The only two outcomes of parsing exact-value text. */
 export type ParameterEntryResult = AcceptedParameterEntry | RejectedParameterEntry;
 
 export function clamp(value: number, min: number, max: number): number {
     return Math.min(Math.max(value, min), max);
-}
-
-export function quantize(value: number, spec: ParameterEntryBounds): number {
-    if (!(spec.step > 0)) {
-        return clamp(value, spec.min, spec.max);
-    }
-
-    const clamped = clamp(value, spec.min, spec.max);
-    const stepped = spec.min + (Math.round((clamped - spec.min) / spec.step) * spec.step);
-    return clamp(Number(stepped.toFixed(8)), spec.min, spec.max);
 }
 
 export function formatFrequencyDisplay(value: number): string {
@@ -190,179 +124,12 @@ export function formatFrequencyDisplay(value: number): string {
     return `${Math.round(value)} Hz`;
 }
 
-export function formatTrimmed(value: number, digits: number): string {
-    return String(Number(value.toFixed(digits)));
-}
-
+/** Lower-cases typed text and removes surrounding space and thousands separators. */
 export function normalizeEntryText(text: string): string {
     return text.trim().toLowerCase().replace(/,/g, "");
 }
 
-export function valueCommit(value: number, spec: ParameterEntrySpec, mode: "free" | null = null): AcceptedParameterEntry {
-    const canonicalValue = quantize(value, spec);
-    return {
-        _tag: "accepted",
-        commit: { _tag: "value", value: canonicalValue, mode },
-        echo: formatParameterEntry(spec, canonicalValue),
-    };
-}
-
-export function rejectForUnit(unit: string, defaultUnit: string): RejectedParameterEntry {
-    return {
-        _tag: "rejected",
-        message: `${unit} is not compatible with a value in ${defaultUnit}.`,
-    };
-}
-
-export function frequencySpec(
-    min: number,
-    max: number,
-    step: number,
-    percentScale: "log" | null,
-): FrequencyParameterEntrySpec {
-    return { _tag: "frequency", min, max, step, defaultUnit: "Hz", percentScale };
-}
-
-export function scalarSpec({
-    min,
-    max,
-    step,
-    unit,
-    canonicalPerDisplayedUnit = 1,
-    digits = 3,
-}: ScalarParameterEntrySpecInput): ScalarParameterEntrySpec {
-    return {
-        _tag: "scalar",
-        min,
-        max,
-        step,
-        defaultUnit: unit,
-        canonicalPerDisplayedUnit,
-        digits,
-    };
-}
-
-
-export function requirePositiveLogarithmicBase(baseValue: number): void {
-    if (!Number.isFinite(baseValue) || baseValue <= 0) {
-        throw new RangeError("A logarithmic modulation amount requires a positive finite base value.");
-    }
-}
-
-export function amountSpec(args: Omit<AmountParameterEntrySpec, "_tag">): AmountParameterEntrySpec {
-    return { _tag: "amount", ...args };
-}
-
-
-export function parameterEntrySpecForSeconds({
-    minSeconds,
-    maxSeconds,
-    stepSeconds,
-    currentSeconds,
-    displayUnit,
-}: SecondsParameterEntrySpecInput): ParameterEntrySpec {
-    return {
-        _tag: "seconds",
-        min: minSeconds,
-        max: maxSeconds,
-        step: stepSeconds,
-        defaultUnit: displayUnit ?? (currentSeconds < 1 ? "ms" : "s"),
-    };
-}
-
-/** Derive a millisecond-backed time spec whose bare-number unit matches the visible readout. */
-export function parameterEntrySpecForMilliseconds({
-    minMilliseconds,
-    maxMilliseconds,
-    stepMilliseconds,
-    currentMilliseconds,
-    displayUnit,
-}: MillisecondsParameterEntrySpecInput): ParameterEntrySpec {
-    return {
-        _tag: "milliseconds",
-        min: minMilliseconds,
-        max: maxMilliseconds,
-        step: stepMilliseconds,
-        defaultUnit: displayUnit ?? (currentMilliseconds < 1_000 ? "ms" : "s"),
-    };
-}
-
-/** Construct a frequency spec from an existing display range. */
-export function parameterEntrySpecForFrequency({
-    minHz,
-    maxHz,
-    stepHz,
-    allowLogPercent,
-}: FrequencyParameterEntrySpecInput): ParameterEntrySpec {
-    return frequencySpec(minHz, maxHz, stepHz, allowLogPercent ? "log" : null);
-}
-
-/** Construct a scalar spec from an existing display range and unit. */
-export function parameterEntrySpecForScalar(input: ScalarParameterEntrySpecInput): ParameterEntrySpec {
-    return scalarSpec(input);
-}
-
-/** The base field shown while an eligible control is in Key Track mode. */
-
-export function scalarDisplay(spec: ScalarParameterEntrySpec, canonicalValue: number): FormattedParameterEntry {
-    const displayedValue = canonicalValue / spec.canonicalPerDisplayedUnit;
-    const draft = formatTrimmed(displayedValue, spec.digits);
-    if (spec.defaultUnit === "") {
-        return { display: draft, draft, unit: "" };
-    }
-    if (spec.defaultUnit === "%" || spec.defaultUnit === "°" || spec.defaultUnit === "x") {
-        return { display: `${draft}${spec.defaultUnit}`, draft, unit: spec.defaultUnit };
-    }
-    return { display: `${draft} ${spec.defaultUnit}`, draft, unit: spec.defaultUnit };
-}
-
-export function amountDisplay(spec: AmountParameterEntrySpec, canonicalValue: number): FormattedParameterEntry {
-    const displayedValue = canonicalValue / spec.canonicalPerDisplayedUnit;
-    const draft = formatTrimmed(displayedValue, spec.digits);
-    if (spec.defaultUnit === "%" || spec.defaultUnit === "°") {
-        return { display: `${draft}${spec.defaultUnit}`, draft, unit: spec.defaultUnit };
-    }
-    return { display: `${draft} ${spec.defaultUnit}`, draft, unit: spec.defaultUnit };
-}
-
-/** Format a canonical value for idle display and a unitless editing draft. */
-export function formatParameterEntry(spec: ParameterEntrySpec, value: number): FormattedParameterEntry {
-    if (spec._tag === "tempoSync") {
-        return formatParameterEntry(spec.freeSpec, value);
-    }
-    const canonicalValue = quantize(value, spec);
-    if (spec._tag === "frequency") {
-        return { display: formatFrequencyDisplay(canonicalValue), draft: String(canonicalValue), unit: spec.defaultUnit };
-    }
-    if (spec._tag === "scalar") {
-        return scalarDisplay(spec, canonicalValue);
-    }
-    if (spec._tag === "seconds") {
-        const editingValue = spec.defaultUnit === "ms" ? canonicalValue * 1_000 : canonicalValue;
-        const draft = formatTrimmed(editingValue, 3);
-        return { display: `${draft} ${spec.defaultUnit}`, draft, unit: spec.defaultUnit };
-    }
-    if (spec._tag === "milliseconds") {
-        const editingValue = spec.defaultUnit === "s" ? canonicalValue / 1_000 : canonicalValue;
-        const draft = formatTrimmed(editingValue, 3);
-        return { display: `${draft} ${spec.defaultUnit}`, draft, unit: spec.defaultUnit };
-    }
-    if (spec._tag === "pan") {
-        const percent = Math.round(canonicalValue * 100);
-        const draft = String(percent);
-        const display = percent === 0 ? "C" : percent < 0 ? `${-percent} L` : `${percent} R`;
-        return { display, draft, unit: spec.defaultUnit };
-    }
-    if (spec._tag === "choice") {
-        const choice = spec.choices.find((candidate) => candidate.value === Math.round(canonicalValue));
-        if (choice === undefined) {
-            throw new RangeError(`Choice value ${canonicalValue} is absent from its parameter entry spec.`);
-        }
-        return { display: choice.label, draft: choice.label, unit: spec.defaultUnit };
-    }
-    return amountDisplay(spec, canonicalValue);
-}
-
+/** Splits normalized text such as "1.5 khz" into its number and optional unit, or null. */
 export function parseNumericAndUnit(text: string): { readonly numericText: string; readonly unit: string | undefined } | null {
     const match = text.match(/^([+-]?(?:\d+(?:\.\d*)?|\.\d+))\s*([a-z%°]+)?$/);
     const numericText = match?.[1];
@@ -376,6 +143,122 @@ export function unitIs(unit: string | undefined, ...aliases: ReadonlyArray<strin
     return unit !== undefined && aliases.includes(unit);
 }
 
+export function parameterEntrySpecForSeconds({
+    minSeconds,
+    maxSeconds,
+    stepSeconds,
+    currentSeconds,
+    displayUnit,
+}: SecondsParameterEntrySpecInput): SecondsParameterEntrySpec {
+    return {
+        _tag: "seconds",
+        min: minSeconds,
+        max: maxSeconds,
+        step: stepSeconds,
+        defaultUnit: displayUnit ?? (currentSeconds < 1 ? "ms" : "s"),
+    };
+}
+
+export function parameterEntrySpecForMilliseconds({
+    minMilliseconds,
+    maxMilliseconds,
+    stepMilliseconds,
+    currentMilliseconds,
+    displayUnit,
+}: MillisecondsParameterEntrySpecInput): MillisecondsParameterEntrySpec {
+    return {
+        _tag: "milliseconds",
+        min: minMilliseconds,
+        max: maxMilliseconds,
+        step: stepMilliseconds,
+        defaultUnit: displayUnit ?? (currentMilliseconds < 1_000 ? "ms" : "s"),
+    };
+}
+
+export function parameterEntrySpecForFrequency({
+    minHz,
+    maxHz,
+    stepHz,
+    allowLogPercent,
+}: FrequencyParameterEntrySpecInput): FrequencyParameterEntrySpec {
+    return {
+        _tag: "frequency",
+        min: minHz,
+        max: maxHz,
+        step: stepHz,
+        defaultUnit: "Hz",
+        percentScale: allowLogPercent ? "log" : null,
+    };
+}
+
+export function parameterEntrySpecForScalar({
+    min,
+    max,
+    step,
+    unit,
+    canonicalPerDisplayedUnit = 1,
+    digits = 3,
+}: ScalarParameterEntrySpecInput): ScalarParameterEntrySpec {
+    return { _tag: "scalar", min, max, step, defaultUnit: unit, canonicalPerDisplayedUnit, digits };
+}
+
+function quantize(value: number, spec: ParameterEntryBounds): number {
+    const clamped = clamp(value, spec.min, spec.max);
+    if (!(spec.step > 0)) {
+        return clamped;
+    }
+    const stepped = spec.min + (Math.round((clamped - spec.min) / spec.step) * spec.step);
+    // toFixed(8) drops binary noise such as 0.30000000000000004 before the final clamp.
+    return clamp(Number(stepped.toFixed(8)), spec.min, spec.max);
+}
+
+function formatTrimmed(value: number, digits: number): string {
+    return String(Number(value.toFixed(digits)));
+}
+
+function accept(value: number, spec: ParameterEntrySpec): AcceptedParameterEntry {
+    const storedValue = quantize(value, spec);
+    return {
+        _tag: "accepted",
+        commit: { _tag: "value", value: storedValue },
+        echo: formatParameterEntry(spec, storedValue),
+    };
+}
+
+function rejectUnit(unit: string, spec: ParameterEntrySpec): RejectedParameterEntry {
+    if (spec.defaultUnit === "") {
+        return { _tag: "rejected", message: `${unit} is not compatible with a unitless value.` };
+    }
+    return { _tag: "rejected", message: `${unit} is not compatible with a value in ${spec.defaultUnit}.` };
+}
+
+function formatScalar(spec: ScalarParameterEntrySpec, storedValue: number): FormattedParameterEntry {
+    const draft = formatTrimmed(storedValue / spec.canonicalPerDisplayedUnit, spec.digits);
+    if (spec.defaultUnit === "") {
+        return { display: draft, draft, unit: "" };
+    }
+    if (spec.defaultUnit === "%" || spec.defaultUnit === "°" || spec.defaultUnit === "x") {
+        return { display: `${draft}${spec.defaultUnit}`, draft, unit: spec.defaultUnit };
+    }
+    return { display: `${draft} ${spec.defaultUnit}`, draft, unit: spec.defaultUnit };
+}
+
+export function formatParameterEntry(spec: ParameterEntrySpec, value: number): FormattedParameterEntry {
+    const storedValue = quantize(value, spec);
+    if (spec._tag === "frequency") {
+        return { display: formatFrequencyDisplay(storedValue), draft: String(storedValue), unit: spec.defaultUnit };
+    }
+    if (spec._tag === "scalar") {
+        return formatScalar(spec, storedValue);
+    }
+    const shownValue = spec._tag === "seconds"
+        ? (spec.defaultUnit === "ms" ? storedValue * 1_000 : storedValue)
+        : (spec.defaultUnit === "s" ? storedValue / 1_000 : storedValue);
+    const draft = formatTrimmed(shownValue, 3);
+    return { display: `${draft} ${spec.defaultUnit}`, draft, unit: spec.defaultUnit };
+}
+
+/** Accepts Hz, kHz ("k" for short) and, when the spec allows it, a log-scale percentage of the range. */
 export function parseFrequency(spec: FrequencyParameterEntrySpec, text: string): ParameterEntryResult {
     const parsed = parseNumericAndUnit(text);
     if (parsed === null) {
@@ -386,263 +269,86 @@ export function parseFrequency(spec: FrequencyParameterEntrySpec, text: string):
         return { _tag: "rejected", message: "Enter a finite number in Hz or kHz." };
     }
     if (parsed.unit === "%" && spec.percentScale === null) {
-        return rejectForUnit("%", spec.defaultUnit);
+        return rejectUnit("%", spec);
     }
-    if (
-        parsed.unit !== undefined
-        && parsed.unit !== "%"
-        && !unitIs(parsed.unit, "hz", "khz", "k")
-    ) {
-        return rejectForUnit(parsed.unit, spec.defaultUnit);
+    if (parsed.unit !== undefined && parsed.unit !== "%" && !unitIs(parsed.unit, "hz", "khz", "k")) {
+        return rejectUnit(parsed.unit, spec);
     }
     const value = unitIs(parsed.unit, "khz", "k")
         ? numericValue * 1_000
         : parsed.unit === "%"
             ? spec.min * (spec.max / spec.min) ** (numericValue / 100)
             : numericValue;
-    return valueCommit(value, spec);
+    return accept(value, spec);
 }
 
-export function scalarEntryPrompt(spec: ScalarParameterEntrySpec, finite: boolean) {
-    if (spec.defaultUnit === "x") {
-        return "Enter a finite number of voices.";
-    }
+function scalarPrompt(spec: ScalarParameterEntrySpec, finite: boolean): string {
     if (spec.defaultUnit === "") {
         return finite ? "Enter a finite unitless number." : "Enter a unitless number.";
+    }
+    if (spec.defaultUnit === "x") {
+        return finite ? "Enter a finite multiplier, such as 1.5x." : "Enter a multiplier, such as 1.5x.";
     }
     return `Enter ${finite ? "a finite number" : "a number"} in ${spec.defaultUnit}.`;
 }
 
-export function parseScalar(spec: ScalarParameterEntrySpec, text: string): ParameterEntryResult {
+function scalarUnitCompatible(spec: ScalarParameterEntrySpec, unit: string): boolean {
+    switch (spec.defaultUnit) {
+        case "%": return unit === "%";
+        case "BPM": return unitIs(unit, "bpm");
+        case "Q": return unitIs(unit, "q");
+        case "dB": return unitIs(unit, "db");
+        case "°": return unitIs(unit, "°", "deg", "degree", "degrees");
+        case "st": return unitIs(unit, "st", "semitone", "semitones", "ct", "cent", "cents");
+        case "oct": return unitIs(unit, "oct", "octave", "octaves");
+        case "ct": return unitIs(unit, "ct", "cent", "cents");
+        case "x": return unit === "x";
+        case "": return false;
+    }
+}
+
+function parseScalar(spec: ScalarParameterEntrySpec, text: string): ParameterEntryResult {
     const parsed = parseNumericAndUnit(text);
     if (parsed === null) {
-        return { _tag: "rejected", message: scalarEntryPrompt(spec, false) };
+        return { _tag: "rejected", message: scalarPrompt(spec, false) };
     }
-    const compatible = parsed.unit === undefined
-        || (spec.defaultUnit === "%" && parsed.unit === "%")
-        || (spec.defaultUnit === "BPM" && unitIs(parsed.unit, "bpm"))
-        || (spec.defaultUnit === "Q" && unitIs(parsed.unit, "q"))
-        || (spec.defaultUnit === "dB" && unitIs(parsed.unit, "db"))
-        || (spec.defaultUnit === "°" && unitIs(parsed.unit, "°", "deg", "degree", "degrees"))
-        || (spec.defaultUnit === "st" && unitIs(parsed.unit, "st", "semitone", "semitones", "ct", "cent", "cents"))
-        || (spec.defaultUnit === "oct" && unitIs(parsed.unit, "oct", "octave", "octaves"))
-        || (spec.defaultUnit === "ct" && unitIs(parsed.unit, "ct", "cent", "cents"))
-        || (spec.defaultUnit === "x" && unitIs(parsed.unit, "x", "voice", "voices"));
-    if (!compatible && parsed.unit !== undefined) {
-        if (spec.defaultUnit === "") {
-            return { _tag: "rejected", message: `${parsed.unit} is not compatible with a unitless value.` };
-        }
-        return rejectForUnit(parsed.unit, spec.defaultUnit);
+    if (parsed.unit !== undefined && !scalarUnitCompatible(spec, parsed.unit)) {
+        return rejectUnit(parsed.unit, spec);
     }
     const numericValue = Number(parsed.numericText);
     if (!Number.isFinite(numericValue)) {
-        return { _tag: "rejected", message: scalarEntryPrompt(spec, true) };
+        return { _tag: "rejected", message: scalarPrompt(spec, true) };
     }
+    // A semitone field also takes cents: "50 ct" is half a semitone.
     const centsScale = spec.defaultUnit === "st" && unitIs(parsed.unit, "ct", "cent", "cents") ? 0.01 : 1;
-    return valueCommit(numericValue * centsScale * spec.canonicalPerDisplayedUnit, spec);
+    return accept(numericValue * centsScale * spec.canonicalPerDisplayedUnit, spec);
 }
 
-export function timeUnitKind(unit: string | undefined): "milliseconds" | "seconds" | "unknown" | "bare" {
-    if (unit === undefined) return "bare";
-    if (unitIs(unit, "ms", "msec", "msecs", "millisecond", "milliseconds")) return "milliseconds";
-    if (unitIs(unit, "s", "sec", "secs", "second", "seconds")) return "seconds";
-    return "unknown";
-}
-
-export function parseTime(
-    spec: SecondsParameterEntrySpec | MillisecondsParameterEntrySpec,
-    text: string,
-): ParameterEntryResult {
+function parseTime(spec: SecondsParameterEntrySpec | MillisecondsParameterEntrySpec, text: string): ParameterEntryResult {
     const parsed = parseNumericAndUnit(text);
     if (parsed === null) {
         return { _tag: "rejected", message: "Enter a time in ms or s." };
     }
-    const unitKind = timeUnitKind(parsed.unit);
-    if (unitKind === "unknown" && parsed.unit !== undefined) {
-        return rejectForUnit(parsed.unit, spec.defaultUnit);
+    const typedMilliseconds = unitIs(parsed.unit, "ms", "msec", "msecs", "millisecond", "milliseconds");
+    const typedSeconds = unitIs(parsed.unit, "s", "sec", "secs", "second", "seconds");
+    if (parsed.unit !== undefined && !typedMilliseconds && !typedSeconds) {
+        return rejectUnit(parsed.unit, spec);
     }
     const numericValue = Number(parsed.numericText);
     if (!Number.isFinite(numericValue)) {
         return { _tag: "rejected", message: "Enter a finite time in ms or s." };
     }
+    const inMilliseconds = typedMilliseconds || (parsed.unit === undefined && spec.defaultUnit === "ms");
     if (spec._tag === "seconds") {
-        const value = unitKind === "milliseconds" || (unitKind === "bare" && spec.defaultUnit === "ms")
-            ? numericValue / 1_000
-            : numericValue;
-        return valueCommit(value, spec);
+        return accept(inMilliseconds ? numericValue / 1_000 : numericValue, spec);
     }
-    const value = unitKind === "seconds" || (unitKind === "bare" && spec.defaultUnit === "s")
-        ? numericValue * 1_000
-        : numericValue;
-    return valueCommit(value, spec);
+    return accept(inMilliseconds ? numericValue : numericValue * 1_000, spec);
 }
 
-export function parsePan(spec: PanParameterEntrySpec, text: string): ParameterEntryResult {
-    if (text === "c" || text === "center" || text === "centre") {
-        return valueCommit(0, spec);
-    }
-    const match = text.match(/^([+-]?(?:\d+(?:\.\d*)?|\.\d+))\s*%?\s*([lr])?$/);
-    const numericText = match?.[1];
-    if (numericText === undefined) {
-        return { _tag: "rejected", message: "Enter Pan as a percentage, optionally followed by L or R." };
-    }
-    const numericValue = Number(numericText);
-    if (!Number.isFinite(numericValue)) {
-        return { _tag: "rejected", message: "Enter a finite Pan percentage." };
-    }
-    const direction = match?.[2];
-    const signedPercent = direction === "l"
-        ? -Math.abs(numericValue)
-        : direction === "r"
-            ? Math.abs(numericValue)
-            : numericValue;
-    return valueCommit(signedPercent / 100, spec);
-}
-
-export function parseChoice(spec: ChoiceParameterEntrySpec, text: string): ParameterEntryResult {
-    const choice = spec.choices.find((candidate) => candidate.label.toLowerCase() === text);
-    if (choice !== undefined) {
-        return valueCommit(choice.value, spec);
-    }
-    const parsed = parseNumericAndUnit(text);
-    if (parsed === null || parsed.unit !== undefined) {
-        return { _tag: "rejected", message: "Enter one of the shown choices." };
-    }
-    const numericValue = Number(parsed.numericText);
-    if (!Number.isFinite(numericValue)) {
-        return { _tag: "rejected", message: "Enter one of the shown choices." };
-    }
-    return valueCommit(numericValue, spec);
-}
-
-export function depthPercentValue(spec: AmountParameterEntrySpec, numericValue: number): number {
-    const sideLimit = numericValue < 0 ? Math.abs(spec.min) : Math.abs(spec.max);
-    return sideLimit * (numericValue / 100);
-}
-
-export function parseOctavePhysicalInterval(
-    spec: AmountParameterEntrySpec,
-    numericText: string,
-    numericValue: number,
-    unit: string,
-): ParameterEntryResult | null {
-    if (spec.baseValue === null || spec.physicalIntervalUnit === null) {
-        return null;
-    }
-    const isCompatiblePhysicalUnit = spec.physicalIntervalUnit === "frequency"
-        ? unitIs(unit, "hz", "khz", "k")
-        : timeUnitKind(unit) !== "unknown";
-    if (!isCompatiblePhysicalUnit) {
-        return null;
-    }
-    if (!/^[+-]/.test(numericText)) {
-        return {
-            _tag: "rejected",
-            message: `Enter a signed ${spec.physicalIntervalUnit === "frequency" ? "Hz/kHz" : "ms/s"} movement.`,
-        };
-    }
-    let movement: number;
-    if (spec.physicalIntervalUnit === "frequency") {
-        movement = unitIs(unit, "khz", "k") ? numericValue * 1_000 : numericValue;
-    } else {
-        movement = timeUnitKind(unit) === "seconds" ? numericValue * 1_000 : numericValue;
-    }
-    const endpoint = spec.baseValue + movement;
-    if (!(endpoint > 0)) {
-        return { _tag: "rejected", message: "The resulting value must be above zero." };
-    }
-    return valueCommit(Math.log2(endpoint / spec.baseValue), spec);
-}
-
-export function amountUnitCompatible(spec: AmountParameterEntrySpec, unit: string): boolean {
-    return (spec.defaultUnit === "oct" && unitIs(unit, "oct", "octave", "octaves"))
-        || (spec.defaultUnit === "st" && unitIs(unit, "st", "semitone", "semitones", "ct", "cent", "cents"))
-        || (spec.defaultUnit === "dB" && unitIs(unit, "db"))
-        || (spec.defaultUnit === "Q" && unitIs(unit, "q"))
-        || (spec.defaultUnit === "s" && timeUnitKind(unit) !== "unknown")
-        || (spec.defaultUnit === "ms" && timeUnitKind(unit) !== "unknown")
-        || (spec.defaultUnit === "Hz" && unitIs(unit, "hz", "khz", "k"))
-        || (spec.defaultUnit === "°" && unitIs(unit, "°", "deg", "degree", "degrees"))
-        || (spec.defaultUnit === "%" && unit === "%");
-}
-
-export function parseAmount(spec: AmountParameterEntrySpec, text: string): ParameterEntryResult {
-    const parsed = parseNumericAndUnit(text);
-    if (parsed === null) {
-        return { _tag: "rejected", message: `Enter an amount in ${spec.defaultUnit} or %.` };
-    }
-    const numericValue = Number(parsed.numericText);
-    if (!Number.isFinite(numericValue)) {
-        return { _tag: "rejected", message: `Enter a finite amount in ${spec.defaultUnit} or %.` };
-    }
-    if (parsed.unit === "%") {
-        const value = spec.percentMeaning === "native"
-            ? numericValue * spec.canonicalPerDisplayedUnit
-            : depthPercentValue(spec, numericValue);
-        return valueCommit(value, spec);
-    }
-    if (spec.defaultUnit === "oct" && parsed.unit !== undefined) {
-        const interval = parseOctavePhysicalInterval(spec, parsed.numericText, numericValue, parsed.unit);
-        if (interval !== null) {
-            return interval;
-        }
-    }
-    if (parsed.unit !== undefined && !amountUnitCompatible(spec, parsed.unit)) {
-        return rejectForUnit(parsed.unit, spec.defaultUnit);
-    }
-
-    const centsScale = spec.defaultUnit === "st" && unitIs(parsed.unit, "ct", "cent", "cents") ? 0.01 : 1;
-    let value = numericValue * centsScale * spec.canonicalPerDisplayedUnit;
-    if (spec.defaultUnit === "s" && timeUnitKind(parsed.unit) === "milliseconds") {
-        value = numericValue / 1_000;
-    } else if (spec.defaultUnit === "ms" && timeUnitKind(parsed.unit) === "seconds") {
-        value = numericValue * 1_000;
-    } else if (spec.defaultUnit === "Hz" && unitIs(parsed.unit, "khz", "k")) {
-        value = numericValue * 1_000;
-    }
-    return valueCommit(value, spec);
-}
-
-export function parseTempoSync(spec: TempoSyncParameterEntrySpec, text: string): ParameterEntryResult {
-    const division = spec.divisions.find((candidate) => candidate.label.toLowerCase() === text);
-    if (division !== undefined) {
-        return {
-            _tag: "accepted",
-            commit: {
-                _tag: "tempoDivision",
-                mode: "sync",
-                divisionValue: division.value,
-                divisionLabel: division.label,
-            },
-            echo: { display: `${division.label} Sync`, draft: division.label, unit: "Sync" },
-        };
-    }
-    if (/^\d+\/\d+(?:\.|t)?$/i.test(text)) {
-        return { _tag: "rejected", message: "That tempo division is not supported for this parameter." };
-    }
-    const result = spec.freeSpec._tag === "frequency"
-        ? parseFrequency(spec.freeSpec, text)
-        : parseTime(spec.freeSpec, text);
-    if (result._tag === "rejected") {
-        return result;
-    }
-    if (result.commit._tag !== "value") {
-        throw new Error("A Free-value parser returned a tempo division.");
-    }
-    return {
-        ...result,
-        commit: { ...result.commit, mode: "free" },
-    };
-}
-
-/** Parse user-entered exact-value text into a typed commit or explicit rejection. */
+/** Parses typed text into the value to store, or a message saying what to type instead. */
 export function parseParameterEntry(spec: ParameterEntrySpec, text: string): ParameterEntryResult {
     const normalizedText = normalizeEntryText(text);
-    if (spec._tag === "tempoSync") return parseTempoSync(spec, normalizedText);
     if (spec._tag === "frequency") return parseFrequency(spec, normalizedText);
     if (spec._tag === "scalar") return parseScalar(spec, normalizedText);
-    if (spec._tag === "seconds" || spec._tag === "milliseconds") return parseTime(spec, normalizedText);
-    if (spec._tag === "pan") return parsePan(spec, normalizedText);
-    if (spec._tag === "choice") return parseChoice(spec, normalizedText);
-    return parseAmount(spec, normalizedText);
+    return parseTime(spec, normalizedText);
 }

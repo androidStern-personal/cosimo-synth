@@ -11,8 +11,8 @@ let server;
 before(async () => {
     server = await startStaticWebServer(root, {
         bundleTypeScript: true,
-        mounts: { "/cmaj_api": () => process.env.COSIMO_CMAJOR_SOURCE
-            ? path.join(process.env.COSIMO_CMAJOR_SOURCE, "javascript/cmaj_api")
+        mounts: { "/cmaj_api": () => process.env.BUILDER_KIT_CMAJOR_SOURCE
+            ? path.join(process.env.BUILDER_KIT_CMAJOR_SOURCE, "javascript/cmaj_api")
             : stageCmajorWebRuntime(root, { buildDirectory: path.join(root, "build/cmajor_web_runtime-synth-state-tests"), instanceId: String(process.pid) }) },
     });
     browser = await chromium.launch({ headless: true });
@@ -284,7 +284,7 @@ test("a Voice edit rejected by another client's lock rolls back its draft withou
         await releaseBoot(page);
         const begin = await page.evaluate(async () => {
             window.fixture.openObserver();
-            return window.fixture.observerCommand({ kind: "begin", key: "globalTune", gesture: 21 });
+            return window.fixture.observerCommand({ kind: "begin", keys: ["globalTune"], gesture: 21 });
         });
         assert.equal(begin.kind, "accepted");
         await page.getByText("Drag seven", { exact: true }).click();
@@ -298,7 +298,7 @@ test("a Voice edit rejected by another client's lock rolls back its draft withou
         assert.deepEqual(await page.evaluate(() => window.fixture.publications().flatMap(message => message.operations)), [
             { kind: "gesture-start", endpoint: "globalTune" },
         ]);
-        const end = await page.evaluate(() => window.fixture.observerCommand({ kind: "end", key: "globalTune", gesture: 21 }));
+        const end = await page.evaluate(() => window.fixture.observerCommand({ kind: "end", keys: ["globalTune"], gesture: 21 }));
         assert.equal(end.kind, "accepted");
         await page.getByText("Drag five", { exact: true }).click();
         await page.waitForFunction(() => window.fixture.parameter("globalTune") === 5);

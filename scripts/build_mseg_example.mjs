@@ -9,9 +9,12 @@ const output = path.join(root, 'kit/examples/mseg')
 const temp = await mkdtemp(path.join(tmpdir(), 'mseg-example-'))
 try {
     const cache = await readFile(path.join(root, 'build/cmajor_external_codegen-host/CMakeCache.txt'), 'utf8')
-    const source = cache.match(/^CPM_PACKAGE_cosimo_cmajor_toolchain_SOURCE_DIR:INTERNAL=(.+)$/m)?.[1]
+    const source = cache.match(/^CPM_PACKAGE_builder_kit_cmajor_toolchain_SOURCE_DIR:INTERNAL=(.+)$/m)?.[1]
     if (!source) throw new Error('Configure the worktree-local pinned external generator first.')
-    const files = ['kit/cmajor/mseg.cmajor', 'kit/examples/mseg/playback.cmajor', 'kit/cmake/CosimoDependencies.cmake']
+    const dependencies = await readFile(path.join(root, 'kit/cmake/dependencies.cmake'), 'utf8')
+    const cmajorCommit = dependencies.match(/set\(BUILDER_KIT_CMAJOR_PINNED_COMMIT "([0-9a-f]{40})"\)/)?.[1]
+    if (!cmajorCommit) throw new Error('kit/cmake/dependencies.cmake has no BUILDER_KIT_CMAJOR_PINNED_COMMIT.')
+    const files = ['kit/cmajor/mseg.cmajor', 'kit/examples/mseg/playback.cmajor']
     const hashes = {}
     for (const name of files) {
         const bytes = await readFile(path.join(root, name))
@@ -54,9 +57,9 @@ try {
             .digest('hex')
     await writeFile(
         path.join(output, 'playback-provenance.json'),
-        JSON.stringify({ generatedBy: 'scripts/build_mseg_example.mjs', sha256: hashes }, null, 2) + '\n',
+        JSON.stringify({ generatedBy: 'scripts/build_mseg_example.mjs', cmajorCommit, sha256: hashes }, null, 2) + '\n',
     )
-    console.log('Frozen real MSEG playback example and source fingerprints.')
+    console.log('Frozen real MSEG playback example, its Cmajor pin and source fingerprints.')
 } finally {
     await rm(temp, { recursive: true, force: true })
 }

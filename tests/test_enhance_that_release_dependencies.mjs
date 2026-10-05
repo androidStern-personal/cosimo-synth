@@ -5,7 +5,7 @@ import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { readCmajorPin } from "../kit/scripts/toolchain.mjs";
+import { readCmajorPin } from "../scripts/export_kit.mjs";
 import { enhanceThatNativeDependencies } from "../scripts/enhance-that-release-config.mjs";
 import { seqFxReleaseConfig } from "../scripts/seqfx-release-config.mjs";
 import { readDeclaredNativeDependencyProvenance } from "../scripts/build_seqfx_beta_release.mjs";
@@ -25,7 +25,7 @@ test("production SDK and tool producer share the exported dependency pin", async
     const production = await readDeclaredNativeDependencyProvenance(config);
     const tools = await readDeclaredNativeDependencyProvenance({ nativeDependencies: {
         ...enhanceThatNativeDependencies,
-        cmajor: { ...enhanceThatNativeDependencies.cmajor, cpmName: "cosimo_cmajor_toolchain" },
+        cmajor: { ...enhanceThatNativeDependencies.cmajor, cpmName: "builder_kit_cmajor_toolchain" },
     } });
     assert.equal(production.cmajor.revision, proposedCommit);
     assert.equal(tools.cmajor.revision, proposedCommit);
@@ -52,9 +52,9 @@ test("live product notices match the shared production dependencies", async () =
 
 for (const [name, change, error] of [
     ["old Cmajor pin", text => text.replaceAll(proposedCommit, oldCommit), /Cmajor production dependency revision drift/u],
-    ["wrong Cmajor repository", text => text.replaceAll("${COSIMO_CMAJOR_GIT_URL}", "https://example.invalid/wrong.git"), /Cmajor production dependency repository drift/u],
+    ["wrong Cmajor repository", text => text.replaceAll("${BUILDER_KIT_CMAJOR_GIT_URL}", "https://example.invalid/wrong.git"), /Cmajor production dependency repository drift/u],
     ["wrong JUCE pin", text => text.replaceAll(enhanceThatNativeDependencies.juce.revision, "0".repeat(40)), /JUCE production dependency revision drift/u],
-    ["missing production declaration", text => text.replace("NAME cosimo_cmajor\n", "NAME wrong_package\n"), /exactly one CPMAddPackage declaration/u],
+    ["missing production declaration", text => text.replace("NAME builder_kit_cmajor\n", "NAME wrong_package\n"), /exactly one CPMAddPackage declaration/u],
 ]) {
     test(`Enhance That refuses ${name}`, async context => {
         const repositoryRoot = await scratch(context);

@@ -31,8 +31,8 @@ createRoot(root).render(<ReferencePage title="Filter" description="A filter resp
         { name: "value / onValueChange", description: "Controlled mode, cutoffHz and q." },
         { name: "range / onRangeChange", description: "Optional one-dimensional cutoff interval." },
         { name: "modulation / onModulationChange", description: "Optional cutoff/resonance interval and editable axes." },
-        { name: "spectrum / effective", description: "Read-only analyzer data and current engine response." },
-        { name: "showModeControls / showReadout", description: "Optional mode selector and value chips." },
-        { name: "className / style", description: "Ordinary CSS and --editor-* tokens." },
-        { name: "onEditStart / onEditEnd", description: "Gesture boundaries with the edited target." },
+        { name: "spectrum / preview", description: "Read-only analyzer data and the live response from your engine." },
+        { name: "showModeControls / showHandleChips / showReadout", description: "Optional mode button, range chips and value readout." },
+        { name: "className / style / ref", description: "Root styling, attributes and element ref; --editor-* tokens set the theme." },
+        { name: "onGestureStart / onGestureEnd(cancelled)", description: "Bracket each drag or held key as one edit; both also name the grip." },
     ]} />);

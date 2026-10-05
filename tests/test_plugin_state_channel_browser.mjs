@@ -8,14 +8,14 @@ import { fileURLToPath } from "node:url";
 import { chromium } from "playwright";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-const source = process.env.COSIMO_CMAJOR_SOURCE;
+const source = process.env.BUILDER_KIT_CMAJOR_SOURCE;
 const build = path.join(root, "build/browser_plugin_state");
 const fixture = path.join(root, "tests/browser/fixtures/plugin_state_channel");
 let browser, page, server;
 const errors = [];
 
 before(async () => {
-    assert.ok(source, "Set COSIMO_CMAJOR_SOURCE to the isolated Cmajor worktree");
+    assert.ok(source, "Set BUILDER_KIT_CMAJOR_SOURCE to the isolated Cmajor worktree");
     await fs.mkdir(build, { recursive: true });
     const generated = path.join(build, "generated.js");
     const result = spawnSync(path.join(root, "build/browser_plugin_state_generator/cosimo_cmajor_external_codegen"), [
@@ -179,7 +179,7 @@ test("same browser connection reattach replaces binding identity after its old r
         const { a, first } = window.fixture.clients;
         const old = first.find(body => body.kind === "attached");
         const command = (client, sequence, kind) => a.sendMessageToServer({ type: "kit_state", message: {
-            kind: "command", scope: old.scope, client, sequence, command: { kind, key: "gain", gesture: 1, value: 3.5 }
+            kind: "command", scope: old.scope, client, sequence, command: kind === "begin" ? { kind, keys: ["gain"], gesture: 1 } : { kind, key: "gain", gesture: 1, value: 3.5 }
         }});
         command(old.client, 4, "begin");
         command(old.client, 5, "edit");
