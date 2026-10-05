@@ -7,7 +7,8 @@ export { MsegRoot, useMsegEditor } from './mseg-context'
 export type { MsegRootProps, MsegEditing, MsegSelection } from './mseg-context'
 export { MsegSurface } from './mseg-surface'
 export type { MsegSurfaceProps } from './mseg-surface'
-export * from './mseg-layers'
+export { MsegFill, MsegGrid, MsegLine, MsegPlayhead, MsegPlot, MsegPoints, MsegSegmentHighlight, MsegTimeAxis } from './mseg-layers'
+export type { MsegPlayheadProps, MsegPlotProps, MsegPointRender, MsegPointsProps, MsegShapeLayerProps, MsegTimeAxisProps } from './mseg-layers'
 
 export type MsegEditorProps = MsegRootProps & {
     readonly surfaceProps?: MsegSurfaceProps

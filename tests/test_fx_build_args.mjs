@@ -841,8 +841,8 @@ test("kit/index.ts names its public surface explicitly, in groups, and covers ev
         }
     }
     assert.deepEqual(missing, [], "shipped code imports only names the public entry exports");
-    for (const transport of ["PluginStateDelivery", "PluginStateSubmission", "PluginStateEffect", "PluginStateDeliveryOutcome"])
-        assert.equal(exported.has(transport), false, `${transport} is a transport type, not author API`);
+    for (const delivery of ["PluginStateDelivery", "PluginStateDocumentContext", "PluginStateDeliveryContext", "PluginStateEffect", "PluginStateSubmission", "PluginStateDeliveryOutcome"])
+        assert.equal(exported.has(delivery), true, `${delivery} is public: PLUGIN_STATE.md tells authors to write a custom delivery from it`);
     for (const exampleHelper of ["SPECTRUM_PLOT", "ENHANCER_SPECTRUM_PLOT", "advanceEnhancerSpectrum", "EnhancerSpectrumDisplay"])
         assert.equal(exported.has(exampleHelper), false, `${exampleHelper} belongs to the Enhance That example, not the kit`);
 });
