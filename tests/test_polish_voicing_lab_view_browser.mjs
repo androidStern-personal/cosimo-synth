@@ -36,6 +36,7 @@ function parseParameters(source) {
                 min: readNumber("min"),
                 max: readNumber("max"),
                 init: readNumber("init"),
+                step: readNumber("step"),
                 hidden: /\bhidden\s*:\s*true\b/.test(annotationText),
                 boolean: type === "bool" || /\bboolean\b/.test(annotationText),
                 discrete: /\bdiscrete\s*:\s*true\b/.test(annotationText),
@@ -53,18 +54,28 @@ async function openLab(viewport = { width: 1240, height: 900 }) {
     await page.goto(new URL("tests/helpers/module_test_shell.html", server.baseUrl).toString());
     await page.evaluate(async (inputs) => {
         const ParameterControls = await import("/cmaj_api/cmaj-parameter-controls.js");
+        const { createBrowserPreviewState } = await import("/kit/ui/preview/state.ts");
         const values = new Map(inputs.map(parameter => [parameter.endpointID, parameter.annotation.init]));
         const parameterListeners = new Map();
         const endpointListeners = new Map();
         const statusListeners = new Set();
+        const storedState = new Map();
         const sent = [];
         const gestureStarts = [];
         const gestureEnds = [];
-        const emitParameter = (endpointID, value) => {
-            values.set(endpointID, value);
+        let stateHost;
+        let publishing = false;
+        const notify = (endpointID, value) => {
             for (const listener of parameterListeners.get(endpointID) ?? []) listener(value);
         };
+        // Host automation or a project load: the host's value changes and the state owner observes it.
+        const emitParameter = (endpointID, value) => {
+            values.set(endpointID, value);
+            stateHost.observe(endpointID, Number(value));
+            notify(endpointID, value);
+        };
         const patchConnection = {
+            manifest: { ID: "dev.cosimo.polish-voicing-lab" },
             utilities: { ParameterControls },
             addStatusListener(listener) { statusListeners.add(listener); },
             removeStatusListener(listener) { statusListeners.delete(listener); },
@@ -79,14 +90,12 @@ async function openLab(viewport = { width: 1240, height: 900 }) {
                 parameterListeners.set(endpointID, listeners);
             },
             removeParameterListener(endpointID, listener) { parameterListeners.get(endpointID)?.delete(listener); },
-            requestParameterValue(endpointID) {
-                queueMicrotask(() => {
-                    for (const listener of parameterListeners.get(endpointID) ?? []) listener(values.get(endpointID));
-                });
-            },
+            requestParameterValue(endpointID) { queueMicrotask(() => notify(endpointID, values.get(endpointID))); },
             sendEventOrValue(endpointID, value) {
                 sent.push({ endpointID, value });
-                emitParameter(endpointID, value);
+                values.set(endpointID, value);
+                if (!publishing) stateHost.observe(endpointID, Number(value));
+                notify(endpointID, value);
             },
             sendParameterGestureStart(endpointID) { gestureStarts.push(endpointID); },
             sendParameterGestureEnd(endpointID) { gestureEnds.push(endpointID); },
@@ -97,7 +106,27 @@ async function openLab(viewport = { width: 1240, height: 900 }) {
             },
             removeEndpointListener(endpointID, listener) { endpointListeners.get(endpointID)?.delete(listener); },
         };
-        window.__POLISH_LAB_SETUP__ = {
+        // The kit's browser state owner stands in for the plugin's state worker:
+        // every edit reaches the host through it, as parameter writes and gestures.
+        stateHost = createBrowserPreviewState({
+            snapshot: () => ({ values: Object.fromEntries(storedState), parameters: inputs.map(input => ({
+                endpoint: input.endpointID, value: Number(values.get(input.endpointID)),
+                min: input.annotation.boolean ? 0 : input.annotation.min, max: input.annotation.boolean ? 1 : input.annotation.max,
+                step: input.annotation.step ?? 0, defaultValue: Number(input.annotation.init),
+            })) }),
+            parameter(endpointID, value) {
+                publishing = true;
+                try { patchConnection.sendEventOrValue(endpointID, value); }
+                finally { publishing = false; }
+            },
+            stored(key, value) { storedState.set(key, value); },
+            gesture(endpointID, kind) {
+                if (kind === "gesture-start") patchConnection.sendParameterGestureStart(endpointID);
+                else patchConnection.sendParameterGestureEnd(endpointID);
+            },
+        });
+        Object.assign(patchConnection, stateHost.host);
+    window.__POLISH_LAB_SETUP__ = {
             patchConnection,
             values,
             sent,
@@ -121,7 +150,10 @@ async function openLab(viewport = { width: 1240, height: 900 }) {
                 for (const listener of setup.endpointListeners.get("meterOut") ?? []) listener(frame);
             },
             disconnect() { view.remove(); },
-            snapshot() {
+            /** Let pending edits and host writes settle, then read the surface. */
+            async snapshot() {
+                for (let turn = 0; turn < 4; turn += 1) await new Promise(resolve => setTimeout(resolve, 0));
+                await new Promise(resolve => requestAnimationFrame(() => resolve()));
                 const root = view.shadowRoot;
                 const controls = Array.from(root.querySelectorAll("cmaj-labelled-control-holder"));
                 const graph = root.querySelector('[data-transfer-graph="shaper"]');
@@ -218,12 +250,12 @@ async function openLab(viewport = { width: 1240, height: 900 }) {
             },
         };
     });
-    await page.waitForFunction(() => window.__POLISH_LAB_TEST__?.snapshot().controlIDs.length > 0);
+    await page.locator("cmaj-labelled-control-holder").first().waitFor();
     return page;
 }
 
 before(async () => {
-    server = await startStaticRepoServer();
+    server = await startStaticRepoServer({ bundleTypeScript: true });
     browser = await chromium.launch({ headless: true });
 });
 
@@ -748,7 +780,7 @@ test("Reset and all-slot host-state replay reconstruct both graphs exactly", asy
 
         await page.locator("[data-reset]").click();
         const reset = await page.evaluate(() => window.__POLISH_LAB_TEST__.snapshot());
-        assert.equal(reset.parameterValues.bypass, false);
+        assert.equal(reset.parameterValues.bypass, 0, "Reset returns to processed listening");
         assert.equal(reset.parameterValues.thresholdDb, 0);
         assert.equal(reset.parameterValues.ratio, 4);
         assert.equal(reset.parameterValues.kneeDb, 6);
@@ -996,6 +1028,76 @@ test("Ratio and the other compressor graph controls always edit the visible DSP 
         assert.ok(Math.abs(state.compressorOperatingPoint.y - 95.2667) < 0.01);
         assert.ok(Math.abs(state.shaperOperatingPoint.x - 518.6667) < 0.01);
         assert.ok(Math.abs(state.shaperOperatingPoint.y - 158.8) < 0.01);
+    } finally {
+        await page.close();
+    }
+});
+
+test("a graph drag and Reset are one Undo entry each, under the preset and snapshot header", async () => {
+    const page = await openLab();
+    try {
+        await page.getByRole("combobox", { name: "Preset" }).waitFor();
+        await page.getByRole("group", { name: "Snapshots" }).waitFor();
+        const undo = page.getByRole("button", { name: "Undo", exact: true });
+        assert.equal(await undo.isDisabled(), true);
+
+        const handle = page.locator('[data-shape-point-handle][data-shape-side="positive"][data-shape-index="1"]');
+        await handle.scrollIntoViewIfNeeded();
+        const box = await handle.boundingBox();
+        await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+        await page.mouse.down();
+        await page.mouse.move(box.x + box.width / 2 - 40, box.y + box.height / 2 + 30, { steps: 4 });
+        await page.mouse.up();
+        const dragged = await page.evaluate(() => window.__POLISH_LAB_TEST__.snapshot());
+        assert.notEqual(dragged.parameterValues.curveP1X, 1);
+
+        await page.locator("[data-reset]").click();
+        const reset = await page.evaluate(() => window.__POLISH_LAB_TEST__.snapshot());
+        assert.equal(reset.parameterValues.curveP1X, 1);
+
+        await undo.click();
+        const undoneReset = await page.evaluate(() => window.__POLISH_LAB_TEST__.snapshot());
+        assert.equal(undoneReset.parameterValues.curveP1X, dragged.parameterValues.curveP1X);
+        assert.equal(undoneReset.parameterValues.curveP1Y, dragged.parameterValues.curveP1Y);
+        assert.equal(undoneReset.shaperCurvePath, dragged.shaperCurvePath);
+
+        await undo.click();
+        const undoneDrag = await page.evaluate(() => window.__POLISH_LAB_TEST__.snapshot());
+        assert.equal(undoneDrag.parameterValues.curveP1X, 1, "the whole drag was one entry");
+        assert.equal(undoneDrag.parameterValues.curveP1Y, 1);
+        assert.equal(await undo.isDisabled(), true);
+    } finally {
+        await page.close();
+    }
+});
+
+test("a snapshot slot carries the whole curve, hidden slots included, and leaves Dry alone", async () => {
+    const page = await openLab();
+    try {
+        const snapshots = page.getByRole("group", { name: "Snapshots" });
+        await snapshots.getByRole("button", { name: /^Snapshot A/ }).click();
+        await page.locator('[data-shape-point-handle][data-shape-side="positive"][data-shape-index="1"]').click();
+        await page.locator("[data-shape-add]").click();
+        await page.locator('[data-shape-exact-field="output"]').fill("0.4");
+        await page.locator('[data-shape-exact-field="output"]').press("Enter");
+        const edited = await page.evaluate(() => window.__POLISH_LAB_TEST__.snapshot());
+        assert.equal(edited.parameterValues.curvePointCount, 2);
+        assert.equal(edited.parameterValues.curveP1Y, 0.4);
+
+        await snapshots.getByRole("button", { name: /^Snapshot B/ }).click();
+        await page.locator("[data-reset]").click();
+        await page.locator("[data-compare]").click();
+        const neutral = await page.evaluate(() => window.__POLISH_LAB_TEST__.snapshot());
+        assert.equal(neutral.parameterValues.curvePointCount, 1);
+        assert.equal(neutral.parameterValues.bypass, 1);
+
+        await snapshots.getByRole("button", { name: /^Snapshot A/ }).click();
+        const recalled = await page.evaluate(() => window.__POLISH_LAB_TEST__.snapshot());
+        assert.equal(recalled.parameterValues.curvePointCount, 2);
+        assert.equal(recalled.parameterValues.curveP1Y, 0.4);
+        assert.equal(recalled.parameterValues.curveP2X, edited.parameterValues.curveP2X);
+        assert.equal(recalled.shaperCurvePath, edited.shaperCurvePath);
+        assert.equal(recalled.parameterValues.bypass, 1, "Dry is a listening switch, not part of the sound");
     } finally {
         await page.close();
     }

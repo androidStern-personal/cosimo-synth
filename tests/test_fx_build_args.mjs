@@ -1078,13 +1078,15 @@ test("every jit install plan points at a patch whose declared view entry will ex
         assert.equal(buildModule.createJitInstallPlan(pluginName).jitInstallRuntime, true, pluginName);
 });
 
-test("Chorus Lab, OTT Lab and Spectral Chord Resonator declare their state through the kit and install from their built runtime", async () => {
+test("Chorus Lab, OTT Lab, Spectral Chord Resonator, Enhancer and Polish Voicing Lab declare their state through the kit and install from their built runtime", async () => {
     const { buildModule } = await loadBuildModules();
 
     for (const [pluginName, directory, patchFile, viewSource] of [
         ["chorus", "fx/chorus_lab", "ChorusLab.cmajorpatch", "source.ts"],
         ["ott", "fx/ott_lab", "OttLab.cmajorpatch", "source.ts"],
         ["spectral", "fx/spectral_chord_resonator", "SpectralChordResonator.cmajorpatch", "source.tsx"],
+        ["enhancer", "fx/enhancer", "Enhancer.cmajorpatch", "source.tsx"],
+        ["polish", "fx/polish_lab", "PolishVoicingLab.cmajorpatch", "source.tsx"],
     ]) {
         const plugin = buildModule.getEffectPlugins()[pluginName];
 

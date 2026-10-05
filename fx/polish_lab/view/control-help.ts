@@ -1,4 +1,5 @@
-export const CONTROL_HELP = Object.freeze({
+/** What each knob does, shown as its tooltip and accessible description. */
+export const CONTROL_HELP: { readonly [endpointID: string]: string } = Object.freeze({
   thresholdDb: "Level where compression starts. Lower values compress more of the signal.",
   ratio: "How strongly levels above Threshold are reduced. This always drives the visible curve and DSP directly.",
   kneeDb: "Width of the transition into compression. Zero is sharp; higher values make the bend gentler.",
@@ -7,8 +8,3 @@ export const CONTROL_HELP = Object.freeze({
   makeupDb: "Gain added after compression. It moves the compressor curve vertically.",
   morph: "Moves the assigned waveshaper point linearly from its A position to its B position. It changes nothing else.",
 });
-
-export function getControlHelp(endpointInfo) {
-  const endpointID = endpointInfo?.endpointID;
-  return CONTROL_HELP[endpointID];
-}

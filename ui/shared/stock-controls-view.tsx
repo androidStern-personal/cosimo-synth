@@ -52,9 +52,12 @@ function visibleParameters(status: unknown): EndpointInfo[] {
 /**
  * One stock Cmajor control whose value comes from, and whose edits go to, a
  * plugin state field. Its drags are gestures on that field, so each one is a
- * single Undo entry.
+ * single Undo entry. `attributes` are set on the created control element; pass
+ * a stable object, since a new one recreates the control.
  */
-function StockControl({ controls, field, endpoint }: { controls: StockControls; field: ParameterField; endpoint: EndpointInfo }) {
+export function StockControl({ controls, field, endpoint, attributes }: {
+    controls: StockControls; field: ParameterField; endpoint: EndpointInfo; attributes?: Readonly<Record<string, string>>;
+}) {
     const control = usePluginState(field);
     const latest = useRef<PluginStateControl<number>>(control);
     const [listeners] = useState(() => new Set<(value: number) => void>());
@@ -76,9 +79,10 @@ function StockControl({ controls, field, endpoint }: { controls: StockControls; 
         };
         const element = controls.createLabelledControl(connection, endpoint);
         if (!element || !holder.current) return;
+        for (const [name, value] of Object.entries(attributes ?? {})) element.setAttribute(name, value);
         holder.current.replaceChildren(element);
         return () => element.remove();
-    }, [controls, endpoint, listeners]);
+    }, [controls, endpoint, listeners, attributes]);
 
     const value = "value" in control.state ? control.state.value : undefined;
     useLayoutEffect(() => {
@@ -91,8 +95,8 @@ function StockControl({ controls, field, endpoint }: { controls: StockControls; 
     </>;
 }
 
-/** Group the patch's controls under their annotated group names, in declaration order. */
-export function ControlGroups({ controls, definition }: { controls: StockControls; definition: Definition }) {
+/** The patch's visible parameter inputs, in declaration order; null until the host reports its status. */
+export function useVisibleParameters(): readonly EndpointInfo[] | null {
     const connection = usePatchConnection();
     const [parameters, setParameters] = useState<readonly EndpointInfo[] | null>(null);
 
@@ -106,6 +110,12 @@ export function ControlGroups({ controls, definition }: { controls: StockControl
         return () => connection.removeStatusListener?.(listener);
     }, [connection]);
 
+    return parameters;
+}
+
+/** Group the patch's controls under their annotated group names, in declaration order. */
+export function ControlGroups({ controls, definition }: { controls: StockControls; definition: Definition }) {
+    const parameters = useVisibleParameters();
     if (parameters === null) return <section className="empty" role="status">Connecting</section>;
     const fields = new Map<string, ParameterField>();
     for (const field of Object.values(definition)) if (field.kind === "parameter") fields.set(field.endpoint, field);

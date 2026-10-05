@@ -3,7 +3,7 @@
   "alias": "polish",
   "cmakeTarget": "PolishVoicingLab",
   "productName": "PolishVoicingLab",
+  "stateSource": "fx/polish_lab/state.ts",
   "runtimeOut": "build/fx/polish_lab_runtime",
-  "juceOut": "build/polish_lab_juce",
-  "jitInstallRuntime": true
+  "juceOut": "build/polish_lab_juce"
 }
