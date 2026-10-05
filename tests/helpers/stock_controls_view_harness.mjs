@@ -13,7 +13,7 @@ export async function hostStatusInputs(dspPath) {
     const source = await readFile(dspPath, "utf8");
     // An annotation may name a namespace constant, such as init: ottlab::defaultLowMidHz.
     const constants = new Map([...source.matchAll(/\blet (\w+) = (-?[\d.]+)f?;/g)].map(([, name, value]) => [name, Number(value)]));
-    return [...source.matchAll(/^\s*input value (bool|float32) (\w+)\s*\[\[([^\]]*)\]\]/gm)].map(([, type, endpointID, text]) => {
+    return [...source.matchAll(/^\s*input (?:value|event) (bool|float32) (\w+)\s*\[\[([^\]]*)\]\]/gm)].map(([, type, endpointID, text]) => {
         const annotation = {};
         for (const [, key, raw] of text.matchAll(/(\w+)\s*:\s*("[^"]*"|[^,]+)/g)) {
             const value = raw.trim();

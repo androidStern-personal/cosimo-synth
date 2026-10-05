@@ -24,12 +24,12 @@ interface StockControlConnection {
 }
 
 /** Cmajor's stock knob, switch and option controls, from the host's patch-view utilities. */
-interface StockControls {
+export interface StockControls {
     createLabelledControl(connection: StockControlConnection, endpoint: EndpointInfo): HTMLElement | undefined;
     getAllCSS(): string;
 }
 
-function stockControlsOf(connection: PatchConnectionLike): StockControls | null {
+export function stockControlsOf(connection: PatchConnectionLike): StockControls | null {
     const controls: unknown = connection.utilities?.ParameterControls;
     if (typeof controls !== "object" || controls === null) return null;
     if (!("createLabelledControl" in controls) || typeof controls.createLabelledControl !== "function") return null;
@@ -92,7 +92,7 @@ function StockControl({ controls, field, endpoint }: { controls: StockControls; 
 }
 
 /** Group the patch's controls under their annotated group names, in declaration order. */
-function ControlGroups({ controls, definition }: { controls: StockControls; definition: Definition }) {
+export function ControlGroups({ controls, definition }: { controls: StockControls; definition: Definition }) {
     const connection = usePatchConnection();
     const [parameters, setParameters] = useState<readonly EndpointInfo[] | null>(null);
 

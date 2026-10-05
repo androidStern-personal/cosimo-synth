@@ -17,6 +17,10 @@ Read this before changing the Spectral DSP, patch endpoints, voice dispatcher, m
 
 Keep `hostSlot0Guard` as the first declared Spectral host parameter. It protects the observed Ableton/Cmajor slot-zero behavior and the released automation order; visible parameters such as `magFeedbackIn` begin after it. Source-order assertions preserve this today, but no current minimal host reproduction identifies the upstream cause. Do not remove or reorder the guard until compiled host parameter inventory and supported-host automation compatibility are independently proven.
 
+## Editor state
+
+`state.ts` declares the sound through the Builder Kit: one field per host parameter, plus the harmonic partial shape. The kit saves the shape with the project and sends it to the DSP's `partialShapeUpload` event when the plugin opens and after every change. Knob turns, partial edits, presets and snapshots share one Undo history. `hostSlot0Guard` is declared first with `preset: false`, so presets and snapshots never move it.
+
 ## Evidence
 
 `tests/test_spectral_chord_resonator_probe.py` covers audio reconstruction/stereo independence, fast-note Poly/Mono behavior, Imprint source dependence, selected-note continuity into Mono, and slot-zero source order. The probe can skip when its Cmajor/Node toolchain is unavailable, and it does not close the held-chord restoration or compiled host-order gaps above. Report those limits separately from passing source/probe checks.

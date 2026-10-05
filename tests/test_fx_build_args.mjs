@@ -1055,15 +1055,19 @@ test("every jit install plan points at a patch whose declared view entry will ex
         assert.equal(buildModule.createJitInstallPlan(pluginName).jitInstallRuntime, true, pluginName);
 });
 
-test("Chorus Lab and OTT Lab declare their state through the kit and install from their built runtime", async () => {
+test("Chorus Lab, OTT Lab and Spectral Chord Resonator declare their state through the kit and install from their built runtime", async () => {
     const { buildModule } = await loadBuildModules();
 
-    for (const [pluginName, directory, patchFile] of [["chorus", "fx/chorus_lab", "ChorusLab.cmajorpatch"], ["ott", "fx/ott_lab", "OttLab.cmajorpatch"]]) {
+    for (const [pluginName, directory, patchFile, viewSource] of [
+        ["chorus", "fx/chorus_lab", "ChorusLab.cmajorpatch", "source.ts"],
+        ["ott", "fx/ott_lab", "OttLab.cmajorpatch", "source.ts"],
+        ["spectral", "fx/spectral_chord_resonator", "SpectralChordResonator.cmajorpatch", "source.tsx"],
+    ]) {
         const plugin = buildModule.getEffectPlugins()[pluginName];
 
         assert.equal(plugin.stateSource, `${directory}/state.ts`, pluginName);
         assert.equal(plugin.workerSource, undefined, `${pluginName} has no hand-written worker`);
-        assert.equal(plugin.devModule, `/${directory}/view/source.ts`, pluginName);
+        assert.equal(plugin.devModule, `/${directory}/view/${viewSource}`, pluginName);
         assert.equal(buildModule.createJitInstallPlan(pluginName).jitInstallRuntime, true, `${pluginName} installs the runtime that carries its state worker`);
         await assert.rejects(access(path.join(repoRoot, directory, "view", "index.js")), `${pluginName} keeps no source-patch loader link`);
 
