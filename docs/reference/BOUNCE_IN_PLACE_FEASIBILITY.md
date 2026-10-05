@@ -1,5 +1,7 @@
 # Feasibility Study: Bounce in Place for Cosimo
 
+> October 2026: the host-path preset system this document describes was replaced by the kit's presets-as-state (`kit/ui/presets.ts`, `kit/ui/snapshots.ts`). The text below is kept as history.
+
 Independent adversarial study. All references are repo-relative at commit
 `bc0f363` (the analysis was performed in a detached worktree at that HEAD;
 the probe `PROBE_bounce_math.mjs` is committed alongside this document).

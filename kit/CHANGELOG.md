@@ -65,29 +65,6 @@ what a version number promises.
 - **Tools for publishing the kit itself are no longer shipped.** The kit now
   holds only what a plugin project uses.
 
-### Removed
-
-- The 0.1.x preset modules: `createPresetBar`, `StandaloneEffectPresetController`,
-  `createEffectHeader`, the snapshot bank and their saved formats. Use
-  `presets()`, `snapshots()`, `PresetBar` and `SnapshotBar`. User presets saved
-  by a 0.1.x plugin are not read by 0.2.0.
-- The stored-state mirror and worker-service modules. The generated state
-  worker replaces them.
-- `FilterRangeEditor`. Use `FilterEditor`; [Filters](docs/FILTERS.md) shows
-  its props.
-- The editor building blocks: `EditorCurveSurface` and its parts, the editor
-  layout constants, the editor tokens module and `useEditorSurfaceSize`.
-- Patch hooks other than `usePatchConnection` and `usePatchParameter`, such as
-  `usePatchStatus`, `usePatchEndpoint` and `PatchConnectionProvider`.
-- Parameter-entry internals. The formatting and entry-spec helpers listed in
-  `kit/index.ts` remain.
-- Any other name that `kit/index.ts` no longer exports. `npm run typecheck`
-  names each one a plugin still imports.
-- The `.build.json` and `product.json` config files, and the `wordmark` and
-  `accentColor` product keys. Nothing reads them.
-- The `cmajplugin:build` script and `cmajplugin:install -- --from-source`.
-  Use the pinned download from `kit:setup`.
-
 ### Known issues
 
 - Saving, renaming or deleting a preset, and clearing a snapshot slot, cannot
