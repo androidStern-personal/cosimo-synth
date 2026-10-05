@@ -1,6 +1,6 @@
 import { memo, useEffect, useId, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
 
-import { PresetBar, SnapshotBar, usePluginState, usePresets } from "../../kit/index";
+import { PresetBar, SnapshotBar, usePluginHistory, usePluginState, usePresets, type PluginStateHistoryEntry } from "../../kit/index";
 import type { PluginStateFields } from "../../kit/ui/plugin-state-definition";
 import { pluginManifestId } from "../../kit/ui/plugin-state-user-files";
 import { editOutcome, jsonEqual, parsePresetFile, soundChanges, useCurrentSound, type SoundValues } from "../../kit/ui/presets";
@@ -95,19 +95,38 @@ const PresetControls = memo(function PresetControls(props: PresetControlsProps) 
     const ready = presets.status === "ready" && sound.status === "ready";
     const bounced = "value" in sourceMode.state && sourceMode.state.value === 1;
 
-    // A recall changes the active preset or snapshot together with the sound; a library
-    // action such as Save changes the active preset but leaves the sound as it was.
-    const recall = useRef<{ readonly preset: unknown; readonly snapshot: unknown; readonly sound: SoundValues | null } | null>(null);
+    // The sound is replaced when it changes together with the active preset or snapshot, when it
+    // returns to the active preset (Revert, or recalling the active preset again), or when a sound
+    // link loads. A library action such as Save changes the active preset but not the sound. Undo
+    // and Redo of a replacement replace the sound again, so the history entries of replacements
+    // are remembered, following each one as Undo and Redo move it between the two stacks.
+    const { undoEntry, redoEntry, canUndoEntry, canRedoEntry } = usePluginHistory();
+    const replacementEntries = useRef(new WeakSet<PluginStateHistoryEntry>());
+    const linkLoading = useRef(false);
+    const observed = useRef<{
+        readonly preset: unknown; readonly snapshot: unknown; readonly sound: SoundValues; readonly dirty: boolean;
+        readonly undoEntry?: PluginStateHistoryEntry; readonly redoEntry?: PluginStateHistoryEntry;
+    } | null>(null);
     const presetValue = "value" in activePreset.state ? activePreset.state.value : undefined;
     const snapshotValue = "value" in activeSnapshot.state ? activeSnapshot.state.value : undefined;
+    const { dirty, active } = presets;
     useEffect(() => {
-        const previous = recall.current;
-        const current = sound.status === "ready" ? sound : null;
-        recall.current = { preset: presetValue, snapshot: snapshotValue, sound: current?.saved ?? null };
-        if (!previous?.sound || !current) return;
-        const activeChanged = previous.preset !== presetValue || previous.snapshot !== snapshotValue;
-        if (activeChanged && !jsonEqual(previous.sound, current.saved)) onSoundReplaced(parameterValues(current.values));
-    }, [presetValue, snapshotValue, sound, onSoundReplaced]);
+        if (sound.status !== "ready") return;
+        const previous = observed.current;
+        observed.current = { preset: presetValue, snapshot: snapshotValue, sound: sound.saved, dirty, undoEntry, redoEntry };
+        if (!previous || jsonEqual(previous.sound, sound.saved)) return;
+        const entries = replacementEntries.current;
+        const undone = previous.undoEntry !== undefined && canRedoEntry(previous.undoEntry) ? previous.undoEntry : undefined;
+        const redone = previous.redoEntry !== undefined && canUndoEntry(previous.redoEntry) ? previous.redoEntry : undefined;
+        const replayed = (undone !== undefined && entries.has(undone)) || (redone !== undefined && entries.has(redone));
+        const replaced = replayed || linkLoading.current || previous.preset !== presetValue || previous.snapshot !== snapshotValue
+            || (undone === undefined && redone === undefined && previous.dirty && !dirty && active !== null);
+        linkLoading.current = false;
+        if (!replaced) return;
+        const entry = undone !== undefined ? redoEntry : redone !== undefined || undoEntry !== previous.undoEntry ? undoEntry : undefined;
+        if (entry !== undefined) entries.add(entry);
+        onSoundReplaced(parameterValues(sound.values));
+    }, [presetValue, snapshotValue, sound, dirty, active, undoEntry, redoEntry, canUndoEntry, canRedoEntry, onSoundReplaced]);
 
     // A link opened in the browser offers its sound once the presets are ready.
     const fragmentChecked = useRef(false);
@@ -158,9 +177,11 @@ const PresetControls = memo(function PresetControls(props: PresetControlsProps) 
         if (!shared) return;
         const tables = validateSoundShareWavetables(shared.values, wavetableTables);
         if (!tables.ok) { setNotice({ kind: "error", text: tables.error.message }); return; }
-        const result = editOutcome(await editor.edit({ ...soundChanges(synthPluginState, shared.values), activePreset: null }, { recall: true }));
+        linkLoading.current = true;
+        const accepted = await editor.edit({ ...soundChanges(synthPluginState, shared.values), activePreset: null }, { recall: true });
+        if (accepted.kind !== "accepted" || accepted.changed === false) linkLoading.current = false;
+        const result = editOutcome(accepted);
         if (result.kind === "failed") { setNotice({ kind: "error", text: result.message }); return; }
-        onSoundReplaced(parameterValues(shared.values));
         const stripped = stripSoundShareFragment();
         setNotice(stripped.ok
             ? { kind: "status", text: `Loaded “${shared.name}”. Save it as a preset to keep it.` }

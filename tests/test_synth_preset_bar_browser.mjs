@@ -74,9 +74,17 @@ test("a fresh synth shows Init, unmodified; recalling Init is one Undo entry", a
         await modified(page).waitFor();
         calls = await view.calls();
         assert.equal(calls.replaced.length, 2, "Undo of a recall replaces the sound again");
+        await page.getByRole("button", { name: "Redo" }).click();
+        await view.waitForParameter("filterCutoff", 1000);
+        await modified(page).waitFor({ state: "detached" });
+        assert.equal((await view.calls()).replaced.length, 3, "Redo of a recall replaces the sound again");
+        await page.getByRole("button", { name: "Undo" }).click();
+        await view.waitForParameter("filterCutoff", 2400);
+        assert.equal((await view.calls()).replaced.length, 4);
         await page.getByRole("button", { name: "Undo" }).click();
         await view.waitForParameter("filterCutoff", 1000);
         assert.equal(await page.getByRole("button", { name: "Undo" }).isDisabled(), true, "the recall was a single entry");
+        assert.equal((await view.calls()).replaced.length, 4, "undoing a knob edit does not replace the sound");
     } finally {
         await view.close();
     }

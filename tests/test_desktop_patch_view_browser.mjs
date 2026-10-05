@@ -5847,8 +5847,9 @@ test("mobile workspace keeps the synth preset bar visible and contained at 320px
         // retiring the legacy 38px preset-bar literal (ADR-026).
         assert.equal(layout.presetBarHeight, 40);
         assert.equal(layout.panelsTop >= layout.height, true);
-        // A fresh instance plays the Init sound but has not recalled a preset yet.
-        assert.equal(layout.presetName, "No preset");
+        // A fresh instance starts on the Init preset. This harness loads a sound that differs
+        // from Init (wavetable position and Glide), so the name carries the modified mark.
+        assert.equal(layout.presetName, "Init ●");
         assert.ok(layout.bar && layout.nameRegion && layout.leftCluster && layout.meter && layout.more);
         assert.equal(Math.abs(layout.meter.width - 92) <= 0.5, true);
         assert.equal(layout.nameRegion.left >= layout.leftCluster.right - 0.5, true);
