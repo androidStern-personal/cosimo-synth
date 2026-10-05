@@ -7,7 +7,6 @@ import {
 } from "../../../ui/speedrun/audio/master-track";
 import { renderSpeedrunCheckpoints } from "../../../ui/speedrun/audio/render-pool";
 import { createSoundShareURL } from "../../../ui/shared/sound-share-link";
-import type { SoundShareEnvelopeV2 } from "../../../ui/shared/sound-share-envelope";
 
 type HarnessRequest = {
     readonly states: ReadonlyArray<CumulativePatchState>;
@@ -113,8 +112,8 @@ async function render(request: HarnessRequest) {
     };
 }
 
-async function measureSoundShareURL(envelope: SoundShareEnvelopeV2) {
-    const result = await createSoundShareURL(envelope, "https://cosimo.test/");
+async function measureSoundShareURL(presetFile: string) {
+    const result = await createSoundShareURL(presetFile, "https://cosimo.test/");
     return result.ok
         ? {
             ok: true as const,

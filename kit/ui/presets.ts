@@ -236,6 +236,19 @@ export type CurrentSound =
     | { readonly status: "loading" | "unavailable" }
     | { readonly status: "ready"; readonly values: Readonly<Record<string, unknown>>; readonly saved: SoundValues };
 
+// Accepted values are immutable, so each value object is encoded once per field, however
+// often the preset and snapshot bars render. Large documents would otherwise be re-encoded
+// on every render of every bar.
+const savedForms = new WeakMap<PluginStateStored<unknown>, WeakMap<object, PluginStateJson>>();
+function savedForm(field: PluginStateStored<unknown>, value: unknown): PluginStateJson {
+    if (typeof value !== "object" || value === null) return field.codec.encode(value);
+    let forField = savedForms.get(field);
+    if (!forField) savedForms.set(field, forField = new WeakMap());
+    let saved = forField.get(value);
+    if (saved === undefined) forField.set(value, saved = field.codec.encode(value));
+    return saved;
+}
+
 /** Read every sound field from the rendered state. */
 export function useCurrentSound(definition: PluginStateFields): CurrentSound {
     const snapshot = usePluginStateSnapshot();
@@ -246,7 +259,7 @@ export function useCurrentSound(definition: PluginStateFields): CurrentSound {
         if (!field || !current || current.readiness.kind === "pending") return { status: "loading" };
         if (current.readiness.kind === "failed" || !("value" in current)) return { status: "unavailable" };
         values[key] = current.value;
-        saved[key] = field.kind === "parameter" ? Number(current.value) : field.codec.encode(current.value);
+        saved[key] = field.kind === "parameter" ? Number(current.value) : savedForm(field, current.value);
     }
     return { status: "ready", values, saved: Object.freeze(saved) };
 }

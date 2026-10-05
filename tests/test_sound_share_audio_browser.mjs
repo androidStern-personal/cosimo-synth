@@ -61,41 +61,30 @@ function renderState(document) {
 }
 
 async function buildFixture() {
-    const [context, modules, maximalModule, envelopeModule, shareModule] = await Promise.all([
+    const [context, modules, maximalModule, shareModule, studioModule] = await Promise.all([
         createCurrentSpeedrunContext(),
         loadSpeedrunModules(),
         loadUIModule(repoRoot, "tests/fixtures/sound-share-maximal.ts"),
-        loadUIModule(repoRoot, "ui/shared/sound-share-envelope.ts"),
         loadUIModule(repoRoot, "ui/shared/sound-share-link.ts"),
+        loadUIModule(repoRoot, "ui/speedrun/studio/patch-input.ts"),
     ]);
     const maximal = maximalModule.createMaximalSoundFixture(context.inputEndpoints);
-    const preset = {
-        kind: "cosimo.effectPreset",
-        version: 2,
-        effectID: context.options.currentContract.effectID,
-        presetID: "cosimo.share.audio-proof",
+    const source = modules.patchIO.intakePatch({
         label: maximal.label,
-        contract: context.options.currentContract,
         parameters: maximal.parameters,
-        storedState: {
-            "modulation.v6": maximal.storedState["modulation.v6"],
-            "articulations.v4": maximal.storedState["articulations.v4"],
-            "bounce.v1": null,
-        },
-    };
-    const envelope = envelopeModule.createSoundShareEnvelope({
-        preset,
-        supplementalStoredState: { "lane.v1": maximal.storedState["lane.v1"] },
-    });
-    const rawBytes = Buffer.byteLength(JSON.stringify(envelope));
-    assert.equal(rawBytes, 3_110_089);
-    const created = await shareModule.createSoundShareURL(envelope, "https://cosimo.test/");
+        storedState: maximal.storedState,
+    }, context.options);
+    assert.equal(source.ok, true, source.ok ? undefined : source.error.message);
+    // A link carries the same preset file the synth's Share sound link writes.
+    const presetFile = studioModule.createStudioSharePresetFile(source.value.document);
+    const rawBytes = Buffer.byteLength(presetFile);
+    assert.ok(rawBytes < shareModule.SOUND_SHARE_DECOMPRESSED_MAX_BYTES, `${rawBytes} bytes fit the link's decompressed limit`);
+    const created = await shareModule.createSoundShareURL(presetFile, "https://cosimo.test/");
     assert.equal(created.ok, true, created.ok ? undefined : created.error.message);
     const decoded = await shareModule.decodeSoundShareFragment(new URL(created.value.url).hash);
     assert.equal(decoded.ok, true, decoded.ok ? undefined : decoded.error.message);
-    const source = modules.patchIO.intakePatch(envelope, context.options);
-    const restored = modules.patchIO.intakePatch(decoded.value, context.options);
-    assert.equal(source.ok, true, source.ok ? undefined : source.error.message);
+    assert.equal(decoded.value, presetFile);
+    const restored = modules.patchIO.intakePatch(JSON.parse(decoded.value), context.options);
     assert.equal(restored.ok, true, restored.ok ? undefined : restored.error.message);
     assert.deepEqual(restored.value.document, source.value.document);
     assert.equal(Object.keys(source.value.document.parameters).length, maximal.facts.parameterCount);
@@ -104,7 +93,7 @@ async function buildFixture() {
     assert.equal(Object.keys(source.value.document.lane.devices).length, maximal.facts.laneDeviceCount);
 
     return {
-        envelope,
+        presetFile,
         rawBytes,
         renderRequest: {
             states: [renderState(source.value.document), renderState(restored.value.document)],
@@ -147,12 +136,11 @@ for (const [browserName, browserType] of [["Chromium", chromium], ["WebKit", web
     }, async () => {
         const { browser, page } = await openHarness(browserType);
         try {
-            const shared = await page.evaluate((envelope) => (
-                window.__COSIMO_SPEEDRUN_AUDIO_HARNESS__.measureSoundShareURL(envelope)
-            ), fixture.envelope);
+            const shared = await page.evaluate((presetFile) => (
+                window.__COSIMO_SPEEDRUN_AUDIO_HARNESS__.measureSoundShareURL(presetFile)
+            ), fixture.presetFile);
             assert.equal(shared.ok, true, shared.ok ? undefined : shared.message);
-            assert.equal(shared.lengthClass, "warning");
-            assert.equal(shared.length, browserName === "Chromium" ? 71_656 : 118_164);
+            assert.equal(shared.lengthClass, "warning", `${browserName} link of ${shared.length} characters`);
 
             const rendered = await page.evaluate((request) => (
                 window.__COSIMO_SPEEDRUN_AUDIO_HARNESS__.render(request)

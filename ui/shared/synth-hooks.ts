@@ -84,6 +84,7 @@ import {
     VOICE_ENHANCER_Q_ENDPOINT_ID,
 } from "./voice-enhancer";
 import { getModulationArticulationCellIndex } from "./modulation-runtime-program";
+import { articulationStateCodec } from "./synth-document-state";
 import {
     ARTICULATIONS_V4_STATE_KEY,
     createEmptyArticulationsState,
@@ -1360,7 +1361,7 @@ export function replaceVisibleArticulationSnapshotV4(
 }
 
 function articulationStatesEqual(left: ArticulationsState, right: ArticulationsState): boolean {
-    return JSON.stringify(serializeArticulationsV4(left)) === JSON.stringify(serializeArticulationsV4(right));
+    return articulationStateCodec.equals(left, right);
 }
 
 function useStoredArticulationEditorState(
@@ -1398,10 +1399,11 @@ function useStoredArticulationEditorState(
         const client = createSynthDocumentClient<ArticulationsState>(patchConnection, ARTICULATIONS_V4_STATE_KEY);
         clientRef.current = client;
         setHasHydrated(false);
+        // Every state update notifies this client; only a new articulation document needs projecting.
         const read = () => {
             const current = client.read();
             setHasHydrated(current !== undefined);
-            if (!current) return;
+            if (!current || current === stateRef.current) return;
             applyCurrentState(current);
         };
         const unsubscribe = client.subscribe(read);

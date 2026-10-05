@@ -16,7 +16,6 @@ export async function loadSpeedrunModules() {
         contractModule,
         modulationModule,
         articulationModule,
-        synthIdentity,
     ] = await Promise.all([
         loadUIModule(repoRoot, "ui/speedrun/patch-io.ts"),
         loadUIModule(repoRoot, "ui/speedrun/analyzer.ts"),
@@ -26,7 +25,6 @@ export async function loadSpeedrunModules() {
         loadUIModule(repoRoot, "ui/shared/effects/effect-state-contract.ts"),
         loadUIModule(repoRoot, "ui/shared/modulation.ts"),
         loadUIModule(repoRoot, "ui/shared/articulation-image.ts"),
-        loadUIModule(repoRoot, "ui/shared/effects/synth-preset-identity.ts"),
     ]);
     return {
         patchIO,
@@ -37,7 +35,6 @@ export async function loadSpeedrunModules() {
         contractModule,
         modulationModule,
         articulationModule,
-        synthIdentity,
     };
 }
 
@@ -49,9 +46,9 @@ export async function createCurrentSpeedrunContext() {
     const visibleParameters = inputEndpoints.filter((endpoint) => (
         endpoint.purpose === "parameter" && endpoint.annotation?.hidden !== true
     ));
-    const { contractModule, patchIO, synthIdentity } = await loadSpeedrunModules();
+    const { contractModule, patchIO } = await loadSpeedrunModules();
     const currentContract = contractModule.buildCanonicalPluginStateContract({
-        effectID: synthIdentity.SYNTH_PRESET_EFFECT_ID,
+        effectID: patchIO.SYNTH_CONTRACT_ID,
         parameters: visibleParameters,
         storedState: [
             { key: "modulation.v6", schemaVersion: 6, required: true },

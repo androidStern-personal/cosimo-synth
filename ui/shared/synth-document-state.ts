@@ -19,6 +19,16 @@ export const rackStateCodec: PluginStateCodec<LaneStateV2> = {
     equals: (a, b) => serializeLaneStateV2(a) === serializeLaneStateV2(b),
 };
 
+// An accepted document is frozen, so its saved text is computed once however often it is
+// compared. The articulation bank can be megabytes, and every state update compares it.
+const articulationText = new WeakMap<ArticulationsState, string>();
+export function savedArticulationText(value: ArticulationsState): string {
+    if (!Object.isFrozen(value)) return JSON.stringify(serializeArticulationsV4(value));
+    let text = articulationText.get(value);
+    if (text === undefined) articulationText.set(value, text = JSON.stringify(serializeArticulationsV4(value)));
+    return text;
+}
+
 /** Validate the saved schema independently; the paired modulation projection
  * validates route references against its current bank before engine delivery. */
 export const articulationStateCodec: PluginStateCodec<ArticulationsState> = {
@@ -42,6 +52,6 @@ export const articulationStateCodec: PluginStateCodec<ArticulationsState> = {
         freezeDocument(parsed.value);
         return { kind: "ok", value: parsed.value };
     },
-    encode: value => JSON.stringify(serializeArticulationsV4(value)),
-    equals: (a, b) => JSON.stringify(serializeArticulationsV4(a)) === JSON.stringify(serializeArticulationsV4(b)),
+    encode: savedArticulationText,
+    equals: (a, b) => a === b || savedArticulationText(a) === savedArticulationText(b),
 };

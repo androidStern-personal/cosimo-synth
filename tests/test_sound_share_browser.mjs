@@ -33,10 +33,13 @@ const productionPublicParameterIDs = Array.from(
     endpointID !== "hostSlot0Guard"
     && !/(?:^|,)\s*hidden:\s*true(?:\s*,|$)/u.test(annotationText)
 )).map(({ endpointID }) => endpointID).sort();
+// Bounce owns the source mode, so a preset (and so a link) never carries it.
+const presetParameterIDs = productionPublicParameterIDs.filter((endpointID) => endpointID !== "sourceMode");
+// COSIMO_WEB_BROWSER=chromium|webkit runs one engine, as in the web proof-of-concept suite.
 const engines = [
     { key: "chromium", label: "Chromium", launcher: chromium },
     { key: "webkit", label: "Safari/WebKit", launcher: webkit },
-];
+].filter(({ key }) => !process.env.COSIMO_WEB_BROWSER || process.env.COSIMO_WEB_BROWSER === key);
 const browsers = new Map();
 let server;
 
@@ -70,16 +73,6 @@ async function createContext(engineKey, viewport, { catalogTableCount = factoryC
             { origin: new URL(server.baseUrl).origin },
         );
     }
-    await context.addInitScript(() => {
-        window.__T46_SOUND_SHARE_TOASTS__ = [];
-        const appendChild = Node.prototype.appendChild;
-        Node.prototype.appendChild = function captureSoundShareToast(node) {
-            if (node instanceof HTMLElement && node.matches(".cpb-toast")) {
-                window.__T46_SOUND_SHARE_TOASTS__.push(node.textContent ?? "");
-            }
-            return appendChild.call(this, node);
-        };
-    });
     return context;
 }
 
@@ -87,117 +80,103 @@ async function openHarnessPage(context, url = server.baseUrl) {
     const page = await context.newPage();
     await page.goto(url, { waitUntil: "load" });
     await waitForHarnessReady(page);
-    await page.waitForFunction(() => {
-        const button = document.querySelector("cosimo-preset-bar")?.shadowRoot
-            ?.querySelector('[data-el="btn-share"]');
-        return button instanceof HTMLButtonElement && !button.disabled;
-    }, undefined, { timeout: 90_000 });
+    await presetBar(page).locator('[data-action="toggle-sound-actions"]').waitFor({ timeout: 90_000 });
     return page;
 }
 
 function presetBar(page) {
-    return page.locator("cosimo-preset-bar");
+    return page.locator('[data-role="synth-preset-bar"]');
 }
 
-async function clickPresetBarElement(page, elementID) {
-    const element = presetBar(page).locator(`[data-el="${elementID}"]`);
-    await element.waitFor({ state: "visible" });
-    await element.click();
+async function openSoundActions(page) {
+    const toggle = presetBar(page).locator('[data-action="toggle-sound-actions"]');
+    if (await toggle.getAttribute("aria-expanded") !== "true") await toggle.click();
 }
 
-async function clickPresetBarAction(page, action) {
-    const element = presetBar(page).locator(`[data-action="${action}"]`);
-    await element.waitFor({ state: "visible" });
-    await element.click();
+/** Start sharing from the Sound actions menu; resolves once the dialog or a refusal shows. */
+async function requestShare(page) {
+    await openSoundActions(page);
+    const share = presetBar(page).locator('[data-action="share"]');
+    await page.waitForFunction(() => {
+        const button = document.querySelector('[data-role="sound-actions"] [data-action="share"]');
+        return button instanceof HTMLButtonElement && !button.disabled;
+    }, undefined, { timeout: 90_000 });
+    await share.click();
 }
 
-async function openShareDialog(page, layout = "desktop") {
-    if (layout === "phone") {
-        await clickPresetBarElement(page, "shell-more");
-        await clickPresetBarElement(page, "menu-share");
-    } else {
-        await clickPresetBarElement(page, "btn-share");
-    }
-    const dialog = presetBar(page).locator('[data-el="share-dialog"]');
-    const errorToast = presetBar(page).locator(".cpb-toast.error").last();
+async function openShareDialog(page) {
+    await requestShare(page);
+    const dialog = presetBar(page).locator('[data-role="share-dialog"]');
+    const refusal = presetBar(page).getByRole("alert");
     await Promise.race([
         dialog.waitFor({ state: "visible" }),
-        errorToast.waitFor({ state: "visible" }),
+        refusal.waitFor({ state: "visible" }),
     ]);
-    if (await errorToast.isVisible()) {
-        throw new Error(`Share dialog did not open: ${await errorToast.innerText()}`);
+    if (await refusal.isVisible()) {
+        throw new Error(`Share dialog did not open: ${await refusal.innerText()}`);
     }
-    const link = await presetBar(page).locator('[data-el="share-link"]').inputValue();
-    assert.match(link, /#p=2\.[A-Za-z0-9_-]+$/u);
+    const link = await dialog.getByLabel("Sound link").inputValue();
+    assert.match(link, /#p=3\.[A-Za-z0-9_-]+$/u);
     return {
         link,
-        message: await presetBar(page).locator('[data-el="share-message"]').innerText(),
+        message: await dialog.locator("p").innerText(),
     };
+}
+
+async function readClipboard(page, engineKey) {
+    if (engineKey === "chromium") return page.evaluate(() => navigator.clipboard.readText());
+    return execFileSync("pbpaste", { encoding: "utf8" });
 }
 
 async function verifyExactClipboardCopy(page, engineKey, expectedLink) {
     if (engineKey === "webkit") {
         execFileSync("pbcopy", { input: "" });
     }
-    await clickPresetBarAction(page, "share-copy");
-    if (engineKey === "chromium") {
-        await page.waitForFunction(async (expected) => {
-            try {
-                return await navigator.clipboard.readText() === expected;
-            } catch {
-                return false;
-            }
-        }, expectedLink, { timeout: 15_000 });
-        return;
-    }
+    await presetBar(page).locator('[data-role="share-dialog"]').getByRole("button", { name: "Copy link" }).click();
     let clipboardText = "";
     for (let attempt = 0; attempt < 30; attempt += 1) {
-        clipboardText = execFileSync("pbpaste", { encoding: "utf8" });
+        clipboardText = await readClipboard(page, engineKey);
         if (clipboardText === expectedLink) return;
         await delay(100);
     }
-    assert.equal(clipboardText, expectedLink, "WebKit copied the complete link to the macOS clipboard");
+    assert.equal(clipboardText, expectedLink, `${engineKey} copied the complete link`);
 }
 
-async function captureCurrentSound(page) {
-    return page.evaluate(() => {
-        const presetBarElement = document.querySelector("cosimo-preset-bar");
-        const mutations = presetBarElement?._synthMutations;
-        const captured = mutations?.captureCurrentSound();
-        if (!captured?.ok) {
-            throw new Error(captured?.message ?? "Current sound capture is unavailable.");
-        }
-        return captured.value;
-    });
+/** The current sound as the preset file Copy JSON writes (the same file a link carries). */
+async function captureCurrentSound(page, engineKey) {
+    const compact = await presetBar(page).getAttribute("data-compact") !== null;
+    if (compact) await openSoundActions(page);
+    const presets = presetBar(page).locator(".bk-preset-bar");
+    const copied = presets.getByRole("status").filter({ hasText: "Copied" });
+    await copied.waitFor({ state: "detached", timeout: 5_000 });
+    await presets.getByRole("button", { name: "More", exact: true }).click();
+    await presets.getByRole("button", { name: "Copy JSON", exact: true }).click();
+    await copied.waitFor();
+    if (compact) await presetBar(page).locator('[data-action="toggle-sound-actions"]').click();
+    return JSON.parse(await readClipboard(page, engineKey));
 }
 
-function normalizedSoundDocument(envelope) {
-    const { presetID: _captureIdentity, ...preset } = envelope.preset;
-    return {
-        ...envelope,
-        preset,
-    };
+/** Compare sounds, not the names they travel under. */
+function normalizedSoundDocument(presetFile) {
+    return presetFile.values;
 }
 
 function parseDocument(value) {
     return typeof value === "string" ? JSON.parse(value) : value;
 }
 
-function assertMaximalDocument(envelope, facts) {
-    assert.equal(Object.keys(envelope.preset.parameters).length, facts.parameterCount);
-    assert.deepEqual(
-        Object.keys(envelope.preset.parameters).sort(),
-        productionPublicParameterIDs,
-        "maximal capture includes every current production public parameter",
-    );
-    assert.deepEqual(
-        Object.keys(envelope.preset.storedState).sort(),
-        envelope.preset.contract.storedState.map(({ key }) => key).sort(),
-    );
-    assert.deepEqual(Object.keys(envelope.supplementalStoredState), ["lane.v1"]);
-    const modulation = parseDocument(envelope.preset.storedState["modulation.v6"]);
-    const articulations = parseDocument(envelope.preset.storedState["articulations.v4"]);
-    const lane = parseDocument(envelope.supplementalStoredState["lane.v1"]);
+const SOUND_DOCUMENT_KEYS = ["articulations.v4", "lane.v1", "modulation.v6"];
+
+function assertMaximalDocument(presetFile, facts) {
+    assert.equal(presetFile.kind, "builder-kit.preset");
+    assert.equal(presetFile.plugin, "dev.cosimo.wavetable-synth");
+    const parameterIDs = Object.keys(presetFile.values).filter((key) => !SOUND_DOCUMENT_KEYS.includes(key)).sort();
+    assert.equal(parameterIDs.length, facts.parameterCount - 1, "every public parameter except the source mode");
+    assert.deepEqual(parameterIDs, presetParameterIDs, "maximal capture includes every current production preset parameter");
+    for (const key of SOUND_DOCUMENT_KEYS) assert.equal(key in presetFile.values, true, `the sound carries ${key}`);
+    const modulation = parseDocument(presetFile.values["modulation.v6"]);
+    const articulations = parseDocument(presetFile.values["articulations.v4"]);
+    const lane = parseDocument(presetFile.values["lane.v1"]);
     assert.equal(modulation.routes.length, facts.modulationRouteCount);
     assert.equal(
         modulation.msegSlots.reduce((sum, slot) => (
@@ -287,24 +266,20 @@ async function getRenderedSoundProjection(page) {
 }
 
 async function waitForSharedLoadDialog(page) {
-    const dialog = presetBar(page).locator('[data-el="shared-load-dialog"]');
+    const dialog = presetBar(page).locator('[data-role="shared-load-dialog"]');
     await dialog.waitFor({ state: "visible" });
     assert.equal((await dialog.locator("h3").textContent())?.trim(), "Load shared sound?");
 }
 
 async function confirmSharedLoad(page) {
-    await clickPresetBarAction(page, "shared-load-confirm");
+    await presetBar(page).locator('[data-role="shared-load-dialog"]').getByRole("button", { name: "Load" }).click();
     await page.waitForFunction(() => window.location.hash === "", undefined, { timeout: 30_000 });
     await page.waitForTimeout(900);
 }
 
-async function waitForErrorToast(page, expected) {
-    await page.waitForFunction(({ source, flags }) => {
-        const pattern = new RegExp(source, flags);
-        return window.__T46_SOUND_SHARE_TOASTS__?.some((message) => pattern.test(message));
-    }, { source: expected.source, flags: expected.flags }, { timeout: 10_000 });
-    const messages = await page.evaluate(() => window.__T46_SOUND_SHARE_TOASTS__ ?? []);
-    assert.equal(messages.some((message) => expected.test(message)), true, messages.join(" | "));
+async function waitForRefusal(page, expected) {
+    const refusal = presetBar(page).getByRole("alert").filter({ hasText: expected });
+    await refusal.waitFor({ state: "visible", timeout: 10_000 });
 }
 
 async function runMaximalCopyOpenFlow(engineKey, label) {
@@ -314,26 +289,28 @@ async function runMaximalCopyOpenFlow(engineKey, label) {
     try {
         const sourcePage = await openHarnessPage(desktopSourceContext);
         const facts = await installMaximalSound(sourcePage);
-        const sourceCurrent = await captureCurrentSound(sourcePage);
-        const shared = await openShareDialog(sourcePage, "desktop");
+        const sourceCurrent = await captureCurrentSound(sourcePage, engineKey);
+        const shared = await openShareDialog(sourcePage);
         desktopLink = shared.link;
         assert.match(shared.message, /Some apps may shorten it/u);
         assert.ok(desktopLink.length > 8_000);
         assert.ok(desktopLink.length <= 128_000);
         await verifyExactClipboardCopy(sourcePage, engineKey, desktopLink);
 
-        const { decodeSoundShareFragment } = await loadUIModule(repoRoot, "ui/shared/sound-share-link.ts");
+        const { decodeSoundShareFragment, SOUND_SHARE_DECOMPRESSED_MAX_BYTES } = await loadUIModule(repoRoot, "ui/shared/sound-share-link.ts");
         const decoded = await decodeSoundShareFragment(new URL(desktopLink).hash);
         assert.equal(decoded.ok, true, decoded.ok ? undefined : decoded.error.message);
-        desktopDocument = decoded.value;
+        desktopDocument = JSON.parse(decoded.value);
         assert.deepEqual(
             normalizedSoundDocument(desktopDocument),
             normalizedSoundDocument(sourceCurrent),
             "normal capture and link capture cover the same complete sound",
         );
         assertMaximalDocument(desktopDocument, facts);
-        const rawBytes = Buffer.byteLength(JSON.stringify(desktopDocument));
-        assert.ok(rawBytes < 3_000_000);
+        // A link carries each document in its saved form; the articulation bank is a JSON
+        // string, so its quotes are escaped. The maximal sound measures about 3.12 MB.
+        const rawBytes = Buffer.byteLength(decoded.value);
+        assert.ok(rawBytes < SOUND_SHARE_DECOMPRESSED_MAX_BYTES, `${rawBytes} bytes fit the link's decompressed limit`);
 
         let firstTargetRendered;
         const desktopTargetContext = await createContext(engineKey, { width: 1280, height: 900 });
@@ -341,7 +318,7 @@ async function runMaximalCopyOpenFlow(engineKey, label) {
             const targetPage = await openHarnessPage(desktopTargetContext, desktopLink);
             await waitForSharedLoadDialog(targetPage);
             await confirmSharedLoad(targetPage);
-            const targetCurrent = await captureCurrentSound(targetPage);
+            const targetCurrent = await captureCurrentSound(targetPage, engineKey);
             assert.deepEqual(
                 normalizedSoundDocument(targetCurrent),
                 normalizedSoundDocument(sourceCurrent),
@@ -351,10 +328,10 @@ async function runMaximalCopyOpenFlow(engineKey, label) {
             assert.equal(firstTargetRendered.errorText, null);
             assert.equal(firstTargetRendered.hasCanvas, true);
             assert.equal(firstTargetRendered.stageLabel, "XLNT-Xello");
-            assert.equal(firstTargetRendered.stageDebug.position, sourceCurrent.preset.parameters.oscAWavetablePosition);
-            assert.equal(firstTargetRendered.filterGraphState.base.mode, sourceCurrent.preset.parameters.filterMode);
-            assert.equal(firstTargetRendered.filterGraphState.base.cutoffHz, sourceCurrent.preset.parameters.filterCutoff);
-            assert.equal(firstTargetRendered.filterGraphState.base.q, sourceCurrent.preset.parameters.filterQ);
+            assert.equal(firstTargetRendered.stageDebug.position, sourceCurrent.values.oscAWavetablePosition);
+            assert.equal(firstTargetRendered.filterGraphState.base.mode, sourceCurrent.values.filterMode);
+            assert.equal(firstTargetRendered.filterGraphState.base.cutoffHz, sourceCurrent.values.filterCutoff);
+            assert.equal(firstTargetRendered.filterGraphState.base.q, sourceCurrent.values.filterQ);
             assert.ok(firstTargetRendered.msegPreviewState?.shapeACurvePath);
             assert.ok(firstTargetRendered.msegPreviewState?.shapeBCurvePath);
             assert.equal(new URL(targetPage.url()).hash, "");
@@ -368,7 +345,7 @@ async function runMaximalCopyOpenFlow(engineKey, label) {
             await waitForSharedLoadDialog(secondTargetPage);
             await confirmSharedLoad(secondTargetPage);
             assert.deepEqual(
-                normalizedSoundDocument(await captureCurrentSound(secondTargetPage)),
+                normalizedSoundDocument(await captureCurrentSound(secondTargetPage, engineKey)),
                 normalizedSoundDocument(sourceCurrent),
                 "a second clean desktop session restores the exact normalized maximal sound",
             );
@@ -389,14 +366,14 @@ async function runMaximalCopyOpenFlow(engineKey, label) {
     try {
         const phoneSourcePage = await openHarnessPage(phoneSourceContext);
         const facts = await installMaximalSound(phoneSourcePage);
-        const phoneCurrent = await captureCurrentSound(phoneSourcePage);
+        const phoneCurrent = await captureCurrentSound(phoneSourcePage, engineKey);
         assert.deepEqual(
             normalizedSoundDocument(phoneCurrent),
             normalizedSoundDocument(desktopDocument),
             "desktop and phone sessions capture the same maximal sound",
         );
         assertMaximalDocument(phoneCurrent, facts);
-        const shared = await openShareDialog(phoneSourcePage, "phone");
+        const shared = await openShareDialog(phoneSourcePage);
         assert.ok(shared.link.length > 8_000 && shared.link.length <= 128_000);
         await verifyExactClipboardCopy(phoneSourcePage, engineKey, shared.link);
 
@@ -406,7 +383,7 @@ async function runMaximalCopyOpenFlow(engineKey, label) {
             await waitForSharedLoadDialog(phoneTargetPage);
             await confirmSharedLoad(phoneTargetPage);
             assert.deepEqual(
-                normalizedSoundDocument(await captureCurrentSound(phoneTargetPage)),
+                normalizedSoundDocument(await captureCurrentSound(phoneTargetPage, engineKey)),
                 normalizedSoundDocument(phoneCurrent),
                 "a clean phone session restores the exact normalized maximal sound",
             );
@@ -431,54 +408,55 @@ async function runRefusalAndCancellationFlow(engineKey) {
     let baseline;
     try {
         const baselinePage = await openHarnessPage(guardedContext);
-        baseline = await captureCurrentSound(baselinePage);
+        baseline = await captureCurrentSound(baselinePage, engineKey);
         validLink = (await openShareDialog(baselinePage)).link;
         await baselinePage.close();
 
         const validHash = new URL(validLink).hash;
         const overCapText = JSON.stringify({
-            format: "cosimo.soundShare",
-            version: 2,
-            preset: { padding: "x".repeat(3_250_000) },
-            supplementalStoredState: {},
+            kind: "builder-kit.preset",
+            version: 1,
+            plugin: "dev.cosimo.wavetable-synth",
+            name: "x".repeat(3_250_000),
+            values: {},
         });
         assert.ok(Buffer.byteLength(overCapText) > 3_250_000);
-        const overCapHash = `#p=2.${deflateSync(Buffer.from(overCapText)).toString("base64url")}`;
+        const overCapHash = `#p=3.${deflateSync(Buffer.from(overCapText)).toString("base64url")}`;
         assert.ok(overCapHash.length < 128_000);
         const cases = [
-            { label: "malformed", hash: "#p=2.not_base64!", error: /not valid base64url/iu },
-            { label: "truncated", hash: validHash.slice(0, Math.ceil(validHash.length / 2)), error: /decompress|incomplete|invalid|truncated/iu },
-            { label: "unsupported", hash: "#p=3.AAAA", error: /version .* not supported/iu },
-            { label: "oversized", hash: `#p=2.${"A".repeat(128_001)}`, error: /exceeds 128,000 characters/iu },
+            { label: "malformed", hash: "#p=3.not_base64!", error: /not valid base64url/iu },
+            { label: "truncated", hash: validHash.slice(0, Math.ceil(validHash.length / 2)), error: /decompress|incomplete|invalid|truncated|not valid/iu },
+            { label: "retired version", hash: "#p=2.AAAA", error: /version .* not supported/iu },
+            { label: "oversized", hash: `#p=3.${"A".repeat(128_001)}`, error: /exceeds 128,000 characters/iu },
             { label: "decompressed over-cap", hash: overCapHash, error: /expands beyond 3,250,000 bytes/iu },
         ];
         for (const invalidCase of cases) {
             const page = await openHarnessPage(guardedContext, `${server.baseUrl}${invalidCase.hash}`);
             try {
-                await waitForErrorToast(page, invalidCase.error);
+                await waitForRefusal(page, invalidCase.error);
             } catch (error) {
-                const messages = await page.evaluate(() => window.__T46_SOUND_SHARE_TOASTS__ ?? []);
-                throw new Error(`${invalidCase.label} refusal was not presented; observed: ${messages.join(" | ")}`, {
+                const shown = await presetBar(page).getByRole("alert").allInnerTexts();
+                throw new Error(`${invalidCase.label} refusal was not presented; observed: ${shown.join(" | ")}`, {
                     cause: error,
                 });
             }
             assert.deepEqual(
-                normalizedSoundDocument(await captureCurrentSound(page)),
+                normalizedSoundDocument(await captureCurrentSound(page, engineKey)),
                 normalizedSoundDocument(baseline),
                 `invalid fragment ${invalidCase.hash.slice(0, 14)} is non-destructive`,
             );
             assert.equal(new URL(page.url()).hash, invalidCase.hash);
-            assert.equal(await presetBar(page).locator('[data-el="shared-load-dialog"]').isVisible(), false);
+            assert.equal(await presetBar(page).locator('[data-role="shared-load-dialog"]').isVisible(), false);
             await page.close();
         }
 
         const cancelPage = await openHarnessPage(guardedContext, validLink);
         await waitForSharedLoadDialog(cancelPage);
-        const beforeCancel = await captureCurrentSound(cancelPage);
-        await clickPresetBarAction(cancelPage, "shared-load-cancel");
-        await presetBar(cancelPage).locator('[data-el="shared-load-dialog"]').waitFor({ state: "hidden" });
+        const beforeCancel = await captureCurrentSound(cancelPage, engineKey);
+        await presetBar(cancelPage).locator('[data-role="shared-load-dialog"]').getByRole("button", { name: "Cancel" }).click();
+        await presetBar(cancelPage).locator('[data-role="shared-load-dialog"]').waitFor({ state: "detached" });
         assert.deepEqual(
-            normalizedSoundDocument(await captureCurrentSound(cancelPage)),
+            normalizedSoundDocument(await captureCurrentSound(cancelPage, engineKey)),
             normalizedSoundDocument(beforeCancel),
         );
         assert.deepEqual(normalizedSoundDocument(beforeCancel), normalizedSoundDocument(baseline));
@@ -508,11 +486,11 @@ async function runRefusalAndCancellationFlow(engineKey) {
     try {
         const targetPage = await openHarnessPage(unavailableTargetContext, unavailableLink);
         await waitForSharedLoadDialog(targetPage);
-        const beforeLoad = await captureCurrentSound(targetPage);
-        await clickPresetBarAction(targetPage, "shared-load-confirm");
-        await waitForErrorToast(targetPage, /unavailable wavetable for Oscillator A/iu);
+        const beforeLoad = await captureCurrentSound(targetPage, engineKey);
+        await presetBar(targetPage).locator('[data-role="shared-load-dialog"]').getByRole("button", { name: "Load" }).click();
+        await waitForRefusal(targetPage, /unavailable wavetable for Oscillator A/iu);
         assert.deepEqual(
-            normalizedSoundDocument(await captureCurrentSound(targetPage)),
+            normalizedSoundDocument(await captureCurrentSound(targetPage, engineKey)),
             normalizedSoundDocument(beforeLoad),
         );
         assert.equal(new URL(targetPage.url()).hash, new URL(unavailableLink).hash);
@@ -522,14 +500,14 @@ async function runRefusalAndCancellationFlow(engineKey) {
             window.__COSIMO_DESKTOP_HARNESS__.setParameterValue("oscCWavetableSelect", 81);
         });
         await capturePage.waitForTimeout(100);
-        const beforeCapture = await captureCurrentSound(capturePage);
-        await clickPresetBarElement(capturePage, "btn-share");
-        await waitForErrorToast(capturePage, /unavailable wavetable for Oscillator C/iu);
+        const beforeCapture = await captureCurrentSound(capturePage, engineKey);
+        await requestShare(capturePage);
+        await waitForRefusal(capturePage, /unavailable wavetable for Oscillator C/iu);
         assert.deepEqual(
-            normalizedSoundDocument(await captureCurrentSound(capturePage)),
+            normalizedSoundDocument(await captureCurrentSound(capturePage, engineKey)),
             normalizedSoundDocument(beforeCapture),
         );
-        assert.equal(await presetBar(capturePage).locator('[data-el="share-dialog"]').isVisible(), false);
+        assert.equal(await presetBar(capturePage).locator('[data-role="share-dialog"]').count(), 0);
     } finally {
         await unavailableTargetContext.close();
     }
@@ -541,14 +519,14 @@ async function runRefusalAndCancellationFlow(engineKey) {
             window.__COSIMO_DESKTOP_HARNESS__.setParameterValue("sourceMode", 1);
         });
         await bouncePage.waitForTimeout(100);
-        const beforeBounceShare = await captureCurrentSound(bouncePage);
-        await clickPresetBarElement(bouncePage, "btn-share");
-        await waitForErrorToast(bouncePage, /Bounced sounds can't be shared by link yet/u);
+        const beforeBounceShare = await captureCurrentSound(bouncePage, engineKey);
+        await requestShare(bouncePage);
+        await waitForRefusal(bouncePage, /Bounced sounds can't be shared by link yet/u);
         assert.deepEqual(
-            normalizedSoundDocument(await captureCurrentSound(bouncePage)),
+            normalizedSoundDocument(await captureCurrentSound(bouncePage, engineKey)),
             normalizedSoundDocument(beforeBounceShare),
         );
-        assert.equal(await presetBar(bouncePage).locator('[data-el="share-dialog"]').isVisible(), false);
+        assert.equal(await presetBar(bouncePage).locator('[data-role="share-dialog"]').count(), 0);
     } finally {
         await bounceContext.close();
     }

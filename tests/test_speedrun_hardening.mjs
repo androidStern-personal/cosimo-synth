@@ -99,9 +99,9 @@ test("maximal-patch URL compression remains warning-class and copyable", async (
         catalog,
         webRootURL: new URL("https://cosimo.test/app/"),
     };
-    const envelope = patchInput.createStudioShareEnvelope(intake.value.document, runtime);
-    const rawBytes = new TextEncoder().encode(JSON.stringify(envelope)).byteLength;
-    const fragment = await share.encodeSoundShareFragment(envelope);
+    const presetFile = patchInput.createStudioSharePresetFile(intake.value.document);
+    const rawBytes = new TextEncoder().encode(presetFile).byteLength;
+    const fragment = await share.encodeSoundShareFragment(presetFile);
     assert.equal(fragment.ok, true, fragment.error?.message);
     const candidateURL = new URL(runtime.webRootURL);
     candidateURL.hash = fragment.value.slice(1);

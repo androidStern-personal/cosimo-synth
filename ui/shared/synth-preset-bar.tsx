@@ -1,4 +1,4 @@
-import { useEffect, useId, useRef, useState, type ReactNode } from "react";
+import { memo, useEffect, useId, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
 
 import { PresetBar, SnapshotBar, usePluginState, usePresets } from "../../kit/index";
 import type { PluginStateFields } from "../../kit/ui/plugin-state-definition";
@@ -58,9 +58,28 @@ function canUseSoundLinks() {
     }
 }
 
-/** The synth's preset row: the kit's preset and snapshot bars plus sound links, Bounce and the shell controls. */
-export function SynthPresetBar(props: SynthPresetBarProps) {
-    const { compact, polishMeter, wavetableTables, onSoundReplaced } = props;
+/**
+ * The synth's preset row: the kit's preset and snapshot bars plus sound links, Bounce and the
+ * shell controls. The phone row keeps the ADR-026 composition: Back and the Polish meter on the
+ * left, the preset name centered on the row whatever the Back state, and one menu on the right.
+ */
+export function SynthPresetBar({ polishMeter, backAvailable, onBack, ...controls }: SynthPresetBarProps) {
+    // The meter updates at display rate; it sits outside the preset controls so they do not re-render with it.
+    return <div data-role="synth-preset-bar" data-compact={controls.compact ? "" : undefined}
+        className={`relative min-w-0 text-[11px] text-slate-100 ${controls.compact ? "h-[var(--compact-shell-row,40px)]" : "flex items-center gap-2 px-3 py-1.5"}`}>
+        {controls.compact && <div data-role="shell-left-cluster" className="absolute left-0 top-0 z-[2] flex h-full w-[134px] items-center gap-0.5">
+            <button type="button" data-action="shell-back" aria-label="Back" disabled={!backAvailable} onClick={onBack}
+                className="grid h-full w-10 shrink-0 place-items-center text-[20px] leading-none text-slate-200/80 disabled:pointer-events-none disabled:invisible">&#8249;</button>
+            <PolishMeter frame={polishMeter} />
+        </div>}
+        <PresetControls {...controls} />
+    </div>;
+}
+
+type PresetControlsProps = Omit<SynthPresetBarProps, "polishMeter" | "backAvailable" | "onBack">;
+
+const PresetControls = memo(function PresetControls(props: PresetControlsProps) {
+    const { compact, wavetableTables, onSoundReplaced } = props;
     const presets = usePresets(synthPluginState);
     const editor = usePluginState(synthPluginState);
     const sound = useCurrentSound(synthPluginState);
@@ -182,27 +201,21 @@ export function SynthPresetBar(props: SynthPresetBarProps) {
         </div>}
     </>;
 
-    // The phone row keeps the ADR-026 composition: Back and the Polish meter on the left,
-    // the preset name centered on the row whatever the Back state, and one menu on the right.
-    return <div data-role="synth-preset-bar" data-compact={compact ? "" : undefined}
-        className={`relative min-w-0 text-[11px] text-slate-100 ${compact ? "h-[var(--compact-shell-row,40px)]" : "flex items-center gap-2 px-3 py-1.5"}`}
-        onKeyDown={event => { if (event.key === "Escape" && menuOpen) { event.preventDefault(); setMenuOpen(false); } }}>
+    const closeMenuOnEscape = (event: KeyboardEvent<HTMLElement>) => {
+        if (event.key === "Escape" && menuOpen) { event.preventDefault(); setMenuOpen(false); }
+    };
+    return <>
         {compact ? <>
-            <div data-role="shell-left-cluster" className="absolute left-0 top-0 z-[2] flex h-full w-[134px] items-center gap-0.5">
-                <button type="button" data-action="shell-back" aria-label="Back" disabled={!props.backAvailable} onClick={props.onBack}
-                    className="grid h-full w-10 shrink-0 place-items-center text-[20px] leading-none text-slate-200/80 disabled:pointer-events-none disabled:invisible">&#8249;</button>
-                <PolishMeter frame={polishMeter} />
-            </div>
             <p data-role="preset-name"
                 className="absolute left-1/2 top-0 z-[1] m-0 h-full w-[max(0px,calc(100%-268px))] -translate-x-1/2 truncate text-center text-[13px] leading-[var(--compact-shell-row,40px)]">
                 {presets.active?.name ?? "No preset"}
                 {presets.dirty && <span data-role="preset-modified" className="text-[var(--editor-accent-start)]" aria-label="Modified"> ●</span>}
             </p>
-            <div className="absolute right-0 top-0 z-[2] h-full">{menu}</div>
+            <div className="absolute right-0 top-0 z-[2] h-full" onKeyDown={closeMenuOnEscape}>{menu}</div>
         </> : <>
             <PresetBar definition={synthPluginState} className="min-w-0" />
             <SnapshotBar definition={synthPluginState} />
-            <div className="relative ml-auto shrink-0">{menu}</div>
+            <div className="relative ml-auto shrink-0" onKeyDown={closeMenuOnEscape}>{menu}</div>
         </>}
         {sharedSound && <Dialog role="alertdialog" name="shared-load-dialog" title="Load shared sound?">
             <p className="m-0">Load “{sharedSound.name}” from this link? You can undo it.</p>
@@ -225,8 +238,8 @@ export function SynthPresetBar(props: SynthPresetBarProps) {
             {notice.text}
             {notice.kind === "error" && <button type="button" onClick={() => setNotice(null)} className="underline">Dismiss</button>}
         </div>}
-    </div>;
-}
+    </>;
+});
 
 async function copyText(text: string) {
     try {
