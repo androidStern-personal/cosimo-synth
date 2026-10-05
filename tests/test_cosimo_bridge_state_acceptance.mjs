@@ -11,7 +11,7 @@ export { acquireSynthViewState } from "./ui/shared/synth-state-client";
 export { synthPluginState, synthParameterByEndpoint } from "./ui/shared/synth-plugin-state";
 export { createDefaultModulationState, createDefaultRoute, MODULATION_STATE_KEY } from "./ui/shared/modulation";
 export { createPluginStateSession } from "./kit/ui/plugin-state-session";
-`, resolveDir: root }, bundle: true, format: "esm", platform: "node", target: "es2022", write: false });
+`, resolveDir: root }, bundle: true, format: "esm", platform: "node", target: "es2022", write: false, loader: { ".css": "text" } });
 const api = await import(`data:text/javascript;base64,${Buffer.from(bundled.outputFiles[0].text).toString("base64")}`);
 const key = api.MODULATION_STATE_KEY;
 

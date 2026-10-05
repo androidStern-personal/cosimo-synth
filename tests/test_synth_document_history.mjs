@@ -12,7 +12,7 @@ export { createSynthDocumentClient } from './ui/shared/synth-document-client';
 export { createDefaultLaneStateV2, setLaneDeviceParam, setLaneDeviceEnabled } from './ui/shared/lane-state-v2';
 export { getLaneSlotId, getLaneSlotParamIndex } from './ui/shared/lane-slot-params';
 export { createEmptyArticulationsState } from './ui/shared/articulation-image';
-`, resolveDir: root }, bundle: true, platform: "node", format: "esm", write: false });
+`, resolveDir: root }, bundle: true, platform: "node", format: "esm", write: false, loader: { ".css": "text" } });
 const api = await import(`data:text/javascript;base64,${Buffer.from(bundle.outputFiles[0].text).toString("base64")}`);
 
 test("rack gestures, articulation and parameters share Undo; actual delivery updates independent engine records and preserves automated trim", async t => {
