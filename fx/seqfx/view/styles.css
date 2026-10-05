@@ -82,13 +82,28 @@ select {
 }
 
 .seqfx-preset-row {
-    margin: 0 0 10px;
-    background: #101923;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px 16px;
+    margin: 10px 18px;
+    color: var(--seqfx-shell-ink);
 }
 
-.seqfx-preset-row cosimo-effect-header {
-    display: block;
-    background: #101923;
+.seqfx-preset-row [role="alert"] {
+    flex-basis: 100%;
+    margin: 0;
+    color: #a23a2a;
+}
+
+.seqfx-status {
+    margin: 18px;
+    color: var(--seqfx-shell-ink);
+}
+
+.seqfx-status p {
+    margin: 0 0 10px;
 }
 
 .seqfx-topbar {

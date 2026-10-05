@@ -1,8 +1,7 @@
+import type { PluginStateCodec, PluginStateJson } from "../../../kit/index";
 import {
     SEQFX_EFFECT_IDS,
     SEQFX_EFFECT_TYPES,
-    SEQFX_EFFECT_TYPE_NAMES,
-    SEQFX_EFFECT_TYPE_SHORT_NAMES,
     SEQFX_PARAM_COUNT,
     getSeqFxEffectDefinition,
     getSeqFxDefaultParams,
@@ -26,10 +25,8 @@ export {
 } from "./seqfx-effect-definitions";
 export type { SeqFxEffectDefinition, SeqFxEffectLifecycle, SeqFxEffectType, SeqFxFactoryEffectPreset, SeqFxParameterDefinition } from "./seqfx-effect-definitions";
 
-export const SEQFX_STATE_KEY = "seqfx.v7";
-export const SEQFX_LEGACY_STATE_KEY = "seqfx.v6";
-export const SEQFX_STATE_VERSION = 7;
-export const SEQFX_LEGACY_STATE_VERSION = 5;
+/** The format of the saved pattern document; parsing rejects any other. */
+export const SEQFX_STATE_VERSION = 8;
 export const SEQFX_STEP_COUNT = 32;
 export const SEQFX_LANE_COUNT = 4;
 export const SEQFX_PATTERN_COUNT = 12;
@@ -129,12 +126,11 @@ export type SeqFxLane = {
 };
 
 export type SeqFxPattern = {
-    revision: number;
     lanes: SeqFxLaneVector;
 };
 
 export type SeqFxState = {
-    /** Dense, normalized editing/runtime projection. Persistence uses SeqFxStoredStateV7. */
+    /** Dense, normalized editing projection. The project saves the sparse SeqFxStoredState. */
     version: typeof SEQFX_STATE_VERSION;
     patterns: SeqFxPatternVector;
 };
@@ -183,23 +179,13 @@ export type SeqFxStoredChain = {
 };
 
 export type SeqFxStoredPattern = {
-    revision: number;
     chains: SeqFxStoredChain[];
 };
 
-export type SeqFxStoredStateV7 = {
+/** The sparse pattern document saved with the project: only blocks and the values that differ from defaults. */
+export type SeqFxStoredState = {
     version: typeof SEQFX_STATE_VERSION;
     patterns: SeqFxStoredPattern[];
-};
-
-type SeqFxLegacyStateV5 = Omit<SeqFxState, "version"> & {
-    version: typeof SEQFX_LEGACY_STATE_VERSION;
-};
-
-export type SeqFxStoredStateParseResult = {
-    state: SeqFxState;
-    sourceVersion: typeof SEQFX_STATE_VERSION | typeof SEQFX_LEGACY_STATE_VERSION;
-    migrated: boolean;
 };
 
 export class SeqFxStateParseError extends Error {
@@ -214,10 +200,9 @@ export class SeqFxStateParseError extends Error {
     }
 }
 
-export type SeqPatternUpload = {
+/** One pattern's steps in the layout of the DSP's SeqPatternUpload event, without its delivery fields. */
+export type SeqPatternContent = {
     patternIndex: number;
-    revision: number;
-    authoritative: boolean;
     activeSteps: boolean[][];
     triggerSteps: boolean[][];
     effectTypes: number[][];
@@ -419,7 +404,7 @@ export type SeqFxLoopClipboard = {
 };
 
 const FILTER_PARAM_CUTOFF = 1;
-const FILTER_PARAM_LEGACY_END_CUTOFF = 2;
+const FILTER_PARAM_END_CUTOFF = 2;
 
 function clamp(value: number, min: number, max: number): number {
     if (!Number.isFinite(value)) {
@@ -571,7 +556,7 @@ function defaultAuxForParams(params: number[], effectType: number = SEQFX_EFFECT
             end: normalizeParam(
                 SEQFX_EFFECT_TYPES.filter,
                 FILTER_PARAM_CUTOFF,
-                Number(params[FILTER_PARAM_LEGACY_END_CUTOFF] ?? params[FILTER_PARAM_CUTOFF] ?? 500),
+                Number(params[FILTER_PARAM_END_CUTOFF] ?? params[FILTER_PARAM_CUTOFF] ?? 500),
             ),
         };
     }
@@ -893,10 +878,6 @@ function assertAuxStateValuesInRange(effectType: number, aux: SeqFxAuxState | un
 
 export function assertSeqFxStateValuesInRange(state: SeqFxState) {
     state.patterns.forEach((pattern, patternIndex) => {
-        if (!Number.isInteger(pattern.revision) || pattern.revision < 1) {
-            throw new Error(`SeqFX pattern ${patternIndex} revision must be a positive integer.`);
-        }
-
         pattern.lanes.forEach((lane, laneIndex) => {
             lane.steps.forEach((step, stepIndex) => {
                 const hasEffectType = Object.prototype.hasOwnProperty.call(step, "effectType");
@@ -974,7 +955,6 @@ function createDefaultStep(lane: number): SeqFxStep {
 
 function createDefaultPattern(): SeqFxPattern {
     return {
-        revision: 1,
         lanes: createFixedDenseArray(SEQFX_LANE_COUNT, (lane) => ({
             steps: createFixedDenseArray(SEQFX_STEP_COUNT, () => createDefaultStep(lane)),
         })),
@@ -994,7 +974,6 @@ function cloneState(state: SeqFxState): SeqFxState {
         patterns: createFixedDenseArray(SEQFX_PATTERN_COUNT, (patternIndex) => {
             const pattern = state.patterns[patternIndex];
             return {
-                revision: pattern.revision,
                 lanes: createFixedDenseArray(SEQFX_LANE_COUNT, (laneIndex) => {
                     const lane = pattern.lanes[laneIndex];
                     return {
@@ -1085,7 +1064,6 @@ function normalizePattern(candidate: unknown): SeqFxPattern {
     const rawLanes = Array.isArray(pattern["lanes"]) ? pattern["lanes"] : [];
 
     return repairPatternBlocks({
-        revision: positiveIntegerOrFallback(pattern["revision"], 1),
         lanes: createFixedDenseArray(SEQFX_LANE_COUNT, (lane) => {
             const rawLane = rawLanes[lane];
             const rawSteps = isPlainRecord(rawLane) && Array.isArray(rawLane["steps"])
@@ -1121,32 +1099,8 @@ function normalizeDenseSeqFxState(candidate: unknown): SeqFxState {
     };
 }
 
-function looksLikeSparseV7(candidate: unknown): boolean {
-    if (!isPlainRecord(candidate) || candidate.version !== SEQFX_STATE_VERSION || !Array.isArray(candidate.patterns)) {
-        return false;
-    }
-
-    return candidate.patterns.length === 0
-        || isPlainRecord(candidate.patterns[0]) && Array.isArray(candidate.patterns[0].chains);
-}
-
-export function normalizeSeqFxState(candidate: unknown): SeqFxState {
-    if (typeof candidate === "string") {
-        try {
-            return normalizeSeqFxState(JSON.parse(candidate));
-        } catch {
-            return createDefaultSeqFxState();
-        }
-    }
-
-    if (looksLikeSparseV7(candidate)) {
-        try {
-            return parseStrictSeqFxStateV7(candidate);
-        } catch {
-            return createDefaultSeqFxState();
-        }
-    }
-
+/** A dense copy of an editing state, with every value clamped to its limits and every block repaired. */
+export function normalizeSeqFxState(candidate: SeqFxState): SeqFxState {
     return normalizeDenseSeqFxState(candidate);
 }
 
@@ -1308,12 +1262,11 @@ function serializeSparseBlock(pattern: SeqFxPattern, block: SeqFxBlock): SeqFxSt
     return storedBlock;
 }
 
-export function projectSeqFxStoredStateV7(state: SeqFxState): SeqFxStoredStateV7 {
+export function projectStoredSeqFxState(state: SeqFxState): SeqFxStoredState {
     const normalized = normalizeDenseSeqFxState(state);
     return {
         version: SEQFX_STATE_VERSION,
         patterns: normalized.patterns.map((pattern) => ({
-            revision: pattern.revision,
             chains: pattern.lanes.map((_lane, lane) => ({
                 blocks: getSeqFxLaneBlocks(pattern, lane).map((block) => serializeSparseBlock(pattern, block)),
             })),
@@ -1321,24 +1274,20 @@ export function projectSeqFxStoredStateV7(state: SeqFxState): SeqFxStoredStateV7
     };
 }
 
+const serializedStates = new WeakMap<SeqFxState, string>();
+
+/** The saved document as JSON text; equal text means an equal sound. */
 export function serializeSeqFxState(state: SeqFxState): string {
-    return JSON.stringify(projectSeqFxStoredStateV7(state));
+    let text = serializedStates.get(state);
+    if (text === undefined) {
+        text = JSON.stringify(projectStoredSeqFxState(state));
+        serializedStates.set(state, text);
+    }
+    return text;
 }
 
 function failParse(code: string, path: string, message: string): never {
     throw new SeqFxStateParseError(code, path, message);
-}
-
-function parseStateCandidate(value: unknown): unknown {
-    if (typeof value !== "string") {
-        return value;
-    }
-
-    try {
-        return JSON.parse(value);
-    } catch (error) {
-        failParse("invalid_json", "$", error instanceof Error ? error.message : "invalid JSON");
-    }
 }
 
 function requireRecord(value: unknown, path: string): Record<string, unknown> {
@@ -1354,20 +1303,6 @@ function assertAllowedKeys(value: Record<string, unknown>, allowed: readonly str
     if (unknown) {
         failParse("unknown_field", `${path}.${unknown}`, "is not part of this SeqFX state schema");
     }
-}
-
-function requireField(value: Record<string, unknown>, key: string, path: string): unknown {
-    if (!hasOwnValue(value, key)) {
-        failParse("missing_field", `${path}.${key}`, "is required");
-    }
-    return value[key];
-}
-
-function requireBoolean(value: unknown, path: string): boolean {
-    if (typeof value !== "boolean") {
-        failParse("invalid_boolean", path, "must be boolean");
-    }
-    return value;
 }
 
 function requireInteger(value: unknown, min: number, max: number, path: string): number {
@@ -1553,9 +1488,9 @@ function parseStoredStep(
     };
 }
 
-export function parseStrictSeqFxStateV7(value: unknown): SeqFxState {
-    const parsed = parseStateCandidate(value);
-    const rawState = requireRecord(parsed, "$");
+/** Parse a saved pattern document strictly: any unknown field or out-of-range value is an error naming its path. */
+export function parseStoredSeqFxState(value: unknown): SeqFxState {
+    const rawState = requireRecord(value, "$");
     assertAllowedKeys(rawState, ["version", "patterns"], "$");
     if (rawState.version !== SEQFX_STATE_VERSION) {
         failParse("unsupported_version", "$.version", `must be ${SEQFX_STATE_VERSION}`);
@@ -1568,14 +1503,12 @@ export function parseStrictSeqFxStateV7(value: unknown): SeqFxState {
     rawState.patterns.forEach((rawPattern, patternIndex) => {
         const patternPath = `$.patterns[${patternIndex}]`;
         const storedPattern = requireRecord(rawPattern, patternPath);
-        assertAllowedKeys(storedPattern, ["revision", "chains"], patternPath);
-        const revision = requireInteger(storedPattern.revision, 1, Number.MAX_SAFE_INTEGER, `${patternPath}.revision`);
+        assertAllowedKeys(storedPattern, ["chains"], patternPath);
         if (!Array.isArray(storedPattern.chains) || storedPattern.chains.length !== SEQFX_LANE_COUNT) {
             failParse("invalid_chain_count", `${patternPath}.chains`, `must contain exactly ${SEQFX_LANE_COUNT} chains`);
         }
 
         const pattern = createDefaultPattern();
-        pattern.revision = revision;
         storedPattern.chains.forEach((rawChain, chainIndex) => {
             const chainPath = `${patternPath}.chains[${chainIndex}]`;
             const chain = requireRecord(rawChain, chainPath);
@@ -1641,480 +1574,33 @@ export function parseStrictSeqFxStateV7(value: unknown): SeqFxState {
     return state;
 }
 
-const LEGACY_PARAM_LIMITS: Readonly<Record<number, readonly (readonly [number, number])[]>> = {
-    [SEQFX_EFFECT_TYPES.filter]: [[0, 2], [20, 20_000], [20, 20_000], [0.1, 20], [0.25, 4], [0, 0], [0, 0], [0, 0]],
-    [SEQFX_EFFECT_TYPES.crusher]: [[4, 16], [1, 64], [0, 36], [0, 0], [0, 0], [0, 0], [0, 0], [0, 0]],
-    [SEQFX_EFFECT_TYPES.tapeStop]: [[0.05, 4], [0.25, 4], [0.25, 4], [0, 100], [0, 1], [0, 0], [0, 0], [0, 0]],
-    [SEQFX_EFFECT_TYPES.stutter]: [[2, 32], [0.5, 2], [0, 1], [0, 1], [0, 0], [0, 0], [0, 0], [0, 0]],
-};
-
-function parseLegacyEffectType(value: unknown, path: string): SeqFxEffectType {
-    const effectType = requireInteger(value, SEQFX_EFFECT_TYPES.empty, SEQFX_EFFECT_TYPES.stutter, path);
-    switch (effectType) {
-        case SEQFX_EFFECT_TYPES.empty: return SEQFX_EFFECT_TYPES.empty;
-        case SEQFX_EFFECT_TYPES.filter: return SEQFX_EFFECT_TYPES.filter;
-        case SEQFX_EFFECT_TYPES.crusher: return SEQFX_EFFECT_TYPES.crusher;
-        case SEQFX_EFFECT_TYPES.tapeStop: return SEQFX_EFFECT_TYPES.tapeStop;
-        case SEQFX_EFFECT_TYPES.stutter: return SEQFX_EFFECT_TYPES.stutter;
-        default: return failParse("invalid_effect_type", path, `contains unknown legacy effect ID ${effectType}`);
-    }
+/** An editing state from the view, which the codec saves in canonical sparse form. */
+function isEditingState(value: unknown): value is SeqFxState {
+    return isPlainRecord(value) && value.version === SEQFX_STATE_VERSION && Array.isArray(value.patterns)
+        && value.patterns.length === SEQFX_PATTERN_COUNT
+        && value.patterns.every((pattern) => isPlainRecord(pattern) && Array.isArray(pattern.lanes));
 }
 
-function parseLegacyMemoryEffectType(key: string, path: string): SeqFxEffectType {
-    const effectType = parseLegacyEffectType(Number(key), path);
-    if (String(effectType) !== key || effectType === SEQFX_EFFECT_TYPES.empty) {
-        failParse("invalid_effect_type", path, `contains unknown legacy effect ID ${key}`);
-    }
-    return effectType;
-}
-
-function legacyParamLimits(effectType: SeqFxEffectType, paramIndex: number): readonly [number, number] {
-    return LEGACY_PARAM_LIMITS[effectType]?.[paramIndex] ?? [0, 0];
-}
-
-function parseLegacyParamVector(effectType: SeqFxEffectType, value: unknown, path: string): SeqFxParamVector {
-    if (!Array.isArray(value) || value.length !== SEQFX_PARAM_COUNT) {
-        failParse("invalid_params", path, `must contain exactly ${SEQFX_PARAM_COUNT} parameters`);
-    }
-
-    return createFixedDenseArray(SEQFX_PARAM_COUNT, (paramIndex) => {
-        const rawParam = value[paramIndex];
-        const [min, max] = legacyParamLimits(effectType, paramIndex);
-        const param = requireNumber(rawParam, min, max, `${path}[${paramIndex}]`);
-        const isInteger = (effectType === SEQFX_EFFECT_TYPES.filter && paramIndex === 0)
-            || (effectType === SEQFX_EFFECT_TYPES.crusher && (paramIndex === 0 || paramIndex === 1))
-            || (effectType === SEQFX_EFFECT_TYPES.tapeStop && paramIndex === 4)
-            || (effectType === SEQFX_EFFECT_TYPES.stutter && paramIndex === 0);
-        if (isInteger && !Number.isInteger(param)) {
-            failParse("invalid_integer_param", `${path}[${paramIndex}]`, "must be an integer");
-        }
-        return param;
-    });
-}
-
-function parseLegacyAux(
-    effectType: SeqFxEffectType,
-    value: unknown,
-    path: string,
-): SeqFxAuxState {
-    const rawAux = requireRecord(value, path);
-    assertAllowedKeys(rawAux, ["source", "targets"], path);
-    const rawSource = requireRecord(requireField(rawAux, "source", path), `${path}.source`);
-    assertAllowedKeys(rawSource, ["shape", "sourceCurve", "rateMode", "tempoMultiplier", "tempoTriplet", "sliceCount"], `${path}.source`);
-    const rateMode = requireField(rawSource, "rateMode", `${path}.source`);
-    if (rateMode !== SEQFX_AUX_RATE_MODES.tempo && rateMode !== SEQFX_AUX_RATE_MODES.slice) {
-        failParse("invalid_enum", `${path}.source.rateMode`, "must be tempo or slice");
-    }
-    const source: SeqFxAuxSource = {
-        shape: requireNumber(requireField(rawSource, "shape", `${path}.source`), SEQFX_AUX_SHAPE_MIN, SEQFX_AUX_SHAPE_MAX, `${path}.source.shape`),
-        sourceCurve: requireNumber(requireField(rawSource, "sourceCurve", `${path}.source`), SEQFX_AUX_SOURCE_CURVE_MIN, SEQFX_AUX_SOURCE_CURVE_MAX, `${path}.source.sourceCurve`),
-        rateMode,
-        tempoMultiplier: requireInteger(requireField(rawSource, "tempoMultiplier", `${path}.source`), SEQFX_AUX_TEMPO_MULTIPLIER_MIN, SEQFX_AUX_TEMPO_MULTIPLIER_MAX, `${path}.source.tempoMultiplier`),
-        tempoTriplet: requireBoolean(requireField(rawSource, "tempoTriplet", `${path}.source`), `${path}.source.tempoTriplet`),
-        sliceCount: requireInteger(requireField(rawSource, "sliceCount", `${path}.source`), SEQFX_AUX_SLICE_COUNT_MIN, SEQFX_AUX_SLICE_COUNT_MAX, `${path}.source.sliceCount`),
-    };
-    const rawTargets = requireField(rawAux, "targets", path);
-    if (!Array.isArray(rawTargets) || rawTargets.length !== SEQFX_PARAM_COUNT) {
-        failParse("invalid_aux_targets", `${path}.targets`, `must contain exactly ${SEQFX_PARAM_COUNT} targets`);
-    }
-    const targets = createFixedDenseArray(SEQFX_PARAM_COUNT, (paramIndex): SeqFxAuxTarget => {
-        const rawTarget = rawTargets[paramIndex];
-        const targetPath = `${path}.targets[${paramIndex}]`;
-        const target = requireRecord(rawTarget, targetPath);
-        assertAllowedKeys(target, ["enabled", "end"], targetPath);
-        const [min, max] = legacyParamLimits(effectType, paramIndex);
-        const end = requireNumber(requireField(target, "end", targetPath), min, max, `${targetPath}.end`);
-        const isInteger = (effectType === SEQFX_EFFECT_TYPES.filter && paramIndex === 0)
-            || (effectType === SEQFX_EFFECT_TYPES.crusher && (paramIndex === 0 || paramIndex === 1))
-            || (effectType === SEQFX_EFFECT_TYPES.tapeStop && paramIndex === 4)
-            || (effectType === SEQFX_EFFECT_TYPES.stutter && paramIndex === 0);
-        if (isInteger && !Number.isInteger(end)) {
-            failParse("invalid_integer_param", `${targetPath}.end`, "must be an integer");
-        }
-        return {
-            enabled: requireBoolean(requireField(target, "enabled", targetPath), `${targetPath}.enabled`),
-            end,
-        };
-    });
-    return { source, targets };
-}
-
-function parseLegacyMemories(
-    rawStep: Record<string, unknown>,
-    path: string,
-): Pick<SeqFxStep, "effectParams" | "effectAux"> {
-    const effectParams: Partial<Record<SeqFxEffectType, SeqFxParamVector>> = {};
-    const effectAux: Partial<Record<SeqFxEffectType, SeqFxAuxState>> = {};
-
-    if (hasOwnValue(rawStep, "effectParams")) {
-        const rawParams = requireRecord(rawStep.effectParams, `${path}.effectParams`);
-        for (const [key, params] of Object.entries(rawParams)) {
-            const effectType = parseLegacyMemoryEffectType(key, `${path}.effectParams.${key}`);
-            effectParams[effectType] = parseLegacyParamVector(effectType, params, `${path}.effectParams.${key}`);
-        }
-    }
-    if (hasOwnValue(rawStep, "effectAux")) {
-        const rawAux = requireRecord(rawStep.effectAux, `${path}.effectAux`);
-        for (const [key, aux] of Object.entries(rawAux)) {
-            const effectType = parseLegacyMemoryEffectType(key, `${path}.effectAux.${key}`);
-            effectAux[effectType] = parseLegacyAux(effectType, aux, `${path}.effectAux.${key}`);
-        }
-    }
-
-    return {
-        ...(Object.keys(effectParams).length > 0 ? { effectParams } : {}),
-        ...(Object.keys(effectAux).length > 0 ? { effectAux } : {}),
-    };
-}
-
-function parseStrictSeqFxLegacyState(value: unknown): SeqFxLegacyStateV5 {
-    const rawState = requireRecord(value, "$");
-    assertAllowedKeys(rawState, ["version", "patterns"], "$");
-    if (requireField(rawState, "version", "$") !== SEQFX_LEGACY_STATE_VERSION) {
-        failParse("unsupported_version", "$.version", `must be ${SEQFX_LEGACY_STATE_VERSION}`);
-    }
-    const rawPatterns = requireField(rawState, "patterns", "$");
-    if (!Array.isArray(rawPatterns) || rawPatterns.length !== SEQFX_PATTERN_COUNT) {
-        failParse("invalid_pattern_count", "$.patterns", `must contain exactly ${SEQFX_PATTERN_COUNT} patterns`);
-    }
-
-    const patterns = createFixedDenseArray(SEQFX_PATTERN_COUNT, (patternIndex): SeqFxPattern => {
-        const rawPattern = rawPatterns[patternIndex];
-        const patternPath = `$.patterns[${patternIndex}]`;
-        const pattern = requireRecord(rawPattern, patternPath);
-        assertAllowedKeys(pattern, ["revision", "lanes"], patternPath);
-        const rawLanes = requireField(pattern, "lanes", patternPath);
-        if (!Array.isArray(rawLanes) || rawLanes.length !== SEQFX_LANE_COUNT) {
-            failParse("invalid_lane_count", `${patternPath}.lanes`, `must contain exactly ${SEQFX_LANE_COUNT} lanes`);
-        }
-        return {
-            revision: requireInteger(requireField(pattern, "revision", patternPath), 1, Number.MAX_SAFE_INTEGER, `${patternPath}.revision`),
-            lanes: createFixedDenseArray(SEQFX_LANE_COUNT, (laneIndex): SeqFxLane => {
-                const rawLane = rawLanes[laneIndex];
-                const lanePath = `${patternPath}.lanes[${laneIndex}]`;
-                const lane = requireRecord(rawLane, lanePath);
-                assertAllowedKeys(lane, ["steps"], lanePath);
-                const rawSteps = requireField(lane, "steps", lanePath);
-                if (!Array.isArray(rawSteps) || rawSteps.length !== SEQFX_STEP_COUNT) {
-                    failParse("invalid_step_count", `${lanePath}.steps`, `must contain exactly ${SEQFX_STEP_COUNT} steps`);
-                }
-                return {
-                    steps: createFixedDenseArray(SEQFX_STEP_COUNT, (stepIndex): SeqFxStep => {
-                        const rawStep = rawSteps[stepIndex];
-                        const stepPath = `${lanePath}.steps[${stepIndex}]`;
-                        const step = requireRecord(rawStep, stepPath);
-                        assertAllowedKeys(step, ["active", "trigger", "effectType", "mix", "params", "aux", "effectParams", "effectAux"], stepPath);
-                        const active = requireBoolean(requireField(step, "active", stepPath), `${stepPath}.active`);
-                        const trigger = requireBoolean(requireField(step, "trigger", stepPath), `${stepPath}.trigger`);
-                        const effectType = parseLegacyEffectType(requireField(step, "effectType", stepPath), `${stepPath}.effectType`);
-                        if (active && effectType === SEQFX_EFFECT_TYPES.empty) {
-                            failParse("invalid_effect_type", `${stepPath}.effectType`, "active legacy steps cannot be empty");
-                        }
-                        if (!active && effectType !== SEQFX_EFFECT_TYPES.empty) {
-                            failParse("invalid_effect_type", `${stepPath}.effectType`, "inactive legacy steps must be empty");
-                        }
-                        if (!active && trigger) {
-                            failParse("invalid_trigger", `${stepPath}.trigger`, "inactive legacy steps cannot trigger");
-                        }
-                        const parameterEffectType = effectType === SEQFX_EFFECT_TYPES.empty
-                            ? defaultEffectTypeForLane(laneIndex)
-                            : effectType;
-                        return {
-                            active,
-                            trigger,
-                            effectType,
-                            mix: requireNumber(requireField(step, "mix", stepPath), 0, 1, `${stepPath}.mix`),
-                            params: parseLegacyParamVector(parameterEffectType, requireField(step, "params", stepPath), `${stepPath}.params`),
-                            aux: parseLegacyAux(parameterEffectType, requireField(step, "aux", stepPath), `${stepPath}.aux`),
-                            ...parseLegacyMemories(step, stepPath),
-                        };
-                    }),
-                };
-            }),
-        };
-    });
-
-    return {
-        version: SEQFX_LEGACY_STATE_VERSION,
-        patterns,
-    };
-}
-
-function migrateLegacyTapeParamVector(rawParams: unknown, blockLength: number): SeqFxParamVector {
-    const params = Array.isArray(rawParams) ? rawParams.map(Number) : [];
-    const durationScale = Number(params[0] ?? 1);
-    const curvePower = Number(params[1] ?? 1);
-    const releaseCurvePower = Number(params[2] ?? 1);
-    const catchupPercent = Number(params[3] ?? 25);
-    const legacyMode = Number(params[4] ?? 0);
-
-    const legacyValues: Array<[number, number, number, string]> = [
-        [durationScale, 0.05, 4, "duration scale"],
-        [curvePower, 0.25, 4, "curve"],
-        [releaseCurvePower, 0.25, 4, "release curve"],
-        [catchupPercent, 0, 100, "catch-up percent"],
-        [legacyMode, 0, 1, "mode"],
-    ];
-    for (const [value, min, max, label] of legacyValues) {
-        if (!Number.isFinite(value) || value < min || value > max) {
-            throw new Error(`Legacy Tape Stop ${label} must be between ${min} and ${max}.`);
-        }
-    }
-    if (!Number.isInteger(legacyMode)) {
-        throw new Error("Legacy Tape Stop mode must be an integer.");
-    }
-
-    // Legacy timing was a multiple of the authored block. The state document
-    // never stored host tempo/rate, so migration uses the old default clock
-    // (120 BPM, 1/16 cells = 125 ms) and records an honest free-time gesture.
-    const canonicalBlockMs = Math.max(1, Math.trunc(blockLength)) * 125;
-    const freeStopMs = clamp(durationScale * canonicalBlockMs, 20, 8_000);
-    const freeStartMs = clamp((catchupPercent / 100) * canonicalBlockMs, 20, 8_000);
-    const curve = clamp(Math.log(curvePower) / Math.log(4), -1, 1);
-
-    return cloneParamVector([
-        8, // One Cell remains the direct-edit default when switching back to Sync.
-        curve,
-        legacyMode === 1 ? 1 : 0,
-        1,
-        0,
-        1, // Free timing preserves the deterministic millisecond mapping above.
-        freeStopMs,
-        freeStartMs,
-    ]);
-}
-
-function migrateLegacyCrushParamVector(rawParams: unknown): SeqFxParamVector {
-    const params = Array.isArray(rawParams) ? rawParams.map(Number) : [];
-    const bits = Number(params[0] ?? 8);
-    const holdFrames = Number(params[1] ?? 1);
-    const driveDb = Number(params[2] ?? 0);
-
-    const legacyValues: Array<[number, number, number, string]> = [
-        [bits, 4, 16, "bits"],
-        [holdFrames, 1, 64, "hold frames"],
-        [driveDb, 0, 36, "drive"],
-    ];
-    for (const [value, min, max, label] of legacyValues) {
-        if (!Number.isFinite(value) || value < min || value > max) {
-            throw new Error(`Legacy Crush ${label} must be between ${min} and ${max}.`);
-        }
-    }
-    if (!Number.isInteger(bits) || !Number.isInteger(holdFrames)) {
-        throw new Error("Legacy Crush bits and hold frames must be integers.");
-    }
-
-    return cloneParamVector([bits, 48_000 / holdFrames, driveDb, 0, 0, 0, 0, 0]);
-}
-
-function migrateLegacyCrushAux(
-    oldAux: SeqFxAuxState | undefined,
-    oldParams: unknown,
-    newParams: SeqFxParamVector,
-): SeqFxAuxState {
-    const oldVector = Array.isArray(oldParams) ? oldParams.map(Number) : [];
-    const migrated = defaultAuxForParams(newParams, SEQFX_EFFECT_TYPES.crusher);
-    if (!oldAux) {
-        return migrated;
-    }
-
-    migrated.source = normalizeAuxSource(oldAux.source);
-    const oldBitsEnd = Number(oldAux.targets?.[0]?.end ?? oldVector[0] ?? 8);
-    const oldHoldEnd = Number(oldAux.targets?.[1]?.end ?? oldVector[1] ?? 1);
-    const oldDriveEnd = Number(oldAux.targets?.[2]?.end ?? oldVector[2] ?? 0);
-    const legacyEnds: Array<[number, number, number, string]> = [
-        [oldBitsEnd, 4, 16, "bits"],
-        [oldHoldEnd, 1, 64, "hold frames"],
-        [oldDriveEnd, 0, 36, "drive"],
-    ];
-    for (const [value, min, max, label] of legacyEnds) {
-        if (!Number.isFinite(value) || value < min || value > max) {
-            throw new Error(`Legacy Crush aux ${label} must be between ${min} and ${max}.`);
-        }
-    }
-    if (!Number.isInteger(oldBitsEnd) || !Number.isInteger(oldHoldEnd)) {
-        throw new Error("Legacy Crush aux bits and hold frames must be integers.");
-    }
-
-    const migratedEnds = [oldBitsEnd, 48_000 / oldHoldEnd, oldDriveEnd];
-    for (let paramIndex = 0; paramIndex < migratedEnds.length; paramIndex += 1) {
-        migrated.targets[paramIndex] = {
-            enabled: oldAux.targets?.[paramIndex]?.enabled === true,
-            end: normalizeParam(SEQFX_EFFECT_TYPES.crusher, paramIndex, migratedEnds[paramIndex]),
-        };
-    }
-    return migrated;
-}
-
-function migrateLegacyCrushState(value: SeqFxLegacyStateV5): SeqFxLegacyStateV5 {
-    const migrated = structuredClone(value);
-
-    migrated.patterns.forEach((pattern) => {
-        pattern.lanes.forEach((lane, laneIndex) => {
-            lane.steps.forEach((step) => {
-                const fallbackEffectType = defaultEffectTypeForLane(laneIndex);
-                const effectType = step.active
-                    ? normalizeEffectType(Number(step.effectType ?? fallbackEffectType), fallbackEffectType)
-                    : SEQFX_EFFECT_TYPES.empty;
-
-                if (effectType === SEQFX_EFFECT_TYPES.crusher) {
-                    const oldParams = step.params;
-                    const params = migrateLegacyCrushParamVector(oldParams);
-                    step.params = params;
-                    step.aux = migrateLegacyCrushAux(step.aux, oldParams, params);
-                }
-
-                const oldMemoryParams = step.effectParams?.[SEQFX_EFFECT_TYPES.crusher];
-                if (oldMemoryParams) {
-                    const params = migrateLegacyCrushParamVector(oldMemoryParams);
-                    const effectParams = step.effectParams;
-                    if (!effectParams) {
-                        throw new Error("Legacy Crush parameter memory disappeared during migration.");
-                    }
-                    effectParams[SEQFX_EFFECT_TYPES.crusher] = params;
-                    const oldMemoryAux = step.effectAux?.[SEQFX_EFFECT_TYPES.crusher];
-                    if (oldMemoryAux) {
-                        const effectAux = step.effectAux;
-                        if (!effectAux) {
-                            throw new Error("Legacy Crush aux memory disappeared during migration.");
-                        }
-                        effectAux[SEQFX_EFFECT_TYPES.crusher] = migrateLegacyCrushAux(
-                            oldMemoryAux,
-                            oldMemoryParams,
-                            params,
-                        );
-                    }
-                }
-            });
-        });
-    });
-
-    return migrated;
-}
-
-function resetMigratedTapeAux(step: SeqFxStep, params: SeqFxParamVector): void {
-    step.params = cloneParamVector(params);
-    step.aux = defaultAuxForParams(params, SEQFX_EFFECT_TYPES.tapeStop);
-
-    if (step.effectParams?.[SEQFX_EFFECT_TYPES.tapeStop]) {
-        step.effectParams[SEQFX_EFFECT_TYPES.tapeStop] = migrateLegacyTapeParamVector(
-            step.effectParams[SEQFX_EFFECT_TYPES.tapeStop],
-            1,
-        );
-    }
-    if (step.effectAux?.[SEQFX_EFFECT_TYPES.tapeStop]) {
-        const memoryParams = step.effectParams?.[SEQFX_EFFECT_TYPES.tapeStop]
-            ?? getSeqFxDefaultParams(SEQFX_EFFECT_TYPES.tapeStop);
-        step.effectAux[SEQFX_EFFECT_TYPES.tapeStop] = defaultAuxForParams(
-            memoryParams,
-            SEQFX_EFFECT_TYPES.tapeStop,
-        );
-    }
-}
-
-function migrateLegacyTapeState(value: SeqFxLegacyStateV5): SeqFxLegacyStateV5 {
-    const migrated = structuredClone(value);
-
-    migrated.patterns.forEach((pattern) => {
-        pattern.lanes.forEach((lane, laneIndex) => {
-            let stepIndex = 0;
-            while (stepIndex < lane.steps.length) {
-                const step = lane.steps[stepIndex];
-                const fallbackEffectType = defaultEffectTypeForLane(laneIndex);
-                const effectType = step.active
-                    ? normalizeEffectType(Number(step.effectType ?? fallbackEffectType), fallbackEffectType)
-                    : SEQFX_EFFECT_TYPES.empty;
-
-                if (effectType !== SEQFX_EFFECT_TYPES.tapeStop) {
-                    if (step.effectParams?.[SEQFX_EFFECT_TYPES.tapeStop]) {
-                        const memoryParams = migrateLegacyTapeParamVector(
-                            step.effectParams[SEQFX_EFFECT_TYPES.tapeStop],
-                            1,
-                        );
-                        step.effectParams[SEQFX_EFFECT_TYPES.tapeStop] = memoryParams;
-                        if (step.effectAux?.[SEQFX_EFFECT_TYPES.tapeStop]) {
-                            step.effectAux[SEQFX_EFFECT_TYPES.tapeStop] = defaultAuxForParams(
-                                memoryParams,
-                                SEQFX_EFFECT_TYPES.tapeStop,
-                            );
-                        }
-                    }
-                    stepIndex += 1;
-                    continue;
-                }
-
-                let blockEnd = stepIndex + 1;
-                while (blockEnd < lane.steps.length) {
-                    const candidate = lane.steps[blockEnd];
-                    const candidateType = candidate.active
-                        ? normalizeEffectType(Number(candidate.effectType ?? fallbackEffectType), fallbackEffectType)
-                        : SEQFX_EFFECT_TYPES.empty;
-                    if (candidateType !== SEQFX_EFFECT_TYPES.tapeStop || candidate.trigger === true) {
-                        break;
-                    }
-                    blockEnd += 1;
-                }
-
-                const blockLength = blockEnd - stepIndex;
-                for (let memberIndex = stepIndex; memberIndex < blockEnd; memberIndex += 1) {
-                    const member = lane.steps[memberIndex];
-                    resetMigratedTapeAux(
-                        member,
-                        migrateLegacyTapeParamVector(member.params, blockLength),
-                    );
-                }
-                stepIndex = blockEnd;
+/**
+ * Saves the twelve patterns as the sparse document and reads them back strictly.
+ * An editing state is accepted in the canonical form the project will save, so
+ * the view, the saved project and the DSP always agree.
+ */
+export const seqFxPatternsCodec: PluginStateCodec<SeqFxState> = {
+    parse(input) {
+        try {
+            return { kind: "ok", value: parseStoredSeqFxState(isEditingState(input) ? projectStoredSeqFxState(input) : input) };
+        } catch (error) {
+            if (error instanceof SeqFxStateParseError) {
+                return { kind: "error", message: `The saved SeqFX patterns are not valid: ${error.message}` };
             }
-        });
-    });
-
-    return migrated;
-}
-
-export function parseStrictSeqFxStateV5(value: unknown): SeqFxState {
-    try {
-        const parsed = parseStateCandidate(value);
-        const legacyState = parseStrictSeqFxLegacyState(parsed);
-        const normalized = normalizeDenseSeqFxState(
-            migrateLegacyTapeState(migrateLegacyCrushState(legacyState)),
-        );
-        assertSeqFxStateValuesInRange(normalized);
-        return normalized;
-    } catch (error) {
-        if (error instanceof SeqFxStateParseError) {
             throw error;
         }
-        throw new SeqFxStateParseError(
-            "invalid_legacy_state",
-            "$",
-            error instanceof Error ? error.message : "invalid legacy SeqFX state",
-        );
-    }
-}
-
-export function parseSeqFxStoredState(value: unknown): SeqFxStoredStateParseResult {
-    const parsed = parseStateCandidate(value);
-    if (!isPlainRecord(parsed)) {
-        failParse("invalid_type", "$", "SeqFX state must be an object");
-    }
-
-    if (parsed.version === SEQFX_STATE_VERSION) {
-        return {
-            state: parseStrictSeqFxStateV7(parsed),
-            sourceVersion: SEQFX_STATE_VERSION,
-            migrated: false,
-        };
-    }
-    if (parsed.version === SEQFX_LEGACY_STATE_VERSION) {
-        return {
-            state: parseStrictSeqFxStateV5(parsed),
-            sourceVersion: SEQFX_LEGACY_STATE_VERSION,
-            migrated: true,
-        };
-    }
-
-    failParse("unsupported_version", "$.version", `must be ${SEQFX_STATE_VERSION} or legacy ${SEQFX_LEGACY_STATE_VERSION}`);
-}
+    },
+    // SAFETY: the stored document is built only from JSON numbers, booleans, strings, arrays and plain objects.
+    encode: (state) => projectStoredSeqFxState(state) as unknown as PluginStateJson,
+    equals: (left, right) => left === right || serializeSeqFxState(left) === serializeSeqFxState(right),
+};
 
 function withEditedPattern(
     state: SeqFxState,
@@ -2124,7 +1610,6 @@ function withEditedPattern(
     const next = cloneState(normalizeSeqFxState(state));
     const resolvedPattern = clampIndex(patternIndex, SEQFX_PATTERN_COUNT, "patternIndex");
     edit(next.patterns[resolvedPattern]);
-    next.patterns[resolvedPattern].revision += 1;
     return next;
 }
 
@@ -3107,18 +2592,14 @@ export function applySeqFxStepValuePaste(state: SeqFxState, edit: SeqFxStepValue
     });
 }
 
-export function buildSeqPatternUpload(
-    state: SeqFxState,
-    options: { patternIndex: number; authoritative: boolean },
-): SeqPatternUpload {
+/** The steps of one pattern as the DSP reads them. */
+export function buildSeqPatternContent(state: SeqFxState, patternIndex: number): SeqPatternContent {
     const normalized = normalizeSeqFxState(state);
-    const patternIndex = clampIndex(options.patternIndex, SEQFX_PATTERN_COUNT, "patternIndex");
-    const pattern = normalized.patterns[patternIndex];
+    const resolvedPatternIndex = clampIndex(patternIndex, SEQFX_PATTERN_COUNT, "patternIndex");
+    const pattern = normalized.patterns[resolvedPatternIndex];
 
     return {
-        patternIndex,
-        revision: pattern.revision,
-        authoritative: options.authoritative,
+        patternIndex: resolvedPatternIndex,
         activeSteps: pattern.lanes.map((lane) => lane.steps.map((step) => step.active)),
         triggerSteps: pattern.lanes.map((lane) => lane.steps.map((step) => step.trigger)),
         effectTypes: pattern.lanes.map((lane) => lane.steps.map((step) => step.active ? step.effectType : SEQFX_EFFECT_TYPES.empty)),
