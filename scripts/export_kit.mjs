@@ -405,11 +405,11 @@ async function proveUpdateMerge(outputRoot, runCommand) {
     await fs.appendFile(path.join(outputRoot, "kit/AGENTS.md"), "\n<!-- kit update marker -->\n");
     git("commit", "--quiet", "-am", "Kit update");
     git("checkout", "--quiet", "main");
-    await fs.appendFile(path.join(outputRoot, "fx/enhancer_lite/view/source.ts"), "\n// customer change marker\n");
+    await fs.appendFile(path.join(outputRoot, "fx/enhancer_lite/view/source.tsx"), "\n// customer change marker\n");
     git("commit", "--quiet", "-am", "Customer plugin change");
     git("merge", "--quiet", "--no-edit", "kit-update");
     const merged = await fs.readFile(path.join(outputRoot, "kit/AGENTS.md"), "utf8");
-    const customer = await fs.readFile(path.join(outputRoot, "fx/enhancer_lite/view/source.ts"), "utf8");
+    const customer = await fs.readFile(path.join(outputRoot, "fx/enhancer_lite/view/source.tsx"), "utf8");
     if (!merged.includes("kit update marker") || !customer.includes("customer change marker")) {
         throw new Error("Update-flow simulation failed: merge lost a change.");
     }

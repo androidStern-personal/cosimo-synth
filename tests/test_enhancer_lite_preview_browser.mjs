@@ -49,16 +49,16 @@ test("the browser preview runs Enhance That's real view with working presets, sn
         assert.equal(await page.locator("#preview-title").innerText(), `${manifest.name} — UI preview`);
         assert.equal(await page.getByRole("group", { name: "Snapshots" }).getByRole("button", { name: /^Snapshot [A-G]/ }).count(), 7);
 
-        const frequency = view.locator("[data-readout='frequency']");
-        assert.equal(await frequency.textContent(), "130 Hz");
-        const amount = view.locator("[data-readout-control='primary-amount']");
+        const frequency = view.getByRole("slider", { name: "Frequency", exact: true });
+        assert.equal(await frequency.getAttribute("aria-valuetext"), "130 Hz");
+        const amount = view.getByRole("slider", { name: "Amount", exact: true });
         await amount.focus();
         await page.keyboard.press("ArrowUp");
         assert.ok(Number(await amount.getAttribute("aria-valuenow")) > 0, "a UI gesture round-trips through the preview's parameter listeners");
         await page.getByRole("combobox", { name: "Preset" }).selectOption("vocal-presence");
         await frequency.filter({ hasText: "3.20 kHz" }).waitFor();
 
-        assert.ok(requests.includes("/fx/enhancer_lite/view/source.ts"), "the preview loads the view source, not a build");
+        assert.ok(requests.includes("/fx/enhancer_lite/view/source.tsx"), "the preview loads the view source, not a build");
         assert.ok(!requests.some((request) => request.startsWith("/build/")));
         assert.deepEqual(errors, []);
     } finally {

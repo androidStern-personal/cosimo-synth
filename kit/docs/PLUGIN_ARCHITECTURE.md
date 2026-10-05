@@ -49,7 +49,7 @@ fx/enhancer_lite/
   EnhancerLite.cmajor
   state.ts                 (plugin state declaration, see PLUGIN_STATE.md)
   view/
-    source.ts              (or source.tsx, any Vite-servable module)
+    source.tsx             (any Vite-servable module)
 ```
 
 A plugin created by `kit:new` also has `view/index.js`, a symlink to the shared
@@ -60,7 +60,7 @@ manifest keeps one stable UI entrypoint:
 ```json
 "view": {
   "src": "view/index.js",
-  "devModule": "/fx/enhancer_lite/view/source.ts",
+  "devModule": "/fx/enhancer_lite/view/source.tsx",
   "width": 820,
   "height": 560,
   "resizable": true
@@ -258,7 +258,7 @@ The in-host loading chain is:
 ```text
 DAW -> patched generic CmajPlugin.vst3 -> build/fx/enhancer_lite_runtime/EnhancerLite.cmajorpatch
     -> view/index.js (shared loader)
-    -> http://127.0.0.1:5175/fx/enhancer_lite/view/source.ts
+    -> http://127.0.0.1:5175/fx/enhancer_lite/view/source.tsx
 ```
 
 Cmajor owns the patch connection, parameter messages, stored state and DSP;

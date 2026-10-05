@@ -420,7 +420,6 @@ export const ANALYZER_ENDPOINTS = Object.freeze({
 const shelfMinimumDisplayDb = -18;
 const shelfMaximumDisplayDb = 30;
 
-
 /**
  * Project the measured shelf response without changing shared graph geometry.
  * Genuine high-Q overflow is compressed into the otherwise unused margins.
@@ -441,4 +440,72 @@ export function shelfGainToY(gainDb: number): number {
     }
 
     return gainToY(gainDb);
+}
+
+/** The band's selection shapes, in the order of the DSP's shape values. */
+export const SHAPES = Object.freeze(["low", "bell", "high"] as const);
+export type Shape = typeof SHAPES[number];
+
+/** Evaluate the RBJ shelf the DSP runs, at the response model's sample rate. */
+function shelfResponseDb(
+    shape: Exclude<Shape, "bell">,
+    frequencyHz: number,
+    centreHz: number,
+    q: number,
+    amount: number,
+): number {
+    const amplitude = Math.pow(10, 12 * clamp(amount, 0, 1) / 40);
+    const centreOmega = 2 * Math.PI * clamp(centreHz, 20, 20_000) / responseModelSampleRate;
+    const centreCosine = Math.cos(centreOmega);
+    const beta = Math.sin(centreOmega) * Math.sqrt(amplitude) / clamp(q, 0.1, 10);
+    const plus = amplitude + 1;
+    const minus = amplitude - 1;
+    const [b0, b1, b2, a0, a1, a2] = shape === "low"
+        ? [
+            amplitude * (plus - minus * centreCosine + beta),
+            2 * amplitude * (minus - plus * centreCosine),
+            amplitude * (plus - minus * centreCosine - beta),
+            plus + minus * centreCosine + beta,
+            -2 * (minus + plus * centreCosine),
+            plus + minus * centreCosine - beta,
+        ]
+        : [
+            amplitude * (plus + minus * centreCosine + beta),
+            -2 * amplitude * (minus + plus * centreCosine),
+            amplitude * (plus + minus * centreCosine - beta),
+            plus - minus * centreCosine + beta,
+            2 * (minus - plus * centreCosine),
+            plus - minus * centreCosine - beta,
+        ];
+
+    const omega = 2 * Math.PI * clamp(frequencyHz, 20, 20_000) / responseModelSampleRate;
+    const z1Real = Math.cos(omega);
+    const z1Imaginary = -Math.sin(omega);
+    const z2Real = Math.cos(2 * omega);
+    const z2Imaginary = -Math.sin(2 * omega);
+    const numeratorReal = b0 + b1 * z1Real + b2 * z2Real;
+    const numeratorImaginary = b1 * z1Imaginary + b2 * z2Imaginary;
+    const denominatorReal = a0 + a1 * z1Real + a2 * z2Real;
+    const denominatorImaginary = a1 * z1Imaginary + a2 * z2Imaginary;
+    const numeratorPower = numeratorReal * numeratorReal + numeratorImaginary * numeratorImaginary;
+    const denominatorPower = denominatorReal * denominatorReal + denominatorImaginary * denominatorImaginary;
+    return 10 * Math.log10(Math.max(numeratorPower / denominatorPower, 1e-30));
+}
+
+/** The plot Y of the band's response at one frequency. */
+export function responseY(shape: Shape, frequencyHz: number, centreHz: number, q: number, amount: number): number {
+    return shape === "bell"
+        ? gainToY(bellResponseDb(frequencyHz, centreHz, q, amount))
+        : shelfGainToY(shelfResponseDb(shape, frequencyHz, centreHz, q, amount));
+}
+
+/** The band's response curve, or with `closeArea` the area between it and 0 dB. */
+export function responsePath(shape: Shape, centreHz: number, q: number, amount: number, closeArea = false): string {
+    const path = frequencyPath((frequencyHz) => responseY(shape, frequencyHz, centreHz, q, amount));
+    if (!closeArea)
+        return path;
+
+    const baseline = gainToY(0).toFixed(2);
+    const right = (SPECTRUM_PLOT.width - SPECTRUM_PLOT.right).toFixed(2);
+    return `${path} L ${right} ${baseline} L ${SPECTRUM_PLOT.left.toFixed(2)} ${baseline} Z`;
 }

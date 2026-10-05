@@ -57,12 +57,37 @@ const hostStatusInputs = [
     { endpointID: "analyzerEnabledIn", purpose: "parameter", annotation: { name: "Analyzer Enable", hidden: true } },
 ];
 
+const sourceView = "/fx/enhancer_lite/view/source.tsx";
+const compiledView = "/build/fx/enhancer_lite_runtime/view/app.js";
+
+/** A readout or graph handle, by its accessible name. */
+function slider(page, name) {
+    return page.getByRole("slider", { name, exact: true });
+}
+
+/** One button of a segmented switch such as Shape or Route. */
+function choice(page, group, name) {
+    return page.getByRole("group", { name: group, exact: true }).getByRole("button", { name, exact: true });
+}
+
+/** The editor surface under the header; tests resize it to model smaller plugin windows. */
+function surface(page) {
+    return page.getByRole("main");
+}
+
+function responseGraph(page) {
+    return page.getByRole("group", { name: "Response graph", exact: true });
+}
+
+const writesTo = (page, endpointID) => page.evaluate((id) => window.__ENHANCER_LITE_TEST__.sent
+    .filter(({ endpointID }) => endpointID === id).map(({ value }) => value), endpointID);
+
 /**
  * Mount the view against a mock patch connection whose parameter writes and
  * stored state go through the kit's browser-preview state owner. Pass
  * `userFileFixture` to install a `window.chocUserFiles` store with those files.
  */
-async function openEnhancerLite(modulePath = "/fx/enhancer_lite/view/source.ts", { manifest, userFileFixture } = {}) {
+async function openEnhancerLite(modulePath = sourceView, { manifest, userFileFixture } = {}) {
     const page = await browser.newPage({ viewport: { width: 900, height: 620 } });
     await page.goto(new URL("kit/tests/helpers/module_test_shell.html", server.baseUrl).toString());
     await page.evaluate(async ({ values, sourceModulePath, statusInputs, manifest, userFileFixture }) => {
@@ -180,16 +205,16 @@ async function openEnhancerLite(modulePath = "/fx/enhancer_lite/view/source.ts",
             openSecond: () => document.querySelector("#mount").append(module.default(patchConnection)),
         };
     }, { values: initialValues, sourceModulePath: modulePath, statusInputs: hostStatusInputs, manifest, userFileFixture });
-    await page.locator("enhance-that-view").waitFor();
+    await slider(page, "Frequency").waitFor();
     return page;
 }
 
-for (const sourceModule of ["/fx/enhancer_lite/view/source.ts", "/build/fx/enhancer_lite_runtime/view/app.js"]) {
+for (const sourceModule of [sourceView, compiledView]) {
 test(`scalar controls share Undo/Redo and retain their history when the GUI reopens (${sourceModule})`, async () => {
     const page = await openEnhancerLite(sourceModule);
     try {
-        const amount = shadow(page, "[data-readout-control='primary-amount']");
-        const frequency = shadow(page, "[data-readout-control='frequency']");
+        const amount = slider(page, "Amount");
+        const frequency = slider(page, "Frequency");
         const originalFrequency = await frequency.getAttribute("aria-valuenow");
         await amount.focus(); await page.keyboard.press("ArrowUp");
         const editedAmount = await amount.getAttribute("aria-valuenow");
@@ -201,7 +226,7 @@ test(`scalar controls share Undo/Redo and retain their history when the GUI reop
         assert.equal(await frequency.getAttribute("aria-valuenow"), originalFrequency);
         assert.equal(await amount.getAttribute("aria-valuenow"), editedAmount);
         await page.evaluate(() => window.__ENHANCER_LITE_TEST__.reopen());
-        await shadow(page, "[data-readout-control='primary-amount']").waitFor();
+        await slider(page, "Amount").waitFor();
         await undo.click();
         assert.equal(await amount.getAttribute("aria-valuenow"), "0");
         await page.getByRole("button", { name: "Redo", exact: true }).click();
@@ -218,9 +243,9 @@ test("the header controls fit the existing 820 by 560 plugin frame", async () =>
         await page.evaluate(() => { document.getElementById("mount").style.cssText = "width:820px;height:560px;padding:0"; });
         // A changed sound shows the widest header: the Modified indicator next to every button.
         await page.getByRole("combobox", { name: "Preset" }).selectOption("air-lift");
-        await shadow(page, "[data-shape='low']").click();
+        await choice(page, "Shape", "Low").click();
         await page.getByText("Modified").waitFor();
-        for (const control of await page.locator(".plugin-header button, .plugin-header select").all()) {
+        for (const control of await page.getByRole("banner").locator("button, select").all()) {
             const bounds = await control.boundingBox();
             assert.ok(bounds && bounds.x >= 0 && bounds.y >= 0 && bounds.x + bounds.width <= 820 && bounds.y + bounds.height <= 40,
                 `${await control.textContent()} sits inside the 820 by 40 header: ${JSON.stringify(bounds)}`);
@@ -230,47 +255,34 @@ test("the header controls fit the existing 820 by 560 plugin frame", async () =>
     } finally { await page.close(); }
 });
 
-test("same-turn parameter edits and keyboard steps read the latest state projection", async () => {
+test("consecutive arrow presses each step from the value the previous one wrote", async () => {
     const page = await openEnhancerLite();
     try {
-        const amount = shadow(page, "[data-readout-control='primary-amount']");
-        await amount.evaluate(element => {
-            element.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowUp", bubbles: true, cancelable: true }));
-            element.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowUp", bubbles: true, cancelable: true }));
-        });
+        const amount = slider(page, "Amount");
+        await amount.press("ArrowUp");
+        await amount.press("ArrowUp");
         assert.equal(await amount.getAttribute("aria-valuenow"), "0.24", "both relative keyboard increments reach the canonical projection");
-        await page.locator("enhance-that-view").evaluate(view => {
-            view.sendValue("midAmountIn", 0.5);
-            view.sendValue("midAmountIn", 0);
-        });
-        assert.equal(await amount.getAttribute("aria-valuenow"), "0", "an absolute return to zero cannot be dropped as an old-render no-op");
-        const writes = await page.evaluate(() => window.__ENHANCER_LITE_TEST__.sent.filter(message => message.endpointID === "midAmountIn").map(message => message.value));
-        assert.deepEqual(writes, [0.01, 0.02, 0.5, 0]);
+        assert.deepEqual(await writesTo(page, "midAmountIn"), [0.01, 0.02]);
     } finally { await page.close(); }
 });
 
 test("a same-turn captured drag returning to its origin adds no Undo entry", async () => {
     const page = await openEnhancerLite();
     try {
-        const amount = shadow(page, "[data-readout-control='primary-amount']");
-        const bounds = await amount.boundingBox();
-        assert.ok(bounds);
-        const x = bounds.x + bounds.width / 2, y = bounds.y + bounds.height / 2;
-        await page.mouse.move(x, y); await page.mouse.down();
+        const amount = slider(page, "Amount");
+        const { originX, originY, pointerID } = await beginCapturedDrag(page, amount);
         await amount.evaluate((element, origin) => {
-            const view = element.getRootNode().host;
-            const pointerId = view.readoutDrag.pointerID;
             for (const clientY of [origin.y - 50, origin.y]) element.dispatchEvent(new PointerEvent("pointermove", {
-                pointerId, clientX: origin.x, clientY, bubbles: true, buttons: 1,
+                pointerId: origin.pointerID, clientX: origin.x, clientY, bubbles: true, buttons: 1,
             }));
-        }, { x, y });
+        }, { x: originX, y: originY, pointerID });
         await page.mouse.up();
         assert.equal(await amount.getAttribute("aria-valuenow"), "0");
         assert.equal(await page.getByRole("button", { name: "Undo", exact: true }).isDisabled(), true);
-        const writes = await page.evaluate(() => window.__ENHANCER_LITE_TEST__.sent.filter(message => message.endpointID === "midAmountIn").map(message => message.value));
+        const writes = await writesTo(page, "midAmountIn");
         assert.equal(writes.length, 2);
         assert.ok(writes[0] > 0);
-        assert.equal(writes[1], 0);
+        assert.equal(writes[1], 0, "an absolute return to zero is written, not dropped as a no-op against the last render");
     } finally { await page.close(); }
 });
 
@@ -278,8 +290,8 @@ test("a competing GUI edit restores the owner projection while another GUI holds
     const page = await openEnhancerLite();
     try {
         await page.evaluate(() => window.__ENHANCER_LITE_TEST__.openSecond());
-        await page.locator("enhance-that-view").nth(1).waitFor();
-        const controls = shadow(page, "[data-readout-control='primary-amount']");
+        const controls = slider(page, "Amount");
+        await controls.nth(1).waitFor();
         const first = controls.nth(0), second = controls.nth(1);
         const bounds = await first.boundingBox();
         assert.ok(bounds);
@@ -296,10 +308,6 @@ test("a competing GUI edit restores the owner projection while another GUI holds
         await page.mouse.up();
     } finally { await page.close(); }
 });
-
-function shadow(page, selector) {
-    return page.locator(`enhance-that-view >> ${selector}`);
-}
 
 async function drag(page, locator, deltaX, deltaY, modifiers = []) {
     const bounds = await locator.boundingBox();
@@ -318,7 +326,7 @@ async function drag(page, locator, deltaX, deltaY, modifiers = []) {
 }
 
 async function measurePrimaryHandleDrag(page, shape, shapeIn) {
-    const handle = shadow(page, "[data-response-role='primary-handle']");
+    const handle = slider(page, "Band handle");
     await page.evaluate((selectedShapeIn) => {
         window.__ENHANCER_LITE_TEST__.emit("shapeIn", selectedShapeIn);
         window.__ENHANCER_LITE_TEST__.emit("freqHzIn", 1000);
@@ -336,10 +344,9 @@ async function measurePrimaryHandleDrag(page, shape, shapeIn) {
     const pointerDeltaY = -40;
     await drag(page, handle, 0, pointerDeltaY);
     const afterCy = Number(await handle.getAttribute("cy"));
-    const amountEvents = (await page.evaluate(() => window.__ENHANCER_LITE_TEST__.sent))
-        .filter(({ endpointID }) => endpointID === "midAmountIn");
+    const amountEvents = await writesTo(page, "midAmountIn");
     assert.ok(amountEvents.length > 0, `${shape} emitted no Amount gesture`);
-    const amount = amountEvents.at(-1).value;
+    const amount = amountEvents.at(-1);
     const expectedAmount = 0.25 - pointerDeltaY / 240;
     const expectedCy = zeroCy - expectedAmount * (zeroCy - fullCy);
 
@@ -377,11 +384,7 @@ async function frequencyRatioAfterDrag(page, locator, originFrequencyHz, horizon
         window.__ENHANCER_LITE_TEST__.clearSent();
     }, originFrequencyHz);
     await drag(page, locator, horizontalPixels, 0);
-    const finalFrequencyHz = await page.evaluate(() => (
-        window.__ENHANCER_LITE_TEST__.sent
-            .filter(({ endpointID }) => endpointID === "freqHzIn")
-            .at(-1)?.value
-    ));
+    const finalFrequencyHz = (await writesTo(page, "freqHzIn")).at(-1);
     assert.equal(typeof finalFrequencyHz, "number");
     return finalFrequencyHz / originFrequencyHz;
 }
@@ -392,11 +395,7 @@ async function amountAfterDrag(page, locator, originAmount, verticalPixels) {
         window.__ENHANCER_LITE_TEST__.clearSent();
     }, originAmount);
     await drag(page, locator, 0, verticalPixels);
-    const finalAmount = await page.evaluate(() => (
-        window.__ENHANCER_LITE_TEST__.sent
-            .filter(({ endpointID }) => endpointID === "midAmountIn")
-            .at(-1)?.value
-    ));
+    const finalAmount = (await writesTo(page, "midAmountIn")).at(-1);
     assert.equal(typeof finalAmount, "number");
     return finalAmount;
 }
@@ -407,11 +406,7 @@ async function qAfterDrag(page, locator, originQ, verticalPixels, modifiers = []
         window.__ENHANCER_LITE_TEST__.clearSent();
     }, originQ);
     await drag(page, locator, 0, verticalPixels, modifiers);
-    const finalQ = await page.evaluate(() => (
-        window.__ENHANCER_LITE_TEST__.sent
-            .filter(({ endpointID }) => endpointID === "qIn")
-            .at(-1)?.value
-    ));
+    const finalQ = (await writesTo(page, "qIn")).at(-1);
     assert.equal(typeof finalQ, "number");
     return finalQ;
 }
@@ -420,7 +415,7 @@ test("the Frequency readout drags one octave per 80 horizontal pixels", async ()
     const page = await openEnhancerLite();
 
     try {
-        const frequencyReadout = shadow(page, "[data-readout-control='frequency']");
+        const frequencyReadout = slider(page, "Frequency");
         assert.equal(await frequencyReadout.count(), 1);
         await page.evaluate(() => {
             window.__ENHANCER_LITE_TEST__.emit("freqHzIn", 1000);
@@ -428,12 +423,9 @@ test("the Frequency readout drags one octave per 80 horizontal pixels", async ()
         });
 
         await drag(page, frequencyReadout, 80, 0);
-        const frequencyEvents = await page.evaluate(() => (
-            window.__ENHANCER_LITE_TEST__.sent
-                .filter(({ endpointID }) => endpointID === "freqHzIn")
-        ));
+        const frequencyEvents = await writesTo(page, "freqHzIn");
         assert.ok(frequencyEvents.length > 1, JSON.stringify(frequencyEvents));
-        assert.ok(Math.abs(frequencyEvents.at(-1).value - 2000) < 1e-6);
+        assert.ok(Math.abs(frequencyEvents.at(-1) - 2000) < 1e-6);
         assert.equal(await frequencyReadout.getAttribute("data-dragging"), null);
         assert.equal(
             await frequencyReadout.evaluate((element) => element.getRootNode().activeElement === element),
@@ -454,10 +446,8 @@ test("the Frequency readout keeps its fixed logarithmic law at every value and e
         const page = await openEnhancerLite();
         try {
             await page.setViewportSize({ width: viewportWidth, height: 620 });
-            await page.locator("enhance-that-view").evaluate((host, width) => {
-                host.style.width = `${width}px`;
-            }, editorWidth);
-            const frequencyReadout = shadow(page, "[data-readout-control='frequency']");
+            await surface(page).evaluate((element, width) => { element.style.width = `${width}px`; }, editorWidth);
+            const frequencyReadout = slider(page, "Frequency");
             const lowRatio = await frequencyRatioAfterDrag(page, frequencyReadout, 100, 40);
             const highRatio = await frequencyRatioAfterDrag(page, frequencyReadout, 8000, 40);
 
@@ -473,7 +463,7 @@ test("the Amount readout gains half scale over 120 upward pixels", async () => {
     const page = await openEnhancerLite();
 
     try {
-        const amountReadout = shadow(page, "[data-readout-control='primary-amount']");
+        const amountReadout = slider(page, "Amount");
         assert.equal(await amountReadout.count(), 1);
         await page.evaluate(() => {
             window.__ENHANCER_LITE_TEST__.emit("midAmountIn", 0.25);
@@ -481,12 +471,9 @@ test("the Amount readout gains half scale over 120 upward pixels", async () => {
         });
 
         await drag(page, amountReadout, 0, -120);
-        const amountEvents = await page.evaluate(() => (
-            window.__ENHANCER_LITE_TEST__.sent
-                .filter(({ endpointID }) => endpointID === "midAmountIn")
-        ));
+        const amountEvents = await writesTo(page, "midAmountIn");
         assert.ok(amountEvents.length > 1, JSON.stringify(amountEvents));
-        assert.ok(Math.abs(amountEvents.at(-1).value - 0.75) < 1e-6);
+        assert.ok(Math.abs(amountEvents.at(-1) - 0.75) < 1e-6);
     } finally {
         await page.close();
     }
@@ -496,7 +483,7 @@ test("the Q readout doubles Q over 40 upward pixels", async () => {
     const page = await openEnhancerLite();
 
     try {
-        const qReadout = shadow(page, "[data-readout-control='q']");
+        const qReadout = slider(page, "Q");
         assert.equal(await qReadout.count(), 1);
         await page.evaluate(() => {
             window.__ENHANCER_LITE_TEST__.emit("qIn", 0.5);
@@ -504,12 +491,9 @@ test("the Q readout doubles Q over 40 upward pixels", async () => {
         });
 
         await drag(page, qReadout, 0, -40);
-        const qEvents = await page.evaluate(() => (
-            window.__ENHANCER_LITE_TEST__.sent
-                .filter(({ endpointID }) => endpointID === "qIn")
-        ));
+        const qEvents = await writesTo(page, "qIn");
         assert.ok(qEvents.length > 1, JSON.stringify(qEvents));
-        assert.ok(Math.abs(qEvents.at(-1).value - 1) < 1e-6);
+        assert.ok(Math.abs(qEvents.at(-1) - 1) < 1e-6);
     } finally {
         await page.close();
     }
@@ -523,16 +507,10 @@ test("Amount uses the same fixed vertical law in the readout and bell at every e
         const page = await openEnhancerLite();
         try {
             await page.setViewportSize({ width: viewportWidth, height: viewportHeight });
-            await page.locator("enhance-that-view").evaluate((host, width) => {
-                host.style.width = `${width}px`;
-            }, editorWidth);
-            await shadow(page, ".response-plot").evaluate((plot, height) => {
-                plot.style.height = `${height}px`;
-            }, plotHeight);
-            const amountReadout = shadow(page, "[data-readout-control='primary-amount']");
-            const primaryHandle = shadow(page, "[data-response-role='primary-handle']");
-            const readoutAmount = await amountAfterDrag(page, amountReadout, 0.25, -60);
-            const bellAmount = await amountAfterDrag(page, primaryHandle, 0.25, -60);
+            await surface(page).evaluate((element, width) => { element.style.width = `${width}px`; }, editorWidth);
+            await responseGraph(page).evaluate((plot, height) => { plot.style.height = `${height}px`; }, plotHeight);
+            const readoutAmount = await amountAfterDrag(page, slider(page, "Amount"), 0.25, -60);
+            const bellAmount = await amountAfterDrag(page, slider(page, "Band handle"), 0.25, -60);
 
             assert.ok(Math.abs(readoutAmount - 0.5) < 1e-6, String(readoutAmount));
             assert.ok(Math.abs(bellAmount - 0.5) < 1e-6, String(bellAmount));
@@ -550,16 +528,10 @@ test("Q uses the same fixed logarithmic law in the readout and Shift-drag bell",
         const page = await openEnhancerLite();
         try {
             await page.setViewportSize({ width: viewportWidth, height: viewportHeight });
-            await page.locator("enhance-that-view").evaluate((host, width) => {
-                host.style.width = `${width}px`;
-            }, editorWidth);
-            await shadow(page, ".response-plot").evaluate((plot, height) => {
-                plot.style.height = `${height}px`;
-            }, plotHeight);
-            const qReadout = shadow(page, "[data-readout-control='q']");
-            const primaryHandle = shadow(page, "[data-response-role='primary-handle']");
-            const readoutQ = await qAfterDrag(page, qReadout, 0.5, -40);
-            const bellQ = await qAfterDrag(page, primaryHandle, 0.5, -40, ["Shift"]);
+            await surface(page).evaluate((element, width) => { element.style.width = `${width}px`; }, editorWidth);
+            await responseGraph(page).evaluate((plot, height) => { plot.style.height = `${height}px`; }, plotHeight);
+            const readoutQ = await qAfterDrag(page, slider(page, "Q"), 0.5, -40);
+            const bellQ = await qAfterDrag(page, slider(page, "Band handle"), 0.5, -40, ["Shift"]);
 
             assert.ok(Math.abs(readoutQ - 1) < 1e-6, String(readoutQ));
             assert.ok(Math.abs(bellQ - 1) < 1e-6, String(bellQ));
@@ -573,9 +545,9 @@ test("readout drag direction and endpoint clamps stay truthful", async () => {
     const page = await openEnhancerLite();
 
     try {
-        const frequencyReadout = shadow(page, "[data-readout-control='frequency']");
-        const amountReadout = shadow(page, "[data-readout-control='primary-amount']");
-        const qReadout = shadow(page, "[data-readout-control='q']");
+        const frequencyReadout = slider(page, "Frequency");
+        const amountReadout = slider(page, "Amount");
+        const qReadout = slider(page, "Q");
 
         assert.ok(Math.abs(
             await frequencyRatioAfterDrag(page, frequencyReadout, 30, -800) * 30 - 20,
@@ -600,8 +572,8 @@ test("every shape shares frequency, amount, and Shift-drag Q with no slider fall
     const page = await openEnhancerLite();
 
     try {
-        assert.equal(await shadow(page, ".shell input[type='range']").count(), 0);
-        const primaryHandle = shadow(page, "[data-response-role='primary-handle']");
+        assert.equal(await surface(page).locator("input").count(), 0);
+        const primaryHandle = slider(page, "Band handle");
 
         await page.evaluate(() => window.__ENHANCER_LITE_TEST__.clearSent());
         await drag(page, primaryHandle, 120, -82);
@@ -628,10 +600,10 @@ test("every shape shares frequency, amount, and Shift-drag Q with no slider fall
 test("one graph drag over frequency, amount and Q is one gesture that one Undo restores", async () => {
     const page = await openEnhancerLite();
     try {
-        const handle = shadow(page, "[data-response-role='primary-handle']");
-        const readout = role => shadow(page, `[data-readout-control='${role}']`);
+        const handle = slider(page, "Band handle");
+        const readouts = ["Frequency", "Amount", "Q"];
         const before = {};
-        for (const role of ["frequency", "primary-amount", "q"]) before[role] = await readout(role).getAttribute("aria-valuenow");
+        for (const name of readouts) before[name] = await slider(page, name).getAttribute("aria-valuenow");
         await page.evaluate(() => window.__ENHANCER_LITE_TEST__.clearAutomation());
         const bounds = await handle.boundingBox();
         assert.ok(bounds, "drag target must have browser geometry");
@@ -643,8 +615,8 @@ test("one graph drag over frequency, amount and Q is one gesture that one Undo r
         await page.mouse.move(x + 90, y - 100, { steps: 4 });
         await page.mouse.up();
         await page.keyboard.up("Shift");
-        for (const role of ["frequency", "primary-amount", "q"])
-            assert.notEqual(await readout(role).getAttribute("aria-valuenow"), before[role], `${role} moved during the drag`);
+        for (const name of readouts)
+            assert.notEqual(await slider(page, name).getAttribute("aria-valuenow"), before[name], `${name} moved during the drag`);
         const brackets = await page.evaluate(() => window.__ENHANCER_LITE_TEST__.automationMessages.filter(message => message.type !== "value"));
         assert.deepEqual(brackets, [
             { type: "begin", endpointID: "freqHzIn" }, { type: "begin", endpointID: "midAmountIn" }, { type: "begin", endpointID: "qIn" },
@@ -653,8 +625,8 @@ test("one graph drag over frequency, amount and Q is one gesture that one Undo r
 
         const undo = page.getByRole("button", { name: "Undo", exact: true });
         await undo.click({ timeout: 2000 });
-        for (const role of ["frequency", "primary-amount", "q"])
-            assert.equal(await readout(role).getAttribute("aria-valuenow"), before[role], `one Undo restores ${role}`);
+        for (const name of readouts)
+            assert.equal(await slider(page, name).getAttribute("aria-valuenow"), before[name], `one Undo restores ${name}`);
         assert.equal(await undo.isDisabled(), true, "the drag made exactly one Undo entry");
     } finally {
         await page.close();
@@ -662,12 +634,8 @@ test("one graph drag over frequency, amount and Q is one gesture that one Undo r
 });
 
 test("Bell, Low, and High Amount handles follow real pointer travel in source and compiled UI", async () => {
-    const modulePaths = [
-        "/fx/enhancer_lite/view/source.ts",
-        "/build/fx/enhancer_lite_runtime/view/app.js",
-    ];
     const results = [];
-    for (const modulePath of modulePaths) {
+    for (const modulePath of [sourceView, compiledView]) {
         const page = await openEnhancerLite(modulePath);
         try {
             results.push({
@@ -690,7 +658,7 @@ test("losing pointer capture closes the bell gesture before later movement", asy
     const page = await openEnhancerLite();
 
     try {
-        const primaryHandle = shadow(page, "[data-response-role='primary-handle']");
+        const primaryHandle = slider(page, "Band handle");
         const { originX, originY, pointerID } = await beginCapturedDrag(page, primaryHandle);
         await primaryHandle.evaluate((element, capturedPointerID) => {
             element.releasePointerCapture(capturedPointerID);
@@ -715,7 +683,7 @@ test("readout pointer cancellation and capture loss close without stale writes",
     for (const terminalEvent of ["pointercancel", "lostpointercapture"]) {
         const page = await openEnhancerLite();
         try {
-            const qReadout = shadow(page, "[data-readout-control='q']");
+            const qReadout = slider(page, "Q");
             const { originX, originY, pointerID } = await beginCapturedDrag(page, qReadout);
             await qReadout.evaluate((element, detail) => {
                 if (detail.terminalEvent === "lostpointercapture")
@@ -742,19 +710,17 @@ test("disconnect closes an active readout gesture and releases capture", async (
     const page = await openEnhancerLite();
 
     try {
-        const frequencyReadout = shadow(page, "[data-readout-control='frequency']");
-        const { pointerID } = await beginCapturedDrag(page, frequencyReadout);
-        const cleanup = await page.evaluate((capturedPointerID) => {
-            const view = document.querySelector("builder-kit-state-view").shadowRoot.querySelector("enhance-that-view");
-            const readout = view.shadowRoot.querySelector("[data-readout-control='frequency']");
+        const frequencyReadout = slider(page, "Frequency");
+        const { originX, originY, pointerID } = await beginCapturedDrag(page, frequencyReadout);
+        await page.mouse.move(originX + 20, originY, { steps: 2 });
+        const captured = await frequencyReadout.evaluate((readout, capturedPointerID) => {
             document.querySelector("#mount").replaceChildren();
-            return {
-                captured: readout.hasPointerCapture(capturedPointerID),
-                dragging: readout.hasAttribute("data-dragging"),
-            };
+            return readout.hasPointerCapture(capturedPointerID);
         }, pointerID);
         await page.mouse.up();
-        assert.deepEqual(cleanup, { captured: false, dragging: false });
+        assert.equal(captured, false);
+        const automation = await page.evaluate(() => window.__ENHANCER_LITE_TEST__.automationMessages);
+        assert.deepEqual(automation.at(-1), { type: "end", endpointID: "freqHzIn" }, "the drag's host gesture closed");
         assert.deepEqual(await page.evaluate(() => window.__ENHANCER_LITE_TEST__.sent.at(-1)), {
             endpointID: "analyzerEnabledIn",
             value: 0,
@@ -768,7 +734,7 @@ test("readouts ignore ineligible starts while selection stays suppressed and but
     const page = await openEnhancerLite();
 
     try {
-        const amountReadout = shadow(page, "[data-readout-control='primary-amount']");
+        const amountReadout = slider(page, "Amount");
         const bounds = await amountReadout.boundingBox();
         assert.ok(bounds);
         await page.evaluate(() => window.__ENHANCER_LITE_TEST__.clearSent());
@@ -787,8 +753,8 @@ test("readouts ignore ineligible starts while selection stays suppressed and but
         assert.deepEqual(await page.evaluate(() => window.__ENHANCER_LITE_TEST__.sent), []);
         assert.equal(await amountReadout.evaluate((element) => getComputedStyle(element).userSelect), "none");
 
-        await shadow(page, "[data-curve='tube']").click();
-        await shadow(page, "[data-mode='mid-side']").click();
+        await choice(page, "Character", "Tube").click();
+        await choice(page, "Route", "M/S").click();
         assert.deepEqual(await page.evaluate(() => window.__ENHANCER_LITE_TEST__.sent.slice(-2)), [
             { endpointID: "curveIn", value: 0 },
             { endpointID: "modeIn", value: 1 },
@@ -802,13 +768,13 @@ test("M/S exposes an independent draggable Side amount while sharing frequency a
     const page = await openEnhancerLite();
 
     try {
-        const sideHandle = shadow(page, "[data-response-role='side-handle']");
+        const sideHandle = slider(page, "Side band handle");
         assert.equal(await sideHandle.isHidden(), true);
-        assert.equal(await shadow(page, "[data-primary-label]").textContent(), "AMOUNT");
+        assert.match(await slider(page, "Amount").textContent(), /AMOUNT/);
 
-        await shadow(page, "[data-mode='mid-side']").click();
+        await choice(page, "Route", "M/S").click();
         assert.equal(await sideHandle.isVisible(), true);
-        assert.equal(await shadow(page, "[data-primary-label]").textContent(), "MID");
+        assert.match(await slider(page, "Mid Amount").textContent(), /MID/);
 
         await page.evaluate(() => window.__ENHANCER_LITE_TEST__.clearSent());
         await drag(page, sideHandle, 0, -72);
@@ -824,12 +790,11 @@ test("Mid and Side Amount readouts drag their own production endpoints independe
     const page = await openEnhancerLite();
 
     try {
-        const midReadout = shadow(page, "[data-readout-control='primary-amount']");
-        const sideReadout = shadow(page, "[data-readout-control='side-amount']");
-        assert.equal(await sideReadout.count(), 1);
+        const sideReadout = slider(page, "Side Amount");
         assert.equal(await sideReadout.isHidden(), true);
-        await shadow(page, "[data-mode='mid-side']").click();
+        await choice(page, "Route", "M/S").click();
         assert.equal(await sideReadout.isVisible(), true);
+        const midReadout = slider(page, "Mid Amount");
         await page.evaluate(() => {
             window.__ENHANCER_LITE_TEST__.emit("midAmountIn", 0.2);
             window.__ENHANCER_LITE_TEST__.emit("sideAmountIn", 0.7);
@@ -859,18 +824,14 @@ test("readouts expose truthful slider semantics and the bell's keyboard steps", 
     const page = await openEnhancerLite();
 
     try {
-        const frequencyReadout = shadow(page, "[data-readout-control='frequency']");
-        const amountReadout = shadow(page, "[data-readout-control='primary-amount']");
-        const qReadout = shadow(page, "[data-readout-control='q']");
+        const frequencyReadout = slider(page, "Frequency");
+        const amountReadout = slider(page, "Amount");
+        const qReadout = slider(page, "Q");
         assert.deepEqual(await frequencyReadout.evaluate((element) => ({
-            role: element.getAttribute("role"),
-            label: element.getAttribute("aria-label"),
             orientation: element.getAttribute("aria-orientation"),
             minimum: element.getAttribute("aria-valuemin"),
             maximum: element.getAttribute("aria-valuemax"),
         })), {
-            role: "slider",
-            label: "Frequency",
             orientation: "horizontal",
             minimum: "20",
             maximum: "20000",
@@ -906,11 +867,11 @@ test("readouts expose truthful slider semantics and the bell's keyboard steps", 
         sent = await page.evaluate(() => window.__ENHANCER_LITE_TEST__.sent);
         assert.equal(sent.at(-1).endpointID, "qIn");
         assert.ok(Math.abs(sent.at(-1).value - 0.5 * Math.pow(2, 1 / 6)) < 1e-6);
-        assert.equal(await qReadout.getAttribute("aria-valuetext"), `Q ${sent.at(-1).value.toFixed(2)}`);
+        assert.equal(await qReadout.getAttribute("aria-valuetext"), sent.at(-1).value.toFixed(2));
 
-        await shadow(page, "[data-mode='mid-side']").click();
-        const sideReadout = shadow(page, "[data-readout-control='side-amount']");
-        assert.equal(await amountReadout.getAttribute("aria-label"), "Mid Amount");
+        await choice(page, "Route", "M/S").click();
+        const sideReadout = slider(page, "Side Amount");
+        assert.equal(await slider(page, "Mid Amount").count(), 1, "the primary amount is named Mid in M/S");
         assert.equal(await sideReadout.getAttribute("tabindex"), "0");
         await page.evaluate(() => {
             window.__ENHANCER_LITE_TEST__.emit("sideAmountIn", 0.5);
@@ -928,13 +889,56 @@ test("readouts expose truthful slider semantics and the bell's keyboard steps", 
     }
 });
 
+test("Enter or a double-click on a readout types an exact value as one Undo entry", async () => {
+    const page = await openEnhancerLite();
+    try {
+        const frequency = slider(page, "Frequency");
+        const undo = page.getByRole("button", { name: "Undo", exact: true });
+        await frequency.press("Enter");
+        const field = page.getByRole("textbox", { name: "Frequency value" });
+        assert.equal(await field.inputValue(), "130 Hz", "the field opens on the shown value");
+        await field.fill("2.5k");
+        await field.press("Enter");
+        await frequency.filter({ hasText: "2.50 kHz" }).waitFor();
+        assert.deepEqual(await writesTo(page, "freqHzIn"), [2500]);
+        assert.equal(await frequency.evaluate((element) => element.getRootNode().activeElement === element), true, "Enter returns focus to the readout");
+
+        await frequency.press("Enter");
+        await field.fill("loud");
+        await field.press("Enter");
+        assert.equal(await page.getByRole("alert").textContent(), "Type a frequency such as 440 or 2.5k.");
+        await field.press("Escape");
+        assert.equal(await field.count(), 0);
+        assert.deepEqual(await writesTo(page, "freqHzIn"), [2500], "a rejected or cancelled entry writes nothing");
+
+        // Amount is typed in the dB it shows; an absolute value back to zero is written.
+        const amount = slider(page, "Amount");
+        await amount.press("ArrowUp");
+        await amount.dblclick();
+        const amountField = page.getByRole("textbox", { name: "Amount value" });
+        await amountField.fill("0 dB");
+        await amountField.press("Enter");
+        assert.equal(await amount.getAttribute("aria-valuenow"), "0");
+        assert.deepEqual(await writesTo(page, "midAmountIn"), [0.01, 0]);
+
+        await undo.click();
+        assert.equal(await amount.getAttribute("aria-valuenow"), "0.12", "the typed value is one Undo entry");
+        await undo.click();
+        await undo.click();
+        assert.equal(await frequency.getAttribute("aria-valuenow"), "130");
+        assert.equal(await undo.isDisabled(), true);
+    } finally {
+        await page.close();
+    }
+});
+
 test("the plotted bell narrows as Q rises and tracks the actual 12 dB amount law", async () => {
     const page = await openEnhancerLite();
 
     try {
-        const primaryPath = shadow(page, "[data-response-role='primary']");
+        const primaryPath = page.locator("[data-response='mid']");
         assert.deepEqual(
-            await shadow(page, "[data-gain-db]").evaluateAll((rows) => (
+            await page.locator("[data-gain-db]").evaluateAll((rows) => (
                 rows.map((row) => Number(row.getAttribute("data-gain-db")))
             )),
             [12, 9, 6, 3, 0],
@@ -955,8 +959,8 @@ test("the plotted bell narrows as Q rises and tracks the actual 12 dB amount law
 
         assert.notEqual(narrowPath, widePath);
         assert.ok(widePointsAboveSixDb > narrowPointsAboveSixDb);
-        assert.equal(await shadow(page, "[data-readout='primary']").textContent(), "+12.0 dB");
-        assert.equal(await shadow(page, "[data-response-role='primary-handle']").getAttribute("cy"), "18.00");
+        assert.equal(await slider(page, "Amount").getAttribute("aria-valuetext"), "+12.0 dB");
+        assert.equal(await slider(page, "Band handle").getAttribute("cy"), "18.00");
     } finally {
         await page.close();
     }
@@ -966,40 +970,32 @@ test("Low and High draw measured shelf responses with a directly manipulated Amo
     const page = await openEnhancerLite();
 
     try {
-        const primaryPath = shadow(page, "[data-response-role='primary']");
+        const primaryPath = page.locator("[data-response='mid']");
+        const guide = page.locator("[data-guide='mid']");
         await page.evaluate(() => {
             window.__ENHANCER_LITE_TEST__.emit("freqHzIn", 1000);
             window.__ENHANCER_LITE_TEST__.emit("midAmountIn", 1);
             window.__ENHANCER_LITE_TEST__.emit("qIn", 0.7);
         });
         const bellPath = await primaryPath.getAttribute("d");
-        assert.equal(await shadow(page, "[data-shelf-overflow='high']").isHidden(), true);
-        assert.equal(await shadow(page, "[data-response-role='primary-guide']").isHidden(), true);
+        assert.equal(await page.locator("[data-shelf-overflow='high']").isHidden(), true);
+        assert.equal(await guide.count(), 0, "the bell's handle sits on its curve and needs no guide");
 
         await page.evaluate(() => window.__ENHANCER_LITE_TEST__.clearSent());
-        await shadow(page, "[data-shape='low']").click();
+        await choice(page, "Shape", "Low").click();
         const lowPath = await primaryPath.getAttribute("d");
         assert.notEqual(lowPath, bellPath);
-        assert.equal(await shadow(page, "[data-shape='low']").getAttribute("aria-pressed"), "true");
-        assert.equal(await shadow(page, "[data-shelf-overflow='high']").isVisible(), true);
-        assert.equal(await shadow(page, "[data-shelf-overflow='low']").isVisible(), true);
-        assert.equal(
-            await shadow(page, "[data-response-role='primary-guide']").getAttribute("hidden"),
-            null,
-        );
-        assert.match(
-            await shadow(page, "[data-response-role='primary-guide']").getAttribute("d"),
-            /^M [\d.]+ 18\.00 V [\d.]+$/,
-        );
-        assert.equal(
-            await shadow(page, "[data-response-role='primary-handle']").getAttribute("cy"),
-            "18.00",
-        );
+        assert.equal(await choice(page, "Shape", "Low").getAttribute("aria-pressed"), "true");
+        assert.equal(await page.locator("[data-shelf-overflow='high']").isVisible(), true);
+        assert.equal(await page.locator("[data-shelf-overflow='low']").isVisible(), true);
+        assert.equal(await guide.count(), 1, "a shelf draws the guide from the handle to its curve");
+        assert.match(await guide.getAttribute("d"), /^M [\d.]+ 18\.00 V [\d.]+$/);
+        assert.equal(await slider(page, "Band handle").getAttribute("cy"), "18.00");
 
-        await shadow(page, "[data-shape='high']").click();
+        await choice(page, "Shape", "High").click();
         const highPath = await primaryPath.getAttribute("d");
         assert.notEqual(highPath, lowPath);
-        assert.equal(await shadow(page, "[data-shape='high']").getAttribute("aria-pressed"), "true");
+        assert.equal(await choice(page, "Shape", "High").getAttribute("aria-pressed"), "true");
         assert.deepEqual(
             await page.evaluate(() => window.__ENHANCER_LITE_TEST__.sent),
             [
@@ -1050,13 +1046,13 @@ test("input and output spectra share the bell's frequency grid and aligned dB ro
             });
         });
 
-        const inputPath = await shadow(page, "[data-spectrum-role='input']").getAttribute("d");
-        const outputPath = await shadow(page, "[data-spectrum-role='output']").getAttribute("d");
+        await page.locator("[data-spectrum-peak='input']").filter({ hasText: "-12.0 dB" }).waitFor();
+        await page.locator("[data-spectrum-peak='output']").filter({ hasText: "-6.0 dB" }).waitFor();
+        const inputPath = await page.locator("[data-spectrum-role='input']").getAttribute("d");
+        const outputPath = await page.locator("[data-spectrum-role='output']").getAttribute("d");
         assert.ok(inputPath.length > 1000);
         assert.ok(outputPath.length > 1000);
         assert.notEqual(inputPath, outputPath);
-        assert.equal(await shadow(page, "[data-spectrum-peak='input']").textContent(), "-12.0 dB");
-        assert.equal(await shadow(page, "[data-spectrum-peak='output']").textContent(), "-6.0 dB");
 
         const parsePoints = (pathValue) => [...pathValue.matchAll(/[ML] ([\d.]+) ([\d.]+)/g)]
             .map((match) => ({ x: Number(match[1]), y: Number(match[2]) }));
@@ -1066,18 +1062,18 @@ test("input and output spectra share the bell's frequency grid and aligned dB ro
         const outputPeak = parsePoints(outputPath).reduce((peak, point) => (
             point.y < peak.y ? point : peak
         ));
-        const handleX = Number(await shadow(page, "[data-response-role='primary-handle']").getAttribute("cx"));
-        const oneKhzTickX = Number(await shadow(page, "[data-frequency-hz='1000']").getAttribute("x"));
+        const handleX = Number(await slider(page, "Band handle").getAttribute("cx"));
+        const oneKhzTickX = Number(await page.locator("[data-frequency-hz='1000']").getAttribute("x"));
         assert.equal(handleX, oneKhzTickX);
         assert.ok(Math.abs(inputPeak.x - handleX) <= 5, `${inputPeak.x} vs ${handleX}`);
         assert.ok(Math.abs(outputPeak.x - handleX) <= 5, `${outputPeak.x} vs ${handleX}`);
         assert.ok(outputPeak.y < inputPeak.y);
 
-        const gainRowY = await shadow(page, "[data-gain-db='6']").getAttribute("y");
-        const levelRowY = await shadow(page, "[data-level-dbfs='-36']").getAttribute("y");
+        const gainRowY = await page.locator("[data-gain-db='6']").getAttribute("y");
+        const levelRowY = await page.locator("[data-level-dbfs='-36']").getAttribute("y");
         assert.equal(gainRowY, levelRowY);
         if (process.env.ENHANCER_LITE_SCREENSHOT_PATH) {
-            await shadow(page, "[data-mode='mid-side']").click();
+            await choice(page, "Route", "M/S").click();
             await page.evaluate(() => {
                 window.__ENHANCER_LITE_TEST__.emit("sideAmountIn", 0.55);
                 window.scrollTo(0, 0);
@@ -1098,39 +1094,33 @@ test("a plotted frequency handle writes the exact shared-axis tick under the poi
         const page = await openEnhancerLite();
         try {
             await page.setViewportSize({ width: Math.max(500, editorWidth + 40), height: 620 });
-            await page.locator("enhance-that-view").evaluate((host, width) => {
-                host.style.width = `${width}px`;
-            }, editorWidth);
+            await surface(page).evaluate((element, width) => { element.style.width = `${width}px`; }, editorWidth);
             await page.evaluate(() => {
-                window.__ENHANCER_LITE_TEST__.emit("freqHzIn", 1_000);
+                window.__ENHANCER_LITE_TEST__.emit("freqHzIn", 200);
                 window.__ENHANCER_LITE_TEST__.clearSent();
             });
 
-            const plot = shadow(page, ".response-plot");
-            const handle = shadow(page, "[data-response-role='primary-handle']");
-            const targetTick = shadow(page, "[data-frequency-hz='2000']");
+            // 1 kHz is labelled at every width.
+            const handle = slider(page, "Band handle");
+            const targetTick = page.locator("[data-frequency-hz='1000']");
             const [plotBounds, handleBounds, targetTickX] = await Promise.all([
-                plot.boundingBox(),
+                responseGraph(page).boundingBox(),
                 handle.boundingBox(),
                 targetTick.getAttribute("x").then(Number),
             ]);
             assert.ok(plotBounds && handleBounds);
             const targetClientX = plotBounds.x + targetTickX / 760 * plotBounds.width;
             const handleClientY = handleBounds.y + handleBounds.height / 2;
-            await page.mouse.move(
-                handleBounds.x + handleBounds.width / 2,
-                handleClientY,
-            );
+            await page.mouse.move(handleBounds.x + handleBounds.width / 2, handleClientY);
             await page.mouse.down();
             await page.mouse.move(targetClientX, handleClientY, { steps: 5 });
             await page.mouse.up();
 
-            const frequencyEvents = (await page.evaluate(() => window.__ENHANCER_LITE_TEST__.sent))
-                .filter(({ endpointID }) => endpointID === "freqHzIn");
+            const frequencyEvents = await writesTo(page, "freqHzIn");
             assert.ok(frequencyEvents.length > 0, `${editorWidth}px emitted no frequency write`);
             assert.ok(
-                Math.abs(frequencyEvents.at(-1).value - 2_000) < 0.25,
-                `${editorWidth}px wrote ${frequencyEvents.at(-1).value} Hz at the 2 kHz tick`,
+                Math.abs(frequencyEvents.at(-1) - 1_000) < 0.125,
+                `${editorWidth}px wrote ${frequencyEvents.at(-1)} Hz at the 1 kHz tick`,
             );
             assert.equal(await handle.getAttribute("cx"), await targetTick.getAttribute("x"));
         } finally {
@@ -1149,20 +1139,17 @@ test("the shared axis reduces label density responsively without moving retained
             { editorWidth: 820, expectedLabels: 10 },
         ]) {
             await page.setViewportSize({ width: Math.max(500, editorWidth + 40), height: 620 });
-            await page.locator("enhance-that-view").evaluate((host, width) => {
-                host.style.width = `${width}px`;
-            }, editorWidth);
-            await page.waitForFunction((count) => {
-                const root = document.querySelector("builder-kit-state-view").shadowRoot.querySelector("enhance-that-view")?.shadowRoot;
-                return root?.querySelectorAll("[data-frequency-hz]:not([hidden])").length === count;
-            }, expectedLabels);
+            await surface(page).evaluate((element, width) => { element.style.width = `${width}px`; }, editorWidth);
+            const ticks = page.locator("[data-frequency-hz]");
+            await page.waitForFunction((count) => (
+                document.querySelector("builder-kit-state-view").shadowRoot.querySelectorAll("[data-frequency-hz]").length === count
+            ), expectedLabels);
 
-            const visibleTicks = shadow(page, "[data-frequency-hz]:not([hidden])");
-            assert.equal(await visibleTicks.count(), expectedLabels);
-            const labels = await visibleTicks.allTextContents();
+            assert.equal(await ticks.count(), expectedLabels);
+            const labels = await ticks.allTextContents();
             assert.equal(labels.some((label) => label.endsWith(" Hz")), true);
             assert.equal(labels.some((label) => label.endsWith(" kHz")), true);
-            const nextOneKhzX = Number(await shadow(page, "[data-frequency-hz='1000']").getAttribute("x"));
+            const nextOneKhzX = Number(await page.locator("[data-frequency-hz='1000']").getAttribute("x"));
             oneKhzX ??= nextOneKhzX;
             assert.equal(nextOneKhzX, oneKhzX);
         }
@@ -1208,14 +1195,11 @@ test("the editor enables live analysis only while its view is connected", async 
 
 test("the source and compiled views name the product in plain text and load no images", async () => {
     const { name } = JSON.parse(await readFile(path.join(repoRoot, "fx/enhancer_lite/EnhancerLite.cmajorpatch"), "utf8"));
-    for (const modulePath of [
-        "/fx/enhancer_lite/view/source.ts",
-        "/build/fx/enhancer_lite_runtime/view/app.js",
-    ]) {
+    for (const modulePath of [sourceView, compiledView]) {
         const page = await openEnhancerLite(modulePath);
         try {
-            assert.equal(await shadow(page, ".shell h1").textContent(), name);
-            assert.equal(await shadow(page, ".shell img").count(), 0);
+            assert.equal(await page.getByRole("heading", { level: 1 }).textContent(), name);
+            assert.equal(await page.locator("img").count(), 0);
         } finally {
             await page.close();
         }
@@ -1225,13 +1209,18 @@ test("the source and compiled views name the product in plain text and load no i
 test("the surface shows both spectra, one response handle and the four draggable readouts", async () => {
     const page = await openEnhancerLite();
     try {
-        assert.equal(await shadow(page, "[data-spectrum-role='input']").count(), 1);
-        assert.equal(await shadow(page, "[data-spectrum-role='output']").count(), 1);
-        assert.equal(await shadow(page, ".response-handle.primary").count(), 1);
-        assert.deepEqual(
-            await shadow(page, ".drag-affordance").allTextContents(),
-            ["↔", "↕", "↕", "↕"],
-        );
+        assert.equal(await page.locator("[data-spectrum-role='input']").count(), 1);
+        assert.equal(await page.locator("[data-spectrum-role='output']").count(), 1);
+        assert.equal(await slider(page, "Band handle").count(), 1);
+        await choice(page, "Route", "M/S").click();
+        const readouts = [];
+        for (const name of ["Frequency", "Mid Amount", "Side Amount", "Q"]) {
+            const readout = slider(page, name);
+            readouts.push([name, await readout.getAttribute("aria-orientation"), (await readout.textContent()).at(0)]);
+        }
+        assert.deepEqual(readouts, [
+            ["Frequency", "horizontal", "↔"], ["Mid Amount", "vertical", "↕"], ["Side Amount", "vertical", "↕"], ["Q", "vertical", "↕"],
+        ]);
     } finally {
         await page.close();
     }
@@ -1241,57 +1230,45 @@ test("host-restored shape, character, and intensity select the truthful segment"
     const page = await openEnhancerLite();
 
     try {
-        assert.equal(await shadow(page, "[data-curve='solid']").getAttribute("aria-pressed"), "true");
-        assert.equal(
-            await shadow(page, "[data-saturation-mode='subtle']").getAttribute("aria-pressed"),
-            "true",
-        );
-        assert.equal(await shadow(page, "[data-shape='bell']").getAttribute("aria-pressed"), "true");
+        assert.equal(await choice(page, "Character", "Solid").getAttribute("aria-pressed"), "true");
+        assert.equal(await choice(page, "Intensity", "Subtle").getAttribute("aria-pressed"), "true");
+        assert.equal(await choice(page, "Shape", "Bell").getAttribute("aria-pressed"), "true");
         await page.evaluate(() => {
             window.__ENHANCER_LITE_TEST__.emit("curveIn", 0);
             window.__ENHANCER_LITE_TEST__.emit("saturationModeIn", 1);
             window.__ENHANCER_LITE_TEST__.emit("shapeIn", 2);
         });
-        assert.equal(await shadow(page, "[data-curve='tube']").getAttribute("aria-pressed"), "true");
-        assert.equal(await shadow(page, "[data-curve='solid']").getAttribute("aria-pressed"), "false");
-        assert.equal(
-            await shadow(page, "[data-saturation-mode='medium']").getAttribute("aria-pressed"),
-            "true",
-        );
-        assert.equal(
-            await shadow(page, "[data-saturation-mode='subtle']").getAttribute("aria-pressed"),
-            "false",
-        );
-        assert.equal(await shadow(page, "[data-shape='high']").getAttribute("aria-pressed"), "true");
-        assert.equal(await shadow(page, "[data-shape='bell']").getAttribute("aria-pressed"), "false");
+        assert.equal(await choice(page, "Character", "Tube").getAttribute("aria-pressed"), "true");
+        assert.equal(await choice(page, "Character", "Solid").getAttribute("aria-pressed"), "false");
+        assert.equal(await choice(page, "Intensity", "Medium").getAttribute("aria-pressed"), "true");
+        assert.equal(await choice(page, "Intensity", "Subtle").getAttribute("aria-pressed"), "false");
+        assert.equal(await choice(page, "Shape", "High").getAttribute("aria-pressed"), "true");
+        assert.equal(await choice(page, "Shape", "Bell").getAttribute("aria-pressed"), "false");
     } finally {
         await page.close();
     }
 });
 
 test("the compiled VST view preserves the same gesture surface and eight sound controls", async () => {
-    const page = await openEnhancerLite("/build/fx/enhancer_lite_runtime/view/app.js");
+    const page = await openEnhancerLite(compiledView);
 
     try {
-        assert.equal(await shadow(page, ".response-panel").count(), 1);
-        assert.equal(await shadow(page, ".shell input").count(), 0);
-        assert.equal(await shadow(page, "[data-readout-control]").count(), 4);
-        assert.deepEqual(await shadow(page, ".shell").evaluate((shell) => {
-            const root = shell.getRootNode();
+        assert.equal(await responseGraph(page).count(), 1);
+        assert.equal(await surface(page).locator("input").count(), 0);
+        assert.deepEqual(await surface(page).evaluate((main) => {
+            const root = main.getRootNode();
             return {
-                frequencyCursor: getComputedStyle(
-                    root.querySelector("[data-readout-control='frequency']"),
-                ).cursor,
-                qCursor: getComputedStyle(root.querySelector("[data-readout-control='q']")).cursor,
+                frequencyCursor: getComputedStyle(root.querySelector("[role=slider][aria-label=Frequency]")).cursor,
+                qCursor: getComputedStyle(root.querySelector("[role=slider][aria-label=Q]")).cursor,
             };
         }), {
             frequencyCursor: "ew-resize",
             qCursor: "ns-resize",
         });
-        await shadow(page, "[data-shape='low']").click();
-        await shadow(page, "[data-saturation-mode='medium']").click();
-        await shadow(page, "[data-mode='mid-side']").click();
-        assert.equal(await shadow(page, "[data-response-role='side-handle']").isVisible(), true);
+        await choice(page, "Shape", "Low").click();
+        await choice(page, "Intensity", "Medium").click();
+        await choice(page, "Route", "M/S").click();
+        assert.equal(await slider(page, "Side band handle").isVisible(), true);
         assert.deepEqual(await page.evaluate(() => window.__ENHANCER_LITE_TEST__.sent.slice(-3)), [
             { endpointID: "shapeIn", value: 0 },
             { endpointID: "saturationModeIn", value: 1 },
@@ -1305,10 +1282,10 @@ test("the compiled VST view preserves the same gesture surface and eight sound c
             window.__ENHANCER_LITE_TEST__.emit("qIn", 0.5);
             window.__ENHANCER_LITE_TEST__.clearSent();
         });
-        await drag(page, shadow(page, "[data-readout-control='frequency']"), 80, 0);
-        await drag(page, shadow(page, "[data-readout-control='primary-amount']"), 0, -24);
-        await drag(page, shadow(page, "[data-readout-control='side-amount']"), 0, 24);
-        await drag(page, shadow(page, "[data-readout-control='q']"), 0, -40);
+        await drag(page, slider(page, "Frequency"), 80, 0);
+        await drag(page, slider(page, "Mid Amount"), 0, -24);
+        await drag(page, slider(page, "Side Amount"), 0, 24);
+        await drag(page, slider(page, "Q"), 0, -40);
         const finalValues = Object.fromEntries(
             (await page.evaluate(() => window.__ENHANCER_LITE_TEST__.sent))
                 .map(({ endpointID, value }) => [endpointID, value]),
@@ -1323,14 +1300,11 @@ test("the compiled VST view preserves the same gesture surface and eight sound c
 });
 
 test("the header puts presets, snapshots and Undo above the Lite surface in source and compiled views", async () => {
-    for (const modulePath of [
-        "/fx/enhancer_lite/view/source.ts",
-        "/build/fx/enhancer_lite_runtime/view/app.js",
-    ]) {
+    for (const modulePath of [sourceView, compiledView]) {
         const page = await openEnhancerLite(modulePath);
         try {
-            const layout = await page.locator(".plugin-header").evaluate((header) => {
-                const panel = header.getRootNode().querySelector("enhance-that-view");
+            const layout = await page.getByRole("banner").evaluate((header) => {
+                const panel = header.getRootNode().querySelector("main");
                 const headerBounds = header.getBoundingClientRect();
                 const panelBounds = panel.getBoundingClientRect();
                 return { headerHeight: headerBounds.height, panelBelowHeader: panelBounds.top >= headerBounds.bottom, total: panelBounds.bottom - headerBounds.top };
@@ -1345,9 +1319,11 @@ test("the header puts presets, snapshots and Undo above the Lite surface in sour
             assert.equal(await page.getByRole("group", { name: "Snapshots" }).getByRole("button", { name: /^Snapshot [A-G], empty$/ }).count(), 7);
             assert.equal(await page.getByRole("button", { name: "Undo", exact: true }).isDisabled(), true);
 
-            // The Lite surface underneath is untouched: same controls, the
-            // analyzer switched on first, nothing else written at mount.
-            assert.equal(await shadow(page, ".shell [data-readout-control]").count(), 4);
+            // The surface underneath shows the Stereo readouts, switches the
+            // analyzer on first and writes nothing else at mount.
+            for (const name of ["Frequency", "Amount", "Q"])
+                assert.equal(await slider(page, name).isVisible(), true, `${name} readout`);
+            assert.equal(await slider(page, "Side Amount").isHidden(), true);
             assert.deepEqual(await page.evaluate(() => window.__ENHANCER_LITE_TEST__.sent), [
                 { endpointID: "analyzerEnabledIn", value: 1 },
             ]);
@@ -1361,35 +1337,37 @@ test("a factory preset recalls the complete Lite sound as one Undo entry", async
     const page = await openEnhancerLite();
     try {
         const preset = page.getByRole("combobox", { name: "Preset" });
+        const frequency = slider(page, "Frequency");
+        const shapeSelected = (name) => page.getByRole("group", { name: "Shape" }).getByRole("button", { name, exact: true, pressed: true });
         await page.evaluate(() => window.__ENHANCER_LITE_TEST__.clearSent());
         await preset.selectOption("vocal-presence");
-        await shadow(page, "[data-readout='frequency']").filter({ hasText: "3.20 kHz" }).waitFor();
+        await frequency.filter({ hasText: "3.20 kHz" }).waitFor();
 
         const sent = await page.evaluate(() => window.__ENHANCER_LITE_TEST__.sent);
         assert.deepEqual(Object.fromEntries(sent.map(({ endpointID, value }) => [endpointID, value])),
             { freqHzIn: 3200, qIn: 1.1, midAmountIn: 0.3 }, "only the values that differ are written");
-        assert.equal(await shadow(page, "[data-readout='q']").textContent(), "1.10");
-        assert.equal(await shadow(page, "[data-readout='primary']").textContent(), "+3.6 dB");
+        assert.equal(await slider(page, "Q").getAttribute("aria-valuetext"), "1.10");
+        assert.equal(await slider(page, "Amount").getAttribute("aria-valuetext"), "+3.6 dB");
         assert.equal(await preset.inputValue(), "vocal-presence");
         assert.equal(await page.getByText("Modified").count(), 0);
         const stored = await page.evaluate(() => window.__ENHANCER_LITE_TEST__.storedWrites.map(({ key }) => key));
         assert.deepEqual(stored, ["activePreset"], "the active preset is project state; the factory list is not stored");
 
         // Editing the surface marks the preset modified; Revert restores it.
-        await shadow(page, "[data-shape='high']").click();
+        await choice(page, "Shape", "High").click();
         await page.getByText("Modified").waitFor();
         await page.getByRole("button", { name: "Revert", exact: true }).click();
-        await shadow(page, "[data-shape='bell']").and(page.locator("[aria-pressed='true']")).waitFor();
+        await shapeSelected("Bell").waitFor();
         await page.getByText("Modified").waitFor({ state: "detached" });
 
         // Undo walks back the revert, the shape edit, then the whole recall.
         const undo = page.getByRole("button", { name: "Undo", exact: true });
         await undo.click();
-        await shadow(page, "[data-shape='high']").and(page.locator("[aria-pressed='true']")).waitFor();
+        await shapeSelected("High").waitFor();
         await undo.click();
-        await shadow(page, "[data-shape='bell']").and(page.locator("[aria-pressed='true']")).waitFor();
+        await shapeSelected("Bell").waitFor();
         await undo.click();
-        await shadow(page, "[data-readout='frequency']").filter({ hasText: "130 Hz" }).waitFor();
+        await frequency.filter({ hasText: "130 Hz" }).waitFor();
         assert.equal(await preset.inputValue(), "", "Undo also restores the previous active preset");
         assert.equal(await undo.isDisabled(), true);
     } finally {
@@ -1401,9 +1379,9 @@ test("user presets live in the user's files for this plugin identity only", asyn
     const original = JSON.parse(await readFile(path.join(repoRoot, "fx/enhancer_lite/EnhancerLite.cmajorpatch"), "utf8"));
     const manifest = { ...original, ID: "com.example.enhance" };
     let files = {};
-    let page = await openEnhancerLite("/fx/enhancer_lite/view/source.ts", { manifest, userFileFixture: files });
+    let page = await openEnhancerLite(sourceView, { manifest, userFileFixture: files });
     try {
-        await shadow(page, "[data-shape='high']").click();
+        await choice(page, "Shape", "High").click();
         await page.getByRole("button", { name: "Save as new", exact: true }).click();
         const name = page.getByRole("textbox", { name: "Preset name" });
         await name.fill("Bright");
@@ -1423,14 +1401,14 @@ test("user presets live in the user's files for this plugin identity only", asyn
             "saving a preset is not undone");
     } finally { await page.close(); }
 
-    page = await openEnhancerLite("/fx/enhancer_lite/view/source.ts", { manifest, userFileFixture: files });
+    page = await openEnhancerLite(sourceView, { manifest, userFileFixture: files });
     try {
         const user = page.getByRole("combobox", { name: "Preset" }).locator("optgroup[label='User'] option");
         await user.first().waitFor({ state: "attached" });
         assert.deepEqual(await user.allTextContents(), ["Bright"], "another project opens with the same user presets");
     } finally { await page.close(); }
 
-    page = await openEnhancerLite("/fx/enhancer_lite/view/source.ts", { manifest: { ...manifest, ID: "com.example.other" }, userFileFixture: files });
+    page = await openEnhancerLite(sourceView, { manifest: { ...manifest, ID: "com.example.other" }, userFileFixture: files });
     try {
         await page.waitForFunction(() => window.__PRESET_FILES_TEST__.calls.some(({ operation }) => operation === "list"));
         assert.equal(await page.getByRole("combobox", { name: "Preset" }).locator("optgroup[label='User']").count(), 0,
@@ -1443,7 +1421,7 @@ test("A-G snapshots keep each slot's tweaks and select as one Undo entry", async
     try {
         const snapshots = page.getByRole("group", { name: "Snapshots" });
         const slot = (id) => snapshots.getByRole("button", { name: new RegExp(`^Snapshot ${id}(, empty)?$`) });
-        const frequency = shadow(page, "[data-readout='frequency']");
+        const frequency = slider(page, "Frequency");
         await page.evaluate(() => window.__ENHANCER_LITE_TEST__.emit("freqHzIn", 1000));
         await frequency.filter({ hasText: "1.00 kHz" }).waitFor();
 
@@ -1454,15 +1432,15 @@ test("A-G snapshots keep each slot's tweaks and select as one Undo entry", async
         await snapshots.getByRole("button", { name: "Snapshot B", exact: true, pressed: true }).waitFor();
 
         // Tweaks made while B is selected stay with B when A is selected.
-        await shadow(page, "[data-shape='high']").click();
+        await choice(page, "Shape", "High").click();
         await page.evaluate(() => window.__ENHANCER_LITE_TEST__.emit("freqHzIn", 5000));
         await frequency.filter({ hasText: "5.00 kHz" }).waitFor();
         await slot("A").click();
         await frequency.filter({ hasText: "1.00 kHz" }).waitFor();
-        assert.equal(await shadow(page, "[data-shape='bell']").getAttribute("aria-pressed"), "true");
+        assert.equal(await choice(page, "Shape", "Bell").getAttribute("aria-pressed"), "true");
         await slot("B").click();
         await frequency.filter({ hasText: "5.00 kHz" }).waitFor();
-        assert.equal(await shadow(page, "[data-shape='high']").getAttribute("aria-pressed"), "true");
+        assert.equal(await choice(page, "Shape", "High").getAttribute("aria-pressed"), "true");
 
         // Undo restores the previous slot's sound and selection.
         await page.getByRole("button", { name: "Undo", exact: true }).click();
@@ -1478,18 +1456,15 @@ test("A-G snapshots keep each slot's tweaks and select as one Undo entry", async
     }
 });
 
-for (const modulePath of [
-    "/fx/enhancer_lite/view/source.ts",
-    "/build/fx/enhancer_lite_runtime/view/app.js",
-]) {
+for (const modulePath of [sourceView, compiledView]) {
     test(`all eight controls send balanced host automation gestures: ${modulePath}`, async () => {
         const page = await openEnhancerLite(modulePath);
         try {
-            for (const selector of ["[data-mode='mid-side']", "[data-curve='tube']", "[data-saturation-mode='medium']", "[data-shape='high']"])
-                await shadow(page, selector).click();
-            await shadow(page, "[data-shape='bell']").click();
-            for (const [role, key] of [["frequency", "ArrowRight"], ["q", "ArrowUp"], ["primary-amount", "ArrowUp"], ["side-amount", "ArrowUp"]])
-                await shadow(page, `[data-readout-control='${role}']`).press(key);
+            for (const [group, name] of [["Route", "M/S"], ["Character", "Tube"], ["Intensity", "Medium"], ["Shape", "High"]])
+                await choice(page, group, name).click();
+            await choice(page, "Shape", "Bell").click();
+            for (const [name, key] of [["Frequency", "ArrowRight"], ["Q", "ArrowUp"], ["Mid Amount", "ArrowUp"], ["Side Amount", "ArrowUp"]])
+                await slider(page, name).press(key);
             const messages = await page.evaluate(() => window.__ENHANCER_LITE_TEST__.automationMessages);
             assert.deepEqual([...new Set(messages.map(({ endpointID }) => endpointID))].sort(), Object.keys(initialValues).sort());
             for (let i = 0; i < messages.length; i += 3) {
@@ -1499,7 +1474,7 @@ for (const modulePath of [
                 assert.deepEqual(end, { type: "end", endpointID: value.endpointID });
             }
             await page.evaluate(() => window.__ENHANCER_LITE_TEST__.clearAutomation());
-            await shadow(page, "[data-shape='bell']").click();
+            await choice(page, "Shape", "Bell").click();
             assert.deepEqual(await page.evaluate(() => window.__ENHANCER_LITE_TEST__.automationMessages), [], "an unchanged selection writes no automation");
         } finally {
             await page.close();
@@ -1509,7 +1484,7 @@ for (const modulePath of [
     test(`a multi-parameter drag keeps host gestures open through modifier changes: ${modulePath}`, async () => {
         const page = await openEnhancerLite(modulePath);
         try {
-            const handle = shadow(page, ".response-handle.primary");
+            const handle = slider(page, "Band handle");
             const bounds = await handle.boundingBox();
             assert.ok(bounds);
             const x = bounds.x + bounds.width / 2;
@@ -1549,12 +1524,13 @@ for (const modulePath of [
             }, playback);
             for (const reopen of [false, true]) {
                 if (reopen) await page.evaluate(() => window.__ENHANCER_LITE_TEST__.reopen());
-                for (const [selector, value] of [["[data-mode='mid-side']", "true"], ["[data-curve='tube']", "true"], ["[data-saturation-mode='medium']", "true"], ["[data-shape='high']", "true"]])
-                    assert.equal(await shadow(page, selector).getAttribute("aria-pressed"), value);
-                assert.equal(await shadow(page, "[data-readout-control='frequency']").getAttribute("aria-valuenow"), "440");
-                assert.equal(await shadow(page, "[data-readout-control='q']").getAttribute("aria-valuenow"), "2.5");
-                assert.ok(Math.abs(Number(await shadow(page, "[data-readout-control='primary-amount']").getAttribute("aria-valuenow")) - 7.2) < 1e-9);
-                assert.ok(Math.abs(Number(await shadow(page, "[data-readout-control='side-amount']").getAttribute("aria-valuenow")) - 4.2) < 1e-9);
+                await slider(page, "Side Amount").waitFor();
+                for (const [group, name] of [["Route", "M/S"], ["Character", "Tube"], ["Intensity", "Medium"], ["Shape", "High"]])
+                    assert.equal(await choice(page, group, name).getAttribute("aria-pressed"), "true");
+                assert.equal(await slider(page, "Frequency").getAttribute("aria-valuenow"), "440");
+                assert.equal(await slider(page, "Q").getAttribute("aria-valuenow"), "2.5");
+                assert.ok(Math.abs(Number(await slider(page, "Mid Amount").getAttribute("aria-valuenow")) - 7.2) < 1e-9);
+                assert.ok(Math.abs(Number(await slider(page, "Side Amount").getAttribute("aria-valuenow")) - 4.2) < 1e-9);
             }
             assert.deepEqual(await page.evaluate(() => window.__ENHANCER_LITE_TEST__.automationMessages), []);
             assert.deepEqual(await page.evaluate(() => window.__ENHANCER_LITE_TEST__.sent.filter(({ endpointID }) => endpointID !== "analyzerEnabledIn")), []);
@@ -1564,11 +1540,12 @@ for (const modulePath of [
     });
 }
 
+// Browsers bubble pointercancel and lostpointercapture, so the stand-ins here do too.
 for (const termination of ["pointercancel", "lostpointercapture", "disconnect"]) {
     test(`readout automation closes exactly once on ${termination}`, async () => {
         const page = await openEnhancerLite();
         try {
-            const readout = shadow(page, "[data-readout-control='frequency']");
+            const readout = slider(page, "Frequency");
             const bounds = await readout.boundingBox();
             assert.ok(bounds);
             await page.mouse.move(bounds.x + bounds.width / 2, bounds.y + bounds.height / 2);
@@ -1580,11 +1557,12 @@ for (const termination of ["pointercancel", "lostpointercapture", "disconnect"])
             if (termination === "disconnect") {
                 await page.evaluate(() => window.__ENHANCER_LITE_TEST__.disconnect());
             } else {
-                await readout.evaluate((element, type) => element.dispatchEvent(new PointerEvent(type, { pointerId: 1 })), termination);
+                await readout.evaluate((element, type) => element.dispatchEvent(new PointerEvent(type, { pointerId: 1, bubbles: true })), termination);
             }
+            const closed = await page.evaluate(() => window.__ENHANCER_LITE_TEST__.automationMessages);
+            assert.deepEqual(closed.at(-1), { type: "end", endpointID: "freqHzIn" }, `${termination} itself closes the gesture`);
             await page.mouse.up();
             const completed = await page.evaluate(() => window.__ENHANCER_LITE_TEST__.automationMessages);
-            assert.equal(completed.at(-1).type, "end");
             assert.equal(completed.filter(({ type }) => type === "end").length, 1);
             assert.ok(completed.every(({ endpointID }) => endpointID === "freqHzIn"));
         } finally {
@@ -1593,19 +1571,13 @@ for (const termination of ["pointercancel", "lostpointercapture", "disconnect"])
     });
 }
 
-for (const modulePath of [
-    "/fx/enhancer_lite/view/source.ts",
-    "/build/fx/enhancer_lite_runtime/view/app.js",
-]) {
-    for (const [surface, selector] of [
-        ["readout", "[data-readout-control='frequency']"],
-        ["graph", ".response-handle.primary"],
-    ]) {
+for (const modulePath of [sourceView, compiledView]) {
+    for (const [surfaceName, name] of [["readout", "Frequency"], ["graph", "Band handle"]]) {
         for (const termination of ["pointerup", "pointercancel"]) {
-            test(`keyboard edits share the ${surface} drag gesture until ${termination}: ${modulePath}`, async () => {
+            test(`keyboard edits share the ${surfaceName} drag gesture until ${termination}: ${modulePath}`, async () => {
                 const page = await openEnhancerLite(modulePath);
                 try {
-                    const target = shadow(page, selector);
+                    const target = slider(page, name);
                     const { originX, originY, pointerID } = await beginCapturedDrag(page, target);
                     const frequencyMessages = () => page.evaluate(() => window.__ENHANCER_LITE_TEST__.automationMessages.filter(({ endpointID }) => endpointID === "freqHzIn"));
                     const assertTouchOpen = (messages) => {
@@ -1631,7 +1603,7 @@ for (const modulePath of [
                     assertTouchOpen(continued);
                     assert.ok(continued.length > afterKey.length, "pointer motion continues to write under the original touch");
                     if (termination === "pointercancel")
-                        await target.evaluate((element, id) => element.dispatchEvent(new PointerEvent("pointercancel", { pointerId: id })), pointerID);
+                        await target.evaluate((element, id) => element.dispatchEvent(new PointerEvent("pointercancel", { pointerId: id, bubbles: true })), pointerID);
                     await page.mouse.up();
                     await page.keyboard.up("ArrowRight");
                     const complete = await frequencyMessages();

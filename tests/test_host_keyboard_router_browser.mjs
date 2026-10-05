@@ -215,7 +215,7 @@ async function openPackagedEnhancerLite() {
         const module = await import("/build/fx/enhancer_lite_runtime/view/app.js");
         document.querySelector("#mount").replaceChildren(await module.default(patchConnection));
     });
-    await page.locator("enhance-that-view").waitFor();
+    await page.getByRole("slider", { name: "Frequency", exact: true }).waitFor();
     await page.waitForFunction(() => (
         window.__CHOC_HOST_KEYBOARD_MESSAGES__?.some(({ action }) => action === "installed")
     ));
@@ -303,7 +303,7 @@ test("the exact CHOC router reaches the native seam from the packaged Enhancer L
     const page = await openPackagedEnhancerLite();
 
     try {
-        const frequency = page.locator('[data-readout-control="frequency"]');
+        const frequency = page.getByRole("slider", { name: "Frequency", exact: true });
         await t.test("non-text slider role forwards Space down and matching up", async () => {
             assertForwardedPair(await pressAndRead(page, frequency), " ", "spacebar-transport");
         });

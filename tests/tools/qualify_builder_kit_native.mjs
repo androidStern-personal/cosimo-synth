@@ -513,7 +513,7 @@ async function runQualification(options) {
         assert.ok(dspTransition.objectMtimeChanged.length > 0, "DSP edit must recompile native objects");
         assert.equal(dspTransition.binaryChanged, true, "DSP edit must change the dedicated VST3 binary");
 
-        await appendFile(path.join(exportRoot, mainPluginDirectory, "view/source.ts"), `\nconsole.info(${JSON.stringify(uiMarker)});\n`);
+        await appendFile(path.join(exportRoot, mainPluginDirectory, "view/source.tsx"), `\nconsole.info(${JSON.stringify(uiMarker)});\n`);
         const ui = await build("ui-edit");
         const uiTransition = transitionSummary(dsp.snapshot, ui.snapshot);
         report.transitions.ui = uiTransition;
