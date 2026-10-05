@@ -448,11 +448,17 @@ test("cross-type swap suppresses the replacement endpoint's stale callback until
 });
 
 test("live bindings use type-instance host gestures and the iPhone Distortion editor ends with Output Trim", async () => {
-    const [bindingsSource, mirrorSource, synthHooksSource, iosSource] = await Promise.all([
+    const [bindingsSource, mirrorSource, synthHooksSource, iosSource, pluginStateSource] = await Promise.all([
         fs.readFile(path.join(repoRoot, "ui/shared/lane-param-bindings.ts"), "utf8"),
         fs.readFile(path.join(repoRoot, "ui/shared/effect-output-trim-host-mirror.ts"), "utf8"),
         fs.readFile(path.join(repoRoot, "ui/shared/synth-hooks.ts"), "utf8"),
         fs.readFile(path.join(repoRoot, "ui/ios/IOSPatchView.tsx"), "utf8"),
+        fs.readFile(path.join(repoRoot, "ui/shared/synth-plugin-state.ts"), "utf8"),
+    ]);
+    const [trim, laneState, { synthPluginState }] = await Promise.all([
+        loadUIModule(repoRoot, "ui/shared/effect-output-trim.ts"),
+        loadUIModule(repoRoot, "ui/shared/lane-state-v2.ts"),
+        loadUIModule(repoRoot, "ui/shared/synth-plugin-state.ts"),
     ]);
 
     assert.match(bindingsSource, /effectOutputTrimHostEndpointID\([\s\S]*parsedDeviceId\.instanceNumber/);
@@ -461,7 +467,27 @@ test("live bindings use type-instance host gestures and the iPhone Distortion ed
     assert.match(bindingsSource, /hostBinding\.beginGesture\(\)/);
     assert.match(bindingsSource, /hostBinding\.endGesture\(\)/);
     assert.match(mirrorSource, /allEffectOutputTrimHostEndpointIDs\(\)/);
-    assert.match(bindingsSource, /scheduleOutputTrimPersist\(created\)/);
+
+    // The host trim parameters are the automation authority. The shared plugin
+    // state declares them, folds them into the rack before rack delivery, and the
+    // view only re-reads accepted state when automation moves a trim. Nothing in
+    // the view writes trim values back into the stored rack document.
+    for (const endpoint of trim.allEffectOutputTrimHostEndpointIDs()) {
+        assert.deepEqual(synthPluginState[endpoint], { kind: "parameter", endpoint });
+    }
+    const rack = synthPluginState["lane.v1"].engine;
+    assert.deepEqual([...rack.dependencies].sort(), [...trim.allEffectOutputTrimHostEndpointIDs()].sort());
+    const prepared = rack.prepare(laneState.createDefaultLaneStateV2(), {
+        parameters: { laneDistortion1OutputTrimDb: 4.5, laneDelay1OutputTrimDb: -18 },
+    });
+    assert.equal(prepared.devices["distortion#1"].params.distortionOutputTrimDb, 4.5);
+    assert.equal(prepared.devices["delay#1"].params.delayOutputTrimDb, -18);
+    assert.match(
+        pluginStateSource,
+        /\[LANE_STATE_KEY\]: preparedState\(\{[\s\S]*?dependencies: allEffectOutputTrimHostEndpointIDs\(\),\s*prepare: \(value, \{ parameters \}\) => synchronizeLaneOutputTrimsFromHostParameters\(value, parameters\),\s*engine: synthRackDelivery,/,
+    );
+    assert.match(bindingsSource, /new EffectOutputTrimHostMirror\(connection, \(\) => \{[\s\S]*?\bread\(\);\s*\}\);/);
+    assert.doesNotMatch(bindingsSource, /scheduleOutputTrimPersist|sendStoredStateValue/);
 
     assert.match(synthHooksSource, /distortionOutputTrim:\s*PatchControlBinding<number>/);
     assert.match(
