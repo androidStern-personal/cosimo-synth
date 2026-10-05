@@ -10,6 +10,9 @@
 export { definePluginState, parameter, storedValue, preparedState, eventValue, preparationFailure } from "./ui/plugin-state-definition";
 export type { PluginStateCodec, PluginStateJson, PluginStateValueResult, PluginStateLifetime, PluginStateOptions,
     PluginStatePrepareContext, PluginStateSharedPlan, PluginStatePreparationFailure } from "./ui/plugin-state-definition";
+// For custom delivery seams; see PLUGIN_STATE.md.
+export type { PluginStateDelivery, PluginStateDeliveryContext, PluginStateDocumentContext, PluginStateEffect, PluginStateSubmission,
+    PluginStateDeliveryOutcome } from "./ui/plugin-state-definition";
 export { sharedData } from "./ui/shared-data-delivery";
 export { nativeValue } from "./ui/native-value";
 export * as Native from "./ui/native-value-codecs";

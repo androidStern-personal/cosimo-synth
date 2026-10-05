@@ -1,4 +1,4 @@
-import type { PluginStateDelivery } from "../../kit/ui/plugin-state-definition";
+import type { PluginStateDelivery } from "../../kit/index";
 import type { SeqPatternContent } from "./view/seqfx-state";
 
 /** What preparation hands the delivery: the selected pattern's steps, and whether they replace the sound outright. */

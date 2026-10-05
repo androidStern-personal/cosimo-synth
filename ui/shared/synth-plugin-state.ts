@@ -1,6 +1,4 @@
-import { definePluginState, parameter, preparedState, storedValue, type PluginStateCodec, type PluginStateParameter } from "../../kit/ui/plugin-state-definition";
-import { presets } from "../../kit/ui/presets";
-import { snapshots } from "../../kit/ui/snapshots";
+import { definePluginState, parameter, preparedState, presets, snapshots, storedValue, type PluginStateCodec } from "../../kit/index";
 import { createDefaultModulationState, MODULATION_STATE_KEY } from "./modulation";
 import { modulationStateCodec } from "./synth-modulation-state";
 import { OSCILLATOR_BINDING_CONTRACTS } from "./oscillator-binding";
@@ -57,7 +55,7 @@ export const synthBounceReference = storedValue({ initial: null, codec: bounceRe
 
 // Reuse the oscillator and resident-effect identities. Ranges/defaults still
 // come from the actual host parameter; this declares user editing and history.
-export const synthParameterByEndpoint: Readonly<Record<string, PluginStateParameter>> = Object.freeze({
+export const synthParameterByEndpoint: Readonly<Record<string, ReturnType<typeof parameter>>> = Object.freeze({
     ...Object.fromEntries(OSCILLATOR_BINDING_CONTRACTS.flatMap(({ controls }) =>
         controls.map(({ endpointID }) => [endpointID, parameter(endpointID)]))),
     ...Object.fromEntries(allEffectOutputTrimHostEndpointIDs().map(endpoint => [endpoint, parameter(endpoint)])),
@@ -127,6 +125,6 @@ export const synthPluginState = definePluginState({
     }),
     [ARTICULATIONS_V4_STATE_KEY]: storedValue({ initial: createEmptyArticulationsState(), codec: articulationStateCodec }),
     [BOUNCE_STATE_KEY]: synthBounceReference,
-    ...presets({ factory: synthFactoryPresets }),
+    ...presets({ factory: synthFactoryPresets, initial: "init" }),
     ...snapshots(),
 });

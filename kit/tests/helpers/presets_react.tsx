@@ -16,13 +16,15 @@ const modeCodec = {
     encode: (value: "clean" | "warm") => value,
     equals: (left: string, right: string) => left === right,
 };
-const definition = definePluginState({
+/** `initial` names the factory preset a fresh project starts on. */
+const harnessState = (initial?: string) => definePluginState({
     gain: parameter("gainIn"),
     mode: storedValue<"clean" | "warm">({ initial: "clean", codec: modeCodec }),
     ...presets({ factory: [
+        { id: "init", name: "Init", values: { gain: 0, mode: "clean" } },
         { id: "quiet", name: "Quiet", values: { gain: -12, mode: "clean" } },
         { id: "hot", name: "Hot", values: { gain: 6, mode: "warm" } },
-    ] }),
+    ], initial }),
     ...snapshots({ slots: ["A", "B", "C"] }),
 });
 export const pluginId = "com.example.presets";
@@ -30,11 +32,12 @@ export const pluginId = "com.example.presets";
 type Latest = { presets: Presets; snapshots: Snapshots; history: PluginStateHistory; gain: PluginStateControl<number>; mode: PluginStateControl<"clean" | "warm"> };
 
 /** The real owner, client and React hooks for one definition with presets and snapshots. */
-export async function mount(element: HTMLElement) {
+export async function mount(element: HTMLElement, initial?: string) {
+    const definition = harnessState(initial);
     const scope = { owner: "presets-owner", document: 0 };
     const defects: unknown[] = [];
     const jobs: Promise<unknown>[] = [];
-    let receive: ((event: PluginStateClientEvent<typeof definition>) => void) | undefined;
+    let receive: ((event: PluginStateClientEvent<ReturnType<typeof harnessState>>) => void) | undefined;
     let latest: Latest | undefined;
     const owner = createPluginStateSession(definition, {
         native: { publish() {}, close() {}, update(state, receipt) {

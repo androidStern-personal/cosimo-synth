@@ -51,10 +51,13 @@ const presetSelect = (page) => bar(page).getByLabel("Preset", { exact: true });
 const openSoundActions = (page) => bar(page).locator('[data-action="toggle-sound-actions"]').click();
 const modified = (page) => bar(page).locator(':is(.bk-preset-bar-dirty, [data-role="preset-modified"])');
 
-test("Init is the synth's factory preset: recalling it is one Undo entry", async () => {
+test("a fresh synth shows Init, unmodified; recalling Init is one Undo entry", async () => {
     const view = await open();
     const { page } = view;
     try {
+        assert.equal(await presetSelect(page).inputValue(), "init", "a fresh synth starts on Init");
+        assert.equal(await bar(page).getByText("No preset").count(), 0);
+        assert.equal(await modified(page).count(), 0, "the starting sound is exactly Init");
         await page.getByRole("button", { name: "Cutoff 2400" }).click();
         await view.waitForParameter("filterCutoff", 2400);
         await presetSelect(page).selectOption({ label: "Init" });
@@ -67,7 +70,8 @@ test("Init is the synth's factory preset: recalling it is one Undo entry", async
 
         await page.getByRole("button", { name: "Undo" }).click();
         await view.waitForParameter("filterCutoff", 2400);
-        assert.equal(await presetSelect(page).inputValue(), "", "Undo also restores the active preset");
+        assert.equal(await presetSelect(page).inputValue(), "init", "Undo also restores the active preset");
+        await modified(page).waitFor();
         calls = await view.calls();
         assert.equal(calls.replaced.length, 2, "Undo of a recall replaces the sound again");
         await page.getByRole("button", { name: "Undo" }).click();
@@ -154,11 +158,11 @@ test("a sound link carries the current sound and loads it as one Undo entry", as
     try {
         const dialog = bar(page).locator('[data-role="shared-load-dialog"]');
         await dialog.waitFor();
-        assert.match(await dialog.textContent(), /Load “Current sound” from this link\?/);
+        assert.match(await dialog.textContent(), /Load “Init” from this link\?/, "the link carries the active preset's name");
         assert.equal(await target.parameter("filterCutoff"), 1000, "nothing changes before Load");
         await dialog.getByRole("button", { name: "Load" }).click();
         await target.waitForParameter("filterCutoff", 2400);
-        await bar(page).getByRole("status").filter({ hasText: "Loaded “Current sound”" }).waitFor();
+        await bar(page).getByRole("status").filter({ hasText: "Loaded “Init”" }).waitFor();
         assert.equal(await page.evaluate(() => window.location.hash), "", "the link is consumed");
         assert.equal((await target.calls()).replaced.length, 1);
         await page.getByRole("button", { name: "Undo" }).click();
@@ -199,7 +203,7 @@ test("Bounce video receives the current sound as a speedrun patch; the other act
         assert.equal(calls.developerSettings, 1);
         assert.equal(calls.videoPatches.length, 1);
         const [patch] = calls.videoPatches;
-        assert.equal(patch.label, "Current sound");
+        assert.equal(patch.label, "Init", "the patch carries the active preset's name");
         assert.equal(patch.parameters.filterCutoff, 2400);
         assert.equal(patch.parameters.sourceMode, 0, "the source mode travels with the patch so speedrun can refuse bounced sounds");
         assert.deepEqual(Object.keys(patch.storedState).sort(), ["articulations.v4", "lane.v1", "modulation.v6"]);
@@ -214,11 +218,13 @@ test("the phone row shows the preset name and keeps the preset bar in the Sound 
     const { page } = view;
     try {
         const name = bar(page).locator('[data-role="preset-name"]');
-        assert.equal(await name.textContent(), "No preset");
+        assert.equal(await name.textContent(), "Init", "a fresh synth shows Init, unmodified");
         assert.equal(await presetSelect(page).count(), 0, "the preset selector lives in the menu");
 
+        await page.getByRole("button", { name: "Cutoff 2400" }).click();
+        await page.waitForFunction(() => document.querySelector('[data-role="preset-name"]')?.textContent === "Init ●");
         await openSoundActions(page);
-        await presetSelect(page).selectOption({ label: "Init" });
+        await bar(page).getByRole("button", { name: "Revert", exact: true }).click();
         await page.waitForFunction(() => document.querySelector('[data-role="preset-name"]')?.textContent === "Init");
         await bar(page).locator('[data-action="shell-back"]').click();
         assert.equal((await view.calls()).back, 1);

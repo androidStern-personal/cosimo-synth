@@ -15,13 +15,13 @@ after(async () => { await browser?.close(); await server?.stop(); });
 
 const scope = `plugin-${createHash("sha256").update("com.example.presets").digest("hex")}`;
 
-/** Mount the harness; `files` installs a user-file store before the view opens. */
-async function open(files) {
+/** Mount the harness; `files` installs a user-file store and `initial` names the starting factory preset. */
+async function open(files, initial) {
     const page = await browser.newPage();
     const errors = [];
     page.on("pageerror", error => errors.push(error.message));
     await page.goto(new URL("kit/tests/helpers/module_test_shell.html", server.baseUrl).href);
-    await page.evaluate(async files => {
+    await page.evaluate(async ([files, initial]) => {
         if (files) {
             const store = new Map(Object.entries(files));
             window.userFiles = store;
@@ -33,8 +33,8 @@ async function open(files) {
             };
         }
         const { mount } = await import("/kit/tests/helpers/presets_react.tsx");
-        window.harness = await mount(document.getElementById("mount"));
-    }, files);
+        window.harness = await mount(document.getElementById("mount"), initial);
+    }, [files, initial]);
     await page.waitForFunction(() => window.harness.view().status === "ready");
     const run = (group, action, ...args) => page.evaluate(([group, action, args]) => window.harness.run(group, action, ...args), [group, action, args]);
     const view = () => page.evaluate(() => window.harness.view());
@@ -57,6 +57,30 @@ test("recalling a preset is exactly one Undo entry that restores the sound and t
             { gain: 0, mode: "clean", active: null, canUndo: false });
         assert.deepEqual((await run("presets", "recall", "missing")), { kind: "failed", message: "That preset no longer exists." });
         assert.equal((await view()).error, "That preset no longer exists.");
+    } finally { await close(); }
+});
+
+test("a fresh project starts on the initial preset, unmodified, and Revert returns to it", async () => {
+    const { page, run, view, close } = await open(undefined, "init");
+    try {
+        assert.deepEqual(await view().then(({ active, dirty, canUndo }) => ({ active, dirty, canUndo })),
+            { active: { id: "init", name: "Init" }, dirty: false, canUndo: false });
+        assert.equal(await page.getByRole("combobox", { name: "Preset" }).inputValue(), "init");
+        assert.equal(await page.getByText("No preset").count(), 0);
+        await run("gain", "setValue", 4);
+        assert.equal((await view()).dirty, true);
+        await page.getByText("Modified").waitFor();
+        assert.deepEqual(await run("presets", "revert"), { kind: "done" });
+        assert.deepEqual(await view().then(({ gain, active, dirty }) => ({ gain, active, dirty })),
+            { gain: 0, active: { id: "init", name: "Init" }, dirty: false });
+    } finally { await close(); }
+});
+
+test("without an initial preset a fresh project has none active", async () => {
+    const { page, view, close } = await open();
+    try {
+        assert.deepEqual(await view().then(({ active, dirty }) => ({ active, dirty })), { active: null, dirty: false });
+        assert.equal(await page.getByRole("combobox", { name: "Preset" }).inputValue(), "");
     } finally { await close(); }
 });
 

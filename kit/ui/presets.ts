@@ -1,6 +1,6 @@
 import { useState } from "react";
 import {
-    definitionCheck, soundFieldKeys, storedValue,
+    definitionCheck, definitionInitial, soundFieldKeys, storedValue,
     type PluginStateCodec, type PluginStateFields, type PluginStateJson, type PluginStateParameter, type PluginStateStored, type PluginStateValueResult,
 } from "./plugin-state-definition";
 import { usePluginState, usePluginStateSnapshot, type PluginStateEditResult } from "./plugin-state-react";
@@ -138,7 +138,9 @@ export function sameSoundValue(field: PluginStateParameter | PluginStateStored<u
     return parsed.kind === "ok" && field.codec.equals(parsed.value, current);
 }
 
-function checkFactoryPresets(factory: readonly FactoryPreset[], fields: PluginStateFields) {
+function checkFactoryPresets(factory: readonly FactoryPreset[], initial: string | undefined, fields: PluginStateFields) {
+    if (initial !== undefined && !factory.some(preset => preset.id === initial))
+        throw new Error(`The initial preset "${initial}" is not a factory preset. Use the id of one of the factory presets.`);
     const sound = soundFieldKeys(fields);
     const ids = new Set<string>();
     for (const preset of factory) {
@@ -164,17 +166,27 @@ function checkFactoryPresets(factory: readonly FactoryPreset[], fields: PluginSt
 /**
  * Declare presets. Spread the result into `definePluginState`: it adds `presetLibrary`, the
  * user's presets shared across projects, and `activePreset`, the project's current preset.
+ * `initial` names the factory preset a project starts with; without it no preset is active
+ * until the user recalls one.
  */
-export function presets(options: { readonly factory?: readonly FactoryPreset[] } = {}) {
+export function presets(options: { readonly factory?: readonly FactoryPreset[]; readonly initial?: string } = {}) {
     const factory = Object.freeze((options.factory ?? []).map(preset => Object.freeze({ ...preset, values: Object.freeze({ ...preset.values }) })));
+    const { initial } = options;
     const library: PresetLibraryField = Object.freeze({
         ...storedValue<PresetLibrary>({ codec: presetLibraryCodec, initial: { version: 1, presets: [] }, lifetime: "user", preset: false }),
         factory,
-        [definitionCheck]: (fields: PluginStateFields) => checkFactoryPresets(factory, fields),
+        [definitionCheck]: (fields: PluginStateFields) => checkFactoryPresets(factory, initial, fields),
     });
+    const activePreset = storedValue<Preset | null>({ codec: activePresetCodec, initial: null, preset: false });
+    const initialPreset = factory.find(preset => preset.id === initial);
     return {
         presetLibrary: library,
-        activePreset: storedValue<Preset | null>({ codec: activePresetCodec, initial: null, preset: false }),
+        // The initial preset's values are saved in each field's encoded form, which needs the whole definition.
+        activePreset: initialPreset === undefined ? activePreset : Object.freeze({
+            ...activePreset,
+            [definitionInitial]: (fields: PluginStateFields) =>
+                activePresetCodec.parse({ id: initialPreset.id, name: initialPreset.name, values: factoryValues(fields, initialPreset) }),
+        }),
     };
 }
 

@@ -1,4 +1,5 @@
-import { isPreparationFailure, type PluginStateDocumentContext, type PluginStateSubmission } from "../../kit/ui/plugin-state-definition";
+import type { PluginStateDocumentContext, PluginStateSubmission } from "../../kit/index";
+import { isPreparationFailure } from "../../kit/ui/plugin-state-definition";
 import type { EngineCancellation } from "../../kit/ui/plugin-state-engine";
 import { createPatchConnectionResourceClient } from "../../kit/ui/resource-client";
 import type { PatchConnectionLike } from "../shared/cmajor-react";

@@ -1,4 +1,4 @@
-import type { PluginStateCodec } from "../../kit/ui/plugin-state-definition";
+import type { PluginStateCodec } from "../../kit/index";
 import { parseModulationState, serializeModulationState, type ModulationState } from "./modulation";
 
 // The strict parser builds fresh JSON records. Freeze that owned tree so callers

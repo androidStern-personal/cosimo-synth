@@ -166,6 +166,11 @@ export type PluginStateLifetime = "project" | "instance" | "user";
 
 /** Lets a kit-provided field reject a definition it cannot work in. */
 export const definitionCheck: unique symbol = Symbol.for("builder-kit.plugin-state.definition-check");
+/**
+ * Lets a kit-provided field derive its initial value from the whole definition, after every
+ * check has passed. The definition then holds a copy of the field with that initial value.
+ */
+export const definitionInitial: unique symbol = Symbol.for("builder-kit.plugin-state.definition-initial");
 
 /** Immutable configuration for a codec-owned stored field. */
 export interface PluginStateStored<Value, Payload = unknown> {
@@ -178,6 +183,7 @@ export interface PluginStateStored<Value, Payload = unknown> {
     /** `false` keeps the field out of presets and snapshots. */
     readonly preset?: false;
     readonly [definitionCheck]?: (fields: PluginStateFields) => void;
+    readonly [definitionInitial]?: (fields: PluginStateFields) => PluginStateValueResult<Value>;
 }
 
 /** The finite field declarations accepted by a state session. */
@@ -311,5 +317,11 @@ export function definePluginState<const Fields extends PluginStateFields>(fields
         endpoints.set(field.endpoint, key);
     }
     for (const field of Object.values(fields)) if (field.kind === "stored") field[definitionCheck]?.(fields);
-    return Object.freeze(Object.defineProperty({ ...fields }, optionsKey, { value: Object.freeze({ ...options }) }));
+    const resolved: Record<string, PluginStateParameter | PluginStateStored<unknown>> = { ...fields };
+    for (const [key, field] of Object.entries(fields)) {
+        const initial = field.kind === "stored" ? field[definitionInitial] : undefined;
+        if (initial) resolved[key] = Object.freeze({ ...field, initial: initial(fields) });
+    }
+    // SAFETY: each derived field differs from its declaration only in its initial value.
+    return Object.freeze(Object.defineProperty(resolved, optionsKey, { value: Object.freeze({ ...options }) })) as Readonly<Fields>;
 }

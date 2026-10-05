@@ -114,8 +114,9 @@ export default definePluginState({
     tone: parameter("tone"),
     meterHold: parameter("meterHold", { preset: false }),   // Not part of the sound.
     ...presets({ factory: [
+        { id: "init", name: "Init", values: { gain: 0, tone: 0 } },
         { id: "warm", name: "Warm", values: { gain: -3, tone: 0.2 } },
-    ] }),
+    ], initial: "init" }),                                   // A new project starts on Init.
     ...snapshots(),
 });
 ```
@@ -127,6 +128,8 @@ export default definePluginState({
 ```
 
 `presets()` adds two fields: `presetLibrary`, the user's saved presets, and `activePreset`, the project's current preset. `snapshots({ slots })` adds `snapshotSlots` and `activeSnapshot`. The **sound fields** are every other field, unless declared with `preset: false` on `parameter()` or `storedValue()`. `definePluginState` checks each factory preset: it must set every sound field and nothing else, with valid values, and its `id` must be unique. The error names the preset and the field.
+
+`initial` names the factory preset a new project starts on: it is the active preset until the user recalls another, and it reads as unmodified while the sound matches its values, so give it the same values as the fields' defaults. Without `initial`, no preset is active until the first recall. An `initial` that is not a factory preset id is an error.
 
 | Action | Undo |
 |---|---|
@@ -187,7 +190,9 @@ The optional opaque `historyEntry` in an edit result supports a component's guar
 
 An edit updates the session and history together. The engine binding prepares that accepted value. The store exposes it at the next audio block, then reports adoption. Jotai updates the GUI as acceptance and engine status arrive. Closing the GUI disposes only its client.
 
-For a component with its own transfer protocol, `preparedState({codec,initial,prepare,engine})` also accepts a delivery object. The delivery declares permitted event/output endpoints, saved keys, host effects and shared-data inputs. Its `create(document)` factory is owned by the generated worker. It returns `apply(payload,delivery)` and `stop()`; no author-created worker is needed. The document context supplies bounded `send`, `listen`, `readStored`, `subscribeStored`, direct `prepareData`, and status/failure reporting. These resources survive one successful application and are revoked on project replacement or shutdown. Per-application listeners and cancellation end with that application. `replacement:"finish"` supports a protocol that must finish its current application before sending the newest queued value. The delivery types live in `kit/ui/plugin-state-definition.ts` and are not part of the public entry, so this protocol may change between kit releases.
+Every state update the worker sends to the GUI carries every field, not only the ones that changed, because a GUI must be able to attach at any revision (opening the window, a second view, a reconnect) and render from that one message. Each view re-renders only for the fields it reads, but a large stored value is still sent whole on every update, so split it into smaller fields or move its bulk into prepared state so each update and each re-render covers only what changed.
+
+For a component with its own transfer protocol, `preparedState({codec,initial,prepare,engine})` also accepts a delivery object. The delivery declares permitted event/output endpoints, saved keys, host effects and shared-data inputs. Its `create(document)` factory is owned by the generated worker. It returns `apply(payload,delivery)` and `stop()`; no author-created worker is needed. The document context supplies bounded `send`, `listen`, `readStored`, `subscribeStored`, direct `prepareData`, and status/failure reporting. These resources survive one successful application and are revoked on project replacement or shutdown. Per-application listeners and cancellation end with that application. `replacement:"finish"` supports a protocol that must finish its current application before sending the newest queued value. Write one from the public types `PluginStateDelivery`, `PluginStateDocumentContext`, `PluginStateDeliveryContext`, `PluginStateEffect`, `PluginStateSubmission` and `PluginStateDeliveryOutcome`, all exported from `kit/index`; see the [API reference](PLUGIN_STATE_API.md#custom-delivery).
 
 `eventValue` suits ordinary small DSP events. Custom host effects require a matching registered native handler; the framework cannot invent the handler's product behavior.
 

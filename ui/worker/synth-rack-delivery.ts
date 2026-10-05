@@ -1,4 +1,4 @@
-import type { PluginStateDelivery, PluginStateDeliveryOutcome } from "../../kit/ui/plugin-state-definition";
+import type { PluginStateDelivery, PluginStateDeliveryOutcome } from "../../kit/index";
 import { buildLaneRuntimeEventsV2, type LaneStateV2 } from "../shared/lane-state-v2";
 import { LANE_OUTPUT_CONTROL_ENDPOINT_ID, LANE_SLOT_PARAMS_ENDPOINT_ID, LANE_SLOT_PARAM_VALUE_ENDPOINT_ID, LANE_TOPOLOGY_ENDPOINT_ID } from "../shared/lane-state";
 

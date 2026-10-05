@@ -53,6 +53,25 @@ test("definePluginState checks every factory preset against the sound fields", (
     /sets "meter", which is not a sound field/, "a field declared preset: false is not part of a preset");
 });
 
+test("an initial factory preset is the active preset of a project that never recalled one", () => {
+    const definition = definePluginState({ ...sound(), ...presets({ factory, initial: "hot" }) });
+    assert.deepEqual(definition.activePreset.initial, { kind: "ok", value: { id: "hot", name: "Hot", values: { gain: 6, mode: "warm" } } });
+    assert.ok(Object.isFrozen(definition.activePreset.initial.value.values), "the initial preset is immutable");
+    const levelCodec = {
+        parse: input => typeof input === "number" ? { kind: "ok", value: input }
+            : typeof input?.db === "number" ? { kind: "ok", value: input.db } : { kind: "error", message: "Expected a level." },
+        encode: value => ({ db: value }),
+        equals: Object.is,
+    };
+    const encoded = definePluginState({ level: storedValue({ initial: 0, codec: levelCodec }),
+        ...presets({ factory: [{ id: "loud", name: "Loud", values: { level: 6 } }], initial: "loud" }) });
+    assert.deepEqual(encoded.activePreset.initial.value.values, { level: { db: 6 } }, "the initial preset holds each value in saved form");
+    assert.deepEqual(definePluginState({ ...sound(), ...presets({ factory }) }).activePreset.initial, { kind: "ok", value: null },
+        "without initial, no preset is active");
+    assert.throws(() => definePluginState({ ...sound(), ...presets({ factory, initial: "init" }) }),
+        /The initial preset "init" is not a factory preset\. Use the id of one of the factory presets\./);
+});
+
 test("the library and active-preset codecs accept only well-formed presets", () => {
     const { presetLibrary, activePreset } = presets();
     const library = { version: 1, presets: [{ id: "user-1", name: "Mine", values: { gain: 1, mode: "warm" } }] };

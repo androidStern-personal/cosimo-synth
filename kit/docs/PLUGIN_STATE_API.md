@@ -31,6 +31,12 @@ Every state, preset and snapshot name `kit/index.ts` exports. Anything not liste
 | `PluginStatePrepareContext` | type | The second argument of `prepare`: `resources`, captured `parameters`, the change `reason` (`load`, `recall`, `history` or `edit`) and a cancellation `signal`. |
 | `PluginStateSharedPlan` | type | What `prepare` returns for variable-length shared data: a `length` and a synchronous `write`. |
 | `PluginStatePreparationFailure` | type | The value `preparationFailure` returns. |
+| `PluginStateDelivery<Payload>` | type | A custom `engine` for `preparedState`: its declared endpoints and keys, and `create(document)`; see [Custom delivery](#custom-delivery). |
+| `PluginStateDocumentContext` | type | What `create` receives: sending, listening, saved-state reads and shared-data writes that last until the project closes. |
+| `PluginStateDeliveryContext` | type | What each `apply` receives: `send`, `listen` and a cancellation `signal` that last for that one application. |
+| `PluginStateEffect` | type | One message a delivery sends: a declared event, or a declared host effect. |
+| `PluginStateSubmission` | type | What `send` returns: submitted with a `completion`, failed, or cancelled. |
+| `PluginStateDeliveryOutcome` | type | What `apply` resolves to: sent, acknowledged by the engine, unconfirmed, failed or cancelled. |
 | `PluginStateControl<Value>` | type | One field's state, error, retry and edit actions; described below. |
 | `PluginStateControlState<Value>` | type | `control.state`, discriminated by `status`. |
 | `PluginStateControlError` | type | `control.error`: one displayable `message`. |
@@ -40,7 +46,7 @@ Every state, preset and snapshot name `kit/index.ts` exports. Anything not liste
 | `PluginStateRejectionReason` | type | Why an edit was rejected; see the table below. |
 | `PluginStateHistory` | type | `usePluginHistory()`'s result. |
 | `PluginStateHistoryEntry` | type | An opaque token for guarded Undo and Redo. |
-| `presets({ factory? })` | function | Adds `presetLibrary` and `activePreset` to a definition. |
+| `presets({ factory?, initial? })` | function | Adds `presetLibrary` and `activePreset` to a definition; `initial` names the factory preset a new project starts on. |
 | `usePresets(definition)` | hook | Returns `Presets`: everything `PresetBar` shows and does. |
 | `snapshots({ slots? })` | function | Adds `snapshotSlots` and `activeSnapshot` to a definition. |
 | `useSnapshots(definition)` | hook | Returns `Snapshots`: everything `SnapshotBar` shows and does. |
@@ -221,9 +227,42 @@ interface PluginStateHistory {
 | `preset: false` | `parameter(endpoint, options)`, `storedValue(options)` | The field is not part of the sound: presets and snapshots neither save nor recall it. |
 | `lifetime: "user"` | `storedValue(options)` | One value shared by every instance and project of the plugin, kept in the user's files (in memory where the Cmajor user-files API is absent). Never part of Undo; `history: true` is an error. |
 
+## Custom delivery
+
+A component with its own transfer protocol passes a `PluginStateDelivery` as the `engine` of `preparedState`. The generated worker calls `create` once per project document and `apply` with each prepared value; the [guide](PLUGIN_STATE.md#framework-building-blocks) describes the lifetimes.
+
+```ts
+interface PluginStateDelivery<Payload> {
+    readonly eventEndpoints: readonly string[];      // Events `send` may target.
+    readonly outputEndpoints?: readonly string[];    // Outputs `listen` may observe.
+    readonly storedKeys?: readonly string[];         // Saved-state keys `readStored` and `subscribeStored` may read.
+    readonly hostEffects?: readonly string[];        // Host effects `send` may target; each needs a native handler.
+    readonly dataInputs?: readonly number[];         // Shared-data inputs `prepareData` may fill.
+    readonly replacement?: "supersede" | "finish";   // "finish" lets the current application end before the newest value.
+    create(document: PluginStateDocumentContext): {
+        apply(payload: Payload, context: PluginStateDeliveryContext): Promise<PluginStateDeliveryOutcome>;
+        stop(): void | Promise<void>;
+    };
+}
+
+type PluginStateEffect =
+    | { readonly kind: "event"; readonly endpoint: string; readonly value: unknown }
+    | { readonly kind: "host-effect"; readonly name: string; readonly value: unknown };
+
+type PluginStateSubmission =
+    | { readonly kind: "submitted"; readonly completion: Promise<   // Settles once native code has processed the message.
+        | { readonly kind: "sent"; readonly proof: "native-publication-processed" }
+        | { readonly kind: "failed"; readonly error: { readonly kind: string; readonly message: string } }
+        | { readonly kind: "cancelled" }> }
+    | { readonly kind: "failed"; readonly error: { readonly kind: string; readonly message: string } }
+    | { readonly kind: "cancelled" };
+```
+
+`PluginStateDocumentContext` has `signal`, `send`, `listen`, `readStored`, `subscribeStored`, `prepareData(input, byteLength, writer, signal?)`, `report(status)` and `fail(error)`. `PluginStateDeliveryContext` has `signal`, `send` and `listen`; its listeners are removed when that application ends. `apply` resolves to `{ kind: "sent" }` or `{ kind: "acknowledged" }` when the engine has the value, `{ kind: "unconfirmed" }` when it cannot know, or `{ kind: "failed", error }` or `{ kind: "cancelled" }`. A submission's `completion` is itself a valid outcome, so an `apply` that sends one message can return it.
+
 ## Presets and snapshots
 
-`presets({ factory? })` returns `{ presetLibrary, activePreset }` to spread into `definePluginState`. Each factory preset is `{ id, name, values }`, with `values` keyed by sound field in the form `editor.edit` accepts. `snapshots({ slots? })` returns `{ snapshotSlots, activeSnapshot }`; `slots` defaults to `["A", "B", "C", "D", "E", "F", "G"]`.
+`presets({ factory?, initial? })` returns `{ presetLibrary, activePreset }` to spread into `definePluginState`. Each factory preset is `{ id, name, values }`, with `values` keyed by sound field in the form `editor.edit` accepts. `initial` is a factory preset `id`: a new project starts with it as the active preset, and `definePluginState` throws if no factory preset has that id. Without `initial`, `active` is `null` until the first recall. `snapshots({ slots? })` returns `{ snapshotSlots, activeSnapshot }`; `slots` defaults to `["A", "B", "C", "D", "E", "F", "G"]`.
 
 `usePresets(definition)` returns:
 

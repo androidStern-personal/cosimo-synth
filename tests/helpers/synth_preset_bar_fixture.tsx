@@ -5,6 +5,7 @@ import { PatchConnectionProvider } from "../../ui/shared/cmajor-react";
 import { MockPatchConnection, loadHarnessManifest } from "../../ui/shared/patch-connection-mock";
 import { SILENT_POLISH_METER_FRAME } from "../../ui/shared/polish";
 import { SynthPresetBar } from "../../ui/shared/synth-preset-bar";
+import { synthFactoryPresets } from "../../ui/shared/synth-factory-presets";
 import { synthParameterByEndpoint } from "../../ui/shared/synth-plugin-state";
 import { SynthStateProvider } from "../../ui/shared/synth-plugin-state-react";
 
@@ -25,9 +26,15 @@ function Edits() {
     </>;
 }
 
-/** Mount the synth preset row on the development patch connection. */
+/** Mount the synth preset row on the development patch connection, as a new synth instance. */
 export async function mount(element: HTMLElement, options: { readonly compact: boolean }) {
     const connection = new MockPatchConnection(await loadHarnessManifest());
+    // The development connection starts on a demo sound. A new synth starts on its Cmajor init
+    // values, which are exactly Init's (tests/test_synth_factory_presets.mjs).
+    const init = synthFactoryPresets.find(preset => preset.id === "init")!;
+    for (const [endpointID, value] of Object.entries(init.values)) {
+        if (typeof value === "number") connection.setParameterValue(endpointID, value);
+    }
     const calls = { replaced: [] as Record<string, number>[], bounceAudio: 0, videoPatches: [] as unknown[], developerSettings: 0, back: 0 };
     // Every selector slot holds a shipped factory table, so the default sound can be shared.
     const tables = Array.from({ length: 239 }, (_, index) => ({ tableId: `factory-${index}` }));
