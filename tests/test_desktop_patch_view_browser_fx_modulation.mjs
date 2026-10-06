@@ -412,7 +412,7 @@ test("mod matrix amount knob double-click entry uses the displayed units", async
     }
 });
 
-test("mod matrix amount entry preserves the focused draft across a host echo", async () => {
+test("a host-loaded modulation document closes the open amount entry without applying its draft", async () => {
     const page = await openHarnessPage();
 
     try {
@@ -423,32 +423,23 @@ test("mod matrix amount entry preserves the focused draft across a host echo", a
         const amountInput = page.locator('input[aria-label="Route 1 amount value"]:visible');
         await amountInput.waitFor({ state: "visible" });
         await amountInput.fill("12");
+
+        // A stored-state change from the host is a project load: the view
+        // reattaches to the loaded document, so a draft typed against the
+        // replaced one is discarded instead of being applied to the new sound.
         await page.evaluate(() => {
             const harness = window.__COSIMO_DESKTOP_HARNESS__;
             const modulationState = JSON.parse(String(harness.getSnapshot().storedState["modulation.v6"]));
             modulationState.routes[0].amount = 0.77;
             harness.setStoredStateValue("modulation.v6", JSON.stringify(modulationState));
         });
-        await page.waitForFunction(() => {
-            const harness = window.__COSIMO_DESKTOP_HARNESS__;
-            const modulationState = JSON.parse(String(harness.getSnapshot().storedState["modulation.v6"]));
-            return Math.abs(Number(modulationState.routes[0]?.amount) - 0.77) <= 1e-9;
-        });
+        await amountInput.waitFor({ state: "detached" });
+        await page.waitForFunction(() => [...document.querySelectorAll('[role="slider"][aria-label="Route 1 amount"]')]
+            .some((element) => element.checkVisibility() && element.getAttribute("aria-valuenow") === "0.77"));
 
-        assert.equal(await amountInput.inputValue(), "12");
-        await amountInput.press("Enter");
-
-        const snapshot = await waitForHarnessSnapshot(
-            page,
-            "focused route amount draft committed after host echo",
-            (nextSnapshot) => {
-                const route = readStoredModulationState(nextSnapshot).routes[0];
-                return route?.targetKind === "oscA.warpAmount"
-                    && Math.abs(Number(route.amount) - 0.12) <= 1e-9;
-            },
-        );
-        assert.equal(readStoredModulationState(snapshot).routes[0].amount, 0.12);
-        assert.equal(await amountInput.count(), 0, "Enter must close the exact-value editor instead of reopening it through the slider.");
+        const route = readStoredModulationState(await getHarnessSnapshot(page)).routes[0];
+        assert.equal(route.targetKind, "oscA.warpAmount");
+        assert.equal(route.amount, 0.77);
     } finally {
         await page.close();
     }
