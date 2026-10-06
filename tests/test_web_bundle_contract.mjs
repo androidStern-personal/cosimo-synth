@@ -24,28 +24,14 @@ import {
 import { copyWebHostAssets } from "../web/web-host-assets.mjs";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-const desktopBundleBudgetBytes = 3_200_000;
-// The worker owns stored-state parsing, sparse compilation, and acknowledged
-// delivery. Keep measured raw-parse and transfer ceilings on that complete
-// production unit instead of budgeting only the old 12-slot publisher.
-// The 2026-08-15 generator-control cut adds 18 strict target identities and
-// their range validation to the worker's accepted modulation domain.
-// The 2026-08-19 Voice filter Mix append (T05) adds one shared voice target
-// plus its catalog descriptor and amount policy; re-measured at 142,969 raw
-// and 34,341 gzipped.
-// Raised 2026-08-21 for the T22 batched mip-upload protocol (+700 raw /
-// +103 gzip): batch assembly and per-batch ack matching are deliberate
-// features, not drift. Keep the headroom tight.
-// Re-measured 2026-08-23 after the effects-lane dynamic-target grammar landed
-// (be5309e..367922d): 149,732 raw and 36,209 gzipped with Node's level-9
-// encoder. The added descriptor/instance vocabulary is the intended product
-// contract; these ceilings retain less than 1.5% headroom.
-// Re-measured 2026-08-24 after merging the lane.v2 topology compiler at
-// 90e9a28: 157,762 raw and 38,295 gzipped. The worker must deserialize and
-// replay that current lane contract while no editor is open; keep the renewed
-// ceilings at roughly 1.5% headroom so future accidental growth still fails.
-const wavetableWorkerBudgetBytes = 160_000;
-const wavetableWorkerGzipBudgetBytes = 38_800;
+// Measured ceilings, so any growth fails here and has to be explained. React,
+// react-dom and NexusUI are about a sixth of the desktop entry.
+const desktopBundleBudgetBytes = 3_502_903;
+// The worker owns stored-state parsing, sparse compilation and acknowledged
+// delivery for the whole synth state, presets, snapshots and the bounce
+// document included, and it must carry no React.
+const wavetableWorkerBudgetBytes = 284_695;
+const wavetableWorkerGzipBudgetBytes = 71_694;
 
 test("compiled desktop production entry stays within its browser parse budget", async () => {
     const bundlePath = path.join(repoRoot, "patch_gui", "desktop", "app.js");
@@ -68,6 +54,8 @@ test("compiled wavetable worker stays within its startup parse budget", async ()
         bundle.size <= wavetableWorkerBudgetBytes,
         `Expected ${bundlePath} to be at most ${wavetableWorkerBudgetBytes} bytes, received ${bundle.size}.`,
     );
+    assert.doesNotMatch(source.toString("utf8"), /react\.production|__SECRET_INTERNALS|useSyncExternalStore/,
+        "the worker bundle must not carry React");
     const compressedSize = gzipSync(source, { level: 9 }).byteLength;
     assert.ok(
         compressedSize <= wavetableWorkerGzipBudgetBytes,
