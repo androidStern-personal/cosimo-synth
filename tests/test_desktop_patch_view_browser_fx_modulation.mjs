@@ -3980,37 +3980,30 @@ test("ADR-025 journey: a confirmed drop flashes, ticks, and pulses; bypass and d
 
         // Authoritative confirmation: flash + rising checkmark + light tick,
         // the rail count pulses, and the matrix's new 0% row pulses too. The
-        // pulses are brief, so the page records them as they appear and opens
-        // the mappings once the confirmation and the count pulse have shown.
-        await page.evaluate(() => { window.__creationChoreography = new Promise((resolve, reject) => {
-            const seen = { confirmed: false, check: false, countPulse: false, rowPulse: false };
-            const timeout = setTimeout(() => { observer.disconnect(); reject(new Error(`Choreography incomplete: ${JSON.stringify(seen)}`)); }, 5000);
-            const scan = () => {
-                seen.check ||= document.querySelector('[data-role="rack-parameter-surface-reverbSize"] .rack-confirm-check') !== null;
-                seen.countPulse ||= document.querySelector('[data-role="mobile-global-mod-rail-route-count"][data-count-pulsing]') !== null;
-                seen.rowPulse ||= document.querySelector('[data-role="mod-mappings-row"].is-just-created') !== null;
-                if (!seen.confirmed && seen.check && seen.countPulse && document.querySelector('[data-role="rack-parameter-surface-reverbSize"]')
-                    ?.getAttribute("data-creation-confirmed") === "true") {
-                    seen.confirmed = true;
-                    document.querySelector('[data-role="mobile-workspace-tab-mod"]')?.click();
-                }
-                if (!seen.confirmed) return;
-                document.querySelector('[data-role="mobile-mod-panel-tab-mappings"]:not([aria-selected="true"])')?.click();
-                if (document.querySelector('[data-role="mod-mappings-row"]') !== null) {
-                    clearTimeout(timeout);
-                    observer.disconnect();
-                    resolve(seen);
-                }
-            };
-            const observer = new MutationObserver(scan);
-            observer.observe(document.body, { subtree: true, childList: true, attributes: true });
-        }); });
-        await page.mouse.up();
-        const seen = await page.evaluate(() => window.__creationChoreography);
-        assert.equal(seen.check, true, "The confirmed parameter shows the rising checkmark.");
-        assert.equal((await page.evaluate(() => window.__rackHaptics.slice())).includes("light"), true);
-        assert.equal(seen.countPulse, true, "The rail's mapping count must pulse on confirmation.");
-        assert.equal(seen.rowPulse, true, "The new matrix row must pulse in the source color.");
+        // pulses end on UI timers, which wait while the test reads them.
+        await withUiTimersPaused(page, async () => {
+            await page.mouse.up();
+            await page.locator('[data-role="rack-parameter-surface-reverbSize"][data-creation-confirmed="true"]').waitFor();
+            assert.equal(
+                await page.locator('[data-role="rack-parameter-surface-reverbSize"] .rack-confirm-check').count(),
+                1,
+                "The confirmed parameter shows the rising checkmark.",
+            );
+            assert.equal((await page.evaluate(() => window.__rackHaptics.slice())).includes("light"), true);
+            assert.equal(
+                await page.locator('[data-role="mobile-global-mod-rail-route-count"][data-count-pulsing]').count(),
+                1,
+                "The rail's mapping count must pulse on confirmation.",
+            );
+            await page.click('[data-role="mobile-workspace-tab-mod"]');
+            await page.click('[data-role="mobile-mod-panel-tab-mappings"]');
+            await page.locator('[data-role="mod-mappings-row"]').waitFor();
+            assert.equal(
+                await page.locator('[data-role="mod-mappings-row"].is-just-created').count(),
+                1,
+                "The new matrix row must pulse in the source color.",
+            );
+        });
         const createdRoute = readStoredModulationState(await getHarnessSnapshot(page)).routes
             .find((route) => route.targetKind === "lane.reverb#1.reverbSize");
         assert.ok(createdRoute);

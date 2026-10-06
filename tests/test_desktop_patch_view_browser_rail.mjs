@@ -4168,19 +4168,11 @@ test("T60 application preferences cross plugin and desktop breakpoints without c
 
         try {
             // Compare against the sound once the opening document has reached the engine.
-            let soundBeforeResize = await waitForOpeningLaneDelivery(page);
-            for (let settled = 0; settled < 3;) {
-                await page.waitForTimeout(100);
-                const next = await getHarnessSnapshot(page);
-                settled = isDeepStrictEqual(next.parameterValues, soundBeforeResize.parameterValues)
-                    && isDeepStrictEqual(next.storedState, soundBeforeResize.storedState) ? settled + 1 : 0;
-                soundBeforeResize = next;
-            }
+            const soundBeforeResize = await waitForOpeningLaneDelivery(page);
             assert.equal(await page.locator('[data-role="mobile-global-mod-rail"]').count(), 0);
             await page.setViewportSize({ width: 393, height: 852 });
             const rail = page.locator('[data-role="mobile-global-mod-rail"][data-placement="parked"]');
             await rail.waitFor();
-            await page.waitForTimeout(220);
             assert.equal(
                 await rail.evaluate((element) => (
                     getComputedStyle(element).getPropertyValue("--rail-scale").trim()
@@ -7645,13 +7637,11 @@ test("T13v2: the quick sheet's graphic is the REAL editor — MSEG points drag, 
         await page.mouse.down();
         await page.mouse.move(start.x, start.y + 40, { steps: 4 });
         await page.mouse.up();
-        await page.waitForFunction((previous) => {
-            const snapshot = window.__COSIMO_DESKTOP_HARNESS__.getSnapshot();
-            const raw = snapshot.storedStateValues?.["modulation.v6"] ?? snapshot.storedState?.["modulation.v6"];
-            return typeof raw === "string" && raw !== previous;
-        }, JSON.stringify(before) === "null" ? "" : undefined, { timeout: 5000 }).catch(() => null);
-        const after = readStoredMsegShape(await getHarnessSnapshot(page), 0);
-        assert.notDeepEqual(after, before, "Dragging a sheet point must edit the stored MSEG shape.");
+        await waitForHarnessSnapshot(
+            page,
+            "a sheet point drag edits the stored MSEG shape",
+            (snapshot) => !isDeepStrictEqual(readStoredMsegShape(snapshot, 0), before),
+        );
         await page.locator('[data-role="quick-source-sheet-close"]').click();
 
         // Envelope sheet: the graphic is the REAL draggable ADSR editor.
@@ -7811,12 +7801,11 @@ test("T14: the SOURCE graph edits points directly with Expand explicit; the 320p
         await page.mouse.down();
         await page.mouse.move(start.x, start.y + 30, { steps: 4 });
         await page.mouse.up();
-        await page.waitForFunction((previousShape) => {
-            const raw = window.__COSIMO_DESKTOP_HARNESS__.getSnapshot().storedState["modulation.v6"];
-            return typeof raw === "string" && raw !== previousShape;
-        }, JSON.stringify(before), { timeout: 5000 }).catch(() => null);
-        const after = readStoredMsegShape(await getHarnessSnapshot(page), 0);
-        assert.notDeepEqual(after, before, "Dragging a SOURCE-panel point must edit the stored shape.");
+        await waitForHarnessSnapshot(
+            page,
+            "a SOURCE-panel point drag edits the stored MSEG shape",
+            (snapshot) => !isDeepStrictEqual(readStoredMsegShape(snapshot, 0), before),
+        );
 
         // The explicit Expand control opens the real full-screen editor.
         await page.click('[data-role="mod-source-mseg-expand"]');
