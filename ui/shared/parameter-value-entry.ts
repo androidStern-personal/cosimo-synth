@@ -8,9 +8,7 @@
 
 import {
     getRackEffectDescriptor,
-    getRackParameterDescriptor,
     getRackParameterDescriptorForModulationEndpoint,
-    type RackParameterChoice,
     type RackParameterDescriptor,
 } from "./rack-parameter-descriptors";
 import { laneMirrorRackKind, parseLaneModulationTargetKind } from "./lane-modulation-targets";

@@ -728,7 +728,7 @@ function createGuideLines(camera: Camera, projection: Projection): GuideLine[] {
     ];
 }
 
-function buildProjectionFromFrames(contourSamples: Float32Array[], width: number, height: number, frameCount: number, drawableInsets: WavetableDrawableInsets = {}): { camera: Camera; projection: Projection } {
+function buildProjection(width: number, height: number, drawableInsets: WavetableDrawableInsets = {}): { camera: Camera; projection: Projection } {
     const camera = createCamera();
     const stableWorldPoints = [
         { x: -1, y: FLOOR_Y, z: 0 },
@@ -1081,7 +1081,7 @@ export function buildWavetableStaticScene({
     const surfacePointCount = getSurfacePointCount(safeWidth, frames[0].length);
     const contourSamples = frames.map((frame) => decimateFrame(frame, contourPointCount));
     const surfaceSamples = frames.map((frame) => decimateFrame(frame, surfacePointCount));
-    const { camera, projection } = buildProjectionFromFrames(contourSamples, safeWidth, safeHeight, frameCount, drawableInsets);
+    const { camera, projection } = buildProjection(safeWidth, safeHeight, drawableInsets);
     const contourFrames = contourSamples.map((samples, frameIndex) =>
         createProjectedFrame(samples, frameIndex, frameCount, camera, projection)
     );

@@ -38,7 +38,6 @@ import { acquireSynthViewState } from "./synth-state-client";
 import {
     clampNormalizedValue,
     makeMappingId,
-    parseNormalizedValue,
     splitMappingId,
     type ArticulationId,
     type MappingId,

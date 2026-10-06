@@ -1563,11 +1563,9 @@ export async function installArticulationReconnectHydrationHarness(target: HTMLE
     const mounted = mountHarness(target, (root) => {
         function Reader() {
             const stageRef = useRef<HTMLDivElement | null>(null);
-            const msegEditorSurfaceRef = useRef<SVGSVGElement | null>(null);
             const keyboardRef = useRef(null);
             synthView = useSynthPatchViewModel({
                 stageRef,
-                msegEditorSurfaceRef,
                 keyboardRef,
                 voiceModeCount: 3,
                 observeFilterSpectrum: false,
@@ -1599,7 +1597,6 @@ export async function installArticulationReconnectHydrationHarness(target: HTMLE
             return (
                 <div>
                     <div ref={stageRef} />
-                    <svg ref={msegEditorSurfaceRef} />
                     <button
                         type="button"
                         data-role="reconnect-articulation-capture"
@@ -1759,11 +1756,9 @@ export async function installArticulationOwnerHydrationHarness(target: HTMLEleme
             articulationReadiness = articulation.state;
             repairArticulations = () => articulation.setValue(createEmptyArticulationsState());
             const stageRef = useRef<HTMLDivElement | null>(null);
-            const msegEditorSurfaceRef = useRef<SVGSVGElement | null>(null);
             const keyboardRef = useRef(null);
             synthView = useSynthPatchViewModel({
                 stageRef,
-                msegEditorSurfaceRef,
                 keyboardRef,
                 voiceModeCount: 3,
                 observeFilterSpectrum: false,
@@ -2521,11 +2516,9 @@ export async function installAutoPreviewSynthHookHarness(target: HTMLElement) {
     const mounted = mountHarness(target, (root) => {
         function Harness() {
             const stageRef = useRef<HTMLDivElement | null>(null);
-            const msegEditorSurfaceRef = useRef<SVGSVGElement | null>(null);
             const keyboardRef = useRef(null);
             synthView = useSynthPatchViewModel({
                 stageRef,
-                msegEditorSurfaceRef,
                 keyboardRef,
                 voiceModeCount: 3,
                 observeFilterSpectrum: false,
@@ -2545,7 +2538,6 @@ export async function installAutoPreviewSynthHookHarness(target: HTMLElement) {
             return (
                 <div>
                     <div ref={stageRef} />
-                    <svg ref={msegEditorSurfaceRef} />
                 </div>
             );
         }

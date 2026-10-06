@@ -30,19 +30,7 @@ import {
     type LaneSplitGroupV2,
     type LaneStateV2,
 } from "./lane-state-v2";
-import {
-    LANE_SPLIT_PARAM_XOVER_HIGH_HZ,
-    LANE_SPLIT_PARAM_XOVER_HIGH_KEY_TRACK_ENABLED,
-    LANE_SPLIT_PARAM_XOVER_HIGH_KEY_TRACK_OFFSET_SEMITONES,
-    LANE_SPLIT_PARAM_XOVER_LOW_HZ,
-    LANE_SPLIT_PARAM_XOVER_LOW_KEY_TRACK_ENABLED,
-    LANE_SPLIT_PARAM_XOVER_LOW_KEY_TRACK_OFFSET_SEMITONES,
-} from "./lane-state";
-import {
-    getLaneSlotParamIndex,
-    laneDeviceParamEndpoints,
-} from "./lane-slot-params";
-import type { EffectModuleId } from "./target-descriptor";
+import { getLaneSlotParamIndex } from "./lane-slot-params";
 import {
     buildPatchModulationTargetOptions,
     type ModulationTargetOption,

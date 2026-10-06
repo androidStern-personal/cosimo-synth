@@ -1,5 +1,5 @@
 import { renderStillOnWeb } from "@remotion/web-renderer";
-import React, { useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { useDelayRender } from "remotion";
 
 import { DesktopPatchView } from "../../desktop/DesktopPatchView";

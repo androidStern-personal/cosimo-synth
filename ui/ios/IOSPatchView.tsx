@@ -6,7 +6,6 @@ import {
     useRef,
     useState,
     type CSSProperties,
-    type PointerEvent as ReactPointerEvent,
     type RefObject,
 } from "react";
 
@@ -80,7 +79,6 @@ import {
 import { useParameterMenuShell } from "../shared/parameter-menu-shell";
 import { KeyTrackStatus } from "../shared/key-track-status";
 import {
-    clampDisplayPosition,
 } from "../shared/runtime-table-state";
 import {
     useSynthPatchViewModel,
@@ -113,8 +111,6 @@ const ENVELOPE_EDITOR_SLOT_COUNT = MODULATION_ENV_SLOT_COUNT + 1;
 const KEYBOARD_ROOT_NOTE_MIN = 12;
 const KEYBOARD_ROOT_NOTE_MAX = 72;
 const DISTORTION_WET_HP_MIN_HZ = 20;
-const DISTORTION_WET_HP_MAX_HZ = 4_000;
-const DISTORTION_WET_LP_MIN_HZ = 20;
 const DISTORTION_WET_LP_MAX_HZ = 20_000;
 function requireIOSRackParameterDescriptor(endpointID: string): RackParameterDescriptor {
     const descriptor = getRackParameterDescriptor(endpointID);
@@ -227,12 +223,6 @@ function frequencyHzToLogNormalized(value: number, minHz: number, maxHz: number)
 
 function normalizedToLogFrequencyHz(normalized: number, minHz: number, maxHz: number) {
     return minHz * Math.pow(maxHz / minHz, clamp(normalized, 0, 1));
-}
-
-function formatFrameReadout(position: number, frameCount: number) {
-    const safeFrameCount = Math.max(1, frameCount);
-    const frameIndex = Math.round(clampDisplayPosition(position) * Math.max(0, safeFrameCount - 1)) + 1;
-    return `${String(frameIndex).padStart(2, "0")}/${String(safeFrameCount).padStart(2, "0")}`;
 }
 
 function formatKeyboardRangeLabel(rootNote: number, noteCount: number) {
@@ -1378,11 +1368,9 @@ function IOSPatchViewBody() {
     const synthView = useSynthPatchViewModel({
         oscillatorID: oscillatorSelection.selectedOscillatorID,
         stageRef,
-        msegEditorSurfaceRef,
         keyboardRef,
         voiceModeCount: VOICE_MODE_OPTIONS.length,
         observeFilterSpectrum: false,
-        msegSurfaceOrientation: msegEditorOrientation,
         msegCurveEditActivationMode: "hold-or-drag",
         onMsegCurveEditHoldActivated: () => {
             triggerIOSHaptic("light");

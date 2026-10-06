@@ -14,7 +14,6 @@ import {
     drawWavetableModel,
     type WavetableFrameInput,
 } from "../../shared/wavetable-display";
-import type { OscillatorID } from "../../shared/modulation-targets";
 import { FingerOverlay } from "./finger-overlay";
 import type { GestureScript } from "./gestures";
 import type { SpeedrunVisualState } from "./state";
@@ -22,7 +21,6 @@ import type { SpeedrunVisualState } from "./state";
 export type SpeedrunWavetableFrames = Readonly<Record<string, ReadonlyArray<WavetableFrameInput>>>;
 
 const NOOP = () => undefined;
-const VOICE_ACCENT = "#69d5c5";
 const FX_ACCENT = "#a98cff";
 const MOD_ACCENT = "#ff79d8";
 const SOURCE_ACCENT = "#ffd36e";

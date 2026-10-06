@@ -1,6 +1,5 @@
 import {
     type ReactNode,
-    useCallback,
     useEffect,
     useId,
     useLayoutEffect,
@@ -42,7 +41,6 @@ import { uiMediaTimeNow } from "./ui-media-clock";
 import {
     composeModulationAmount,
     formatModulationAmountReadout,
-    getModulationAmountDepth,
     getModulationAmountPercentLabel,
     getModulationAmountSliderPosition,
     getModulationTargetClampHint,
@@ -450,7 +448,6 @@ export function MsegPreview({
     morphShapeAPoints = null,
     morphShapeBPoints = null,
     morphValue = null,
-    showMorphCurve = false,
     editShapeIndex = 0,
     orientation = "horizontal",
     className,
@@ -461,7 +458,6 @@ export function MsegPreview({
     morphShapeAPoints?: Array<{ x: number; y: number; curvePower: number }> | null;
     morphShapeBPoints?: Array<{ x: number; y: number; curvePower: number }> | null;
     morphValue?: number | null;
-    showMorphCurve?: boolean;
     /** Shape identity controls color only; selection never swaps A/B colors. */
     editShapeIndex?: 0 | 1;
     orientation?: MsegSurfaceOrientation;
@@ -924,7 +920,6 @@ export function ModulationAmountField({
     polarityAriaLabel,
     className,
 }: ModulationAmountFieldProps) {
-    const depth = getModulationAmountDepth(targetKind, amount);
     const knobPosition = getModulationAmountSliderPosition(targetKind, amount);
     const depthLabel = getModulationAmountPercentLabel(targetKind, amount);
     const unitReadout = formatModulationAmountReadout(targetKind, amount, polarity);

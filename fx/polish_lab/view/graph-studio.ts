@@ -272,7 +272,6 @@ export function createPolishGraphStudio({ root, sound }: { readonly root: HTMLEl
     const threshold = finiteOr(values().thresholdDb, COMPRESSOR_DEFAULTS.thresholdDb);
     const ratio = finiteOr(values().ratio, COMPRESSOR_DEFAULTS.ratio);
     const knee = finiteOr(values().kneeDb, COMPRESSOR_DEFAULTS.kneeDb);
-    const makeup = finiteOr(values().makeupDb, COMPRESSOR_DEFAULTS.makeupDb);
     compressorSummary.textContent = threshold.toFixed(1)
       + " dB · "
       + ratio.toFixed(2)

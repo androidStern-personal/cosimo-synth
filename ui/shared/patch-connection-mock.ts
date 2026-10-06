@@ -321,11 +321,11 @@ class MockPianoKeyboard extends HTMLElement {
         this.debug.allNotesOffCount += 1;
     }
 
-    attachToPatchConnection(_patchConnection: PatchConnectionLike, endpointID: string) {
-        this.attachedPatchConnection = _patchConnection;
+    attachToPatchConnection(patchConnection: PatchConnectionLike, endpointID: string) {
+        this.attachedPatchConnection = patchConnection;
         this.attachedEndpointID = endpointID;
         this.debug.attachCalls.push({ endpointID });
-        (_patchConnection as { recordKeyboardAttach?: (endpointID: string) => void }).recordKeyboardAttach?.(endpointID);
+        (patchConnection as { recordKeyboardAttach?: (endpointID: string) => void }).recordKeyboardAttach?.(endpointID);
     }
 
     detachPatchConnection() {

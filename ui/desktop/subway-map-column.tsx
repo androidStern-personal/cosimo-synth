@@ -18,7 +18,6 @@ import {
     type SubwayGhostCell,
     type SubwayRow,
     type SubwayStationCell,
-    type SubwayTint,
 } from "../shared/lane-subway-layout";
 import { getRackEffectDescriptor } from "../shared/rack-parameter-descriptors";
 import type { EffectModuleId } from "../shared/target-descriptor";

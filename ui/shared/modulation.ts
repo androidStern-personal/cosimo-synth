@@ -11,7 +11,6 @@ import {
 } from "./rack-parameter-descriptors";
 import {
     MSEG_RATE_MAX_SECONDS,
-    clampMsegRateSeconds,
     createDefaultMsegPlayback,
     createDefaultMsegShape,
     msegShapesEqual,
@@ -231,8 +230,6 @@ export type ModulationState = {
 
 export type ModulationStateChangeKind = "general" | "routeAmount";
 
-type ModulationRouteAmountListener = (amount: number | null) => void;
-
 /** Expected boundary failure for a non-current modulation document. */
 export class ModulationStateParseError extends Error {
     override readonly name = "ModulationStateParseError";
@@ -321,34 +318,10 @@ export function buildPatchModulationTargetOptions(
     ];
 }
 
-type StoredStateMessage = {
-    key?: unknown;
-    value?: unknown;
-};
-
 let generatedRouteIdCounter = 1;
 
 function hasOwnValue(record: Record<string, unknown>, key: string) {
     return Object.prototype.hasOwnProperty.call(record, key);
-}
-
-function readFullStoredStateValue(storedState: unknown, key: string) {
-    const fullState = storedState && typeof storedState === "object"
-        ? storedState as Record<string, unknown>
-        : {};
-    const values = fullState.values && typeof fullState.values === "object"
-        ? fullState.values as Record<string, unknown>
-        : {};
-
-    if (hasOwnValue(values, key)) {
-        return values[key];
-    }
-
-    if (hasOwnValue(fullState, key)) {
-        return fullState[key];
-    }
-
-    return undefined;
 }
 
 export type MsegEditorControllerLike = {
@@ -1025,21 +998,6 @@ export function deserializeModulationState(value: unknown): ModulationState {
         throw parsedState.error;
     }
     return parsedState.value;
-}
-
-function modulationStatesEqual(left: ModulationState, right: ModulationState) {
-    return serializeModulationState(left) === serializeModulationState(right);
-}
-
-function toStoredStateEchoToken(value: unknown) {
-    if (typeof value === "string") {
-        return value;
-    }
-    try {
-        return `${typeof value}:${JSON.stringify(value)}`;
-    } catch {
-        return `${typeof value}:${String(value)}`;
-    }
 }
 
 function toMsegPlaybackUpload(slotIndex: number, playback: Omit<MsegPlayback, "rate">): ModulationMsegPlaybackUpload {

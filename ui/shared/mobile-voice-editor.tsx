@@ -23,7 +23,6 @@ import {
     useMemo,
     useRef,
     useState,
-    type KeyboardEvent as ReactKeyboardEvent,
     type PointerEvent as ReactPointerEvent,
     type ReactNode,
 } from "react";
@@ -274,18 +273,6 @@ export function MobileVoiceFocusedEditor({
         }
         return address.targetKind;
     }, [contract]);
-
-    const routeFor = useCallback((parameterKind: OscillatorModulationParameterKind | null) => {
-        if (parameterKind === null || armedSource === null) {
-            return null;
-        }
-        const targetKind = targetKindFor(parameterKind);
-        return routes.find((route) => (
-            route.targetKind === targetKind
-            && route.sourceKind === armedSource.sourceKind
-            && route.sourceSlot === armedSource.sourceSlot
-        )) ?? null;
-    }, [armedSource, routes, targetKindFor]);
 
     const armedSourceIdentity = useMemo(() => (
         armedSource === null

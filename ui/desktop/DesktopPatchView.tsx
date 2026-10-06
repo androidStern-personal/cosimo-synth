@@ -81,7 +81,6 @@ import {
     MsegPreview,
     RangeField,
     SYNTH_COMPACT_CONTROL_CHROME_CLASS,
-    SYNTH_COMPACT_CONTROL_TEXT_CLASS,
     SYNTH_GRID_CARD_INSET_SHADOW_CLASS,
     SYNTH_GRID_CARD_SHELL_CLASS,
     SYNTH_GRID_CARD_SIZE_CLASS,
@@ -263,9 +262,7 @@ import {
     MODULATION_MACRO_SLOT_COUNT,
     MODULATION_MSEG_SLOT_COUNT,
     clampModulationRouteAmount,
-    isVoiceModulationSource,
     type ModulationRoute,
-    type ModulationRouteUpdate,
 } from "../shared/modulation";
 
 function cycleFilterSpectrumRenderMode(currentMode: FilterSpectrumRenderMode): FilterSpectrumRenderMode {
@@ -622,7 +619,6 @@ type ModulationMatrixSectionProps = {
         sustain: number;
         releaseSeconds: number;
     } | null;
-    routes: ModulationRoute[];
     onSelectMsegSlot: (slotIndex: number) => void;
     onSelectMsegShape: (shapeIndex: number) => void;
     onOpenMsegEditor: () => void;
@@ -631,9 +627,6 @@ type ModulationMatrixSectionProps = {
     onToggleMsegLoop: () => void;
     onSelectEnvelopeSlot: (slotIndex: number) => void;
     onEnvelopeChange: (field: "attackSeconds" | "decaySeconds" | "sustain" | "releaseSeconds", nextValue: number) => void;
-    onAddRoute: () => void;
-    onRemoveRoute: (routeIndex: number) => void;
-    onRouteChange: (routeIndex: number, update: ModulationRouteUpdate) => void;
     msegRateFocusBindings: SynthFocusBindings;
     msegDirectEditing?: {composition: import("../shared/synth-components").MsegCompositionBindings} | null;
 };
@@ -655,10 +648,6 @@ function envelopeEntryParameter(parameter: EnvelopeEntryParameter): EnvelopeEntr
     return parameter;
 }
 
-function formatSeconds(seconds: number) {
-    return `${seconds.toFixed(3)} s`;
-}
-
 function formatKeyboardRootLabel(rootNote: number) {
     const octave = Math.floor(rootNote / 12) - 1;
     return `C${octave}`;
@@ -666,21 +655,6 @@ function formatKeyboardRootLabel(rootNote: number) {
 
 function formatPercent(value: number) {
     return `${Math.round(value * 100)}%`;
-}
-
-function formatSignedPercent(value: number) {
-    const percentValue = Math.round(value * 100);
-    return `${percentValue > 0 ? "+" : ""}${percentValue}%`;
-}
-
-function formatDriveDb(value: number) {
-    return `${value.toFixed(1)} dB`;
-}
-
-function formatSemitoneOffset(value: number) {
-    const semitones = clamp(value, -2, 2);
-    const prefix = semitones > 0 ? "+" : "";
-    return `${prefix}${semitones.toFixed(2)} st`;
 }
 
 function envelopeTimeEntrySpec(currentSeconds: number, minSeconds = ENVELOPE_TIME_MIN_SECONDS) {
@@ -860,10 +834,6 @@ function formatEnvelopeBubbleValue(
         ? releaseMinimumSeconds
         : ENVELOPE_TIME_MIN_SECONDS;
     return formatParameterEntry(envelopeTimeEntrySpec(value, minimumSeconds), value).display;
-}
-
-function formatSignedOctaves(value: number) {
-    return `${value > 0 ? "+" : ""}${value.toFixed(2)} oct`;
 }
 
 function cycleWarpMode(currentMode: number) {
@@ -4051,7 +4021,6 @@ function ModulationMatrixSection({
     observedMsegPlayhead,
     selectedEnvelopeSlot,
     selectedEnvelope,
-    routes,
     onSelectMsegSlot,
     onSelectMsegShape,
     onOpenMsegEditor,
@@ -4060,9 +4029,6 @@ function ModulationMatrixSection({
     onToggleMsegLoop,
     onSelectEnvelopeSlot,
     onEnvelopeChange,
-    onAddRoute,
-    onRemoveRoute,
-    onRouteChange,
     msegRateFocusBindings,
     msegDirectEditing = null,
 }: ModulationMatrixSectionProps) {
@@ -4969,7 +4935,6 @@ function ModulationMatrixSection({
                                     morphShapeAPoints={msegState.shapeA?.points ?? null}
                                     morphShapeBPoints={msegState.shapeB?.points ?? null}
                                     morphValue={selectedMsegMorph.value}
-                                    showMorphCurve={isMsegMorphAdjusting}
                                     editShapeIndex={msegState.editShapeIndex ?? 0}
                                     className="h-full w-full"
                                     progressFillEnd={observedMsegPlayhead.progressFillEnd}
@@ -5102,8 +5067,6 @@ function msegSourceSlotFromIndex(slotIndex: number): MsegSourceSlot {
     if (slotIndex === 2) return 3;
     throw new RangeError(`Unknown MSEG slot index: ${slotIndex}`);
 }
-
-type MobileWorkspaceSection = WorkspaceTabId;
 
 function parseMobileModSourceDetail(detail: string | null): MobileModSource | null {
     if (detail === null) {
@@ -5380,8 +5343,6 @@ function DesktopPatchViewBody({
     const synthView = useSynthPatchViewModel({
         oscillatorID: oscillatorSelection.selectedOscillatorID,
         stageRef,
-        msegEditorSurfaceRef,
-        msegSurfaceOrientation,
         keyboardRef: keyboardElementRef,
         voiceModeCount: VOICE_MODE_OPTIONS.length,
         keyboardInputMode,
@@ -5739,7 +5700,7 @@ function DesktopPatchViewBody({
                     onSelectCard={synthView.handleSelectArticulationSlot}
                     onCardPlayPressStart={synthView.handleStartArticulationAudition}
                     onCardPlayPressEnd={synthView.handleStopArticulationAudition}
-                    onCapture={() => synthView.handleCaptureArticulationSlot({ autoAssign: !isArticulationEditorExpanded })}
+                    onCapture={synthView.handleCaptureArticulationSlot}
                     onUpdate={synthView.handleUpdateSelectedArticulationSlot}
                     onRevert={synthView.handleRevertSelectedArticulationSlot}
                     onUndoDiscard={synthView.handleUndoDiscardedArticulationEdit}
@@ -6252,7 +6213,6 @@ function DesktopPatchViewBody({
                             observedMsegPlayhead={synthView.observedMsegPlayhead}
                             selectedEnvelopeSlot={synthView.selectedEnvelopeSlot}
                             selectedEnvelope={synthView.selectedEnvelope}
-                            routes={synthView.routes}
                             onSelectMsegSlot={synthView.handleSelectMsegSlot}
                             onSelectMsegShape={synthView.handleSelectMsegShape}
                             onOpenMsegEditor={synthView.msegEditor.openEditor}
@@ -6261,9 +6221,6 @@ function DesktopPatchViewBody({
                             onToggleMsegLoop={synthView.handleToggleMsegLoop}
                             onSelectEnvelopeSlot={synthView.handleSelectEnvelopeSlot}
                             onEnvelopeChange={synthView.handleEnvelopeChange}
-                            onAddRoute={synthView.handleAddRoute}
-                            onRemoveRoute={synthView.handleRemoveRoute}
-                            onRouteChange={synthView.handleRouteChange}
                             msegRateFocusBindings={synthView.keyboardRouting.msegRateFocusBindings}
                             msegDirectEditing={{composition: synthView.msegEditor.composition}}
                         />
@@ -6295,7 +6252,6 @@ function DesktopPatchViewBody({
                         observedMsegPlayhead={synthView.observedMsegPlayhead}
                         selectedEnvelopeSlot={synthView.selectedEnvelopeSlot}
                         selectedEnvelope={synthView.selectedEnvelope}
-                        routes={synthView.routes}
                         onSelectMsegSlot={synthView.handleSelectMsegSlot}
                         onSelectMsegShape={synthView.handleSelectMsegShape}
                         onOpenMsegEditor={synthView.msegEditor.openEditor}
@@ -6304,9 +6260,6 @@ function DesktopPatchViewBody({
                         onToggleMsegLoop={synthView.handleToggleMsegLoop}
                         onSelectEnvelopeSlot={synthView.handleSelectEnvelopeSlot}
                         onEnvelopeChange={synthView.handleEnvelopeChange}
-                        onAddRoute={synthView.handleAddRoute}
-                        onRemoveRoute={synthView.handleRemoveRoute}
-                        onRouteChange={synthView.handleRouteChange}
                         msegRateFocusBindings={synthView.keyboardRouting.msegRateFocusBindings}
                     />
                 )}
@@ -6690,7 +6643,7 @@ function DesktopPatchViewBody({
                     }
                 }}
                 onUpdateArticulation={synthView.handleUpdateSelectedArticulationSlot}
-                onSaveAsNewArticulation={() => synthView.handleCaptureArticulationSlot({ autoAssign: true })}
+                onSaveAsNewArticulation={synthView.handleCaptureArticulationSlot}
                 onRevertArticulation={synthView.handleRevertSelectedArticulationSlot}
             />
 

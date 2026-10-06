@@ -296,7 +296,7 @@ function targetForRoute(root: HTMLElement, op: Extract<UIOp, { kind: "mapRoute" 
     )) ?? null;
 }
 
-function scrollTargetIntoPanel(root: HTMLElement, target: HTMLElement) {
+function scrollTargetIntoPanel(target: HTMLElement) {
     const panel = target.closest<HTMLElement>('[data-role^="mobile-workspace-panel-"]');
     if (!panel) return;
     const panelBounds = panel.getBoundingClientRect();
@@ -529,7 +529,7 @@ export class ScriptedInteractionDirector {
             }
             if (target.focus === "filter") {
                 const filter = root.querySelector<HTMLElement>('[data-role="filter-card"]');
-                if (filter) scrollTargetIntoPanel(root, filter);
+                if (filter) scrollTargetIntoPanel(filter);
             }
             return false;
         }
@@ -611,7 +611,7 @@ export class ScriptedInteractionDirector {
     ) {
         const control = this.resolveParameterControl(root, span, op.endpointID);
         if (!control) return;
-        scrollTargetIntoPanel(root, control);
+        scrollTargetIntoPanel(control);
         if (control instanceof HTMLButtonElement) {
             // A cycle chip advances one choice per tap with wraparound; tap
             // as many times as the value delta needs, spread over the span.
@@ -660,7 +660,7 @@ export class ScriptedInteractionDirector {
         const editor = findByDataValue(root, '[data-role^="rack-editor-"][data-device-id]', "data-device-id", op.deviceId);
         const control = editor?.querySelector<HTMLElement>(`[data-role="rack-parameter-${op.endpointID}"]`) ?? null;
         if (!control) return;
-        scrollTargetIntoPanel(root, control);
+        scrollTargetIntoPanel(control);
         this.driveHorizontalGesture(
             root,
             fingerOverlay,
@@ -775,7 +775,7 @@ export class ScriptedInteractionDirector {
         const target = targetForRoute(root, op);
         const sourceButton = root.querySelector<HTMLElement>('[data-role="mobile-global-mod-rail-selected"]');
         if (!target || !sourceButton) return;
-        scrollTargetIntoPanel(root, target);
+        scrollTargetIntoPanel(target);
         const targetCenter = centerOf(target);
         if (progress < 0.16) return;
         if (!this.activePointer || this.activePointer.key !== span.key) {

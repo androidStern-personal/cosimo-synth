@@ -15,7 +15,6 @@ import { createPortal } from "react-dom";
 import {
     formatModulationAmountReadout,
     getModulationAmountBounds,
-    getModulationAmountSliderPosition,
     type ModulationRoute,
     type RackModulationTargetKind,
 } from "../shared/modulation";
@@ -592,8 +591,8 @@ function ParameterKnobSurface({
 }
 
 function ignoreSelection() {}
-function ignoreModulationAmountChange(_amount: number) {}
-function ignoreContextMenu(_clientX: number, _clientY: number) {}
+function ignoreModulationAmountChange() {}
+function ignoreContextMenu() {}
 
 /** Dual-ring control inside a target tile. The caller's tile owns drop hit testing and feedback; modulationTargetKind identifies the edited quantity. */
 export function RackParameterKnob(props: RackParameterKnobProps) {

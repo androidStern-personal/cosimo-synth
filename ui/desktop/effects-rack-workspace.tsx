@@ -27,7 +27,6 @@ import {
     type ParameterHudVisualization,
 } from "../shared/parameter-hud";
 
-import { usePatchConnection } from "../shared/cmajor-react";
 import { normalizedCurvePointToPlotPoint, plotPointToNormalizedCurvePoint } from "../shared/editor-curve-geometry";
 import { createEditorCurvePlotRect } from "../../kit/ui/editor-curve-geometry";
 import type { PatchControlBinding } from "../shared/patch-controls";
@@ -41,7 +40,6 @@ import {
     type RackParameterDescriptor,
 } from "../shared/rack-parameter-descriptors";
 import {
-    formatParameterEntry,
     parameterEntrySpecForModulationAmount,
     parameterEntrySpecForKeyTrackModulationAmount,
     parameterEntrySpecForKeyTrackOffset,
@@ -49,8 +47,6 @@ import {
     parameterEntrySpecForRackParameter,
     parameterEntrySpecForScalar,
     parameterEntrySpecForSeconds,
-    parseParameterEntry,
-    type ParameterEntryCommit,
 } from "../shared/parameter-value-entry";
 import { EFFECT_ID_TO_LANE_TYPE, LANE_MAX_BRANCHES_PER_GROUP, LANE_TYPE_TO_EFFECT_ID } from "../shared/lane-state";
 import {
@@ -90,10 +86,8 @@ import {
     type KeyTrackRouteStorage,
 } from "../shared/key-track";
 import {
-    MODULATION_SOURCE_OPTIONS,
     parseAnyModulationTargetKind,
     formatModulationAmountReadout,
-    getModulationAmountSliderPosition,
     isVoiceModulationSource,
     type GeneratedModulationRouteInput,
     type ModulationRoute,
@@ -133,10 +127,6 @@ import {
     type ModBarPreferences,
 } from "../shared/mod-bar-preferences";
 import { presentRouteWithCanonicalAmount, useModulationRouteAmountBinding } from "../shared/modulation-route-amount";
-import {
-    laneBaseKindForRackEndpoint,
-    parseModulationTargetKind,
-} from "../shared/modulation-targets";
 import {
     ParameterContextMenu,
     PARAMETER_MENU_LONG_PRESS_SLOP_PX,
@@ -2398,43 +2388,6 @@ function ModSourceCarousel({
             </div>
         </div>
     );
-}
-
-type HudRect = {
-    readonly left: number;
-    readonly top: number;
-    readonly right: number;
-    readonly bottom: number;
-};
-
-type HudPlacementSide = "above" | "below" | "start" | "end";
-
-const HUD_VIEWPORT_MARGIN_PX = 4;
-const HUD_ANCHOR_GAP_PX = 14;
-const HUD_FINGER_CLEARANCE_PX = 48;
-
-function inflateHudRect(rect: HudRect, amount: number): HudRect {
-    return {
-        left: rect.left - amount,
-        top: rect.top - amount,
-        right: rect.right + amount,
-        bottom: rect.bottom + amount,
-    };
-}
-
-function hudRectsIntersect(a: HudRect, b: HudRect) {
-    return !(a.right <= b.left || a.left >= b.right || a.bottom <= b.top || a.top >= b.bottom);
-}
-
-function boundingHudRect(element: Element | null): HudRect | null {
-    if (!element) {
-        return null;
-    }
-    const bounds = element.getBoundingClientRect();
-    if (bounds.width <= 0 || bounds.height <= 0) {
-        return null;
-    }
-    return { left: bounds.left, top: bounds.top, right: bounds.right, bottom: bounds.bottom };
 }
 
 const MOBILE_MOD_RAIL_POSITION_KEY = "cosimo.mobile-global-mod-rail.position.v1";
@@ -5098,9 +5051,6 @@ export function EffectsRackWorkspace({
         : selectedEffect.parameters.find((parameter) => parameter.modulationTargetIndex !== null)
             ?? selectedEffect.parameters[0];
     const activeSource = findRackModulationSource(selectedSource.sourceKind, selectedSource.sourceSlot);
-    const dragSourceDescriptor = dragSource === null
-        ? null
-        : findRackModulationSource(dragSource.sourceKind, dragSource.sourceSlot);
     const kindForDescriptor = useCallback((descriptor: RackParameterDescriptor) => (
         laneKindForDevice(
             laneDeviceIdForDescriptor(selectedDeviceId, descriptor),

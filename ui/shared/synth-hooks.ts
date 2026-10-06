@@ -44,7 +44,6 @@ import {
     type LoopSyncSource,
 } from "./auto-preview-sync";
 import { clampMsegRateSeconds, type MsegState } from "./mseg";
-import type { MsegSurfaceOrientation } from "../../kit/ui/mseg";
 import {
     MODULATION_STATE_KEY,
     MODULATION_TARGET_OPTIONS,
@@ -265,19 +264,7 @@ const AMP_ATTACK_ENDPOINT_ID = "ampAttack";
 const AMP_DECAY_ENDPOINT_ID = "ampDecay";
 const AMP_SUSTAIN_ENDPOINT_ID = "ampSustain";
 const AMP_RELEASE_ENDPOINT_ID = "ampRelease";
-const DISTORTION_MODE_ENDPOINT_ID = "distortionMode";
-const DISTORTION_DRIVE_DB_ENDPOINT_ID = "distortionDriveDb";
-const DISTORTION_KNEE_ENDPOINT_ID = "distortionKnee";
-const DISTORTION_WET_ENDPOINT_ID = "distortionWet";
-const DISTORTION_WET_HP_HZ_ENDPOINT_ID = "distortionWetHPHz";
-const DISTORTION_WET_LP_HZ_ENDPOINT_ID = "distortionWetLPHz";
 const DISTORTION_TYPE_ENDPOINT_ID = "distortionType";
-const CHORUS_MIX_ENDPOINT_ID = "chorusMix";
-const CHORUS_MOTION_MODE_ENDPOINT_ID = "chorusMotionMode";
-const CHORUS_BLOOM_MODE_ENDPOINT_ID = "chorusBloomMode";
-const CHORUS_TONE_ENDPOINT_ID = "chorusTone";
-const CHORUS_FEEDBACK_ENDPOINT_ID = "chorusFeedback";
-const CHORUS_RING_AMOUNT_ENDPOINT_ID = "chorusRingAmount";
 const RUNTIME_SYNC_REQUEST_ENDPOINT_ID = "runtimeSyncRequest";
 const RUNTIME_STATE_ENDPOINT_ID = "runtimeState";
 const RETRY_DESIRED_TABLE_REQUEST_ENDPOINT_ID = "retryDesiredTableRequest";
@@ -529,8 +516,7 @@ export type SynthPatchViewModel = {
     handleAddRouteWithOverrides: (overrides: GeneratedModulationRouteInput) => boolean;
     handleRemoveRoute: (routeIndex: number) => void;
     handleRouteChange: (routeIndex: number, update: ModulationRouteUpdate) => void;
-    handleAddArticulationSlot: () => void;
-    handleCaptureArticulationSlot: (options?: { autoAssign?: boolean }) => void;
+    handleCaptureArticulationSlot: () => void;
     handleSelectArticulationSlot: (slotId: string) => void;
     handleUpdateSelectedArticulationSlot: () => void;
     handleRevertSelectedArticulationSlot: () => void;
@@ -1806,10 +1792,8 @@ export function useSynthKeyboardRouting({
 export function useSynthPatchViewModel({
     oscillatorID = DEFAULT_SELECTED_OSCILLATOR_ID,
     stageRef,
-    msegEditorSurfaceRef,
     keyboardRef,
     voiceModeCount,
-    msegSurfaceOrientation = "horizontal",
     msegCurveEditActivationMode = "immediate",
     onMsegCurveEditHoldActivated = null,
     onKeyboardOctaveDown,
@@ -1823,10 +1807,8 @@ export function useSynthPatchViewModel({
 }: {
     oscillatorID?: OscillatorID;
     stageRef: RefObject<HTMLDivElement | null>;
-    msegEditorSurfaceRef: RefObject<SVGSVGElement | null>;
     keyboardRef: RefObject<SynthKeyboardLike | null>;
     voiceModeCount: number;
-    msegSurfaceOrientation?: MsegSurfaceOrientation;
     msegCurveEditActivationMode?: "immediate" | "hold-or-drag";
     onMsegCurveEditHoldActivated?: (() => void) | null;
     onKeyboardOctaveDown?: () => boolean;
@@ -3014,7 +2996,7 @@ export function useSynthPatchViewModel({
         wavetablePosition,
     ]);
 
-    const handleCaptureArticulationSlot = useCallback((_options: { autoAssign?: boolean } = {}) => {
+    const handleCaptureArticulationSlot = useCallback(() => {
         const baseSnapshot = currentArticulationPatchBase();
         if (baseSnapshot === null) {
             return;
@@ -3035,10 +3017,6 @@ export function useSynthPatchViewModel({
         currentArticulationPatchBase,
         oscillatorID,
     ]);
-
-    const handleAddArticulationSlot = useCallback(() => {
-        handleCaptureArticulationSlot({ autoAssign: true });
-    }, [handleCaptureArticulationSlot]);
 
     const selectArticulationSlot = useCallback((slotId: string, options: { recordDirtyDiscard?: boolean } = {}) => {
         const state = articulationBankState.stateRef.current;
@@ -4099,7 +4077,6 @@ export function useSynthPatchViewModel({
         handleAddRouteWithOverrides,
         handleRemoveRoute,
         handleRouteChange,
-        handleAddArticulationSlot,
         handleCaptureArticulationSlot,
         handleSelectArticulationSlot,
         handleUpdateSelectedArticulationSlot,
