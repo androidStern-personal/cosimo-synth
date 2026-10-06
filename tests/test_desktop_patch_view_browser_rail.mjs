@@ -81,7 +81,9 @@ import {
     rectContains,
     readGlobalModRailGeometry,
     isLaneParamSend,
-    holdForStationLift,
+    pressAndLiftStation,
+    waitForOpeningLaneDelivery,
+    waitForAnimationsToFinish,
 } from "./helpers/desktop_patch_view_browser_suite.mjs";
 
 /**
@@ -328,7 +330,7 @@ test("global Mod Bar grip movement and source mapping have disjoint touch owners
         );
         assert.equal(await page.locator('[data-role="mobile-global-mod-source-ghost"]').count(), 1);
         assert.equal(await page.locator('[data-role="mobile-global-mod-rail-drawer"]').getAttribute("aria-hidden"), "true");
-        await page.waitForTimeout(180);
+        await waitForAnimationsToFinish(rail);
         const retreatedRailBox = await rail.boundingBox();
         const activeGhostBox = await page.locator('[data-role="mobile-global-mod-source-ghost"]').boundingBox();
         assert.ok(retreatedRailBox && activeGhostBox);
@@ -405,7 +407,7 @@ test("global Mod Bar grip movement and source mapping have disjoint touch owners
         assert.equal(await rail.getAttribute("data-expanded"), "false", "Dragging the collapsed armed source must not expand the drawer.");
         assert.equal(await rail.getAttribute("data-mapping-active"), "true", "The collapsed armed source must begin route mapping.");
         assert.equal(await page.locator('[data-role="mobile-global-mod-source-ghost"]').count(), 1);
-        await page.waitForTimeout(180);
+        await waitForAnimationsToFinish(rail);
         assert.equal(
             ((await rail.boundingBox())?.x ?? 0) >= 393,
             true,
@@ -438,7 +440,7 @@ test("global Mod Bar grip movement and source mapping have disjoint touch owners
         );
         assert.equal(await rail.getAttribute("data-expanded"), "false");
         assert.equal(await rail.getAttribute("data-mapping-active"), "false");
-        await page.waitForTimeout(180);
+        await waitForAnimationsToFinish(rail);
         const restoredCollapsedRailBox = await rail.boundingBox();
         assert.ok(restoredCollapsedRailBox);
         assert.equal(Math.abs(restoredCollapsedRailBox.y - collapsedRailTop) <= 1, true, "Dragging the collapsed source moved the bar.");
@@ -890,7 +892,7 @@ test("T39A: Voice settings keeps Global Tune open for live source selection, dro
             touchPoints: [{ x: sourceStart.x - 18, y: sourceStart.y, radiusX: 5, radiusY: 5, force: 1 }],
         });
         await rail.locator('xpath=self::*[@data-mapping-active="true"]').waitFor();
-        await page.waitForTimeout(180);
+        await waitForAnimationsToFinish(rail);
 
         assert.equal(await popover.isVisible(), true, "The Voice popout must stay visibly open while mapping.");
         const mappingTargetBox = await tuneKnob.boundingBox();
@@ -4164,9 +4166,7 @@ test("T60 application preferences cross plugin and desktop breakpoints without c
 
         try {
             // Compare against the sound once the opening document has reached the engine.
-            let soundBeforeResize = await waitForHarnessSnapshot(page, "opening lane delivery", (snapshot) => (
-                snapshot.parameterValues.laneTopology !== undefined
-            ));
+            let soundBeforeResize = await waitForOpeningLaneDelivery(page);
             for (let settled = 0; settled < 3;) {
                 await page.waitForTimeout(100);
                 const next = await getHarnessSnapshot(page);
@@ -4980,19 +4980,27 @@ test("rail flick keeps moving after touch release and faster releases travel far
         };
 
         const measureFlickUp = async (stepDelayMs, releasePauseMs) => {
+            // The page records whether the release starts a coast, however
+            // briefly the coast lasts on this renderer.
+            await page.evaluate(() => {
+                const railElement = document.querySelector('[data-role="mobile-global-mod-rail"]');
+                window.__railCoasted = false;
+                new MutationObserver(() => {
+                    window.__railCoasted ||= railElement.getAttribute("data-decelerating") === "true";
+                }).observe(railElement, { attributes: true, attributeFilter: ["data-decelerating"] });
+            });
             const held = await releaseFlickUp(stepDelayMs, releasePauseMs);
-            await page.waitForTimeout(80);
-            const shortlyAfterRelease = await rail.boundingBox();
-            assert.ok(shortlyAfterRelease);
-            await page.waitForFunction(() => (
-                document.querySelector('[data-role="mobile-global-mod-rail"]')?.getAttribute("data-decelerating") === "false"
-            ));
-            await page.waitForTimeout(220);
+            // The rail rests once its coast has ended and its settling slide has run.
+            await page.waitForFunction(() => {
+                const railElement = document.querySelector('[data-role="mobile-global-mod-rail"]');
+                return railElement?.getAttribute("data-decelerating") === "false"
+                    && railElement.getAnimations().length === 0;
+            });
             const settled = await rail.boundingBox();
             assert.ok(settled);
 
             return {
-                first80Ms: held.y - shortlyAfterRelease.y,
+                coasted: await page.evaluate(() => window.__railCoasted),
                 totalMomentum: held.y - settled.y,
             };
         };
@@ -5005,7 +5013,7 @@ test("rail flick keeps moving after touch release and faster releases travel far
         const slow = await measureFlickUp(70, 120);
 
         assert.equal(
-            fast.first80Ms >= 8,
+            fast.coasted && fast.totalMomentum >= 8,
             true,
             `A quick upward flick must keep traveling after release: ${JSON.stringify({ fast, slow })}`,
         );
@@ -5230,9 +5238,19 @@ test("rack mod bar vertically pages one colored MSEG Envelope and Macro identity
             const startTop = track.getBoundingClientRect().top;
             const travel = viewport.getBoundingClientRect().height;
             next.click();
-            await new Promise((resolve) => window.setTimeout(resolve, 80));
+            // React commits the next page in a microtask; reading the style then
+            // starts the slide, which is inspected at its midpoint and its end
+            // whatever this renderer's frame rate.
+            await Promise.resolve();
+            getComputedStyle(track).transform;
+            const slide = track.getAnimations().find((candidate) => candidate.transitionProperty === "transform");
+            if (slide === undefined) {
+                return null;
+            }
+            slide.pause();
+            slide.currentTime = 140;
             const duringTop = track.getBoundingClientRect().top;
-            await new Promise((resolve) => window.setTimeout(resolve, 260));
+            slide.finish();
             const endTop = track.getBoundingClientRect().top;
             const activePage = document.querySelector('.rack-mod-page[aria-hidden="false"]');
             const selected = activePage?.querySelector('[aria-pressed="true"]');
@@ -5242,6 +5260,7 @@ test("rack mod bar vertically pages one colored MSEG Envelope and Macro identity
                 duringTop,
                 endTop,
                 travel,
+                slideDurationMs: slide.effect?.getTiming().duration,
                 labels: Array.from(activePage?.querySelectorAll("button") ?? [])
                     .map((button) => button.getAttribute("aria-label")),
                 selectedLabel: selected?.getAttribute("aria-label") ?? null,
@@ -5249,7 +5268,8 @@ test("rack mod bar vertically pages one colored MSEG Envelope and Macro identity
             };
         });
 
-        assert.ok(animation);
+        assert.ok(animation, "Paging must slide the source track.");
+        assert.equal(animation.slideDurationMs, 280);
         assert.equal(animation.duringTop < animation.startTop - 1, true, "The vertical source page did not begin moving.");
         assert.equal(
             animation.duringTop > animation.startTop - animation.travel + 1,
@@ -6092,9 +6112,10 @@ test("subway stations select on tap, reorder on drag, and never touch sound para
         const target = page.locator('[data-role="rack-module-chorus"]');
         const targetBox = await target.boundingBox();
         assert.ok(targetBox);
-        await page.mouse.move(stationBox.x + (stationBox.width / 2), stationBox.y + (stationBox.height / 2));
-        await page.mouse.down();
-        await holdForStationLift(page);
+        await pressAndLiftStation(page, {
+            x: stationBox.x + (stationBox.width / 2),
+            y: stationBox.y + (stationBox.height / 2),
+        });
         await page.mouse.move(targetBox.x + (targetBox.width / 2), targetBox.y + (targetBox.height / 2), { steps: 12 });
         await page.mouse.up();
         snapshot = await waitForHarnessSnapshot(
@@ -6181,9 +6202,10 @@ test("every rack editor binds live controls and one drop commits one complete DS
         const handleBox = await reorderHandle.boundingBox();
         const targetBox = await reorderTarget.boundingBox();
         assert.ok(handleBox && targetBox, "Rack pointer-reorder endpoints are missing");
-        await page.mouse.move(handleBox.x + handleBox.width / 2, handleBox.y + handleBox.height / 2);
-        await page.mouse.down();
-        await holdForStationLift(page);
+        await pressAndLiftStation(page, {
+            x: handleBox.x + handleBox.width / 2,
+            y: handleBox.y + handleBox.height / 2,
+        });
         await page.mouse.move(targetBox.x + targetBox.width / 2, targetBox.y + targetBox.height / 2, { steps: 12 });
         await page.mouse.up();
         snapshot = await waitForHarnessSnapshot(

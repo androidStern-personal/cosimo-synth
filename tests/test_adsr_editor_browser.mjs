@@ -7,6 +7,7 @@ import {
     expandGlobalModRail,
     getHarnessSnapshot,
     openHarnessPage,
+    waitForAnimationsToFinish,
     waitForHarnessSnapshot,
 } from "./helpers/desktop_patch_view_browser_suite.mjs";
 
@@ -30,13 +31,14 @@ async function settleLayout(page) {
 }
 
 async function openEnvelopeDrawer(page) {
-    await page.locator('[data-role="mobile-global-mod-rail"]').waitFor();
-    await page.waitForTimeout(240);
+    const rail = page.locator('[data-role="mobile-global-mod-rail"]');
+    await rail.waitFor();
+    await waitForAnimationsToFinish(rail);
     await expandGlobalModRail(page);
     await page.locator('[data-role="rack-mod-source-env-1"]').click();
     const drawer = page.locator('[data-role="quick-source-sheet"][data-source-kind="env"]');
     await drawer.waitFor();
-    await page.waitForTimeout(240);
+    await waitForAnimationsToFinish(drawer);
     await settleLayout(page);
     return drawer;
 }
@@ -323,9 +325,8 @@ test("ADSR geometry stays bounded and circular through compact, expanded, full, 
         await phonePage.mouse.down();
         for (const delta of [42, 88, 138]) {
             await phonePage.mouse.move(start.x, start.y - delta, { steps: 3 });
-            await settleLayout(phonePage);
             assertResponsiveAdsrGeometry(
-                await readAdsrGeometry(surface),
+                await readSettledAdsrGeometry(phonePage, surface),
                 `live drawer resize ${delta}px`,
             );
         }

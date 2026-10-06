@@ -5,11 +5,9 @@ import { setTimeout as delay } from "node:timers/promises";
 import { fileURLToPath } from "node:url";
 
 import { stageCmajorWebRuntime } from "../../ui/vite.shared.mjs";
-import { startStaticWebServer } from "./static_web_server.mjs";
+import { startStaticWebServer } from "../../kit/tests/helpers/static_web_server.mjs";
 
-// The traversal guard lives with the shared static server now; re-exported so
-// existing imports (and their unit tests) keep working.
-export { pathStaysWithinRepoRoot, resolveRepoServedPath } from "./static_web_server.mjs";
+export { pathStaysWithinRepoRoot } from "../../kit/tests/helpers/static_web_server.mjs";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const DESKTOP_HARNESS_READINESS_TIMEOUT_MS = 90_000;

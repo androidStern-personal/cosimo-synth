@@ -23,10 +23,7 @@ import {
     getModulationArticulationCellIndex,
     getModulationRuntimeCell,
 } from "../../patch_gui/modulation-runtime-program.js";
-import {
-    EFFECT_ID_TO_LANE_TYPE,
-    RACK_EFFECT_ORDER,
-} from "../../patch_gui/lane-state.js";
+import { EFFECT_ID_TO_LANE_TYPE } from "../../patch_gui/lane-state.js";
 import {
     createFullDefaultLaneStateV2,
     serializeLaneStateV2,
@@ -46,7 +43,7 @@ import {
     startDesktopHarnessServer,
     waitForHarnessReady,
 } from "./desktop_harness_browser.mjs";
-import { loadUIModule } from "./load_ui_module.mjs";
+import { loadUIModule } from "../../kit/tests/helpers/load_ui_module.mjs";
 import { createSynthParameterFixture, synthParameterEndpoints } from "./synth_parameter_fixture.mjs";
 
 const { renderMsegShape } = await loadUIModule(path.resolve(import.meta.dirname, "../.."), "kit/ui/mseg.ts");
@@ -685,6 +682,13 @@ export async function waitForHarnessSnapshot(page, description, predicate, {
     })}`);
 }
 
+/** The opening lane document has reached the engine, so later topology sends are edits. */
+export async function waitForOpeningLaneDelivery(page) {
+    return waitForHarnessSnapshot(page, "opening lane delivery", (snapshot) => (
+        snapshot.parameterValues.laneTopology !== undefined
+    ));
+}
+
 export async function waitForPageValue(page, description, readValue, predicate, {
     attempts = 80,
     delayMs = 50,
@@ -700,6 +704,18 @@ export async function waitForPageValue(page, description, readValue, predicate, 
     }
 
     throw new Error(`Timed out waiting for ${description}. Last value: ${JSON.stringify(lastValue)}`);
+}
+
+/**
+ * Wait until the element's finite transitions and animations (and with
+ * subtree, its descendants') have run to their end. Endless ones are ignored.
+ */
+export async function waitForAnimationsToFinish(locator, { subtree = false } = {}) {
+    await locator.evaluate((element, includeSubtree) => Promise.all(
+        element.getAnimations({ subtree: includeSubtree })
+            .filter((animation) => animation.effect?.getComputedTiming().endTime !== Infinity)
+            .map((animation) => animation.finished.catch(() => undefined)),
+    ), subtree);
 }
 
 export async function waitForReactFrames(page, frameCount = 2) {
@@ -847,10 +863,10 @@ export async function openHarnessPage({
         if (message.type() === "error") diagnostics.push(`console: ${message.text()}`);
     });
 
-    // The fresh default became the STARTER TRIO (T7), while these suites were
-    // written against the resident eight: the harness opens on a seeded
-    // legacy stored document by default. Pass laneDoc: "fresh" to exercise
-    // the true fresh-instrument default, or a serialized doc to seed it.
+    // A fresh instrument starts with the starter trio, while most scenarios
+    // need all eight resident effects: the harness opens on a seeded
+    // eight-effect document by default. Pass laneDoc: "fresh" to exercise
+    // the fresh-instrument default, or a serialized doc to seed it.
     if (laneDoc !== "fresh") {
         const serialized = laneDoc === "legacy" ? legacyEightLaneDocJson() : laneDoc;
         await page.addInitScript((value) => {
@@ -1338,54 +1354,59 @@ export function assertLatestMsegBufferMatchesStoredShape(snapshot) {
 }
 
 /**
- * Hold a pressed station past its reorder lift. The wait runs on the page's own
- * timer queue, so the station's earlier hold timer has fired before the next
- * pointer event is dispatched, however busy the renderer is.
+ * Run real input while the view's UI timers wait, so no press hold, long-press
+ * menu or HUD linger can elapse part-way through it however long the input
+ * takes to arrive. Waiting timers resume with their remaining time.
  */
-export async function holdForStationLift(page) {
-    await page.evaluate(() => new Promise((resolve) => setTimeout(resolve, 210)));
+export async function withUiTimersPaused(page, action) {
+    await page.evaluate(() => window.__COSIMO_DESKTOP_HARNESS__.pauseUiTimers());
+    try {
+        return await action();
+    } finally {
+        await page.evaluate(() => window.__COSIMO_DESKTOP_HARNESS__.resumeUiTimers());
+    }
 }
 
+/** Let exactly this much paused UI time pass, firing the timers it covers. */
+export async function advanceUiTimers(page, milliseconds) {
+    await page.evaluate((elapsed) => window.__COSIMO_DESKTOP_HARNESS__.advanceUiTimers(elapsed), milliseconds);
+}
+
+/** A station lifts for reordering after this hold; its long-press menu waits 550 ms. */
+const STATION_REORDER_HOLD_MS = 180;
+/** Beyond the station's 3 px reorder movement threshold. */
+const STATION_LIFT_MOVE_PX = 4;
+
+/** With UI timers paused, let a pressed station's reorder hold pass and no more. */
+export async function elapseStationReorderHold(page) {
+    await advanceUiTimers(page, STATION_REORDER_HOLD_MS);
+}
+
+/**
+ * Press a station with the real mouse and lift it for reordering: exactly the
+ * reorder hold elapses before the lifting move, so the long-press menu never
+ * opens first. Resolves once the lifted pill is shown.
+ */
+export async function pressAndLiftStation(page, point) {
+    await withUiTimersPaused(page, async () => {
+        await page.mouse.move(point.x, point.y);
+        await page.mouse.down();
+        await elapseStationReorderHold(page);
+        await page.mouse.move(point.x, point.y + STATION_LIFT_MOVE_PX);
+        await page.locator('[data-role="rack-reorder-lifted-pill"]').waitFor();
+    });
+}
+
+/**
+ * Lift the reverb station with a synthetic pointer while the rack list refuses
+ * pointer capture, then preview over an optional target. Exactly the reorder
+ * hold elapses between the press and the lifting move.
+ */
 export async function beginRackReorderWithoutPointerCapture(page, {
     pointerId,
     targetEffectID = null,
 }) {
-    await page.evaluate(({ pointerId: browserPointerId }) => {
-        const list = document.querySelector('[data-role="rack-module-list"]');
-        const station = document.querySelector('[data-role="rack-station-reverb"]');
-        if (!(list instanceof HTMLElement) || !(station instanceof HTMLElement)) {
-            throw new Error("Expected rack reorder elements.");
-        }
-
-        Object.defineProperty(list, "setPointerCapture", {
-            configurable: true,
-            value() {
-                throw new DOMException("Pointer capture is unavailable.", "NotFoundError");
-            },
-        });
-        // The station arms the reorder once a move crosses the lift
-        // threshold; a second move on the list drives the preview.
-        const stationBounds = station.getBoundingClientRect();
-        const stationCenterX = stationBounds.left + (stationBounds.width / 2);
-        const stationCenterY = stationBounds.top + (stationBounds.height / 2);
-        station.dispatchEvent(new PointerEvent("pointerdown", {
-            bubbles: true,
-            pointerId: browserPointerId,
-            pointerType: "mouse",
-            isPrimary: true,
-            button: 0,
-            buttons: 1,
-            clientX: stationCenterX,
-            clientY: stationCenterY,
-        }));
-    }, { pointerId });
-
-    // Reorder is deliberately distinct from scrolling: the hold must win
-    // before movement crosses the lift threshold, including on the fallback
-    // path used when pointer capture is unavailable.
-    await holdForStationLift(page);
-
-    await page.evaluate(({ pointerId: browserPointerId, targetEffectID: browserTargetEffectID }) => {
+    await page.evaluate(({ pointerId: browserPointerId, targetEffectID: browserTargetEffectID, holdMs, liftPx }) => {
         const list = document.querySelector('[data-role="rack-module-list"]');
         const station = document.querySelector('[data-role="rack-station-reverb"]');
         const target = browserTargetEffectID === null
@@ -1398,33 +1419,46 @@ export async function beginRackReorderWithoutPointerCapture(page, {
             throw new Error(`Expected ${browserTargetEffectID} rack target.`);
         }
 
-        const stationBounds = station.getBoundingClientRect();
-        const stationCenterX = stationBounds.left + (stationBounds.width / 2);
-        const stationCenterY = stationBounds.top + (stationBounds.height / 2);
-        station.dispatchEvent(new PointerEvent("pointermove", {
+        Object.defineProperty(list, "setPointerCapture", {
+            configurable: true,
+            value() {
+                throw new DOMException("Pointer capture is unavailable.", "NotFoundError");
+            },
+        });
+        const pointerAt = (type, clientX, clientY) => new PointerEvent(type, {
             bubbles: true,
             pointerId: browserPointerId,
             pointerType: "mouse",
             isPrimary: true,
             button: 0,
             buttons: 1,
-            clientX: stationCenterX,
-            clientY: stationCenterY + 12,
-        }));
-        if (target instanceof HTMLElement) {
-            const targetBounds = target.getBoundingClientRect();
-            list.dispatchEvent(new PointerEvent("pointermove", {
-                bubbles: true,
-                pointerId: browserPointerId,
-                pointerType: "mouse",
-                isPrimary: true,
-                button: 0,
-                buttons: 1,
-                clientX: targetBounds.left + (targetBounds.width / 2),
-                clientY: targetBounds.top + (targetBounds.height / 2),
-            }));
+            clientX,
+            clientY,
+        });
+        const stationBounds = station.getBoundingClientRect();
+        const stationCenterX = stationBounds.left + (stationBounds.width / 2);
+        const stationCenterY = stationBounds.top + (stationBounds.height / 2);
+        const harness = window.__COSIMO_DESKTOP_HARNESS__;
+        harness.pauseUiTimers();
+        try {
+            station.dispatchEvent(pointerAt("pointerdown", stationCenterX, stationCenterY));
+            // Reorder is deliberately distinct from scrolling: the hold must
+            // elapse before movement crosses the lift threshold, including on
+            // the fallback path used when pointer capture is unavailable.
+            harness.advanceUiTimers(holdMs);
+            station.dispatchEvent(pointerAt("pointermove", stationCenterX, stationCenterY + liftPx));
+            if (target instanceof HTMLElement) {
+                const targetBounds = target.getBoundingClientRect();
+                list.dispatchEvent(pointerAt(
+                    "pointermove",
+                    targetBounds.left + (targetBounds.width / 2),
+                    targetBounds.top + (targetBounds.height / 2),
+                ));
+            }
+        } finally {
+            harness.resumeUiTimers();
         }
-    }, { pointerId, targetEffectID });
+    }, { pointerId, targetEffectID, holdMs: STATION_REORDER_HOLD_MS, liftPx: STATION_LIFT_MOVE_PX });
 }
 
 export async function endRackReorderWithoutPointerCapture(page, pointerId) {
@@ -1513,9 +1547,9 @@ export {
 };
 
 /**
- * The wire location of one effect parameter since the B3 parameter cut:
- * knob edits ride laneSlotParamValue {slotId, paramIndex, ...} instead of a
- * per-parameter host endpoint.
+ * The wire location of one effect parameter: knob edits ride
+ * laneSlotParamValue {slotId, paramIndex, ...}, not a per-parameter host
+ * endpoint.
  */
 export function laneParamWireLocation(endpointID, ordinal = 0) {
     const descriptor = getRackParameterDescriptor(endpointID);
@@ -1543,4 +1577,3 @@ export function isLaneParamSend(message, endpointID, expectedValue, tolerance = 
         || Math.abs(Number(message.value?.value) - expectedValue) <= tolerance;
 }
 
-void RACK_EFFECT_ORDER;

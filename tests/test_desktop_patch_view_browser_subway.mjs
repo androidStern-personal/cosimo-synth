@@ -22,7 +22,11 @@ import {
     touchPointForModSourcePreviewTarget,
     waitForHarnessSnapshot,
     waitForReactFrames,
-    holdForStationLift,
+    pressAndLiftStation,
+    withUiTimersPaused,
+    waitForOpeningLaneDelivery,
+    elapseStationReorderHold,
+    waitForAnimationsToFinish,
 } from "./helpers/desktop_patch_view_browser_suite.mjs";
 import { decodePng, pngPixelAt, rgbDistance } from "./helpers/png_pixels.mjs";
 
@@ -2722,20 +2726,14 @@ test("a reorder dwell opens a folded branch before the exact drop commits", asyn
         ).boundingBox();
         assert.ok(stationBox && branchBadgeBox);
 
-        await page.mouse.move(
-            stationBox.x + (stationBox.width / 2),
-            stationBox.y + (stationBox.height / 2),
-        );
-        await page.mouse.down();
-        await holdForStationLift(page);
+        await pressAndLiftStation(page, {
+            x: stationBox.x + (stationBox.width / 2),
+            y: stationBox.y + (stationBox.height / 2),
+        });
+        // The lift moved pointer capture from the chip to the list, so a move
+        // onto the badge begins its dwell.
         await page.mouse.move(
             branchBadgeBox.x + (branchBadgeBox.width / 2),
-            branchBadgeBox.y + (branchBadgeBox.height / 2),
-        );
-        // The threshold-crossing move transfers pointer capture from the chip
-        // to the list. One subsequent physical move begins the badge dwell.
-        await page.mouse.move(
-            branchBadgeBox.x + (branchBadgeBox.width / 2) + 1,
             branchBadgeBox.y + (branchBadgeBox.height / 2),
         );
         await page.waitForFunction(() => (
@@ -3072,11 +3070,7 @@ test("the fixed FX footer rejects reorder drops without moving a graph path behi
         };
         await clearHarnessDebugLog(page);
 
-        await page.mouse.move(sourcePoint.x, sourcePoint.y);
-        await page.mouse.down();
-        await holdForStationLift(page);
-        await page.mouse.move(sourcePoint.x + 12, sourcePoint.y);
-        await page.locator('[data-role="rack-reorder-lifted-pill"][data-device-id="reverb#1"]').waitFor();
+        await pressAndLiftStation(page, sourcePoint);
         await page.mouse.move(footerPoint.x, footerPoint.y, { steps: 8 });
         assert.equal(await page.evaluate(({ x, y }) => (
             document.elementFromPoint(x, y)?.closest('[data-role="rack-fixed-footer"]') !== null
@@ -3145,10 +3139,12 @@ test("a modulation-source drag edge-scrolls the graph and still drops after leav
             y: graphBox.y + graphBox.height - 8,
         };
         await page.mouse.move(bottomEdge.x, bottomEdge.y, { steps: 4 });
+        // Edge scrolling advances a few pixels per frame, so how long it takes
+        // depends on this renderer's frame rate; the test waits for the distance.
         await page.waitForFunction(() => {
             const element = document.querySelector('[data-role="rack-module-list"]');
             return element instanceof HTMLElement && element.scrollTop >= 48;
-        }, undefined, { timeout: 2_500 });
+        });
         const afterBottomEdge = await graph.evaluate((element) => element.scrollTop);
         assert.equal(
             await page.locator('[data-role="mobile-global-mod-source-ghost"]').count(),
@@ -3175,22 +3171,22 @@ test("a modulation-source drag edge-scrolls the graph and still drops after leav
         await page.waitForFunction((previousScrollTop) => {
             const element = document.querySelector('[data-role="rack-module-list"]');
             return element instanceof HTMLElement && element.scrollTop <= previousScrollTop - 24;
-        }, afterBottomEdge, { timeout: 2_500 });
+        }, afterBottomEdge);
 
-        const hoverPoint = await graph.evaluate((element) => {
-            const bounds = element.getBoundingClientRect();
-            const x = bounds.left + (bounds.width / 2);
-            const y = bounds.top + (bounds.height / 2);
-            const station = document.elementFromPoint(x, y)?.closest("[data-device-id]");
-            return station instanceof HTMLElement
-                ? { x, y, effectId: station.dataset.effectId ?? null }
-                : null;
-        });
-        assert.ok(hoverPoint?.effectId);
+        // Leaving the edge band stops the scroll, so the station under the
+        // pointer once it arrives is the one its dwell opens.
+        const hoverPoint = {
+            x: graphBox.x + (graphBox.width / 2),
+            y: graphBox.y + (graphBox.height / 2),
+        };
         await page.mouse.move(hoverPoint.x, hoverPoint.y, { steps: 3 });
+        const hoveredEffectId = await page.evaluate(({ x, y }) => (
+            document.elementFromPoint(x, y)?.closest("[data-device-id]")?.getAttribute("data-effect-id") ?? null
+        ), hoverPoint);
+        assert.ok(hoveredEffectId);
         await page.waitForFunction((effectId) => (
             document.querySelector(`.subway-station-row.is-selected[data-effect-id="${CSS.escape(effectId)}"], .subway-station-cell.is-selected[data-effect-id="${CSS.escape(effectId)}"]`) !== null
-        ), hoverPoint.effectId, { timeout: 2_500 });
+        ), hoveredEffectId);
 
         const target = page.locator(
             '[data-role="effects-rack-card"] [data-drag-creation="creatable"]:visible',
@@ -4106,7 +4102,7 @@ test("dragging a station into the empty band crosses lanes and commits once", as
         await page.waitForSelector('[data-role="effects-rack-card"]');
         await wrapStationInGroup(page, "delay", "split");
         await page.waitForSelector('[data-role="rack-group-split#1"]');
-        await page.waitForTimeout(200);
+        await waitForAnimationsToFinish(page.locator('[data-role="rack-module-list"]'), { subtree: true });
         await clearHarnessDebugLog(page);
 
         // Natural-height rows may overflow the one root scroller. Reveal the
@@ -4122,9 +4118,24 @@ test("dragging a station into the empty band crosses lanes and commits once", as
         assert.ok(reverbBox && ghostBox);
         assert.ok(sourcePillBox);
 
-        await page.mouse.move(reverbBox.x + (reverbBox.width / 2), reverbBox.y + (reverbBox.height / 2));
-        await page.mouse.down();
-        await holdForStationLift(page);
+        await pressAndLiftStation(page, {
+            x: reverbBox.x + (reverbBox.width / 2),
+            y: reverbBox.y + (reverbBox.height / 2),
+        });
+        // The merge's connector reveal is brief. Its animation starts on the
+        // first frame after the preview moves, so the page notes it there,
+        // whatever this renderer's frame rate.
+        await page.evaluate(() => {
+            const earlier = new Set(document.getAnimations());
+            window.__mergeRevealed = false;
+            const watch = () => {
+                const merge = document.querySelector('[data-role="rack-merge-connections-split#1"]');
+                window.__mergeRevealed = Array.from(merge?.querySelectorAll("path") ?? [])
+                    .some((path) => path.getAnimations().some((animation) => !earlier.has(animation)));
+                if (!window.__mergeRevealed) requestAnimationFrame(watch);
+            };
+            requestAnimationFrame(watch);
+        });
         await page.mouse.move(ghostBox.x + (ghostBox.width / 2), ghostBox.y + (ghostBox.height / 2), { steps: 12 });
 
         const lifted = page.locator('[data-role="rack-reorder-lifted-pill"][data-device-id="reverb#1"]');
@@ -4171,11 +4182,6 @@ test("dragging a station into the empty band crosses lanes and commits once", as
                 },
                 scrollTop: list.scrollTop,
                 mergePathCount: merge.querySelectorAll("path").length,
-                mergeAnimationCount: Array.from(merge.querySelectorAll("path"))
-                    .flatMap((path) => path.getAnimations())
-                    .filter((animation) => (
-                        animation.playState === "running" || animation.playState === "pending"
-                    )).length,
             };
         }, {
             pointerX: ghostBox.x + (ghostBox.width / 2),
@@ -4207,27 +4213,35 @@ test("dragging a station into the empty band crosses lanes and commits once", as
             height: sourcePillBox.height,
         });
         assert.equal(preview.mergePathCount > 0, true);
-        assert.equal(preview.mergeAnimationCount > 0, true);
-        await page.mouse.up();
-
+        assert.equal(
+            await page.evaluate(() => new Promise((resolve) => {
+                requestAnimationFrame(() => resolve(window.__mergeRevealed));
+            })),
+            true,
+            "The preview's topology change reveals the merge connectors.",
+        );
         const settling = page.locator(
             '[data-role="rack-reorder-lifted-pill"][data-device-id="reverb#1"].is-settling',
         );
-        // Measure in the same frame the settle starts; it can finish before another round trip.
-        const settleTarget = await (await page.waitForFunction(() => {
-            const element = document.querySelector(
-                '[data-role="rack-reorder-lifted-pill"][data-device-id="reverb#1"].is-settling',
-            );
-            return element instanceof HTMLElement ? {
-                left: Number.parseFloat(element.style.left),
-                top: Number.parseFloat(element.style.top),
-                width: Number.parseFloat(element.style.width),
-                height: Number.parseFloat(element.style.height),
-                running: element.getAnimations().some((animation) => (
-                    animation.playState === "running" || animation.playState === "pending"
-                )),
-            } : null;
-        }, undefined, { polling: "raf" })).jsonValue();
+        // The settle ends on a UI timer, so it holds while the clock is paused;
+        // the first frame that shows it also shows its animation under way.
+        const settleTarget = await withUiTimersPaused(page, async () => {
+            await page.mouse.up();
+            return (await page.waitForFunction(() => {
+                const element = document.querySelector(
+                    '[data-role="rack-reorder-lifted-pill"][data-device-id="reverb#1"].is-settling',
+                );
+                return element instanceof HTMLElement ? {
+                    left: Number.parseFloat(element.style.left),
+                    top: Number.parseFloat(element.style.top),
+                    width: Number.parseFloat(element.style.width),
+                    height: Number.parseFloat(element.style.height),
+                    running: element.getAnimations().some((animation) => (
+                        animation.playState === "running" || animation.playState === "pending"
+                    )),
+                } : null;
+            }, undefined, { polling: "raf" })).jsonValue();
+        });
         assert.equal(Math.abs(settleTarget.left - preview.ghostRect.left) < 1, true);
         assert.equal(Math.abs(settleTarget.top - preview.ghostRect.top) < 1, true);
         assert.equal(Math.abs(settleTarget.width - preview.ghostRect.width) < 1, true);
@@ -4292,9 +4306,7 @@ test("the source-composed production ShadowRoot owns and styles the lifted real 
         const sourcePoint = await centerOf(source);
         const targetPoint = await centerOf(target);
 
-        await page.mouse.move(sourcePoint.x, sourcePoint.y);
-        await page.mouse.down();
-        await holdForStationLift(page);
+        await pressAndLiftStation(page, sourcePoint);
         await page.mouse.move(targetPoint.x, targetPoint.y);
         const lifted = page.locator(
             '[data-role="rack-reorder-lifted-pill"][data-device-id="reverb#1"]',
@@ -4370,9 +4382,7 @@ test("same-branch reorder commits the exact held preview once", async () => {
         const targetPoint = await centerOf(target);
         await clearHarnessDebugLog(page);
 
-        await page.mouse.move(sourcePoint.x, sourcePoint.y);
-        await page.mouse.down();
-        await holdForStationLift(page);
+        await pressAndLiftStation(page, sourcePoint);
         await page.mouse.move(targetPoint.x, targetPoint.y, { steps: 8 });
         await page.waitForSelector('[data-role="rack-reorder-ghost"][data-device-id="reverb#1"]');
         assert.equal(
@@ -4420,9 +4430,7 @@ test("reorder release composes its move onto concurrent device state", async () 
         const targetPoint = await centerOf(target);
         await clearHarnessDebugLog(page);
 
-        await page.mouse.move(sourcePoint.x, sourcePoint.y);
-        await page.mouse.down();
-        await holdForStationLift(page);
+        await pressAndLiftStation(page, sourcePoint);
         await page.mouse.move(targetPoint.x, targetPoint.y, { steps: 6 });
         await page.waitForSelector('[data-role="rack-reorder-lifted-pill"][data-device-id="reverb#1"]', {
             timeout: 2000,
@@ -4498,9 +4506,7 @@ test("a concurrent topology replacement cancels reorder without restoring its st
         await source.scrollIntoViewIfNeeded();
         const sourcePoint = await centerOf(source);
         const targetPoint = await centerOf(target);
-        await page.mouse.move(sourcePoint.x, sourcePoint.y);
-        await page.mouse.down();
-        await holdForStationLift(page);
+        await pressAndLiftStation(page, sourcePoint);
         await page.mouse.move(targetPoint.x, targetPoint.y, { steps: 6 });
         await page.waitForSelector('[data-role="rack-reorder-lifted-pill"][data-device-id="reverb#1"]', {
             timeout: 2000,
@@ -4643,9 +4649,7 @@ test("station capture rejection still lifts and reorders outside the source stat
         ));
         await clearHarnessDebugLog(page);
 
-        await page.mouse.move(source.x, source.y);
-        await page.mouse.down();
-        await holdForStationLift(page);
+        await pressAndLiftStation(page, source);
         await page.mouse.move(target.x, target.y);
         await page.waitForSelector(
             '[data-role="rack-reorder-ghost"][data-device-id="reverb#1"]',
@@ -4689,9 +4693,7 @@ test("post-lift capture rejection follows outside-list movement and commits the 
         const outsidePoint = await pointOutsideOf(list);
         await clearHarnessDebugLog(page);
 
-        await page.mouse.move(sourcePoint.x, sourcePoint.y);
-        await page.mouse.down();
-        await holdForStationLift(page);
+        await pressAndLiftStation(page, sourcePoint);
         await page.mouse.move(targetPoint.x, targetPoint.y);
         const lifted = page.locator(
             '[data-role="rack-reorder-lifted-pill"][data-device-id="reverb#1"]',
@@ -4771,9 +4773,7 @@ test("post-lift window fallback cancel, blur, and hidden state never publish", a
             const storedBefore = String((await getHarnessSnapshot(page)).storedState["lane.v1"]);
             await clearHarnessDebugLog(page);
 
-            await page.mouse.move(sourcePoint.x, sourcePoint.y);
-            await page.mouse.down();
-            await holdForStationLift(page);
+            await pressAndLiftStation(page, sourcePoint);
             await page.mouse.move(targetPoint.x, targetPoint.y);
             await page.waitForSelector(
                 '[data-role="rack-reorder-lifted-pill"][data-device-id="reverb#1"]',
@@ -5145,11 +5145,13 @@ test("phone station gestures lock scrolling, reorder, and menu as exclusive winn
 
         // Reduced motion keeps the lift/gap/ghost explicit; it removes only
         // travel time. Cancellation then restores the exact source document.
-        await touch.start(source);
-        await page.waitForTimeout(210);
-        await touch.move(target);
-        await touch.move({ x: target.x + 1, y: target.y });
-        await page.waitForSelector('[data-role="rack-reorder-lifted-pill"][data-device-id="reverb#1"]');
+        await withUiTimersPaused(page, async () => {
+            await touch.start(source);
+            await elapseStationReorderHold(page);
+            await touch.move(target);
+            await touch.move({ x: target.x + 1, y: target.y });
+            await page.waitForSelector('[data-role="rack-reorder-lifted-pill"][data-device-id="reverb#1"]');
+        });
         const reducedPresentation = await page.evaluate(() => {
             const lifted = document.querySelector('[data-role="rack-reorder-lifted-pill"]');
             const ghost = document.querySelector('[data-role="rack-reorder-ghost"] .subway-station-pill');
@@ -5203,11 +5205,13 @@ test("phone station gestures lock scrolling, reorder, and menu as exclusive winn
         target = await centerOf(page.locator(
             '[data-device-id="distortion#1"] [data-role="rack-station-drive"]',
         ));
-        await touch.start(source);
-        await page.waitForTimeout(210);
-        await touch.move(target);
-        await touch.move({ x: target.x + 1, y: target.y });
-        await page.waitForSelector('[data-role="rack-reorder-ghost"][data-device-id="reverb#1"]');
+        await withUiTimersPaused(page, async () => {
+            await touch.start(source);
+            await elapseStationReorderHold(page);
+            await touch.move(target);
+            await touch.move({ x: target.x + 1, y: target.y });
+            await page.waitForSelector('[data-role="rack-reorder-ghost"][data-device-id="reverb#1"]');
+        });
         await touch.end();
         const committed = await waitForHarnessSnapshot(
             page,
@@ -5233,7 +5237,6 @@ test("phone station gestures lock scrolling, reorder, and menu as exclusive winn
             '[data-device-id="delay#1"] [data-role="rack-station-delay"]',
         ));
         await touch.start(menuSource);
-        await page.waitForTimeout(600);
         await page.waitForSelector('[data-role="rack-station-menu"][data-device-id="delay#1"]');
         assert.deepEqual(await page.evaluate(() => window.__FX_REORDER_HAPTICS__), []);
         assert.equal(await page.locator('[data-role="rack-reorder-lifted-pill"]').count(), 0);
@@ -5278,11 +5281,13 @@ test("phone station gestures lock scrolling, reorder, and menu as exclusive winn
         const target = await centerOf(fallbackPage.locator(
             '[data-device-id="distortion#1"] [data-role="rack-station-drive"]',
         ));
-        await touch.start(source);
-        await fallbackPage.waitForTimeout(210);
-        await touch.move(target);
-        await touch.move({ x: target.x + 1, y: target.y });
-        await fallbackPage.waitForSelector('[data-role="rack-reorder-lifted-pill"]');
+        await withUiTimersPaused(fallbackPage, async () => {
+            await touch.start(source);
+            await elapseStationReorderHold(fallbackPage);
+            await touch.move(target);
+            await touch.move({ x: target.x + 1, y: target.y });
+            await fallbackPage.waitForSelector('[data-role="rack-reorder-lifted-pill"]');
+        });
         assert.deepEqual(
             await fallbackPage.evaluate(() => window.__FX_REORDER_VIBRATIONS__),
             [8],
@@ -5481,6 +5486,7 @@ test("only the icon of an already selected station toggles bypass", async () => 
         assert.equal(await delayModule.getAttribute("data-enabled"), "false");
 
         // Count only what the toggle sends, not the opening document's delivery.
+        await waitForOpeningLaneDelivery(page);
         await clearHarnessDebugLog(page);
         await delayIcon.click();
         const toggled = await waitForHarnessSnapshot(

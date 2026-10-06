@@ -86,6 +86,7 @@ import {
     rectsIntersect,
     rectContains,
     readGlobalModRailGeometry,
+    withUiTimersPaused,
 } from "./helpers/desktop_patch_view_browser_suite.mjs";
 
 test("desktop articulation hydration and live writes reject the same duplicate and retired documents whole", async () => {
@@ -2226,9 +2227,11 @@ test("filter controls commit mode, cutoff, and Q, and the matrix can route MSEG 
             true,
         );
 
+        // A field held still opens its parameter menu; with UI timers paused
+        // these slow small-step drags stay drags however late each step lands.
         await clearHarnessDebugLog(page);
         const filterCutoffField = page.locator('[data-role="filter-cutoff-field"]');
-        await dragLocatorBy(page, filterCutoffField, 18, 0);
+        await withUiTimersPaused(page, () => dragLocatorBy(page, filterCutoffField, 18, 0));
 
         await page.waitForFunction(() => {
             const snapshot = window.__COSIMO_DESKTOP_HARNESS__.getSnapshot();
@@ -2268,7 +2271,7 @@ test("filter controls commit mode, cutoff, and Q, and the matrix can route MSEG 
 
         await clearHarnessDebugLog(page);
         const filterResonanceField = page.locator('[data-role="filter-resonance-field"]');
-        await dragLocatorBy(page, filterResonanceField, 10, 0);
+        await withUiTimersPaused(page, () => dragLocatorBy(page, filterResonanceField, 10, 0));
 
         await page.waitForFunction(() => {
             const snapshot = window.__COSIMO_DESKTOP_HARNESS__.getSnapshot();

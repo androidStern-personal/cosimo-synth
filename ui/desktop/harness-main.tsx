@@ -1,5 +1,6 @@
 import "./styles.css";
 import { loadHarnessManifest, MockPatchConnection } from "../shared/patch-connection-mock";
+import { installUiTimeoutDriver } from "../shared/ui-timers";
 import { WORKSPACE_SHELL_STORAGE_KEY } from "../shared/workspace-shell";
 import { createDesktopPatchView } from "./patch-view-entry";
 
@@ -54,6 +55,9 @@ declare global {
             emitDistortionScope: (nextState: Parameters<MockPatchConnection["emitDistortionScope"]>[0]) => void;
             emitPolishMeter: (nextState: Parameters<MockPatchConnection["emitPolishMeter"]>[0]) => void;
             setStoredStateValue: (key: string, value: unknown) => void;
+            pauseUiTimers: () => void;
+            advanceUiTimers: (milliseconds: number) => void;
+            resumeUiTimers: () => void;
         };
     }
 }
@@ -197,6 +201,80 @@ function readMsegPreviewState() {
     };
 }
 
+type PendingUiTimer = { readonly dueMilliseconds: number; readonly callback: () => void };
+
+/**
+ * A clock for the view's UI timers (press holds, long-press menus, HUD
+ * lingers) that a test can stop. Running, each timer is the browser's own.
+ * Paused, a timer waits until the test advances the clock, so a test can hold
+ * a press or keep a HUD lingering for as long as its real input takes to
+ * arrive, however busy the renderer is.
+ */
+function createHarnessUiClock() {
+    const pending = new Map<number, PendingUiTimer>();
+    const resumed = new Map<number, number>();
+    let nowMilliseconds = 0;
+    let paused = false;
+    let installed = false;
+    // Negative handles never collide with the browser's own timer ids.
+    let nextHandle = -1;
+
+    const install = () => {
+        if (installed) return;
+        installed = true;
+        installUiTimeoutDriver({
+            setTimeout(callback, delayMilliseconds) {
+                if (!paused) return window.setTimeout(callback, delayMilliseconds);
+                const handle = nextHandle--;
+                pending.set(handle, { dueMilliseconds: nowMilliseconds + Math.max(0, delayMilliseconds), callback });
+                return handle;
+            },
+            clearTimeout(handle) {
+                if (pending.delete(handle)) return true;
+                const browserHandle = resumed.get(handle);
+                if (browserHandle === undefined) return false;
+                window.clearTimeout(browserHandle);
+                resumed.delete(handle);
+                return true;
+            },
+        });
+    };
+
+    return {
+        pause() {
+            install();
+            paused = true;
+        },
+        advance(milliseconds: number) {
+            const targetMilliseconds = nowMilliseconds + milliseconds;
+            for (;;) {
+                let next: [number, PendingUiTimer] | null = null;
+                for (const entry of pending) {
+                    if (entry[1].dueMilliseconds <= targetMilliseconds
+                            && (next === null || entry[1].dueMilliseconds < next[1].dueMilliseconds)) {
+                        next = entry;
+                    }
+                }
+                if (next === null) break;
+                pending.delete(next[0]);
+                nowMilliseconds = next[1].dueMilliseconds;
+                next[1].callback();
+            }
+            nowMilliseconds = targetMilliseconds;
+        },
+        resume() {
+            paused = false;
+            for (const [handle, timer] of pending) {
+                resumed.set(handle, window.setTimeout(() => {
+                    resumed.delete(handle);
+                    timer.callback();
+                }, timer.dueMilliseconds - nowMilliseconds));
+            }
+            pending.clear();
+        },
+    };
+}
+
 function renderFatalError(error: unknown) {
     const message = error instanceof Error
         ? error.stack || error.message
@@ -231,6 +309,7 @@ try {
     const manifest = await loadHarnessManifest();
     document.body.dataset.bootStage = "manifest-loaded";
     const patchConnection = new MockPatchConnection(manifest);
+    const uiClock = createHarnessUiClock();
     // Test/dev-only edge into the video bundle: this import is reachable only
     // from the harness entry (never the production patch-view entry) and only
     // behind the fidelity query parameter.
@@ -319,6 +398,9 @@ try {
             patchConnection.emitPolishMeter(nextState);
         },
         setStoredStateValue: (key, value) => patchConnection.setStoredStateValue(key, value),
+        pauseUiTimers: () => uiClock.pause(),
+        advanceUiTimers: (milliseconds) => uiClock.advance(milliseconds),
+        resumeUiTimers: () => uiClock.resume(),
     };
     document.body.dataset.bootStage = "rendering";
     const patchView = createDesktopPatchView(patchConnection, { keyboardInputMode: "standalone-preview" });

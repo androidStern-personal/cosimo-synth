@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import path from "node:path";
 
 import { formatModulationAmountReadout } from "../patch_gui/modulation.js";
-import { loadUIModule } from "./helpers/load_ui_module.mjs";
+import { loadUIModule } from "../kit/tests/helpers/load_ui_module.mjs";
 
 import {
     normalizeArticulationEditorState,

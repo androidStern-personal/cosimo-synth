@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
-import { loadUIModule } from "./load_ui_module.mjs";
+import { loadUIModule } from "../../kit/tests/helpers/load_ui_module.mjs";
 
 const root = path.resolve(import.meta.dirname, "../..");
 const { synthParameterByEndpoint } = await loadUIModule(root, "ui/shared/synth-plugin-state.ts");
