@@ -5,11 +5,18 @@ import path from "node:path";
 import { loadUIModule } from "./helpers/load_ui_module.mjs";
 
 const repoRoot = path.resolve(import.meta.dirname, "..");
-const laneV1Promise = loadUIModule(repoRoot, "ui/shared/lane-state.ts");
+const lanePromise = loadUIModule(repoRoot, "ui/shared/lane-state.ts");
 const laneV2Promise = loadUIModule(repoRoot, "ui/shared/lane-state-v2.ts");
 const laneSlotParamsPromise = loadUIModule(repoRoot, "ui/shared/lane-slot-params.ts");
 const rackDescriptorsPromise = loadUIModule(repoRoot, "ui/shared/rack-parameter-descriptors.ts");
 const effectOutputTrimPromise = loadUIModule(repoRoot, "ui/shared/effect-output-trim.ts");
+
+/** Each effect's complete default record, keyed by effect id. */
+async function defaultLaneParams() {
+    const [lane, laneV2] = await Promise.all([lanePromise, laneV2Promise]);
+    return Object.fromEntries(Object.entries(lane.EFFECT_ID_TO_LANE_TYPE)
+        .map(([effectId, deviceType]) => [effectId, laneV2.laneDefaultParamsForType(deviceType)]));
+}
 
 const MIX_DEFAULT_CASES = [
     { effectId: "drive", deviceType: "distortion", endpointID: "distortionWet", expected: 0.5 },
@@ -25,8 +32,7 @@ const MIX_DEFAULT_CASES = [
 // branch (the other branch EMPTY), then a trunk reverb — every structural
 // concept v2 adds in one small tree.
 async function makeParallelDoc() {
-    const laneV1 = await laneV1Promise;
-    const params = laneV1.createDefaultLaneState().params;
+    const params = await defaultLaneParams();
     return {
         format: "cosimo.lane",
         version: 2,
@@ -55,8 +61,7 @@ async function makeParallelDoc() {
 }
 
 async function makeSplitDoc() {
-    const laneV1 = await laneV1Promise;
-    const params = laneV1.createDefaultLaneState().params;
+    const params = await defaultLaneParams();
     return {
         format: "cosimo.lane",
         version: 2,
@@ -250,16 +255,15 @@ test("lane output defaults, strict parsing, editing, and runtime replay keep Mix
 });
 
 test("persisted lane intake accepts only complete T78 lane.v2 documents", async () => {
-    const laneV1 = await laneV1Promise;
     const laneV2 = await laneV2Promise;
     const current = laneV2.createDefaultLaneStateV2();
     const missingTrim = JSON.parse(laneV2.serializeLaneStateV2(current));
     delete missingTrim.devices["delay#1"].params.delayOutputTrimDb;
 
     assert.equal(
-        laneV2.deserializeLaneStateV2(laneV1.serializeLaneState(laneV1.createDefaultLaneState())),
+        laneV2.deserializeLaneStateV2(JSON.stringify({ format: "cosimo.lane", version: 1, order: [], enabled: {}, params: {} })),
         null,
-        "lane-v1 is an old complete-sound document, not a T78 migration source",
+        "a version 1 lane document is not read",
     );
     assert.equal(laneV2.deserializeLaneStateV2(missingTrim), null);
     assert.equal(laneV2.deserializeLaneStateV2("{"), null);
@@ -287,10 +291,9 @@ test("the resident-eight constructor authors a complete current document", async
 });
 
 test("lane.v2 validates and never coerces", async () => {
-    const laneV1 = await laneV1Promise;
     const laneV2 = await laneV2Promise;
     const doc = await makeParallelDoc();
-    const chorusParams = laneV1.createDefaultLaneState().params.chorus;
+    const chorusParams = (await defaultLaneParams()).chorus;
 
     const ok = laneV2.parseLaneStateV2(doc);
     assert.equal(ok._tag, "ok");
@@ -372,9 +375,8 @@ test("lane.v2 split groups validate band count and crossover range", async () =>
 });
 
 test("lane.v2 caps the WIRE length: placements plus markers fit one topology upload", async () => {
-    const laneV1 = await laneV1Promise;
     const laneV2 = await laneV2Promise;
-    const params = laneV1.createDefaultLaneState().params;
+    const params = await defaultLaneParams();
 
     const devices = {};
     const trunk = [];
@@ -435,13 +437,8 @@ test("instances list in identity order and hold their slot ordinals by number", 
                      { deviceType: "delay", instanceNumber: 2 });
 });
 
-test("the current serial wire adds instance host trims without changing slot records or topology", async () => {
-    const laneV1 = await laneV1Promise;
-    const laneV2 = await laneV2Promise;
-    const outputTrim = await effectOutputTrimPromise;
-
-    const v1 = laneV1.createDefaultLaneState();
-    const edited = { ...v1, order: [...v1.order].reverse(), enabled: { ...v1.enabled, ott: true } };
+test("the serial wire replays output control, each device's trim and complete record, then the topology", async () => {
+    const [laneV2, laneSlotParams, outputTrim] = await Promise.all([laneV2Promise, laneSlotParamsPromise, effectOutputTrimPromise]);
     const full = laneV2.createFullDefaultLaneStateV2();
     const current = {
         ...full,
@@ -449,33 +446,36 @@ test("the current serial wire adds instance host trims without changing slot rec
             node.deviceId === "ott#1" ? { ...node, enabled: true } : node
         )),
     };
+    const events = laneV2.buildLaneRuntimeEventsV2(current);
 
-    const v1Events = laneV1.buildLaneRuntimeEvents(edited);
-    const v2Events = laneV2.buildLaneRuntimeEventsV2(current);
-
-    // v2 adds the whole-lane output-control event and one real host parameter
-    // event per resident device. Device records and topology stay identical.
-    assert.deepEqual(v2Events[0], {
-        endpointID: "laneOutputControl",
-        value: { mix: 1, bypassed: false },
-    });
+    assert.deepEqual(events[0], { endpointID: "laneOutputControl", value: { mix: 1, bypassed: false } });
     const expectedHostEndpointIDs = outputTrim.EFFECT_OUTPUT_TRIM_DEVICE_TYPES.map(
         (deviceType) => outputTrim.effectOutputTrimHostEndpointID(deviceType, 1),
     );
-    const hostEvents = v2Events.filter((event) => (
-        outputTrim.parseEffectOutputTrimHostEndpointID(event.endpointID) !== null
-    ));
-    assert.deepEqual(hostEvents, expectedHostEndpointIDs.map((endpointID) => ({
-        endpointID,
-        value: 0,
-    })));
-    assert.equal(v2Events.length, v1Events.length + 1 + expectedHostEndpointIDs.length);
-    assert.deepEqual(v2Events[v2Events.length - 1], v1Events[v1Events.length - 1]);
-    // Records cover the same slots with the same values (order may differ).
-    const recordBySlot = (events) => new Map(
-        events.filter((event) => event.endpointID === "laneSlotParams")
-            .map((event) => [event.value.slotId, event.value.values]));
-    assert.deepEqual(recordBySlot(v2Events), recordBySlot(v1Events));
+    const hostEvents = events.filter((event) => outputTrim.parseEffectOutputTrimHostEndpointID(event.endpointID) !== null);
+    assert.deepEqual(hostEvents, expectedHostEndpointIDs.map((endpointID) => ({ endpointID, value: 0 })));
+
+    // One complete positional record per resident device, values in wire order.
+    const records = events.filter((event) => event.endpointID === "laneSlotParams");
+    assert.equal(records.length, Object.keys(full.devices).length);
+    for (const [deviceId, record] of Object.entries(full.devices)) {
+        const deviceType = deviceId.split("#")[0];
+        const expected = new Array(laneSlotParams.LANE_SLOT_PARAM_COUNT).fill(0);
+        laneSlotParams.laneDeviceParamEndpoints(deviceType).forEach((endpointID, index) => {
+            expected[index] = record.params[endpointID];
+        });
+        const slotId = laneSlotParams.getLaneSlotId(deviceType, 0);
+        assert.deepEqual(records.find((event) => event.value.slotId === slotId)?.value.values, expected, deviceId);
+    }
+
+    // The topology comes last: the reversed serial chain, all trunk, only OTT enabled.
+    assert.equal(events.length, 1 + 2 * records.length + 1);
+    const topology = events.at(-1);
+    assert.equal(topology.endpointID, "laneTopology");
+    const chainSlots = current.chain.map((node) => laneSlotParams.getLaneSlotId(node.deviceId.split("#")[0], 0));
+    assert.equal(topology.value.chainLength, chainSlots.length);
+    assert.deepEqual(topology.value.slotIds.slice(0, chainSlots.length), chainSlots);
+    assert.equal(topology.value.enabledMask, 1 << current.chain.findIndex((node) => node.deviceId === "ott#1"));
 });
 
 test("groups compile to marker slots with branch tags, and the mirror validates them", async () => {

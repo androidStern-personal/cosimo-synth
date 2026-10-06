@@ -83,97 +83,6 @@ const LANE_DEVICE_PARAM_LAYOUT: Readonly<Record<LaneDeviceType, ReadonlyArray<st
     ],
 });
 
-/** Exact per-device records written before T50 appended Key Track state. */
-export const LEGACY_LANE_DEVICE_PARAM_ENDPOINTS: Readonly<Record<LaneDeviceType, ReadonlyArray<string>>> = Object.freeze({
-    globalFilter: ["globalFilterMode", "globalFilterCutoff", "globalFilterResonance", "globalFilterDrive"],
-    distortion: ["distortionMode", "distortionDriveDb", "distortionKnee", "distortionWet", "distortionWetHPHz", "distortionWetLPHz", "distortionType"],
-    ott: ["ottMix", "ottAmount", "ottTimePercent", "ottBandDrive", "ottEnvelopeMatch"],
-    chorus: ["chorusMix", "chorusMotionMode", "chorusBloomMode", "chorusTone", "chorusFeedback", "chorusRingAmount", "chorusRingOffsetMode", "chorusRingFineSemitones"],
-    flanger: ["flangerRate", "flangerDepth", "flangerFeedback", "flangerMix"],
-    phaser: ["phaserRate", "phaserRateMode", "phaserRateDivision", "phaserDepth", "phaserFrequency", "phaserFeedback", "phaserPhase", "phaserMix"],
-    delay: ["delayTime", "delayFeedback", "delayFilter", "delayMix", "delayTimeMode", "delayDivision"],
-    reverb: ["reverbSize", "reverbDecay", "reverbDamping", "reverbMix"],
-});
-
-/** The first T50 record shape, before the hidden Chorus compatibility bit. */
-export const PRE_CHORUS_LEGACY_CLAMP_ENDPOINTS: ReadonlyArray<string> = Object.freeze([
-    "chorusMix", "chorusMotionMode", "chorusBloomMode", "chorusTone", "chorusFeedback", "chorusRingAmount", "chorusRingOffsetMode", "chorusRingFineSemitones",
-    "chorusRingFrequencyHz", "chorusRingKeyTrackEnabled", "chorusRingKeyTrackOffsetSemitones",
-]);
-
-const APPENDED_LANE_PARAM_DEFAULTS: Readonly<Record<string, number>> = Object.freeze({
-    globalFilterCutoffKeyTrackEnabled: 0,
-    globalFilterCutoffKeyTrackOffsetSemitones: 0,
-    distortionWetHPKeyTrackEnabled: 0,
-    distortionWetHPKeyTrackOffsetSemitones: 0,
-    distortionWetLPKeyTrackEnabled: 0,
-    distortionWetLPKeyTrackOffsetSemitones: 0,
-    chorusRingOffsetMode: 0,
-    chorusRingFineSemitones: 0,
-    chorusRingFrequencyHz: 28,
-    chorusRingKeyTrackEnabled: 0,
-    chorusRingKeyTrackOffsetSemitones: 0,
-    chorusRingLegacyClampEnabled: 0,
-    flangerBaseDelayMs: 0.6,
-    flangerBaseDelayKeyTrackEnabled: 0,
-    flangerBaseDelayKeyTrackOffsetSemitones: 0,
-    phaserFrequencyKeyTrackEnabled: 0,
-    phaserFrequencyKeyTrackOffsetSemitones: 0,
-    delayTimeKeyTrackEnabled: 0,
-    delayTimeKeyTrackOffsetSemitones: 0,
-    delayFilterKeyTrackEnabled: 0,
-    delayFilterKeyTrackOffsetSemitones: 0,
-});
-
-function legacyChorusRingOffsetSemitones(mode: number): number {
-    if (Math.round(mode) === 1) return -5;
-    if (Math.round(mode) === 2) return 12;
-    if (Math.round(mode) === 3) return -12;
-    return 7;
-}
-
-/**
- * Expand any validated pre-T50/presentation record to the append-only wire
- * layout. The old Chorus mode + fine fields are retained at their deployed
- * indexes and translated to an enabled tracked offset, preserving its sound.
- */
-export function materializeLaneDeviceParams(
-    deviceType: LaneDeviceType,
-    input: Readonly<Record<string, unknown>>,
-): Record<string, number> {
-    const params: Record<string, number> = {};
-    for (const endpointID of LANE_DEVICE_PARAM_LAYOUT[deviceType]) {
-        const value = input[endpointID];
-        if (typeof value === "number" && Number.isFinite(value)) {
-            params[endpointID] = value;
-            continue;
-        }
-        const fallback = APPENDED_LANE_PARAM_DEFAULTS[endpointID];
-        if (fallback === undefined) {
-            throw new Error(`Missing lane parameter value: ${deviceType}.${endpointID}`);
-        }
-        params[endpointID] = fallback;
-    }
-
-    const legacyChorusEndpoints = LEGACY_LANE_DEVICE_PARAM_ENDPOINTS.chorus;
-    const currentLegacyChorusEndpoints = [
-        ...legacyChorusEndpoints,
-        effectOutputTrimLaneEndpointID("chorus"),
-    ];
-    const inputEndpoints = Object.keys(input);
-    const isLegacyChorus = deviceType === "chorus"
-        && inputEndpoints.length === currentLegacyChorusEndpoints.length
-        && inputEndpoints.every((endpointID) => currentLegacyChorusEndpoints.includes(endpointID));
-    if (isLegacyChorus) {
-        params.chorusRingKeyTrackEnabled = 1;
-        params.chorusRingKeyTrackOffsetSemitones = legacyChorusRingOffsetSemitones(
-            Number(input.chorusRingOffsetMode),
-        ) + Number(input.chorusRingFineSemitones);
-        params.chorusRingLegacyClampEnabled = 1;
-    }
-    return params;
-}
-
 /** The full parameter vocabulary of one device type, in wire order. */
 export function laneDeviceParamEndpoints(deviceType: LaneDeviceType): ReadonlyArray<string> {
     return LANE_DEVICE_PARAM_LAYOUT[deviceType];
@@ -199,9 +108,12 @@ export function buildLaneSlotParamValues(
     params: Readonly<Record<string, number>>,
 ): number[] {
     const values = new Array<number>(LANE_SLOT_PARAM_COUNT).fill(0);
-    const materialized = materializeLaneDeviceParams(deviceType, params);
     LANE_DEVICE_PARAM_LAYOUT[deviceType].forEach((endpointID, index) => {
-        values[index] = materialized[endpointID];
+        const value = params[endpointID];
+        if (typeof value !== "number" || !Number.isFinite(value)) {
+            throw new Error(`Missing lane parameter value: ${deviceType}.${endpointID}`);
+        }
+        values[index] = value;
     });
     return values;
 }

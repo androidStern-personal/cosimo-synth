@@ -52,8 +52,7 @@ function sharedPatchLaneDocument(envelope) {
 }
 
 async function buildStressSpec() {
-    const [laneV1, laneV2, targets] = await Promise.all([
-        loadUIModule(repoRoot, "ui/shared/lane-state.ts"),
+    const [laneV2, targets] = await Promise.all([
         loadUIModule(repoRoot, "ui/shared/lane-state-v2.ts"),
         loadUIModule(repoRoot, "ui/shared/modulation-targets.ts"),
     ]);
@@ -61,7 +60,7 @@ async function buildStressSpec() {
     // All eight base devices with their product defaults, then two pool
     // clones, arranged as five trunk devices plus a three-band split whose
     // bands carry the rest: ten devices and a split group in one chain.
-    const base = laneV2.upgradeLaneStateV1(laneV1.createDefaultLaneState());
+    const base = laneV2.createFullDefaultLaneStateV2();
     const devices = { ...base.devices };
     devices["distortion#2"] = { params: { ...devices["distortion#1"].params } };
     devices["chorus#2"] = { params: { ...devices["chorus#1"].params } };

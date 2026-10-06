@@ -5,7 +5,7 @@ import path from "node:path";
 import { loadUIModule } from "./helpers/load_ui_module.mjs";
 
 const repoRoot = path.resolve(import.meta.dirname, "..");
-const laneV1Promise = loadUIModule(repoRoot, "ui/shared/lane-state.ts");
+const lanePromise = loadUIModule(repoRoot, "ui/shared/lane-state.ts");
 const laneV2Promise = loadUIModule(repoRoot, "ui/shared/lane-state-v2.ts");
 const layoutPromise = loadUIModule(repoRoot, "ui/shared/lane-subway-layout.ts");
 const connectorGeometryPromise = loadUIModule(repoRoot, "ui/shared/subway-connector-geometry.ts");
@@ -27,8 +27,8 @@ async function parseDoc(chainAndDevices) {
 }
 
 async function defaultParams(effectId) {
-    const laneV1 = await laneV1Promise;
-    return { ...laneV1.createDefaultLaneState().params[effectId] };
+    const [lane, laneV2] = await Promise.all([lanePromise, laneV2Promise]);
+    return laneV2.laneDefaultParamsForType(lane.EFFECT_ID_TO_LANE_TYPE[effectId]);
 }
 
 test("compact branch allocation owns both responsive tracks and connector anchors", async () => {

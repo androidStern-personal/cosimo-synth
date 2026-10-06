@@ -1,5 +1,4 @@
 import "./styles.css";
-import { createDefaultLaneState } from "../shared/lane-state";
 import { loadHarnessManifest, MockPatchConnection } from "../shared/patch-connection-mock";
 import { WORKSPACE_SHELL_STORAGE_KEY } from "../shared/workspace-shell";
 import { createDesktopPatchView } from "./patch-view-entry";
@@ -14,7 +13,6 @@ declare global {
         __COSIMO_DESKTOP_HARNESS__?: {
             patchConnection: MockPatchConnection;
             getSnapshot: () => ReturnType<MockPatchConnection["getDebugSnapshot"]>;
-            createDefaultLaneState: typeof createDefaultLaneState;
             getRenderedState: () => {
                 errorText: string | null;
                 hasCanvas: boolean;
@@ -258,7 +256,6 @@ try {
     window.__COSIMO_DESKTOP_HARNESS__ = {
         patchConnection,
         getSnapshot: () => patchConnection.getDebugSnapshot(),
-        createDefaultLaneState,
         getRenderedState: () => {
             const viewRoot = getDesktopViewRoot();
             return {

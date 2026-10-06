@@ -1,13 +1,10 @@
 import type { LaneDeviceInstance, LaneDeviceType } from "./lane-modulation-targets";
 import {
-    LEGACY_LANE_DEVICE_PARAM_ENDPOINTS,
-    PRE_CHORUS_LEGACY_CLAMP_ENDPOINTS,
     LANE_SLOT_ORDINAL_COUNT,
     LANE_SLOT_PARAM_COUNT,
     buildLaneSlotParamValues,
     getLaneSlotId,
     laneDeviceParamEndpoints,
-    materializeLaneDeviceParams,
 } from "./lane-slot-params";
 import { getRackEffectDescriptor } from "./rack-parameter-descriptors";
 import {
@@ -206,43 +203,20 @@ function parseDeviceRecord(deviceId: string, input: unknown):
         return { failure: err(`device ${deviceId} must be { params }`) };
     }
     const endpoints = laneDeviceParamEndpoints(parsedId.deviceType);
-    const effectId = LANE_TYPE_TO_EFFECT_ID.get(parsedId.deviceType);
-    if (effectId === undefined) {
-        return { failure: err(`device ${deviceId} has no effect descriptor`) };
-    }
-    const presentationEndpoints = getRackEffectDescriptor(effectId).parameters
-        .map((descriptor) => descriptor.endpointID);
     const inputParams = input.params as Record<string, unknown>;
     const inputKeys = Object.keys(inputParams);
-    const hasShape = (expected: ReadonlyArray<string>) => inputKeys.length === expected.length
-        && inputKeys.every((key) => expected.includes(key));
-    const trimEndpointID = effectOutputTrimLaneEndpointID(parsedId.deviceType);
-    const currentLegacyEndpoints = [
-        ...LEGACY_LANE_DEVICE_PARAM_ENDPOINTS[parsedId.deviceType],
-        trimEndpointID,
-    ];
-    const currentPreClampChorusEndpoints = [
-        ...PRE_CHORUS_LEGACY_CLAMP_ENDPOINTS,
-        trimEndpointID,
-    ];
-    // T78 deliberately introduces no old-preset compatibility path. Both
-    // full and previously supported supplemental shapes must already carry
-    // Output Trim; pre-Output-Trim records receive no hidden 0 dB migration.
-    const hasCurrentShape = inputKeys.includes(trimEndpointID)
-        && (hasShape(endpoints)
-            || hasShape(presentationEndpoints)
-            || hasShape(currentLegacyEndpoints)
-            || (parsedId.deviceType === "chorus" && hasShape(currentPreClampChorusEndpoints)));
-    if (!hasCurrentShape) {
+    if (inputKeys.length !== endpoints.length || !endpoints.every((endpointID) => Object.hasOwn(inputParams, endpointID))) {
         return { failure: err(`device ${deviceId} must carry every parameter once`) };
     }
-    for (const endpointID of inputKeys) {
+    const params: Record<string, number> = {};
+    for (const endpointID of endpoints) {
         const value = inputParams[endpointID];
         if (typeof value !== "number" || !Number.isFinite(value)) {
             return { failure: err(`device ${deviceId}.${endpointID} must be a finite number`) };
         }
+        params[endpointID] = value;
     }
-    return { record: { params: materializeLaneDeviceParams(parsedId.deviceType, inputParams) } };
+    return { record: { params } };
 }
 
 function parsePlacement(input: unknown, deviceIds: ReadonlySet<string>):

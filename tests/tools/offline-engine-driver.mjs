@@ -71,13 +71,12 @@ export async function loadOfflineEngineClass(enginePath) {
 
 async function uiModules() {
     const repoRoot = path.resolve(import.meta.dirname, "..", "..");
-    const [modulation, program, laneV1, laneV2] = await Promise.all([
+    const [modulation, program, laneV2] = await Promise.all([
         loadUIModule(repoRoot, "ui/shared/modulation.ts"),
         loadUIModule(repoRoot, "ui/shared/modulation-runtime-program.ts"),
-        loadUIModule(repoRoot, "ui/shared/lane-state.ts"),
         loadUIModule(repoRoot, "ui/shared/lane-state-v2.ts"),
     ]);
-    return { modulation, program, laneV1, laneV2 };
+    return { modulation, program, laneV2 };
 }
 
 function installWavetables(performer) {

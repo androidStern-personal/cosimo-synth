@@ -292,9 +292,10 @@ test("incomplete legacy Chorus Ring lane records are rejected", async () => {
     assert.equal(parsed._tag, "err");
 });
 
-test("legacy Chorus mode-zero/fine-zero remains distinguishable from new linear state", async () => {
-    const slots = await loadUIModule(repoRoot, "ui/shared/lane-slot-params.ts");
-    const legacyInput = {
+test("incomplete pre-compatibility Chorus records are rejected", async () => {
+    const lane = await loadUIModule(repoRoot, "ui/shared/lane-state-v2.ts");
+    // Every Chorus field except the compatibility bit.
+    const currentParams = {
         chorusMix: 0.5,
         chorusMotionMode: 1,
         chorusBloomMode: 0,
@@ -303,48 +304,10 @@ test("legacy Chorus mode-zero/fine-zero remains distinguishable from new linear 
         chorusRingAmount: 0,
         chorusRingOffsetMode: 0,
         chorusRingFineSemitones: 0,
-        chorusOutputTrimDb: 0,
-    };
-    const legacy = slots.materializeLaneDeviceParams("chorus", legacyInput);
-    const nonExactLegacyLookalike = slots.materializeLaneDeviceParams("chorus", {
-        ...legacyInput,
-        unknownFutureField: 1,
-    });
-    const current = slots.materializeLaneDeviceParams("chorus", {
-        ...legacy,
         chorusRingFrequencyHz: 28,
         chorusRingKeyTrackEnabled: 1,
         chorusRingKeyTrackOffsetSemitones: 7,
-        chorusRingLegacyClampEnabled: 0,
-    });
-
-    assert.equal(legacy.chorusRingKeyTrackOffsetSemitones, 7);
-    assert.equal(legacy.chorusRingLegacyClampEnabled, 1);
-    assert.equal(nonExactLegacyLookalike.chorusRingLegacyClampEnabled, 0);
-    assert.equal(current.chorusRingKeyTrackOffsetSemitones, 7);
-    assert.equal(current.chorusRingLegacyClampEnabled, 0);
-    assert.equal(slots.getLaneSlotParamIndex("chorus", "chorusRingLegacyClampEnabled"), 11);
-    assert.equal(slots.LANE_SLOT_PARAM_COUNT, 13);
-});
-
-test("incomplete pre-compatibility Chorus records are rejected", async () => {
-    const lane = await loadUIModule(repoRoot, "ui/shared/lane-state-v2.ts");
-    const slots = await loadUIModule(repoRoot, "ui/shared/lane-slot-params.ts");
-    const currentParams = Object.fromEntries(
-        slots.PRE_CHORUS_LEGACY_CLAMP_ENDPOINTS.map((endpointID) => [endpointID, ({
-            chorusMix: 0.5,
-            chorusMotionMode: 1,
-            chorusBloomMode: 0,
-            chorusTone: 0.5,
-            chorusFeedback: 0.42,
-            chorusRingAmount: 0,
-            chorusRingOffsetMode: 0,
-            chorusRingFineSemitones: 0,
-            chorusRingFrequencyHz: 28,
-            chorusRingKeyTrackEnabled: 1,
-            chorusRingKeyTrackOffsetSemitones: 7,
-        })[endpointID]]),
-    );
+    };
     const parsed = lane.parseLaneStateV2({
         format: "cosimo.lane",
         version: 2,

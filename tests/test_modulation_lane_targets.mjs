@@ -34,12 +34,12 @@ test("lane kind grammar accepts real device params and rejects everything else",
 
 test("whole-lane output controls never enter the modulation destination inventory", async () => {
     const [laneState, modulation, descriptors] = await Promise.all([
-        loadUIModule(repoRoot, "ui/shared/lane-state.ts"),
+        loadUIModule(repoRoot, "ui/shared/lane-state-v2.ts"),
         loadUIModule(repoRoot, "ui/shared/modulation.ts"),
         loadUIModule(repoRoot, "ui/shared/target-descriptor.ts"),
     ]);
     const options = modulation.buildPatchModulationTargetOptions(
-        laneState.listLaneDeviceInstances(laneState.createDefaultLaneState()),
+        laneState.listLaneDeviceInstancesV2(laneState.createFullDefaultLaneStateV2()),
     );
 
     assert.equal(options.some(({ value }) => [
@@ -321,13 +321,13 @@ test("every pool instance's base resolves the type's editing contract", async ()
 });
 
 test("the per-patch target domain is the static core plus one entry per live lane device parameter", async () => {
-    const laneState = await loadUIModule(repoRoot, "ui/shared/lane-state.ts");
+    const laneState = await loadUIModule(repoRoot, "ui/shared/lane-state-v2.ts");
     const modulation = await loadUIModule(repoRoot, "ui/shared/modulation.ts");
 
     // The resident device set: one instance-#1 device per type, in the stable
     // identity order (never the chain order — reordering the chain must not
     // reshuffle pickers).
-    const resident = laneState.listLaneDeviceInstances(laneState.createDefaultLaneState());
+    const resident = laneState.listLaneDeviceInstancesV2(laneState.createFullDefaultLaneStateV2());
     assert.deepEqual(resident, [
         { instanceId: "globalFilter#1", deviceType: "globalFilter" },
         { instanceId: "distortion#1", deviceType: "distortion" },

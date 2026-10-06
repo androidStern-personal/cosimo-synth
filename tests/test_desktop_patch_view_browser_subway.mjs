@@ -3,11 +3,8 @@ import assert from "node:assert/strict";
 import fs from "node:fs/promises";
 import path from "node:path";
 
-import {
-    createDefaultLaneState,
-    serializeLaneState,
-} from "../patch_gui/lane-state.js";
-import { createDefaultLaneStateV2 } from "../patch_gui/lane-state-v2.js";
+import { EFFECT_ID_TO_LANE_TYPE } from "../patch_gui/lane-state.js";
+import { createDefaultLaneStateV2, laneDefaultParamsForType } from "../patch_gui/lane-state-v2.js";
 import { normalizeModulationState } from "../patch_gui/modulation.js";
 import {
     recallSynthPreset,
@@ -27,6 +24,12 @@ import {
     waitForReactFrames,
 } from "./helpers/desktop_patch_view_browser_suite.mjs";
 import { decodePng, pngPixelAt, rgbDistance } from "./helpers/png_pixels.mjs";
+
+/** Each effect's complete default record, keyed by effect id. */
+function defaultLaneParams() {
+    return Object.fromEntries(Object.entries(EFFECT_ID_TO_LANE_TYPE)
+        .map(([effectId, deviceType]) => [effectId, laneDefaultParamsForType(deviceType)]));
+}
 
 const readStoredLaneDoc = (snapshot) => JSON.parse(String(snapshot.storedState["lane.v1"]));
 const starterTrioLaneDocJson = () => JSON.stringify(createDefaultLaneStateV2());
@@ -185,7 +188,7 @@ function emptyLaneDocJson() {
 }
 
 function populatedThreeBandLaneDocJson() {
-    const params = createDefaultLaneState().params;
+    const params = defaultLaneParams();
     return JSON.stringify({
         format: "cosimo.lane",
         version: 2,
@@ -242,7 +245,7 @@ function emptySplitLaneDocJson(branchCount) {
 }
 
 function populatedFourWayParallelLaneDocJson() {
-    const params = createDefaultLaneState().params;
+    const params = defaultLaneParams();
     return JSON.stringify({
         format: "cosimo.lane",
         version: 2,
@@ -278,7 +281,7 @@ function populatedFourWayParallelLaneDocJson() {
 }
 
 function maximumSerialLaneDocJson() {
-    const params = createDefaultLaneState().params;
+    const params = defaultLaneParams();
     const devices = {};
     const chain = [];
     const types = [
@@ -304,7 +307,7 @@ function maximumSerialLaneDocJson() {
 }
 
 function boundaryScrollLaneDocJson() {
-    const params = createDefaultLaneState().params;
+    const params = defaultLaneParams();
     return JSON.stringify({
         format: "cosimo.lane",
         version: 2,
@@ -356,7 +359,7 @@ function boundaryScrollLaneDocJson() {
 }
 
 function branchTailLaneDocJson(groupKind) {
-    const params = createDefaultLaneState().params;
+    const params = defaultLaneParams();
     const group = groupKind === "parallel"
         ? {
             kind: "parallel",
@@ -462,7 +465,7 @@ function insertExpectedPlacement(document, path, deviceId) {
 }
 
 function populatedConnectorLaneDocJson(groupKind, branchCount) {
-    const params = createDefaultLaneState().params;
+    const params = defaultLaneParams();
     const fixtures = [
         { deviceId: "distortion#1", params: params.drive },
         { deviceId: "ott#1", params: params.ott },
@@ -5342,19 +5345,20 @@ test("a pre-T78 v1 document is rejected atomically without writes or upgrade", a
         })));
         const visibleBefore = await visibleLane();
         const currentBefore = await getHarnessSnapshot(page);
-        const v1 = createDefaultLaneState();
+        const effectIds = Object.keys(EFFECT_ID_TO_LANE_TYPE);
         const preT78 = {
-            ...v1,
-            order: [...v1.order].reverse(),
-            enabled: { ...v1.enabled, chorus: true },
-            params: Object.fromEntries(Object.entries(v1.params).map(([effectId, params]) => [
+            format: "cosimo.lane",
+            version: 1,
+            order: [...effectIds].reverse(),
+            enabled: Object.fromEntries(effectIds.map((effectId) => [effectId, effectId === "chorus"])),
+            params: Object.fromEntries(Object.entries(defaultLaneParams()).map(([effectId, params]) => [
                 effectId,
                 Object.fromEntries(Object.entries(params).filter(
                     ([endpointID]) => !endpointID.endsWith("OutputTrimDb"),
                 )),
             ])),
         };
-        const serializedPreT78 = serializeLaneState(preT78);
+        const serializedPreT78 = JSON.stringify(preT78);
         assert.equal(
             Object.values(preT78.params).every((params) => Object.keys(params).every(
                 (endpointID) => !endpointID.endsWith("OutputTrimDb"),
@@ -5870,7 +5874,7 @@ test("remove rides the station menu, heals the selection, and capacity disables 
 
         // A full delay pool disables just that type in the picker. The v2
         // schema is strict — every device carries its complete param record.
-        const v1Params = createDefaultLaneState().params;
+        const v1Params = defaultLaneParams();
         await page.evaluate((serialized) => {
             window.__COSIMO_DESKTOP_HARNESS__.setStoredStateValue("lane.v1", serialized);
         }, JSON.stringify({
