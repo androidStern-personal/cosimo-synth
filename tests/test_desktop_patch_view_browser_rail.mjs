@@ -1061,7 +1061,14 @@ test("Auto-preview retriggers on real parameter drags, stays silent when off, an
     });
     const cdp = await page.context().newCDPSession(page);
 
+    // Every drag must change the value: an unchanged value is not an edit and
+    // previews nothing, so drag away from whichever end Reverb Size is nearer.
+    const dragDirection = () => page.evaluate(() => {
+        const lane = JSON.parse(String(window.__COSIMO_DESKTOP_HARNESS__.getSnapshot().storedState["lane.v1"]));
+        return lane.devices["reverb#1"].params.reverbSize > 0.5 ? -1 : 1;
+    });
     const dragKnobBase = async () => {
+        const direction = await dragDirection();
         const surface = page.locator('[data-role="rack-parameter-surface-reverbSize"]');
         const surfaceBox = await surface.boundingBox();
         assert.ok(surfaceBox);
@@ -1076,13 +1083,14 @@ test("Auto-preview retriggers on real parameter drags, stays silent when off, an
         for (const step of [12, 26, 40]) {
             await cdp.send("Input.dispatchTouchEvent", {
                 type: "touchMove",
-                touchPoints: [{ x: start.x + step, y: start.y, radiusX: 5, radiusY: 5, force: 1 }],
+                touchPoints: [{ x: start.x + (direction * step), y: start.y, radiusX: 5, radiusY: 5, force: 1 }],
             });
             await page.waitForTimeout(40);
         }
         await cdp.send("Input.dispatchTouchEvent", { type: "touchEnd", touchPoints: [] });
     };
     const startHeldKnobPreview = async () => {
+        const direction = await dragDirection();
         await clearHarnessDebugLog(page);
         const surfaceBox = await page.locator('[data-role="rack-parameter-surface-reverbSize"]').boundingBox();
         assert.ok(surfaceBox);
@@ -1097,7 +1105,7 @@ test("Auto-preview retriggers on real parameter drags, stays silent when off, an
         for (const step of [15, 30]) {
             await cdp.send("Input.dispatchTouchEvent", {
                 type: "touchMove",
-                touchPoints: [{ x: start.x + step, y: start.y, radiusX: 5, radiusY: 5, force: 1 }],
+                touchPoints: [{ x: start.x + (direction * step), y: start.y, radiusX: 5, radiusY: 5, force: 1 }],
             });
         }
         await page.waitForFunction(() => (

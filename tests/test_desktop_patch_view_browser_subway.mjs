@@ -864,19 +864,20 @@ test("whole-lane Mix and Bypass use the lane document/event path and restore an 
 
         await clearHarnessDebugLog(page);
         await slider.fill("0");
+        // The plugin state stores each accepted Mix as it is made; the engine
+        // receives only the whole-lane output event.
         const liveZero = await waitForHarnessSnapshot(
             page,
-            "zero Mix live event",
-            (snapshot) => snapshot.sentMessages.some(({ endpointID, value }) => (
-                endpointID === "laneOutputControl" && value?.mix === 0 && value?.bypassed === false
-            )),
+            "zero Mix live event and accepted value",
+            (snapshot) => readStoredLaneDoc(snapshot).output.mix === 0
+                && snapshot.sentMessages.some(({ endpointID, value }) => (
+                    endpointID === "laneOutputControl" && value?.mix === 0 && value?.bypassed === false
+                )),
         );
         assert.deepEqual(liveZero.sentMessages, [{
             endpointID: "laneOutputControl",
             value: { mix: 0, bypassed: false },
         }]);
-        assert.equal(readStoredLaneDoc(liveZero).output.mix, 0.37,
-            "the live audible path must not persist mid-gesture");
         assert.deepEqual(liveZero.gestureStarts, []);
         assert.deepEqual(liveZero.gestureEnds, []);
 
@@ -4211,16 +4212,21 @@ test("dragging a station into the empty band crosses lanes and commits once", as
         const settling = page.locator(
             '[data-role="rack-reorder-lifted-pill"][data-device-id="reverb#1"].is-settling',
         );
-        await settling.waitFor();
-        const settleTarget = await settling.evaluate((element) => ({
-            left: Number.parseFloat(element.style.left),
-            top: Number.parseFloat(element.style.top),
-            width: Number.parseFloat(element.style.width),
-            height: Number.parseFloat(element.style.height),
-            running: element.getAnimations().some((animation) => (
-                animation.playState === "running" || animation.playState === "pending"
-            )),
-        }));
+        // Measure in the same frame the settle starts; it can finish before another round trip.
+        const settleTarget = await (await page.waitForFunction(() => {
+            const element = document.querySelector(
+                '[data-role="rack-reorder-lifted-pill"][data-device-id="reverb#1"].is-settling',
+            );
+            return element instanceof HTMLElement ? {
+                left: Number.parseFloat(element.style.left),
+                top: Number.parseFloat(element.style.top),
+                width: Number.parseFloat(element.style.width),
+                height: Number.parseFloat(element.style.height),
+                running: element.getAnimations().some((animation) => (
+                    animation.playState === "running" || animation.playState === "pending"
+                )),
+            } : null;
+        }, undefined, { polling: "raf" })).jsonValue();
         assert.equal(Math.abs(settleTarget.left - preview.ghostRect.left) < 1, true);
         assert.equal(Math.abs(settleTarget.top - preview.ghostRect.top) < 1, true);
         assert.equal(Math.abs(settleTarget.width - preview.ghostRect.width) < 1, true);
@@ -5473,6 +5479,8 @@ test("only the icon of an already selected station toggles bypass", async () => 
         await page.waitForSelector('[data-role="rack-editor-delay"][data-device-id="delay#1"]');
         assert.equal(await delayModule.getAttribute("data-enabled"), "false");
 
+        // Count only what the toggle sends, not the opening document's delivery.
+        await clearHarnessDebugLog(page);
         await delayIcon.click();
         const toggled = await waitForHarnessSnapshot(
             page,

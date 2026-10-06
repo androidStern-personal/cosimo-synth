@@ -204,6 +204,9 @@ test("ADSR native pointer-capture loss closes the active edit before later windo
             (element, activePointerId) => element.releasePointerCapture(activePointerId),
             pointerId,
         );
+        // Chromium delivers a released capture's lostpointercapture just before
+        // the next pointer event, so this move must find the edit already closed.
+        await page.mouse.move(start.x + 90, start.y);
         await page.locator('[data-role="adsr-value-bubble"]').waitFor({ state: "detached", timeout: 1_000 });
         assert.equal(await page.evaluate(
             () => window.__COSIMO_ADSR_NATIVE_CAPTURE_LOSS_OBSERVED__,
@@ -212,8 +215,6 @@ test("ADSR native pointer-capture loss closes the active edit before later windo
             await page.locator('[data-role="adsr-editor-surface"]').getAttribute("data-active-handle"),
             null,
         );
-
-        await page.mouse.move(start.x + 90, start.y);
         await settleLayout(page);
         const snapshot = await getHarnessSnapshot(page);
         assert.equal(snapshot.sentMessages.some(({ endpointID }) => endpointID === "env2Attack"), false);

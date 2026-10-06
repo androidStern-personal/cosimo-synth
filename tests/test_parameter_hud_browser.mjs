@@ -1,5 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import path from "node:path";
 
 import {
     MODULATION_STATE_KEY,
@@ -7,6 +8,9 @@ import {
     openHarnessPage,
     selectRackEffect,
 } from "./helpers/desktop_patch_view_browser_suite.mjs";
+import { loadUIModule } from "./helpers/load_ui_module.mjs";
+
+const { PARAMETER_HUD_LINGER_MS } = await loadUIModule(path.resolve(import.meta.dirname, ".."), "ui/shared/parameter-hud.tsx");
 
 test("Wavetable Index drag replaces the generic HUD knob with the production wavetable", async () => {
     const page = await openHarnessPage({
@@ -120,23 +124,27 @@ test("direct filter-graph dragging hides a lingering HUD while ordinary paramete
         await page.mouse.move(cutoffPoint.x - 24, cutoffPoint.y, { steps: 6 });
         const hud = page.locator('[data-role="mobile-voice-hud"]');
         await hud.locator('[data-role="parameter-hud-filter"]').waitFor();
-        await page.mouse.up();
-
         const graphHandleBounds = await graphHandle.boundingBox();
         assert.ok(graphHandleBounds);
         const graphPoint = {
             x: graphHandleBounds.x + (graphHandleBounds.width / 2),
             y: graphHandleBounds.y + (graphHandleBounds.height / 2),
         };
+        await page.mouse.up();
+        const releasedAt = Date.now();
+        assert.equal(await hud.evaluate((element) => element.classList.contains("is-visible")), true,
+            "the cutoff HUD lingers after release");
+
         await page.mouse.move(graphPoint.x, graphPoint.y);
         await page.mouse.down();
-        await page.mouse.move(graphPoint.x - 16, graphPoint.y + 8, { steps: 3 });
-        await page.waitForTimeout(80);
-        assert.equal(
-            await hud.evaluate((element) => element.classList.contains("is-visible")),
-            false,
-            "a direct graph gesture must suppress the still-lingering cutoff HUD",
-        );
+        await page.mouse.move(graphPoint.x - 16, graphPoint.y + 8);
+        await page.evaluate(() => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+        const lingering = Date.now() - releasedAt < PARAMETER_HUD_LINGER_MS;
+        // On a slow renderer the linger can end before the graph gesture starts; the HUD is then gone.
+        assert.equal(await page.locator('[data-role="mobile-voice-hud"]').count(), lingering ? 1 : 0);
+        assert.equal(await page.locator('[data-role="mobile-voice-hud"].is-visible').count(), 0,
+            "a direct graph gesture must suppress the still-lingering cutoff HUD");
+        await page.mouse.move(graphPoint.x - 16, graphPoint.y + 16, { steps: 2 });
         await page.mouse.up();
 
         await page.waitForTimeout(450);

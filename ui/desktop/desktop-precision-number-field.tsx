@@ -280,8 +280,10 @@ export function PrecisionNumberField({
         }
 
         const deltaX = event.clientX - activeDrag.startClientX;
-        if (Math.abs(deltaX) >= DRAG_START_THRESHOLD_PX) {
+        if (!activeDrag.moved && Math.abs(deltaX) >= DRAG_START_THRESHOLD_PX) {
             activeDrag.moved = true;
+            // A press that is changing the value is a drag, so it never opens the parameter menu.
+            longPressMenu.onPointerCancel?.();
         }
 
         const normalizedSpan = Math.max(1e-9, normalizedMax - normalizedMin);

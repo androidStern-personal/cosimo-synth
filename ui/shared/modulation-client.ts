@@ -32,13 +32,18 @@ export function createModulationStateClient(client: StateClient) {
         const snapshot = client.getSnapshot();
         return snapshot.kind === "ready" ? snapshot.state.fields[MODULATION_STATE_KEY] : undefined;
     };
+    let lastAccepted: ModulationState | null = null;
     const getState = (): ModulationState | null => {
         const current = field();
-        if (current && "value" in current) return current.value;
-        // Preserve the existing cold-invalid display without inventing an
-        // accepted value. Readiness and all edit eligibility still use the client.
-        return current?.readiness.kind === "failed" && current.readiness.reason === "invalid-state"
-            ? createDefaultModulationState() : null;
+        if (current && "value" in current) return lastAccepted = current.value;
+        // While the client reattaches to a replaced document, or a host-supplied
+        // bank is prepared, the view keeps the last accepted bank so open editors
+        // survive; every edit still waits for readiness. A cold invalid document
+        // shows the default bank.
+        if (current?.readiness.kind === "failed") {
+            return current.readiness.reason === "invalid-state" ? createDefaultModulationState() : null;
+        }
+        return lastAccepted;
     };
     const isReady = () => !stopped && field()?.readiness.kind === "ready";
     const emit = (kind: ModulationStateChangeKind) => { for (const listener of listeners) listener(getState(), kind); };

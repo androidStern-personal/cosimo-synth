@@ -922,6 +922,13 @@ test("Amp Envelope keeps its exact quick-sheet identity and 5 ms desktop Release
         assert.equal(await editor.getAttribute("data-source-slot"), "4");
         assert.doesNotMatch(await page.locator('[data-role="mobile-workspace-panel-mod"]').innerText(), /Envelope\s*4|AMP\s*4/i);
 
+        // Home already floored Amp Release; move it off the floor so the entry has to clamp.
+        await page.evaluate(() => {
+            window.__COSIMO_DESKTOP_HARNESS__.setParameterValue("ampRelease", 0.2, true);
+        });
+        await page.waitForFunction(() => Math.abs(Number(
+            window.__COSIMO_DESKTOP_HARNESS__.getSnapshot().parameterValues.ampRelease,
+        ) - 0.2) <= 1e-9);
         let releaseInput = page.locator('input[aria-label="Envelope release value"]:visible');
         await clearHarnessDebugLog(page);
         await releaseInput.focus();
@@ -3422,9 +3429,14 @@ test("rack no-op release adopts authoritative stored order received during the g
             && document.querySelector(".subway-station-row.is-reordering") === null
         ));
         // A structurally different authoritative document makes the held
-        // preview inexact, so it cancels immediately and adopts that document.
-        // The eventual release must remain inert.
+        // preview inexact, so it cancels immediately and adopts that document,
+        // whose own topology reaches the engine. The eventual release must remain inert.
+        await waitForHarnessSnapshot(page, "authoritative lane topology delivered", (nextSnapshot) => (
+            nextSnapshot.sentMessages.some(({ endpointID, value }) => endpointID === "laneTopology" && value?.slotIds?.[0] === 7)
+        ));
+        await clearHarnessDebugLog(page);
         await endRackReorderWithoutPointerCapture(page, 94);
+        await waitForReactFrames(page, 2);
 
         const snapshot = await getHarnessSnapshot(page);
         assert.equal(snapshot.sentMessages.some(({ endpointID }) => endpointID === "laneTopology"), false);
