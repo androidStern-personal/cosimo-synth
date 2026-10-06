@@ -11,7 +11,7 @@ import {
     type RefObject,
 } from "react";
 
-import { Mseg, FilterEditor } from "../../kit/index";
+import { Mseg, FilterEditor, type FilterSpectrumFrame, type FilterSpectrumRenderMode } from "../../kit/index";
 import { responseModeToFilterMode } from "../../kit/ui/filter-editor";
 import { buildMsegSurfacePaths } from "../../kit/ui/mseg-editor-geometry";
 
@@ -38,7 +38,6 @@ import {
 import { CanvasWavetableDisplay, type WavetableModulationRangeOverlay } from "./wavetable-display";
 import type { SynthFocusBindings } from "./synth-input-router";
 import { filterQToNormalized, normalizedToFilterQ } from "../../kit/ui/filter-response";
-import type { FilterSpectrumFrame, FilterSpectrumRenderMode } from "../../kit/ui/filter-spectrum";
 import { uiMediaTimeNow } from "./ui-media-clock";
 import {
     composeModulationAmount,

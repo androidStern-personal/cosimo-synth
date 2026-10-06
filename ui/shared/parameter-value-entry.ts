@@ -35,13 +35,8 @@ import {
     type KeyTrackParameterFamily,
     type KeyTrackRouteStorage,
 } from "./key-track";
-import {
-    clamp,
-    formatFrequencyDisplay,
-    normalizeEntryText,
-    parseNumericAndUnit,
-    unitIs,
-} from "../../kit/ui/parameter-value-entry";
+import { clamp } from "../../kit/ui/parameter-value-entry";
+import { formatFrequencyDisplay, normalizeEntryText, parseNumericAndUnit, unitIs } from "../../kit/index";
 
 export type ParameterEntryChoice = {
     readonly value: number;

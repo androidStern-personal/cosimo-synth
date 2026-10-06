@@ -2,7 +2,8 @@
 // base or center cutoff. The kit FilterEditor only draws a range; these helpers
 // decide how a modulation amount becomes one.
 import { clampFilterCutoffHz } from "../../kit/ui/filter-response";
-import type { FilterRange, FilterRangePolarity } from "../../kit/ui/filter-editor";
+import type { FilterRangePolarity } from "../../kit/ui/filter-editor";
+import type { FilterRange } from "../../kit/index";
 
 const MODULATION_RANGE_OCTAVE_LIMIT = 20;
 

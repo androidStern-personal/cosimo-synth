@@ -53,10 +53,13 @@ const KIT_FORBIDDEN_IMPORT_TARGETS = [
     { name: "fx plugin", pattern: /^fx\// },
 ];
 
-async function listKitSourceModules() {
+const SYNTH_MODULE_ROOTS = ["ui", "fx", "tools", "web", "bounce"];
+const SKIPPED_DIRECTORIES = new Set(["node_modules", "build", "dist", "generated"]);
+
+async function listSourceModules(roots) {
     const modulePaths = [];
 
-    for (const root of KIT_MODULE_ROOTS) {
+    for (const root of roots) {
         const entries = await fs.readdir(path.join(repoRoot, root), { recursive: true, withFileTypes: true });
 
         for (const entry of entries) {
@@ -65,6 +68,11 @@ async function listKitSourceModules() {
             }
 
             const parentRelativePath = path.relative(repoRoot, entry.parentPath).replaceAll(path.sep, "/");
+
+            if (parentRelativePath.split("/").some((segment) => SKIPPED_DIRECTORIES.has(segment))) {
+                continue;
+            }
+
             modulePaths.push(path.posix.join(parentRelativePath, entry.name));
         }
     }
@@ -72,8 +80,35 @@ async function listKitSourceModules() {
     return modulePaths.sort();
 }
 
+/** Specifiers of `export ... from` statements, and of imports whose names are exported again. */
+function reExportSpecifiers(source) {
+    const specifiers = new Set();
+
+    for (const match of source.matchAll(/(?:^|[^.\w])export\s[^;]*?from\s*["']([^"']+)["']/gm)) {
+        specifiers.add(match[1]);
+    }
+
+    const localExports = new Set();
+
+    for (const match of source.matchAll(/(?:^|[^.\w])export\s+(?:type\s+)?\{([^}]*)\}\s*;/gm)) {
+        for (const name of match[1].split(",")) {
+            localExports.add(name.trim().replace(/^type\s+/, "").split(/\s+as\s+/)[0]);
+        }
+    }
+
+    for (const match of source.matchAll(/(?:^|[^.\w])import\s+(?:type\s+)?\{([^}]*)\}\s*from\s*["']([^"']+)["']/gm)) {
+        const importedNames = match[1].split(",").map((name) => name.trim().replace(/^type\s+/, "").split(/\s+as\s+/).at(-1));
+
+        if (importedNames.some((name) => localExports.has(name))) {
+            specifiers.add(match[2]);
+        }
+    }
+
+    return [...specifiers];
+}
+
 test("kit modules never import ui/shared, bounce, or fx plugin code", async () => {
-    const modulePaths = await listKitSourceModules();
+    const modulePaths = await listSourceModules(KIT_MODULE_ROOTS);
 
     assert.ok(
         modulePaths.length >= 25,
@@ -99,6 +134,31 @@ test("kit modules never import ui/shared, bounce, or fx plugin code", async () =
                     `${modulePath} imports "${specifier}" (${name}) across the kit boundary`,
                 );
             }
+        }
+    }
+});
+
+test("synth and plugin code never re-exports a kit module", async () => {
+    const modulePaths = await listSourceModules(SYNTH_MODULE_ROOTS);
+
+    assert.ok(modulePaths.includes("ui/shared/mseg.ts"), "expected the walk to include ui/shared/mseg.ts");
+    assert.ok(modulePaths.includes("fx/seqfx/view/SeqFxPatchView.tsx"), "expected the walk to include fx plugin views");
+
+    for (const modulePath of modulePaths) {
+        const source = await fs.readFile(path.join(repoRoot, modulePath), "utf8");
+
+        for (const specifier of reExportSpecifiers(source)) {
+            if (!specifier.startsWith(".")) {
+                continue;
+            }
+
+            const target = path.posix.join(path.posix.dirname(modulePath), specifier);
+
+            assert.doesNotMatch(
+                target,
+                /^kit\//,
+                `${modulePath} re-exports "${specifier}"; import it from the kit module directly where it is used`,
+            );
         }
     }
 });

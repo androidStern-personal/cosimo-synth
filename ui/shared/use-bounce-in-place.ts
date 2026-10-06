@@ -27,8 +27,8 @@ import {
     captureLiveBouncePatchDocument,
 } from "../../bounce/patch-document-adapter.mjs";
 import { BounceTransitionCoordinator } from "../../bounce/transition.mjs";
-import type { PluginStateFields, PluginStateJson } from "../../kit/ui/plugin-state-definition";
-import { usePluginState, usePluginStateSnapshot } from "../../kit/ui/plugin-state-react";
+import { usePluginState, type PluginStateFields, type PluginStateJson } from "../../kit/index";
+import { usePluginStateSnapshot } from "../../kit/ui/plugin-state-react";
 import { editOutcome } from "../../kit/ui/presets";
 import { usePatchConnection, useResourceClient } from "./cmajor-react";
 import { getDefaultPatchRootUrl } from "./resource-client";

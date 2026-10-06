@@ -15,7 +15,7 @@ import type { PluginStateClientResult } from "../../kit/ui/plugin-state-client";
 import { acquireSynthViewState } from "./synth-state-client";
 import type { createModulationStateClient } from "./modulation-client";
 import { useMsegEditorHistory, type MsegStateOwner } from "./mseg-editor-history";
-import { usePluginHistory } from "../../kit/index";
+import { usePluginHistory, type FilterSpectrumFrame } from "../../kit/index";
 import { useSynthPluginParameterBinding } from "./synth-plugin-state-react";
 
 import {
@@ -138,7 +138,7 @@ import {
     type EffectiveWarpState,
     type RuntimeTablePresentation,
 } from "./runtime-table-state";
-import { normalizeFilterSpectrumMessage, type FilterSpectrumFrame } from "../../kit/ui/filter-spectrum";
+import { normalizeFilterSpectrumMessage } from "../../kit/ui/filter-spectrum";
 import {
     DISTORTION_HISTORY_ENDPOINT_ID,
     DISTORTION_SCOPE_ENDPOINT_ID,

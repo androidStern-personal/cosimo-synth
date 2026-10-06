@@ -15,9 +15,11 @@ import {
 import {
     PatchConnectionProvider as KitPatchConnectionProvider,
     useOptionalPatchConnection as useKitOptionalPatchConnection,
+} from "../../kit/ui/cmajor-react";
+import {
     usePatchConnection as useKitPatchConnection,
     type PatchConnectionLike as KitPatchConnectionLike,
-} from "../../kit/ui/cmajor-react";
+} from "../../kit/index";
 import { acquireAnalyzerActivity } from "./analyzer-activity";
 import {
     createPatchConnectionResourceClient,

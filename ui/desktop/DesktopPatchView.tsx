@@ -246,7 +246,8 @@ import {
     type GainEnvelopeView,
     type MsegThumbnailPoint,
 } from "./articulation-ui";
-import { FILTER_SPECTRUM_RENDER_MODE_OPTIONS, type FilterSpectrumRenderMode } from "../../kit/ui/filter-spectrum";
+import { FILTER_SPECTRUM_RENDER_MODE_OPTIONS } from "../../kit/ui/filter-spectrum";
+import type { FilterSpectrumRenderMode } from "../../kit/index";
 import {
     FILTER_CUTOFF_MAX_HZ,
     FILTER_CUTOFF_MIN_HZ,
