@@ -6172,7 +6172,10 @@ test("every rack editor binds live controls and one drop commits one complete DS
 
         await clearHarnessDebugLog(page);
         const reorderHandle = page.locator('[data-role="rack-station-reverb"]');
-        const reorderTarget = page.locator('[data-role="rack-module-filter"]');
+        const reorderTarget = page.locator('[data-role="rack-module-chorus"]');
+        // Keep the whole map and the drop target on screen, so the drag never
+        // depends on edge auto-scroll.
+        await page.locator('[data-role="rack-module-list"]').scrollIntoViewIfNeeded();
         await reorderHandle.scrollIntoViewIfNeeded();
         const handleBox = await reorderHandle.boundingBox();
         const targetBox = await reorderTarget.boundingBox();
@@ -6188,14 +6191,12 @@ test("every rack editor binds live controls and one drop commits one complete DS
             (nextSnapshot) => nextSnapshot.sentMessages.some(({ endpointID, value }) => (
                 endpointID === "laneTopology"
                 && Array.isArray(value?.slotIds)
-                && Number(value.slotIds[0]) === 7
+                && Number(value.slotIds[3]) === 7
             )),
         );
-        const orderMessages = snapshot.sentMessages.filter(({ endpointID, value }) => (
-            endpointID === "laneTopology" && Number(value?.slotIds?.[0]) === 7
-        ));
+        const orderMessages = snapshot.sentMessages.filter(({ endpointID }) => endpointID === "laneTopology");
         assert.equal(orderMessages.length, 1, "drag previews must not write DSP structure");
-        assert.deepEqual(orderMessages[0].value.slotIds.slice(0, 8), [7, 0, 1, 2, 3, 4, 5, 6]);
+        assert.deepEqual(orderMessages[0].value.slotIds.slice(0, 8), [0, 1, 2, 7, 3, 4, 5, 6]);
     } finally {
         await page.close();
     }

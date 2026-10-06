@@ -110,6 +110,21 @@ async function readAdsrGeometry(surface) {
     }, { visibleRoles: VISIBLE_HANDLE_ROLES, hitRoles: CIRCLE_HIT_TARGET_ROLES });
 }
 
+/** Geometry once a layout change has come to rest: the surface size holds for a frame and the viewBox has caught up. */
+async function readSettledAdsrGeometry(page, surface) {
+    let previous = null;
+    for (let attempt = 0; attempt < 60; attempt += 1) {
+        const metrics = await readAdsrGeometry(surface);
+        if (metrics.surfaceMatchesViewBox && previous !== null
+            && metrics.surface.width === previous.surface.width && metrics.surface.height === previous.surface.height) {
+            return metrics;
+        }
+        previous = metrics;
+        await settleLayout(page);
+    }
+    return readAdsrGeometry(surface);
+}
+
 function assertResponsiveAdsrGeometry(metrics, label) {
     assert.equal(metrics.surfaceMatchesViewBox, true, `${label}: SVG coordinates must match rendered CSS pixels.`);
     for (const handle of metrics.visibleHandles) {
@@ -294,7 +309,7 @@ test("ADSR geometry stays bounded and circular through compact, expanded, full, 
     try {
         const drawer = await openEnvelopeDrawer(phonePage);
         const surface = drawer.locator('[data-role="adsr-editor-surface"]');
-        const compactMetrics = await readAdsrGeometry(surface);
+        const compactMetrics = await readSettledAdsrGeometry(phonePage, surface);
         assertResponsiveAdsrGeometry(compactMetrics, "compact drawer");
 
         const grip = drawer.locator('[data-role="quick-source-sheet-grip"]');
@@ -317,7 +332,7 @@ test("ADSR geometry stays bounded and circular through compact, expanded, full, 
         await phonePage.mouse.up();
         await drawer.waitFor();
         await settleLayout(phonePage);
-        const expandedMetrics = await readAdsrGeometry(surface);
+        const expandedMetrics = await readSettledAdsrGeometry(phonePage, surface);
         assertResponsiveAdsrGeometry(expandedMetrics, "expanded drawer");
         assert.equal(expandedMetrics.surface.height > compactMetrics.surface.height + 80, true);
 
@@ -325,7 +340,7 @@ test("ADSR geometry stays bounded and circular through compact, expanded, full, 
         const fullSurface = phonePage.locator('[data-role="adsr-editor-surface"]:visible');
         await fullSurface.waitFor();
         await settleLayout(phonePage);
-        const fullMetrics = await readAdsrGeometry(fullSurface);
+        const fullMetrics = await readSettledAdsrGeometry(phonePage, fullSurface);
         assertResponsiveAdsrGeometry(fullMetrics, "phone full editor");
         assert.equal(
             fullMetrics.curve.height <= fullMetrics.curve.width * 0.63,
@@ -344,8 +359,7 @@ test("ADSR geometry stays bounded and circular through compact, expanded, full, 
         await desktopPage.getByRole("button", { name: "Select envelope 1" }).click();
         const surface = desktopPage.locator('[data-role="adsr-editor-surface"]:visible');
         await surface.waitFor();
-        await settleLayout(desktopPage);
-        const desktopMetrics = await readAdsrGeometry(surface);
+        const desktopMetrics = await readSettledAdsrGeometry(desktopPage, surface);
         assertResponsiveAdsrGeometry(desktopMetrics, "desktop editor");
         assert.equal(desktopMetrics.curve.stroke, "rgb(125, 247, 255)");
 
