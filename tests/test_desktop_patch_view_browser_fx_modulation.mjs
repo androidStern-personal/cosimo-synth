@@ -3150,31 +3150,14 @@ test("mobile Mod creates, reloads, edits, and deletes more than 100 mappings wit
         }, createdRoute.id);
         assert.equal(await page.locator('[data-role="mod-mappings-count"]').innerText(), "102");
 
-        // T15: edit the restored route ON ITS ROW — long-press into the menu
-        // and type the amount exactly.
+        // Edit the restored route on its own row: long-press into the menu and
+        // type the amount exactly. Hovering waits until the cell is scrolled
+        // into view, stable and hit-testable, so the press lands on it.
         const createdRow = page.locator(`[data-role="mod-mappings-row"][data-route-id="${createdRoute.id}"]`);
-        await createdRow.scrollIntoViewIfNeeded();
         await clearHarnessDebugLog(page);
-        const railCell = createdRow.locator(".mobile-voice-cell").first();
-        // content-visibility rows paint a beat after a programmatic scroll and
-        // rows above may still grow: keep centering the cell until it is
-        // actually hit-testable before pressing.
-        await page.waitForFunction((routeId) => {
-            const cell = document
-                .querySelector(`[data-role="mod-mappings-row"][data-route-id="${routeId}"]`)
-                ?.querySelector(".mobile-voice-cell");
-            if (!cell) return false;
-            const rect = cell.getBoundingClientRect();
-            const hit = document.elementFromPoint(rect.left + (rect.width / 2), rect.top + (rect.height / 2));
-            if (hit !== null && cell.contains(hit)) return true;
-            cell.scrollIntoView({ block: "center" });
-            return false;
-        }, createdRoute.id, { polling: 100 });
-        const cellBox = await railCell.boundingBox();
-        assert.ok(cellBox);
-        await page.mouse.move(cellBox.x + (cellBox.width / 2), cellBox.y + (cellBox.height / 2));
+        await createdRow.locator(".mobile-voice-cell").first().hover();
         await page.mouse.down();
-        await page.locator('[data-role="rack-parameter-menu"]').waitFor({ state: "visible", timeout: 10000 });
+        await page.locator('[data-role="rack-parameter-menu"]').waitFor({ state: "visible" });
         await page.mouse.up();
         await page.click('[data-role="rack-parameter-menu-item"][data-action="edit-values"]');
         const amountInput = page.locator('[data-role="rack-modulation-value-input"]');

@@ -5333,8 +5333,8 @@ test("rack mod bar keeps source and target selection unassigned until source-dro
         ));
         assert.ok(sourceFirstRoute);
 
-        // T09: no separate AMOUNT control — the drive knob's vertical axis
-        // edits the new route's amount with the shared HUD.
+        // No separate AMOUNT control: the drive knob's vertical axis edits the
+        // new route's amount with the shared HUD.
         assert.equal(await sourceFirstPage.locator('[data-role="rack-modulation-amount"]').count(), 0);
         await collapseGlobalModRail(sourceFirstPage);
         const driveKnob = sourceFirstPage.locator('[data-role="distortion-drive-field"]');
@@ -5352,37 +5352,35 @@ test("rack mod bar keeps source and target selection unassigned until source-dro
             /Drive/i,
         );
         // The first write compiles the zero-depth route into the program; the
-        // second must ride the small amount-update path.
+        // second must ride the small amount-update path. Writes made while a
+        // delivery is still in flight are coalesced into one, so the second
+        // write waits until the program has reached the engine.
+        const isVoiceRackMaxProgram = ({ endpointID, value }) => {
+            if (endpointID !== "modulationProgram") return false;
+            const count = Number(value?.voiceRackRouteCount) || 0;
+            const routeIndex = value?.voiceRackRouteCells?.slice(0, count).indexOf(3) ?? -1;
+            return routeIndex >= 0 && Number(value?.voiceRackRouteReducers?.[routeIndex]) === 1;
+        };
+        await waitForHarnessSnapshot(
+            sourceFirstPage,
+            "rack route program with its first amount",
+            (nextSnapshot) => nextSnapshot.sentMessages.some(isVoiceRackMaxProgram),
+        );
         await dispatchRackKnobPointerEvents(driveKnob, [
             { type: "pointermove", pointerId: 61, buttons: 1, deltaY: -150 },
             { type: "pointerup", pointerId: 61, buttons: 0, deltaY: -150 },
         ]);
 
-        snapshot = await waitForHarnessSnapshot(
+        await waitForHarnessSnapshot(
             sourceFirstPage,
-            "rack route amount update",
-            (nextSnapshot) => readStoredModulationState(nextSnapshot).routes.some((route) => (
-                route.sourceKind === "mseg"
-                && route.sourceSlot === 1
-                && route.targetKind === "lane.distortion#1.distortionDriveDb"
-                && route.amount > 1
+            "voice-source rack amount edit on the small update path",
+            (nextSnapshot) => nextSnapshot.sentMessages.some(({ endpointID, value }) => (
+                endpointID === "modulationAmount"
+                && Number(value?.pathKind) === 3
+                && Number(value?.cellIndex) === 3
+                && Number(value?.amount) > 1
             )),
         );
-        const modulationMessages = snapshot.sentMessages.filter(({ endpointID }) => (
-            endpointID === "modulationProgram" || endpointID === "modulationAmount"
-        ));
-        assert.equal(snapshot.sentMessages.some(({ endpointID, value }) => {
-            if (endpointID !== "modulationProgram") return false;
-            const count = Number(value?.voiceRackRouteCount) || 0;
-            const routeIndex = value?.voiceRackRouteCells?.slice(0, count).indexOf(3) ?? -1;
-            return routeIndex >= 0 && Number(value?.voiceRackRouteReducers?.[routeIndex]) === 1;
-        }), true, `Voice-source rack route did not compile with Max reduction: ${JSON.stringify(modulationMessages)}`);
-        assert.equal(snapshot.sentMessages.some(({ endpointID, value }) => (
-            endpointID === "modulationAmount"
-            && Number(value?.pathKind) === 3
-            && Number(value?.cellIndex) === 3
-            && Number(value?.amount) > 1
-        )), true, `Voice-source rack amount edit did not use the small update path: ${JSON.stringify(modulationMessages)}`);
     } finally {
         await sourceFirstPage.close();
     }

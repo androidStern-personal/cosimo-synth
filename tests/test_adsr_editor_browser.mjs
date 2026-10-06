@@ -43,13 +43,28 @@ async function openEnvelopeDrawer(page) {
     return drawer;
 }
 
-async function readAdsrGeometry(surface) {
-    return surface.evaluate((element, { visibleRoles, hitRoles }) => {
+/**
+ * The ADSR geometry once layout has come to rest. The surface's viewBox follows
+ * its measured size one render after a layout change, so geometry is read in
+ * the first frame where no finite animation is running and the viewBox matches
+ * the rendered size; checking and reading in one frame keeps them consistent.
+ */
+async function readSettledAdsrGeometry(page, surface) {
+    const settled = await page.waitForFunction(({ element, visibleRoles, hitRoles }) => {
         if (!(element instanceof SVGSVGElement)) {
             throw new Error("Expected the ADSR SVG surface.");
         }
+        const animating = document.getAnimations().some((animation) => (
+            animation.playState !== "finished"
+            && animation.effect?.getComputedTiming().endTime !== Infinity
+        ));
         const surfaceRect = element.getBoundingClientRect();
         const viewBox = element.viewBox.baseVal;
+        if (animating
+                || Math.abs(surfaceRect.width - viewBox.width) > 0.75
+                || Math.abs(surfaceRect.height - viewBox.height) > 0.75) {
+            return null;
+        }
         const rectOf = (target) => {
             const bounds = target.getBoundingClientRect();
             return {
@@ -106,29 +121,17 @@ async function readAdsrGeometry(surface) {
                 stroke: getComputedStyle(curve).stroke,
             },
             viewport: { width: window.innerWidth, height: window.innerHeight },
-            surfaceMatchesViewBox: Math.abs(surfaceRect.width - viewBox.width) <= 0.75
-                && Math.abs(surfaceRect.height - viewBox.height) <= 0.75,
         };
-    }, { visibleRoles: VISIBLE_HANDLE_ROLES, hitRoles: CIRCLE_HIT_TARGET_ROLES });
+    }, {
+        element: await surface.elementHandle(),
+        visibleRoles: VISIBLE_HANDLE_ROLES,
+        hitRoles: CIRCLE_HIT_TARGET_ROLES,
+    }, { polling: "raf" });
+    return settled.jsonValue();
 }
 
-/** Geometry once a layout change has come to rest: the surface size holds for a frame and the viewBox has caught up. */
-async function readSettledAdsrGeometry(page, surface) {
-    let previous = null;
-    for (let attempt = 0; attempt < 60; attempt += 1) {
-        const metrics = await readAdsrGeometry(surface);
-        if (metrics.surfaceMatchesViewBox && previous !== null
-            && metrics.surface.width === previous.surface.width && metrics.surface.height === previous.surface.height) {
-            return metrics;
-        }
-        previous = metrics;
-        await settleLayout(page);
-    }
-    return readAdsrGeometry(surface);
-}
-
+/** Settled metrics already have SVG coordinates matching rendered CSS pixels. */
 function assertResponsiveAdsrGeometry(metrics, label) {
-    assert.equal(metrics.surfaceMatchesViewBox, true, `${label}: SVG coordinates must match rendered CSS pixels.`);
     for (const handle of metrics.visibleHandles) {
         assert.equal(
             Math.abs(handle.rect.width - handle.rect.height) <= 0.1,
@@ -332,7 +335,6 @@ test("ADSR geometry stays bounded and circular through compact, expanded, full, 
         }
         await phonePage.mouse.up();
         await drawer.waitFor();
-        await settleLayout(phonePage);
         const expandedMetrics = await readSettledAdsrGeometry(phonePage, surface);
         assertResponsiveAdsrGeometry(expandedMetrics, "expanded drawer");
         assert.equal(expandedMetrics.surface.height > compactMetrics.surface.height + 80, true);
@@ -340,7 +342,6 @@ test("ADSR geometry stays bounded and circular through compact, expanded, full, 
         await drawer.locator('[data-role="quick-source-sheet-full-editor"]').click();
         const fullSurface = phonePage.locator('[data-role="adsr-editor-surface"]:visible');
         await fullSurface.waitFor();
-        await settleLayout(phonePage);
         const fullMetrics = await readSettledAdsrGeometry(phonePage, fullSurface);
         assertResponsiveAdsrGeometry(fullMetrics, "phone full editor");
         assert.equal(
