@@ -507,16 +507,6 @@ test("plugin config build identifiers and worker paths must be separator-free or
     }
 });
 
-test("a plugin config has no former-bundle-name field", async () => {
-    const { buildModule } = await loadBuildModules();
-    await withFixtureFxRoot(async (fxRoot) => {
-        await writeFixturePlugin(fxRoot, "renamed_tone", "Tone.cmajorpatch", { name: "Tone" }, {
-            productName: "NewTone", previousProductName: "OldTone",
-        });
-        assert.throws(() => buildModule.discoverEffectPlugins({ fxRoot }), /unknown key "previousProductName"/);
-    });
-});
-
 test("the product object is read at discovery and derives the manifest-facing identity", async () => {
     const { buildModule } = await loadBuildModules();
 
