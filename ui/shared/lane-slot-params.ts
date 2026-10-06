@@ -20,7 +20,7 @@ import type { LaneDeviceType } from "./lane-modulation-targets";
 import { effectOutputTrimLaneEndpointID } from "./effect-output-trim";
 
 /** Engine laneSlotParamCount: every record carries this many values. */
-export const LANE_SLOT_PARAM_COUNT = 13;
+export const LANE_SLOT_PARAM_COUNT = 12;
 
 /** Engine lanePoolInstanceCount: ordinals 0..4 exist per device type. */
 export const LANE_SLOT_ORDINAL_COUNT = 5;
@@ -58,7 +58,7 @@ const LANE_DEVICE_PARAM_LAYOUT: Readonly<Record<LaneDeviceType, ReadonlyArray<st
     ],
     chorus: [
         "chorusMix", "chorusMotionMode", "chorusBloomMode", "chorusTone", "chorusFeedback", "chorusRingAmount", "chorusRingOffsetMode", "chorusRingFineSemitones",
-        "chorusRingFrequencyHz", "chorusRingKeyTrackEnabled", "chorusRingKeyTrackOffsetSemitones", "chorusRingLegacyClampEnabled",
+        "chorusRingFrequencyHz", "chorusRingKeyTrackEnabled", "chorusRingKeyTrackOffsetSemitones",
         effectOutputTrimLaneEndpointID("chorus"),
     ],
     flanger: [

@@ -44,8 +44,8 @@ test("a one-field rack edit reaches the engine as one positional field delta; an
 
 test("the slot param layout mirrors the engine's positional constants", async () => {
     const params = await laneParamsPromise;
-    assert.equal(params.LANE_SLOT_PARAM_COUNT, 13);
-    assert.equal(params.getLaneSlotParamIndex("chorus", "chorusOutputTrimDb"), 12);
+    assert.equal(params.LANE_SLOT_PARAM_COUNT, 12);
+    assert.equal(params.getLaneSlotParamIndex("chorus", "chorusOutputTrimDb"), 11);
     assert.equal(params.getLaneSlotParamIndex("delay", "delayTime"), 0);
     assert.equal(params.getLaneSlotParamIndex("delay", "delayDivision"), 5);
     assert.equal(params.getLaneSlotParamIndex("chorus", "chorusRingFineSemitones"), 7);

@@ -331,15 +331,14 @@ export function parseLaneStateV2(input: unknown): LaneStateV2ParseOutcome {
         }
 
         const isSplit = rawNode.kind === "split";
-        const legacySplitKeys = ["kind", "groupId", "enabled", "xoverLowHz", "xoverHighHz", "branches"];
-        const currentSplitKeys = [
-            "kind", "groupId", "enabled", "xoverLowHz", "xoverHighHz",
-            "xoverLowKeyTrackEnabled", "xoverLowKeyTrackOffsetSemitones",
-            "xoverHighKeyTrackEnabled", "xoverHighKeyTrackOffsetSemitones", "branches",
-        ];
-        const expectedKeys = isSplit ? currentSplitKeys : ["kind", "groupId", "enabled", "branches"];
-        const isLegacySplit = isSplit && hasExactKeys(rawNode, legacySplitKeys);
-        if (!hasExactKeys(rawNode, expectedKeys) && !isLegacySplit) {
+        const expectedKeys = isSplit
+            ? [
+                "kind", "groupId", "enabled", "xoverLowHz", "xoverHighHz",
+                "xoverLowKeyTrackEnabled", "xoverLowKeyTrackOffsetSemitones",
+                "xoverHighKeyTrackEnabled", "xoverHighKeyTrackOffsetSemitones", "branches",
+            ]
+            : ["kind", "groupId", "enabled", "branches"];
+        if (!hasExactKeys(rawNode, expectedKeys)) {
             return err(`a ${rawNode.kind} group is { ${expectedKeys.join(", ")} }`);
         }
         const groupId = parseLaneGroupId(rawNode.groupId);
@@ -362,7 +361,7 @@ export function parseLaneStateV2(input: unknown): LaneStateV2ParseOutcome {
             return err(`group ${String(rawNode.groupId)} crossovers must sit in `
                 + `${LANE_SPLIT_XOVER_MIN_HZ}..${LANE_SPLIT_XOVER_MAX_HZ} Hz`);
         }
-        if (isSplit && !isLegacySplit && (
+        if (isSplit && (
             typeof rawNode.xoverLowKeyTrackEnabled !== "boolean"
             || typeof rawNode.xoverHighKeyTrackEnabled !== "boolean"
             || typeof rawNode.xoverLowKeyTrackOffsetSemitones !== "number"
@@ -397,10 +396,10 @@ export function parseLaneStateV2(input: unknown): LaneStateV2ParseOutcome {
                 enabled: rawNode.enabled,
                 xoverLowHz: rawNode.xoverLowHz as number,
                 xoverHighHz: rawNode.xoverHighHz as number,
-                xoverLowKeyTrackEnabled: isLegacySplit ? false : rawNode.xoverLowKeyTrackEnabled as boolean,
-                xoverLowKeyTrackOffsetSemitones: isLegacySplit ? 0 : rawNode.xoverLowKeyTrackOffsetSemitones as number,
-                xoverHighKeyTrackEnabled: isLegacySplit ? false : rawNode.xoverHighKeyTrackEnabled as boolean,
-                xoverHighKeyTrackOffsetSemitones: isLegacySplit ? 0 : rawNode.xoverHighKeyTrackOffsetSemitones as number,
+                xoverLowKeyTrackEnabled: rawNode.xoverLowKeyTrackEnabled as boolean,
+                xoverLowKeyTrackOffsetSemitones: rawNode.xoverLowKeyTrackOffsetSemitones as number,
+                xoverHighKeyTrackEnabled: rawNode.xoverHighKeyTrackEnabled as boolean,
+                xoverHighKeyTrackOffsetSemitones: rawNode.xoverHighKeyTrackOffsetSemitones as number,
                 branches,
             }
             : {

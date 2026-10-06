@@ -84,7 +84,7 @@ test("lane state owns trim by effect-instance identity and full replay addresses
         reverb: "reverbOutputTrimDb",
     };
 
-    assert.equal(slotParams.LANE_SLOT_PARAM_COUNT, 13);
+    assert.equal(slotParams.LANE_SLOT_PARAM_COUNT, 12);
     for (const [deviceType, endpointID] of Object.entries(endpointByType)) {
         const endpoints = slotParams.laneDeviceParamEndpoints(deviceType);
         assert.equal(endpoints.at(-1), endpointID);

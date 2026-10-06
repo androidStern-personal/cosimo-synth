@@ -210,7 +210,7 @@ namespace wt
 
     // Per-slot parameter records travel in LaneSlotParamsUpload.values; each pool
     // slot type documents its own value vocabulary below (indices into `values`).
-    let laneSlotParamCount = 13;
+    let laneSlotParamCount = 12;
 
     // Delay-type pool slots.
     let laneDelayParamTimeMs   = 0;
@@ -268,8 +268,7 @@ namespace wt
     let laneChorusParamRingFrequencyHz = 8;
     let laneChorusParamRingKeyTrackEnabled = 9;
     let laneChorusParamRingKeyTrackOffsetSemitones = 10;
-    let laneChorusParamRingLegacyClampEnabled = 11;
-    let laneChorusParamOutputTrimDb = 12;
+    let laneChorusParamOutputTrimDb = 11;
 
     // Flanger-type pool slots.
     let laneFlangerParamRate     = 0;
@@ -332,7 +331,7 @@ namespace wt
         table[wrap<rackModuleCount> (rackModuleOtt), 4] = 128;
         table[wrap<rackModuleCount> (rackModuleOtt), laneOttParamOutputTrimDb] = 64;
         // chorus: mix 128, motion 0, bloom 0, tone 128, feedback 128,
-        // ringAmount 128, legacy mode 0/fine 128, ordinary frequency 128.
+        // ringAmount 128, ring pitch 0/fine 128, ordinary frequency 128.
         table[wrap<rackModuleCount> (rackModuleChorus), 0] = 128;
         table[wrap<rackModuleCount> (rackModuleChorus), 3] = 128;
         table[wrap<rackModuleCount> (rackModuleChorus), 4] = 128;
@@ -1581,7 +1580,6 @@ namespace wt
                     chorusPool[ordinal].ringFrequencyHzIn <- pp[laneChorusParamRingFrequencyHz];
                     chorusPool[ordinal].ringKeyTrackEnabledIn <- pp[laneChorusParamRingKeyTrackEnabled];
                     chorusPool[ordinal].ringKeyTrackOffsetSemitonesIn <- pp[laneChorusParamRingKeyTrackOffsetSemitones];
-                    chorusPool[ordinal].ringLegacyClampEnabledIn <- pp[laneChorusParamRingLegacyClampEnabled];
                     chorusPool[ordinal].ringRouteOffsetSemitonesIn <-
                         rackModIn[wrap<rackModTargetCount> (laneBase + rackModTargetChorusRingFineSemitones)];
                     chorusPool[ordinal].ringOffsetModeIn <- pp[laneChorusParamRingOffsetMode];

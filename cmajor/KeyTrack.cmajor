@@ -90,43 +90,21 @@ namespace wt
             maximumHz);
     }
 
-    /** Hidden pre-T50 Chorus compatibility law. New state passes 0 and keeps
-        continuous base + route addition; migrated state passes 1 and retains
-        the deployed clamp around legacy fine plus the retained route. */
-    float32 chorusRingTrackedOffsetSemitones (float32 legacyClampEnabled,
-                                              float32 migratedBaseOffsetSemitones,
-                                              float32 legacyFineSemitones,
-                                              float32 retainedRouteSemitones)
-    {
-        if (legacyClampEnabled >= 0.5f)
-            return migratedBaseOffsetSemitones
-                + std::intrinsics::clamp (
-                    legacyFineSemitones + retainedRouteSemitones,
-                    -2.0f,
-                    2.0f)
-                - legacyFineSemitones;
-
-        return migratedBaseOffsetSemitones + retainedRouteSemitones;
-    }
-
+    /** The chorus ring frequency: with Key Track on, the played pitch moved by
+        the Key Track offset plus the modulation route; otherwise the ordinary
+        frequency moved by the route alone. */
     float32 resolveChorusRingFrequencyHz (float32 keyTrackEnabled,
-                                          float32 legacyClampEnabled,
                                           float32 ordinaryHz,
                                           float32 playedPitchHz,
-                                          float32 migratedBaseOffsetSemitones,
-                                          float32 legacyFineSemitones,
-                                          float32 retainedRouteSemitones,
+                                          float32 keyTrackOffsetSemitones,
+                                          float32 routeOffsetSemitones,
                                           float32 minimumHz,
                                           float32 maximumHz)
     {
         if (keyTrackEnabled >= 0.5f)
             return keyTrackFrequencyHz (
                 playedPitchHz,
-                chorusRingTrackedOffsetSemitones (
-                    legacyClampEnabled,
-                    migratedBaseOffsetSemitones,
-                    legacyFineSemitones,
-                    retainedRouteSemitones),
+                keyTrackOffsetSemitones + routeOffsetSemitones,
                 minimumHz,
                 maximumHz);
 
@@ -135,7 +113,7 @@ namespace wt
             ordinaryHz,
             playedPitchHz,
             0.0f,
-            retainedRouteSemitones,
+            routeOffsetSemitones,
             minimumHz,
             maximumHz);
     }
@@ -146,29 +124,22 @@ namespace wt
         resolver — the memo family's contract. */
     float32 resolveChorusRingFrequencyHzMemoized (ExactPow2Memo& ratioMemo,
                                                   float32 keyTrackEnabled,
-                                                  float32 legacyClampEnabled,
                                                   float32 ordinaryHz,
                                                   float32 playedPitchHz,
-                                                  float32 migratedBaseOffsetSemitones,
-                                                  float32 legacyFineSemitones,
-                                                  float32 retainedRouteSemitones,
+                                                  float32 keyTrackOffsetSemitones,
+                                                  float32 routeOffsetSemitones,
                                                   float32 minimumHz,
                                                   float32 maximumHz)
     {
         if (keyTrackEnabled >= 0.5f)
             return std::intrinsics::clamp (
                 keyTrackFinitePitchHz (playedPitchHz)
-                    * exactKeyTrackRatio (ratioMemo,
-                                          chorusRingTrackedOffsetSemitones (
-                                              legacyClampEnabled,
-                                              migratedBaseOffsetSemitones,
-                                              legacyFineSemitones,
-                                              retainedRouteSemitones)),
+                    * exactKeyTrackRatio (ratioMemo, keyTrackOffsetSemitones + routeOffsetSemitones),
                 minimumHz,
                 maximumHz);
 
         return std::intrinsics::clamp (
-            ordinaryHz * exactKeyTrackRatio (ratioMemo, retainedRouteSemitones),
+            ordinaryHz * exactKeyTrackRatio (ratioMemo, routeOffsetSemitones),
             minimumHz,
             maximumHz);
     }

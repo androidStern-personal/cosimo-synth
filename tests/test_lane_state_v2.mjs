@@ -77,6 +77,10 @@ async function makeSplitDoc() {
                 enabled: true,
                 xoverLowHz: 250,
                 xoverHighHz: 2500,
+                xoverLowKeyTrackEnabled: false,
+                xoverLowKeyTrackOffsetSemitones: 0,
+                xoverHighKeyTrackEnabled: false,
+                xoverHighKeyTrackOffsetSemitones: 0,
                 branches: [
                     [{ kind: "device", deviceId: "ott#1", enabled: true }],
                     [],
@@ -368,6 +372,9 @@ test("lane.v2 split groups validate band count and crossover range", async () =>
         { ...doc, chain: [{ ...doc.chain[0], xoverLowHz: Number.NaN }] },
         // Split unit range.
         { ...doc, chain: [{ ...doc.chain[0], groupId: "split#5" }] },
+        // A split without its Key Track fields.
+        { ...doc, chain: [(({ xoverLowKeyTrackEnabled, xoverLowKeyTrackOffsetSemitones,
+                              xoverHighKeyTrackEnabled, xoverHighKeyTrackOffsetSemitones, ...node }) => node)(doc.chain[0])] },
     ];
     for (const [index, corrupt] of rejects.entries()) {
         assert.equal(laneV2.parseLaneStateV2(corrupt)._tag, "err", `split reject case ${index}`);

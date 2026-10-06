@@ -214,6 +214,10 @@ function populatedThreeBandLaneDocJson() {
             enabled: true,
             xoverLowHz: 320,
             xoverHighHz: 3200,
+            xoverLowKeyTrackEnabled: false,
+            xoverLowKeyTrackOffsetSemitones: 0,
+            xoverHighKeyTrackEnabled: false,
+            xoverHighKeyTrackOffsetSemitones: 0,
             branches: [
                 [
                     { kind: "device", deviceId: "distortion#1", enabled: true },
@@ -245,6 +249,10 @@ function emptySplitLaneDocJson(branchCount) {
             enabled: true,
             xoverLowHz: 320,
             xoverHighHz: 3200,
+            xoverLowKeyTrackEnabled: false,
+            xoverLowKeyTrackOffsetSemitones: 0,
+            xoverHighKeyTrackEnabled: false,
+            xoverHighKeyTrackOffsetSemitones: 0,
             branches: new Array(branchCount).fill(null).map(() => []),
         }],
     });
@@ -341,6 +349,10 @@ function boundaryScrollLaneDocJson() {
                 enabled: true,
                 xoverLowHz: 320,
                 xoverHighHz: 3200,
+                xoverLowKeyTrackEnabled: false,
+                xoverLowKeyTrackOffsetSemitones: 0,
+                xoverHighKeyTrackEnabled: false,
+                xoverHighKeyTrackOffsetSemitones: 0,
                 branches: [
                     [
                         { kind: "device", deviceId: "distortion#1", enabled: true },
@@ -416,7 +428,6 @@ function branchTailLaneDocJson(groupKind) {
                     chorusRingFineSemitones: 0,
                     chorusRingKeyTrackEnabled: 0,
                     chorusRingKeyTrackOffsetSemitones: 0,
-                    chorusRingLegacyClampEnabled: 0,
                 },
             },
             "phaser#1": {

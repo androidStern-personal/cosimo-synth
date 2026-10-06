@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import path from "node:path";
-import { readFile } from "node:fs/promises";
+import { readdir, readFile } from "node:fs/promises";
 
 import { loadUIModule } from "../kit/tests/helpers/load_ui_module.mjs";
 
@@ -229,7 +229,7 @@ test("lane records append Key Track fields without moving deployed parameter ind
     assert.equal(slots.getLaneSlotParamIndex("chorus", "chorusRingFrequencyHz"), 8);
     assert.equal(slots.getLaneSlotParamIndex("flanger", "flangerBaseDelayMs"), 4);
     assert.equal(slots.getLaneSlotParamIndex("delay", "delayFilterKeyTrackOffsetSemitones"), 9);
-    assert.equal(slots.LANE_SLOT_PARAM_COUNT, 13);
+    assert.equal(slots.LANE_SLOT_PARAM_COUNT, 12);
 });
 
 test("incomplete pre-Key-Track lane records are rejected instead of default-filled", async () => {
@@ -292,10 +292,9 @@ test("incomplete legacy Chorus Ring lane records are rejected", async () => {
     assert.equal(parsed._tag, "err");
 });
 
-test("incomplete pre-compatibility Chorus records are rejected", async () => {
+test("a complete Chorus record parses, and one carrying a ring clamp switch is rejected", async () => {
     const lane = await loadUIModule(repoRoot, "ui/shared/lane-state-v2.ts");
-    // Every Chorus field except the compatibility bit.
-    const currentParams = {
+    const completeParams = {
         chorusMix: 0.5,
         chorusMotionMode: 1,
         chorusBloomMode: 0,
@@ -307,31 +306,30 @@ test("incomplete pre-compatibility Chorus records are rejected", async () => {
         chorusRingFrequencyHz: 28,
         chorusRingKeyTrackEnabled: 1,
         chorusRingKeyTrackOffsetSemitones: 7,
+        chorusOutputTrimDb: 0,
     };
-    const parsed = lane.parseLaneStateV2({
+    const document = (params) => ({
         format: "cosimo.lane",
         version: 2,
         output: { mix: 1, bypassed: false },
-        devices: { "chorus#1": { params: { ...currentParams, chorusOutputTrimDb: 0 } } },
+        devices: { "chorus#1": { params } },
         chain: [{ kind: "device", deviceId: "chorus#1", enabled: true }],
     });
 
-    assert.equal(parsed._tag, "err");
+    assert.equal(lane.parseLaneStateV2(document(completeParams))._tag, "ok");
+    assert.equal(lane.parseLaneStateV2(document({ ...completeParams, chorusRingLegacyClampEnabled: 0 }))._tag, "err");
 });
 
-test("Chorus legacy clamp metadata is absent from public UI and modulation inventories", async () => {
-    const descriptors = await loadUIModule(repoRoot, "ui/shared/rack-parameter-descriptors.ts");
-    const targets = await loadUIModule(repoRoot, "ui/shared/lane-modulation-targets.ts");
-    const synthSource = await readFile(path.join(repoRoot, "cmajor/WavetableSynth.cmajor"), "utf8");
-    const chorusEndpoints = descriptors.getRackEffectDescriptor("chorus").parameters
-        .map((descriptor) => descriptor.endpointID);
-
-    assert.equal(chorusEndpoints.includes("chorusRingLegacyClampEnabled"), false);
-    assert.equal(targets.getLaneDeviceModulationTargetKinds({
-        instanceId: "chorus#1",
-        deviceType: "chorus",
-    }).some((kind) => kind.includes("chorusRingLegacyClampEnabled")), false);
-    assert.doesNotMatch(synthSource, /chorusRingLegacyClampEnabled/);
+test("the Chorus has no ring clamp switch anywhere in the synth", async () => {
+    const sources = [
+        ...(await readdir(path.join(repoRoot, "cmajor"))).filter((name) => name.endsWith(".cmajor")).map((name) => `cmajor/${name}`),
+        ...(await readdir(path.join(repoRoot, "ui/shared"))).filter((name) => /\.tsx?$/u.test(name)).map((name) => `ui/shared/${name}`),
+    ];
+    for (const source of sources) {
+        assert.doesNotMatch(await readFile(path.join(repoRoot, source), "utf8"), /LegacyClamp|legacyClamp/u, source);
+    }
+    const lane = await loadUIModule(repoRoot, "ui/shared/lane-state-v2.ts");
+    assert.equal("chorusRingLegacyClampEnabled" in lane.laneDefaultParamsForType("chorus"), false);
 });
 
 test("fresh lane devices start Key Track off and Flanger gets its new ordinary base delay", async () => {
@@ -345,7 +343,6 @@ test("fresh lane devices start Key Track off and Flanger gets its new ordinary b
     assert.equal(chorus.chorusRingFrequencyHz, 28);
     assert.equal(chorus.chorusRingKeyTrackEnabled, 0);
     assert.equal(chorus.chorusRingKeyTrackOffsetSemitones, 0);
-    assert.equal(chorus.chorusRingLegacyClampEnabled, 0);
 });
 
 test("lane Key Track transitions preserve ordinary values and make Delay modes exclusive", async () => {
@@ -372,28 +369,18 @@ test("lane Key Track transitions preserve ordinary values and make Delay modes e
     assert.equal(state.devices["delay#1"].params.delayTimeKeyTrackEnabled, 0);
 });
 
-test("incomplete pre-Key-Track split records are rejected", async () => {
+test("a split record without its Key Track fields is rejected", async () => {
     const lane = await loadUIModule(repoRoot, "ui/shared/lane-state-v2.ts");
-    const legacy = {
-        format: "cosimo.lane",
-        version: 2,
-        devices: {
-            "delay#1": { params: {
-                delayTime: 375, delayFeedback: 0.35, delayFilter: 6_000,
-                delayMix: 0.5, delayTimeMode: 0, delayDivision: 8,
-            } },
-        },
-        chain: [{
-            kind: "split",
-            groupId: "split#1",
-            enabled: true,
-            xoverLowHz: 333,
-            xoverHighHz: 3_333,
-            branches: [[{ kind: "device", deviceId: "delay#1", enabled: true }], []],
-        }],
-    };
-    const parsed = lane.parseLaneStateV2(legacy);
-    assert.equal(parsed._tag, "err");
+    const splitState = lane.wrapLaneDeviceInGroup(lane.createDefaultLaneStateV2(), "distortion#1", "split");
+    const document = JSON.parse(lane.serializeLaneStateV2(splitState));
+    assert.equal(lane.parseLaneStateV2(document)._tag, "ok");
+
+    const split = document.chain.find((node) => node.kind === "split");
+    delete split.xoverLowKeyTrackEnabled;
+    delete split.xoverLowKeyTrackOffsetSemitones;
+    delete split.xoverHighKeyTrackEnabled;
+    delete split.xoverHighKeyTrackOffsetSemitones;
+    assert.equal(lane.parseLaneStateV2(document)._tag, "err");
 });
 
 test("frequency-split Key Track transitions preserve ordinary crossovers", async () => {
