@@ -2,13 +2,17 @@
   "format": "cosimo.speedrunRecipe",
   "version": 1,
   "label": "Split Space Lead",
-  "contractHash": "sha256:fe79a52c9635699d2ed67ee73f879d253367c1dcde33577f6d113d03c0053c5c",
+  "contractHash": "sha256:635f0c0ae4a68b8f76c2332dd8cf83ab083477998cc1a197d40574bbb27ceade",
   "prelude": [
     {
       "kind": "installLaneBaseline",
       "lane": {
         "format": "cosimo.lane",
         "version": 2,
+        "output": {
+          "mix": 1,
+          "bypassed": false
+        },
         "devices": {
           "distortion#1": {
             "params": {
@@ -18,7 +22,12 @@
               "distortionWet": 0.5,
               "distortionWetHPHz": 40,
               "distortionWetLPHz": 18000,
-              "distortionType": 1
+              "distortionType": 1,
+              "distortionWetHPKeyTrackEnabled": 0,
+              "distortionWetHPKeyTrackOffsetSemitones": 0,
+              "distortionWetLPKeyTrackEnabled": 0,
+              "distortionWetLPKeyTrackOffsetSemitones": 0,
+              "distortionOutputTrimDb": 0
             }
           },
           "delay#2": {
@@ -28,7 +37,12 @@
               "delayFilter": 6000,
               "delayMix": 0.5,
               "delayTimeMode": 0,
-              "delayDivision": 8
+              "delayDivision": 8,
+              "delayTimeKeyTrackEnabled": 0,
+              "delayTimeKeyTrackOffsetSemitones": 0,
+              "delayFilterKeyTrackEnabled": 0,
+              "delayFilterKeyTrackOffsetSemitones": 0,
+              "delayOutputTrimDb": 0
             }
           },
           "reverb#1": {
@@ -36,7 +50,8 @@
               "reverbSize": 0.5,
               "reverbDecay": 0.4,
               "reverbDamping": 0.5,
-              "reverbMix": 0.5
+              "reverbMix": 0.5,
+              "reverbOutputTrimDb": 0
             }
           }
         },
@@ -52,6 +67,10 @@
             "enabled": true,
             "xoverLowHz": 800,
             "xoverHighHz": 2500,
+            "xoverLowKeyTrackEnabled": false,
+            "xoverLowKeyTrackOffsetSemitones": 0,
+            "xoverHighKeyTrackEnabled": false,
+            "xoverHighKeyTrackOffsetSemitones": 0,
             "branches": [
               [
                 {
@@ -640,6 +659,9 @@
     "articulationOnlyRouteIds": [],
     "routesOnOmittedTargets": [],
     "defaultParameterIDs": [
+      "ampAttack",
+      "ampDecay",
+      "ampSustain",
       "env1Release",
       "env1Sustain",
       "env2Attack",
@@ -650,11 +672,53 @@
       "env3Decay",
       "env3Release",
       "env3Sustain",
+      "filterCutoffKeyTrackEnabled",
+      "filterCutoffKeyTrackOffsetSemitones",
       "filterMix",
       "filterMode",
       "filterQ",
       "glideTime",
       "globalTune",
+      "laneChorus1OutputTrimDb",
+      "laneChorus2OutputTrimDb",
+      "laneChorus3OutputTrimDb",
+      "laneChorus4OutputTrimDb",
+      "laneChorus5OutputTrimDb",
+      "laneDelay1OutputTrimDb",
+      "laneDelay2OutputTrimDb",
+      "laneDelay3OutputTrimDb",
+      "laneDelay4OutputTrimDb",
+      "laneDelay5OutputTrimDb",
+      "laneDistortion1OutputTrimDb",
+      "laneDistortion2OutputTrimDb",
+      "laneDistortion3OutputTrimDb",
+      "laneDistortion4OutputTrimDb",
+      "laneDistortion5OutputTrimDb",
+      "laneFlanger1OutputTrimDb",
+      "laneFlanger2OutputTrimDb",
+      "laneFlanger3OutputTrimDb",
+      "laneFlanger4OutputTrimDb",
+      "laneFlanger5OutputTrimDb",
+      "laneGlobalFilter1OutputTrimDb",
+      "laneGlobalFilter2OutputTrimDb",
+      "laneGlobalFilter3OutputTrimDb",
+      "laneGlobalFilter4OutputTrimDb",
+      "laneGlobalFilter5OutputTrimDb",
+      "laneOtt1OutputTrimDb",
+      "laneOtt2OutputTrimDb",
+      "laneOtt3OutputTrimDb",
+      "laneOtt4OutputTrimDb",
+      "laneOtt5OutputTrimDb",
+      "lanePhaser1OutputTrimDb",
+      "lanePhaser2OutputTrimDb",
+      "lanePhaser3OutputTrimDb",
+      "lanePhaser4OutputTrimDb",
+      "lanePhaser5OutputTrimDb",
+      "laneReverb1OutputTrimDb",
+      "laneReverb2OutputTrimDb",
+      "laneReverb3OutputTrimDb",
+      "laneReverb4OutputTrimDb",
+      "laneReverb5OutputTrimDb",
       "macro1",
       "macro3",
       "macro4",
@@ -727,7 +791,20 @@
       "oscCWavetablePosition",
       "oscCWavetableSelect",
       "playMode",
-      "sourceMode"
+      "polishCompressionClipAmount",
+      "polishCompressionClipBypass",
+      "polishEnhancerAmount",
+      "polishEnhancerBypass",
+      "polishOutputTrimBypass",
+      "polishOutputTrimDb",
+      "polishSafeBassAmount",
+      "polishSafeBassBypass",
+      "sourceMode",
+      "voiceEnhancerAmount",
+      "voiceEnhancerFrequency",
+      "voiceEnhancerKeyTrackEnabled",
+      "voiceEnhancerKeyTrackOffsetSemitones",
+      "voiceEnhancerQ"
     ]
   }
 }
