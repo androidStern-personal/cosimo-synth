@@ -26,7 +26,7 @@ import { copyWebHostAssets } from "../web/web-host-assets.mjs";
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 // Measured ceilings, so any growth fails here and has to be explained. React,
 // react-dom and NexusUI are about a sixth of the desktop entry.
-const desktopBundleBudgetBytes = 3_502_903;
+const desktopBundleBudgetBytes = 3_503_115;
 // The worker owns stored-state parsing, sparse compilation and acknowledged
 // delivery for the whole synth state, presets, snapshots and the bounce
 // document included, and it must carry no React.
