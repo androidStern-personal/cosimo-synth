@@ -15,7 +15,7 @@
 import path from "node:path";
 import { pathToFileURL } from "node:url";
 
-import { loadUIModule } from "../helpers/load_ui_module.mjs";
+import { loadUIModule } from "../../kit/tests/helpers/load_ui_module.mjs";
 
 export const DRIVER_SESSION_ID = 7;
 export const DRIVER_SAMPLE_RATE = 48_000;

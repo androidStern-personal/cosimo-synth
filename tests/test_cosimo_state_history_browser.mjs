@@ -4,7 +4,7 @@ import { createServer } from "node:http";
 import path from "node:path";
 import test from "node:test";
 import { chromium } from "playwright";
-import { bundleBrowserModuleSource } from "./helpers/load_ui_module.mjs";
+import { bundleBrowserModuleSource } from "../kit/tests/helpers/load_ui_module.mjs";
 
 const root = path.resolve(import.meta.dirname, "..");
 const web = path.join(root, "build/web");

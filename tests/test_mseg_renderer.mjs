@@ -12,7 +12,7 @@ import {
     setMsegSegmentCurvePower,
     toMsegPlaybackConfigEvent,
 } from "../patch_gui/mseg.js";
-import { loadUIModule } from "./helpers/load_ui_module.mjs";
+import { loadUIModule } from "../kit/tests/helpers/load_ui_module.mjs";
 
 const {
     MSEG_BODY_SAMPLES,

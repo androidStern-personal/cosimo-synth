@@ -225,6 +225,41 @@ test("corrupt structured state is rejected without partial patch acceptance", as
     assert.equal(result.error._tag, "InvalidModulation");
 });
 
+test("current-patch capture reads stored state only from the values of Cmajor's full reply", async () => {
+    const [{ patchIO }, context] = await Promise.all([
+        loadSpeedrunModules(),
+        createCurrentSpeedrunContext(),
+    ]);
+    const captureWithReply = (reply) => {
+        const listeners = new Map();
+        return patchIO.captureCurrentPatch({
+            addParameterListener(endpointID, listener) {
+                listeners.set(endpointID, listener);
+            },
+            removeParameterListener(endpointID) {
+                listeners.delete(endpointID);
+            },
+            requestParameterValue(endpointID) {
+                listeners.get(endpointID)?.(context.defaults.parameters[endpointID]);
+            },
+            requestFullStoredState(callback) {
+                callback(reply);
+            },
+        }, context.options);
+    };
+
+    // A saved value beside `values` instead of inside it is not Cmajor's reply,
+    // so this unreadable modulation document is never read.
+    const [besideValues, empty] = await Promise.all([
+        captureWithReply({ parameters: [], "modulation.v6": "not a modulation document" }),
+        captureWithReply({ parameters: [], values: {} }),
+    ]);
+
+    assert.equal(besideValues.ok, true, besideValues.error?.message);
+    assert.equal(empty.ok, true, empty.error?.message);
+    assert.deepEqual(besideValues.value.document, empty.value.document);
+});
+
 test("current-patch capture reads every parameter and full stored state without writes", async () => {
     const [{ patchIO }, context] = await Promise.all([
         loadSpeedrunModules(),

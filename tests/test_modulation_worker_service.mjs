@@ -3,7 +3,7 @@ import path from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
 
-import { loadUIModule } from "./helpers/load_ui_module.mjs";
+import { loadUIModule } from "../kit/tests/helpers/load_ui_module.mjs";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const modulationModulePromise = loadUIModule(repoRoot, "ui/shared/modulation.ts");
@@ -89,7 +89,7 @@ class AcknowledgingModulationConnection {
     }
 
     requestFullStoredState(callback) {
-        callback({ [this.stateKey]: this.serializedState });
+        callback({ parameters: [], values: { [this.stateKey]: this.serializedState } });
     }
 
     sendEventOrValue(endpointID, value, _rampFrames, timeoutMilliseconds) {
@@ -224,6 +224,54 @@ test("the modulation service publishes serialized all-1484 state through one cor
         assert.notEqual(modulationAcknowledgement, undefined);
         assert.equal(modulationAcknowledgement.dspSessionId, programEvent.value.dspSessionId);
         assert.equal(modulationAcknowledgement.rejectedSerial, 0);
+    } finally {
+        service.stop();
+    }
+});
+
+test("the modulation service boots only from the values of Cmajor's full stored-state reply", async () => {
+    const [modulation, targets, serviceModule] = await Promise.all([
+        modulationModulePromise,
+        targetsModulePromise,
+        serviceModulePromise,
+    ]);
+    const state = modulation.createDefaultModulationState();
+    const [source] = targets.MODULATION_SOURCE_IDENTITIES;
+    const [target] = targets.MODULATION_TARGET_IDENTITIES;
+    state.routes = [{
+        id: `${source.id}->${target.kind}`,
+        enabled: true,
+        sourceKind: source.sourceKind,
+        sourceSlot: source.sourceSlot,
+        polarity: "unipolar",
+        targetKind: target.kind,
+        amount: 0.25,
+        reducer: "mean",
+    }];
+    const connection = new AcknowledgingModulationConnection(
+        modulation.MODULATION_STATE_KEY,
+        modulation.serializeModulationState(state),
+    );
+    // A saved value beside `values` instead of inside it is not Cmajor's reply.
+    connection.requestFullStoredState = (callback) => callback({
+        parameters: [],
+        [modulation.MODULATION_STATE_KEY]: connection.serializedState,
+    });
+    const service = serviceModule.createModulationArticulationWorkerService(connection);
+
+    service.start();
+    connection.emitEndpoint("runtimeState", { dspSessionId: connection.dspSessionId });
+
+    try {
+        const installedProgram = () => connection.sentEvents.find(
+            ({ endpointID }) => endpointID === "modulationProgram",
+        );
+        await waitFor(() => installedProgram() !== undefined, "the boot modulation program");
+        const program = installedProgram().value;
+        assert.deepEqual(
+            laneTails.map((specification) => program[specification.count]),
+            laneTails.map(() => 0),
+        );
     } finally {
         service.stop();
     }

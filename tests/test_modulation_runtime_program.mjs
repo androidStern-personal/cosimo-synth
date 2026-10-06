@@ -4,7 +4,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import test from "node:test";
 
-import { loadUIModule } from "./helpers/load_ui_module.mjs";
+import { loadUIModule } from "../kit/tests/helpers/load_ui_module.mjs";
 import { createModulationFixture, waitForModulation } from "./helpers/modulation_state_fixture.mjs";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");

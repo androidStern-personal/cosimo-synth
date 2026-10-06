@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { loadUIModule } from "./helpers/load_ui_module.mjs";
+import { loadUIModule } from "../kit/tests/helpers/load_ui_module.mjs";
 import {
     buildMaximalCurrentSpeedrunPatch,
     createCurrentSpeedrunContext,

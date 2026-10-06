@@ -2,7 +2,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
-import { loadUIModule } from "./load_ui_module.mjs";
+import { loadUIModule } from "../../kit/tests/helpers/load_ui_module.mjs";
 
 export const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 

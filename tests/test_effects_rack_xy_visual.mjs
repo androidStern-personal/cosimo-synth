@@ -11,7 +11,7 @@ import {
     waitForHarnessReady,
 } from "./helpers/desktop_harness_browser.mjs";
 import { createFullDefaultLaneStateV2, serializeLaneStateV2 } from "../patch_gui/lane-state-v2.js";
-import { loadUIModule } from "./helpers/load_ui_module.mjs";
+import { loadUIModule } from "../kit/tests/helpers/load_ui_module.mjs";
 
 const repoRoot = path.resolve(import.meta.dirname, "..");
 const rackCatalogPromise = loadUIModule(repoRoot, "ui/shared/rack-parameter-descriptors.ts");

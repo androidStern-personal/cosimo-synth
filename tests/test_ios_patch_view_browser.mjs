@@ -34,7 +34,7 @@ import {
     waitForIOSHarnessReady,
     waitForIOSSourceHarnessReady,
 } from "./helpers/ios_harness_browser.mjs";
-import { loadUIModule } from "./helpers/load_ui_module.mjs";
+import { loadUIModule } from "../kit/tests/helpers/load_ui_module.mjs";
 import { decodePng } from "./helpers/png_pixels.mjs";
 
 const repoRoot = path.resolve(import.meta.dirname, "..");

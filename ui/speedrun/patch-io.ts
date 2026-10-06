@@ -397,9 +397,9 @@ export function intakePatch(input: unknown, options: PatchIntakeOptions): PatchI
     }
 }
 
+/** Cmajor answers a full stored-state request with `{ parameters, values }`. */
 function storedStateValues(input: unknown): Record<string, unknown> {
-    if (!isRecord(input)) return {};
-    return isRecord(input.values) ? { ...input.values } : { ...input };
+    return isRecord(input) && isRecord(input.values) ? { ...input.values } : {};
 }
 
 function soundStoredState(input: Readonly<Record<string, unknown>>): Record<string, unknown> {

@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { loadUIModule } from "./helpers/load_ui_module.mjs";
+import { loadUIModule } from "../kit/tests/helpers/load_ui_module.mjs";
 
 const { TALK_BOX_FORMANTS_HZ, TALK_BOX_VOWELS, resolveTalkBoxFormants } = await loadUIModule(
     process.cwd(),

@@ -5,7 +5,7 @@ import { createHash } from "node:crypto";
 import { mkdir, readFile, realpath, symlink, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { build } from "vite";
-import { loadUIModule } from "./helpers/load_ui_module.mjs";
+import { loadUIModule } from "../kit/tests/helpers/load_ui_module.mjs";
 
 const root = path.resolve(import.meta.dirname, "..");
 test("actual synth QuickJS owner applies an amount-only edit and shared Undo to real audio", { timeout: 240000 }, async () => {

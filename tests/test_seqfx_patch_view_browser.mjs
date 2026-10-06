@@ -6,7 +6,7 @@ import { fileURLToPath } from "node:url";
 import { inflateSync } from "node:zlib";
 
 import { chromium } from "playwright";
-import { loadUIModule } from "./helpers/load_ui_module.mjs";
+import { loadUIModule } from "../kit/tests/helpers/load_ui_module.mjs";
 
 const DEFAULT_DEV_SERVER_ORIGIN = "http://127.0.0.1:5175";
 const testDevServerOriginOverride = process.env.SEQFX_TEST_DEV_SERVER_ORIGIN;

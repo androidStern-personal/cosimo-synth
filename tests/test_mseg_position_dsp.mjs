@@ -5,7 +5,7 @@ import { readFile, writeFile, mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { pathToFileURL } from 'node:url'
-import { loadUIModule } from './helpers/load_ui_module.mjs'
+import { loadUIModule } from '../kit/tests/helpers/load_ui_module.mjs'
 const root = path.resolve(import.meta.dirname, '..')
 const temp = await mkdtemp(path.join(tmpdir(), 'mseg-position-dsp-'))
 try {

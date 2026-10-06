@@ -4,7 +4,7 @@ import path from "node:path";
 import { loadUIModule, bundleBrowserModuleSource } from "../../kit/tests/helpers/load_ui_module.mjs";
 
 const root = path.resolve(import.meta.dirname, "../..");
-const { definePluginState, parameter, storedValue, eventValue } = await loadUIModule(root, "kit/ui/plugin-state-definition.ts");
+const { definePluginState, parameter, storedValue, eventValue, preparedState } = await loadUIModule(root, "kit/ui/plugin-state-definition.ts");
 const { createCmajorPluginStateService, createCmajorPluginStateClient } = await loadUIModule(root, "kit/ui/plugin-state-cmajor.ts");
 const curveCodec = {
     parse(input) {
@@ -898,4 +898,42 @@ test("failed native detach still releases the GUI listener and settles owned tic
     client.stop();
     assert.deepEqual(defects, [problem, cleanupProblem]);
     await owner.service.stop();
+});
+
+test("a delivery reads a saved value only from the values of Cmajor's full stored-state reply", async () => {
+    async function readAuxiliary(reply) {
+        const connection = new RecordingPatchConnection();
+        connection.requestFullStoredState = callback => queueMicrotask(() => callback(reply));
+        connection.addStoredStateValueListener = () => {};
+        connection.removeStoredStateValueListener = () => {};
+        const reads = [];
+        const prepared = definePluginState({ gain: parameter("hostGain"), curve: preparedState({
+            codec: curveCodec, initial: [0, 1], prepare: value => value,
+            engine: { eventEndpoints: ["curveData"], storedKeys: ["auxiliary"], create: document => ({
+                async apply(value) {
+                    reads.push(await document.readStored("auxiliary"));
+                    const sent = document.send({ kind: "event", endpoint: "curveData", value });
+                    return sent.kind === "submitted" ? sent.completion : sent;
+                },
+                stop() {},
+            }) },
+        }) });
+        const service = createCmajorPluginStateService(prepared, connection, { onDefect: error => assert.fail(String(error)) });
+        const starting = service.start();
+        const scope = { owner: "native-owner", document: 0 };
+        connection.deliver({ kind: "opened", request: connection.bodies("open")[0].request, scope, native: {
+            parameters: [{ endpoint: "hostGain", value: 0, min: -12, max: 12, step: 0.5, defaultValue: 0 }],
+            values: { curve: [0, 0.5, 1] },
+        } });
+        await starting;
+        while (connection.bodies("publish").length === 0) await new Promise(resolve => setImmediate(resolve));
+        const publication = connection.bodies("publish")[0];
+        connection.deliver({ kind: "published", request: publication.request, scope, result: { kind: "observed" } });
+        await service.stop();
+        return reads;
+    }
+
+    assert.deepEqual(await readAuxiliary({ parameters: [], values: { auxiliary: 7 } }), [7]);
+    // A value beside `values` instead of inside it is not Cmajor's reply, so it is not read.
+    assert.deepEqual(await readAuxiliary({ parameters: [], auxiliary: 7 }), [undefined]);
 });

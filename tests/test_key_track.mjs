@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import path from "node:path";
 import { readFile } from "node:fs/promises";
 
-import { loadUIModule } from "./helpers/load_ui_module.mjs";
+import { loadUIModule } from "../kit/tests/helpers/load_ui_module.mjs";
 
 const repoRoot = path.resolve(import.meta.dirname, "..");
 const keyTrackPromise = loadUIModule(repoRoot, "ui/shared/key-track.ts");

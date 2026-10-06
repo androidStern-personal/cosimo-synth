@@ -410,8 +410,7 @@ export function createCmajorPluginStateService<const Fields extends PluginStateF
                         const remove = signal.onAbort(() => resolve(undefined));
                         connection.requestFullStoredState?.(state => {
                             remove();
-                            const values = isRecord(state) && isRecord(state.values) ? state.values : state;
-                            resolve(!signal.aborted && isRecord(values) ? values[name] : undefined);
+                            resolve(!signal.aborted && isRecord(state) && isRecord(state.values) ? state.values[name] : undefined);
                         });
                     });
                 },

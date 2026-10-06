@@ -4,7 +4,7 @@ import test from "node:test";
 import { chromium, webkit } from "playwright";
 
 import { startStaticRepoServer } from "./helpers/desktop_harness_browser.mjs";
-import { loadUIModule } from "./helpers/load_ui_module.mjs";
+import { loadUIModule } from "../kit/tests/helpers/load_ui_module.mjs";
 import {
     createCurrentSpeedrunContext,
     loadSpeedrunModules,
