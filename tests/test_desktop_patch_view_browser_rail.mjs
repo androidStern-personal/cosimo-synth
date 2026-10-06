@@ -84,6 +84,8 @@ import {
     pressAndLiftStation,
     waitForOpeningLaneDelivery,
     waitForAnimationsToFinish,
+    withUiTimersPaused,
+    advanceUiTimers,
 } from "./helpers/desktop_patch_view_browser_suite.mjs";
 
 /**
@@ -5774,13 +5776,18 @@ test("a source drag dwell-navigates tabs and rack effects while the gesture surv
         await page.mouse.move(196, 300, { steps: 3 });
 
         // Transit: crossing the FX tab without stopping must not switch, and
-        // leaving before the dwell cancels the pending navigation.
+        // leaving before the dwell cancels the pending navigation. With UI
+        // time paused the crossing takes no dwell time however slowly its
+        // moves arrive; then more than a dwell passes with the pointer away.
         const fxBox = await fxTab.boundingBox();
         assert.ok(fxBox);
         const fxCenter = { x: fxBox.x + (fxBox.width / 2), y: fxBox.y + (fxBox.height / 2) };
-        await page.mouse.move(fxCenter.x, fxCenter.y, { steps: 3 });
-        await page.mouse.move(196, 300, { steps: 3 });
-        await page.waitForTimeout(750);
+        await withUiTimersPaused(page, async () => {
+            await page.mouse.move(fxCenter.x, fxCenter.y, { steps: 3 });
+            await page.mouse.move(196, 300, { steps: 3 });
+            await advanceUiTimers(page, 750);
+        });
+        await waitForReactFrames(page, 2);
         assert.equal(await voiceTab.getAttribute("aria-selected"), "true", "transit must not switch tabs");
 
         // A deliberate dwell on the FX tab switches while the drag stays alive.
@@ -7443,16 +7450,34 @@ test("T20: long-press opens the ADR-017 parameter menu on Voice cells and quick-
         const cell = page.locator('[data-role="mobile-voice-cell-framePosition"]');
         await cell.waitFor();
 
-        // Movement past slop must NEVER open the menu (it is a drag).
-        {
-            const box = await cell.boundingBox();
-            await page.mouse.move(box.x + (box.width / 2), box.y + (box.height / 2));
-            await page.mouse.down();
-            await page.mouse.move(box.x + (box.width / 2) + 18, box.y + (box.height / 2), { steps: 3 });
-            await page.waitForTimeout(700);
-            assert.equal(await menu.count(), 0, "Movement must cancel the long press.");
-            await page.mouse.up();
-        }
+        // Movement past slop must NEVER open the menu (it is a drag). The press
+        // and its moves land in one page task, so the long-press timer cannot
+        // fire between them; waiting on the page's own timer queue then lets
+        // the long-press time pass for certain.
+        await cell.evaluate((element) => {
+            const bounds = element.getBoundingClientRect();
+            const mouseAt = (type, deltaX, buttons) => new PointerEvent(type, {
+                bubbles: true,
+                cancelable: true,
+                isPrimary: true,
+                pointerId: 1,
+                pointerType: "mouse",
+                button: 0,
+                buttons,
+                clientX: bounds.left + (bounds.width / 2) + deltaX,
+                clientY: bounds.top + (bounds.height / 2),
+            });
+            element.dispatchEvent(mouseAt("pointerdown", 0, 1));
+            for (const deltaX of [6, 12, 18]) {
+                element.dispatchEvent(mouseAt("pointermove", deltaX, 1));
+            }
+            window.__releaseSlopDrag = () => element.dispatchEvent(mouseAt("pointerup", 18, 0));
+        });
+        await page.evaluate(() => new Promise((resolve) => {
+            setTimeout(() => requestAnimationFrame(() => requestAnimationFrame(resolve)), 700);
+        }));
+        assert.equal(await menu.count(), 0, "Movement must cancel the long press.");
+        await page.evaluate(() => window.__releaseSlopDrag());
 
         // A stationary long press opens the menu for the pressed cell.
         await longPress(cell);

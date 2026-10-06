@@ -1769,29 +1769,30 @@ test("moving a rack knob touch cancels the hold menu and completes one captured 
         const box = await art.boundingBox();
         assert.ok(box);
         const start = { x: box.x + box.width / 2, y: box.y + box.height / 2 };
-        await knob.dispatchEvent("pointerdown", {
-            pointerId: 42,
-            pointerType: "touch",
-            isPrimary: true,
-            button: 0,
-            buttons: 1,
-            clientX: start.x,
-            clientY: start.y,
-        });
-        // Two samples: the first classifies the base axis (consumed), the
-        // second applies the delta; the movement also cancels the hold menu.
-        for (const deltaX of [14, 28]) {
-            await knob.dispatchEvent("pointermove", {
+        // The press and its moves land in one page task, so the hold timer can
+        // never fire between them. Two samples: the first classifies the base
+        // axis (consumed), the second applies the delta; the movement also
+        // cancels the hold menu.
+        await knob.evaluate((element, origin) => {
+            const touchAt = (type, deltaX) => new PointerEvent(type, {
+                bubbles: true,
                 pointerId: 42,
                 pointerType: "touch",
                 isPrimary: true,
                 button: 0,
                 buttons: 1,
-                clientX: start.x + deltaX,
-                clientY: start.y,
+                clientX: origin.x + deltaX,
+                clientY: origin.y,
             });
-        }
-        await page.waitForTimeout(560);
+            element.dispatchEvent(touchAt("pointerdown", 0));
+            for (const deltaX of [14, 28]) {
+                element.dispatchEvent(touchAt("pointermove", deltaX));
+            }
+        }, start);
+        // Waiting on the page's own timer queue lets the hold time pass for certain.
+        await page.evaluate(() => new Promise((resolve) => {
+            setTimeout(() => requestAnimationFrame(() => requestAnimationFrame(resolve)), 560);
+        }));
         assert.equal(await page.locator('[data-role="rack-parameter-menu"]').count(), 0);
         assert.deepEqual(await page.evaluate(() => window.__rackHaptics), []);
         await knob.dispatchEvent("pointerup", {

@@ -27,6 +27,7 @@ import {
     waitForOpeningLaneDelivery,
     elapseStationReorderHold,
     waitForAnimationsToFinish,
+    advanceUiTimers,
 } from "./helpers/desktop_patch_view_browser_suite.mjs";
 import { decodePng, pngPixelAt, rgbDistance } from "./helpers/png_pixels.mjs";
 
@@ -2391,9 +2392,8 @@ test("every visible fork-symbol pixel owns the exact group tap and long-press co
                 point = await readPoint();
                 await page.mouse.move(point.x, point.y);
                 await page.mouse.down();
-                await page.waitForTimeout(625);
-                await page.mouse.up();
                 await page.waitForSelector('[data-role="rack-group-menu"]');
+                await page.mouse.up();
                 assert.equal(await page.locator(`[data-role="rack-group-enabled-${groupId}"]`).count(), 1);
                 assert.equal(await group.getAttribute("data-focused-branch-index"), "0");
                 await page.keyboard.press("Escape");
@@ -4577,14 +4577,19 @@ test("station capture rejection keeps outside movement in the scrolling gesture"
         ));
         await clearHarnessDebugLog(page);
 
-        await page.mouse.move(source.x, source.y);
-        await page.mouse.down();
-        await page.mouse.move(388, source.y - 44);
-        await page.waitForFunction(() => {
-            const element = document.querySelector('[data-role="rack-module-list"]');
-            return element instanceof HTMLElement && element.scrollTop > 20;
+        // The move lands before any station hold has passed, and once it has
+        // scrolled, more than the long-press time passes without a winner.
+        await withUiTimersPaused(page, async () => {
+            await page.mouse.move(source.x, source.y);
+            await page.mouse.down();
+            await page.mouse.move(388, source.y - 44);
+            await page.waitForFunction(() => {
+                const element = document.querySelector('[data-role="rack-module-list"]');
+                return element instanceof HTMLElement && element.scrollTop > 20;
+            });
+            await advanceUiTimers(page, 600);
         });
-        await page.waitForTimeout(600);
+        await waitForReactFrames(page, 2);
 
         assert.equal(await page.evaluate(() => window.__FX_CAPTURE_REJECTIONS__), 1);
         assert.equal(await page.locator('[data-role="rack-station-menu"]').count(), 0);
@@ -4856,29 +4861,34 @@ test("native station capture loss cancels a hold even when React delegation is b
         });
         await clearHarnessDebugLog(page);
 
-        await page.mouse.move(source.x, source.y);
-        await page.mouse.down();
-        await page.waitForFunction(() => Number.isInteger(window.__FX_CAPTURE_LOSS_POINTER_ID__));
-        await page.mouse.move(source.x + 1, source.y);
-        await page.waitForFunction(() => {
-            const element = document.querySelector(
-                '[data-device-id="reverb#1"] [data-role="rack-station-reverb"]',
+        // Capture is lost before any station hold has passed; afterwards more
+        // than the long-press time passes without a winner.
+        await withUiTimersPaused(page, async () => {
+            await page.mouse.move(source.x, source.y);
+            await page.mouse.down();
+            await page.waitForFunction(() => Number.isInteger(window.__FX_CAPTURE_LOSS_POINTER_ID__));
+            await page.mouse.move(source.x + 1, source.y);
+            await page.waitForFunction(() => {
+                const element = document.querySelector(
+                    '[data-device-id="reverb#1"] [data-role="rack-station-reverb"]',
+                );
+                return element?.hasPointerCapture(window.__FX_CAPTURE_LOSS_POINTER_ID__) === true;
+            });
+            await station.evaluate((element) => {
+                element.addEventListener("lostpointercapture", (event) => {
+                    window.__FX_CAPTURE_LOSS_BLOCKED__ += 1;
+                    event.stopPropagation();
+                }, { once: true });
+                element.releasePointerCapture(window.__FX_CAPTURE_LOSS_POINTER_ID__);
+            });
+            await page.mouse.move(388, source.y - 44);
+            await page.waitForFunction(
+                () => window.__FX_CAPTURE_LOSS_BLOCKED__ === 1,
             );
-            return element?.hasPointerCapture(window.__FX_CAPTURE_LOSS_POINTER_ID__) === true;
+            await advanceUiTimers(page, 600);
         });
-        await station.evaluate((element) => {
-            element.addEventListener("lostpointercapture", (event) => {
-                window.__FX_CAPTURE_LOSS_BLOCKED__ += 1;
-                event.stopPropagation();
-            }, { once: true });
-            element.releasePointerCapture(window.__FX_CAPTURE_LOSS_POINTER_ID__);
-        });
-        await page.mouse.move(388, source.y - 44);
-        await page.waitForFunction(
-            () => window.__FX_CAPTURE_LOSS_BLOCKED__ === 1,
-        );
-        await page.waitForTimeout(600);
         await page.mouse.up();
+        await waitForReactFrames(page, 2);
 
         assert.equal(await page.locator('[data-role="rack-station-menu"]').count(), 0);
         assert.equal(await page.locator('[data-role="rack-reorder-lifted-pill"]').count(), 0);
@@ -4928,27 +4938,32 @@ test("blur and hidden visibility cancel pre-lift station holds without a late wi
             await clearHarnessDebugLog(page);
             const source = await centerOf(sourceLocator);
             const target = await centerOf(targetLocator);
-            await page.mouse.move(source.x, source.y);
-            await page.mouse.down();
-            await page.waitForTimeout(lifecycleLoss === "blur" ? 80 : 230);
-            if (lifecycleLoss === "blur") {
-                await page.evaluate(() => window.dispatchEvent(new Event("blur")));
-            } else {
-                await page.evaluate(() => {
-                    Object.defineProperty(document, "visibilityState", {
-                        configurable: true,
-                        get: () => "hidden",
+            // Blur lands before the reorder hold passes, hidden after it but
+            // before the long-press menu; then more than the menu's time passes.
+            await withUiTimersPaused(page, async () => {
+                await page.mouse.move(source.x, source.y);
+                await page.mouse.down();
+                await advanceUiTimers(page, lifecycleLoss === "blur" ? 80 : 230);
+                if (lifecycleLoss === "blur") {
+                    await page.evaluate(() => window.dispatchEvent(new Event("blur")));
+                } else {
+                    await page.evaluate(() => {
+                        Object.defineProperty(document, "visibilityState", {
+                            configurable: true,
+                            get: () => "hidden",
+                        });
+                        document.dispatchEvent(new Event("visibilitychange"));
+                        Object.defineProperty(document, "visibilityState", {
+                            configurable: true,
+                            get: () => "visible",
+                        });
                     });
-                    document.dispatchEvent(new Event("visibilitychange"));
-                    Object.defineProperty(document, "visibilityState", {
-                        configurable: true,
-                        get: () => "visible",
-                    });
-                });
-            }
-            await page.waitForTimeout(600);
-            await page.mouse.move(target.x, target.y);
-            await page.mouse.up();
+                }
+                await advanceUiTimers(page, 600);
+                await page.mouse.move(target.x, target.y);
+                await page.mouse.up();
+            });
+            await waitForReactFrames(page, 2);
 
             assert.equal(await page.locator('[data-role="rack-station-menu"]').count(), 0);
             assert.equal(await page.locator('[data-role="rack-reorder-lifted-pill"]').count(), 0);
@@ -4980,19 +4995,23 @@ test("secondary mouse and pen pointerdowns never enter the station hold state", 
             '[data-device-id="delay#1"] [data-role="rack-station-delay"]',
         );
         const point = await centerOf(station);
-        for (const input of [
-            { pointerId: 81, pointerType: "mouse", isPrimary: true, button: 2 },
-            { pointerId: 82, pointerType: "pen", isPrimary: true, button: 2 },
-            { pointerId: 83, pointerType: "pen", isPrimary: false, button: 0 },
-        ]) {
-            await station.dispatchEvent("pointerdown", {
-                ...input,
-                clientX: point.x,
-                clientY: point.y,
-                bubbles: true,
-            });
-        }
-        await page.waitForTimeout(600);
+        // Any hold these presses wrongly started would elapse within the advance.
+        await withUiTimersPaused(page, async () => {
+            for (const input of [
+                { pointerId: 81, pointerType: "mouse", isPrimary: true, button: 2 },
+                { pointerId: 82, pointerType: "pen", isPrimary: true, button: 2 },
+                { pointerId: 83, pointerType: "pen", isPrimary: false, button: 0 },
+            ]) {
+                await station.dispatchEvent("pointerdown", {
+                    ...input,
+                    clientX: point.x,
+                    clientY: point.y,
+                    bubbles: true,
+                });
+            }
+            await advanceUiTimers(page, 600);
+        });
+        await waitForReactFrames(page, 2);
 
         assert.equal(await page.locator('[data-role="rack-station-menu"]').count(), 0);
         assert.equal(await page.locator('[data-role="rack-reorder-lifted-pill"]').count(), 0);
