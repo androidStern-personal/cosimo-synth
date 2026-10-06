@@ -26465,10 +26465,14 @@ function createModulationStateClient(client2) {
     const snapshot = client2.getSnapshot();
     return snapshot.kind === "ready" ? snapshot.state.fields[MODULATION_STATE_KEY] : void 0;
   };
+  let lastAccepted = null;
   const getState = () => {
     const current = field();
-    if (current && "value" in current) return current.value;
-    return current?.readiness.kind === "failed" && current.readiness.reason === "invalid-state" ? createDefaultModulationState() : null;
+    if (current && "value" in current) return lastAccepted = current.value;
+    if (current?.readiness.kind === "failed") {
+      return current.readiness.reason === "invalid-state" ? createDefaultModulationState() : null;
+    }
+    return lastAccepted;
   };
   const isReady = () => !stopped && field()?.readiness.kind === "ready";
   const emit = (kind) => {
@@ -28171,7 +28175,7 @@ class CanvasWavetableDisplay {
   constructor(canvas, {
     theme = DEFAULT_WAVETABLE_THEME,
     requestAnimationFrame: requestAnimationFrame2 = requestNextAnimationFrame,
-    cancelAnimationFrame = cancelNextAnimationFrame,
+    cancelAnimationFrame: cancelAnimationFrame2 = cancelNextAnimationFrame,
     paintBackground = true,
     showSliceCaption = true
   } = {}) {
@@ -28181,7 +28185,7 @@ class CanvasWavetableDisplay {
     this.paintBackground = paintBackground;
     this.showSliceCaption = showSliceCaption;
     this.requestAnimationFrame = requestAnimationFrame2;
-    this.cancelAnimationFrame = cancelAnimationFrame;
+    this.cancelAnimationFrame = cancelAnimationFrame2;
     this.frames = [];
     this.position = 0;
     this.warpMode = 0;
@@ -32152,10 +32156,16 @@ function releaseModSourceLiveDriver(connection) {
     return;
   }
   entry.refCount -= 1;
-  if (entry.refCount <= 0) {
+  if (entry.refCount > 0) {
+    return;
+  }
+  queueMicrotask(() => {
+    if (entry.refCount > 0 || sharedDrivers.get(connection) !== entry) {
+      return;
+    }
     entry.driver.detach();
     sharedDrivers.delete(connection);
-  }
+  });
 }
 function useModSourceLight(spec) {
   const connection = useOptionalPatchConnection();
@@ -33332,18 +33342,20 @@ function useDirectionalPanelTransition({
     viewport.appendChild(ghost);
     panel.style.transition = "none";
     panel.style.transform = `translateX(${forward ? "100%" : "-100%"})`;
-    requestAnimationFrame(() => {
-      requestAnimationFrame(() => {
+    let timer = null;
+    let frame = requestAnimationFrame(() => {
+      frame = requestAnimationFrame(() => {
         ghost.style.transform = `translateX(${forward ? "-100%" : "100%"})`;
         panel.style.transition = `transform ${SEGMENTED_PANEL_SLIDE_MS}ms ease-out`;
         panel.style.transform = "translateX(0)";
+        timer = uiTimeout(() => {
+          cleanupRef.current?.();
+        }, SEGMENTED_PANEL_SLIDE_MS + 80);
       });
     });
-    const timer = uiTimeout(() => {
-      cleanupRef.current?.();
-    }, SEGMENTED_PANEL_SLIDE_MS + 80);
     cleanupRef.current = () => {
-      clearUiTimeout(timer);
+      cancelAnimationFrame(frame);
+      if (timer !== null) clearUiTimeout(timer);
       ghost.remove();
       panel.style.transition = "";
       panel.style.transform = "";
