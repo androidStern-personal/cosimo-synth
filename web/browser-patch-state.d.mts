@@ -5,7 +5,6 @@ export type BrowserPatchState = {
         readonly parameters: Readonly<Record<string, number>>;
         readonly storedState: Readonly<Record<string, unknown>>;
     };
-    readonly auxiliary: Readonly<Record<string, unknown>>;
 };
 
 export function readBrowserPatchState(options?: {

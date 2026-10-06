@@ -153,7 +153,6 @@ async function persistAudibleBounce(page) {
                     "lane.v1": defaults.lane,
                 },
             },
-            auxiliary: {},
         };
         currentState.sound.parameters = {
             ...currentState.sound.parameters,
@@ -256,7 +255,6 @@ test("missing bank reload exposes a visible typed error and preserves durable sa
                         "lane.v1": defaults.lane,
                     },
                 },
-                auxiliary: {},
             };
             currentState.sound.parameters = {
                 ...currentState.sound.parameters,

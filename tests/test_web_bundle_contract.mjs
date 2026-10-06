@@ -441,7 +441,6 @@ test("browser patch state distinguishes no saved sound from a complete current d
                 "lane.v1": "current-lane",
             },
         },
-        auxiliary: {},
     };
     const currentStorage = { getItem: () => JSON.stringify(currentDocument) };
 
@@ -491,7 +490,6 @@ test("a zero-parameter inventory cannot qualify lane-only v5 state as a saved so
                     parameters: {},
                     storedState: { "lane.v1": "partial" },
                 },
-                auxiliary: {},
             });
         },
     };
@@ -529,7 +527,6 @@ test("browser patch persistence restores once and coalesces echoed storage write
                     parameters: { filterCutoff: 2_400 },
                     storedState: { "lane.v1": "restored" },
                 },
-                auxiliary: {},
             });
         },
         setItem(key, value) {
@@ -564,12 +561,11 @@ test("browser patch persistence restores once and coalesces echoed storage write
                 parameters: { filterCutoff: 2_400 },
                 storedState: { "lane.v1": "updated" },
             },
-            auxiliary: {},
         }),
     ]]);
 });
 
-test("the T74 complete-sound cut discards a version-4 browser snapshot as one unit", () => {
+test("a browser snapshot of another version is discarded as one unit", () => {
     const runtimeWrites = [];
     const connection = {
         inputEndpoints: [{ endpointID: "polishEnhancerAmount", purpose: "parameter" }],
@@ -589,7 +585,6 @@ test("the T74 complete-sound cut discards a version-4 browser snapshot as one un
                     parameters: { polishEnhancerAmount: 0.91 },
                     storedState: { "lane.v1": "pre-polish-lane" },
                 },
-                auxiliary: { "effects.presets.v2": "pre-polish-library" },
             });
         },
         setItem() {
@@ -604,7 +599,6 @@ test("the T74 complete-sound cut discards a version-4 browser snapshot as one un
         format: "cosimo.browserPatchState",
         version: 5,
         sound: { parameters: {}, storedState: {} },
-        auxiliary: {},
     });
 });
 
@@ -652,7 +646,6 @@ test("a version-5 browser snapshot missing every T62 and T74 Polish value emits 
                         "lane.v1": "partial-rack",
                     },
                 },
-                auxiliary: {},
             });
         },
         setItem() {
@@ -750,7 +743,6 @@ test("browser persistence writes v5 only after the complete live sound image is 
                 "lane.v1": "current-lane",
             },
         },
-        auxiliary: {},
     }]);
     assert.deepEqual(persistence.browserState, storageWrites[0]);
 });
@@ -806,7 +798,6 @@ test("a complete current browser snapshot restores every parameter before struct
                     parameters: parameterValues,
                     storedState,
                 },
-                auxiliary: {},
             });
         },
         setItem(key, value) {
@@ -831,21 +822,21 @@ test("a complete current browser snapshot restores every parameter before struct
             parameters: { ...parameterValues, oscBPan: -0.6 },
             storedState,
         },
-        auxiliary: {},
     });
 });
 
-test("deferred sampled mode ignores safety echoes until an explicit user write", () => {
+function installHeldBackSampledMode() {
     const storageWrites = [];
     const parameterListeners = new Map();
     const runtimeWrites = [];
+    const requested = [];
     const connection = {
         inputEndpoints: [{ endpointID: "sourceMode", purpose: "parameter" }],
         addParameterListener(endpointID, listener) {
             parameterListeners.set(endpointID, listener);
         },
         requestParameterValue(endpointID) {
-            parameterListeners.get(endpointID)?.(0);
+            requested.push(endpointID);
         },
         sendEventOrValue(endpointID, value) {
             runtimeWrites.push([endpointID, value]);
@@ -853,35 +844,56 @@ test("deferred sampled mode ignores safety echoes until an explicit user write",
         },
         sendStoredStateValue() {},
     };
-    const initial = {
+    const saved = {
         format: "cosimo.browserPatchState",
         version: 5,
         sound: {
             parameters: { sourceMode: 1 },
             storedState: { "bounce.v1": "reference" },
         },
-        auxiliary: {},
     };
     const storage = {
-        getItem() { return JSON.stringify(initial); },
+        getItem() { return JSON.stringify(saved); },
         setItem(_key, value) { storageWrites.push(JSON.parse(value)); },
     };
-
     const persistence = installBrowserPatchStatePersistence(connection, {
         storage,
         deferParameterRestore: (endpointID) => endpointID === "sourceMode",
         requiredStoredStateKeys: ["bounce.v1"],
     });
-    // Another host observer may request the temporary engine default. It is
-    // runtime state, not a durable edit.
+    return { connection, parameterListeners, persistence, requested, runtimeWrites, storageWrites };
+}
+
+test("a held-back saved parameter reaches the engine once, through applyDeferredParameter", () => {
+    const { connection, parameterListeners, persistence, requested, runtimeWrites, storageWrites } = installHeldBackSampledMode();
+    assert.deepEqual(runtimeWrites, [], "the held-back value is not restored with the rest of the sound");
+    assert.deepEqual(requested, [], "the engine's default is not read back");
+
+    // Another observer may read the engine's default meanwhile. It is not the saved sound.
     parameterListeners.get("sourceMode")(0);
-    persistence.sendRuntimeEventOrValue("sourceMode", 0);
     assert.deepEqual(storageWrites, []);
-    assert.deepEqual(runtimeWrites, [["sourceMode", 0]]);
+
+    persistence.applyDeferredParameter("sourceMode");
+    persistence.applyDeferredParameter("sourceMode");
+    persistence.applyDeferredParameter("filterCutoff");
+    assert.deepEqual(runtimeWrites, [["sourceMode", 1]]);
+    assert.deepEqual(storageWrites, [], "applying the saved value is not an edit");
+    assert.equal(persistence.browserState.sound.parameters.sourceMode, 1);
 
     connection.sendEventOrValue("sourceMode", 0);
     assert.equal(storageWrites.length, 1);
     assert.equal(storageWrites[0].sound.parameters.sourceMode, 0);
+});
+
+test("a deliberate write replaces a held-back saved parameter, which is then never applied", () => {
+    const { connection, persistence, runtimeWrites, storageWrites } = installHeldBackSampledMode();
+
+    connection.sendEventOrValue("sourceMode", 0);
+    assert.equal(storageWrites.length, 1);
+    assert.equal(storageWrites[0].sound.parameters.sourceMode, 0);
+
+    persistence.applyDeferredParameter("sourceMode");
+    assert.deepEqual(runtimeWrites, [["sourceMode", 0]]);
 });
 
 test("web host packaging includes every runtime-owned module", async (context) => {

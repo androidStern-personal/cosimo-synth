@@ -110,7 +110,6 @@ test("bare and browser-state patches complete, clamp, and snap public parameters
             },
             storedState: { "lane.v1": lane },
         },
-        auxiliary: {},
     }, context.options);
 
     assert.equal(result.ok, true, result.error?.message);
@@ -179,7 +178,6 @@ test("speedrun rejects old browser states, retired share envelopes, and unknown 
         format: "cosimo.browserPatchState",
         version: 4,
         sound: { parameters: {}, storedState: {} },
-        auxiliary: {},
     }, context.options);
     const retiredShare = patchIO.intakePatch({
         format: "cosimo.soundShare",

@@ -123,7 +123,7 @@ class MemoryBankStore {
     }
 }
 
-async function bankFixture(frameCount = 64) {
+async function bankFixture(frameCount = 64, note = 60) {
     const samples = new Int16Array(frameCount * 2);
     for (let frame = 0; frame < frameCount; frame += 1) {
         samples[frame * 2] = Math.round(Math.sin(frame / 8) * 2_000);
@@ -131,7 +131,7 @@ async function bankFixture(frameCount = 64) {
     }
     const bank = buildBounceBank({
         sampleRate: 48_000,
-        roots: [{ note: 60, samples }],
+        roots: [{ note, samples }],
     });
     const bytes = encodeBounceBank(bank);
     return { bank, bytes, digest: await digestBounceBank(bytes) };
@@ -225,16 +225,14 @@ test("OPFS rejects a mislabeled bank and capability-only fallback uses IndexedDB
     assert.equal([...primaryStorage.directory.files].some(([name]) => name.startsWith(".staging-")), false);
 });
 
-test("runtime restore verifies metadata and commits sampled mode only after staged install", async () => {
+test("the restorer applies the saved source mode exactly once, inside the verified install's commit", async () => {
     const fixture = await bankFixture();
     const document = bounceDocument(fixture);
     const log = [];
-    const sourceModes = [];
-    const connection = { sendEventOrValue() {} };
     const restorer = new BounceRuntimeRestorer({
-        connection,
+        connection: { sendEventOrValue() {} },
         store: { get: async (digest) => digest === fixture.digest ? fixture.bytes : null },
-        sendRuntimeSourceMode(value) { sourceModes.push(value); },
+        applySavedSourceMode() { log.push("apply saved source mode"); },
         statusRequest: async () => {
             log.push("status");
             return { dspSessionId: 77, sampleRateHz: 48_000 };
@@ -248,6 +246,7 @@ test("runtime restore verifies metadata and commits sampled mode only after stag
                 async commit(apply) {
                     log.push("commit");
                     await apply();
+                    log.push("committed");
                 },
                 async abort() { log.push("abort"); },
             };
@@ -257,11 +256,21 @@ test("runtime restore verifies metadata and commits sampled mode only after stag
     const state = await restorer.restore(serializeBounceDocument(document));
     assert.equal(state.status, "ready");
     assert.equal(state.digest, fixture.digest);
-    assert.deepEqual(log, ["status", "stage", "commit"]);
-    assert.deepEqual(sourceModes, [1]);
+    assert.deepEqual(log, ["status", "stage", "commit", "apply saved source mode", "committed"]);
 
     await restorer.restore(document);
-    assert.deepEqual(log, ["status", "stage", "commit"], "same digest must not reinstall");
+    assert.equal(log.length, 5, "the same digest neither reinstalls nor applies again");
+
+    const cleared = await restorer.restore(null);
+    assert.equal(cleared.status, "oscillator");
+    assert.equal(log.length, 5, "a cleared document writes nothing; the state editor owns that edit");
+});
+
+test("the restorer requires the callback that applies the saved source mode", () => {
+    assert.throws(
+        () => new BounceRuntimeRestorer({ connection: { sendEventOrValue() {} }, store: { get: async () => null } }),
+        TypeError,
+    );
 });
 
 test("a verified live Bounce transaction suppresses the matching stored-state re-install", async () => {
@@ -269,6 +278,7 @@ test("a verified live Bounce transaction suppresses the matching stored-state re
     const document = bounceDocument(fixture);
     let storeReads = 0;
     let stageCalls = 0;
+    let applied = 0;
     const restorer = new BounceRuntimeRestorer({
         connection: { sendEventOrValue() {} },
         store: {
@@ -277,6 +287,7 @@ test("a verified live Bounce transaction suppresses the matching stored-state re
                 return fixture.bytes;
             },
         },
+        applySavedSourceMode() { applied += 1; },
         statusRequest: async () => ({ dspSessionId: 1, sampleRateHz: 48_000 }),
         stageInstall: async () => {
             stageCalls += 1;
@@ -293,39 +304,48 @@ test("a verified live Bounce transaction suppresses the matching stored-state re
     assert.equal(echoed.digest, fixture.digest);
     assert.equal(storeReads, 0);
     assert.equal(stageCalls, 0);
+    assert.equal(applied, 0);
 });
 
-test("missing or corrupt persisted banks expose typed errors and keep the oscillator fallback", async () => {
+test("every restore failure reports a typed error and writes nothing to the engine", async () => {
     const fixture = await bankFixture();
+    const otherRoot = await bankFixture(64, 62);
     const document = bounceDocument(fixture);
     for (const scenario of [
-        {
-            expectedCode: "missing-bank",
-            get: async () => null,
-        },
+        { expectedCode: "invalid-document", value: { format: "cosimo.bounce", version: 1 } },
+        { expectedCode: "missing-bank", get: async () => null },
         {
             expectedCode: "corrupt-bank",
             get: async () => {
                 throw new BouncePersistenceError("corrupt-bank", "digest mismatch");
             },
         },
+        { expectedCode: "byte-length-mismatch", get: async () => fixture.bytes.slice(1) },
+        { expectedCode: "metadata-mismatch", get: async () => otherRoot.bytes },
+        {
+            expectedCode: "restore-failed",
+            get: async () => fixture.bytes,
+            stageInstall: async () => { throw new Error("the engine refused the staged bank"); },
+        },
     ]) {
-        const sourceModes = [];
+        let applied = 0;
         let staged = false;
+        const writes = [];
         const restorer = new BounceRuntimeRestorer({
-            connection: { sendEventOrValue() {} },
-            store: { get: scenario.get },
-            sendRuntimeSourceMode(value) { sourceModes.push(value); },
+            connection: { sendEventOrValue(endpointID, value) { writes.push([endpointID, value]); } },
+            store: { get: scenario.get ?? (async () => fixture.bytes) },
+            applySavedSourceMode() { applied += 1; },
             statusRequest: async () => ({ dspSessionId: 1, sampleRateHz: 48_000 }),
-            stageInstall: async () => {
+            stageInstall: scenario.stageInstall ?? (async () => {
                 staged = true;
                 throw new Error("must not stage");
-            },
+            }),
         });
-        const state = await restorer.restore(document);
-        assert.equal(state.status, "error");
+        const state = await restorer.restore(scenario.value ?? document);
+        assert.equal(state.status, "error", scenario.expectedCode);
         assert.equal(state.error.code, scenario.expectedCode);
-        assert.deepEqual(sourceModes, [0]);
-        assert.equal(staged, false);
+        assert.equal(applied, 0, scenario.expectedCode);
+        assert.deepEqual(writes, [], scenario.expectedCode);
+        assert.equal(staged, false, scenario.expectedCode);
     }
 });

@@ -31,11 +31,17 @@ function restoreError(cause) {
     return new BounceRestoreError(code, `Could not restore bounced source: ${detail}`, { cause });
 }
 
-/** Load a referenced bank before exposing sampled mode after boot/preset load. */
+/**
+ * Installs the bank that the saved Bounce document names, and reports its status.
+ * Once that bank is verified, it calls applySavedSourceMode exactly once, inside the
+ * install's commit, so the saved sound's own source mode reaches the engine. It writes
+ * nothing else: with no document, an invalid one or a bank that fails verification,
+ * the engine keeps the source mode it already has.
+ */
 export class BounceRuntimeRestorer {
     #connection;
     #store;
-    #sendRuntimeSourceMode;
+    #applySavedSourceMode;
     #statusRequest;
     #stageInstall;
     #listeners = new Set();
@@ -47,7 +53,7 @@ export class BounceRuntimeRestorer {
     constructor({
         connection,
         store,
-        sendRuntimeSourceMode = (value) => connection.sendEventOrValue("sourceMode", value, 0, 0),
+        applySavedSourceMode,
         statusRequest = requestBounceEngineStatus,
         stageInstall = stageBounceBankInstall,
     } = {}) {
@@ -57,9 +63,12 @@ export class BounceRuntimeRestorer {
         if (!store || typeof store.get !== "function") {
             throw new TypeError("Bounce restorer requires a bank store");
         }
+        if (typeof applySavedSourceMode !== "function") {
+            throw new TypeError("Bounce restorer requires an applySavedSourceMode callback");
+        }
         this.#connection = connection;
         this.#store = store;
-        this.#sendRuntimeSourceMode = sendRuntimeSourceMode;
+        this.#applySavedSourceMode = applySavedSourceMode;
         this.#statusRequest = statusRequest;
         this.#stageInstall = stageInstall;
     }
@@ -122,7 +131,6 @@ export class BounceRuntimeRestorer {
         let committed = false;
 
         if (value === null || value === undefined || value === "") {
-            this.#sendRuntimeSourceMode(0);
             this.#setState({ status: "oscillator", digest: null, error: null });
             this.#abortController = null;
             return this.#state;
@@ -137,7 +145,6 @@ export class BounceRuntimeRestorer {
                 `The saved Bounce reference is invalid: ${cause instanceof Error ? cause.message : cause}`,
                 { cause },
             );
-            this.#sendRuntimeSourceMode(0);
             this.#setState({ status: "error", digest: null, error });
             this.#abortController = null;
             return this.#state;
@@ -179,7 +186,7 @@ export class BounceRuntimeRestorer {
                 generation: allocateBounceRuntimeGeneration(this.#connection, document.generation),
                 signal: abortController.signal,
             });
-            await staged.commit(() => this.#sendRuntimeSourceMode(1));
+            await staged.commit(() => this.#applySavedSourceMode());
             committed = true;
             this.#setState({
                 status: "ready",
@@ -192,11 +199,7 @@ export class BounceRuntimeRestorer {
             if (cause?.name === "AbortError") {
                 return this.#state;
             }
-            const error = restoreError(cause);
-            // Use the unwrapped runtime sender supplied by browser persistence:
-            // this safety fallback must not erase the durable sampled intent.
-            this.#sendRuntimeSourceMode(0);
-            this.#setState({ status: "error", digest: document.digest, error });
+            this.#setState({ status: "error", digest: document.digest, error: restoreError(cause) });
         } finally {
             if (staged !== null && !committed) {
                 try { await staged.abort(); } catch { /* inactive candidate */ }

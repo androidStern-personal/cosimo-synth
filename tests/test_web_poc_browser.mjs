@@ -1551,7 +1551,6 @@ test("the production worker installs the current v6 100-route rack profile end t
             format: "cosimo.browserPatchState",
             version: 5,
             sound: { parameters: {}, storedState: { [modulationStateKey]: modulationState } },
-            auxiliary: {},
         }));
     }, { modulationState: profile.stateJSON, modulationStateKey: MODULATION_STATE_KEY });
 
@@ -1644,7 +1643,6 @@ test("mobile product stays realtime with four-way unison and one MSEG filter rou
             format: "cosimo.browserPatchState",
             version: 5,
             sound: { parameters, storedState: { [modulationStateKey]: modulationState } },
-            auxiliary: {},
         }));
     }, {
         modulationState: reportedMobileStoredState,
@@ -2707,7 +2705,6 @@ test("generated preset-bar Init starts clean after the pre-Type saved-sound vers
                     "lane.v1": JSON.stringify(laneState),
                 },
             },
-            auxiliary: {},
         }));
     }, {
         laneState: preTypeRack,
@@ -2838,7 +2835,6 @@ test("generated product preserves explicit version-5 oscillator enable and level
             format: "cosimo.browserPatchState",
             version: 5,
             sound: { parameters, storedState: {} },
-            auxiliary: {},
         }));
     }, explicitOscillatorState);
 

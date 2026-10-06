@@ -1,4 +1,3 @@
-import type { PatchConnectionLike } from "./cmajor-react";
 import type { EffectModuleId } from "./target-descriptor";
 import type { LaneDeviceInstance, LaneDeviceType } from "./lane-modulation-targets";
 import {
@@ -7,7 +6,6 @@ import {
     LANE_SLOT_TYPE_COUNT,
     buildLaneSlotParamValues,
     getLaneSlotId,
-    getLaneSlotParamIndex,
 } from "./lane-slot-params";
 import { getRackEffectDescriptor } from "./rack-parameter-descriptors";
 
@@ -398,37 +396,6 @@ export function buildLaneRuntimeEvents(state: LaneState): ReadonlyArray<{ readon
     });
 
     return events;
-}
-
-/** Send a complete lane document as one logical commit before the next audio frame. */
-export function commitLaneState(connection: PatchConnectionLike, state: LaneState): void {
-    for (const event of buildLaneRuntimeEvents(state)) {
-        connection.sendEventOrValue?.(event.endpointID, event.value);
-    }
-}
-
-/**
- * Send one live-edited parameter field. The document write is the caller's
- * job (typically on gesture end); this is the low-latency audible path.
- */
-export function sendLaneParamValue(
-    connection: PatchConnectionLike,
-    effectId: EffectModuleId,
-    endpointID: string,
-    value: number,
-    deliverySerial: number,
-): void {
-    const deviceType = EFFECT_ID_TO_LANE_TYPE[effectId];
-    const paramIndex = getLaneSlotParamIndex(deviceType, endpointID);
-    if (paramIndex === null) {
-        throw new Error(`Unknown lane parameter: ${effectId}.${endpointID}`);
-    }
-    connection.sendEventOrValue?.(LANE_SLOT_PARAM_VALUE_ENDPOINT_ID, {
-        slotId: getLaneSlotId(deviceType, 0),
-        paramIndex,
-        deliverySerial,
-        value,
-    });
 }
 
 function decodeOrder(code: number): ReadonlyArray<EffectModuleId> | null {

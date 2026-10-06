@@ -93,16 +93,37 @@ test("a lane document replays as complete records first, then one topology event
     });
 });
 
-test("live field edits speak the positional wire layout", async () => {
-    const lane = await laneStatePromise;
+test("a one-field rack edit reaches the engine as one positional field delta; an unknown field is refused", async () => {
+    const [{ synthRackDelivery }, laneV2] = await Promise.all([
+        loadUIModule(repoRoot, "ui/worker/synth-rack-delivery.ts"),
+        loadUIModule(repoRoot, "ui/shared/lane-state-v2.ts"),
+    ]);
     const events = [];
-    const connection = { sendEventOrValue: (endpointID, value) => events.push({ endpointID, value }) };
-    lane.sendLaneParamValue(connection, "delay", "delayFilter", 6000, 41);
+    const signal = { aborted: false, onAbort: () => () => {} };
+    const send = (effect) => {
+        events.push({ endpointID: effect.endpoint, value: effect.value });
+        return { kind: "submitted", completion: Promise.resolve({ kind: "sent", proof: "native-publication-processed" }) };
+    };
+    const listen = () => () => {};
+    const binding = synthRackDelivery.create({ signal, send, listen });
+    const context = { signal, send, listen };
+
+    const initial = laneV2.createDefaultLaneStateV2();
+    assert.equal((await binding.apply(initial, context)).kind, "sent");
+    const installedRecords = events.filter((event) => event.endpointID === "laneSlotParams").length;
+    assert.ok(installedRecords > 0);
+    events.length = 0;
+
+    assert.notEqual(initial.devices["delay#1"].params.delayFilter, 4321);
+    const edited = laneV2.setLaneDeviceParam(initial, "delay#1", "delayFilter", 4321);
+    assert.equal((await binding.apply(edited, context)).kind, "sent");
     assert.deepEqual(events, [{
         endpointID: "laneSlotParamValue",
-        value: { slotId: 6, paramIndex: 2, deliverySerial: 41, value: 6000 },
+        value: { slotId: 6, paramIndex: 2, value: 4321, deliverySerial: installedRecords + 1 },
     }]);
-    assert.throws(() => lane.sendLaneParamValue(connection, "delay", "nope", 1, 42));
+
+    assert.equal(laneV2.setLaneDeviceParam(edited, "delay#1", "nope", 1), null);
+    assert.equal(laneV2.setLaneDeviceParam(edited, "reverb#1", "delayTime", 1), null);
 });
 
 test("the slot param layout mirrors the engine's positional constants", async () => {

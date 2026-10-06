@@ -1,4 +1,3 @@
-import type { PatchConnectionLike } from "./cmajor-react";
 import type { LaneDeviceInstance, LaneDeviceType } from "./lane-modulation-targets";
 import {
     LEGACY_LANE_DEVICE_PARAM_ENDPOINTS,
@@ -745,13 +744,6 @@ export function buildLaneRuntimeEventsV2(state: LaneStateV2): ReadonlyArray<{ re
     });
 
     return events;
-}
-
-/** Send a complete lane.v2 document as one logical commit. */
-export function commitLaneStateV2(connection: PatchConnectionLike, state: LaneStateV2): void {
-    for (const event of buildLaneRuntimeEventsV2(state)) {
-        connection.sendEventOrValue?.(event.endpointID, event.value);
-    }
 }
 
 //==============================================================================

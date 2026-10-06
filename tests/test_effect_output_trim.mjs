@@ -294,16 +294,12 @@ test("same-type replacement suppresses a delayed old host callback until reset a
     ]);
     const listeners = new Map();
     const requested = [];
-    const sent = [];
     const connection = {
         addParameterListener(endpointID, listener) {
             listeners.set(endpointID, listener);
         },
         requestParameterValue(endpointID) {
             requested.push(endpointID);
-        },
-        sendEventOrValue(endpointID, value) {
-            sent.push({ endpointID, value });
         },
     };
     let current = laneState.createDefaultLaneStateV2();
@@ -325,9 +321,8 @@ test("same-type replacement suppresses a delayed old host callback until reset a
     assert.equal(reset.devices["delay#1"].params.delayOutputTrimDb, 0);
     mirror.captureLaneState(reset);
     current = reset;
-    laneState.commitLaneStateV2(connection, reset);
     assert.deepEqual(
-        sent.filter(({ endpointID }) => endpointID === "laneDelay1OutputTrimDb"),
+        laneState.buildLaneRuntimeEventsV2(reset).filter(({ endpointID }) => endpointID === "laneDelay1OutputTrimDb"),
         [{ endpointID: "laneDelay1OutputTrimDb", value: 0 }],
     );
 
@@ -373,15 +368,11 @@ test("cross-type swap suppresses the replacement endpoint's stale callback until
         loadUIModule(repoRoot, "ui/shared/lane-state-v2.ts"),
     ]);
     const listeners = new Map();
-    const sent = [];
     const connection = {
         addParameterListener(endpointID, listener) {
             listeners.set(endpointID, listener);
         },
         requestParameterValue() {},
-        sendEventOrValue(endpointID, value) {
-            sent.push({ endpointID, value });
-        },
     };
     let current = laneState.createDefaultLaneStateV2();
     const acceptedHostValues = [];
@@ -402,9 +393,8 @@ test("cross-type swap suppresses the replacement endpoint's stale callback until
     assert.equal(swapped.devices["flanger#1"].params.flangerOutputTrimDb, 0);
     mirror.captureLaneState(swapped);
     current = swapped;
-    laneState.commitLaneStateV2(connection, swapped);
     assert.deepEqual(
-        sent.filter(({ endpointID }) => endpointID === "laneFlanger1OutputTrimDb"),
+        laneState.buildLaneRuntimeEventsV2(swapped).filter(({ endpointID }) => endpointID === "laneFlanger1OutputTrimDb"),
         [{ endpointID: "laneFlanger1OutputTrimDb", value: 0 }],
     );
 

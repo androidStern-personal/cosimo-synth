@@ -18,9 +18,11 @@ what a version number promises.
   and `beginGesture(keys)` makes a drag that moves several fields one entry.
   `usePluginHistory` drives Undo and Redo buttons.
 - **Presets and snapshots as state.** Spread `presets()` and `snapshots()` into
-  the declaration and render `PresetBar` and `SnapshotBar`. Recalling a preset
-  or selecting a snapshot is one Undo entry. `usePresets` and `useSnapshots`
-  serve custom interfaces.
+  the declaration and render `PresetBar` and `SnapshotBar`. `presets({ initial })`
+  names the preset a new instance starts from. Recalling a preset or selecting a
+  snapshot is one Undo entry. Library operations (saving, renaming, deleting a
+  preset; clearing a snapshot slot) are not Undo entries. `usePresets` and
+  `useSnapshots` serve custom interfaces.
 - **Field status.** Each field reports `loading`, `invalid`, `unavailable`,
   `updating` or `idle`, with one current error and a retry action. Values stay
   editable while they save.
@@ -30,6 +32,13 @@ what a version number promises.
   [Shared audio data](docs/SHARED_DATA.md).
 - **Native settings.** `nativeValue` and the `Native` codecs pass typed values
   to custom C++ code, with generated readers.
+- **Custom deliveries.** Give `preparedState` a `PluginStateDelivery` as its
+  `engine` to deliver a field to the audio engine your own way. Write one from
+  the public types `PluginStateDelivery`, `PluginStateDeliveryContext`,
+  `PluginStateDocumentContext`, `PluginStateEffect`, `PluginStateSubmission`
+  and `PluginStateDeliveryOutcome`. See
+  [Custom delivery](docs/PLUGIN_STATE.md#custom-delivery), which walks through
+  a step sequencer's pattern upload.
 - **Controls.** `Knob`, `Slider`, `FilterEditor` and the `Mseg` editor, each
   usable whole or assembled from parts with your own artwork. See
   [Knobs](docs/KNOBS.md), [Sliders](docs/SLIDERS.md),
@@ -67,8 +76,6 @@ what a version number promises.
 
 ### Known issues
 
-- Saving, renaming or deleting a preset, and clearing a snapshot slot, cannot
-  be undone.
 - Shared audio data in a browser needs a cross-origin isolated page (COOP and
   COEP headers). `npm run ui:docs:dev` sends them; `npm run fx:dev` does not.
 - Builder Kit runs on Apple silicon Macs with macOS 15 or newer, and builds

@@ -455,7 +455,6 @@ async function startAudio() {
 function getSnapshot() {
     updateAudioPeak();
     const audioLifecycle = state.audioLifecycle?.getSnapshot() ?? null;
-    const persistedState = state.browserPatchPersistence?.browserState ?? null;
 
     return {
         audioConnected: state.audioConnected,
@@ -520,10 +519,6 @@ function getSnapshot() {
         modulationRejectedRouteCount: state.modulationRejectedRouteCount,
         parameterValues: { ...state.parameterValues },
         phase: state.phase,
-        persistedStateKeys: [
-            ...Object.keys(persistedState?.sound.storedState ?? {}),
-            ...Object.keys(persistedState?.auxiliary ?? {}),
-        ].sort(),
         silentHeldNotePollCount: state.silentHeldNotePollCount,
         heldNoteCount: state.heldNotes.size,
         started: state.started,
@@ -596,6 +591,7 @@ globalThis.__COSIMO_WEB_POC__ = {
         return state.audioWorkletPerfEpoch;
     },
     sendEvent(endpointID, value) {
+        if (!isTestMode) throw new Error("Direct engine events are only available in test mode.");
         if (!state.connection) throw new Error("Cosimo is not ready.");
         state.connection.sendEventOrValue(endpointID, value);
     },
@@ -621,6 +617,7 @@ globalThis.__COSIMO_WEB_POC__ = {
         });
     },
     setParameter(endpointID, value) {
+        if (!isTestMode) throw new Error("Direct parameter writes are only available in test mode.");
         if (!state.connection) throw new Error("Cosimo is not ready.");
         state.connection.sendEventOrValue(endpointID, value);
     },
@@ -710,8 +707,8 @@ async function initialise() {
         "cosimo-web-audio-worklet",
     );
     const persistence = installBrowserPatchStatePersistence(connection, {
-        // The engine stays on its safe oscillator default until the referenced
-        // OPFS bank has been verified and committed after audio starts.
+        // The engine stays on its oscillator default until the bounce restorer has
+        // verified and installed the saved bank, after audio starts.
         deferParameterRestore: (endpointID, value, browserState) => (
             endpointID === "sourceMode"
             && value === 1
@@ -722,7 +719,7 @@ async function initialise() {
     const bounceRestorer = createBounceRuntimeRestorer({
         connection,
         store: createBrowserBounceBankStore(),
-        sendRuntimeSourceMode: (value) => persistence.sendRuntimeEventOrValue("sourceMode", value, 0, 0),
+        applySavedSourceMode: () => persistence.applyDeferredParameter("sourceMode"),
     });
     connection.acceptCommittedBounceDocument = (value) => (
         bounceRestorer.acceptCommittedDocument(value)

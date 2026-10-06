@@ -229,7 +229,7 @@ interface PluginStateHistory {
 
 ## Custom delivery
 
-A component with its own transfer protocol passes a `PluginStateDelivery` as the `engine` of `preparedState`. The generated worker calls `create` once per project document and `apply` with each prepared value; the [guide](PLUGIN_STATE.md#framework-building-blocks) describes the lifetimes.
+A component with its own transfer protocol passes a `PluginStateDelivery` as the `engine` of `preparedState`. The generated worker calls `create` once per project document and `apply` with each prepared value; the [guide](PLUGIN_STATE.md#custom-delivery) describes the lifetimes and walks through an example.
 
 ```ts
 interface PluginStateDelivery<Payload> {

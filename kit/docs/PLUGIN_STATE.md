@@ -135,7 +135,7 @@ export default definePluginState({
 |---|---|
 | Recall or revert a preset | One entry: the sound and the active preset are restored together. |
 | Select a snapshot slot | One entry: the sound and the selected slot are restored. Slot contents are not. |
-| Save, save as new, rename, duplicate, delete, import a preset; clear a slot | None. Library changes are permanent. |
+| Save, save as new, rename, duplicate, delete, import a preset; clear a slot | None. Library operations are not Undo entries. |
 
 Recall sets the fields a preset contains; a field the preset lacks keeps its value, and a key that is no longer a sound field is ignored. A preset is **modified** when the current sound differs from the active preset's values. Selecting a snapshot slot first stores the current sound in the slot being left, so tweaks made while it was selected are kept; selecting an empty slot stores the current sound in it.
 
@@ -169,6 +169,56 @@ prepare(pattern, { reason }) {
 
 `PresetBar`, `SnapshotBar`, `usePresets` and `useSnapshots` mark their recalls. A custom preset interface marks its own with `editor.edit(changes, { recall: true })`; a recall cannot be part of a gesture.
 
+## Custom delivery
+
+`eventValue` suits ordinary small DSP events. When a component has its own transfer protocol, give `preparedState` a `PluginStateDelivery` as its `engine` and the field reaches the engine your way, with the same editing, saving and Undo as every other field. A step sequencer whose DSP holds only the selected pattern, and ignores an upload older than one it has accepted, numbers each upload:
+
+```ts
+// PLUGIN AUTHOR: pattern-upload.ts.
+import type { PluginStateDelivery } from "../../kit/index";
+
+export type PatternUpload = { readonly content: PatternContent; readonly replacesSound: boolean };
+
+// Rises for as long as the plugin instance runs, across every project it loads.
+let revision = 0;
+
+export const patternUploadDelivery: PluginStateDelivery<PatternUpload> = {
+    eventEndpoints: ["patternUpload"],
+    create() {
+        return {
+            async apply(upload, context) {
+                revision += 1;
+                const submitted = context.send({
+                    kind: "event",
+                    endpoint: "patternUpload",
+                    value: { ...upload.content, revision, authoritative: upload.replacesSound },
+                });
+                return submitted.kind === "submitted" ? await submitted.completion : submitted;
+            },
+            stop() {},
+        };
+    },
+};
+```
+
+```ts
+// PLUGIN AUTHOR: state.ts. Re-sent when the patterns change or the host selects another one.
+patterns: preparedState({
+    codec: patternsCodec,
+    initial: defaultPatterns,
+    dependencies: ["selectedPattern"],
+    prepare: (patterns, { parameters, reason }) => ({
+        content: patternContent(patterns, Math.round(parameters["selectedPattern"] ?? 0)),
+        replacesSound: reason === "load" || reason === "recall",
+    }),
+    engine: patternUploadDelivery,
+}),
+```
+
+The delivery declares the event and output endpoints, saved keys, host effects and shared-data inputs it may use. The generated worker calls `create(document)` once per project document; it returns `apply(payload, context)` and `stop()`, and no author-created worker is needed. The document context supplies bounded `send`, `listen`, `readStored`, `subscribeStored`, direct `prepareData`, and status and failure reporting. These resources survive one successful application and are revoked on project replacement or shutdown; per-application listeners and cancellation end with that application. `replacement: "finish"` suits a protocol that must finish its current application before sending the newest queued value. A custom host effect needs a matching registered native handler; the framework cannot invent the handler's product behavior.
+
+Write a delivery from the public types `PluginStateDelivery`, `PluginStateDeliveryContext`, `PluginStateDocumentContext`, `PluginStateEffect`, `PluginStateSubmission` and `PluginStateDeliveryOutcome`, all exported from `kit/index`; see the [API reference](PLUGIN_STATE_API.md#custom-delivery).
+
 ## Concurrent editing
 
 The hook captures the accepted field version behind each setter. Stale edits return a conflict. Queued updates from the same active gesture remain valid; another GUI or agent cannot write that field during the gesture. Other fields remain usable. Host automation retains authority and is not recorded as a user edit. Undo/Redo restore the recorded user values, including when automation subsequently changed them.
@@ -191,9 +241,5 @@ The optional opaque `historyEntry` in an edit result supports a component's guar
 An edit updates the session and history together. The engine binding prepares that accepted value. The store exposes it at the next audio block, then reports adoption. Jotai updates the GUI as acceptance and engine status arrive. Closing the GUI disposes only its client.
 
 Every state update the worker sends to the GUI carries every field, not only the ones that changed, because a GUI must be able to attach at any revision (opening the window, a second view, a reconnect) and render from that one message. Each view re-renders only for the fields it reads, but a large stored value is still sent whole on every update, so split it into smaller fields or move its bulk into prepared state so each update and each re-render covers only what changed.
-
-For a component with its own transfer protocol, `preparedState({codec,initial,prepare,engine})` also accepts a delivery object. The delivery declares permitted event/output endpoints, saved keys, host effects and shared-data inputs. Its `create(document)` factory is owned by the generated worker. It returns `apply(payload,delivery)` and `stop()`; no author-created worker is needed. The document context supplies bounded `send`, `listen`, `readStored`, `subscribeStored`, direct `prepareData`, and status/failure reporting. These resources survive one successful application and are revoked on project replacement or shutdown. Per-application listeners and cancellation end with that application. `replacement:"finish"` supports a protocol that must finish its current application before sending the newest queued value. Write one from the public types `PluginStateDelivery`, `PluginStateDocumentContext`, `PluginStateDeliveryContext`, `PluginStateEffect`, `PluginStateSubmission` and `PluginStateDeliveryOutcome`, all exported from `kit/index`; see the [API reference](PLUGIN_STATE_API.md#custom-delivery).
-
-`eventValue` suits ordinary small DSP events. Custom host effects require a matching registered native handler; the framework cannot invent the handler's product behavior.
 
 The current worker owns state independently of the GUI, but is not a promise of a dedicated CPU thread. Native uses the Cmajor message loop; browser control code runs outside the AudioWorklet. Heavy preparation should account for that existing execution model.
