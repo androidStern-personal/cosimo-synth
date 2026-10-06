@@ -223,7 +223,7 @@ test("SeqFX strict parsing canonicalizes inherited ineligible Aux endpoints afte
     const stateModule = await stateModulePromise;
     const storedState = stateModule.projectStoredSeqFxState(stateModule.createDefaultSeqFxState());
     const filterType = stateModule.SEQFX_EFFECT_TYPES.filter;
-    const overrideParams = [0, 20, 20, 0.1, 0.25, 0, 0, 0];
+    const overrideParams = [0, 20, 20, 0.1, 0, 0, 0, 0];
     storedState.patterns[0].chains[3].blocks = [{
         startStep: 0,
         length: 2,
