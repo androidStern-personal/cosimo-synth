@@ -25,13 +25,12 @@ const MODULE_DEFINITIONS = [
         workspace: "voice",
         quickParameterId: "cutoff",
         parameters: [
-            // Initial values mirror the authoritative Cmajor parameter defaults:
-            // 1000 Hz and Q 0.707107. The retired UI patch-value bag used to
-            // overwrite these after boot, which made editor-open and headless
-            // instances start from different sounds.
+            // Initial values mirror the authoritative Cmajor parameter defaults,
+            // 1000 Hz and Q 0.707107, so an instance sounds the same whether or
+            // not its editor is open.
             parameter("cutoff", "Cutoff", 56.63233347786729, 70, "frequency"),
             parameter("resonance", "Resonance", 36.91760377573153, 0),
-            // Initial 100% mirrors the engine's back-compat filterMix default 1.0.
+            // Initial 100% mirrors the engine's filterMix default 1.0.
             parameter("mix", "Mix", 100, 100),
             parameter("drive", "Drive", 15, 0),
         ],
@@ -105,8 +104,8 @@ function connectivityFor(targetId, workspace) {
         case "voice-filter.mix":
             return {
                 binding: boundEndpoint("filterMix", mixToEngine, mixFromEngine),
-                // T05 scope: articulations do not own Mix yet — capturing it
-                // would extend the persisted articulation schema.
+                // Articulations do not own Mix: capturing it would extend
+                // the persisted articulation schema.
                 articulationParameterId: null,
                 modulationTargetKind: "filterMix",
             };
@@ -169,9 +168,9 @@ function createDescriptor(moduleDefinition, parameterDefinition) {
     });
 }
 // This is the canonical, modulatable oscillator surface. Non-modulation voice
-// controls and endpoint/articulation wiring remain with the voice architecture
-// and ART work; representing those unfinished seams as unbacked prevents a B/C
-// route from silently driving A's legacy endpoint.
+// controls and endpoint/articulation wiring belong to the voice architecture;
+// marking them unbacked here keeps a B/C route from silently driving
+// oscillator A's endpoint.
 const OSCILLATOR_MODULATION_DESCRIPTOR_DEFINITIONS = [
     { targetIdSuffix: "framePosition", parameterKind: "wavetablePosition", label: "Index", initialPercent: 44, defaultPercent: 0, format: "percent", isQuick: true },
     { targetIdSuffix: "warpAmount", parameterKind: "warpAmount", label: "Warp", initialPercent: 58, defaultPercent: 50, format: "percent" },

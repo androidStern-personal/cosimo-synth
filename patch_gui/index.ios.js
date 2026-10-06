@@ -13570,6 +13570,116 @@ function useEntryReference(projection, entry) {
   const owner = entry?.scope.owner, document2 = entry?.scope.document, id = entry?.id;
   return reactExports.useMemo(() => entry && projection.reference(entry), [projection, owner, document2, id]);
 }
+function fail(message) {
+  throw new Error(message);
+}
+function readAscii(view, offset, length) {
+  let text2 = "";
+  for (let index2 = 0; index2 < length; index2 += 1) text2 += String.fromCharCode(view.getUint8(offset + index2));
+  return text2;
+}
+function decodeText(bytes) {
+  return typeof TextDecoder === "function" ? new TextDecoder().decode(bytes) : String.fromCharCode(...bytes);
+}
+function encodeText(text2) {
+  return typeof TextEncoder === "function" ? new TextEncoder().encode(text2) : Uint8Array.from(text2, (character) => character.charCodeAt(0));
+}
+function bytesFromPayload(path, payload) {
+  if (typeof payload === "string") return encodeText(payload);
+  if (payload instanceof ArrayBuffer) return new Uint8Array(payload.slice(0));
+  if (ArrayBuffer.isView(payload)) return new Uint8Array(payload.buffer.slice(payload.byteOffset, payload.byteOffset + payload.byteLength));
+  if (Array.isArray(payload)) return Uint8Array.from(payload);
+  return fail(`The host returned ${path} in a form this kit cannot read.`);
+}
+function parseMonoWave(path, buffer) {
+  const view = new DataView(buffer);
+  if (view.byteLength < 12 || readAscii(view, 0, 4) !== "RIFF" || readAscii(view, 8, 4) !== "WAVE")
+    fail(`${path} is not a WAV file.`);
+  let format = 0, channels = 0, sampleRate = 0, bitsPerSample = 0, dataOffset = -1, dataSize = 0;
+  for (let cursor = 12; cursor + 8 <= view.byteLength; ) {
+    const chunk = readAscii(view, cursor, 4), size = view.getUint32(cursor + 4, true), body = cursor + 8;
+    if (chunk === "fmt ") {
+      format = view.getUint16(body, true);
+      channels = view.getUint16(body + 2, true);
+      sampleRate = view.getUint32(body + 4, true);
+      bitsPerSample = view.getUint16(body + 14, true);
+    } else if (chunk === "data") {
+      dataOffset = body;
+      dataSize = Math.min(size, view.byteLength - body);
+    }
+    cursor = body + size + size % 2;
+  }
+  if (dataOffset < 0 || format === 0) fail(`${path} is missing its WAV format or data chunk.`);
+  if (channels !== 1) fail(`${path} has ${channels} channels; readAudio reads mono WAV files only.`);
+  const data = buffer.slice(dataOffset, dataOffset + dataSize);
+  if (format === 3 && bitsPerSample === 32) return { sampleRate, samples: new Float32Array(data, 0, Math.floor(dataSize / 4)) };
+  if (format === 1 && bitsPerSample === 16) {
+    const pcm = new Int16Array(data, 0, Math.floor(dataSize / 2));
+    return { sampleRate, samples: Float32Array.from(pcm, (sample) => sample / 32768) };
+  }
+  return fail(`${path} uses WAV format ${format} at ${bitsPerSample} bits; use 16-bit PCM or 32-bit float.`);
+}
+function decodedAudio(path, input) {
+  const decoded = input ?? {};
+  const frames = decoded.frames;
+  if (!frames || typeof frames.length !== "number") fail(`The host decoded ${path} without audio frames.`);
+  const samples = new Float32Array(frames.length);
+  for (let index2 = 0; index2 < frames.length; index2 += 1) {
+    const frame = frames[index2];
+    if (typeof frame === "number") samples[index2] = frame;
+    else if (frame && frame.length === 1) samples[index2] = Number(frame[0]) || 0;
+    else fail(`${path} is not mono; readAudio reads mono audio only.`);
+  }
+  return { sampleRate: Number(decoded.sampleRate) || 0, samples };
+}
+function defaultPatchRoot() {
+  const page = globalThis.location?.href;
+  if (typeof page === "string" && page.length > 0) return new URL("/", page);
+  const folder = new URL(import.meta.url);
+  folder.pathname = folder.pathname.replace(/\/[^/]*$/, "/");
+  return folder;
+}
+function resourceURL(path, address2, patchRoot) {
+  if (address2 instanceof URL) return address2;
+  if (typeof address2 === "string" && address2.length > 0)
+    return /^[a-zA-Z][a-zA-Z\d+.-]*:/.test(address2) ? new URL(address2) : new URL(address2.replace(/^\//, ""), patchRoot);
+  return new URL(path, patchRoot);
+}
+function createPatchConnectionResourceClient(source, options = {}) {
+  const host = source ?? {};
+  const patchRoot = options.patchRoot ?? defaultPatchRoot();
+  const fetchBuffer = async (path, address2 = host.getResourceAddress?.(path)) => {
+    if (typeof fetch !== "function") fail(`Cannot read ${path}: this host has neither a resource bridge nor fetch.`);
+    const url = resourceURL(path, address2, patchRoot);
+    const response = await fetch(url.toString());
+    if (!response.ok) fail(`Could not read ${path} from ${url} (HTTP ${response.status}).`);
+    return response.arrayBuffer();
+  };
+  const readBytes = async (path) => host.readResource ? bytesFromPayload(path, await host.readResource(path)) : new Uint8Array(await fetchBuffer(path));
+  return {
+    async readText(path) {
+      if (!host.readResource) return decodeText(new Uint8Array(await fetchBuffer(path)));
+      const payload = await host.readResource(path);
+      if (typeof payload === "string") return payload;
+      if (typeof payload === "object" && payload !== null && "text" in payload && typeof payload.text === "function")
+        return String(await payload.text());
+      return decodeText(bytesFromPayload(path, payload));
+    },
+    async readJSON(path) {
+      return JSON.parse(await this.readText(path));
+    },
+    readBytes,
+    async readAudio(path) {
+      const address2 = host.getResourceAddress?.(path);
+      if (address2 !== void 0 && address2 !== null && typeof fetch === "function") return parseMonoWave(path, await fetchBuffer(path, address2));
+      if (host.readResourceAsAudioData) return decodedAudio(path, await host.readResourceAsAudioData(path));
+      return parseMonoWave(path, new Uint8Array(await readBytes(path)).buffer);
+    },
+    getURL(path) {
+      return resourceURL(path, host.getResourceAddress?.(path), patchRoot);
+    }
+  };
+}
 const clientMessageKinds = /* @__PURE__ */ new Set(["closed", "attach-failed", "reset", "owner-changed", "receipt", "attached", "update"]);
 function isRecord$5(value) {
   return value !== null && typeof value === "object" && !Array.isArray(value) && (Object.getPrototypeOf(value) === Object.prototype || Object.getPrototypeOf(value) === null);
@@ -19973,367 +20083,6 @@ function acquireAnalyzerActivity(connection, endpointID) {
     }
   };
 }
-function assert$1(condition, message) {
-  if (!condition) {
-    throw new Error(message);
-  }
-}
-function readAscii(view, offset, length) {
-  let text2 = "";
-  for (let index2 = 0; index2 < length; index2 += 1) {
-    text2 += String.fromCharCode(view.getUint8(offset + index2));
-  }
-  return text2;
-}
-function isAbsoluteURL(value) {
-  return /^[a-zA-Z][a-zA-Z\d+.-]*:/.test(value);
-}
-function encodeTextPayload(text2) {
-  if (typeof TextEncoder === "function") {
-    return new TextEncoder().encode(text2);
-  }
-  return Uint8Array.from(text2, (character) => character.charCodeAt(0));
-}
-function describePayload(payload) {
-  if (payload === null) {
-    return "null";
-  }
-  if (payload === void 0) {
-    return "undefined";
-  }
-  const type = typeof payload;
-  const constructorName = payload?.constructor?.name;
-  if (type !== "object") {
-    return constructorName ? `${type}:${constructorName}` : type;
-  }
-  const keys = Object.keys(payload).slice(0, 6);
-  const keySummary = keys.length > 0 ? ` keys=${keys.join(",")}` : "";
-  return constructorName ? `${type}:${constructorName}${keySummary}` : `${type}${keySummary}`;
-}
-function getDefaultPatchRootUrl() {
-  const locationHref = globalThis.location?.href;
-  if (typeof locationHref === "string" && locationHref.length > 0) {
-    return new URL("/", locationHref);
-  }
-  const moduleUrl = new URL(import.meta.url);
-  const modulePath = moduleUrl.pathname;
-  if (modulePath.includes("/patch_gui/desktop/")) {
-    moduleUrl.pathname = modulePath.replace(/\/patch_gui\/desktop\/[^/]+$/, "/");
-    return moduleUrl;
-  }
-  if (modulePath.includes("/patch_gui/")) {
-    moduleUrl.pathname = modulePath.replace(/\/patch_gui\/[^/]+$/, "/");
-    return moduleUrl;
-  }
-  if (modulePath.includes("/ui/shared/")) {
-    moduleUrl.pathname = modulePath.replace(/\/ui\/shared\/[^/]+$/, "/");
-    return moduleUrl;
-  }
-  moduleUrl.pathname = modulePath.replace(/\/[^/]+$/, "/");
-  return moduleUrl;
-}
-function resourceAddressToUrl(path, resourceAddress) {
-  const patchRootUrl = getDefaultPatchRootUrl();
-  if (resourceAddress instanceof URL) {
-    return resourceAddress;
-  }
-  if (typeof resourceAddress === "string" && resourceAddress.length > 0) {
-    if (isAbsoluteURL(resourceAddress)) {
-      return new URL(resourceAddress);
-    }
-    const normalizedPath = resourceAddress.startsWith("/") ? resourceAddress.slice(1) : resourceAddress;
-    return new URL(normalizedPath, patchRootUrl);
-  }
-  return new URL(path, patchRootUrl);
-}
-async function decodeTextPayload(payload) {
-  if (typeof payload === "string") {
-    return payload;
-  }
-  if (payload && typeof payload.text === "function") {
-    return payload.text();
-  }
-  if (payload instanceof ArrayBuffer) {
-    if (typeof TextDecoder === "function") {
-      return new TextDecoder().decode(new Uint8Array(payload));
-    }
-    return String.fromCharCode(...new Uint8Array(payload));
-  }
-  if (ArrayBuffer.isView(payload)) {
-    const bytes = new Uint8Array(payload.buffer, payload.byteOffset, payload.byteLength);
-    if (typeof TextDecoder === "function") {
-      return new TextDecoder().decode(bytes);
-    }
-    return String.fromCharCode(...bytes);
-  }
-  if (Array.isArray(payload)) {
-    const bytes = Uint8Array.from(payload);
-    if (typeof TextDecoder === "function") {
-      return new TextDecoder().decode(bytes);
-    }
-    return String.fromCharCode(...bytes);
-  }
-  throw new Error(`Unsupported text resource payload (${describePayload(payload)})`);
-}
-function normalizeBytesPayload(payload) {
-  if (payload instanceof ArrayBuffer) {
-    return new Uint8Array(payload.slice(0));
-  }
-  if (ArrayBuffer.isView(payload)) {
-    return new Uint8Array(payload.buffer.slice(payload.byteOffset, payload.byteOffset + payload.byteLength));
-  }
-  if (Array.isArray(payload)) {
-    return Uint8Array.from(payload);
-  }
-  if (typeof payload === "string") {
-    return encodeTextPayload(payload);
-  }
-  throw new Error(`Unsupported binary resource payload (${describePayload(payload)})`);
-}
-function normalizeDecodedAudioFileSamples(audioFile) {
-  const frames = audioFile?.frames;
-  assert$1(
-    Array.isArray(frames) || ArrayBuffer.isView(frames),
-    "Decoded audio data must provide a frames array"
-  );
-  const frameArray = Array.from(frames);
-  const samples = new Float32Array(frameArray.length);
-  for (let index2 = 0; index2 < frameArray.length; index2 += 1) {
-    const frame = frameArray[index2];
-    if (typeof frame === "number") {
-      samples[index2] = frame;
-      continue;
-    }
-    if (ArrayBuffer.isView(frame) || Array.isArray(frame)) {
-      const monoFrame = frame;
-      assert$1(monoFrame.length === 1, "Only mono wavetable source files are supported");
-      samples[index2] = Number(monoFrame[0]) || 0;
-      continue;
-    }
-    throw new Error("Decoded audio frames must contain numeric mono samples");
-  }
-  return {
-    sampleRate: Number(audioFile?.sampleRate) || 0,
-    samples
-  };
-}
-function parseWaveFile(arrayBuffer) {
-  const view = new DataView(arrayBuffer);
-  assert$1(readAscii(view, 0, 4) === "RIFF", "Expected a RIFF wave file");
-  assert$1(readAscii(view, 8, 4) === "WAVE", "Expected a WAVE file");
-  let format = null;
-  let channelCount = null;
-  let sampleRate = null;
-  let bitsPerSample = null;
-  let blockAlign = null;
-  let dataOffset = null;
-  let dataSize = null;
-  let cursor = 12;
-  while (cursor + 8 <= view.byteLength) {
-    const chunkID = readAscii(view, cursor, 4);
-    const chunkSize = view.getUint32(cursor + 4, true);
-    const chunkDataOffset = cursor + 8;
-    if (chunkID === "fmt ") {
-      format = view.getUint16(chunkDataOffset, true);
-      channelCount = view.getUint16(chunkDataOffset + 2, true);
-      sampleRate = view.getUint32(chunkDataOffset + 4, true);
-      blockAlign = view.getUint16(chunkDataOffset + 12, true);
-      bitsPerSample = view.getUint16(chunkDataOffset + 14, true);
-    } else if (chunkID === "data") {
-      dataOffset = chunkDataOffset;
-      dataSize = chunkSize;
-    }
-    cursor = chunkDataOffset + chunkSize + chunkSize % 2;
-  }
-  assert$1(format !== null, "Wave file is missing a fmt chunk");
-  assert$1(dataOffset !== null && dataSize !== null, "Wave file is missing a data chunk");
-  assert$1(channelCount === 1, "Only mono wavetable bank files are supported");
-  let samples;
-  if (format === 3 && bitsPerSample === 32) {
-    samples = new Float32Array(arrayBuffer.slice(dataOffset, dataOffset + dataSize));
-  } else if (format === 1 && bitsPerSample === 16) {
-    const sampleCount = dataSize / 2;
-    const pcm = new Int16Array(arrayBuffer.slice(dataOffset, dataOffset + dataSize));
-    samples = new Float32Array(sampleCount);
-    for (let index2 = 0; index2 < sampleCount; index2 += 1) {
-      samples[index2] = pcm[index2] / 32768;
-    }
-  } else {
-    throw new Error(`Unsupported WAV format: format=${format}, bitsPerSample=${bitsPerSample}`);
-  }
-  return {
-    format,
-    channelCount,
-    sampleRate: sampleRate ?? 0,
-    bitsPerSample,
-    blockAlign: blockAlign ?? 0,
-    samples
-  };
-}
-async function fetchArrayBuffer(url) {
-  assert$1(typeof fetch === "function", `Could not fetch ${url}: global fetch is unavailable`);
-  const response = await fetch(url.toString());
-  assert$1(response.ok, `Failed to fetch resource from ${url}`);
-  return response.arrayBuffer();
-}
-function readTextFromBytes(bytes) {
-  if (typeof TextDecoder === "function") {
-    return new TextDecoder().decode(bytes);
-  }
-  return String.fromCharCode(...bytes);
-}
-function readAudioFromBytes(bytes) {
-  const arrayBuffer = new Uint8Array(bytes).buffer;
-  const parsedWave = parseWaveFile(arrayBuffer);
-  return {
-    sampleRate: parsedWave.sampleRate,
-    samples: parsedWave.samples
-  };
-}
-function createResourceClient(source, {
-  textPreference = "bridge",
-  audioPreference = "url"
-} = {}) {
-  const readResourcePayload = async (path) => {
-    assert$1(typeof source.readResource === "function", `Resource bridge cannot read ${path}`);
-    return source.readResource(path);
-  };
-  const readAudioBridge = async (path) => {
-    assert$1(typeof source.readResourceAsAudioData === "function", `Audio resource bridge cannot read ${path}`);
-    const audioFile = await source.readResourceAsAudioData(path);
-    return normalizeDecodedAudioFileSamples(audioFile);
-  };
-  const getExplicitResourceAddress = (path) => {
-    const resourceAddress = source.getResourceAddress?.(path);
-    return resourceAddress !== null && resourceAddress !== void 0 ? resourceAddress : null;
-  };
-  const fetchAudioFromUrl = async (path, resourceAddress = source.getResourceAddress?.(path)) => {
-    const url = resourceAddressToUrl(path, resourceAddress);
-    const arrayBuffer = await fetchArrayBuffer(url);
-    const parsedWave = parseWaveFile(arrayBuffer);
-    return {
-      sampleRate: parsedWave.sampleRate,
-      samples: parsedWave.samples
-    };
-  };
-  const fetchBytesFromUrl = async (path, resourceAddress = source.getResourceAddress?.(path)) => {
-    const url = resourceAddressToUrl(path, resourceAddress);
-    return new Uint8Array(await fetchArrayBuffer(url));
-  };
-  return {
-    async readText(path) {
-      if (textPreference === "bridge" && typeof source.readResource === "function") {
-        return decodeTextPayload(await readResourcePayload(path));
-      }
-      const explicitResourceAddress = getExplicitResourceAddress(path);
-      if (textPreference === "url" && explicitResourceAddress !== null) {
-        return readTextFromBytes(await fetchBytesFromUrl(path, explicitResourceAddress));
-      }
-      if (typeof source.readResource === "function") {
-        return decodeTextPayload(await readResourcePayload(path));
-      }
-      return readTextFromBytes(await fetchBytesFromUrl(path, explicitResourceAddress));
-    },
-    async readJSON(path) {
-      return JSON.parse(await this.readText(path));
-    },
-    async readBytes(path) {
-      if (typeof source.readResource === "function") {
-        return normalizeBytesPayload(await readResourcePayload(path));
-      }
-      return fetchBytesFromUrl(path);
-    },
-    async readAudio(path) {
-      if (audioPreference === "bridge" && typeof source.readResourceAsAudioData === "function") {
-        return readAudioBridge(path);
-      }
-      const explicitResourceAddress = getExplicitResourceAddress(path);
-      if (audioPreference === "url" && explicitResourceAddress !== null) {
-        return fetchAudioFromUrl(path, explicitResourceAddress);
-      }
-      if (typeof source.readResourceAsAudioData === "function") {
-        return readAudioBridge(path);
-      }
-      return readAudioFromBytes(await this.readBytes(path));
-    },
-    getURL(path) {
-      return resourceAddressToUrl(path, source.getResourceAddress?.(path));
-    }
-  };
-}
-function createPatchConnectionResourceClient(source) {
-  const normalizedSource = source ?? {};
-  const prefersBridgeAudio = Boolean(normalizedSource.prefersAudioResourceReadBridge);
-  return createResourceClient(normalizedSource, {
-    textPreference: "bridge",
-    audioPreference: prefersBridgeAudio ? "bridge" : "url"
-  });
-}
-function createIOSResourceClient(source) {
-  const normalizedSource = source ?? {};
-  const prefersBridgeAudio = Boolean(normalizedSource.prefersAudioResourceReadBridge);
-  return createResourceClient(normalizedSource, {
-    textPreference: "bridge",
-    audioPreference: prefersBridgeAudio ? "bridge" : "url"
-  });
-}
-function normalizeResourceClient(value) {
-  const readText = typeof value.readText === "function" ? value.readText.bind(value) : null;
-  const readJSON = typeof value.readJSON === "function" ? value.readJSON.bind(value) : null;
-  const readBytes = typeof value.readBytes === "function" ? value.readBytes.bind(value) : null;
-  const readAudio = typeof value.readAudio === "function" ? value.readAudio.bind(value) : null;
-  const getURL = typeof value.getURL === "function" ? value.getURL.bind(value) : null;
-  return {
-    async readText(path) {
-      if (readText) {
-        return readText(path);
-      }
-      if (readJSON) {
-        return JSON.stringify(await readJSON(path));
-      }
-      if (readBytes) {
-        return readTextFromBytes(await readBytes(path));
-      }
-      throw new Error(`Resource client cannot read text ${path}`);
-    },
-    async readJSON(path) {
-      if (readJSON) {
-        return readJSON(path);
-      }
-      return JSON.parse(await this.readText(path));
-    },
-    async readBytes(path) {
-      if (readBytes) {
-        return readBytes(path);
-      }
-      if (readText) {
-        return encodeTextPayload(await readText(path));
-      }
-      if (readJSON) {
-        return encodeTextPayload(JSON.stringify(await readJSON(path)));
-      }
-      throw new Error(`Resource client cannot read bytes ${path}`);
-    },
-    async readAudio(path) {
-      if (readAudio) {
-        return readAudio(path);
-      }
-      return readAudioFromBytes(await this.readBytes(path));
-    },
-    getURL(path) {
-      return getURL ? getURL(path) : null;
-    }
-  };
-}
-function isResourceClient(value) {
-  return typeof value?.readText === "function" || typeof value?.readJSON === "function" || typeof value?.readBytes === "function" || typeof value?.readAudio === "function";
-}
-function asResourceClient(value) {
-  if (isResourceClient(value)) {
-    return normalizeResourceClient(value);
-  }
-  return createPatchConnectionResourceClient(value);
-}
 const ResourceClientContext = reactExports.createContext(null);
 function PatchConnectionProvider({
   patchConnection,
@@ -21790,13 +21539,12 @@ const MODULE_DEFINITIONS = [
     workspace: "voice",
     quickParameterId: "cutoff",
     parameters: [
-      // Initial values mirror the authoritative Cmajor parameter defaults:
-      // 1000 Hz and Q 0.707107. The retired UI patch-value bag used to
-      // overwrite these after boot, which made editor-open and headless
-      // instances start from different sounds.
+      // Initial values mirror the authoritative Cmajor parameter defaults,
+      // 1000 Hz and Q 0.707107, so an instance sounds the same whether or
+      // not its editor is open.
       parameter("cutoff", "Cutoff", 56.63233347786729, 70, "frequency"),
       parameter("resonance", "Resonance", 36.91760377573153, 0),
-      // Initial 100% mirrors the engine's back-compat filterMix default 1.0.
+      // Initial 100% mirrors the engine's filterMix default 1.0.
       parameter("mix", "Mix", 100, 100),
       parameter("drive", "Drive", 15, 0)
     ]
@@ -21859,8 +21607,8 @@ function connectivityFor(targetId, workspace) {
     case "voice-filter.mix":
       return {
         binding: boundEndpoint("filterMix", mixToEngine, mixFromEngine),
-        // T05 scope: articulations do not own Mix yet — capturing it
-        // would extend the persisted articulation schema.
+        // Articulations do not own Mix: capturing it would extend
+        // the persisted articulation schema.
         articulationParameterId: null,
         modulationTargetKind: "filterMix"
       };
@@ -22377,7 +22125,7 @@ function buildPatchModulationTargetOptions(devices) {
   ];
 }
 let generatedRouteIdCounter = 1;
-function hasOwnValue$1(record, key) {
+function hasOwnValue(record, key) {
   return Object.prototype.hasOwnProperty.call(record, key);
 }
 function clamp$d(value, min, max) {
@@ -22803,7 +22551,7 @@ function canonicalJsonValuesEqual(left, right) {
   const rightRecord = right;
   const leftKeys = Object.keys(leftRecord);
   const rightKeys = Object.keys(rightRecord);
-  return leftKeys.length === rightKeys.length && leftKeys.every((key) => hasOwnValue$1(rightRecord, key) && canonicalJsonValuesEqual(leftRecord[key], rightRecord[key]));
+  return leftKeys.length === rightKeys.length && leftKeys.every((key) => hasOwnValue(rightRecord, key) && canonicalJsonValuesEqual(leftRecord[key], rightRecord[key]));
 }
 function createFirstAvailableModulationRoute(routes, targetOptions = MODULATION_TARGET_OPTIONS) {
   const usedPairs = new Set(routes.map(modulationRoutePairKey));
@@ -24009,6 +23757,11 @@ function lowestFreeRuntimeSlot(state2) {
 }
 const SHARED_MSEG_FIRST_INPUT = 3;
 const SHARED_MSEG_BYTES = (4 + MSEG_PADDED_SAMPLES) * 4;
+function fullStoredStateValues(fullState) {
+  if (typeof fullState !== "object" || fullState === null) return {};
+  const values = Reflect.get(fullState, "values");
+  return typeof values === "object" && values !== null && !Array.isArray(values) ? values : {};
+}
 const RUNTIME_STATE_ENDPOINT_ID$1 = "runtimeState";
 function getRuntimeDspSessionId(value) {
   if (typeof value !== "object" || value === null || Array.isArray(value)) {
@@ -24521,16 +24274,6 @@ class RuntimeInstallLane {
 }
 const runtimeRecoveryDelayMilliseconds = 1e3;
 const bootStoredStateKeys = [MODULATION_STATE_KEY, ARTICULATIONS_V4_STATE_KEY];
-function hasOwnValue(record, key) {
-  return Object.prototype.hasOwnProperty.call(record, key);
-}
-function getFullStoredStateValue(storedState, key) {
-  const fullState = storedState && typeof storedState === "object" ? storedState : {};
-  const values = fullState.values && typeof fullState.values === "object" ? fullState.values : {};
-  if (hasOwnValue(values, key)) return values[key];
-  if (hasOwnValue(fullState, key)) return fullState[key];
-  return void 0;
-}
 function parseStoredArticulations(value, acceptedRouteIds) {
   if (value === void 0) return createEmptyArticulationsState();
   let document2 = value;
@@ -24646,7 +24389,7 @@ class ModulationArticulationWorkerService {
     if (typeof this.connection.requestFullStoredState === "function") {
       this.connection.requestFullStoredState((storedState) => {
         if (!this.started || epoch !== this.lifecycleEpoch) return;
-        this.applyBootState(storedState);
+        this.applyBootState(fullStoredStateValues(storedState));
         this.finishBoot();
       });
       return;
@@ -24666,12 +24409,12 @@ class ModulationArticulationWorkerService {
     for (const event of events) this.applyLiveStoredState(event.key, event.value);
     this.applyRuntimeStateIfReady();
   }
-  applyBootState(storedState) {
-    const rawModulation = getFullStoredStateValue(storedState, MODULATION_STATE_KEY);
+  applyBootState(storedValues) {
+    const rawModulation = storedValues[MODULATION_STATE_KEY];
     const parsedModulation = this.frameworkInput ? { _tag: "ok", value: this.modulationState } : rawModulation === void 0 ? { _tag: "ok", value: createDefaultModulationState() } : parseModulationState(rawModulation);
     if (parsedModulation._tag === "err") {
       console.error(`[runtime-state-worker] ${MODULATION_STATE_KEY} is invalid; boot state was not installed.`);
-      const rawArticulations2 = getFullStoredStateValue(storedState, ARTICULATIONS_V4_STATE_KEY);
+      const rawArticulations2 = storedValues[ARTICULATIONS_V4_STATE_KEY];
       const independentArticulations = parseStoredArticulations(rawArticulations2, /* @__PURE__ */ new Set());
       if (independentArticulations !== null) {
         this.articulationBank = independentArticulations;
@@ -24681,7 +24424,7 @@ class ModulationArticulationWorkerService {
     }
     this.modulationState = parsedModulation.value;
     this.hasModulationState = true;
-    const rawArticulations = getFullStoredStateValue(storedState, ARTICULATIONS_V4_STATE_KEY);
+    const rawArticulations = storedValues[ARTICULATIONS_V4_STATE_KEY];
     const parsedArticulations = parseStoredArticulations(
       rawArticulations,
       articulationRouteIds(parsedModulation.value)
@@ -25045,7 +24788,7 @@ function createCoordinator(document2) {
     stop: stop2
   };
 }
-const LANE_SLOT_PARAM_COUNT = 13;
+const LANE_SLOT_PARAM_COUNT = 12;
 const LANE_SLOT_ORDINAL_COUNT = 5;
 const LANE_SLOT_TYPE_COUNT = 8;
 const LANE_TYPE_WIRE_IDS = Object.freeze({
@@ -25102,7 +24845,6 @@ const LANE_DEVICE_PARAM_LAYOUT = Object.freeze({
     "chorusRingFrequencyHz",
     "chorusRingKeyTrackEnabled",
     "chorusRingKeyTrackOffsetSemitones",
-    "chorusRingLegacyClampEnabled",
     effectOutputTrimLaneEndpointID("chorus")
   ],
   flanger: [
@@ -25566,8 +25308,7 @@ function parseLaneStateV2(input) {
       return err(`unknown chain node kind ${String(rawNode.kind)}`);
     }
     const isSplit = rawNode.kind === "split";
-    const legacySplitKeys = ["kind", "groupId", "enabled", "xoverLowHz", "xoverHighHz", "branches"];
-    const currentSplitKeys = [
+    const expectedKeys = isSplit ? [
       "kind",
       "groupId",
       "enabled",
@@ -25578,10 +25319,8 @@ function parseLaneStateV2(input) {
       "xoverHighKeyTrackEnabled",
       "xoverHighKeyTrackOffsetSemitones",
       "branches"
-    ];
-    const expectedKeys = isSplit ? currentSplitKeys : ["kind", "groupId", "enabled", "branches"];
-    const isLegacySplit = isSplit && hasExactKeys(rawNode, legacySplitKeys);
-    if (!hasExactKeys(rawNode, expectedKeys) && !isLegacySplit) {
+    ] : ["kind", "groupId", "enabled", "branches"];
+    if (!hasExactKeys(rawNode, expectedKeys)) {
       return err(`a ${rawNode.kind} group is { ${expectedKeys.join(", ")} }`);
     }
     const groupId = parseLaneGroupId(rawNode.groupId);
@@ -25602,7 +25341,7 @@ function parseLaneStateV2(input) {
     if (isSplit && (!isValidCrossoverHz(rawNode.xoverLowHz) || !isValidCrossoverHz(rawNode.xoverHighHz))) {
       return err(`group ${String(rawNode.groupId)} crossovers must sit in ${LANE_SPLIT_XOVER_MIN_HZ}..${LANE_SPLIT_XOVER_MAX_HZ} Hz`);
     }
-    if (isSplit && !isLegacySplit && (typeof rawNode.xoverLowKeyTrackEnabled !== "boolean" || typeof rawNode.xoverHighKeyTrackEnabled !== "boolean" || typeof rawNode.xoverLowKeyTrackOffsetSemitones !== "number" || !Number.isFinite(rawNode.xoverLowKeyTrackOffsetSemitones) || typeof rawNode.xoverHighKeyTrackOffsetSemitones !== "number" || !Number.isFinite(rawNode.xoverHighKeyTrackOffsetSemitones))) {
+    if (isSplit && (typeof rawNode.xoverLowKeyTrackEnabled !== "boolean" || typeof rawNode.xoverHighKeyTrackEnabled !== "boolean" || typeof rawNode.xoverLowKeyTrackOffsetSemitones !== "number" || !Number.isFinite(rawNode.xoverLowKeyTrackOffsetSemitones) || typeof rawNode.xoverHighKeyTrackOffsetSemitones !== "number" || !Number.isFinite(rawNode.xoverHighKeyTrackOffsetSemitones))) {
       return err(`group ${String(rawNode.groupId)} Key Track state must be finite`);
     }
     wireEntryCount += 1;
@@ -25627,10 +25366,10 @@ function parseLaneStateV2(input) {
       enabled: rawNode.enabled,
       xoverLowHz: rawNode.xoverLowHz,
       xoverHighHz: rawNode.xoverHighHz,
-      xoverLowKeyTrackEnabled: isLegacySplit ? false : rawNode.xoverLowKeyTrackEnabled,
-      xoverLowKeyTrackOffsetSemitones: isLegacySplit ? 0 : rawNode.xoverLowKeyTrackOffsetSemitones,
-      xoverHighKeyTrackEnabled: isLegacySplit ? false : rawNode.xoverHighKeyTrackEnabled,
-      xoverHighKeyTrackOffsetSemitones: isLegacySplit ? 0 : rawNode.xoverHighKeyTrackOffsetSemitones,
+      xoverLowKeyTrackEnabled: rawNode.xoverLowKeyTrackEnabled,
+      xoverLowKeyTrackOffsetSemitones: rawNode.xoverLowKeyTrackOffsetSemitones,
+      xoverHighKeyTrackEnabled: rawNode.xoverHighKeyTrackEnabled,
+      xoverHighKeyTrackOffsetSemitones: rawNode.xoverHighKeyTrackOffsetSemitones,
       branches
     } : {
       kind: "parallel",
@@ -26465,14 +26204,10 @@ function createModulationStateClient(client2) {
     const snapshot = client2.getSnapshot();
     return snapshot.kind === "ready" ? snapshot.state.fields[MODULATION_STATE_KEY] : void 0;
   };
-  let lastAccepted = null;
   const getState = () => {
     const current = field();
-    if (current && "value" in current) return lastAccepted = current.value;
-    if (current?.readiness.kind === "failed") {
-      return current.readiness.reason === "invalid-state" ? createDefaultModulationState() : null;
-    }
-    return lastAccepted;
+    if (current && "value" in current) return current.value;
+    return current?.readiness.kind === "failed" && current.readiness.reason === "invalid-state" ? createDefaultModulationState() : null;
   };
   const isReady = () => !stopped && field()?.readiness.kind === "ready";
   const emit = (kind) => {
@@ -27690,7 +27425,7 @@ function createGuideLines(camera, projection) {
     { kind: "frame", strength: 0.18, points: createGuideLine(topRight, camera, projection) }
   ];
 }
-function buildProjectionFromFrames(contourSamples, width, height, frameCount, drawableInsets = {}) {
+function buildProjection(width, height, drawableInsets = {}) {
   const camera = createCamera();
   const stableWorldPoints = [
     { x: -1, y: FLOOR_Y, z: 0 },
@@ -27979,7 +27714,7 @@ function buildWavetableStaticScene({
   const surfacePointCount = getSurfacePointCount(safeWidth, frames[0].length);
   const contourSamples = frames.map((frame) => decimateFrame(frame, contourPointCount));
   const surfaceSamples = frames.map((frame) => decimateFrame(frame, surfacePointCount));
-  const { camera, projection } = buildProjectionFromFrames(contourSamples, safeWidth, safeHeight, frameCount, drawableInsets);
+  const { camera, projection } = buildProjection(safeWidth, safeHeight, drawableInsets);
   const contourFrames = contourSamples.map(
     (samples, frameIndex) => createProjectedFrame(samples, frameIndex, frameCount, camera, projection)
   );
@@ -28424,7 +28159,6 @@ function MsegPreview({
   morphShapeAPoints = null,
   morphShapeBPoints = null,
   morphValue = null,
-  showMorphCurve = false,
   editShapeIndex = 0,
   orientation = "horizontal",
   className,
@@ -28761,7 +28495,6 @@ function ModulationAmountField({
   polarityAriaLabel,
   className
 }) {
-  getModulationAmountDepth(targetKind, amount);
   const knobPosition = getModulationAmountSliderPosition(targetKind, amount);
   const depthLabel = getModulationAmountPercentLabel(targetKind, amount);
   const unitReadout = formatModulationAmountReadout(targetKind, amount, polarity);
@@ -32272,7 +32005,7 @@ function ParameterHudWavetable({
     ] })
   ] });
 }
-function ignoreFilterValue(_value) {
+function ignoreFilterValue() {
 }
 function ParameterHudFilter({
   visualization,
@@ -33491,13 +33224,6 @@ function MobileVoiceFocusedEditor({
     }
     return address2.targetKind;
   }, [contract]);
-  reactExports.useCallback((parameterKind) => {
-    if (parameterKind === null || armedSource === null) {
-      return null;
-    }
-    const targetKind = targetKindFor(parameterKind);
-    return routes.find((route) => route.targetKind === targetKind && route.sourceKind === armedSource.sourceKind && route.sourceSlot === armedSource.sourceSlot) ?? null;
-  }, [armedSource, routes, targetKindFor]);
   const armedSourceIdentity = reactExports.useMemo(() => armedSource === null ? null : findRackModulationSource(armedSource.sourceKind, armedSource.sourceSlot), [armedSource]);
   const sourceAccent = armedSourceIdentity?.accent ?? "#cc59d2";
   const bindingsRef = reactExports.useRef(bindings);
@@ -33986,7 +33712,7 @@ function useLongPressParameterMenu(buildRequest) {
   const pressRef = reactExports.useRef(null);
   const clearPress = reactExports.useCallback(() => {
     if (pressRef.current !== null) {
-      window.clearTimeout(pressRef.current.timer);
+      clearUiTimeout(pressRef.current.timer);
       pressRef.current = null;
     }
   }, []);
@@ -34003,7 +33729,7 @@ function useLongPressParameterMenu(buildRequest) {
       pointerId,
       startX: clientX,
       startY: clientY,
-      timer: window.setTimeout(() => {
+      timer: uiTimeout(() => {
         pressRef.current = null;
         openMenu({ ...buildRequest(), clientX, clientY });
       }, PARAMETER_GESTURE_LONG_PRESS_MS)
@@ -35696,18 +35422,16 @@ function extractSourceFrames(samples, {
     frames
   };
 }
-async function loadFactoryBankCatalog(resourceClientInput, {
+async function loadFactoryBankCatalog(resourceClient, {
   catalogPath = DEFAULT_FACTORY_BANK_CATALOG_PATH
 } = {}) {
-  const resourceClient = asResourceClient(resourceClientInput);
   return getFactoryBankCatalogValue(await resourceClient.readJSON(catalogPath));
 }
-async function loadFactoryBankFrames(resourceClientInput, {
+async function loadFactoryBankFrames(resourceClient, {
   catalogPath = DEFAULT_FACTORY_BANK_CATALOG_PATH,
   tableIndex = 0,
   samplesPerFrame = DEFAULT_SAMPLES_PER_FRAME
 } = {}) {
-  const resourceClient = asResourceClient(resourceClientInput);
   const catalogValue = await loadFactoryBankCatalog(resourceClient, { catalogPath });
   const clampedTableIndex = clampToRange(tableIndex, 0, catalogValue.tables.length - 1);
   const sourceTableMeta = catalogValue.tables[clampedTableIndex];
@@ -36791,10 +36515,8 @@ function useSynthKeyboardRouting({
 function useSynthPatchViewModel({
   oscillatorID = DEFAULT_SELECTED_OSCILLATOR_ID,
   stageRef,
-  msegEditorSurfaceRef,
   keyboardRef,
   voiceModeCount,
-  msegSurfaceOrientation = "horizontal",
   msegCurveEditActivationMode = "immediate",
   onMsegCurveEditHoldActivated = null,
   onKeyboardOctaveDown,
@@ -37886,7 +37608,7 @@ function useSynthPatchViewModel({
     warpMode,
     wavetablePosition
   ]);
-  const handleCaptureArticulationSlot = reactExports.useCallback((_options = {}) => {
+  const handleCaptureArticulationSlot = reactExports.useCallback(() => {
     const baseSnapshot = currentArticulationPatchBase();
     if (baseSnapshot === null) {
       return;
@@ -37905,9 +37627,6 @@ function useSynthPatchViewModel({
     currentArticulationPatchBase,
     oscillatorID
   ]);
-  const handleAddArticulationSlot = reactExports.useCallback(() => {
-    handleCaptureArticulationSlot({ autoAssign: true });
-  }, [handleCaptureArticulationSlot]);
   const selectArticulationSlot = reactExports.useCallback((slotId, options = {}) => {
     const state2 = articulationBankState.stateRef.current;
     const slot = state2.slots.find((candidate) => candidate.id === slotId);
@@ -38711,7 +38430,6 @@ function useSynthPatchViewModel({
     handleAddRouteWithOverrides,
     handleRemoveRoute,
     handleRouteChange,
-    handleAddArticulationSlot,
     handleCaptureArticulationSlot,
     handleSelectArticulationSlot,
     handleUpdateSelectedArticulationSlot,
@@ -40480,11 +40198,9 @@ function IOSPatchViewBody() {
   const synthView = useSynthPatchViewModel({
     oscillatorID: oscillatorSelection.selectedOscillatorID,
     stageRef,
-    msegEditorSurfaceRef,
     keyboardRef,
     voiceModeCount: VOICE_MODE_OPTIONS.length,
     observeFilterSpectrum: false,
-    msegSurfaceOrientation: msegEditorOrientation,
     msegCurveEditActivationMode: "hold-or-drag",
     onMsegCurveEditHoldActivated: () => {
       triggerIOSHaptic("light");
@@ -40843,7 +40559,7 @@ class IOSPatchErrorBoundary extends reactExports.Component {
 }
 class CosimoIOSReactViewElement extends HTMLElement {
   patchConnection = null;
-  resourceClient = null;
+  resourceClient;
   root = null;
   mountPoint = null;
   modulationRuntimePatchConnection = null;
@@ -40855,7 +40571,7 @@ class CosimoIOSReactViewElement extends HTMLElement {
       this.modulationRuntimePatchConnection = null;
     }
     this.patchConnection = patchConnection;
-    this.resourceClient = resourceClient ?? null;
+    this.resourceClient = resourceClient;
     if (!this.modulationRuntimePatchConnection) {
       this.stateLease = acquireSynthViewState(patchConnection);
       this.modulationRuntimePatchConnection = patchConnection;
@@ -40904,7 +40620,7 @@ class CosimoIOSReactViewElement extends HTMLElement {
         IOSPatchView,
         {
           patchConnection: this.patchConnection,
-          resourceClient: this.resourceClient ?? createIOSResourceClient(this.patchConnection)
+          resourceClient: this.resourceClient
         }
       ) })
     );

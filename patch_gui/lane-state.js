@@ -19,7 +19,7 @@ export const LANE_OUTPUT_CONTROL_ENDPOINT_ID = "laneOutputControl";
 /** Wire capacity of one lane chain (engine maxLaneChainLength). */
 export const LANE_MAX_CHAIN_LENGTH = 16;
 /**
- * Branch-tag wire encoding (groups, M3 slices T1+T2). The topology upload's
+ * Branch-tag wire encoding for groups. The topology upload's
  * slotIds carry the slot id in the low byte and a BRANCH TAG in the three
  * bits above it: tag 0 is the trunk. A group is opened by a MARKER SLOT —
  * a utility unit placed in the chain like a device — whose tag field carries

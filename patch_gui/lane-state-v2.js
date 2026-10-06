@@ -5,7 +5,7 @@ import { EFFECT_ID_TO_LANE_TYPE, LANE_TYPE_TO_EFFECT_ID, LANE_BRANCH_TAG_BITS, L
 import { getLaneKeyTrackEndpoints } from "./key-track.js";
 import { EFFECT_OUTPUT_TRIM_MAX_DB, EFFECT_OUTPUT_TRIM_SILENCE_DB, effectOutputTrimHostEndpointID, effectOutputTrimLaneEndpointID, parseEffectOutputTrimHostEndpointID, } from "./effect-output-trim.js";
 /**
- * lane.v2 — the device-instance + topology-tree document (M3).
+ * lane.v2 — the device-instance + topology-tree document.
  *
  * v1 pins one device of each type in a serial permutation; v2 is the general
  * form the subway map renders and the marker-grammar wire carries: an
@@ -25,9 +25,9 @@ import { EFFECT_OUTPUT_TRIM_MAX_DB, EFFECT_OUTPUT_TRIM_SILENCE_DB, effectOutputT
  * The document stores what the wire validates: crossovers live in the
  * engine's 40..18000 clamp range, fan-outs in 2..4 (parallel) / 2..3
  * (split), and the flattened chain — placements plus one marker per group —
- * fits one topology upload. Parsing validates and never coerces (C11). Since
- * T78, persisted intake is greenfield: only a complete lane.v2 document is
- * accepted, and only true absence creates the current clean default.
+ * fits one topology upload. Parsing validates and never coerces: only a
+ * complete lane.v2 document is accepted, and only true absence creates the
+ * clean default.
  */
 export const LANE_SPLIT_XOVER_MIN_HZ = 40;
 export const LANE_SPLIT_XOVER_MAX_HZ = 18000;
@@ -206,15 +206,14 @@ export function parseLaneStateV2(input) {
             return err(`unknown chain node kind ${String(rawNode.kind)}`);
         }
         const isSplit = rawNode.kind === "split";
-        const legacySplitKeys = ["kind", "groupId", "enabled", "xoverLowHz", "xoverHighHz", "branches"];
-        const currentSplitKeys = [
-            "kind", "groupId", "enabled", "xoverLowHz", "xoverHighHz",
-            "xoverLowKeyTrackEnabled", "xoverLowKeyTrackOffsetSemitones",
-            "xoverHighKeyTrackEnabled", "xoverHighKeyTrackOffsetSemitones", "branches",
-        ];
-        const expectedKeys = isSplit ? currentSplitKeys : ["kind", "groupId", "enabled", "branches"];
-        const isLegacySplit = isSplit && hasExactKeys(rawNode, legacySplitKeys);
-        if (!hasExactKeys(rawNode, expectedKeys) && !isLegacySplit) {
+        const expectedKeys = isSplit
+            ? [
+                "kind", "groupId", "enabled", "xoverLowHz", "xoverHighHz",
+                "xoverLowKeyTrackEnabled", "xoverLowKeyTrackOffsetSemitones",
+                "xoverHighKeyTrackEnabled", "xoverHighKeyTrackOffsetSemitones", "branches",
+            ]
+            : ["kind", "groupId", "enabled", "branches"];
+        if (!hasExactKeys(rawNode, expectedKeys)) {
             return err(`a ${rawNode.kind} group is { ${expectedKeys.join(", ")} }`);
         }
         const groupId = parseLaneGroupId(rawNode.groupId);
@@ -237,7 +236,7 @@ export function parseLaneStateV2(input) {
             return err(`group ${String(rawNode.groupId)} crossovers must sit in `
                 + `${LANE_SPLIT_XOVER_MIN_HZ}..${LANE_SPLIT_XOVER_MAX_HZ} Hz`);
         }
-        if (isSplit && !isLegacySplit && (typeof rawNode.xoverLowKeyTrackEnabled !== "boolean"
+        if (isSplit && (typeof rawNode.xoverLowKeyTrackEnabled !== "boolean"
             || typeof rawNode.xoverHighKeyTrackEnabled !== "boolean"
             || typeof rawNode.xoverLowKeyTrackOffsetSemitones !== "number"
             || !Number.isFinite(rawNode.xoverLowKeyTrackOffsetSemitones)
@@ -268,10 +267,10 @@ export function parseLaneStateV2(input) {
                 enabled: rawNode.enabled,
                 xoverLowHz: rawNode.xoverLowHz,
                 xoverHighHz: rawNode.xoverHighHz,
-                xoverLowKeyTrackEnabled: isLegacySplit ? false : rawNode.xoverLowKeyTrackEnabled,
-                xoverLowKeyTrackOffsetSemitones: isLegacySplit ? 0 : rawNode.xoverLowKeyTrackOffsetSemitones,
-                xoverHighKeyTrackEnabled: isLegacySplit ? false : rawNode.xoverHighKeyTrackEnabled,
-                xoverHighKeyTrackOffsetSemitones: isLegacySplit ? 0 : rawNode.xoverHighKeyTrackOffsetSemitones,
+                xoverLowKeyTrackEnabled: rawNode.xoverLowKeyTrackEnabled,
+                xoverLowKeyTrackOffsetSemitones: rawNode.xoverLowKeyTrackOffsetSemitones,
+                xoverHighKeyTrackEnabled: rawNode.xoverHighKeyTrackEnabled,
+                xoverHighKeyTrackOffsetSemitones: rawNode.xoverHighKeyTrackOffsetSemitones,
                 branches,
             }
             : {
@@ -316,11 +315,11 @@ export function createFullDefaultLaneStateV2() {
 }
 const STARTER_DEVICE_IDS = ["distortion#1", "delay#1", "reverb#1"];
 /**
- * The fresh-instrument STARTER (M4): a compact bypassed line — drive →
+ * The fresh-instrument STARTER: a compact bypassed line — drive →
  * delay → reverb — so the out-of-box sound stays the deployed dry voice
  * while the map opens with a short line and add-ghosts instead of eight
  * resident pills. It is sliced from the current resident-eight constructor,
- * so every record is complete under the T78 schema.
+ * so every record is complete.
  */
 export function createDefaultLaneStateV2() {
     const full = createFullDefaultLaneStateV2();
@@ -341,9 +340,9 @@ export function createDefaultLaneStateV2() {
     };
 }
 /**
- * Deserialize current persisted state. Only true absence creates a fresh
- * T78 document; old, corrupt, and incomplete documents are rejected instead
- * of acquiring implicit Output Trim defaults.
+ * Deserialize persisted state. Only true absence creates a fresh document;
+ * corrupt and incomplete documents are rejected instead of acquiring
+ * implicit defaults.
  */
 export function deserializeLaneStateV2(input) {
     if (input === undefined) {
@@ -553,7 +552,7 @@ export function buildLaneRuntimeEventsV2(state) {
     return events;
 }
 //==============================================================================
-// Tree editing (M4). Every op is pure: it returns a NEW document, the same
+// Tree editing. Every op is pure: it returns a NEW document, the same
 // document copy for a no-op, or null when the edit is not representable —
 // unknown identity, a full unit pool, a non-empty branch removal, a wire
 // overflow. Callers surface null as a refusal; they never coerce.
