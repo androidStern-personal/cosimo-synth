@@ -159,9 +159,16 @@ async function listSourceFiles(root) {
     return files;
 }
 
-test("plugin modules use the Builder Kit public entrypoint", async () => {
+// Plug-ins customers receive read only the public entry. The owner's own plug-ins
+// may compose kit internals like the synth; tests/test_kit_import_boundary.mjs
+// keeps them from re-exporting a kit module.
+test("shipped plugin modules use the Builder Kit public entrypoint", async () => {
+    const policy = JSON.parse(await fs.readFile(path.join(repoRoot, "scripts/builder-kit-export-policy.json"), "utf8"));
+    const shippedPlugins = policy.trees.filter((tree) => tree.startsWith("fx/"));
+    assert.ok(shippedPlugins.length > 0, "the export ships at least one plug-in");
     const violations = [];
-    for (const filePath of await listSourceFiles(path.join(repoRoot, "fx"))) {
+    const sourceFiles = (await Promise.all(shippedPlugins.map((tree) => listSourceFiles(path.join(repoRoot, tree))))).flat();
+    for (const filePath of sourceFiles) {
         const source = await fs.readFile(filePath, "utf8");
         const imports = source.matchAll(/\b(?:from\s+|import\s*(?:\(\s*)?)["']([^"']+)["']/gu);
         for (const match of imports) {
