@@ -1003,17 +1003,14 @@ async function waitForInstalledRoutes(page, routes) {
 /**
  * Opens the synth on a saved sound, as a returning user's browser does, and
  * starts audio once the synth has installed that sound's rack and mappings.
- * Without a sound the synth opens fresh. Every reload reopens the same sound.
+ * Without a sound the synth opens fresh. Later loads of the page reopen the
+ * sound most recently given here.
  */
 async function openSynthOnSavedSound(page, sound = null, { routes = [] } = {}) {
     await page.addInitScript(({ key, saved }) => {
         if (saved === null) localStorage.removeItem(key);
         else localStorage.setItem(key, JSON.stringify(saved));
     }, { key: savedPatchStateKey, saved: sound });
-    await startSynthPage(page, routes);
-}
-
-async function startSynthPage(page, routes = []) {
     await page.goto(`${baseUrl}?test=1`, { waitUntil: "domcontentloaded" });
     await page.waitForFunction(() => globalThis.__COSIMO_WEB_POC__?.getSnapshot().phase === "ready", null, {
         timeout: 30_000,
