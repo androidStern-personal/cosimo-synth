@@ -34,13 +34,8 @@ const isTestMode = searchParameters.has("test");
 // on-device (iPhone Safari/Chrome) dropout diagnosis path.
 const isPerfHudVisible = searchParameters.has("perf");
 const isPerfMetricsMode = isTestMode || isPerfHudVisible;
-const hostOwnsRuntimeLanes = isTestMode && searchParameters.get("runtime-owner") === "host";
 const browserAudioLeaveEvent = "cosimo-browser-audio-leave";
 const browserAudioReturnEvent = "cosimo-browser-audio-return";
-
-if (hostOwnsRuntimeLanes) {
-    patch.manifest.worker = "patch_gui/wavetable-test-worker.js";
-}
 
 const elements = {
     audioRecoveryNotice: document.getElementById("cosimo-audio-recovery-notice"),
@@ -106,10 +101,6 @@ const state = {
     started: false,
     startedVoiceIndices: new Set(),
     voiceArticulationStarts: [],
-    runtimeInstallQueue: Promise.resolve(),
-    runtimeInstallOwnedLanes: new Set(),
-    runtimeInstallAckRevision: 0,
-    runtimeSyncSerial: 10_000,
 };
 
 function describeError(error) {
@@ -154,93 +145,6 @@ function showBounceRestoreState(restoreState) {
 
 function endpointEvent(message) {
     return message?.event ?? message;
-}
-
-function waitForRuntimeInstallAck(predicate, timeoutMilliseconds = 5_000) {
-    const deadline = performance.now() + timeoutMilliseconds;
-    return new Promise((resolve, reject) => {
-        const poll = () => {
-            const acknowledgement = state.latestRuntimeInstallAck;
-            if (acknowledgement && predicate(acknowledgement, state.runtimeInstallAckRevision)) {
-                resolve(acknowledgement);
-                return;
-            }
-            if (performance.now() >= deadline) {
-                reject(new Error("Timed out waiting for a runtime install acknowledgement."));
-                return;
-            }
-            setTimeout(poll, 1);
-        };
-        poll();
-    });
-}
-
-async function requestRuntimeInstallFrontier(dspSessionId) {
-    state.runtimeSyncSerial += 1;
-    const syncSerial = state.runtimeSyncSerial;
-    const revisionFloor = state.runtimeInstallAckRevision;
-    state.connection.sendEventOrValue("runtimeSyncRequest", syncSerial);
-    return waitForRuntimeInstallAck((candidate, revision) => (
-        revision > revisionFloor
-        && candidate.dspSessionId === dspSessionId
-        && candidate.syncSerial === syncSerial
-    ));
-}
-
-async function claimRuntimeInstallLane(laneKind, dspSessionId) {
-    const ownershipKey = `${dspSessionId}:${laneKind}`;
-    if (state.runtimeInstallOwnedLanes.has(ownershipKey)) {
-        return state.latestRuntimeInstallAck;
-    }
-    const acknowledgement = await requestRuntimeInstallFrontier(dspSessionId);
-    state.runtimeInstallOwnedLanes.add(ownershipKey);
-    return acknowledgement;
-}
-
-async function sendAcknowledgedRuntimeEvent(laneKind, endpointID, value) {
-    if (!hostOwnsRuntimeLanes || !state.connection) {
-        throw new Error("Acknowledged runtime test events require exclusive host lane ownership.");
-    }
-
-    const runtimeStateEvent = endpointEvent(state.latestRuntimeState);
-    const runtimeState = runtimeStateEvent?.value ?? runtimeStateEvent;
-    const dspSessionId = Math.trunc(Number(runtimeState?.dspSessionId) || 0);
-    const acknowledgement = await claimRuntimeInstallLane(laneKind, dspSessionId);
-
-    const deliverySerial = laneKind === "articulation"
-        ? Math.min(0, Math.trunc(Number(acknowledgement.acceptedArticulationSerial) || 0)) - 1
-        : Math.max(0, Math.trunc(Number(acknowledgement.acceptedModulationSerial) || 0)) + 1;
-    const revisionFloor = state.runtimeInstallAckRevision;
-    state.connection.sendEventOrValue(endpointID, {
-        ...value,
-        dspSessionId,
-        deliverySerial,
-    });
-    const terminal = await waitForRuntimeInstallAck((candidate, revision) => (
-        revision > revisionFloor
-        && candidate.dspSessionId === dspSessionId
-        && (candidate.rejectedSerial === deliverySerial
-            || (laneKind === "articulation"
-                ? candidate.acceptedArticulationSerial <= deliverySerial
-                : candidate.acceptedModulationSerial >= deliverySerial))
-    ));
-
-    return {
-        accepted: terminal.rejectedSerial !== deliverySerial && (laneKind === "articulation"
-            ? terminal.acceptedArticulationSerial <= deliverySerial
-            : terminal.acceptedModulationSerial >= deliverySerial),
-        acknowledgement: { ...terminal },
-        deliverySerial,
-        dspSessionId,
-    };
-}
-
-function enqueueAcknowledgedRuntimeEvent(laneKind, endpointID, value) {
-    const operation = state.runtimeInstallQueue.then(() => (
-        sendAcknowledgedRuntimeEvent(laneKind, endpointID, value)
-    ));
-    state.runtimeInstallQueue = operation.catch(() => {});
-    return operation;
 }
 
 function findEndpointID(connection, purpose) {
@@ -595,9 +499,6 @@ globalThis.__COSIMO_WEB_POC__ = {
         if (!state.connection) throw new Error("Cosimo is not ready.");
         state.connection.sendEventOrValue(endpointID, value);
     },
-    sendAcknowledgedRuntimeEvent(laneKind, endpointID, value) {
-        return enqueueAcknowledgedRuntimeEvent(laneKind, endpointID, value);
-    },
     sendPerfGapProbe() {
         if (!isTestMode || !state.connection?.audioNode?.port) {
             throw new Error("Performance gap probes are only available in test mode.");
@@ -821,7 +722,6 @@ async function initialise() {
         connection.addEndpointListener("runtimeInstallAck", (message) => {
             const event = endpointEvent(message);
             state.latestRuntimeInstallAck = event?.value ?? event;
-            state.runtimeInstallAckRevision += 1;
         });
         connection.addEndpointListener("effectiveFilterState", (message) => {
             state.latestEffectiveFilterState = endpointEvent(message);

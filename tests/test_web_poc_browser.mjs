@@ -28,7 +28,12 @@ import {
 } from "../patch_gui/articulations.js";
 import { MODULATION_TARGET_OPTIONS } from "../patch_gui/modulation.js";
 import { allTargetDescriptors } from "../patch_gui/target-descriptor.js";
-import { createDefaultLaneStateV2 } from "../patch_gui/lane-state-v2.js";
+import { LANE_STATE_KEY } from "../patch_gui/lane-state.js";
+import {
+    createDefaultLaneStateV2,
+    createFullDefaultLaneStateV2,
+    serializeLaneStateV2,
+} from "../patch_gui/lane-state-v2.js";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const browserEngine = process.env.COSIMO_WEB_BROWSER ?? "chromium";
@@ -1173,6 +1178,165 @@ async function openStartedMobileRackPage({ simulateWebKitZeroTouchButtons = fals
     return page;
 }
 
+const savedPatchStateKey = "cosimo.web.patch-state.v2";
+const synthPluginId = JSON.parse(await fs.readFile(path.join(repoRoot, "WavetableSynth.cmajorpatch"), "utf8")).ID;
+
+/**
+ * A sound as the browser saves it: a fresh synth's saved sound with these
+ * parameters and stored documents. The browser keeps only a complete sound.
+ */
+async function savedSound({ parameters = {}, rack, modulation } = {}) {
+    const fresh = await savedFreshSound();
+    const storedState = { ...fresh.sound.storedState };
+    if (rack) storedState[LANE_STATE_KEY] = serializeLaneStateV2(rack);
+    if (modulation) storedState[MODULATION_STATE_KEY] = serializeModulationState(modulation);
+    return { ...fresh, sound: { parameters: { ...fresh.sound.parameters, ...parameters }, storedState } };
+}
+
+/** All eight rack devices on and driven hard: the rack's gain-safety load. */
+function hotAllOnRack() {
+    const rack = createFullDefaultLaneStateV2();
+    const hotParameters = {
+        "distortion#1": { distortionDriveDb: 30, distortionWet: 0.35 },
+        "ott#1": { ottMix: 35, ottAmount: 35 },
+        "chorus#1": { chorusMix: 0.3 },
+        "flanger#1": { flangerMix: 0.25 },
+        "phaser#1": { phaserMix: 0.25 },
+        "delay#1": { delayMix: 0.25 },
+        "reverb#1": { reverbMix: 0.3 },
+    };
+    return {
+        ...rack,
+        devices: Object.fromEntries(Object.entries(rack.devices).map(([deviceId, device]) => (
+            [deviceId, { params: { ...device.params, ...hotParameters[deviceId] } }]
+        ))),
+        chain: rack.chain.map((node) => ({ ...node, enabled: true })),
+    };
+}
+
+function installedRouteCounts(routes) {
+    const program = compileModulationRuntimeProgram(routes);
+    return [program.voiceRouteCount, program.macroVoiceRouteCount, program.voiceRackRouteCount, program.macroRackRouteCount];
+}
+
+async function waitForInstalledRoutes(page, routes) {
+    await page.waitForFunction((expected) => {
+        const acknowledgement = globalThis.__COSIMO_WEB_POC__.getSnapshot().latestRuntimeInstallAck;
+        return [
+            acknowledgement?.installedVoiceRouteCount,
+            acknowledgement?.installedMacroVoiceRouteCount,
+            acknowledgement?.installedVoiceRackRouteCount,
+            acknowledgement?.installedMacroRackRouteCount,
+        ].every((count, index) => Number(count) === expected[index]);
+    }, installedRouteCounts(routes), { timeout: 30_000 });
+}
+
+/**
+ * Opens the synth on a saved sound, as a returning user's browser does, and
+ * starts audio once the synth has installed that sound's rack and mappings.
+ * Without a sound the synth opens fresh. Every reload reopens the same sound.
+ */
+async function openSynthOnSavedSound(page, sound = null, { routes = [] } = {}) {
+    await page.addInitScript(({ key, saved }) => {
+        if (saved === null) localStorage.removeItem(key);
+        else localStorage.setItem(key, JSON.stringify(saved));
+    }, { key: savedPatchStateKey, saved: sound });
+    await startSynthPage(page, routes);
+}
+
+async function startSynthPage(page, routes = []) {
+    await page.goto(`${baseUrl}?test=1`, { waitUntil: "domcontentloaded" });
+    await page.waitForFunction(() => globalThis.__COSIMO_WEB_POC__?.getSnapshot().phase === "ready", null, {
+        timeout: 30_000,
+    });
+    await page.locator("#cosimo-start-overlay").click();
+    await page.waitForFunction(() => {
+        const snapshot = globalThis.__COSIMO_WEB_POC__.getSnapshot();
+        return snapshot.phase === "running"
+            && snapshot.hasActiveTable
+            && Number(snapshot.latestEffectiveRackState?.laneCommittedGeneration) >= 1;
+    }, null, { timeout: 30_000 });
+    await waitForInstalledRoutes(page, routes);
+}
+
+function readRackDelivery(page) {
+    return page.evaluate(() => {
+        const rack = globalThis.__COSIMO_WEB_POC__.getSnapshot().latestEffectiveRackState;
+        return {
+            generation: Number(rack?.laneCommittedGeneration),
+            parameterSerial: Number(rack?.laneParamsAcknowledgedSerial),
+        };
+    });
+}
+
+/** Runs a rack edit and waits until the engine has acknowledged the change it makes. */
+async function editRack(page, edit) {
+    const before = await readRackDelivery(page);
+    await edit();
+    await page.waitForFunction(({ generation, parameterSerial }) => {
+        const rack = globalThis.__COSIMO_WEB_POC__.getSnapshot().latestEffectiveRackState;
+        return Number(rack?.laneCommittedGeneration) > generation
+            || Number(rack?.laneParamsAcknowledgedSerial) > parameterSerial;
+    }, before, { timeout: 10_000 });
+}
+
+/** Runs a mapping edit and waits until the engine has accepted the newer mappings. */
+async function editMappings(page, edit) {
+    const before = await page.evaluate(() => (
+        Number(globalThis.__COSIMO_WEB_POC__.getSnapshot().latestRuntimeInstallAck?.acceptedModulationSerial)
+    ));
+    await edit();
+    await page.waitForFunction((serial) => (
+        Number(globalThis.__COSIMO_WEB_POC__.getSnapshot().latestRuntimeInstallAck?.acceptedModulationSerial) > serial
+    ), before, { timeout: 10_000 });
+}
+
+/** Types an exact value into a rack control's value sheet, as a user does from its context menu. */
+async function enterRackValue(page, controlRole, value, { input = "rack-base-value-input" } = {}) {
+    await page.locator(`[data-role="${controlRole}"]`).click({ button: "right" });
+    await page.locator('[data-role="rack-parameter-menu-item"][data-action="edit-values"]').click();
+    const sheet = page.locator('[data-role="rack-parameter-value-sheet"]');
+    await sheet.locator(`[data-role="${input}"]`).fill(String(value));
+    await sheet.locator('[data-role="rack-value-sheet-apply"]').click();
+    await sheet.waitFor({ state: "detached" });
+}
+
+/** Arms a modulation source and drags it onto a parameter, as a user maps one. */
+async function dropModulationSource(page, sourceRole, targetRole) {
+    await page.locator(`[data-role="${sourceRole}"]`).click();
+    const source = await centerOf(page.locator(`[data-role="${sourceRole}"]`));
+    const target = await centerOf(page.locator(`[data-role="${targetRole}"]`));
+    await page.mouse.move(source.x, source.y);
+    await page.mouse.down();
+    await page.mouse.move(
+        source.x + ((target.x - source.x) * 0.35),
+        source.y + ((target.y - source.y) * 0.35),
+        { steps: 4 },
+    );
+    await page.mouse.move(target.x, target.y, { steps: 8 });
+    await page.mouse.up();
+}
+
+async function setMacroValue(page, slot, value) {
+    await page.getByRole("button", { name: `Select macro ${slot}`, exact: true }).click();
+    await page.locator(`[data-role="macro-source-value-${slot}"]`).fill(String(value));
+    await page.waitForFunction(({ endpointID, expected }) => (
+        globalThis.__COSIMO_WEB_POC__.getSnapshot().parameterValues[endpointID] === expected
+    ), { endpointID: `macro${slot}`, expected: value });
+}
+
+/** Loads a sound with the preset bar's Paste JSON: one recall through the synth's state. */
+async function pasteSound(page, values) {
+    const presets = page.getByRole("group", { name: "Presets" });
+    if (!await presets.isVisible()) await page.locator('[data-action="toggle-sound-actions"]').click();
+    await presets.getByRole("button", { name: "More", exact: true }).click();
+    await presets.getByRole("button", { name: "Paste JSON", exact: true }).click();
+    await presets.getByLabel("Preset JSON").fill(JSON.stringify({
+        kind: "builder-kit.preset", version: 1, plugin: synthPluginId, name: "Test sound", values,
+    }));
+    await presets.getByRole("button", { name: "Load", exact: true }).click();
+}
+
 let freshSoundCapture;
 /** The sound a fresh synth saves: every parameter at its default and no stored field edited. */
 function savedFreshSound() {
@@ -1504,113 +1668,31 @@ test("generated production-mode browser keeps acceptance diagnostics off the aud
     }
 });
 
-test("generated browser accepts 100 voice routes and rejects malformed or over-capacity programs", async () => {
-    const page = await browser.newPage({ viewport: { width: 960, height: 640 } });
-
-    try {
-        await page.goto(`${baseUrl}?test=1&runtime-owner=host`, { waitUntil: "domcontentloaded" });
-        await page.waitForFunction(() => globalThis.__COSIMO_WEB_POC__?.getSnapshot().phase === "ready", null, {
-            timeout: 30_000,
-        });
-        await page.locator("#cosimo-start-overlay").click();
-        await page.waitForFunction(() => globalThis.__COSIMO_WEB_POC__?.getSnapshot().phase === "running");
-
-        const malformedProgram = {
-            ...emptyModulationProgram,
-            voiceRouteCount: 1,
-            voiceRouteCells: [1, ...emptyModulationProgram.voiceRouteCells.slice(1)],
-        };
-        const outcome = await sendAcknowledgedRuntimeEvent(
-            page,
-            "modulation",
-            "modulationProgram",
-            malformedProgram,
-        );
-        assert.equal(outcome.accepted, false, JSON.stringify(outcome));
-        assert.equal(
-            outcome.acknowledgement.rejectedSerial,
-            outcome.deliverySerial,
-            JSON.stringify(outcome),
-        );
-        await page.waitForFunction(() => (
-            globalThis.__COSIMO_WEB_POC__.getSnapshot().modulationRejectedRouteCount === 1
-        ), null, { timeout: 5_000 });
-
-        const expandedVoiceOutcome = await sendAcknowledgedRuntimeEvent(
-            page,
-            "modulation",
-            "modulationProgram",
-            matrixVoiceHundredProgram,
-        );
-        assert.equal(expandedVoiceOutcome.accepted, true, JSON.stringify(expandedVoiceOutcome));
-        assert.equal(
-            expandedVoiceOutcome.acknowledgement.installedVoiceRouteCount,
-            100,
-            JSON.stringify(expandedVoiceOutcome),
-        );
-
-        const overCapacityOutcome = await sendAcknowledgedRuntimeEvent(
-            page,
-            "modulation",
-            "modulationProgram",
-            {
-                ...emptyModulationProgram,
-                voiceRouteCount: emptyModulationProgram.voiceRouteCells.length + 1,
-            },
-        );
-        assert.equal(overCapacityOutcome.accepted, false, JSON.stringify(overCapacityOutcome));
-        assert.equal(overCapacityOutcome.acknowledgement.rejectionReason, 3);
-        assert.equal(
-            overCapacityOutcome.acknowledgement.rejectedSerial,
-            overCapacityOutcome.deliverySerial,
-            JSON.stringify(overCapacityOutcome),
-        );
-    } finally {
-        await page.close();
-    }
-});
-
-test("the production worker installs the current v6 100-route rack profile end to end", async () => {
-    const profile = matrixBenchmarkProfiles.get("voice-rack-100");
-    assert.ok(profile);
-    const freshSound = await savedFreshSound();
-    const page = await browser.newPage({ viewport: { width: 960, height: 640 } });
-    await page.addInitScript((saved) => {
-        localStorage.setItem("cosimo.web.patch-state.v2", JSON.stringify(saved));
-    }, {
-        ...freshSound,
-        sound: { ...freshSound.sound, storedState: { [MODULATION_STATE_KEY]: profile.stateJSON } },
-    });
-
-    try {
-        await page.goto(`${baseUrl}?test=1`, { waitUntil: "domcontentloaded" });
-        await page.waitForFunction(() => globalThis.__COSIMO_WEB_POC__?.getSnapshot().phase === "ready", null, {
-            timeout: 30_000,
-        });
-        await page.locator("#cosimo-start-overlay").click();
-        await page.waitForFunction(() => {
-            const snapshot = globalThis.__COSIMO_WEB_POC__?.getSnapshot();
-            const acknowledgement = snapshot?.latestRuntimeInstallAck;
-            return snapshot?.phase === "running"
-                && Number(acknowledgement?.installedVoiceRouteCount) === 0
-                && Number(acknowledgement?.installedMacroVoiceRouteCount) === 0
-                && Number(acknowledgement?.installedVoiceRackRouteCount) === 100
-                && Number(acknowledgement?.installedMacroRackRouteCount) === 0;
-        }, null, { timeout: 30_000 });
-
-        const evidence = await page.evaluate(() => {
-            const api = globalThis.__COSIMO_WEB_POC__;
-            return api.storedState().then((storedState) => ({
-                acknowledgement: api.runtimeInstallAckForTest(),
-                rejectedRouteCount: api.getSnapshot().modulationRejectedRouteCount,
-                storedState,
-            }));
-        });
-        assert.equal(evidence.rejectedRouteCount, 0, JSON.stringify(evidence));
-        assert.equal(deserializeModulationState(evidence.storedState.values[MODULATION_STATE_KEY]).routes.length, 100);
-    } finally {
-        await page.evaluate(() => localStorage.removeItem("cosimo.web.patch-state.v2")).catch(() => {});
-        await page.close();
+test("the production worker installs saved 100-route voice and rack profiles end to end", async () => {
+    // The synth's compiler never emits a malformed or over-capacity program; the
+    // engine's rejection of one is proven in tests/cmajor_rack/RuntimeInstallProtocol.cmajtest.
+    for (const profileName of ["voice-100", "voice-rack-100"]) {
+        const modulation = matrixBenchmarkState(profileName);
+        const page = await browser.newPage({ viewport: { width: 960, height: 640 } });
+        try {
+            await openSynthOnSavedSound(page, await savedSound({ modulation }), { routes: modulation.routes });
+            const evidence = await page.evaluate(async () => {
+                const api = globalThis.__COSIMO_WEB_POC__;
+                return {
+                    rejectedRouteCount: api.getSnapshot().modulationRejectedRouteCount,
+                    storedState: await api.storedState(),
+                };
+            });
+            assert.equal(evidence.rejectedRouteCount, 0, profileName);
+            assert.equal(
+                deserializeModulationState(evidence.storedState.values[MODULATION_STATE_KEY]).routes.length,
+                100,
+                profileName,
+            );
+        } finally {
+            await page.evaluate((key) => localStorage.removeItem(key), savedPatchStateKey).catch(() => {});
+            await page.close();
+        }
     }
 });
 
@@ -2494,89 +2576,53 @@ test("generated browser starts audio when the optional playback-session hint is 
 });
 
 test("generated WebAssembly rack changes audio, modulates a real target, and stays gain-safe", async (t) => {
-    const page = await browser.newPage(browserEngine === "webkit"
-        ? { ...devices["iPhone 13"] }
-        : { viewport: { width: 1280, height: 820 } });
+    const page = await browser.newPage({ viewport: { width: 1280, height: 820 } });
     const pageFailures = observePageFailures(page);
-    await page.addInitScript(() => {
-        if (sessionStorage.getItem("cosimo-rack-test-initialised") !== "1") {
-            localStorage.removeItem("cosimo.web.patch-state.v2");
-            sessionStorage.setItem("cosimo-rack-test-initialised", "1");
-        }
-    });
 
     try {
-        await page.goto(`${baseUrl}?test=1&runtime-owner=host`, { waitUntil: "domcontentloaded" });
-        await page.waitForFunction(() => globalThis.__COSIMO_WEB_POC__?.getSnapshot().phase === "ready", null, {
-            timeout: 30_000,
-        });
-        await page.locator("#cosimo-start-overlay").click();
-        await page.waitForFunction(() => {
-            const snapshot = globalThis.__COSIMO_WEB_POC__?.getSnapshot();
-            return snapshot?.phase === "running" && snapshot.hasActiveTable;
-        }, null, { timeout: 30_000 });
-
-        await page.evaluate(() => {
-            const api = globalThis.__COSIMO_WEB_POC__;
-            api.sendEvent("laneTopology", { chainLength: 0, slotIds: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], enabledMask: 0 });
-            api.sendEvent("laneSlotParamValue", { slotId: 1, paramIndex: 1, deliverySerial: 0, value: 30 });
-            api.sendEvent("laneSlotParamValue", { slotId: 1, paramIndex: 3, deliverySerial: 0, value: 0 });
-        });
+        await openSynthOnSavedSound(page);
+        // The fresh rack opens on its bypassed Distortion. Classic mode matches
+        // its output level to the input; Harmonics adds the distortion on top.
+        await editRack(page, () => page.locator('[data-role="distortion-mode-option-1"]').click());
+        await editRack(page, () => enterRackValue(page, "distortion-drive-field", 30));
+        await editRack(page, () => enterRackValue(page, "distortion-mix-field", 100));
         const dryRms = await measureHeldNote(page);
         assert.ok(dryRms > 1e-5, `Dry rack must be audible, received RMS ${dryRms}.`);
 
-        await page.evaluate(() => {
-            const api = globalThis.__COSIMO_WEB_POC__;
-            api.sendEvent("laneTopology", { chainLength: 1, slotIds: [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], enabledMask: 1 });
-            api.sendEvent("laneSlotParamValue", { slotId: 1, paramIndex: 3, deliverySerial: 0, value: 1 });
-        });
+        await editRack(page, () => page.locator('[data-role="rack-editor-power"]').click());
         const drivenRms = await measureHeldNote(page);
         assert.ok(
             Math.abs(drivenRms - dryRms) / dryRms > 0.08,
             `Distortion parameter must measurably change audio (dry ${dryRms}, wet ${drivenRms}).`,
         );
 
-        await page.evaluate(() => {
-            const api = globalThis.__COSIMO_WEB_POC__;
-            api.sendEvent("laneSlotParamValue", { slotId: 1, paramIndex: 3, deliverySerial: 0, value: 0 });
-            api.setParameter("macro1", 0);
-        });
-        await sendAcceptedModulationEvent(
-            page,
-            "modulationProgram",
-            macroRackDistortionWetProgram,
-        );
+        await editRack(page, () => enterRackValue(page, "distortion-mix-field", 0));
+        // A new mapping starts at zero depth, so it changes no sound until its amount is set.
+        await dropModulationSource(page, "rack-mod-source-macro-1", "distortion-mix-field");
+        await waitForAsyncPageCondition(page, async (key) => (
+            JSON.parse((await globalThis.__COSIMO_WEB_POC__.storedState()).values[key] ?? "{}").routes?.length === 1
+        ), MODULATION_STATE_KEY, { timeout: 10_000 });
+        await editMappings(page, () => enterRackValue(page, "distortion-mix-field", 100, {
+            input: "rack-modulation-value-input",
+        }));
+        await setMacroValue(page, 1, 0);
         const macroLowRms = await measureHeldNote(page);
-        await page.evaluate(() => globalThis.__COSIMO_WEB_POC__.setParameter("macro1", 1));
+        await setMacroValue(page, 1, 1);
         const macroHighRms = await measureHeldNote(page);
         assert.ok(
             Math.abs(macroHighRms - macroLowRms) / macroLowRms > 0.08,
             `Macro-to-rack modulation must change audio (low ${macroLowRms}, high ${macroHighRms}).`,
         );
 
-        await sendAcceptedModulationEvent(
-            page,
-            "modulationProgram",
-            inactiveMacroRackDistortionWetProgram,
-        );
-        const inactiveMacroRackRms = await measureHeldNote(page);
+        await editMappings(page, () => page.getByRole("button", { name: "Route 1 bypass", exact: true }).click());
+        const bypassedRouteRms = await measureHeldNote(page);
         assert.ok(
-            inactiveMacroRackRms < macroHighRms * 0.05,
-            `A zero-count Macro-to-rack tail must be inert (inactive ${inactiveMacroRackRms}, active ${macroHighRms}).`,
+            Math.abs(bypassedRouteRms - macroLowRms) / macroLowRms < 0.02,
+            `A bypassed Macro route must leave the rack at its base value (base ${macroLowRms}, bypassed ${bypassedRouteRms}).`,
         );
-        await page.evaluate(() => {
-            const api = globalThis.__COSIMO_WEB_POC__;
-            api.setParameter("macro1", 0);
-            api.sendEvent("laneSlotParamValue", { slotId: 1, paramIndex: 3, deliverySerial: 0, value: 0.35 });
-            api.sendEvent("laneSlotParamValue", { slotId: 2, paramIndex: 1, deliverySerial: 0, value: 35 });
-            api.sendEvent("laneSlotParamValue", { slotId: 2, paramIndex: 0, deliverySerial: 0, value: 35 });
-            api.sendEvent("laneSlotParamValue", { slotId: 3, paramIndex: 0, deliverySerial: 0, value: 0.3 });
-            api.sendEvent("laneSlotParamValue", { slotId: 4, paramIndex: 3, deliverySerial: 0, value: 0.25 });
-            api.sendEvent("laneSlotParamValue", { slotId: 5, paramIndex: 7, deliverySerial: 0, value: 0.25 });
-            api.sendEvent("laneSlotParamValue", { slotId: 6, paramIndex: 3, deliverySerial: 0, value: 0.25 });
-            api.sendEvent("laneSlotParamValue", { slotId: 7, paramIndex: 3, deliverySerial: 0, value: 0.3 });
-            api.sendEvent("laneTopology", { chainLength: 8, slotIds: [0, 1, 2, 3, 4, 5, 6, 7, 0, 0, 0, 0, 0, 0, 0, 0], enabledMask: 255 });
-        });
+
+        await setMacroValue(page, 1, 0);
+        await editRack(page, () => pasteSound(page, { [LANE_STATE_KEY]: serializeLaneStateV2(hotAllOnRack()) }));
         const allOnRms = await measureHeldNote(page);
         const allOnSnapshot = await page.evaluate(() => globalThis.__COSIMO_WEB_POC__.getSnapshot());
         assert.ok(
@@ -2610,9 +2656,9 @@ test("generated WebAssembly rack changes audio, modulates a real target, and sta
             audioWorkletProcessMultiplier: sustainedSnapshot.audioWorkletProcessMultiplier,
             audioWorkletQuantizedMaxLoad: sustainedSnapshot.audioWorkletQuantizedMaxLoad,
             audioWorkletQuantizedOverBudgetBlocks: sustainedSnapshot.audioWorkletQuantizedOverBudgetBlocks,
+            bypassedRouteRms,
             drivenRms,
             dryRms,
-            inactiveMacroRackRms,
             macroHighRms,
             macroLowRms,
             silentHeldNotePollCount: sustainedSnapshot.silentHeldNotePollCount,
@@ -2621,7 +2667,7 @@ test("generated WebAssembly rack changes audio, modulates a real target, and sta
 
         pageFailures.assertClean();
     } finally {
-        await page.evaluate(() => localStorage.removeItem("cosimo.web.patch-state.v2")).catch(() => {});
+        await page.evaluate((key) => localStorage.removeItem(key), savedPatchStateKey).catch(() => {});
         await page.close();
     }
 });
