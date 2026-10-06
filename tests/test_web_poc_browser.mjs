@@ -1080,7 +1080,7 @@ function touchPointForModSourcePreviewTarget(start, target, viewportWidth, viewp
     };
 }
 
-async function dispatchTouchDrag(page, start, end, { afterFirstMove, steps = 10 } = {}) {
+async function dispatchTouchDrag(page, start, end, { afterFirstMove, holdMs = 0, steps = 10 } = {}) {
     const client = await page.context().newCDPSession(page);
 
     try {
@@ -1095,6 +1095,7 @@ async function dispatchTouchDrag(page, start, end, { afterFirstMove, steps = 10 
                 id: 1,
             }],
         });
+        if (holdMs > 0) await page.waitForTimeout(holdMs);
 
         for (let index = 1; index <= steps; index += 1) {
             const progress = index / steps;
@@ -2949,6 +2950,8 @@ test("generated product UI restores oscillator parameters and rack state through
         assert.ok(handleBox && targetBox);
         await page.mouse.move(handleBox.x + handleBox.width / 2, handleBox.y + handleBox.height / 2);
         await page.mouse.down();
+        // A rack station lifts for reordering only after a short stationary hold.
+        await page.waitForTimeout(250);
         await page.mouse.move(targetBox.x + targetBox.width / 2, targetBox.y + targetBox.height / 2, { steps: 12 });
         await page.mouse.up();
 
@@ -2986,6 +2989,9 @@ test("generated product UI restores oscillator parameters and rack state through
         assert.equal(afterReload.firstRole, "rack-module-reverb");
         assert.equal(afterReload.delayPressed, "true");
         assert.equal(afterReload.localOscBPan, 0.25);
+        // The startup screen covers the controls again until audio restarts.
+        await page.locator("#cosimo-start-overlay").click();
+        await page.waitForFunction(() => globalThis.__COSIMO_WEB_POC__?.getSnapshot().phase === "running");
         await page.getByRole("tab", { name: "Oscillator B" }).click();
         await page.waitForTimeout(100);
         // ADR-028: Pan displays in L/C/R language via the one shared
@@ -3012,7 +3018,8 @@ test("generated mobile rack reorder survives WebKit zero-button touch moves with
         });
         const reorderStart = await centerOf(page.locator('[data-role="rack-station-reverb"]'));
         const reorderEnd = await centerOf(page.locator('[data-role="rack-module-drive"]'));
-        await dispatchTouchDrag(page, reorderStart, reorderEnd);
+        // A rack station lifts for reordering only after a short stationary hold.
+        await dispatchTouchDrag(page, reorderStart, reorderEnd, { holdMs: 250 });
         await waitForAsyncPageCondition(page, async () => {
             const root = document.querySelector("cosimo-desktop-react-view")?.shadowRoot;
             const list = root?.querySelector('[data-role="rack-module-list"]');
