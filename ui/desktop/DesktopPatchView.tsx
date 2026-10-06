@@ -556,7 +556,7 @@ type FilterSectionProps = {
         coefficients: Record<string, number>;
     };
     className?: string;
-    /** T05 compact mode: attached knob row, forced round-bars, Off greys all. */
+    /** Compact mode: attached knob row, forced round-bars, Off greys all. */
     compact?: boolean;
     filterMix?: PatchControlBinding<number>;
     routes?: ModulationRoute[];
@@ -604,7 +604,7 @@ type MsegEditorModalProps = {
 type ModulationMatrixSectionProps = {
     compact?: boolean;
     focusedSource?: MobileModSource | null;
-    /** Compact only: the floating Mod bar's selection — the page shares it (T14). */
+    /** Compact only: the floating Mod bar's selection, which the page shares. */
     armedSource?: GlobalModRailState["selectedSource"] | null;
     onArmSource?: (source: GlobalModRailState["selectedSource"]) => void;
     selectedMsegSlot: number;
@@ -2348,10 +2348,10 @@ function SynthPresetBarHost({
 }
 
 /**
- * T05: the Voice filter's compact knob row uses the shared production knob
+ * The Voice filter's compact knob row uses the shared production knob
  * (ADR-025 dual-ring) bound to the voice filter endpoints. The rack context
  * menu is deliberately not offered here — value editing happens on the knob
- * and modulation feedback on its ring, per the T04 settled list.
+ * and modulation feedback on its ring.
  */
 
 
@@ -3774,14 +3774,14 @@ function MsegEditorModal({
         const siblings = Array.from(modalRoot.parentElement?.children ?? []).filter(
             (candidate): candidate is HTMLElement => candidate instanceof HTMLElement
                 && candidate !== modalRoot
-                // T28 keeps the compact preset/Back row as live global shell
+                // The compact preset/Back row stays live global shell
                 // above focused editors; universal Back owns dismissal.
                 && candidate.getAttribute("data-role") !== "synth-preset-bar-host"
-                // The floating Mod bar is the universal play surface (T11);
+                // The floating Mod bar is the universal play surface;
                 // editing a shape while auditioning it is the point, so the
                 // modal must never deaden it.
                 && candidate.getAttribute("data-role") !== "mobile-global-mod-rail-portal"
-                // T60 groups the portal with the bottom tabs so a parked row
+                // The portal is grouped with the bottom tabs so a parked row
                 // can consume exactly one dock row. During full-screen editing
                 // the tabs are absent, leaving this wrapper as the bar owner.
                 && candidate.querySelector('[data-role="mobile-global-mod-rail-portal"]') === null,
@@ -4082,7 +4082,7 @@ function ModulationMatrixSection({
         ));
     }, [focusedSource, onSelectEnvelopeSlot, onSelectMsegSlot]);
 
-    // T14: the page and the floating Mod bar share ONE selection. The bar's
+    // The page and the floating Mod bar share ONE selection. The bar's
     // armed source drives the page's editor here; the page's own selectors
     // push back through onArmSource, so the shape the user sees is always the
     // shape the full editor opens.
@@ -5163,8 +5163,9 @@ function DesktopPatchViewBody({
         };
     }, [activeMsegRouteSource.sourceKind, activeMsegRouteSource.sourceSlot]);
     const [selectedRackEffectId, setSelectedRackEffectId] = useState<EffectModuleId>("drive");
-    // T74 owns the compact action and controlled state only. T75 composes its
-    // dedicated surface from this seam without changing the rack footprint.
+    // The rack's compact Polish module owns only the open action and this
+    // state; the full-page editor composes from it without changing the rack
+    // footprint.
     const [polishEditorExpanded, setPolishEditorExpanded] = useState(false);
     const polishFxScrollContextRef = useRef<Array<{
         readonly element: HTMLElement;
@@ -5407,7 +5408,7 @@ function DesktopPatchViewBody({
     const [keyboardControlMode, setKeyboardControlMode] = useState<"articulation" | "voice">("articulation");
     const [isArticulationEditorExpanded, setIsArticulationEditorExpanded] = useState(false);
     const [dismissedContextualToolbarKey, setDismissedContextualToolbarKey] = useState<string | null>(null);
-    // T14: the Mod page and the floating bar share ONE selection. The page's
+    // The Mod page and the floating bar share ONE selection. The page's
     // selectors arm the bar through this signal (the rail workspace owns the
     // real selection state and re-reports it); the bar's own changes reach
     // the page through the mirrored globalModRailState.selectedSource. The
@@ -5422,7 +5423,7 @@ function DesktopPatchViewBody({
         setGlobalModRailState((current) => ({ ...current, selectedSource: source }));
         setArmModSourceSignal((previous) => ({ source, serial: (previous?.serial ?? 0) + 1 }));
     }, []);
-    // T14: choosing a source from the floating bar while inside Mod surfaces
+    // Choosing a source from the floating bar while inside Mod surfaces
     // the SOURCE panel (never the quick sheet over the full panel).
     const [modPagerFocusSerial, setModPagerFocusSerial] = useState(0);
     const modPagerSourceKey = `${globalModRailState.selectedSource.sourceKind}-${globalModRailState.selectedSource.sourceSlot}`;
@@ -5783,7 +5784,7 @@ function DesktopPatchViewBody({
         });
     }, [workspacePanelElement]);
 
-    // T06: dwell navigation during a source drag. The drag gesture keeps its
+    // Dwell navigation during a source drag. The drag gesture keeps its
     // owner; these only change what is presented under the held source.
     const handleDragDwellNavigate = useCallback((dwellKey: string) => {
         if (dwellKey.startsWith("workspace-tab:")) {
@@ -5836,7 +5837,7 @@ function DesktopPatchViewBody({
         }));
     }, []);
 
-    // T43: the source and open state are one value. Replacing this value keeps
+    // The source and open state are one value. Replacing this value keeps
     // the mounted sheet alive while changing A -> B, so its heading and cells
     // can never observe different source snapshots.
     const [quickEditorSource, setQuickEditorSource] = useState<MobileModSource | null>(null);
@@ -5862,7 +5863,7 @@ function DesktopPatchViewBody({
         }
     }, [quickEditorSource]);
 
-    /* T20 — the ADR-017 long-press parameter menu: one shared shell state
+    /* The ADR-017 long-press parameter menu: one shared shell state
        machine (also used by the iOS shell). */
     const { openParameterMenu: openShellParameterMenu, parameterMenuOverlays } = useParameterMenuShell({
         routes: synthView.routes,
@@ -6162,7 +6163,7 @@ function DesktopPatchViewBody({
                 armedSource={globalModRailState.selectedSource}
             />
         </section>
-        {/* T05: the articulation/controls pane leaves compact mobile; the
+        {/* The articulation/controls pane is absent on compact mobile; the
             wavetable editor and filter split the freed height 50/50. */}
         {isCompactViewport ? null : (
             <section

@@ -2,7 +2,7 @@
  * The ONE compact numeric-readout cell language (ADR-024): rolling-axis drags
  * (horizontal = base, vertical = the armed source's route amount), truth-table
  * rails, the fixed top-center precision HUD, long-press menu seam, keyboard
- * nudges, and choice cells — extracted from the mobile Voice editor so the T13
+ * nudges, and choice cells — shared with the mobile Voice editor so the
  * quick-editor sheet reuses the EXACT interaction contract instead of
  * inventing drawer-specific controls.
  *

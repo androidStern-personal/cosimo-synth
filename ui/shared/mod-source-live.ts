@@ -503,7 +503,7 @@ export function useModSourceLight(spec: ModSourceLightSpec): (element: Element |
 
 /** Adapt the existing engine monitor to the kit's read-only value contract.
  * Projection returns the parameter's canonical units, never SVG coordinates.
- * The same driver serves legacy lights and these subscribers, so there is one
+ * The same driver serves the traveling lights and these subscribers, so there is one
  * upstream monitor subscription per patch connection.
  */
 export function createModSourceValue(connection: PatchConnectionLike, source: ModSourceIdentity,

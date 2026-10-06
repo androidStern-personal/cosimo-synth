@@ -30,7 +30,7 @@ function hostValuesMatch(left: number, right: number): boolean {
 }
 
 /**
- * One connection-lifetime bridge between T78's real host parameters and the
+ * One connection-lifetime bridge between the Output Trim host parameters and the
  * lane document's durable mirrors.
  *
  * The host parameter is runtime/automation authority. Capturing a newly

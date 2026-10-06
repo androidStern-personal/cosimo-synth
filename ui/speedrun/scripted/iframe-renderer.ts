@@ -1,8 +1,7 @@
 /**
- * DEPRECATED (frame-stepped rasterizer render): superseded by the live-performance render path in
- * ui/speedrun/live/ (see VIDEO_BOUNCE_LIVE_RENDER_PLAN.md). Kept only as the
- * VITE_COSIMO_VIDEO_BOUNCE_SCRIPTED=1 escape hatch until the live render is
- * accepted; scheduled for deletion with its suites afterwards.
+ * The frame-stepped rasterizer render of the scripted video render, which a build with
+ * VITE_COSIMO_VIDEO_BOUNCE_SCRIPTED=1 selects. The default render is the live
+ * performance in ui/speedrun/live/.
  */
 import { renderMediaOnWeb } from "@remotion/web-renderer";
 

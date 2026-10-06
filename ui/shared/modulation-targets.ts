@@ -288,13 +288,13 @@ export function getModulationSourceIdentity(
     return identity;
 }
 
-/** Parse an untrusted target kind without legacy aliases. */
+/** Parse an untrusted target kind; only exact current kinds are accepted. */
 export function parseModulationTargetKind(value: unknown): ModulationTargetKind | null {
     if (typeof value !== "string") return null;
     return targetIdentityByKind.has(value as ModulationTargetKind) ? value as ModulationTargetKind : null;
 }
 
-/** Parse an untrusted voice target without legacy aliases. */
+/** Parse an untrusted voice target; only exact current kinds are accepted. */
 export function parseVoiceModulationTargetKind(value: unknown): VoiceModulationTargetKind | null {
     const targetKind = parseModulationTargetKind(value);
     return targetKind !== null && targetIdentityByKind.get(targetKind)?.group === "voice"

@@ -1,5 +1,5 @@
 /**
- * T14/T15: the ONE resolver from a modulation target kind to its BASE
+ * The ONE resolver from a modulation target kind to its BASE
  * parameter's live-editing contract (engine endpoint + unit-aware entry
  * spec + labels). The mappings table's per-row rails and value sheets edit
  * any route's base through this — never a second per-surface table.

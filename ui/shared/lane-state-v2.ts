@@ -46,7 +46,7 @@ import {
 } from "./effect-output-trim";
 
 /**
- * lane.v2 — the device-instance + topology-tree document (M3).
+ * lane.v2 — the device-instance + topology-tree document.
  *
  * v1 pins one device of each type in a serial permutation; v2 is the general
  * form the subway map renders and the marker-grammar wire carries: an
@@ -66,9 +66,9 @@ import {
  * The document stores what the wire validates: crossovers live in the
  * engine's 40..18000 clamp range, fan-outs in 2..4 (parallel) / 2..3
  * (split), and the flattened chain — placements plus one marker per group —
- * fits one topology upload. Parsing validates and never coerces (C11). Since
- * T78, persisted intake is greenfield: only a complete lane.v2 document is
- * accepted, and only true absence creates the current clean default.
+ * fits one topology upload. Parsing validates and never coerces: only a
+ * complete lane.v2 document is accepted, and only true absence creates the
+ * clean default.
  */
 
 export const LANE_SPLIT_XOVER_MIN_HZ = 40;
@@ -449,11 +449,11 @@ export function createFullDefaultLaneStateV2(): LaneStateV2 {
 const STARTER_DEVICE_IDS = ["distortion#1", "delay#1", "reverb#1"] as const;
 
 /**
- * The fresh-instrument STARTER (M4): a compact bypassed line — drive →
+ * The fresh-instrument STARTER: a compact bypassed line — drive →
  * delay → reverb — so the out-of-box sound stays the deployed dry voice
  * while the map opens with a short line and add-ghosts instead of eight
  * resident pills. It is sliced from the current resident-eight constructor,
- * so every record is complete under the T78 schema.
+ * so every record is complete.
  */
 export function createDefaultLaneStateV2(): LaneStateV2 {
     const full = createFullDefaultLaneStateV2();
@@ -477,9 +477,9 @@ export function createDefaultLaneStateV2(): LaneStateV2 {
 }
 
 /**
- * Deserialize current persisted state. Only true absence creates a fresh
- * T78 document; old, corrupt, and incomplete documents are rejected instead
- * of acquiring implicit Output Trim defaults.
+ * Deserialize persisted state. Only true absence creates a fresh document;
+ * corrupt and incomplete documents are rejected instead of acquiring
+ * implicit defaults.
  */
 export function deserializeLaneStateV2(input: unknown): LaneStateV2 | null {
     if (input === undefined) {
@@ -720,7 +720,7 @@ export function buildLaneRuntimeEventsV2(state: LaneStateV2): ReadonlyArray<{ re
 }
 
 //==============================================================================
-// Tree editing (M4). Every op is pure: it returns a NEW document, the same
+// Tree editing. Every op is pure: it returns a NEW document, the same
 // document copy for a no-op, or null when the edit is not representable —
 // unknown identity, a full unit pool, a non-empty branch removal, a wire
 // overflow. Callers surface null as a refusal; they never coerce.

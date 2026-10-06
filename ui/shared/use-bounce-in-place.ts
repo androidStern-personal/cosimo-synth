@@ -89,7 +89,7 @@ declare global {
     // traversing the real worker/persistence/install transaction.
     // eslint-disable-next-line no-var
     var __COSIMO_BOUNCE_TEST_CONFIG__: BounceTestConfig | undefined;
-    // Test-only bounded telemetry for G5. It contains counters/digests only,
+    // Test-only bounded telemetry. It contains counters/digests only,
     // never PCM or a retained performer.
     // eslint-disable-next-line no-var
     var __COSIMO_BOUNCE_TEST_DIAGNOSTICS__: BounceTestDiagnostics | undefined;

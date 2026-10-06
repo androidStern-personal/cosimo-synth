@@ -334,7 +334,7 @@ const pooledConsumeOutputEventsConstruction = `                // One coalesced 
                         {
                             this.cosimoPendingEventMessages.push ({
                                 type: replyType,
-                                message: event.event, // N.B. chucking away frame and typeIndex info for now
+                                message: event.event, // only the value, as Cmajor's own dispatcher sends
                             });
                         }
                     },

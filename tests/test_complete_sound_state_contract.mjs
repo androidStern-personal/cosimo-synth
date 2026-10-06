@@ -64,7 +64,7 @@ function effectOutputTrimTitle(endpointID) {
     const match = endpointID.match(
         /^lane(GlobalFilter|Distortion|Ott|Chorus|Flanger|Phaser|Delay|Reverb)([1-5])OutputTrimDb$/,
     );
-    assert.ok(match, `unrecognised T78 endpoint ${endpointID}`);
+    assert.ok(match, `unrecognised Output Trim endpoint ${endpointID}`);
     const familyTitles = {
         GlobalFilter: "Global Filter",
         Distortion: "Distortion",
@@ -78,7 +78,7 @@ function effectOutputTrimTitle(endpointID) {
     return `${familyTitles[match[1]]} ${match[2]} Output Trim`;
 }
 
-test("the shared native complete-sound contract is T78 and requires all 40 trims", async (context) => {
+test("the shared native complete-sound contract requires all 40 Output Trims", async (context) => {
     const [contractSource, trim] = await Promise.all([
         fs.readFile(path.join(repoRoot, "native/CompleteSoundState.h"), "utf8"),
         loadUIModule(repoRoot, "ui/shared/effect-output-trim.ts"),
@@ -100,7 +100,7 @@ test("the shared native complete-sound contract is T78 and requires all 40 trims
     execFileSync(binaryPath, [], { stdio: "pipe" });
 });
 
-test("the desktop VST3 qualification probe freezes all T78 automation identities", async () => {
+test("the desktop VST3 qualification probe freezes all Output Trim automation identities", async () => {
     const [contractSource, rackSource, probeSource, cmakeSource] = await Promise.all([
         fs.readFile(path.join(repoRoot, "native/CompleteSoundState.h"), "utf8"),
         fs.readFile(path.join(repoRoot, "cmajor/EffectsRack.cmajor"), "utf8"),
@@ -167,7 +167,7 @@ test("the desktop VST3 qualification probe freezes all T78 automation identities
     assert.match(cmakeSource, /JUCE_PLUGINHOST_VST3=1/);
 });
 
-test("the out-of-process AUv3 smoke freezes and writes every T78 trim identity", async () => {
+test("the out-of-process AUv3 smoke freezes and writes every Output Trim identity", async () => {
     const [contractSource, rackSource, snapshotSource, harnessSource, harnessHeader,
         controllerSource, runnerSource] = await Promise.all([
         fs.readFile(path.join(repoRoot, "native/CompleteSoundState.h"), "utf8"),

@@ -150,8 +150,8 @@ export function sampleCrusherPreview({
         let crushed = 0;
 
         if (resolvedCharacter === 0) {
-            const legacyDriven = clamp(dry, -1, 1) * driveGain;
-            const legacyClipped = clamp(legacyDriven, -1, 1);
+            const driven = clamp(dry, -1, 1) * driveGain;
+            const clipped = clamp(driven, -1, 1);
             let shouldCapture = needsRecapture;
             if (!shouldCapture) {
                 capturePhase += resolvedRateHz / CRUSHER_PREVIEW_SAMPLE_RATE;
@@ -159,7 +159,7 @@ export function sampleCrusherPreview({
             }
 
             if (shouldCapture) {
-                held = legacyClipped;
+                held = clipped;
                 needsRecapture = false;
                 capturePhase = capturePhase >= 1 ? capturePhase - 1 : 0;
                 if (index > 0) {

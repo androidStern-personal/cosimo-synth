@@ -257,7 +257,7 @@ export function MobileVoiceFocusedEditor({
     const [graphAxis, setGraphAxis] = useState<RollingAxis | null>(null);
 
     /* ADR-024 tabs: the fixed bar + directional panel slide (shared with the
-       Mod page's SOURCE/MAPPINGS pair — T14's one-selector rule). */
+       Mod page's SOURCE/MAPPINGS pair, so the app has one selector). */
     const panelTransition = useDirectionalPanelTransition({
         order: selection.options.map((option) => option.id),
         activeId: oscillatorID,

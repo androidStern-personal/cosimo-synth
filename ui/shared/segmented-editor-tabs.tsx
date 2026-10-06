@@ -2,11 +2,10 @@
  * THE segmented selector, and its fixed-bar/directional-panel transition.
  * Voice A/B/C, the Mod page's SOURCE/MAPPINGS, the Voice/FX/Mod workspace
  * bar, the iOS oscillator bar and the articulation mode bar are all this
- * component with different labels (T14: never a second tab dialect).
+ * component with different labels, so the app has one tab dialect.
  *
  * It renders the neutral `.cosimo-tabs` / `.cosimo-tab` classes from the
- * design system. It previously hardcoded `mobile-voice-tab*`, which is why
- * every other bar in the app was rewritten by hand instead of reusing it.
+ * design system.
  *
  * Transition semantics (MOBILE_VOICE_FOCUSED_OSCILLATOR_SPEC "Tabs"):
  * the bar stays stationary; selecting a later tab slides the outgoing panel

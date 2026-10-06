@@ -258,7 +258,7 @@ test("lane output defaults, strict parsing, editing, and runtime replay keep Mix
     });
 });
 
-test("persisted lane intake accepts only complete T78 lane.v2 documents", async () => {
+test("persisted lane intake accepts only complete lane.v2 documents", async () => {
     const laneV2 = await laneV2Promise;
     const current = laneV2.createDefaultLaneStateV2();
     const missingTrim = JSON.parse(laneV2.serializeLaneStateV2(current));

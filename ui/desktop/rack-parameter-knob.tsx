@@ -85,7 +85,7 @@ export type BaseParameterKnobProps = {
     /** Production-backed replacement for the ordinary HUD knob. */
     readonly presentHudVisualization?: (value: number) => ParameterHudVisualization;
     /** Exact-entry spec: with a shell menu present, long-press opens the
-        ADR-017 parameter menu built from this spec (T20: every control). */
+        ADR-017 parameter menu built from this spec, as on every control. */
     readonly entrySpec?: ParameterEntrySpec;
 };
 

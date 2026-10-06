@@ -7,7 +7,7 @@ import { loadUIModule } from "../kit/tests/helpers/load_ui_module.mjs";
 
 const repoRoot = path.resolve(import.meta.dirname, "..");
 
-test("T79 keyboard presentation preferences preserve responsive defaults and bound persisted geometry", async () => {
+test("keyboard presentation preferences preserve responsive defaults and bound persisted geometry", async () => {
     const preferences = await loadUIModule(
         repoRoot,
         "ui/shared/keyboard-presentation-preferences.ts",
@@ -83,7 +83,7 @@ test("T79 keyboard presentation preferences preserve responsive defaults and bou
     );
 });
 
-test("T79 Copy settings exports both keyboard presentation values", async () => {
+test("Copy settings exports both keyboard presentation values", async () => {
     const tuning = await loadUIModule(repoRoot, "ui/shared/perf-tuning.ts");
     const copied = tuning.formatPerfTuningSettings(
         tuning.PERF_TUNING_DEFAULTS,
@@ -103,7 +103,7 @@ test("T79 Copy settings exports both keyboard presentation values", async () => 
     assert.equal(copied.match(/keyboard\.heightScale/gu)?.length, 1);
 });
 
-test("T79 sound, URL, host, Init, automation, and modulation inventories exclude keyboard presentation", async () => {
+test("sound, URL, host, Init, automation, and modulation inventories exclude keyboard presentation", async () => {
     const inventoryFiles = new Map([
         ["host and automation", [
             "cmajor/WavetableSynth.cmajor",

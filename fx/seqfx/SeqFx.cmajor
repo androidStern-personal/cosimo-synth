@@ -1315,7 +1315,6 @@ processor SeqFx [[ main ]]
             stepParams[seqfx::laneFilter, step, 1] = 2000.0f;
             stepParams[seqfx::laneFilter, step, 2] = 500.0f;
             stepParams[seqfx::laneFilter, step, 3] = 0.707f;
-            stepParams[seqfx::laneFilter, step, 4] = 1.0f;
 
             stepParams[seqfx::laneCrusher, step, 0] = 8.0f;
             stepParams[seqfx::laneCrusher, step, 1] = 48000.0f;

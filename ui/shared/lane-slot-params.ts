@@ -1,12 +1,11 @@
 /**
- * Effects Lane slot parameter wire layout (B3 parameter cut).
+ * Effects Lane slot parameter wire layout.
  *
- * Since the parameter cut, ordinary effect parameters ride the two record
- * events on wt::EffectsRack. T78's Output Trim is the one deliberate
- * exception: its lane-record value is also mirrored to a real type+instance
- * host endpoint for automation.
+ * Effect parameters ride the two record events on wt::EffectsRack. Output
+ * Trim is the one deliberate exception: its lane-record value is also
+ * mirrored to a real type+instance host endpoint for automation.
  *
- *   laneSlotParams      { slotId, deliverySerial, values[13] }  bulk restore
+ *   laneSlotParams      { slotId, deliverySerial, values[12] }  bulk restore
  *   laneSlotParamValue  { slotId, paramIndex, deliverySerial, value }  live edit
  *
  * A slot's record is POSITIONAL: `values[paramIndex]` for the device type's

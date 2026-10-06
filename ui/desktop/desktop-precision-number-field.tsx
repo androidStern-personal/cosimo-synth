@@ -94,7 +94,7 @@ export function PrecisionNumberField({
     menuKeyTrack,
 }: PrecisionNumberFieldProps) {
     const { min, max, step } = entrySpec;
-    // T20: a stationary long press opens the ADR-017 parameter menu; the
+    // A stationary long press opens the ADR-017 parameter menu; the
     // field's own drag cancels it through ordinary movement bubbling.
     const longPressMenu = useLongPressParameterMenu(useCallback(() => ({
         controlKey: binding.endpointID,

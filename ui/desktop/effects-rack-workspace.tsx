@@ -105,6 +105,7 @@ import {
     buildRailSilhouettePath,
     MOBILE_MOD_RAIL_BASE_GEOMETRY,
     normalizeRailTop,
+    MOD_RAIL_DOCK_STORAGE_KEY,
     parseStoredRailDock,
     projectRailDefaultPlacement,
     projectRailDrawerPlacement,
@@ -207,7 +208,7 @@ type EffectsRackWorkspaceProps = {
     polishEnhancerBypass: PatchControlBinding<number>;
     polishCompressionClipBypass: PatchControlBinding<number>;
     polishOutputTrimBypass: PatchControlBinding<number>;
-    /** T74 owns only this controlled open/close handoff; T75 owns the surface. */
+    /** The rack owns only this controlled open/close handoff; the full-page Polish editor owns the surface. */
     polishEditorExpanded: boolean;
     onPolishEditorExpandedChange: (expanded: boolean) => void;
     onAddRouteWithOverrides: (overrides: GeneratedModulationRouteInput) => boolean;
@@ -228,7 +229,7 @@ type EffectsRackWorkspaceProps = {
     onGlobalModSourceSelect?: (source: GlobalModRailState["selectedSource"]) => void;
     /** A valid drop is distinct from an ordinary source tap. */
     onGlobalModSourceDrop?: (source: GlobalModRailState["selectedSource"]) => void;
-    /** T14 one-selection: the Mod page's selectors arm the bar through this. */
+    /** One selection: the Mod page's selectors arm the bar through this. */
     selectModSourceSignal?: { source: SelectedSource; serial: number } | null;
     /** ADR-025 row 15: fired once per authoritative route creation. */
     onRouteCreationConfirmed?: (routeId: string) => void;
@@ -240,7 +241,7 @@ type EffectsRackWorkspaceProps = {
     modRailAudition?: ModRailAuditionBindings;
     modRailVoiceSettings?: ModRailVoiceSettings;
     /**
-     * T06: dwell navigation during a source drag for surfaces the rack does
+     * Dwell navigation during a source drag for surfaces the rack does
      * not own (workspace tabs, oscillator tabs). Rack rows resolve locally.
      */
     onDragDwellNavigate?: (dwellKey: string) => void;
@@ -1817,7 +1818,7 @@ type ModSourceDragCallbacks = {
     ) => void;
     readonly onTap: (source: SelectedSource, wasActiveSelection: boolean) => void;
     /**
-     * T06: fired when the drag preview dwells on a `[data-drag-dwell]`
+     * Fired when the drag preview dwells on a `[data-drag-dwell]`
      * navigation surface. The drag stays alive; the consumer navigates.
      */
     readonly onDwellNavigate?: (dwellKey: string) => void;
@@ -2390,7 +2391,6 @@ function ModSourceCarousel({
     );
 }
 
-const MOBILE_MOD_RAIL_POSITION_KEY = "cosimo.mobile-global-mod-rail.position.v1";
 const MOBILE_MOD_RAIL_VELOCITY_WINDOW_MS = 100;
 const MOBILE_MOD_RAIL_MIN_RELEASE_VELOCITY_PX_PER_MS = 0.08;
 const MOBILE_MOD_RAIL_MAX_RELEASE_VELOCITY_PX_PER_MS = 1.35;
@@ -2808,7 +2808,7 @@ function MobileGlobalModRail({
             dockInitializedRef.current = true;
             let storedDock: RailDock | null = null;
             try {
-                storedDock = parseStoredRailDock(localStorage.getItem(MOBILE_MOD_RAIL_POSITION_KEY));
+                storedDock = parseStoredRailDock(localStorage.getItem(MOD_RAIL_DOCK_STORAGE_KEY));
             } catch {
                 storedDock = null;
             }
@@ -2893,8 +2893,8 @@ function MobileGlobalModRail({
             ? surface.style.getPropertyValue("--active-source-color")
             : "";
         // A data attribute, NOT a class: the surface's className is
-        // React-controlled and re-renders (page switches) silently wiped an
-        // imperative class mid-drag (T21). React never writes attributes it
+        // React-controlled and re-renders (page switches) would silently wipe
+        // an imperative class mid-drag. React never writes attributes it
         // does not declare, so this one survives any surface re-render.
         if (surface instanceof HTMLElement) {
             if (mappingActive) {
@@ -2925,7 +2925,7 @@ function MobileGlobalModRail({
         normalizedPositionRef.current = normalizedY;
         try {
             localStorage.setItem(
-                MOBILE_MOD_RAIL_POSITION_KEY,
+                MOD_RAIL_DOCK_STORAGE_KEY,
                 serializeRailDock({ edge: edgeRef.current, normalizedY }),
             );
         } catch {
@@ -4366,7 +4366,7 @@ function polishControlDescriptor(
 }
 
 /**
- * Project T74's eight approved bindings into T75's larger presentation. The
+ * Project the compact Polish module's eight bindings into the full-page editor. The
  * compact and full-screen surfaces render the same control/action components;
  * this adapter adds no second parameter implementation or sound state.
  */
@@ -4726,7 +4726,7 @@ export function EffectsRackWorkspace({
     }, [clearReorderBranchDwell, focusRackBranch, focusedBranchIndices]);
     const [selectedSource, setSelectedSource] = useState<SelectedSource>({ sourceKind: "mseg", sourceSlot: 1 });
     const [sourceIsArmed, setSourceIsArmed] = useState(false);
-    // T14 one-selection: the Mod page's selectors arm the bar. This state is
+    // One selection: the Mod page's selectors arm the bar. This state is
     // the real selection owner; onGlobalModRailStateChange re-reports it.
     useEffect(() => {
         if (selectModSourceSignal !== null) {
@@ -5638,7 +5638,7 @@ export function EffectsRackWorkspace({
         setRouteStatus("");
     }, [deviceIdForEffectSelection, onSelectedEffectChange]);
 
-    // T06: a source drag dwelling on a navigation surface switches views
+    // A source drag dwelling on a navigation surface switches views
     // while the drag stays alive under its original owner.
     const handleDwellNavigate = useCallback((dwellKey: string) => {
         if (dwellKey.startsWith("rack-effect:")) {
@@ -5790,7 +5790,7 @@ export function EffectsRackWorkspace({
         onDuplicateHover: handleDuplicateHover,
         onTap: (source, wasActiveSelection) => {
             if (modSourceTapMode === "toggle-quick-source") {
-                // T43: an inactive source changes selection and sheet ownership
+                // An inactive source changes selection and sheet ownership
                 // atomically. The active source only toggles its existing editor.
                 if (!wasActiveSelection) {
                     selectSource(source);
@@ -5849,7 +5849,7 @@ export function EffectsRackWorkspace({
 
     const modulationRouteControls = (
         <>
-            {/* T09: a selected mapped pair shows NO separate amount control —
+            {/* A selected mapped pair shows NO separate amount control —
                 the target knob, its ring, and the shared HUD own that job. */}
             <output className="rack-route-status" aria-live="polite">
                 {routeStatus || (hoverTargetEndpointID ? `Route to ${hoverTargetEndpointID}` : "")}

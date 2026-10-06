@@ -193,8 +193,8 @@ function assertMaximalDocument(presetFile, facts) {
         assert.equal(typeof slot.playback.legatoRestarts, "boolean");
         assert.equal(typeof slot.playback.holdFinalValue, "boolean");
     }
-    assert.equal(modulation.envelopeSlots.every(({ name }) => name.startsWith("T46 Envelope")), true);
-    assert.equal(modulation.macroNames.every((name) => name.startsWith("T46 Macro")), true);
+    assert.equal(modulation.envelopeSlots.every(({ name }) => name.startsWith("Max Envelope")), true);
+    assert.equal(modulation.macroNames.every((name) => name.startsWith("Max Macro")), true);
     assert.equal(articulations.slots.length, facts.articulationSlotCount);
     for (const slot of articulations.slots) {
         assert.equal(Object.keys(slot.overrides).length, facts.articulationOverrideCountPerSlot);
@@ -214,7 +214,7 @@ async function installMaximalSound(page) {
         const inputs = harness.patchConnection.status?.details?.inputs;
         if (!Array.isArray(inputs)) throw new Error("Desktop harness parameter contract is unavailable.");
         const fixture = fixtureModule.createMaximalSoundFixture(inputs);
-        window.__T46_MAXIMAL_SOUND__ = fixture;
+        window.__COSIMO_MAXIMAL_SOUND__ = fixture;
         for (const [endpointID, value] of Object.entries(fixture.parameters)) {
             harness.setParameterValue(endpointID, value);
         }
@@ -227,12 +227,12 @@ async function installMaximalSound(page) {
     await page.waitForTimeout(300);
     await page.evaluate(() => {
         const harness = window.__COSIMO_DESKTOP_HARNESS__;
-        const fixture = window.__T46_MAXIMAL_SOUND__;
+        const fixture = window.__COSIMO_MAXIMAL_SOUND__;
         if (!harness || !fixture) throw new Error("Maximal sound fixture was not staged.");
         harness.setStoredStateValue("articulations.v4", fixture.storedState["articulations.v4"]);
         harness.setStoredStateValue("lane.v1", fixture.storedState["lane.v1"]);
         harness.setStoredStateValue("bounce.v1", null);
-        delete window.__T46_MAXIMAL_SOUND__;
+        delete window.__COSIMO_MAXIMAL_SOUND__;
     });
     await page.waitForTimeout(750);
     return facts;
@@ -357,7 +357,7 @@ async function runMaximalCopyOpenFlow(engineKey, label) {
         } finally {
             await secondTargetContext.close();
         }
-        console.log(`T46 ${label} desktop maximal: ${rawBytes} raw bytes, ${desktopLink.length} URL characters`);
+        console.log(`${label} desktop maximal: ${rawBytes} raw bytes, ${desktopLink.length} URL characters`);
     } finally {
         await desktopSourceContext.close();
     }
@@ -391,7 +391,7 @@ async function runMaximalCopyOpenFlow(engineKey, label) {
         } finally {
             await phoneTargetContext.close();
         }
-        console.log(`T46 ${label} phone maximal: ${shared.link.length} URL characters`);
+        console.log(`${label} phone maximal: ${shared.link.length} URL characters`);
     } finally {
         await phoneSourceContext.close();
     }

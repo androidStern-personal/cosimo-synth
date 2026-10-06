@@ -1,5 +1,5 @@
 /**
- * Application-level Mod bar presentation preferences (T60).
+ * Application-level Mod bar presentation preferences.
  *
  * These values deliberately live outside patch, preset, articulation, and
  * host state. The store is available in every UI build because floating-edge
@@ -7,7 +7,7 @@
  * developer-only tuning page is absent.
  */
 
-import { MOBILE_MOD_RAIL_SCALE, parseStoredRailDock } from "./mod-rail-perimeter";
+import { MOBILE_MOD_RAIL_SCALE, MOD_RAIL_DOCK_STORAGE_KEY, parseStoredRailDock } from "./mod-rail-perimeter";
 
 /** The three product-approved placements. */
 export type ModBarPlacement = "floating-left" | "floating-right" | "parked";
@@ -22,13 +22,13 @@ export type ModBarPreferences = {
     readonly parkedVisibility: ParkedModBarVisibility;
 };
 
-/** T42's current coherent enlargement is T60's initial live value. */
+/** The Mod rail's own proportional scale is the bar's starting size. */
 export const MOD_BAR_DEFAULT_SCALE = MOBILE_MOD_RAIL_SCALE;
 
-/** Proposed live tuning floor from the settled T60 contract. */
+/** The smallest Mod bar scale a user can choose. */
 export const MOD_BAR_MIN_SCALE = 0.85;
 
-/** Proposed live tuning ceiling from the settled T60 contract. */
+/** The largest Mod bar scale a user can choose. */
 export const MOD_BAR_MAX_SCALE = 1.3;
 
 /** The application preference used when no stored choice exists. */
@@ -40,9 +40,6 @@ export const MOD_BAR_PREFERENCE_DEFAULTS: ModBarPreferences = {
 
 /** Versioned application-preference key, separate from every sound codec. */
 export const MOD_BAR_PREFERENCES_STORAGE_KEY = "cosimo.mod-bar.preferences.v1";
-
-/** Legacy floating dock key, read once as a left/right placement fallback. */
-export const LEGACY_MOD_RAIL_POSITION_STORAGE_KEY = "cosimo.mobile-global-mod-rail.position.v1";
 
 const PLACEMENTS: ReadonlyArray<ModBarPlacement> = ["floating-left", "floating-right", "parked"];
 const PARKED_VISIBILITIES: ReadonlyArray<ParkedModBarVisibility> = ["visible", "hidden"];
@@ -115,7 +112,8 @@ export function parseStoredModBarPreferences(
     };
 }
 
-function legacyPlacement(rawDock: string | null): ModBarPlacement {
+/** Before the user picks a placement, the bar starts on the side the rail is docked to. */
+function placementFromRailDock(rawDock: string | null): ModBarPlacement {
     const dock = parseStoredRailDock(rawDock);
     return dock?.edge === "left" ? "floating-left" : "floating-right";
 }
@@ -128,7 +126,7 @@ function readInitialState(): ModBarPreferences {
     try {
         const defaults = {
             ...MOD_BAR_PREFERENCE_DEFAULTS,
-            placement: legacyPlacement(localStorage.getItem(LEGACY_MOD_RAIL_POSITION_STORAGE_KEY)),
+            placement: placementFromRailDock(localStorage.getItem(MOD_RAIL_DOCK_STORAGE_KEY)),
         } satisfies ModBarPreferences;
         return parseStoredModBarPreferences(
             localStorage.getItem(MOD_BAR_PREFERENCES_STORAGE_KEY),
@@ -179,7 +177,7 @@ export function updateModBarPreferences(patch: ModBarPreferencePatch): void {
     }
 }
 
-/** Restore the T60 starting point without touching sound state. */
+/** Restore the default Mod bar presentation without touching sound state. */
 export function resetModBarPreferences(): void {
     updateModBarPreferences(MOD_BAR_PREFERENCE_DEFAULTS);
 }

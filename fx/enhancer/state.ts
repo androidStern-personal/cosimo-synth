@@ -1,8 +1,7 @@
 import { definePluginState, parameter, presets, snapshots } from "../../kit/index";
 
 /**
- * Every EnhancerPlugin.cmajor parameter, keyed by the setting names the synth's
- * Enhancer state uses. Slider drags, button presses, presets and A-G snapshots
+ * Every EnhancerPlugin.cmajor parameter, keyed by its setting name. Slider drags, button presses, presets and A-G snapshots
  * share one Undo history.
  */
 export default definePluginState({

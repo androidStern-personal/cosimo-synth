@@ -8,7 +8,7 @@ import {
 } from "./lane-state-v2";
 
 /**
- * The subway-map layout model (M3, locked direction: canvas "FX Rack Subway
+ * The subway-map layout model (design reference: canvas "FX Rack Subway
  * Map"). A lane.v2 document becomes a vertical script of ROWS the renderer
  * draws top to bottom — the WHOLE topology always in view, devices shrunk to
  * station pills. This model is geometry-free: lanes are indices (the

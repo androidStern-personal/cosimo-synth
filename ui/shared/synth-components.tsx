@@ -186,11 +186,11 @@ export type FilterEndpointState = {
 };
 
 /**
- * T04A: the armed source's modulation travel — the filter at source = 0
+ * The armed source's modulation travel — the filter at source = 0
  * (start) and at full deflection (end) — drawn as the two response curves
  * with the swept region shaded in the source color. Renders only while the
- * armed source has at least one filter mapping (T07: color never implies a
- * mapping that does not exist). The start of a fully unipolar travel is the
+ * armed source has at least one filter mapping, so color never implies a
+ * mapping that does not exist. The start of a fully unipolar travel is the
  * base handle itself; only bipolar travel gets its own start handle.
  */
 export type FilterModulationTravel = {

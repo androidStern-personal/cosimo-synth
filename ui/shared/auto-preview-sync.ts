@@ -47,7 +47,7 @@ export type StrikeQuantizerConfig = {
     readonly slowLoopPolicy: "opportunistic" | "subdivision";
 };
 
-/** T12B starting numbers; tuned on the phone alongside the T12 cadence. */
+/** Starting numbers, tuned on the phone together with the Auto-preview cadence. */
 export const AUTO_PREVIEW_SYNC_CONFIG: StrikeQuantizerConfig = {
     minSyncPeriodMs: 120,
     waitBudgetLeadingMs: 150,

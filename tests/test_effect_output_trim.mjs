@@ -134,13 +134,13 @@ test("lane state owns trim by effect-instance identity and full replay addresses
         { _tag: "ok", value: moved },
     );
 
-    const preT78 = JSON.parse(laneState.serializeLaneStateV2(initial));
-    delete preT78.devices["delay#1"].params.delayOutputTrimDb;
-    let preT78Result;
+    const incomplete = JSON.parse(laneState.serializeLaneStateV2(initial));
+    delete incomplete.devices["delay#1"].params.delayOutputTrimDb;
+    let incompleteResult;
     assert.doesNotThrow(() => {
-        preT78Result = laneState.parseLaneStateV2(preT78);
-    }, "unsupported pre-T78 state must reject at the schema boundary, not throw mid-materialization");
-    assert.equal(preT78Result._tag, "err", "T78 explicitly adds no old-preset compatibility path");
+        incompleteResult = laneState.parseLaneStateV2(incomplete);
+    }, "a lane record without Output Trim must reject at the schema boundary, not throw mid-materialization");
+    assert.equal(incompleteResult._tag, "err", "a lane record without Output Trim is rejected");
 });
 
 test("the sparse modulation program grows to 235 rack cells and executes only mapped trim routes", async () => {

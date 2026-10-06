@@ -655,8 +655,8 @@ class CosimoBridgeAdapter implements CosimoAdapterPort {
             if (articulationId !== "Default") {
                 this.requireArticulation(articulationId);
             }
-            // TODO(COSIMO_ADAPTER_COMMAND_MAP): audition selector forcing is an
-            // open engine path; retain the requested articulation locally only.
+            // The engine has no input that forces the audition articulation,
+            // so the requested articulation is kept locally.
             this.audition = { ...this.audition, articulation: articulationId };
             this.markSnapshotDirty();
         }),
@@ -1770,8 +1770,8 @@ class CosimoBridgeAdapter implements CosimoAdapterPort {
     private restoreEffectOrder(effectOrder: ReadonlyArray<EffectModuleId>): void {
         const order = effectOrder.map((effectId) => requireEffectId(effectId));
         // A full-order restore is a serial statement over the DOCUMENT'S own
-        // devices (the starter default is a trio, so eight is no longer the
-        // universal count): the restored list must restate exactly the
+        // devices (the starter default is a trio, so eight is not a universal
+        // count): the restored list must restate exactly the
         // devices this document places, in any order.
         const current = this.projectEffectOrder();
         if (order.length !== current.length

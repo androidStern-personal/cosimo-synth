@@ -1379,7 +1379,7 @@ function IOSPatchViewBody() {
     const distortionWetHPKeyTrack = useLaneKeyTrackControlBinding(DISTORTION_WET_HP_DESCRIPTOR);
     const distortionWetLPKeyTrack = useLaneKeyTrackControlBinding(DISTORTION_WET_LP_DESCRIPTOR);
 
-    /* T20 — the ADR-017 long-press parameter menu (shared shell machine). */
+    /* The ADR-017 long-press parameter menu (shared shell machine). */
     const { openParameterMenu, parameterMenuOverlays } = useParameterMenuShell({
         routes: synthView.routes,
         armedSourceKind: armedSource.sourceKind,

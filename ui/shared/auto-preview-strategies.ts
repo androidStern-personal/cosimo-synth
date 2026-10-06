@@ -1,6 +1,6 @@
 /**
  * Dev-build auto-preview strategy engine: the alternative retrigger feels the
- * performance tuning page can swap in for the shipped T12 engine. Exposes the
+ * performance tuning page can swap in for the shipped engine. Exposes the
  * exact AutoPreviewEngine surface so the note layer, manual-hold tracking, and
  * suspension wiring in synth-hooks drive it unchanged.
  *

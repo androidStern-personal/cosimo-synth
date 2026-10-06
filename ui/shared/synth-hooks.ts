@@ -270,7 +270,7 @@ const RUNTIME_STATE_ENDPOINT_ID = "runtimeState";
 const RETRY_DESIRED_TABLE_REQUEST_ENDPOINT_ID = "retryDesiredTableRequest";
 const WAVETABLE_PREWARM_REQUEST_ENDPOINT_ID = "wavetablePrewarmRequest";
 const MIDI_INPUT_ENDPOINT_ID = "midiIn";
-/** T12 locked starting cadence; tune on a real phone before shipping. */
+/** Auto-preview starting cadence, tuned on a real phone. */
 const AUTO_PREVIEW_SCHEDULER_CONFIG = {
     minRetriggerIntervalMs: 250,
     movementStoppedMs: 150,
@@ -1928,8 +1928,7 @@ export function useSynthPatchViewModel({
         initialValue: 0.707107,
         coerce: (value) => clamp(Number(value) || 0, 0.1, 20),
     });
-    // T05: linear dry/wet blend, 1.0 = fully filtered (preserves every
-    // existing patch; the appended engine endpoint defaults to 1).
+    // Linear dry/wet blend, 1.0 = fully filtered.
     const filterMix = usePatchParameterBinding<number>({
         endpointID: FILTER_MIX_ENDPOINT_ID,
         initialValue: 1,
@@ -2604,7 +2603,7 @@ export function useSynthPatchViewModel({
         if (!bridge?.isReady() || !bank) return false;
         const route = createDefaultRoute({ ...overrides, id: createAvailableGeneratedRouteId(bank.routes) });
         if (parseModulationState({ ...bank, routes: [...bank.routes, route] })._tag === "err") return false;
-        // This legacy boolean means validated submission; acceptance belongs to the owner.
+        // True means the edit passed validation and was submitted; the owner decides acceptance.
         submitModulationEdit(bridge.addRoute(route));
         return true;
     }, [modulationBridge, oscillatorTargetsActive]);
@@ -2890,7 +2889,7 @@ export function useSynthPatchViewModel({
         const parameters = snapshot.parameters;
 
         // Applying a snapshot writes through the scalar bindings but is not a
-        // direct user edit: suppress the T12 user-edit seam for the batch.
+        // direct user edit: keep the batch off the user-edit bus.
         runProgrammaticWrites(() => {
             wavetablePosition.setValue(parameters.wavetablePosition);
             pan.setValue(parameters.pan);
@@ -3551,7 +3550,7 @@ export function useSynthPatchViewModel({
         sendMidiInputEvent(0x90, note, 100);
     }, [handleStopNoteKeyAudition, sendMidiInputEvent]);
 
-    // ── Auto-preview (T12/T12C): when no manual notes are held, retrigger the
+    // ── Auto-preview: when no manual notes are held, retrigger the
     // most recent completed intentional group after a real changed edit.
     // Engine-owned strikes take the raw connection so they never disturb the
     // held-note, chord-memory, or last-played bookkeeping.
@@ -3724,7 +3723,7 @@ export function useSynthPatchViewModel({
                 releaseOwnedGroup();
             },
         });
-        // The dev tuning page's alternative feels (T12 follow-up): same engine
+        // The dev tuning page's alternative feels: same engine
         // surface, different retrigger policy. Strategy strikes are held notes
         // choked by the next strike; release comes from the strategy itself.
         const createStrategyEngine = () => createPreviewStrategyEngine({

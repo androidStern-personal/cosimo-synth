@@ -121,7 +121,7 @@ function createShape(slotIndex: number, shapeIndex: 0 | 1) {
     return {
         format: "cosimo.mseg.shape" as const,
         version: 1 as const,
-        name: `T46 MSEG ${slotIndex + 1}${shapeIndex === 0 ? "A" : "B"}`,
+        name: `Max MSEG ${slotIndex + 1}${shapeIndex === 0 ? "A" : "B"}`,
         globalSmooth: shapeIndex === 1,
         points: Array.from({ length: 16 }, (_, pointIndex) => ({
             x: pointIndex / 15,
@@ -161,9 +161,9 @@ function createMaximalModulation(): ModulationState {
             },
         })),
         envelopeSlots: defaults.envelopeSlots.map((_, slotIndex) => ({
-            name: `T46 Envelope ${slotIndex + 1}`,
+            name: `Max Envelope ${slotIndex + 1}`,
         })),
-        macroNames: defaults.macroNames.map((_, slotIndex) => `T46 Macro ${slotIndex + 1}`),
+        macroNames: defaults.macroNames.map((_, slotIndex) => `Max Macro ${slotIndex + 1}`),
         routes,
     };
     const parsed = parseModulationState(candidate);
@@ -223,7 +223,7 @@ function parseRequiredArticulations(
         slots: Array.from({ length: ARTICULATION_MAX_SLOTS }, (_, slotIndex) => ({
             id: `t46-articulation-${slotIndex}`,
             runtimeSlot: slotIndex,
-            name: `T46 Articulation ${slotIndex + 1}`,
+            name: `Max Articulation ${slotIndex + 1}`,
             color: `#${((slotIndex * 2_654_435_761) & 0xff_ffff).toString(16).padStart(6, "0")}`,
             key: slotIndex,
             velRange: { min: slotIndex, max: slotIndex },
@@ -323,7 +323,7 @@ export function createMaximalSoundFixture(inputs: ReadonlyArray<ParameterInput>)
     const lane = createMaximalLane();
     const articulableRouteCount = Object.keys(articulations.slots[0]?.routeAmounts ?? {}).length;
     return {
-        label: "T46 Maximum Current Sound",
+        label: "The Maximum Current Sound",
         parameters,
         modulation,
         articulations,

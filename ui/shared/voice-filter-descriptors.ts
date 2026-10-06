@@ -1,6 +1,6 @@
 /**
- * The Voice filter's three base parameters (T04/T05 card), in the rack
- * descriptor shape so every consumer (the filter knobs, the T14 mappings
+ * The Voice filter card's three base parameters, in the rack
+ * descriptor shape so every consumer (the filter knobs, the mappings
  * table's base resolver, exact entry) shares ONE authority.
  */
 

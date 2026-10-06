@@ -156,7 +156,7 @@ export function NexusNumberField({
         || !Number.isFinite(displayValue)) {
         throw new RangeError(`Nexus field "${label}" requires a finite displayed numeric domain.`);
     }
-    // T20: a stationary long press anywhere on the field opens the ADR-017
+    // A stationary long press anywhere on the field opens the ADR-017
     // parameter menu (typing stays available through normal focus).
     const longPressMenu = useLongPressParameterMenu(useCallback(() => ({
         controlKey: binding.endpointID,

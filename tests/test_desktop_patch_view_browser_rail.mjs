@@ -571,7 +571,7 @@ test("the Mod rail docks to either screen edge and remembers its dock across lau
         await restoredPage.close();
     }
 
-    const legacyPage = await openHarnessPage({
+    const edgelessPage = await openHarnessPage({
         beforeGoto: async (nextPage) => {
             await nextPage.setViewportSize({ width: 393, height: 852 });
             await nextPage.addInitScript(() => {
@@ -581,20 +581,20 @@ test("the Mod rail docks to either screen edge and remembers its dock across lau
         },
     });
     try {
-        const rail = legacyPage.locator('[data-role="mobile-global-mod-rail"]');
+        const rail = edgelessPage.locator('[data-role="mobile-global-mod-rail"]');
         await rail.waitFor();
-        await legacyPage.waitForTimeout(240);
+        await edgelessPage.waitForTimeout(240);
         assert.equal(
             await rail.getAttribute("data-edge"),
             "right",
-            "A legacy stored position predates edge docking and must restore on the right edge.",
+            "A stored position without an edge is ignored, so the rail takes its default right dock.",
         );
     } finally {
-        await legacyPage.evaluate(() => {
+        await edgelessPage.evaluate(() => {
             localStorage.removeItem("cosimo.mod-bar.preferences.v1");
             localStorage.removeItem("cosimo.mobile-global-mod-rail.position.v1");
         }).catch(() => {});
-        await legacyPage.close();
+        await edgelessPage.close();
     }
 });
 

@@ -1124,7 +1124,7 @@ test("fx/enhancer_lite ships only the product patch; the shelves audition lives 
     assert.equal(liteEntries.includes("assets"), false, "the rejected wordmark asset no longer ships");
 });
 
-test("the enhancer target builds from the canonical T26 DSP source, not a copy", async () => {
+test("the enhancer target builds from the canonical Enhancer DSP source, not a copy", async () => {
     const { buildModule } = await loadBuildModules();
     const manifest = JSON.parse(
         await readFile(path.join(repoRoot, buildModule.getEffectPlugins().enhancer.patch), "utf8"),

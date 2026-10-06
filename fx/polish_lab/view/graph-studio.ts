@@ -940,7 +940,7 @@ export function createPolishGraphStudio({ root, sound }: { readonly root: HTMLEl
     if (!activeGesture) return;
     if (event.type === "mouseup") {
       // Embedded WebKit can lose the PointerEvent release after SVG capture.
-      // Keep its legacy fallback strictly scoped to a mouse-owned gesture.
+      // Keep this mouseup fallback strictly scoped to a mouse-owned gesture.
       if (activeGesture.pointerType === "mouse") finishGesture(false);
       return;
     }

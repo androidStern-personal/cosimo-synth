@@ -1,5 +1,5 @@
 /**
- * Effects Lane modulation target kinds (M1).
+ * Effects Lane modulation target kinds.
  *
  * `lane.<instanceId>.<endpointID>` names ONE pool device's parameter — e.g.
  * `lane.delay#2.delayTime`. Lane kinds are per-patch DYNAMIC: they exist only

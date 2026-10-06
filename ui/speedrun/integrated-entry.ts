@@ -17,10 +17,9 @@ export { renderScriptedVideoInCurrentDocument } from "./scripted/iframe-renderer
 const STYLE_LINK_MARKER = "cosimo-video-bounce-runtime";
 /**
  * The shipped path is "live": a real-time performance of the real UI
- * recorded from the compositor. Build-flag escape hatches, kept until the
- * deprecated paths are deleted: VITE_COSIMO_VIDEO_BOUNCE_SCRIPTED=1 selects
- * the frame-stepped rasterizer path, VITE_COSIMO_VIDEO_BOUNCE_REPLICA=1 the
- * parked replica composition.
+ * recorded from the compositor. A build flag selects another path:
+ * VITE_COSIMO_VIDEO_BOUNCE_SCRIPTED=1 the frame-stepped rasterizer path,
+ * VITE_COSIMO_VIDEO_BOUNCE_REPLICA=1 the replica composition.
  */
 const VIDEO_COMPOSITION_MODE = import.meta.env.VITE_COSIMO_VIDEO_BOUNCE_REPLICA === "1"
     ? "replica"

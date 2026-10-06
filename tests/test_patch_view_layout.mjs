@@ -212,7 +212,7 @@ test("checked-in UI source maps keep dependency provenance inside the checkout",
     }
 });
 
-test("generated desktop and iPhone UI artifacts carry the exact T74/T75 source contracts", async () => {
+test("generated desktop and iPhone UI artifacts carry the compact and full-page Polish source contracts", async () => {
     const sharedEndpointTokens = [
         "polishSafeBassAmount",
         "polishSafeBassBypass",

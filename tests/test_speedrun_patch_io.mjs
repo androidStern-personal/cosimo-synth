@@ -140,7 +140,7 @@ test("synth preset files from sound links and Copy JSON enter through strict doc
     assert.deepEqual(result.value.document.lane, lane);
 });
 
-test("speedrun browser and URL-share intake reject old or incomplete T78 lane state", async () => {
+test("speedrun browser and URL-share intake reject incomplete lane state", async () => {
     const modules = await loadSpeedrunModules();
     const { patchIO } = modules;
     const context = createSourceOnlyT78IntakeContext(modules);
@@ -148,7 +148,7 @@ test("speedrun browser and URL-share intake reject old or incomplete T78 lane st
     const missingTrim = structuredClone(context.defaults.lane);
     delete missingTrim.devices["delay#1"].params.delayOutputTrimDb;
 
-    const makePresetFile = (lane) => presetFile("Rejected T78 State", {
+    const makePresetFile = (lane) => presetFile("Rejected Lane State", {
         ...context.defaults.parameters,
         "modulation.v6": context.defaults.modulation,
         "articulations.v4": context.defaults.articulations,

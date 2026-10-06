@@ -1,5 +1,5 @@
 /**
- * The user-edit bus (T12): the single stream of direct user parameter edits.
+ * The user-edit bus: the single stream of direct user parameter edits.
  *
  * Scalar control bindings and the modulation runtime bridge publish here.
  * Preset loads, DAW/host restore, engine echo, and undo enter the app

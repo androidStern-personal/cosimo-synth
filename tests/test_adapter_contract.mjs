@@ -689,7 +689,7 @@ test("bridge rack commands preserve desired state across an older effective read
     adapter.dispose();
 });
 
-test("bridge hydration rejects old or incomplete T78 lane state before runtime writes", async () => {
+test("bridge hydration rejects incomplete lane state before runtime writes", async () => {
     const [{ createCosimoBridgeAdapter }, { MockPatchConnection }, laneState] = await Promise.all([
         bridgeFactoryPromise,
         mockConnectionPromise,
@@ -701,7 +701,7 @@ test("bridge hydration rejects old or incomplete T78 lane state before runtime w
     delete missingTrim.devices["delay#1"].params.delayOutputTrimDb;
 
     for (const invalidLane of [oldVersion, missingTrim]) {
-        const connection = new MockPatchConnection({ name: "T78 lane rejection", version: 1 }, { loadStateChannel: loadChannel });
+        const connection = new MockPatchConnection({ name: "lane rejection", version: 1 }, { loadStateChannel: loadChannel });
         connection.setStoredStateValue("lane.v1", JSON.stringify(invalidLane));
         connection.clearDebugLog();
         const adapter = createCosimoBridgeAdapter({ connection });
