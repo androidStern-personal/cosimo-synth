@@ -4,14 +4,6 @@ var MSEG_BODY_SAMPLES = 2048;
 var MSEG_PADDED_SAMPLES = MSEG_BODY_SAMPLES + 3;
 var MSEG_CURVE_POWER_LIMIT = 20;
 var MSEG_DEFAULT_NAME = "MSEG 1";
-var MSEG_DEFAULT_DEPTH = 1;
-var MSEG_RATE_MIN_SECONDS = 0;
-var MSEG_RATE_MAX_SECONDS = 2;
-var MSEG_RATE_KIND_SECONDS = 0;
-var MSEG_RATE_KIND_TEMPO = 1;
-var MSEG_NOTE_OFF_POLICY_FINISH_LOOP = 0;
-var MSEG_NOTE_OFF_POLICY_IMMEDIATE = 1;
-var MSEG_NOTE_OFF_POLICY_IGNORE = 2;
 var MSEG_POINT_HIT_RADIUS_PX = 22;
 var MSEG_SEGMENT_HIT_RADIUS_PX = 14;
 var MSEG_POINT_RADIUS_PX = 8;
@@ -86,31 +78,6 @@ function createDefaultMsegShape(name = MSEG_DEFAULT_NAME) {
     ]
   };
 }
-function createDefaultMsegPlayback() {
-  return {
-    format: "mseg.playback",
-    version: 1,
-    rate: {
-      kind: "seconds",
-      seconds: 1
-    },
-    loop: { startX: 0, endX: 1 },
-    noteOffPolicy: "finish_loop",
-    legatoRestarts: false,
-    holdFinalValue: true
-  };
-}
-function clampMsegDepth(value) {
-  return clamp(Number.isFinite(value) ? value : 0, -1, 1);
-}
-function clampMsegRateSeconds(value) {
-  const numericValue = Number(value);
-  return clamp(
-    Number.isFinite(numericValue) ? numericValue : 1,
-    MSEG_RATE_MIN_SECONDS,
-    MSEG_RATE_MAX_SECONDS
-  );
-}
 function createMsegEditorMetrics(width, height, {
   pointRadius = MSEG_POINT_RADIUS_PX,
   horizontalPadding = MSEG_EDITOR_HORIZONTAL_PADDING_PX,
@@ -171,43 +138,6 @@ function msegEditorCoordinatesToPoint(editorX, editorY, width, height, options =
     y: clamp01(1 - (Number(editorY) - metrics.plotTop) / metrics.plotHeight)
   };
 }
-function normalizeMsegLoop(loop) {
-  if (!loop || typeof loop !== "object") {
-    return null;
-  }
-  const nextLoop = objectFields(loop);
-  const startX = clamp01(Number(nextLoop.startX));
-  const endX = clamp01(Number(nextLoop.endX));
-  if (almostEqual(startX, endX)) {
-    return null;
-  }
-  if (endX < startX) {
-    return {
-      startX: endX,
-      endX: startX
-    };
-  }
-  return { startX, endX };
-}
-function normalizeMsegPlayback(playback = createDefaultMsegPlayback()) {
-  const next = objectFields(playback);
-  const rate = objectFields(next.rate);
-  const seconds = Number(rate.seconds);
-  const noteOffPolicyCandidate = next.noteOffPolicy;
-  const noteOffPolicy = noteOffPolicyCandidate === "finish_loop" || noteOffPolicyCandidate === "immediate" || noteOffPolicyCandidate === "ignore" ? noteOffPolicyCandidate : "finish_loop";
-  return {
-    format: "mseg.playback",
-    version: 1,
-    rate: {
-      kind: "seconds",
-      seconds: clampMsegRateSeconds(Number.isFinite(seconds) ? seconds : 1)
-    },
-    loop: normalizeMsegLoop(next.loop),
-    noteOffPolicy,
-    legatoRestarts: Boolean(next.legatoRestarts),
-    holdFinalValue: next.holdFinalValue !== false
-  };
-}
 function normalizePoint(point, pointIndex, pointCount) {
   const nextPoint = objectFields(point);
   let x = Number(nextPoint.x);
@@ -245,36 +175,6 @@ function normalizeMsegShape(shape = createDefaultMsegShape()) {
     globalSmooth: Boolean(next.globalSmooth),
     points
   };
-}
-function serializeMsegShape(shape) {
-  return JSON.stringify(normalizeMsegShape(shape));
-}
-function deserializeMsegShape(value) {
-  if (typeof value !== "string" || !value.trim()) {
-    return createDefaultMsegShape();
-  }
-  try {
-    return normalizeMsegShape(JSON.parse(value));
-  } catch {
-    return createDefaultMsegShape();
-  }
-}
-function serializeMsegPlayback(playback) {
-  return JSON.stringify(normalizeMsegPlayback(playback));
-}
-function deserializeMsegPlayback(value) {
-  if (typeof value !== "string" || !value.trim()) {
-    return createDefaultMsegPlayback();
-  }
-  try {
-    return normalizeMsegPlayback(JSON.parse(value));
-  } catch {
-    return createDefaultMsegPlayback();
-  }
-}
-function deserializeMsegDepth(value) {
-  const numericValue = Number(value);
-  return clampMsegDepth(Number.isFinite(numericValue) ? numericValue : MSEG_DEFAULT_DEPTH);
 }
 function powerScale(value, power) {
   if (Math.abs(power) < 0.01) {
@@ -417,9 +317,6 @@ function evaluateNormalizedMsegShape(points, x) {
 function evaluateMsegShape(shape, x) {
   return evaluateNormalizedMsegShape(normalizeMsegShape(shape).points, x);
 }
-function catmullRom(p0, p1, p2, p3, t) {
-  return p1 + 0.5 * t * (p2 - p0 + t * (2 * p0 - 5 * p1 + 4 * p2 - p3 + t * (-p0 + 3 * p1 - 3 * p2 + p3)));
-}
 function renderMsegShape(shape) {
   const padded = new Float32Array(MSEG_PADDED_SAMPLES);
   renderMsegShapeInto(shape, padded);
@@ -435,22 +332,6 @@ function renderMsegShapeInto(shape, padded) {
   padded[0] = padded[1];
   padded[MSEG_BODY_SAMPLES + 1] = padded[MSEG_BODY_SAMPLES];
   padded[MSEG_BODY_SAMPLES + 2] = padded[MSEG_BODY_SAMPLES];
-}
-function sampleRenderedMsegBuffer(paddedBuffer, x) {
-  if (!(paddedBuffer instanceof Float32Array) || paddedBuffer.length !== MSEG_PADDED_SAMPLES) {
-    throw new Error(`Rendered MSEG buffers must be a Float32Array with ${MSEG_PADDED_SAMPLES} samples`);
-  }
-  const clampedX = clamp01(Number(x));
-  const scaled = clampedX * (MSEG_BODY_SAMPLES - 1);
-  const sampleIndex = Math.floor(scaled);
-  const fractional = scaled - sampleIndex;
-  return catmullRom(
-    paddedBuffer[sampleIndex],
-    paddedBuffer[sampleIndex + 1],
-    paddedBuffer[sampleIndex + 2],
-    paddedBuffer[sampleIndex + 3],
-    fractional
-  );
 }
 function findMsegPointHitIndex(shape, editorX, editorY, width, height, hitRadius = MSEG_POINT_HIT_RADIUS_PX, editorOptions = {}) {
   const points = normalizeMsegShape(shape).points;
@@ -551,25 +432,6 @@ function deriveMsegSegmentCurvePower(shape, segmentIndex, x, y) {
   }
   return clampCurvePower((low + high) * 0.5);
 }
-function toMsegPlaybackConfigEvent(playback) {
-  const normalizedPlayback = normalizeMsegPlayback(playback);
-  return {
-    seconds: normalizedPlayback.rate.seconds,
-    holdFinalValue: normalizedPlayback.holdFinalValue,
-    rateKind: MSEG_RATE_KIND_SECONDS,
-    loopEnabled: normalizedPlayback.loop !== null,
-    loopStart: normalizedPlayback.loop?.startX ?? 0,
-    loopEnd: normalizedPlayback.loop?.endX ?? 0,
-    noteOffPolicy: normalizedPlayback.noteOffPolicy === "immediate" ? MSEG_NOTE_OFF_POLICY_IMMEDIATE : normalizedPlayback.noteOffPolicy === "ignore" ? MSEG_NOTE_OFF_POLICY_IGNORE : MSEG_NOTE_OFF_POLICY_FINISH_LOOP,
-    legatoRestarts: normalizedPlayback.legatoRestarts
-  };
-}
-function msegShapesEqual(left, right) {
-  return serializeMsegShape(left) === serializeMsegShape(right);
-}
-function msegPlaybacksEqual(left, right) {
-  return serializeMsegPlayback(left) === serializeMsegPlayback(right);
-}
 function addMsegPoint(shape, x, y) {
   const normalizedShape = normalizeMsegShape(shape);
   const points = normalizedShape.points.map((point) => ({ ...point }));
@@ -639,14 +501,24 @@ function setMsegSegmentCurvePower(shape, segmentIndex, curvePower) {
 }
 
 // ui/shared/mseg.ts
+var MSEG_DEFAULT_DEPTH = 1;
+var MSEG_RATE_MIN_SECONDS = 0;
+var MSEG_RATE_MAX_SECONDS = 2;
+var MSEG_RATE_KIND_SECONDS = 0;
+var MSEG_NOTE_OFF_POLICY_FINISH_LOOP = 0;
+var MSEG_NOTE_OFF_POLICY_IMMEDIATE = 1;
+var MSEG_NOTE_OFF_POLICY_IGNORE = 2;
+function objectFields2(value) {
+  return value !== null && typeof value === "object" ? value : {};
+}
+function clamp2(value, min, max) {
+  return Math.min(Math.max(value, min), max);
+}
 function createDefaultMsegShape2(...args) {
   return { ...createDefaultMsegShape(...args), format: "cosimo.mseg.shape" };
 }
 function normalizeMsegShape2(...args) {
   return { ...normalizeMsegShape(...args), format: "cosimo.mseg.shape" };
-}
-function deserializeMsegShape2(...args) {
-  return { ...deserializeMsegShape(...args), format: "cosimo.mseg.shape" };
 }
 function addMsegPoint2(...args) {
   return { ...addMsegPoint(...args), format: "cosimo.mseg.shape" };
@@ -660,20 +532,129 @@ function deleteMsegPoint2(...args) {
 function setMsegSegmentCurvePower2(...args) {
   return { ...setMsegSegmentCurvePower(...args), format: "cosimo.mseg.shape" };
 }
-function createDefaultMsegPlayback2(...args) {
-  return { ...createDefaultMsegPlayback(...args), format: "cosimo.mseg.playback" };
-}
-function normalizeMsegPlayback2(...args) {
-  return { ...normalizeMsegPlayback(...args), format: "cosimo.mseg.playback" };
-}
-function deserializeMsegPlayback2(...args) {
-  return { ...deserializeMsegPlayback(...args), format: "cosimo.mseg.playback" };
-}
-function serializeMsegShape2(shape) {
+function serializeMsegShape(shape) {
   return JSON.stringify(normalizeMsegShape2(shape));
 }
-function serializeMsegPlayback2(playback) {
-  return JSON.stringify(normalizeMsegPlayback2(playback));
+function deserializeMsegShape(value) {
+  if (typeof value !== "string" || !value.trim()) {
+    return createDefaultMsegShape2();
+  }
+  try {
+    return normalizeMsegShape2(JSON.parse(value));
+  } catch {
+    return createDefaultMsegShape2();
+  }
+}
+function msegShapesEqual(left, right) {
+  return serializeMsegShape(left) === serializeMsegShape(right);
+}
+function clampMsegDepth(value) {
+  return clamp2(Number.isFinite(value) ? value : 0, -1, 1);
+}
+function deserializeMsegDepth(value) {
+  const numericValue = Number(value);
+  return clampMsegDepth(Number.isFinite(numericValue) ? numericValue : MSEG_DEFAULT_DEPTH);
+}
+function clampMsegRateSeconds(value) {
+  const numericValue = Number(value);
+  return clamp2(
+    Number.isFinite(numericValue) ? numericValue : 1,
+    MSEG_RATE_MIN_SECONDS,
+    MSEG_RATE_MAX_SECONDS
+  );
+}
+function createDefaultMsegPlayback() {
+  return {
+    format: "cosimo.mseg.playback",
+    version: 1,
+    rate: {
+      kind: "seconds",
+      seconds: 1
+    },
+    loop: { startX: 0, endX: 1 },
+    noteOffPolicy: "finish_loop",
+    legatoRestarts: false,
+    holdFinalValue: true
+  };
+}
+function normalizeMsegLoop(loop) {
+  if (!loop || typeof loop !== "object") {
+    return null;
+  }
+  const nextLoop = objectFields2(loop);
+  const startX = clamp01(Number(nextLoop.startX));
+  const endX = clamp01(Number(nextLoop.endX));
+  if (Math.abs(startX - endX) <= 1e-12) {
+    return null;
+  }
+  return endX < startX ? { startX: endX, endX: startX } : { startX, endX };
+}
+function normalizeMsegPlayback(playback = createDefaultMsegPlayback()) {
+  const next = objectFields2(playback);
+  const rate = objectFields2(next.rate);
+  const seconds = Number(rate.seconds);
+  const noteOffPolicyCandidate = next.noteOffPolicy;
+  const noteOffPolicy = noteOffPolicyCandidate === "finish_loop" || noteOffPolicyCandidate === "immediate" || noteOffPolicyCandidate === "ignore" ? noteOffPolicyCandidate : "finish_loop";
+  return {
+    format: "cosimo.mseg.playback",
+    version: 1,
+    rate: {
+      kind: "seconds",
+      seconds: clampMsegRateSeconds(Number.isFinite(seconds) ? seconds : 1)
+    },
+    loop: normalizeMsegLoop(next.loop),
+    noteOffPolicy,
+    legatoRestarts: Boolean(next.legatoRestarts),
+    holdFinalValue: next.holdFinalValue !== false
+  };
+}
+function serializeMsegPlayback(playback) {
+  return JSON.stringify(normalizeMsegPlayback(playback));
+}
+function deserializeMsegPlayback(value) {
+  if (typeof value !== "string" || !value.trim()) {
+    return createDefaultMsegPlayback();
+  }
+  try {
+    return normalizeMsegPlayback(JSON.parse(value));
+  } catch {
+    return createDefaultMsegPlayback();
+  }
+}
+function msegPlaybacksEqual(left, right) {
+  return serializeMsegPlayback(left) === serializeMsegPlayback(right);
+}
+function toMsegPlaybackConfigEvent(playback) {
+  const normalizedPlayback = normalizeMsegPlayback(playback);
+  return {
+    seconds: normalizedPlayback.rate.seconds,
+    holdFinalValue: normalizedPlayback.holdFinalValue,
+    rateKind: MSEG_RATE_KIND_SECONDS,
+    loopEnabled: normalizedPlayback.loop !== null,
+    loopStart: normalizedPlayback.loop?.startX ?? 0,
+    loopEnd: normalizedPlayback.loop?.endX ?? 0,
+    noteOffPolicy: normalizedPlayback.noteOffPolicy === "immediate" ? MSEG_NOTE_OFF_POLICY_IMMEDIATE : normalizedPlayback.noteOffPolicy === "ignore" ? MSEG_NOTE_OFF_POLICY_IGNORE : MSEG_NOTE_OFF_POLICY_FINISH_LOOP,
+    legatoRestarts: normalizedPlayback.legatoRestarts
+  };
+}
+function catmullRom(p0, p1, p2, p3, t) {
+  return p1 + 0.5 * t * (p2 - p0 + t * (2 * p0 - 5 * p1 + 4 * p2 - p3 + t * (-p0 + 3 * p1 - 3 * p2 + p3)));
+}
+function sampleRenderedMsegBuffer(paddedBuffer, x) {
+  if (!(paddedBuffer instanceof Float32Array) || paddedBuffer.length !== MSEG_PADDED_SAMPLES) {
+    throw new Error(`Rendered MSEG buffers must be a Float32Array with ${MSEG_PADDED_SAMPLES} samples`);
+  }
+  const clampedX = clamp01(Number(x));
+  const scaled = clampedX * (MSEG_BODY_SAMPLES - 1);
+  const sampleIndex = Math.floor(scaled);
+  const fractional = scaled - sampleIndex;
+  return catmullRom(
+    paddedBuffer[sampleIndex],
+    paddedBuffer[sampleIndex + 1],
+    paddedBuffer[sampleIndex + 2],
+    paddedBuffer[sampleIndex + 3],
+    fractional
+  );
 }
 export {
   MSEG_BODY_SAMPLES,
@@ -690,7 +671,6 @@ export {
   MSEG_POINT_HIT_RADIUS_PX,
   MSEG_POINT_RADIUS_PX,
   MSEG_RATE_KIND_SECONDS,
-  MSEG_RATE_KIND_TEMPO,
   MSEG_RATE_MAX_SECONDS,
   MSEG_RATE_MIN_SECONDS,
   MSEG_SEGMENT_HIT_RADIUS_PX,
@@ -699,15 +679,15 @@ export {
   clamp01,
   clampMsegDepth,
   clampMsegRateSeconds,
-  createDefaultMsegPlayback2 as createDefaultMsegPlayback,
+  createDefaultMsegPlayback,
   createDefaultMsegShape2 as createDefaultMsegShape,
   createMsegEditorMetrics,
   createMsegTimeAxisTicks,
   deleteMsegPoint2 as deleteMsegPoint,
   deriveMsegSegmentCurvePower,
   deserializeMsegDepth,
-  deserializeMsegPlayback2 as deserializeMsegPlayback,
-  deserializeMsegShape2 as deserializeMsegShape,
+  deserializeMsegPlayback,
+  deserializeMsegShape,
   evaluateMsegShape,
   findMsegPointHitIndex,
   findMsegSegmentHitIndex,
@@ -715,7 +695,7 @@ export {
   msegEditorCoordinatesToPoint,
   msegPlaybacksEqual,
   msegShapesEqual,
-  normalizeMsegPlayback2 as normalizeMsegPlayback,
+  normalizeMsegPlayback,
   normalizeMsegShape2 as normalizeMsegShape,
   pointToMsegEditorCoordinates,
   renderMsegShape,
@@ -724,8 +704,8 @@ export {
   sampleMsegEditorPolyline,
   sampleMsegSegmentEditorPolyline,
   sampleRenderedMsegBuffer,
-  serializeMsegPlayback2 as serializeMsegPlayback,
-  serializeMsegShape2 as serializeMsegShape,
+  serializeMsegPlayback,
+  serializeMsegShape,
   setMsegSegmentCurvePower2 as setMsegSegmentCurvePower,
   toMsegPlaybackConfigEvent
 };

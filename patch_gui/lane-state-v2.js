@@ -575,12 +575,6 @@ export function buildLaneRuntimeEventsV2(state) {
     });
     return events;
 }
-/** Send a complete lane.v2 document as one logical commit. */
-export function commitLaneStateV2(connection, state) {
-    for (const event of buildLaneRuntimeEventsV2(state)) {
-        connection.sendEventOrValue?.(event.endpointID, event.value);
-    }
-}
 //==============================================================================
 // Tree editing (M4). Every op is pure: it returns a NEW document, the same
 // document copy for a no-op, or null when the edit is not representable —
