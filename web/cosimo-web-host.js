@@ -499,15 +499,6 @@ globalThis.__COSIMO_WEB_POC__ = {
         if (!state.connection) throw new Error("Cosimo is not ready.");
         state.connection.sendEventOrValue(endpointID, value);
     },
-    sendPerfGapProbe() {
-        if (!isTestMode || !state.connection?.audioNode?.port) {
-            throw new Error("Performance gap probes are only available in test mode.");
-        }
-        state.connection.audioNode.port.postMessage({
-            type: "patch",
-            payload: { type: "cosimo-perf-gap-probe" },
-        });
-    },
     setPerfProcessMultiplier(multiplier) {
         if (!isTestMode || !state.connection?.audioNode?.port) {
             throw new Error("Performance load amplification is only available in test mode.");
