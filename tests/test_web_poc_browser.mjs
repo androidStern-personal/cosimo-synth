@@ -3003,7 +3003,9 @@ test("generated product UI restores oscillator parameters and rack state through
 });
 
 test("generated mobile rack reorder survives WebKit zero-button touch moves without scrolling", {
-    skip: browserEngine !== "chromium",
+    skip: browserEngine === "chromium"
+        ? false
+        : "Touches are injected through the Chrome DevTools Protocol, which only Chromium exposes.",
 }, async () => {
     const page = await openStartedMobileRackPage({ simulateWebKitZeroTouchButtons: true });
 
@@ -3066,7 +3068,9 @@ test("generated mobile rack reorder survives WebKit zero-button touch moves with
 });
 
 test("generated mobile modulation source touch-drops onto a parameter inside the patch shadow root", {
-    skip: browserEngine !== "chromium",
+    skip: browserEngine === "chromium"
+        ? false
+        : "Touches are injected through the Chrome DevTools Protocol, which only Chromium exposes.",
 }, async () => {
     const page = await openStartedMobileRackPage();
 
@@ -3181,7 +3185,9 @@ test("generated mobile modulation rail keeps one continuous vector silhouette", 
 });
 
 test("generated browser proof plays and visibly presses notes from a touchscreen", {
-    skip: browserEngine !== "webkit",
+    skip: browserEngine === "webkit"
+        ? false
+        : "This plays notes the way iPhone Safari delivers touches, which only the WebKit engine reproduces.",
 }, async () => {
     const page = await browser.newPage({
         ...devices["iPhone 13"],
@@ -3323,7 +3329,9 @@ test("generated browser proof plays and visibly presses notes from a touchscreen
 });
 
 test("generated browser proof stacks full-width wavetable and filter rows on mobile", {
-    skip: browserEngine !== "webkit",
+    skip: browserEngine === "webkit"
+        ? false
+        : "This measures the iPhone Safari layout, which only the WebKit engine reproduces.",
 }, async () => {
     const page = await browser.newPage({
         ...devices["iPhone 13"],
