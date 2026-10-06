@@ -76,6 +76,22 @@ test("client waits for host-backed state, hydrates through the channel, and Jota
     assert.equal(channel.listener, undefined);
 });
 
+test("the last value change keeps its object across updates until a later change replaces it", () => {
+    const channel = new ControlledChannel();
+    const client = createPluginStateClient(definition, { channel, onDefect: error => assert.fail(String(error)) });
+    const withChange = (state, lastChange) => ({ ...state, lastChange });
+    channel.deliver(attached(withChange(snapshot(1), { reason: "load", keys: ["gain", "curve"], revision: 1 })));
+    const loaded = client.getSnapshot().state.lastChange;
+    channel.deliver({ kind: "update", scope, revision: 2, state: withChange(snapshot(2), { reason: "load", keys: ["gain", "curve"], revision: 1 }) });
+    assert.equal(client.getSnapshot().state.lastChange, loaded, "an update that changed no value keeps the object, though it crossed JSON");
+    channel.deliver({ kind: "update", scope, revision: 3, state: withChange(snapshot(3, [0, 1], 0.9), { reason: "edit", keys: ["gain"], revision: 3 }) });
+    const edited = client.getSnapshot().state.lastChange;
+    assert.deepEqual(edited, { reason: "edit", keys: ["gain"], revision: 3 });
+    channel.deliver({ kind: "update", scope, revision: 4, state: withChange(snapshot(4, [0, 1], 0.8), { reason: "edit", keys: ["gain"], revision: 4 }) });
+    assert.notEqual(client.getSnapshot().state.lastChange, edited, "a later edit of the same field is a new object");
+    client.stop();
+});
+
 test("an update received during attach wins over the older attach snapshot; duplicate attach cannot roll it back", () => {
     const channel = new ControlledChannel();
     channel.onSend = message => {

@@ -17,10 +17,12 @@ before(async () => {
 after(async () => { await browser?.close(); await server?.close() })
 async function withPage(run, { prepare, ...options } = {}) {
     const page = await browser.newPage(options)
+    // Interactions get 5 s. Loading the page may first wait for Vite to pre-bundle dependencies on a cold cache.
     page.setDefaultTimeout(5000)
+    const load = { timeout: 60000 }
     const errors = []
     page.on('pageerror', e => errors.push(e.message))
-    try { await prepare?.(page); await page.goto(base); await page.locator('#default [data-slot=filter-editor]').waitFor(); await run(page); assert.deepEqual(errors, []) }
+    try { await prepare?.(page); await page.goto(base, load); await page.locator('#default [data-slot=filter-editor]').waitFor(load); await run(page); assert.deepEqual(errors, []) }
     finally { await page.close() }
 }
 async function drag(page, handle, dx, dy) {

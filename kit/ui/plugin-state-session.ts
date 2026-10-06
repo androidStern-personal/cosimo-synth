@@ -100,6 +100,14 @@ export interface PluginStateSnapshot<Fields extends PluginStateFields = PluginSt
         readonly undoEntry?: PluginStateHistoryEntry;
         readonly redoEntry?: PluginStateHistoryEntry;
     };
+    /**
+     * The accepted change that last altered field values: `load` when the document was loaded or
+     * replaced, `recall` for an edit marked as a recall, `history` for Undo and Redo, and `edit`
+     * for every other change. `keys` lists the fields whose values changed, in definition order;
+     * `revision` is the snapshot revision that made the change. A snapshot that alters no value
+     * keeps the same object, so a view detects a new change by identity.
+     */
+    readonly lastChange?: { readonly reason: PluginStateChangeReason; readonly keys: readonly string[]; readonly revision: number };
 }
 
 /** Shared edit command; agent adapters require expectedVersion before entering this seam. */
@@ -257,7 +265,6 @@ function readyField(value: unknown, persistence: PluginStatePersistence, version
     return Object.freeze({ readiness: Object.freeze({ kind: "ready" as const }), value, version, persistence: Object.freeze(persistence), ...(metadata ? { metadata } : {}), ...(gesture ? { gesture } : {}), ...(application ? { application: Object.freeze(application) } : {}), ...(persistenceRequest === undefined ? {} : { persistenceRequest }) });
 }
 
-/** Create a patch-lifetime state owner with explicit native effects and Jotai reactivity. */
 /** An author codec threw while the session handled one command. */
 class CodecThrew extends Error {
     constructor(key: string, cause: unknown) { super(codecThrewMessage(key), { cause }); }
@@ -268,6 +275,7 @@ function codecCall<Result>(key: string, call: () => Result): Result {
     catch (error) { throw new CodecThrew(key, error); }
 }
 
+/** Create a patch-lifetime state owner with explicit native effects and Jotai reactivity. */
 export function createPluginStateSession<const Fields extends PluginStateFields>(
     definition: Fields,
     ports: {
@@ -331,19 +339,27 @@ export function createPluginStateSession<const Fields extends PluginStateFields>
             }),
         };
     };
+    /** Whether a field's accepted value differs between two snapshots; gaining or losing a value counts. */
+    const valueChanged = (key: string, before: RuntimeField | undefined, after: RuntimeField | undefined) => {
+        if (before === after) return false;
+        const old = before && "value" in before ? before : undefined, field = after && "value" in after ? after : undefined;
+        return old && field ? !Object.is(old.value, field.value) && !equalValue(key, old.value, field.value) : old !== field;
+    };
     // Why each engine binding last prepared, so a retry repeats that preparation faithfully.
     const preparedReasons = new Map<string, PluginStateChangeReason>();
     const commit = (next: Model, retryKey?: string, reason: PluginStateChangeReason = "edit") => {
         const previous = store.get(state);
         if (next.snapshot === previous.snapshot) { store.set(state, next); return; }
         const scope = next.snapshot.scope;
-        if (!scope || !ports.bindings?.length) { store.set(state, next); return; }
+        const reset = scope !== null && (!previous.snapshot.scope || !sameScope(scope, previous.snapshot.scope));
+        const keys = Object.keys(definition).filter(key => valueChanged(key, previous.snapshot.fields[key], next.snapshot.fields[key]));
+        const lastChange = keys.length ? Object.freeze({ reason: reset ? "load" as const : reason, keys: Object.freeze(keys), revision: next.snapshot.revision })
+            : next.snapshot.lastChange;
         const fields = { ...next.snapshot.fields };
-        for (const binding of ports.bindings) {
+        if (scope) for (const binding of ports.bindings ?? []) {
             const field = fields[binding.key];
             if (!field) continue;
             const old = previous.snapshot.fields[binding.key];
-            const reset = !previous.snapshot.scope || !sameScope(scope, previous.snapshot.scope);
             const changed = reset || binding.key === retryKey || !old || old.readiness.kind !== field.readiness.kind
                 || ("value" in field && (!('value' in old) || !Object.is(field.value, old.value)))
                 || binding.dependencies.some(key => {
@@ -377,7 +393,7 @@ export function createPluginStateSession<const Fields extends PluginStateFields>
                 engineEffects.push(() => binding.replace(input, target));
             } else engineEffects.push(() => binding.cancel());
         }
-        store.set(state, { ...next, snapshot: Object.freeze({ ...next.snapshot, fields: Object.freeze(fields) }) });
+        store.set(state, { ...next, snapshot: Object.freeze({ ...next.snapshot, fields: Object.freeze(fields), ...(lastChange ? { lastChange } : {}) }) });
     };
     const applyValues = (model: Model, changes: readonly { readonly key: string; readonly value: unknown }[], history: UndoHistory<HistoryEntry>, cause: "edit" | "recall" | "history" | "recover"): PluginStateResult => {
         if (!model.snapshot.scope) return { kind: "rejected", reason: "not-ready" };

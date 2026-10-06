@@ -92,6 +92,47 @@ async function openMixedSession() {
     } };
 }
 
+test("the snapshot names why and which field values last changed, and keeps that object until a value changes again", async t => {
+    const { session, native, scope, command } = await openMixedSession();
+    t.after(() => session.stop());
+    const lastChange = () => session.getSnapshot().lastChange;
+    const expectChange = (reason, keys, message) => {
+        const snapshot = session.getSnapshot();
+        assert.deepEqual(snapshot.lastChange, { reason, keys, revision: snapshot.revision }, message);
+        assert.ok(Object.isFrozen(snapshot.lastChange) && Object.isFrozen(snapshot.lastChange.keys));
+    };
+    expectChange("load", ["gain", "rate", "curve"], "opening the document is a load of every field that gained a value");
+
+    await command({ kind: "edit", key: "gain", value: 4 });
+    expectChange("edit", ["gain"]);
+    const edited = lastChange();
+    const before = session.getSnapshot().revision;
+    await session.dispatch({ kind: "published", scope, request: native.publications.at(-1).request, result: { kind: "observed" } });
+    await command({ kind: "begin", keys: ["rate"], gesture: 1 });
+    await command({ kind: "end", keys: ["rate"], gesture: 1 });
+    assert.ok(session.getSnapshot().revision > before, "persistence and gesture bookkeeping published new snapshots");
+    assert.equal(lastChange(), edited, "a publish that changes no value keeps the same lastChange object");
+
+    await command({ kind: "edit-many", recall: true, edits: [
+        { key: "curve", value: { points: [0, 0.5, 1] } }, { key: "gain", value: 4 }, { key: "rate", value: 2 },
+    ] });
+    expectChange("recall", ["rate", "curve"], "a recall lists the fields it changed in definition order, not the unchanged gain");
+    await command({ kind: "undo" });
+    expectChange("history", ["rate", "curve"]);
+    const undone = lastChange();
+    await command({ kind: "redo" });
+    expectChange("history", ["rate", "curve"]);
+    assert.notEqual(lastChange(), undone, "Redo is a new change");
+
+    await session.dispatch({ kind: "replaced", scope: { ...scope, document: 1 }, native: {
+        parameters: [
+            { endpoint: "gain", value: 2.5, min: -12, max: 12, step: 0.5, defaultValue: 1 },
+            { endpoint: "rate", value: 2, min: 0.25, max: 8, step: 0.25, defaultValue: 1 },
+        ], values: { curve: { points: [0, 0.5, 1] } },
+    } });
+    expectChange("load", ["gain"], "a replaced document lists only fields whose values differ, comparing stored values with their codec");
+});
+
 test("delayed parameter reports cannot rewind accepted intent, but newer automation can equal an old drag value", async t => {
     const { session, native, scope, command } = await openMixedSession();
     t.after(() => session.stop());

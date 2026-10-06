@@ -79,9 +79,11 @@ export function createPluginStateClient<const Fields extends PluginStateFields>(
                 ? before.value : "value" in next ? next.value : undefined;
             fields[key] = Object.freeze("value" in next ? { ...next, value } : next);
         }
+        // The same change keeps its object across updates, so a view detects a new change by identity.
+        const lastChange = previous?.lastChange && previous.lastChange.revision === incoming.lastChange?.revision ? previous.lastChange : incoming.lastChange;
         // SAFETY: keys are the definition's keys; parsed adapter values retain
         // their field type and may only be replaced by an equal prior field value.
-        return Object.freeze({ ...incoming, fields: Object.freeze(fields) }) as PluginStateSnapshot<Fields>;
+        return Object.freeze({ ...incoming, fields: Object.freeze(fields), ...(lastChange ? { lastChange } : {}) }) as PluginStateSnapshot<Fields>;
     };
     /** Parse and encode one outgoing edit value. A throwing author codec rejects only this edit. */
     const parseOutbound = (key: string, value: unknown): { readonly kind: "ok"; readonly value: unknown; readonly encoded: unknown } | { readonly kind: "error" } => {

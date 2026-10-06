@@ -1,6 +1,6 @@
 import type { EngineTarget } from "./plugin-state-engine";
 import type { PluginStateClientEvent } from "./plugin-state-client";
-import type { PluginStateFields, PluginStateJson } from "./plugin-state-definition";
+import type { PluginStateChangeReason, PluginStateFields, PluginStateJson } from "./plugin-state-definition";
 import type {
     PluginStateAddress, PluginStateCommand, PluginStateNativeSnapshot,
     PluginStateScope, PluginStateSnapshot, PluginStatePersistence, PluginStateFieldSnapshot, PluginStateResult, PluginStateReceipt, PluginStateApplication, PluginStateHistoryEntry,
@@ -352,6 +352,20 @@ function fieldSnapshot(definition: PluginStateFields[string], input: unknown,
         persistence: Object.freeze(evidence), ...(metadata ? { metadata } : {}), ...(gesture ? { gesture } : {}), ...common });
 }
 
+function changeReason(input: unknown): input is PluginStateChangeReason {
+    return input === "load" || input === "recall" || input === "history" || input === "edit";
+}
+
+/** A snapshot's last value change: a known reason, declared keys in definition order, and a revision no later than the snapshot's. */
+function lastChange(input: unknown, declared: readonly string[], revision: number): PluginStateSnapshot["lastChange"] {
+    if (!isRecord(input) || !changeReason(input.reason) || !counter(input.revision) || input.revision > revision
+        || !Array.isArray(input.keys) || input.keys.length === 0) return undefined;
+    const listed: readonly unknown[] = input.keys;
+    const keys = declared.filter(key => listed.includes(key));
+    if (keys.length !== listed.length || keys.some((key, index) => key !== listed[index])) return undefined;
+    return Object.freeze({ reason: input.reason, keys: Object.freeze(keys), revision: input.revision });
+}
+
 function stateSnapshot<Fields extends PluginStateFields>(definition: Fields, input: unknown,
     base?: PluginStateSnapshot<Fields>): PluginStateSnapshot<Fields> | undefined {
     if (!isRecord(input) || !counter(input.revision, false) || !isRecord(input.fields) || !isRecord(input.history)
@@ -364,6 +378,8 @@ function stateSnapshot<Fields extends PluginStateFields>(definition: Fields, inp
     for (const entry of [undoEntry, redoEntry]) {
         if (entry && (entry.scope.owner !== parsedScope.owner || entry.scope.document !== parsedScope.document)) return undefined;
     }
+    const change = input.lastChange === undefined ? undefined : lastChange(input.lastChange, Object.keys(definition), input.revision);
+    if (input.lastChange !== undefined && !change) return undefined;
     const sameDocument = base?.scope?.owner === parsedScope.owner && base.scope.document === parsedScope.document;
     const fields: Record<string, PluginStateFieldSnapshot<unknown>> = Object.create(null);
     for (const [key, declaration] of Object.entries(definition)) {
@@ -379,6 +395,7 @@ function stateSnapshot<Fields extends PluginStateFields>(definition: Fields, inp
         history: Object.freeze({ canUndo: input.history.canUndo, canRedo: input.history.canRedo,
             ...(undoEntry ? { undoEntry } : {}), ...(redoEntry ? { redoEntry } : {}),
         }),
+        ...(change ? { lastChange: change } : {}),
     }) as PluginStateSnapshot<Fields>;
 }
 

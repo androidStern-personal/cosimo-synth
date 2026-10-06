@@ -6,7 +6,7 @@ import { loadUIModule } from "../../kit/tests/helpers/load_ui_module.mjs";
 const root = path.resolve(import.meta.dirname, "../..");
 const protocol = await loadUIModule(root, "kit/ui/plugin-state-protocol.ts");
 const { isBoundedStateJson, parseClientMessage, parseServiceMessage, encodeEventPayload } = protocol;
-const { definePluginState, storedValue } = await loadUIModule(root, "kit/ui/plugin-state-definition.ts");
+const { definePluginState, parameter, storedValue } = await loadUIModule(root, "kit/ui/plugin-state-definition.ts");
 
 test("the shared JSON boundary accounts for UTF-8, each node and nesting before transport", () => {
     assert.equal(isBoundedStateJson({ values: [null, true, 2.5, "𐐷 café"] }), true);
@@ -151,4 +151,32 @@ test("an unchanged value resolves only against the same field version in the sam
         "a changed value is sent in full");
     assert.equal(parseClientMessage(definition, { kind: "attached", request: 1, client: 1, scope, revision: 2, state: elided }, base).kind, "invalid",
         "an attach reply always carries every value");
+});
+
+test("the last value change crosses to the GUI intact, and a malformed one is refused", () => {
+    const { encodeStateSnapshot } = protocol;
+    const codec = { parse: value => typeof value === "number" ? { kind: "ok", value } : { kind: "error", message: "number" }, encode: value => value, equals: (a, b) => a === b };
+    const definition = definePluginState({ gain: parameter("gain"), shape: storedValue({ initial: 0, codec }), tone: storedValue({ initial: 0, codec }) });
+    const scope = { owner: "owner", document: 1 };
+    const field = value => ({ readiness: { kind: "ready" }, value, version: 1, persistence: { kind: "pending" } });
+    const snapshot = lastChange => ({ scope, revision: 5, history: { canUndo: true, canRedo: false },
+        fields: { gain: field(0.5), shape: field(2), tone: field(3) }, ...(lastChange === undefined ? {} : { lastChange }) });
+    const parse = lastChange => parseClientMessage(definition, JSON.parse(JSON.stringify({ kind: "update", scope, revision: 5,
+        state: encodeStateSnapshot(definition, snapshot(lastChange)) })));
+
+    const change = { reason: "recall", keys: ["gain", "tone"], revision: 3 };
+    const parsed = parse(change);
+    assert.equal(parsed.kind, "ok");
+    assert.deepEqual(parsed.value.state.lastChange, change);
+    assert.ok(Object.isFrozen(parsed.value.state.lastChange) && Object.isFrozen(parsed.value.state.lastChange.keys));
+    for (const reason of ["load", "history", "edit"]) assert.equal(parse({ ...change, reason }).kind, "ok", reason);
+    assert.equal("lastChange" in parse(undefined).value.state, false, "a snapshot before any value change has none");
+
+    for (const [malformed, why] of [
+        [null, "not an object"], [{ ...change, reason: "preset" }, "unknown reason"], [{ ...change, keys: "gain" }, "keys not a list"],
+        [{ ...change, keys: [] }, "no keys"], [{ ...change, keys: ["gain", "volume"] }, "undeclared key"],
+        [{ ...change, keys: ["gain", "gain"] }, "repeated key"], [{ ...change, keys: ["tone", "gain"] }, "not in definition order"],
+        [{ ...change, keys: ["gain", 1] }, "non-string key"], [{ ...change, revision: 0 }, "no revision"],
+        [{ ...change, revision: 6 }, "a revision after the snapshot's"], [{ ...change, revision: 2.5 }, "fractional revision"],
+    ]) assert.equal(parse(malformed).kind, "invalid", why);
 });
