@@ -283,20 +283,23 @@ export function useDirectionalPanelTransition({
 
         panel.style.transition = "none";
         panel.style.transform = `translateX(${forward ? "100%" : "-100%"})`;
-        // Two frames: apply the start positions, then animate both to rest.
-        requestAnimationFrame(() => {
-            requestAnimationFrame(() => {
+        // Two frames: apply the start positions, then animate both to rest. The
+        // ghost leaves a slide's length after the slide starts, so slow frames
+        // cannot remove it before it has moved.
+        let timer: number | null = null;
+        let frame = requestAnimationFrame(() => {
+            frame = requestAnimationFrame(() => {
                 ghost.style.transform = `translateX(${forward ? "-100%" : "100%"})`;
                 panel.style.transition = `transform ${SEGMENTED_PANEL_SLIDE_MS}ms ease-out`;
                 panel.style.transform = "translateX(0)";
+                timer = uiTimeout(() => {
+                    cleanupRef.current?.();
+                }, SEGMENTED_PANEL_SLIDE_MS + 80);
             });
         });
-
-        const timer = uiTimeout(() => {
-            cleanupRef.current?.();
-        }, SEGMENTED_PANEL_SLIDE_MS + 80);
         cleanupRef.current = () => {
-            clearUiTimeout(timer);
+            cancelAnimationFrame(frame);
+            if (timer !== null) clearUiTimeout(timer);
             ghost.remove();
             panel.style.transition = "";
             panel.style.transform = "";

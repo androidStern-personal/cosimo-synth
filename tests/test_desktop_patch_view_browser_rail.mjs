@@ -4934,9 +4934,12 @@ test("rail flick keeps moving after touch release and faster releases travel far
                 y: handleBox.y + (handleBox.height / 2),
             };
 
+            // Explicit event times keep the gesture's velocity independent of renderer load.
+            const startSeconds = Date.now() / 1000;
             await cdp.send("Input.dispatchTouchEvent", {
                 type: "touchStart",
                 touchPoints: [{ ...start, radiusX: 5, radiusY: 5, force: 1 }],
+                timestamp: startSeconds,
             });
             for (let step = 1; step <= 4; step += 1) {
                 await page.waitForTimeout(stepDelayMs);
@@ -4949,13 +4952,18 @@ test("rail flick keeps moving after touch release and faster releases travel far
                         radiusY: 5,
                         force: 1,
                     }],
+                    timestamp: startSeconds + ((step * stepDelayMs) / 1000),
                 });
             }
             await page.waitForTimeout(releasePauseMs);
 
             const held = await rail.boundingBox();
             assert.ok(held);
-            await cdp.send("Input.dispatchTouchEvent", { type: "touchEnd", touchPoints: [] });
+            await cdp.send("Input.dispatchTouchEvent", {
+                type: "touchEnd",
+                touchPoints: [],
+                timestamp: startSeconds + (((4 * stepDelayMs) + releasePauseMs) / 1000),
+            });
             return held;
         };
 
@@ -6040,6 +6048,9 @@ test("subway stations select on tap, reorder on drag, and never touch sound para
         await page.waitForSelector('[data-role="effects-rack-card"]');
         await clearHarnessDebugLog(page);
         const station = page.locator('[data-role="rack-station-reverb"]');
+        // Keep the whole map and the drag target on screen, so the drag never
+        // depends on edge auto-scroll.
+        await page.locator('[data-role="rack-module-list"]').scrollIntoViewIfNeeded();
         await station.scrollIntoViewIfNeeded();
         const stationBox = await station.boundingBox();
         assert.ok(stationBox);
@@ -6066,7 +6077,7 @@ test("subway stations select on tap, reorder on drag, and never touch sound para
 
         // A drag along the line is a reorder: exactly one topology commit,
         // no parameter traffic, and the release detaches cleanly.
-        const target = page.locator('[data-role="rack-module-filter"]');
+        const target = page.locator('[data-role="rack-module-chorus"]');
         const targetBox = await target.boundingBox();
         assert.ok(targetBox);
         await page.mouse.move(stationBox.x + (stationBox.width / 2), stationBox.y + (stationBox.height / 2));
@@ -6080,7 +6091,7 @@ test("subway stations select on tap, reorder on drag, and never touch sound para
             (nextSnapshot) => nextSnapshot.sentMessages.some(({ endpointID, value }) => (
                 endpointID === "laneTopology"
                 && Array.isArray(value?.slotIds)
-                && Number(value.slotIds[0]) === 7
+                && Number(value.slotIds[3]) === 7
             )),
         );
         assert.equal(snapshot.sentMessages.filter(({ endpointID }) => endpointID === "laneTopology").length, 1);

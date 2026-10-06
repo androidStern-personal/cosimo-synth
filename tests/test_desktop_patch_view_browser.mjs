@@ -6679,42 +6679,59 @@ test("ADR-024 tabs: selecting an oscillator slides the panel directionally and s
         beforeGoto: (nextPage) => nextPage.setViewportSize({ width: 393, height: 852 }),
     });
 
+    // The outgoing ghost lives for one short slide, so the page itself samples
+    // its horizontal shift every frame from insertion until it leaves.
+    const recordGhostSlide = () => page.evaluate(() => {
+        window.__ghostSlide = new Promise((resolve) => {
+            const observer = new MutationObserver(() => {
+                const ghost = document.querySelector("[data-panel-ghost]");
+                if (!(ghost instanceof HTMLElement)) return;
+                observer.disconnect();
+                const shifts = [];
+                const insertedAt = performance.now();
+                const liveRoles = ghost.querySelectorAll("[data-role]").length;
+                const sample = () => {
+                    if (!ghost.isConnected) {
+                        resolve({ shifts, liveRoles, lifetimeMs: performance.now() - insertedAt });
+                        return;
+                    }
+                    shifts.push(new DOMMatrixReadOnly(getComputedStyle(ghost).transform).m41);
+                    requestAnimationFrame(sample);
+                };
+                requestAnimationFrame(sample);
+            });
+            observer.observe(document.body, { childList: true, subtree: true });
+        });
+    });
+    const ghostSlide = () => page.evaluate(() => window.__ghostSlide);
+
     try {
         // This test ASSERTS the slide; the harness default is reduced-motion.
         await page.emulateMedia({ reducedMotion: "no-preference" });
         await page.locator('[data-role="mobile-voice-tab-b"]').waitFor();
 
-
         // A -> B: the outgoing ghost slides LEFT, the live panel enters from
         // the right and is interactive from its first frame.
+        await recordGhostSlide();
         await page.click('[data-role="mobile-voice-tab-b"]');
-        const ghost = page.locator("[data-panel-ghost]");
-        await ghost.waitFor({ state: "visible", timeout: 2000 });
-        const ghostShift = await ghost.evaluate((element) => new Promise((resolve) => {
-            requestAnimationFrame(() => requestAnimationFrame(() => {
-                resolve(new DOMMatrixReadOnly(getComputedStyle(element).transform).m41);
-            }));
-        }));
-        assert.equal(ghostShift < 0, true, `A->B must slide the outgoing panel left, got ${ghostShift}px.`);
         assert.equal(
             await page.locator('[data-role="mobile-voice-editor"]').getAttribute("data-selected-oscillator-id"),
             "B",
             "The selection binds immediately — the slide never postpones it.",
         );
+        const first = await ghostSlide();
+        assert.equal(Math.min(...first.shifts) < 0, true, `A->B must slide the outgoing panel left, got ${first.shifts}.`);
+        assert.equal(Math.max(...first.shifts) <= 0, true, `A->B never slides right, got ${first.shifts}.`);
         // The ghost carries no live roles (sanitized) and leaves promptly.
-        assert.equal(await ghost.locator("[data-role]").count(), 0);
-        await ghost.waitFor({ state: "detached", timeout: 2000 });
+        assert.equal(first.liveRoles, 0);
+        assert.equal(first.lifetimeMs < 2000, true, `The ghost must leave promptly, stayed ${first.lifetimeMs}ms.`);
 
         // B -> A slides the other way.
+        await recordGhostSlide();
         await page.click('[data-role="mobile-voice-tab-a"]');
-        const secondShift = await page.locator("[data-panel-ghost]").evaluate(
-            (element) => new Promise((resolve) => {
-                requestAnimationFrame(() => requestAnimationFrame(() => {
-                    resolve(new DOMMatrixReadOnly(getComputedStyle(element).transform).m41);
-                }));
-            }),
-        );
-        assert.equal(secondShift > 0, true, `B->A must slide the outgoing panel right, got ${secondShift}px.`);
+        const second = await ghostSlide();
+        assert.equal(Math.max(...second.shifts) > 0, true, `B->A must slide the outgoing panel right, got ${second.shifts}.`);
+        assert.equal(Math.min(...second.shifts) >= 0, true, `B->A never slides left, got ${second.shifts}.`);
     } finally {
         await page.close();
     }
