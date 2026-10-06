@@ -1,5 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { isDeepStrictEqual } from "node:util";
 
 import {
     normalizeArticulationEditorState,
@@ -4161,7 +4162,17 @@ test("T60 application preferences cross plugin and desktop breakpoints without c
         });
 
         try {
-            const soundBeforeResize = await getHarnessSnapshot(page);
+            // Compare against the sound once the opening document has reached the engine.
+            let soundBeforeResize = await waitForHarnessSnapshot(page, "opening lane delivery", (snapshot) => (
+                snapshot.parameterValues.laneTopology !== undefined
+            ));
+            for (let settled = 0; settled < 3;) {
+                await page.waitForTimeout(100);
+                const next = await getHarnessSnapshot(page);
+                settled = isDeepStrictEqual(next.parameterValues, soundBeforeResize.parameterValues)
+                    && isDeepStrictEqual(next.storedState, soundBeforeResize.storedState) ? settled + 1 : 0;
+                soundBeforeResize = next;
+            }
             assert.equal(await page.locator('[data-role="mobile-global-mod-rail"]').count(), 0);
             await page.setViewportSize({ width: 393, height: 852 });
             const rail = page.locator('[data-role="mobile-global-mod-rail"][data-placement="parked"]');

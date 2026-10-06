@@ -3153,8 +3153,9 @@ test("mobile Mod creates, reloads, edits, and deletes more than 100 mappings wit
         await createdRow.scrollIntoViewIfNeeded();
         await clearHarnessDebugLog(page);
         const railCell = createdRow.locator(".mobile-voice-cell").first();
-        // content-visibility rows paint a beat after a programmatic scroll:
-        // wait until the cell is actually hit-testable before pressing.
+        // content-visibility rows paint a beat after a programmatic scroll and
+        // rows above may still grow: keep centering the cell until it is
+        // actually hit-testable before pressing.
         await page.waitForFunction((routeId) => {
             const cell = document
                 .querySelector(`[data-role="mod-mappings-row"][data-route-id="${routeId}"]`)
@@ -3162,8 +3163,10 @@ test("mobile Mod creates, reloads, edits, and deletes more than 100 mappings wit
             if (!cell) return false;
             const rect = cell.getBoundingClientRect();
             const hit = document.elementFromPoint(rect.left + (rect.width / 2), rect.top + (rect.height / 2));
-            return hit !== null && cell.contains(hit);
-        }, createdRoute.id);
+            if (hit !== null && cell.contains(hit)) return true;
+            cell.scrollIntoView({ block: "center" });
+            return false;
+        }, createdRoute.id, { polling: 100 });
         const cellBox = await railCell.boundingBox();
         assert.ok(cellBox);
         await page.mouse.move(cellBox.x + (cellBox.width / 2), cellBox.y + (cellBox.height / 2));
@@ -3979,28 +3982,40 @@ test("ADR-025 journey: a confirmed drop flashes, ticks, and pulses; bypass and d
         await page.mouse.down();
         await page.mouse.move(196, 420, { steps: 4 });
         await page.mouse.move(surfaceBox.x + (surfaceBox.width / 2), surfaceBox.y + (surfaceBox.height / 2), { steps: 4 });
-        await page.mouse.up();
 
         // Authoritative confirmation: flash + rising checkmark + light tick,
-        // the rail count pulses, and the matrix's new 0% row pulses too.
-        await page.waitForFunction(() => (
-            document.querySelector('[data-role="rack-parameter-surface-reverbSize"]')
-                ?.getAttribute("data-creation-confirmed") === "true"
-        ), undefined, { timeout: 3000 });
-        assert.equal(await page.locator('[data-role="rack-parameter-surface-reverbSize"] .rack-confirm-check').count(), 1);
+        // the rail count pulses, and the matrix's new 0% row pulses too. The
+        // pulses are brief, so the page records them as they appear and opens
+        // the mappings once the confirmation and the count pulse have shown.
+        await page.evaluate(() => { window.__creationChoreography = new Promise((resolve, reject) => {
+            const seen = { confirmed: false, check: false, countPulse: false, rowPulse: false };
+            const timeout = setTimeout(() => { observer.disconnect(); reject(new Error(`Choreography incomplete: ${JSON.stringify(seen)}`)); }, 5000);
+            const scan = () => {
+                seen.check ||= document.querySelector('[data-role="rack-parameter-surface-reverbSize"] .rack-confirm-check') !== null;
+                seen.countPulse ||= document.querySelector('[data-role="mobile-global-mod-rail-route-count"][data-count-pulsing]') !== null;
+                seen.rowPulse ||= document.querySelector('[data-role="mod-mappings-row"].is-just-created') !== null;
+                if (!seen.confirmed && seen.check && seen.countPulse && document.querySelector('[data-role="rack-parameter-surface-reverbSize"]')
+                    ?.getAttribute("data-creation-confirmed") === "true") {
+                    seen.confirmed = true;
+                    document.querySelector('[data-role="mobile-workspace-tab-mod"]')?.click();
+                }
+                if (!seen.confirmed) return;
+                document.querySelector('[data-role="mobile-mod-panel-tab-mappings"]:not([aria-selected="true"])')?.click();
+                if (document.querySelector('[data-role="mod-mappings-row"]') !== null) {
+                    clearTimeout(timeout);
+                    observer.disconnect();
+                    resolve(seen);
+                }
+            };
+            const observer = new MutationObserver(scan);
+            observer.observe(document.body, { subtree: true, childList: true, attributes: true });
+        }); });
+        await page.mouse.up();
+        const seen = await page.evaluate(() => window.__creationChoreography);
+        assert.equal(seen.check, true, "The confirmed parameter shows the rising checkmark.");
         assert.equal((await page.evaluate(() => window.__rackHaptics.slice())).includes("light"), true);
-        assert.equal(
-            await page.locator('[data-role="mobile-global-mod-rail-route-count"][data-count-pulsing]').count(),
-            1,
-            "The rail's mapping count must pulse on confirmation.",
-        );
-        await page.click('[data-role="mobile-workspace-tab-mod"]');
-        await page.click('[data-role="mobile-mod-panel-tab-mappings"]');
-        assert.equal(
-            await page.locator('[data-role="mod-mappings-row"].is-just-created').count(),
-            1,
-            "The new matrix row must pulse in the source color.",
-        );
+        assert.equal(seen.countPulse, true, "The rail's mapping count must pulse on confirmation.");
+        assert.equal(seen.rowPulse, true, "The new matrix row must pulse in the source color.");
         const createdRoute = readStoredModulationState(await getHarnessSnapshot(page)).routes
             .find((route) => route.targetKind === "lane.reverb#1.reverbSize");
         assert.ok(createdRoute);
