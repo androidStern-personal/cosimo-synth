@@ -106,7 +106,7 @@ test("every supported Split and Parallel fan-out compiles its last branch exactl
             groupId,
             enabled: true,
             branches: new Array(branchCount).fill(null).map(() => []),
-            ...(kind === "split" ? { xoverLowHz: 800, xoverHighHz: 2500 } : {}),
+            ...(kind === "split" ? { xoverLowHz: 800, xoverHighHz: 2500, xoverLowKeyTrackEnabled: false, xoverLowKeyTrackOffsetSemitones: 0, xoverHighKeyTrackEnabled: false, xoverHighKeyTrackOffsetSemitones: 0 } : {}),
         };
         const state = { ...laneState, chain: [group] };
         const selected = solo.toggleLaneBranchSolo(

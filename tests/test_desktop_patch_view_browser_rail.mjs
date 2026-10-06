@@ -1433,7 +1433,7 @@ test("the global modulation rail owns one continuous SVG silhouette", async () =
             await nextPage.addInitScript(() => {
                 localStorage.setItem(
                     "cosimo.mobile-global-mod-rail.position.v1",
-                    JSON.stringify({ normalizedY: 0.25 }),
+                    JSON.stringify({ version: 2, edge: "right", normalizedY: 0.25 }),
                 );
             });
         },
@@ -4532,7 +4532,7 @@ test("the global modulation rail keeps a fixed tab and opens its source drawer t
             await nextPage.addInitScript(() => {
                 localStorage.setItem(
                     "cosimo.mobile-global-mod-rail.position.v1",
-                    JSON.stringify({ normalizedY: 0.25 }),
+                    JSON.stringify({ version: 2, edge: "right", normalizedY: 0.25 }),
                 );
             });
         },
@@ -4674,7 +4674,7 @@ test("a bottom-positioned global modulation rail opens its drawer upward", async
             await nextPage.addInitScript(() => {
                 localStorage.setItem(
                     "cosimo.mobile-global-mod-rail.position.v1",
-                    JSON.stringify({ normalizedY: 1 }),
+                    JSON.stringify({ version: 2, edge: "right", normalizedY: 1 }),
                 );
             });
         },
@@ -4715,7 +4715,7 @@ test("the parameter gesture HUD avoids the active control, the global rail, the 
             await nextPage.addInitScript(() => {
                 localStorage.setItem(
                     "cosimo.mobile-global-mod-rail.position.v1",
-                    JSON.stringify({ normalizedY: 0 }),
+                    JSON.stringify({ version: 2, edge: "right", normalizedY: 0 }),
                 );
             });
         },
@@ -4906,7 +4906,7 @@ test("rail flick keeps moving after touch release and faster releases travel far
             await nextPage.addInitScript(() => {
                 localStorage.setItem(
                     "cosimo.mobile-global-mod-rail.position.v1",
-                    JSON.stringify({ normalizedY: 0.5 }),
+                    JSON.stringify({ version: 2, edge: "right", normalizedY: 0.5 }),
                 );
             });
         },
@@ -4923,7 +4923,7 @@ test("rail flick keeps moving after touch release and faster releases travel far
             await page.evaluate(() => {
                 localStorage.setItem(
                     "cosimo.mobile-global-mod-rail.position.v1",
-                    JSON.stringify({ normalizedY: 0.5 }),
+                    JSON.stringify({ version: 2, edge: "right", normalizedY: 0.5 }),
                 );
             });
             await page.reload({ waitUntil: "commit" });

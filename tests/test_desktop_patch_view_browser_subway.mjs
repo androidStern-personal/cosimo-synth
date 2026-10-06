@@ -493,7 +493,7 @@ function populatedConnectorLaneDocJson(groupKind, branchCount) {
         kind: groupKind,
         groupId: `${groupKind}#1`,
         enabled: true,
-        ...(groupKind === "split" ? { xoverLowHz: 320, xoverHighHz: 3200 } : {}),
+        ...(groupKind === "split" ? { xoverLowHz: 320, xoverHighHz: 3200, xoverLowKeyTrackEnabled: false, xoverLowKeyTrackOffsetSemitones: 0, xoverHighKeyTrackEnabled: false, xoverHighKeyTrackOffsetSemitones: 0 } : {}),
         branches: fixtures.map(({ deviceId }) => ([{
             kind: "device",
             deviceId,
@@ -517,7 +517,7 @@ function emptyConnectorLaneDocJson(groupKind, branchCount) {
         kind: groupKind,
         groupId: `${groupKind}#1`,
         enabled: true,
-        ...(groupKind === "split" ? { xoverLowHz: 320, xoverHighHz: 3200 } : {}),
+        ...(groupKind === "split" ? { xoverLowHz: 320, xoverHighHz: 3200, xoverLowKeyTrackEnabled: false, xoverLowKeyTrackOffsetSemitones: 0, xoverHighKeyTrackEnabled: false, xoverHighKeyTrackOffsetSemitones: 0 } : {}),
         branches: Array.from({ length: branchCount }, () => []),
     };
     return JSON.stringify({
