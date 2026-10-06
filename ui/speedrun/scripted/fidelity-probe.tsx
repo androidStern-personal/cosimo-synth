@@ -9,7 +9,6 @@ import {
     serializeLaneStateV2,
 } from "../../shared/lane-state-v2";
 import type { MockPatchConnection } from "../../shared/patch-connection-mock";
-import { createDesktopResourceClient } from "../../shared/resource-client";
 import {
     MODULATION_STATE_KEY,
     normalizeModulationState,
@@ -280,7 +279,6 @@ function ProbeReady({
         >
             <DesktopPatchView
                 patchConnection={patchConnection}
-                resourceClient={createDesktopResourceClient(patchConnection)}
                 keyboardInputMode="standalone-preview"
             />
         </div>

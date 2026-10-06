@@ -50,3 +50,20 @@ test("URLs use an absolute host address as given and resolve relative ones from 
     assert.equal(client.getURL("table.wav").href, "http://127.0.0.1:5173/assets/table.wav");
     assert.equal(createPatchConnectionResourceClient({}).getURL("table.wav").href, "http://127.0.0.1:5173/table.wav");
 });
+
+test("a bundle served outside the patch folder names the patch folder, and relative reads resolve from it", async t => {
+    const originalFetch = globalThis.fetch;
+    const fetched = [];
+    globalThis.fetch = async url => {
+        fetched.push(url);
+        return { ok: true, arrayBuffer: async () => monoWave([0.5]) };
+    };
+    t.after(() => { globalThis.fetch = originalFetch; });
+    const patchRoot = new URL("file:///plugins/MyPatch/");
+    const client = createPatchConnectionResourceClient({ getResourceAddress: path => `/${path}` }, { patchRoot });
+    assert.equal(client.getURL("assets/table.wav").href, "file:///plugins/MyPatch/assets/table.wav");
+    assert.equal(createPatchConnectionResourceClient({}, { patchRoot }).getURL("notes.txt").href, "file:///plugins/MyPatch/notes.txt");
+    const audio = await client.readAudio("assets/table.wav");
+    assert.deepEqual([...audio.samples], [0.5]);
+    assert.deepEqual(fetched, ["file:///plugins/MyPatch/assets/table.wav"]);
+});

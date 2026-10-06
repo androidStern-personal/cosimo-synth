@@ -5,10 +5,7 @@ import cssText from "./styles.css?inline";
 import { DesktopPatchView } from "./DesktopPatchView";
 import { DesktopCurveLabStandaloneView } from "./desktop-curve-lab";
 import type { PatchConnectionLike } from "../shared/cmajor-react";
-import {
-    createDesktopResourceClient,
-    type ResourceClient,
-} from "../shared/resource-client";
+import type { ResourceClient } from "../../kit/ui/resource-client";
 import type { SynthKeyboardInputMode } from "../shared/synth-input-router";
 import { acquireSynthViewState } from "../shared/synth-state-client";
 
@@ -85,7 +82,7 @@ class DesktopPatchErrorBoundary extends Component<
 
 class CosimoDesktopReactViewElement extends HTMLElement {
     private patchConnection: PatchConnectionLike | null = null;
-    private resourceClient: ResourceClient | null = null;
+    private resourceClient: ResourceClient | undefined;
     private keyboardInputMode: SynthKeyboardInputMode = "hosted";
     private root: Root | null = null;
     private mountPoint: HTMLDivElement | null = null;
@@ -104,7 +101,7 @@ class CosimoDesktopReactViewElement extends HTMLElement {
         }
 
         this.patchConnection = patchConnection;
-        this.resourceClient = resourceClient ?? null;
+        this.resourceClient = resourceClient;
         this.keyboardInputMode = keyboardInputMode;
         if (!this.modulationRuntimePatchConnection) {
             this.stateLease = acquireSynthViewState(patchConnection);
@@ -186,7 +183,7 @@ class CosimoDesktopReactViewElement extends HTMLElement {
             <DesktopPatchErrorBoundary>
                 <DesktopPatchView
                     patchConnection={this.patchConnection}
-                    resourceClient={this.resourceClient ?? createDesktopResourceClient(this.patchConnection)}
+                    resourceClient={this.resourceClient}
                     keyboardInputMode={this.keyboardInputMode}
                 />
             </DesktopPatchErrorBoundary>

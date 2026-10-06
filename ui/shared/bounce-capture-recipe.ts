@@ -6,7 +6,7 @@ import {
 import {
     readBounceDocumentFromPatch,
 } from "../../bounce/document.mjs";
-import type { ResourceClient } from "./resource-client";
+import type { ResourceClient } from "../../kit/ui/resource-client";
 import {
     loadFactoryBankCatalog,
 } from "./wavetable-bank";

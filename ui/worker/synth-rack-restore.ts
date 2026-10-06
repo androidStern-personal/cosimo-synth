@@ -2,6 +2,7 @@ import type { PluginStateDocumentContext, PluginStateSubmission } from "../../ki
 import { isPreparationFailure } from "../../kit/ui/plugin-state-definition";
 import type { EngineCancellation } from "../../kit/ui/plugin-state-engine";
 import { createPatchConnectionResourceClient } from "../../kit/ui/resource-client";
+import { synthPatchRoot } from "../shared/patch-root";
 import type { PatchConnectionLike } from "../shared/cmajor-react";
 import { LANE_STATE_KEY } from "../shared/lane-state";
 import { getRuntimeDspSessionId, RUNTIME_STATE_ENDPOINT_ID } from "../shared/runtime-dsp-session";
@@ -35,7 +36,7 @@ export function createSynthRackRestore(connection: PatchConnectionLike, options:
         get aborted() { return stopped; },
         onAbort(listener) { abortListeners.add(listener); return () => abortListeners.delete(listener); },
     };
-    const resources = createPatchConnectionResourceClient(connection);
+    const resources = createPatchConnectionResourceClient(connection, { patchRoot: synthPatchRoot() });
     const removals: Array<() => void> = [];
     function listen(endpoint: string, listener: (value: unknown) => void) {
         connection.addEndpointListener?.(endpoint, listener);

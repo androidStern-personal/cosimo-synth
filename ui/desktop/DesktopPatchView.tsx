@@ -46,7 +46,7 @@ import {
     isVideoBounceAvailable,
     VideoBounceFlow,
 } from "./video-bounce-flow";
-import type { ResourceClient } from "../shared/resource-client";
+import type { ResourceClient } from "../../kit/ui/resource-client";
 import {
     usePatchParameterBinding,
     type PatchControlBinding,

@@ -4,14 +4,13 @@ import fs from "node:fs/promises";
 import path from "node:path";
 
 import {
-    parseWaveFile,
     getFactoryBankCatalogValue,
     loadFactoryBankCatalog,
     loadFactoryBankFrames,
     loadFactoryBankCatalogFromPatch,
     loadFactoryBankFramesFromPatch,
 } from "../patch_gui/wavetable-bank.mjs";
-import { createIOSResourceClient } from "../patch_gui/resource-client.js";
+import { createPatchConnectionResourceClient } from "../patch_gui/resource-client.js";
 import {
     DEFAULT_WAVETABLE_THEME,
     createFrameState,
@@ -24,6 +23,28 @@ import {
 import { DEFAULT_PATCH_THEME, getPatchThemeCSSVariables } from "../patch_gui/theme.mjs";
 
 const repoRoot = path.resolve(import.meta.dirname, "..");
+/** The repo's own files, read through the kit's resource client the way a host's resource bridge serves them. */
+const repoResources = createPatchConnectionResourceClient({
+    readResource: async (requestedPath) => fs.readFile(path.join(repoRoot, requestedPath)),
+});
+
+/** The format fields of a WAV file's fmt chunk. */
+function waveFormat(bytes) {
+    const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+    for (let cursor = 12; cursor + 8 <= view.byteLength;) {
+        const chunk = String.fromCharCode(...bytes.subarray(cursor, cursor + 4));
+        const size = view.getUint32(cursor + 4, true);
+        if (chunk === "fmt ") {
+            return {
+                format: view.getUint16(cursor + 8, true),
+                channelCount: view.getUint16(cursor + 10, true),
+                bitsPerSample: view.getUint16(cursor + 22, true),
+            };
+        }
+        cursor += 8 + size + (size % 2);
+    }
+    throw new Error("The WAV file has no fmt chunk.");
+}
 
 async function withPatchedFetch(fakeFetch, callback) {
     const originalFetch = globalThis.fetch;
@@ -243,12 +264,7 @@ async function loadCurrentBank() {
     );
     const firstTable = catalog.tables[0];
     const sourceWavBytes = await fs.readFile(path.join(repoRoot, firstTable.sourceWav));
-    const parsedWave = parseWaveFile(
-        sourceWavBytes.buffer.slice(
-            sourceWavBytes.byteOffset,
-            sourceWavBytes.byteOffset + sourceWavBytes.byteLength
-        )
-    );
+    const parsedWave = await repoResources.readAudio(firstTable.sourceWav);
     const bank = await loadFactoryBankFramesFromPatch({
         manifest,
         getResourceAddress(requestedPath) {
@@ -282,11 +298,11 @@ test("initialized factory table identity is Core Shapes", async () => {
     assert.equal(defaultTable?.name, "Core Shapes");
 });
 
-test("wave bank parser reads the current display source wavetable", async () => {
-    const { bank, parsedWave } = await loadCurrentBank();
+test("the display source wavetable is a 44.1 kHz mono 32-bit float WAV and loads whole", async () => {
+    const { bank, parsedWave, catalog } = await loadCurrentBank();
+    const format = waveFormat(await fs.readFile(path.join(repoRoot, catalog.tables[0].sourceWav)));
+    assert.deepEqual(format, { format: 3, channelCount: 1, bitsPerSample: 32 });
     assert.equal(parsedWave.sampleRate, 44100);
-    assert.equal(parsedWave.channelCount, 1);
-    assert.equal(parsedWave.bitsPerSample, 32);
     assert.equal(parsedWave.samples.length, bank.frameCount * 2048);
     assert.equal(bank.samples.length, parsedWave.samples.length);
 });
@@ -357,12 +373,7 @@ test("explicit resource client loads the selected source wavetable without raw p
     );
     const selectedTable = catalog.tables[1];
     const sourceWavBytes = await fs.readFile(path.join(repoRoot, selectedTable.sourceWav));
-    const parsedWave = parseWaveFile(
-        sourceWavBytes.buffer.slice(
-            sourceWavBytes.byteOffset,
-            sourceWavBytes.byteOffset + sourceWavBytes.byteLength
-        )
-    );
+    const parsedWave = await repoResources.readAudio(selectedTable.sourceWav);
     const requestedCatalogPaths = [];
     const requestedAudioPaths = [];
     const resourceClient = {
@@ -395,18 +406,18 @@ test("explicit resource client loads the selected source wavetable without raw p
     assert.deepEqual(requestedAudioPaths, [selectedTable.sourceWav]);
 });
 
-test("byte-only resource clients are treated as resource clients instead of falling back to patch helpers", async () => {
+test("a catalog delivered as bytes through the resource bridge loads", async () => {
     const catalog = getFactoryBankCatalogValue(
         JSON.parse(await fs.readFile(path.join(repoRoot, "assets", "factory-bank-catalog.json"), "utf8"))
     );
     const requestedPaths = [];
-    const resourceClient = {
-        async readBytes(requestedPath) {
+    const resourceClient = createPatchConnectionResourceClient({
+        async readResource(requestedPath) {
             requestedPaths.push(requestedPath);
             assert.equal(requestedPath, "assets/factory-bank-catalog.json");
             return Buffer.from(JSON.stringify(catalog), "utf8");
         },
-    };
+    });
 
     const loadedCatalog = await loadFactoryBankCatalog(resourceClient);
 
@@ -414,24 +425,18 @@ test("byte-only resource clients are treated as resource clients instead of fall
     assert.deepEqual(requestedPaths, ["assets/factory-bank-catalog.json"]);
 });
 
-test("iPhone resource client reads catalog JSON through the native bridge and source audio through the resolved URL", async () => {
+test("a host with a resource bridge and a fetchable address serves catalog JSON through the bridge and source audio by fetch", async () => {
     const catalog = getFactoryBankCatalogValue(
         JSON.parse(await fs.readFile(path.join(repoRoot, "assets", "factory-bank-catalog.json"), "utf8"))
     );
     const selectedTable = catalog.tables[1];
     const sourceWavBytes = await fs.readFile(path.join(repoRoot, selectedTable.sourceWav));
-    const parsedWave = parseWaveFile(
-        sourceWavBytes.buffer.slice(
-            sourceWavBytes.byteOffset,
-            sourceWavBytes.byteOffset + sourceWavBytes.byteLength
-        )
-    );
+    const parsedWave = await repoResources.readAudio(selectedTable.sourceWav);
     const requestedCatalogPaths = [];
     const requestedAudioPaths = [];
     const requestedUrlPaths = [];
     const fetchedUrls = [];
     const patchConnection = {
-        prefersResourceReadBridge: true,
         async readResource(requestedPath) {
             requestedCatalogPaths.push(requestedPath);
             assert.equal(requestedPath, "assets/factory-bank-catalog.json");
@@ -440,14 +445,14 @@ test("iPhone resource client reads catalog JSON through the native bridge and so
         async readResourceAsAudioData(requestedPath) {
             requestedAudioPaths.push(requestedPath);
             assert.equal(requestedPath, selectedTable.sourceWav);
-            throw new Error(`The iPhone resource client should not use the audio bridge for ${requestedPath}`);
+            throw new Error(`Audio with a fetchable address should not use the audio decoder for ${requestedPath}`);
         },
         getResourceAddress(requestedPath) {
             requestedUrlPaths.push(requestedPath);
             return new URL(requestedPath, "https://example.test/bundle/");
         },
     };
-    const resourceClient = createIOSResourceClient(patchConnection);
+    const resourceClient = createPatchConnectionResourceClient(patchConnection);
 
     const loadedCatalog = await loadFactoryBankCatalog(resourceClient);
     const bank = await withPatchedFetch(async (url) => {
@@ -481,23 +486,15 @@ test("iPhone resource client reads catalog JSON through the native bridge and so
     ]);
 });
 
-test("iPhone resource client falls back to the native audio bridge when no resource URL is available", async () => {
+test("a host that offers no fetchable address serves source audio through its audio decoder", async () => {
     const catalog = getFactoryBankCatalogValue(
         JSON.parse(await fs.readFile(path.join(repoRoot, "assets", "factory-bank-catalog.json"), "utf8"))
     );
     const selectedTable = catalog.tables[1];
-    const sourceWavBytes = await fs.readFile(path.join(repoRoot, selectedTable.sourceWav));
-    const parsedWave = parseWaveFile(
-        sourceWavBytes.buffer.slice(
-            sourceWavBytes.byteOffset,
-            sourceWavBytes.byteOffset + sourceWavBytes.byteLength
-        )
-    );
+    const parsedWave = await repoResources.readAudio(selectedTable.sourceWav);
     const requestedCatalogPaths = [];
     const requestedAudioPaths = [];
-    const requestedUrlPaths = [];
     const patchConnection = {
-        prefersResourceReadBridge: true,
         async readResource(requestedPath) {
             requestedCatalogPaths.push(requestedPath);
             assert.equal(requestedPath, "assets/factory-bank-catalog.json");
@@ -512,15 +509,13 @@ test("iPhone resource client falls back to the native audio bridge when no resou
                 frames: Array.from(parsedWave.samples),
             };
         },
-        getResourceAddress(requestedPath) {
-            requestedUrlPaths.push(requestedPath);
-            return null;
-        },
     };
-    const resourceClient = createIOSResourceClient(patchConnection);
+    const resourceClient = createPatchConnectionResourceClient(patchConnection);
 
     const loadedCatalog = await loadFactoryBankCatalog(resourceClient);
-    const bank = await loadFactoryBankFrames(resourceClient, { tableIndex: 1 });
+    const bank = await withPatchedFetch(async (url) => {
+        throw new Error(`A host without a fetchable address should not be fetched from: ${url}`);
+    }, async () => loadFactoryBankFrames(resourceClient, { tableIndex: 1 }));
 
     assert.equal(loadedCatalog.tables[1]?.tableId, selectedTable.tableId);
     assert.equal(bank.sampleRate, parsedWave.sampleRate);
@@ -533,7 +528,6 @@ test("iPhone resource client falls back to the native audio bridge when no resou
         "assets/factory-bank-catalog.json",
     ]);
     assert.deepEqual(requestedAudioPaths, [selectedTable.sourceWav]);
-    assert.deepEqual(requestedUrlPaths, [selectedTable.sourceWav]);
 });
 
 test("bank loading prefers the resolved resource URL for factory wavetable source paths when both loader paths are available", async () => {

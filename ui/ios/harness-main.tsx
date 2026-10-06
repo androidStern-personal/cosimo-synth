@@ -1,5 +1,4 @@
 import { MockPatchConnection } from "../shared/patch-connection-mock";
-import { createDesktopResourceClient } from "../shared/resource-client";
 import { createIOSPatchView } from "./patch-view-entry";
 
 declare global {
@@ -60,8 +59,7 @@ try {
     harnessRoot.textContent = "Booting iPhone React harness…";
     const manifest = await loadIOSHarnessManifest();
     const patchConnection = new MockPatchConnection(manifest);
-    const resourceClient = createDesktopResourceClient(patchConnection);
-    const patchView = createIOSPatchView(patchConnection, { resourceClient });
+    const patchView = createIOSPatchView(patchConnection);
     patchView.style.width = "100%";
     patchView.style.height = "100%";
     harnessRoot.replaceChildren(patchView);

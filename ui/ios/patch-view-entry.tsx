@@ -4,10 +4,7 @@ import { createRoot, type Root } from "react-dom/client";
 import cssText from "./styles.css?inline";
 import { IOSPatchView } from "./IOSPatchView";
 import type { PatchConnectionLike } from "../shared/cmajor-react";
-import {
-    createIOSResourceClient,
-    type ResourceClient,
-} from "../shared/resource-client";
+import type { ResourceClient } from "../../kit/ui/resource-client";
 import { acquireSynthViewState } from "../shared/synth-state-client";
 
 type ErrorBoundaryState = {
@@ -76,7 +73,7 @@ class IOSPatchErrorBoundary extends Component<
 
 class CosimoIOSReactViewElement extends HTMLElement {
     private patchConnection: PatchConnectionLike | null = null;
-    private resourceClient: ResourceClient | null = null;
+    private resourceClient: ResourceClient | undefined;
     private root: Root | null = null;
     private mountPoint: HTMLDivElement | null = null;
     private modulationRuntimePatchConnection: PatchConnectionLike | null = null;
@@ -90,7 +87,7 @@ class CosimoIOSReactViewElement extends HTMLElement {
         }
 
         this.patchConnection = patchConnection;
-        this.resourceClient = resourceClient ?? null;
+        this.resourceClient = resourceClient;
         if (!this.modulationRuntimePatchConnection) {
             this.stateLease = acquireSynthViewState(patchConnection);
             this.modulationRuntimePatchConnection = patchConnection;
@@ -145,7 +142,7 @@ class CosimoIOSReactViewElement extends HTMLElement {
             <IOSPatchErrorBoundary>
                 <IOSPatchView
                     patchConnection={this.patchConnection}
-                    resourceClient={this.resourceClient ?? createIOSResourceClient(this.patchConnection)}
+                    resourceClient={this.resourceClient}
                 />
             </IOSPatchErrorBoundary>
         );

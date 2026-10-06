@@ -24,7 +24,7 @@ import { acquireAnalyzerActivity } from "./analyzer-activity";
 import {
     createPatchConnectionResourceClient,
     type ResourceClient,
-} from "./resource-client";
+} from "../../kit/ui/resource-client";
 
 export type PatchConnectionLike = KitPatchConnectionLike & {
     sendNativeArticulationTriggerConfig?: (serializedConfig: string) => void;

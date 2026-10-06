@@ -1,11 +1,11 @@
 import { OSCILLATOR_IDS } from "../../shared/modulation-targets";
 import {
-    parseWaveFile,
+    createPatchConnectionResourceClient,
     type ResourceClient,
     type ResourceAudioData,
-} from "../../shared/resource-client";
+} from "../../../kit/ui/resource-client";
 import {
-    getFactoryBankCatalogValue,
+    loadFactoryBankCatalog,
     type FactoryBankCatalog,
 } from "../../shared/wavetable-bank";
 import type { CumulativePatchState } from "../partial-states";
@@ -23,37 +23,20 @@ function selectedTableIndices(states: ReadonlyArray<CumulativePatchState>) {
     ))));
 }
 
-async function fetchRequired(url: URL) {
-    const response = await fetch(url);
-    if (!response.ok) {
-        throw new Error(`Speedrun resource ${url.pathname} returned HTTP ${response.status}.`);
-    }
-    return response;
-}
-
 /** Fetch and decode each selected source once before virtual-time install begins. */
 export async function prefetchSpeedrunWavetableResources(
     states: ReadonlyArray<CumulativePatchState>,
     resourceBaseURL: string | URL,
 ): Promise<SpeedrunWavetableResourceBundle> {
-    const root = new URL("./", resourceBaseURL);
-    const catalog = getFactoryBankCatalogValue(
-        await (await fetchRequired(new URL(CATALOG_PATH, root))).json(),
-    );
+    const resources = createPatchConnectionResourceClient({}, { patchRoot: new URL("./", resourceBaseURL) });
+    const catalog = await loadFactoryBankCatalog(resources, { catalogPath: CATALOG_PATH });
     const sourcePaths = [...selectedTableIndices(states)].map((tableIndex) => {
         const table = catalog.tables[tableIndex];
         if (!table) throw new Error(`Speedrun wavetable ${tableIndex} is outside the factory catalog.`);
         return table.sourceWav;
     });
     const audioByPath = Object.fromEntries(await Promise.all(
-        [...new Set(sourcePaths)].map(async (sourcePath) => {
-            const bytes = await (await fetchRequired(new URL(sourcePath, root))).arrayBuffer();
-            const parsed = parseWaveFile(bytes);
-            return [sourcePath, {
-                sampleRate: parsed.sampleRate,
-                samples: parsed.samples,
-            }] as const;
-        }),
+        [...new Set(sourcePaths)].map(async (sourcePath) => [sourcePath, await resources.readAudio(sourcePath)] as const),
     ));
     return { catalog, audioByPath };
 }

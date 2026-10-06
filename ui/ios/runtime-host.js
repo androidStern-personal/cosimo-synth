@@ -1,4 +1,4 @@
-import { createIOSResourceClient } from "./resource-client.js";
+import { createPatchConnectionResourceClient } from "./resource-client.js";
 
 function normaliseURL(url) {
     if (typeof url !== "string") {
@@ -373,14 +373,14 @@ function createEmbeddedPatchConnectionClass(PatchConnectionClass, runtimeState) 
                 this.manifest.view = runtimeState.boot.preferredView;
             }
 
-            const prefersNativeAudioBridge = runtimeState.bundleResourceBaseURL.startsWith("cosimo://");
-            this.prefersAudioResourceReadBridge = prefersNativeAudioBridge;
-            this.prefersResourceReadBridge = true;
-            globalThis.cmaj_deliverMessageFromServer = (message) => this.deliverMessageFromServer(message);
-        }
+            // Inside the app the bundle is served by the cosimo:// scheme handler and every
+            // resource is read through the native bridge; only a bundle served over the web
+            // offers a fetchable address.
+            if (!runtimeState.bundleResourceBaseURL.startsWith("cosimo://")) {
+                this.getResourceAddress = (path) => new URL(toResourcePath(path), runtimeState.resourceBaseURL).toString();
+            }
 
-        getResourceAddress(path) {
-            return new URL(toResourcePath(path), runtimeState.resourceBaseURL).toString();
+            globalThis.cmaj_deliverMessageFromServer = (message) => this.deliverMessageFromServer(message);
         }
 
         async readResource(path) {
@@ -520,7 +520,7 @@ function cloneInspectableValue(value) {
 }
 
 async function refreshCatalogSnapshot(patchConnection) {
-    const resourceClient = patchConnection?.resourceClient ?? createIOSResourceClient(patchConnection);
+    const resourceClient = patchConnection?.resourceClient ?? createPatchConnectionResourceClient(patchConnection);
     state.catalogSnapshot = { pending: true };
     globalThis.__cosimoLatestCatalogSnapshot = state.catalogSnapshot;
 
@@ -577,7 +577,7 @@ async function initialisePatch() {
     setPhase("create-patch-connection");
     const EmbeddedPatchConnection = createEmbeddedPatchConnectionClass(runtimeModules.PatchConnection, state.runtimeState);
     const patchConnection = new EmbeddedPatchConnection();
-    patchConnection.resourceClient = createIOSResourceClient(patchConnection);
+    patchConnection.resourceClient = createPatchConnectionResourceClient(patchConnection);
     globalThis.__cosimoPatchConnection = patchConnection;
 
     if (typeof patchConnection.addEndpointListener === "function") {

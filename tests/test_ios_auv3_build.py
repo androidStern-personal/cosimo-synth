@@ -2295,8 +2295,8 @@ def test_actual_built_bundle_roots_load_the_runtime_patch_and_ui_files(
 import {
     loadFactoryBankCatalogFromPatch,
     loadFactoryBankFramesFromPatch,
-    parseWaveFile,
 } from "./patch_gui/wavetable-bank.mjs";
+import { createPatchConnectionResourceClient } from "./patch_gui/resource-client.js";
 
 async function fetchJSON(url) {
     const response = await fetch(url);
@@ -2319,13 +2319,7 @@ async function loadBundle(rootUrl) {
     const catalog = await loadFactoryBankCatalogFromPatch(patchConnection);
     const bank = await loadFactoryBankFramesFromPatch(patchConnection, { tableIndex: 0 });
     const firstTable = catalog.tables[0];
-    const sourceResponse = await fetch(new URL(firstTable.sourceWav, rootUrl));
-
-    if (!sourceResponse.ok) {
-        throw new Error(`Could not fetch source wavetable from ${rootUrl}`);
-    }
-
-    const sourceWave = parseWaveFile(await sourceResponse.arrayBuffer());
+    const sourceWave = await createPatchConnectionResourceClient({}, { patchRoot: new URL(rootUrl) }).readAudio(firstTable.sourceWav);
     const viewResponse = await fetch(new URL(manifest.view.src, rootUrl));
 
     if (!viewResponse.ok) {

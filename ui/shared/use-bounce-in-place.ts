@@ -31,7 +31,7 @@ import { usePluginState, type PluginStateFields, type PluginStateJson } from "..
 import { usePluginStateSnapshot } from "../../kit/ui/plugin-state-react";
 import { editOutcome } from "../../kit/ui/presets";
 import { usePatchConnection, useResourceClient } from "./cmajor-react";
-import { getDefaultPatchRootUrl } from "./resource-client";
+import { synthPatchRoot } from "./patch-root";
 import {
     createProductBounceCaptureSnapshot,
     type BounceRecipeProgress,
@@ -247,8 +247,8 @@ export function useBounceInPlace() {
     const coordinator = useMemo(() => new BounceTransitionCoordinator({
         capture: (request) => captureBounceBank({
             ...request,
-            workerURL: new URL("patch_gui/bounce-render-worker.js", getDefaultPatchRootUrl()),
-            engineModuleURL: new URL("cmaj_Cosimo_Synth.offline.js", getDefaultPatchRootUrl()),
+            workerURL: new URL("patch_gui/bounce-render-worker.js", synthPatchRoot()),
+            engineModuleURL: new URL("cmaj_Cosimo_Synth.offline.js", synthPatchRoot()),
         }),
         persistBank: (capture) => (
             store.put(capture.digest, capture.bytes)

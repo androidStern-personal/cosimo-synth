@@ -91,7 +91,7 @@ function decodedAudio(path: string, input: unknown): ResourceAudioData {
 }
 
 /** The folder the patch is served from: the page's origin, or this module's folder where there is no page. */
-function patchRoot() {
+function defaultPatchRoot() {
     const page = globalThis.location?.href;
     if (typeof page === "string" && page.length > 0) return new URL("/", page);
     const folder = new URL(import.meta.url);
@@ -99,23 +99,28 @@ function patchRoot() {
     return folder;
 }
 
-function resourceURL(path: string, address: string | URL | undefined) {
+function resourceURL(path: string, address: string | URL | undefined, patchRoot: URL) {
     if (address instanceof URL) return address;
     if (typeof address === "string" && address.length > 0)
-        return /^[a-zA-Z][a-zA-Z\d+.-]*:/.test(address) ? new URL(address) : new URL(address.replace(/^\//, ""), patchRoot());
-    return new URL(path, patchRoot());
+        return /^[a-zA-Z][a-zA-Z\d+.-]*:/.test(address) ? new URL(address) : new URL(address.replace(/^\//, ""), patchRoot);
+    return new URL(path, patchRoot);
 }
 
 /**
  * A resource client over a patch connection. Text and bytes come through the
  * host's resource bridge when it has one; audio prefers a fetchable address, then
- * the host's decoder, then decoding the bytes here.
+ * the host's decoder, then decoding the bytes here. `patchRoot` is the patch
+ * folder, for a bundle that is not served from it.
  */
-export function createPatchConnectionResourceClient(source: PatchConnectionResourceSource | null | undefined): ResourceClient {
+export function createPatchConnectionResourceClient(
+    source: PatchConnectionResourceSource | null | undefined,
+    options: { patchRoot?: URL } = {},
+): ResourceClient {
     const host = source ?? {};
-    const fetchBuffer = async (path: string) => {
+    const patchRoot = options.patchRoot ?? defaultPatchRoot();
+    const fetchBuffer = async (path: string, address = host.getResourceAddress?.(path)) => {
         if (typeof fetch !== "function") fail(`Cannot read ${path}: this host has neither a resource bridge nor fetch.`);
-        const url = resourceURL(path, host.getResourceAddress?.(path));
+        const url = resourceURL(path, address, patchRoot);
         const response = await fetch(url.toString());
         if (!response.ok) fail(`Could not read ${path} from ${url} (HTTP ${response.status}).`);
         return response.arrayBuffer();
@@ -138,12 +143,12 @@ export function createPatchConnectionResourceClient(source: PatchConnectionResou
         readBytes,
         async readAudio(path) {
             const address = host.getResourceAddress?.(path);
-            if (address !== undefined && address !== null && typeof fetch === "function") return parseMonoWave(path, await fetchBuffer(path));
+            if (address !== undefined && address !== null && typeof fetch === "function") return parseMonoWave(path, await fetchBuffer(path, address));
             if (host.readResourceAsAudioData) return decodedAudio(path, await host.readResourceAsAudioData(path));
             return parseMonoWave(path, new Uint8Array(await readBytes(path)).buffer);
         },
         getURL(path) {
-            return resourceURL(path, host.getResourceAddress?.(path));
+            return resourceURL(path, host.getResourceAddress?.(path), patchRoot);
         },
     };
 }

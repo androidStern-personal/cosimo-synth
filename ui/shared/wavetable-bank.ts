@@ -1,9 +1,8 @@
 import {
-    asResourceClient,
-    type ResourceClientInput,
-} from "./resource-client";
-
-export { parseWaveFile } from "./resource-client";
+    createPatchConnectionResourceClient,
+    type PatchConnectionResourceSource,
+    type ResourceClient,
+} from "../../kit/ui/resource-client";
 
 export const DEFAULT_SAMPLES_PER_FRAME = 2048;
 export const DEFAULT_FACTORY_BANK_CATALOG_PATH = "assets/factory-bank-catalog.json";
@@ -126,46 +125,19 @@ function extractSourceFrames(
     };
 }
 
-export async function loadFactoryBankCatalogFromPatch(
-    patchConnection: ResourceClientInput,
-    {
-        catalogPath = DEFAULT_FACTORY_BANK_CATALOG_PATH,
-    }: {
-        catalogPath?: string;
-    } = {},
-): Promise<FactoryBankCatalog> {
-    return loadFactoryBankCatalog(patchConnection, { catalogPath });
-}
-
 export async function loadFactoryBankCatalog(
-    resourceClientInput: ResourceClientInput,
+    resourceClient: ResourceClient,
     {
         catalogPath = DEFAULT_FACTORY_BANK_CATALOG_PATH,
     }: {
         catalogPath?: string;
     } = {},
 ): Promise<FactoryBankCatalog> {
-    const resourceClient = asResourceClient(resourceClientInput);
     return getFactoryBankCatalogValue(await resourceClient.readJSON<FactoryBankCatalog>(catalogPath));
 }
 
-export async function loadFactoryBankFramesFromPatch(
-    patchConnection: ResourceClientInput,
-    {
-        catalogPath = DEFAULT_FACTORY_BANK_CATALOG_PATH,
-        tableIndex = 0,
-        samplesPerFrame = DEFAULT_SAMPLES_PER_FRAME,
-    }: {
-        catalogPath?: string;
-        tableIndex?: number;
-        samplesPerFrame?: number;
-    } = {},
-): Promise<SourceWavetableFrames> {
-    return loadFactoryBankFrames(patchConnection, { catalogPath, tableIndex, samplesPerFrame });
-}
-
 export async function loadFactoryBankFrames(
-    resourceClientInput: ResourceClientInput,
+    resourceClient: ResourceClient,
     {
         catalogPath = DEFAULT_FACTORY_BANK_CATALOG_PATH,
         tableIndex = 0,
@@ -176,7 +148,6 @@ export async function loadFactoryBankFrames(
         samplesPerFrame?: number;
     } = {},
 ): Promise<SourceWavetableFrames> {
-    const resourceClient = asResourceClient(resourceClientInput);
     const catalogValue = await loadFactoryBankCatalog(resourceClient, { catalogPath });
     const clampedTableIndex = clampToRange(tableIndex, 0, catalogValue.tables.length - 1);
     const sourceTableMeta = catalogValue.tables[clampedTableIndex];
@@ -194,4 +165,17 @@ export async function loadFactoryBankFrames(
         samples: sourceAudio.samples,
         frames: sourceFrames.frames,
     };
+}
+
+/** The catalog read over a patch connection, for pages that have no resource client of their own. */
+export function loadFactoryBankCatalogFromPatch(patchConnection: PatchConnectionResourceSource) {
+    return loadFactoryBankCatalog(createPatchConnectionResourceClient(patchConnection));
+}
+
+/** One table's frames read over a patch connection, for pages that have no resource client of their own. */
+export function loadFactoryBankFramesFromPatch(
+    patchConnection: PatchConnectionResourceSource,
+    options: Parameters<typeof loadFactoryBankFrames>[1] = {},
+) {
+    return loadFactoryBankFrames(createPatchConnectionResourceClient(patchConnection), options);
 }
