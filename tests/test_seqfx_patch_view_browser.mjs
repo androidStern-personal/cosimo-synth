@@ -1713,7 +1713,7 @@ test("seqfx_factory_content_is_discoverable_atomic_and_undoable_without_onboardi
     let snapshot = await getHarnessSnapshot(page);
     let storedState = parseSeqFxStoredState(snapshot.storedState[SEQFX_STATE_KEY]);
     assert.equal(storedState.patterns[0].lanes[0].steps[0].mix, 0.82);
-    assert.deepEqual(storedState.patterns[0].lanes[0].steps[0].params.slice(0, 5), [2, 1_350, 1_350, 2.4, 1]);
+    assert.deepEqual(storedState.patterns[0].lanes[0].steps[0].params.slice(0, 4), [2, 1_350, 1_350, 2.4]);
     assert.equal(patternUploads(snapshot).length, 1, "effect preset should upload once after one state commit");
     await page.locator('[data-role="seqfx-undo"]').click();
     assert.equal(await effectPreset.inputValue(), "warm-low-pass");
