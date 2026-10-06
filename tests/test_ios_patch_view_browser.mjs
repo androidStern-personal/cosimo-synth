@@ -5,11 +5,6 @@ import path from "node:path";
 
 import { chromium } from "playwright";
 import {
-    MSEG_EDITOR_HORIZONTAL_PADDING_PX,
-    MSEG_EDITOR_VERTICAL_PADDING_PX,
-    MSEG_POINT_RADIUS_PX,
-} from "../patch_gui/mseg.js";
-import {
     MODULATION_STATE_KEY,
     createDefaultRoute,
     createDefaultModulationState,
@@ -39,9 +34,15 @@ import {
     waitForIOSHarnessReady,
     waitForIOSSourceHarnessReady,
 } from "./helpers/ios_harness_browser.mjs";
+import { loadUIModule } from "./helpers/load_ui_module.mjs";
 import { decodePng } from "./helpers/png_pixels.mjs";
 
 const repoRoot = path.resolve(import.meta.dirname, "..");
+const {
+    MSEG_EDITOR_HORIZONTAL_PADDING_PX,
+    MSEG_EDITOR_VERTICAL_PADDING_PX,
+    MSEG_POINT_RADIUS_PX,
+} = await loadUIModule(repoRoot, "kit/ui/mseg.ts");
 
 let server;
 let browser;

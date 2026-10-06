@@ -1,6 +1,7 @@
 import React, { useLayoutEffect, useMemo, useRef } from "react";
 
-import { createDefaultMsegShape, renderMsegShape, sampleRenderedMsegBuffer } from "../../shared/mseg";
+import { createDefaultMsegShape, sampleRenderedMsegBuffer } from "../../shared/mseg";
+import { renderMsegShape } from "../../../kit/ui/mseg";
 import { ParameterKnobArtwork, type ParameterKnobModRing } from "../../shared/parameter-knob-artwork";
 import {
     formatRackParameterValue,

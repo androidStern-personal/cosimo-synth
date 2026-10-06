@@ -1,7 +1,5 @@
 import { polylineToSvgPath, type EditorCurvePlotRect, type EditorCurvePoint } from "../../kit/ui/editor-curve-geometry";
 
-export * from "../../kit/ui/editor-curve-geometry";
-
 export type EditorCurveSamplePoint = EditorCurvePoint & {
     t?: number;
 };

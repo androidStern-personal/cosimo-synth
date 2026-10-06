@@ -67,17 +67,9 @@ import {
     getModulationTargetDescriptor,
     type EffectModuleId,
 } from "../shared/target-descriptor";
-import {
-    type SynthFocusBindings,
-    type SynthKeyboardInputMode,
-} from "../shared/synth-input-router";
-import {
-    MSEG_RATE_MAX_SECONDS,
-    MSEG_RATE_MIN_SECONDS,
-    clampMsegRateSeconds,
-    type MsegState,
-    type MsegSurfaceOrientation,
-} from "../shared/mseg";
+import type { SynthFocusBindings, SynthKeyboardInputMode } from "../shared/synth-input-router";
+import { MSEG_RATE_MAX_SECONDS, MSEG_RATE_MIN_SECONDS, clampMsegRateSeconds, type MsegState } from "../shared/mseg";
+import type { MsegSurfaceOrientation } from "../../kit/ui/mseg";
 import {
     EditableMsegSurface,
     FilterResponseGraph,
@@ -136,22 +128,19 @@ import {
     type ParameterMenuRequest,
 } from "../shared/parameter-context-menu";
 import { KeyTrackStatus } from "../shared/key-track-status";
-import {
-    EDITOR_HIT_RADIUS_PX,
-    EDITOR_VALUE_HANDLE_RADIUS_PX,
-    useElementSize,
-} from "../shared/editor-tokens";
+import { EDITOR_HIT_RADIUS_PX, EDITOR_VALUE_HANDLE_RADIUS_PX } from "../../kit/ui/editor-curve-geometry";
+import { useElementSize } from "../../kit/ui/use-element-size";
 import {
     applyRollingAxisSample,
     createRollingAxisState,
     type RollingAxis,
     type RollingAxisPointerType,
     type RollingAxisState,
-} from "../shared/rolling-axis-classifier";
+} from "../../kit/ui/rolling-axis-classifier";
 import { useParameterMenuShell } from "../shared/parameter-menu-shell";
 import { clearUiTimeout, uiTimeout } from "../shared/ui-timers";
 import type { RackParameterDescriptor } from "../shared/rack-parameter-descriptors";
-import { findRackModulationSource } from "../shared/rack-modulation-sources";
+import { findRackModulationSource, type RackModulationSource } from "../shared/rack-modulation-sources";
 import { VOICE_FILTER_KNOB_DESCRIPTORS } from "../shared/voice-filter-descriptors";
 import { VoiceEnhancerGraph } from "../shared/voice-enhancer-graph";
 import {
@@ -257,11 +246,7 @@ import {
     type GainEnvelopeView,
     type MsegThumbnailPoint,
 } from "./articulation-ui";
-import {
-    FILTER_SPECTRUM_RENDER_MODE_OPTIONS,
-    cycleFilterSpectrumRenderMode,
-    type FilterSpectrumRenderMode,
-} from "../shared/filter-spectrum";
+import { FILTER_SPECTRUM_RENDER_MODE_OPTIONS, type FilterSpectrumRenderMode } from "../../kit/ui/filter-spectrum";
 import {
     FILTER_CUTOFF_MAX_HZ,
     FILTER_CUTOFF_MIN_HZ,
@@ -271,7 +256,7 @@ import {
     filterQToNormalized,
     normalizedToFilterCutoffHz,
     normalizedToFilterQ,
-} from "../shared/filter-response";
+} from "../../kit/ui/filter-response";
 import {
     MODULATION_ENV_SLOT_COUNT,
     MODULATION_MACRO_SLOT_COUNT,
@@ -281,7 +266,14 @@ import {
     type ModulationRoute,
     type ModulationRouteUpdate,
 } from "../shared/modulation";
-import type { RackModulationSource } from "../shared/rack-modulation-sources";
+
+function cycleFilterSpectrumRenderMode(currentMode: FilterSpectrumRenderMode): FilterSpectrumRenderMode {
+    const currentIndex = FILTER_SPECTRUM_RENDER_MODE_OPTIONS.findIndex((option) => option.value === currentMode);
+    const nextIndex = currentIndex >= 0
+        ? (currentIndex + 1) % FILTER_SPECTRUM_RENDER_MODE_OPTIONS.length
+        : 0;
+    return FILTER_SPECTRUM_RENDER_MODE_OPTIONS[nextIndex].value;
+}
 
 const KEYBOARD_ROOT_NOTE_DEFAULT = 36;
 const KEYBOARD_ROOT_NOTE_MIN = 12;

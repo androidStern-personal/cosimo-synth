@@ -22,7 +22,7 @@ import {
     type PointerEvent as ReactPointerEvent,
 } from "react";
 
-import { PARAMETER_GESTURE_LONG_PRESS_MS } from "./parameter-gesture";
+import { PARAMETER_GESTURE_LONG_PRESS_MS } from "../../kit/ui/parameter-gesture";
 
 import {
     MODULATION_SOURCE_OPTIONS,

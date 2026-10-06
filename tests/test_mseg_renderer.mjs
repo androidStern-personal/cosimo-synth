@@ -1,31 +1,36 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import path from "node:path";
 
 import {
+    clampMsegRateSeconds,
+    createDefaultMsegPlayback,
+    createDefaultMsegShape,
+    normalizeMsegPlayback,
+    normalizeMsegShape,
+    sampleRenderedMsegBuffer,
+    setMsegSegmentCurvePower,
+    toMsegPlaybackConfigEvent,
+} from "../patch_gui/mseg.js";
+import { loadUIModule } from "./helpers/load_ui_module.mjs";
+
+const {
     MSEG_BODY_SAMPLES,
     MSEG_EDITOR_CURVE_TOLERANCE_PX,
     MSEG_CURVE_POWER_LIMIT,
     MSEG_POINT_RADIUS_PX,
     MSEG_PADDED_SAMPLES,
-    clampMsegRateSeconds,
     createMsegTimeAxisTicks,
     createMsegEditorMetrics,
-    createDefaultMsegPlayback,
-    createDefaultMsegShape,
     evaluateMsegShape,
     findMsegPointHitIndex,
     findMsegSegmentHitIndex,
     msegEditorCoordinatesToPoint,
-    normalizeMsegPlayback,
-    normalizeMsegShape,
     pointToMsegEditorCoordinates,
     renderMsegShape,
     resolveMsegSurfaceOrientation,
     sampleMsegSegmentEditorPolyline,
-    sampleRenderedMsegBuffer,
-    setMsegSegmentCurvePower,
-    toMsegPlaybackConfigEvent,
-} from "../patch_gui/mseg.js";
+} = await loadUIModule(path.resolve(import.meta.dirname, ".."), "kit/ui/mseg.ts");
 
 function expectThrows(message, callback) {
     assert.throws(callback, new RegExp(message));

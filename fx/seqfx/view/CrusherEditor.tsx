@@ -9,21 +9,19 @@ import { EditorTickSlider, ModBadge, type ModulationDirection } from "./editor-t
 import {
     EDITOR_PLOT_BOTTOM_PADDING_PX,
     EDITOR_PLOT_TOP_PADDING_PX,
-    useElementSize,
-} from "../../../ui/shared/editor-tokens";
-import {
     createEditorCurvePlotRect,
-    editorCurveFillPathToBaseline,
     polylineToSvgPath,
     type EditorCurvePlotRect,
-} from "../../../ui/shared/editor-curve-geometry";
+} from "../../../kit/ui/editor-curve-geometry";
+import { useElementSize } from "../../../kit/ui/use-element-size";
+import { editorCurveFillPathToBaseline } from "../../../ui/shared/editor-curve-geometry";
+import { EditorCurveFill } from "../../../ui/shared/editor-curve-surface";
 import {
     EditorCurveAxis,
-    EditorCurveFill,
     EditorCurvePath,
     EditorCurvePlotArea,
     EditorCurveSurface,
-} from "../../../ui/shared/editor-curve-surface";
+} from "../../../kit/ui/editor-curve-surface";
 import {
     CRUSHER_BITS_MAX,
     CRUSHER_BITS_MIN,

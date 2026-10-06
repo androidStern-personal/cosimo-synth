@@ -28,12 +28,9 @@ import {
 } from "../shared/parameter-hud";
 
 import { usePatchConnection } from "../shared/cmajor-react";
-import {
-    createEditorCurvePlotRect,
-    normalizedCurvePointToPlotPoint,
-    plotPointToNormalizedCurvePoint,
-} from "../shared/editor-curve-geometry";
-import { type PatchControlBinding } from "../shared/patch-controls";
+import { normalizedCurvePointToPlotPoint, plotPointToNormalizedCurvePoint } from "../shared/editor-curve-geometry";
+import { createEditorCurvePlotRect } from "../../kit/ui/editor-curve-geometry";
+import type { PatchControlBinding } from "../shared/patch-controls";
 import {
     RACK_EFFECT_DESCRIPTORS,
     formatRackParameterValue,
@@ -176,12 +173,12 @@ import {
 } from "../shared/synth-hooks";
 import { useSliderDrag, type SliderDragPointer } from "../shared/use-slider-drag";
 import { clearUiTimeout, uiTimeout } from "../shared/ui-timers";
+import { PARAMETER_GESTURE_MODULATION_PIXELS_PER_FULL_SPAN } from "../shared/parameter-gesture";
 import {
     PARAMETER_GESTURE_BASE_PIXELS_PER_FULL_RANGE,
     PARAMETER_GESTURE_LONG_PRESS_MS,
-    PARAMETER_GESTURE_MODULATION_PIXELS_PER_FULL_SPAN,
     useParameterGesture,
-} from "../shared/parameter-gesture";
+} from "../../kit/ui/parameter-gesture";
 import {
     BaseParameterKnob,
     RackParameterKnob,

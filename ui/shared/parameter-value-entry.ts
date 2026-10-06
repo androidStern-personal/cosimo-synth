@@ -43,8 +43,6 @@ import {
     unitIs,
 } from "../../kit/ui/parameter-value-entry";
 
-export { clamp, formatFrequencyDisplay, normalizeEntryText, parseNumericAndUnit, unitIs };
-
 export type ParameterEntryChoice = {
     readonly value: number;
     readonly label: string;

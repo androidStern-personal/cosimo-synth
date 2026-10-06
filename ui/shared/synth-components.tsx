@@ -19,24 +19,26 @@ import type { PatchControlBinding } from "./patch-controls";
 import { useSliderDrag } from "./use-slider-drag";
 import { clampDisplayPosition } from "./runtime-table-state";
 import {
-    MSEG_EDITOR_HORIZONTAL_PADDING_PX,
-    MSEG_EDITOR_VERTICAL_PADDING_PX,
     MSEG_RATE_MAX_SECONDS,
     MSEG_RATE_MIN_SECONDS,
     clampMsegRateSeconds,
+    sampleRenderedMsegBuffer,
+    type MsegState,
+} from "./mseg";
+import {
+    MSEG_EDITOR_HORIZONTAL_PADDING_PX,
+    MSEG_EDITOR_VERTICAL_PADDING_PX,
     createMsegEditorMetrics,
     pointToMsegEditorCoordinates,
     renderMsegShape,
     resolveMsegSurfaceOrientation,
-    sampleRenderedMsegBuffer,
     type MsegSurfaceOrientation,
-    type MsegState,
     type MsegTimeAxisScale,
-} from "./mseg";
+} from "../../kit/ui/mseg";
 import { CanvasWavetableDisplay, type WavetableModulationRangeOverlay } from "./wavetable-display";
 import type { SynthFocusBindings } from "./synth-input-router";
-import { filterQToNormalized, normalizedToFilterQ } from "./filter-response";
-import type { FilterSpectrumFrame, FilterSpectrumRenderMode } from "./filter-spectrum";
+import { filterQToNormalized, normalizedToFilterQ } from "../../kit/ui/filter-response";
+import type { FilterSpectrumFrame, FilterSpectrumRenderMode } from "../../kit/ui/filter-spectrum";
 import { uiMediaTimeNow } from "./ui-media-clock";
 import {
     composeModulationAmount,

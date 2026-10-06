@@ -9,20 +9,15 @@ import {
     type FilterMode,
     type FilterModeOption,
     type FilterValue,
-} from "../../../kit/index";
-import {
-    cutoffRangeOctaves,
-    cutoffsFromCenterRangeOctaves,
-    geometricCenterCutoffHz,
-} from "../../../ui/shared/filter-modulation-range";
-import { EditorTickSlider, ModBadge, type ModulationDirection } from "./editor-tick-slider";
-import {
     parameterEntrySpecForFrequency,
     parameterEntrySpecForMilliseconds,
     parameterEntrySpecForScalar,
     parameterEntrySpecForSeconds,
     type ParameterEntrySpec,
 } from "../../../kit/index";
+import { cutoffsFromCenterRangeOctaves } from "../../../ui/shared/filter-modulation-range";
+import { cutoffRangeOctaves, geometricCenterCutoffHz } from "../../../kit/ui/filter-editor";
+import { EditorTickSlider, ModBadge, type ModulationDirection } from "./editor-tick-slider";
 import { AuxSource, auxSourceMonitorPoint, buildAuxSourcePreviewPath } from "./AuxSource";
 import { CrusherEditor, type CrusherModulation } from "./CrusherEditor";
 import { SeqFxGlobalControlSurface } from "./SeqFxGlobalControls";

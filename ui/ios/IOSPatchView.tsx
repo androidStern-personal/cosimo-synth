@@ -23,12 +23,8 @@ import {
     VOICE_MODE_OPTIONS,
 } from "../shared/synth-components";
 import { DistortionVisualizer } from "../shared/distortion-visualizer";
-import {
-    clampMsegRateSeconds,
-    MSEG_RATE_MAX_SECONDS,
-    MSEG_RATE_MIN_SECONDS,
-    type MsegSurfaceOrientation,
-} from "../shared/mseg";
+import { clampMsegRateSeconds, MSEG_RATE_MAX_SECONDS, MSEG_RATE_MIN_SECONDS } from "../shared/mseg";
+import type { MsegSurfaceOrientation } from "../../kit/ui/mseg";
 import {
     MODULATION_SOURCE_OPTIONS,
     applyModulationSourceOption,

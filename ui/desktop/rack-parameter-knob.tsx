@@ -9,7 +9,7 @@ import {
     useState,
     type CSSProperties,
 } from "react";
-import { maybeLaneBaseKindForRackEndpoint } from "../shared/modulation-targets";
+import { maybeLaneBaseKindForRackEndpoint, type ModulationTargetKind } from "../shared/modulation-targets";
 import { createPortal } from "react-dom";
 
 import {
@@ -19,11 +19,8 @@ import {
     type ModulationRoute,
     type RackModulationTargetKind,
 } from "../shared/modulation";
-import type { ModulationTargetKind } from "../shared/modulation-targets";
-import {
-    PARAMETER_GESTURE_BASE_PIXELS_PER_FULL_RANGE,
-    PARAMETER_GESTURE_MODULATION_PIXELS_PER_FULL_SPAN,
-} from "../shared/parameter-gesture";
+import { PARAMETER_GESTURE_MODULATION_PIXELS_PER_FULL_SPAN } from "../shared/parameter-gesture";
+import { PARAMETER_GESTURE_BASE_PIXELS_PER_FULL_RANGE } from "../../kit/ui/parameter-gesture";
 import {
     ParameterHudLayerContext,
     ParameterPrecisionHud,

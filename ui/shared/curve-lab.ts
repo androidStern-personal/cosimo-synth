@@ -1,8 +1,4 @@
-import {
-    FILTER_Q_MAX,
-    FILTER_Q_MIN,
-    normalizedToFilterQ,
-} from "./filter-response";
+import { FILTER_Q_MAX, FILTER_Q_MIN, normalizedToFilterQ } from "../../kit/ui/filter-response";
 
 export type CurveCoefficientDefinition = {
     key: string;

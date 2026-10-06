@@ -1,5 +1,6 @@
 import { after, before } from "node:test";
 import assert from "node:assert/strict";
+import path from "node:path";
 import { chromium } from "playwright";
 import {
     normalizeArticulationEditorState,
@@ -9,7 +10,7 @@ import {
     ARTICULATIONS_V4_STATE_KEY,
     parseArticulationsV4,
 } from "../../patch_gui/articulation-image.js";
-import { deserializeMsegShape, renderMsegShape } from "../../patch_gui/mseg.js";
+import { deserializeMsegShape } from "../../patch_gui/mseg.js";
 import {
     MODULATION_SOURCE_OPTIONS,
     MODULATION_STATE_KEY,
@@ -45,7 +46,10 @@ import {
     startDesktopHarnessServer,
     waitForHarnessReady,
 } from "./desktop_harness_browser.mjs";
+import { loadUIModule } from "./load_ui_module.mjs";
 import { createSynthParameterFixture, synthParameterEndpoints } from "./synth_parameter_fixture.mjs";
+
+const { renderMsegShape } = await loadUIModule(path.resolve(import.meta.dirname, "../.."), "kit/ui/mseg.ts");
 
 let server;
 

@@ -2,7 +2,7 @@ import type { PatchConnectionLike, PluginStateDelivery, PluginStateDeliveryOutco
 import { ARTICULATIONS_V4_STATE_KEY } from "../shared/articulation-image";
 import { serializeArticulationTriggerConfig } from "../shared/articulations";
 import type { ModulationState } from "../shared/modulation";
-import { MSEG_PADDED_SAMPLES, renderMsegShapeInto } from "../shared/mseg";
+import { MSEG_PADDED_SAMPLES, renderMsegShapeInto } from "../../kit/ui/mseg";
 import { SHARED_MSEG_BYTES, SHARED_MSEG_FIRST_INPUT } from "../shared/shared-mseg";
 import { ModulationArticulationWorkerService } from "./modulation-articulation-worker-service";
 

@@ -62,7 +62,7 @@ import {
     usePatchModulationTargetOptions,
 } from "../shared/lane-param-bindings";
 import { formatParameterEntry } from "../shared/parameter-value-entry";
-import { useParameterGesture } from "../shared/parameter-gesture";
+import { useParameterGesture } from "../../kit/ui/parameter-gesture";
 import { useReadoutCells, type ReadoutCellSpec } from "../shared/parameter-readout-strip";
 import {
     useLongPressParameterMenu,

@@ -6,31 +6,27 @@ import {
 } from "react";
 
 import {
-    EDITOR_CURVE_STROKE_WIDTH,
     EDITOR_HIT_RADIUS_PX,
     EDITOR_PLOT_BOTTOM_PADDING_PX,
     EDITOR_PLOT_TOP_PADDING_PX,
     EDITOR_VALUE_HANDLE_HALO_RADIUS_PX,
     EDITOR_VALUE_HANDLE_RADIUS_PX,
-    useElementSize,
-} from "../../../ui/shared/editor-tokens";
-import {
-    adaptiveSampleEditorCurve,
     createEditorCurvePlotRect,
-    editorCurveFillPathToBaseline,
     polylineToSvgPath,
     type EditorCurvePlotRect,
-} from "../../../ui/shared/editor-curve-geometry";
+} from "../../../kit/ui/editor-curve-geometry";
+import { useElementSize } from "../../../kit/ui/use-element-size";
+import { adaptiveSampleEditorCurve, editorCurveFillPathToBaseline } from "../../../ui/shared/editor-curve-geometry";
+import { EditorCurveFill } from "../../../ui/shared/editor-curve-surface";
 import {
     EditorCurveAxis,
-    EditorCurveFill,
     EditorCurveHandle,
     EditorCurveHandleHalo,
     EditorCurveHitTarget,
     EditorCurvePath,
     EditorCurvePlotArea,
     EditorCurveSurface,
-} from "../../../ui/shared/editor-curve-surface";
+} from "../../../kit/ui/editor-curve-surface";
 import { EditorTickSlider, ModBadge, type ModulationDirection } from "./editor-tick-slider";
 import {
     STUTTER_DEFAULT_GATE,
@@ -604,7 +600,6 @@ export function StutterEnvelopeEditor({
                             className="seqfx-stutter-editor__env-path"
                             data-role="seqfx-stutter-env-path"
                             d={paths.line}
-                            strokeWidth={EDITOR_CURVE_STROKE_WIDTH}
                         />
                         {isGateModulated ? (
                             <>

@@ -1,5 +1,5 @@
 import { createCmajorPluginStateService, type CmajorStateConnection } from "../../kit/ui/plugin-state-cmajor";
-import type { SharedDataDestination } from "./prepared-shared-data";
+import type { SharedDataDestination } from "../../kit/ui/plugin-state-direct-data";
 import type { PluginStateNativeParameter, PluginStateScope } from "../../kit/ui/plugin-state-session";
 import { synthPluginState } from "./synth-plugin-state";
 

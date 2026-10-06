@@ -19,7 +19,7 @@ async function loadKeyboardGeometryModule() {
 }
 
 async function loadFilterResponseModule() {
-    return await loadUIModule(repoRoot, "ui/shared/filter-response.ts");
+    return await loadUIModule(repoRoot, "kit/ui/filter-response.ts");
 }
 
 async function loadFilterModulationRangeModule() {
@@ -30,8 +30,12 @@ async function loadFilterEditorModule() {
     return await loadUIModule(repoRoot, "kit/ui/filter-editor.tsx");
 }
 
+async function loadFilterDepthConceptsModule() {
+    return await loadUIModule(repoRoot, "ui/shared/filter-depth-concepts.ts");
+}
+
 async function loadFilterSpectrumModule() {
-    return await loadUIModule(repoRoot, "ui/shared/filter-spectrum.ts");
+    return await loadUIModule(repoRoot, "kit/ui/filter-spectrum.ts");
 }
 
 async function loadDistortionVisualizationModule() {
@@ -440,11 +444,8 @@ test("filter response curves show the expected shape for lowpass, highpass, band
 });
 
 test("higher Q narrows and raises the bandpass response", async () => {
-    const {
-        FILTER_MODE_BANDPASS,
-        createFilterResponseModel,
-        magnitudeAtFrequency,
-    } = await loadFilterResponseModule();
+    const { FILTER_MODE_BANDPASS, createFilterResponseModel } = await loadFilterResponseModule();
+    const { magnitudeAtFrequency } = await loadFilterDepthConceptsModule();
     const sampleRate = 44100;
     const cutoffHz = 1200;
     const lowQ = createFilterResponseModel({ mode: FILTER_MODE_BANDPASS, cutoffHz, q: 0.707, sampleRate });
@@ -480,11 +481,8 @@ test("high-Q lowpass response falls smoothly after its resonance peak", async ()
 });
 
 test("filter range helpers use geometric centers and preserve range direction", async () => {
-    const {
-        cutoffRangeOctaves,
-        cutoffsFromCenterRangeOctaves,
-        geometricCenterCutoffHz,
-    } = await loadFilterModulationRangeModule();
+    const { cutoffsFromCenterRangeOctaves } = await loadFilterModulationRangeModule();
+    const { cutoffRangeOctaves, geometricCenterCutoffHz } = await loadFilterEditorModule();
 
     assert.equal(Math.round(geometricCenterCutoffHz(200, 3200)), 800);
     assert.equal(cutoffRangeOctaves(200, 3200), 4);
@@ -853,7 +851,7 @@ test("filter spectrum smoothing decays gradually and peak hold persists before f
     assert.ok(fadedState.peakMagnitudesDb[peakIndex] >= fadedState.smoothedMagnitudesDb[peakIndex]);
 });
 
-test("filter spectrum render modes cycle predictably and change geometry shape", async () => {
+test("filter spectrum render modes are graph, bars and round bars, each with its own geometry", async () => {
     const {
         FILTER_SPECTRUM_RENDER_MODE_OPTIONS,
         buildFilterSpectrumBands,
@@ -861,16 +859,12 @@ test("filter spectrum render modes cycle predictably and change geometry shape",
         buildFilterSpectrumRenderGeometry,
         createFilterSpectrumDisplayFrame,
         advanceFilterSpectrumDisplayState,
-        cycleFilterSpectrumRenderMode,
     } = await loadFilterSpectrumModule();
 
     assert.deepEqual(
         FILTER_SPECTRUM_RENDER_MODE_OPTIONS.map((option) => option.value),
         ["graph", "bars", "round-bars"],
     );
-    assert.equal(cycleFilterSpectrumRenderMode("graph"), "bars");
-    assert.equal(cycleFilterSpectrumRenderMode("bars"), "round-bars");
-    assert.equal(cycleFilterSpectrumRenderMode("round-bars"), "graph");
 
     const frame = createFilterSpectrumDisplayFrame({
         frame: {

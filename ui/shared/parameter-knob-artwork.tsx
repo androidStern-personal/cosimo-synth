@@ -15,7 +15,6 @@
 
 import { useId } from "react";
 import { knobArcPoint as polarPoint, knobSector as pieSectorPath, knobAnnulus as annularSectorPath } from "../../kit/ui/knob-geometry";
-export { knobArcPoint } from "../../kit/ui/knob-geometry";
 
 const BASE_RADIUS = 25;
 const MOD_INNER_RADIUS = 36;

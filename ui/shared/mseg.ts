@@ -4,7 +4,6 @@
  * editing and geometry come from the kit.
  */
 import * as mseg from "../../kit/ui/mseg";
-export * from "../../kit/ui/mseg";
 
 export const MSEG_DEFAULT_DEPTH = 1.0;
 export const MSEG_RATE_MIN_SECONDS = 0.0;

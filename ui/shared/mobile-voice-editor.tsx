@@ -37,9 +37,7 @@ import {
 import type { OscillatorModulationParameterKind } from "./modulation-targets";
 import { parameterEntrySpecForMobileVoiceControl } from "./parameter-value-entry";
 import type { ParameterMenuRequest } from "./parameter-context-menu";
-import {
-    type ModulationRoute,
-} from "./modulation";
+import type { ModulationRoute } from "./modulation";
 import { findRackModulationSource, type RackModulationSourceKind } from "./rack-modulation-sources";
 import { usePatchParameterBinding, type PatchControlBinding } from "./patch-controls";
 import {
@@ -53,11 +51,8 @@ import {
     WARP_MODE_LABELS,
     type MobileVoiceBindableControlID,
 } from "./mobile-voice-display-descriptors";
-import type { RollingAxis } from "./rolling-axis-classifier";
-import {
-    useParameterGesture,
-    type ParameterGestureChannel,
-} from "./parameter-gesture";
+import type { RollingAxis } from "../../kit/ui/rolling-axis-classifier";
+import { useParameterGesture, type ParameterGestureChannel } from "../../kit/ui/parameter-gesture";
 import {
     ReadoutCell,
     useReadoutCells,

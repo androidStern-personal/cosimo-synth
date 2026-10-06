@@ -1,4 +1,4 @@
-import type { SharedDataDestination } from "./prepared-shared-data";
+import type { SharedDataDestination } from "../../kit/ui/plugin-state-direct-data";
 import { buildMipFrameFromSpectrum, DEFAULT_MIP_LEVEL_COUNT } from "./wavetable-mip";
 
 // Cosimo's renderer layout, shared with RendererBridge.h. This packing belongs

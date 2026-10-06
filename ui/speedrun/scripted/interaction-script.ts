@@ -1,4 +1,4 @@
-import { PARAMETER_GESTURE_BASE_PIXELS_PER_FULL_RANGE } from "../../shared/parameter-gesture";
+import { PARAMETER_GESTURE_BASE_PIXELS_PER_FULL_RANGE } from "../../../kit/ui/parameter-gesture";
 import { getRackParameterDescriptor } from "../../shared/rack-parameter-descriptors";
 import type { DefaultsSnapshot } from "../patch-io";
 import type { NavTarget, UIOp } from "../recipe";

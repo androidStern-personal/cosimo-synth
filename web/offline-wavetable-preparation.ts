@@ -1,5 +1,6 @@
 import type {BounceWavetableSource} from '../bounce/capture-plan.mjs';
-import {prepareSharedData,type SharedDataConnection} from '../ui/shared/prepared-shared-data';
+import { prepareSharedData } from "../ui/shared/prepared-shared-data";
+import type { SharedDataConnection } from "../kit/ui/plugin-state-direct-data";
 import {PACKED_WAVETABLE_BYTES,preparePackedWavetable} from '../ui/shared/packed-wavetable';
 import {buildFrameSpectrum} from '../ui/shared/wavetable-mip';
 export {prepareSharedMseg as prepareOfflineMseg} from '../ui/shared/shared-mseg';

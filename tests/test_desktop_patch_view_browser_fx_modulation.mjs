@@ -2844,7 +2844,7 @@ test("T15: base drags on log-scale rows walk the display scale, matching the kno
     // this same argument for the knobs.
     const { PARAMETER_GESTURE_BASE_PIXELS_PER_FULL_RANGE } = await loadUIModule(
         path.resolve(import.meta.dirname, ".."),
-        "ui/shared/parameter-gesture.ts",
+        "kit/ui/parameter-gesture.ts",
     );
     const page = await openHarnessPage({
         beforeGoto: async (nextPage) => {
@@ -2921,7 +2921,7 @@ test("T15: resonance amount drags walk the modulated value along the dial (effec
     // and the amount is derived storage.
     const { PARAMETER_GESTURE_BASE_PIXELS_PER_FULL_RANGE } = await loadUIModule(
         path.resolve(import.meta.dirname, ".."),
-        "ui/shared/parameter-gesture.ts",
+        "kit/ui/parameter-gesture.ts",
     );
     const page = await openHarnessPage({
         beforeGoto: async (nextPage) => {

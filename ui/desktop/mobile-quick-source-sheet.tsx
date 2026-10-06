@@ -21,11 +21,10 @@ import {
     useRef,
     useState,
     type PointerEvent as ReactPointerEvent,
+    type ReactNode,
 } from "react";
 
-import type { ReactNode } from "react";
-
-import { useParameterGesture } from "../shared/parameter-gesture";
+import { useParameterGesture } from "../../kit/ui/parameter-gesture";
 import {
     ParameterReadoutStrip,
     type ReadoutCellSpec,

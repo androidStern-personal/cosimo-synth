@@ -1,7 +1,5 @@
 import type { SharedDataConnection, SharedDataDestination } from "../../kit/ui/plugin-state-direct-data";
 
-export type { SharedDataConnection, SharedDataDestination };
-
 /** Portable cancellation owned by the caller, including native JavaScript hosts. */
 export interface SharedDataCancellation {
     readonly aborted: boolean;

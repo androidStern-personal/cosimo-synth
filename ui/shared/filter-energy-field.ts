@@ -18,8 +18,8 @@ import {
     filterQToNormalized,
     normalizedToFilterCutoffHz,
     normalizedToFilterQ,
-} from "./filter-response";
-import { type FilterSpectrumRenderGeometry } from "./filter-spectrum";
+} from "../../kit/ui/filter-response";
+import type { FilterSpectrumRenderGeometry } from "../../kit/ui/filter-spectrum";
 
 const FILTER_RESONANCE_CURVE_TARGET_ID = "filter-resonance-handle";
 const FILTER_RESONANCE_CURVE_PROFILE = createDefaultCurveProfile(FILTER_RESONANCE_CURVE_TARGET_ID);

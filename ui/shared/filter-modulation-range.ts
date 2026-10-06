@@ -4,8 +4,6 @@
 import { clampFilterCutoffHz } from "../../kit/ui/filter-response";
 import type { FilterRange, FilterRangePolarity } from "../../kit/ui/filter-editor";
 
-export { cutoffRangeOctaves, geometricCenterCutoffHz } from "../../kit/ui/filter-editor";
-
 const MODULATION_RANGE_OCTAVE_LIMIT = 20;
 
 function clamp(value: number, min: number, max: number) {

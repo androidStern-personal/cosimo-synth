@@ -1,4 +1,5 @@
-import { clamp01, type MsegPlayback } from "./mseg";
+import type { MsegPlayback } from "./mseg";
+import { clamp01 } from "../../kit/ui/mseg";
 
 export const EFFECTIVE_MSEG_STATE_ENDPOINT_ID = "effectiveMsegState";
 const EFFECTIVE_MSEG_SLOT_COUNT = 3;

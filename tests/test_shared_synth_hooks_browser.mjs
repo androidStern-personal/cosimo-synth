@@ -1,15 +1,19 @@
 import { createSynthParameterFixture, synthParameterEndpoints } from "./helpers/synth_parameter_fixture.mjs";
 import test, { after, before } from "node:test";
 import assert from "node:assert/strict";
+import path from "node:path";
 
 import { chromium } from "playwright";
-import {
+
+import { startDesktopHarnessServer } from "./helpers/desktop_harness_browser.mjs";
+import { loadUIModule } from "./helpers/load_ui_module.mjs";
+
+const repoRoot = path.resolve(import.meta.dirname, "..");
+const {
     MSEG_EDITOR_HORIZONTAL_PADDING_PX,
     MSEG_EDITOR_VERTICAL_PADDING_PX,
     MSEG_POINT_RADIUS_PX,
-} from "../patch_gui/mseg.js";
-
-import { startDesktopHarnessServer } from "./helpers/desktop_harness_browser.mjs";
+} = await loadUIModule(repoRoot, "kit/ui/mseg.ts");
 
 const parameterFixture = createSynthParameterFixture();
 const nativeParameters = synthParameterEndpoints.map(endpoint => parameterFixture.readParameter(endpoint));

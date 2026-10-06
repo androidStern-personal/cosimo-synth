@@ -2,8 +2,21 @@ import type { PluginStateNativeParameter } from "../../kit/ui/plugin-state-sessi
 import { usePluginState } from "../../kit/ui/plugin-state-react";
 import { synthPluginState } from "../../ui/shared/synth-plugin-state";
 import { Mseg } from "../../kit/index";
-import { normalizeMsegShape } from "../../ui/shared/mseg";
-import { createDefaultMsegShape as defaultKitCurve, addMsegPoint as addKitPoint } from "../../kit/ui/mseg";
+import {
+    normalizeMsegShape,
+    addMsegPoint,
+    createDefaultMsegPlayback,
+    createDefaultMsegShape,
+    deleteMsegPoint,
+    moveMsegPoint,
+    setMsegSegmentCurvePower,
+    type MsegState,
+} from "../../ui/shared/mseg";
+import {
+    createDefaultMsegShape as defaultKitCurve,
+    addMsegPoint as addKitPoint,
+    pointToMsegEditorCoordinates,
+} from "../../kit/ui/mseg";
 import { Component, useEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
 import { createModulationEditorFixture, createModulationProjectionHost } from "./modulation_editor_state";
 import { createRoot, type Root } from "react-dom/client";
@@ -51,12 +64,12 @@ import {
     type FilterMode,
     type FilterRangePolarity,
     type FilterValue,
+    cutoffRangeOctaves,
+    geometricCenterCutoffHz,
 } from "../../kit/ui/filter-editor";
 import {
-    cutoffRangeOctaves,
     cutoffsFromBaseModulationOctaves,
     cutoffsFromCenterRangeOctaves,
-    geometricCenterCutoffHz,
     modulationOctavesFromCutoffRange,
 } from "../../ui/shared/filter-modulation-range";
 import {
@@ -83,16 +96,6 @@ import { ParameterMenuContext } from "../../ui/shared/parameter-context-menu";
 import { useParameterMenuShell } from "../../ui/shared/parameter-menu-shell";
 import { MobileModMappingsPanel } from "../../ui/desktop/mobile-mod-mappings-panel";
 import type { SynthKeyboardInputMode } from "../../ui/shared/synth-input-router";
-import {
-    addMsegPoint,
-    createDefaultMsegPlayback,
-    createDefaultMsegShape,
-    deleteMsegPoint,
-    moveMsegPoint,
-    pointToMsegEditorCoordinates,
-    setMsegSegmentCurvePower,
-    type MsegState,
-} from "../../ui/shared/mseg";
 import {
     MODULATION_STATE_KEY,
     createDefaultRoute,

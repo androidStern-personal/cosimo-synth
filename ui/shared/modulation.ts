@@ -11,18 +11,17 @@ import {
 } from "./rack-parameter-descriptors";
 import {
     MSEG_RATE_MAX_SECONDS,
-    clamp01,
     clampMsegRateSeconds,
     createDefaultMsegPlayback,
     createDefaultMsegShape,
     msegShapesEqual,
     normalizeMsegPlayback,
     normalizeMsegShape,
-    renderMsegShape,
     type MsegPlayback,
     type MsegShape,
     type MsegState,
 } from "./mseg";
+import { clamp01, renderMsegShape } from "../../kit/ui/mseg";
 import {
     MODULATION_SOURCE_IDENTITIES,
     MODULATION_TARGET_IDENTITIES,

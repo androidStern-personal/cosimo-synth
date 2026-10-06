@@ -11,7 +11,7 @@ const dataPromise = loadUIModule(
     repoRoot,
     "prototypes/mobile-sound-design-wireframe/src/etchGalleryData.js",
 );
-const spectrumPromise = loadUIModule(repoRoot, "ui/shared/filter-spectrum.ts");
+const spectrumPromise = loadUIModule(repoRoot, "kit/ui/filter-spectrum.ts");
 const distortionPromise = loadUIModule(repoRoot, "ui/shared/distortion-visualization.ts");
 const filterEnergyPromise = loadUIModule(repoRoot, "ui/shared/filter-energy-field.ts");
 

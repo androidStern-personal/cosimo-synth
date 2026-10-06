@@ -18,7 +18,7 @@ import { useCallback, useEffect, useMemo, useRef } from "react";
 
 import { useOptionalPatchConnection, type PatchConnectionLike } from "./cmajor-react";
 import type { LiveValue } from "../../kit/index";
-import { knobArcPoint } from "./parameter-knob-artwork";
+import { knobArcPoint } from "../../kit/ui/knob-geometry";
 import type { ModulationSourceKind } from "./modulation-targets";
 import {
     hasUiMediaClock,

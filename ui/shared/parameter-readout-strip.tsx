@@ -27,12 +27,12 @@ import {
 } from "react";
 import { createPortal } from "react-dom";
 
+import { PARAMETER_GESTURE_MODULATION_PIXELS_PER_FULL_SPAN } from "./parameter-gesture";
 import {
     PARAMETER_GESTURE_BASE_PIXELS_PER_FULL_RANGE,
-    PARAMETER_GESTURE_MODULATION_PIXELS_PER_FULL_SPAN,
     type ParameterGestureChannel,
     type useParameterGesture,
-} from "./parameter-gesture";
+} from "../../kit/ui/parameter-gesture";
 import {
     ParameterPrecisionHud,
     type ParameterHudModel,

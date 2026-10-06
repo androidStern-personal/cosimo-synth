@@ -1,5 +1,7 @@
-import { prepareSharedData, type SharedDataConnection, type SharedDataCancellation } from "./prepared-shared-data";
-import { MSEG_PADDED_SAMPLES, renderMsegShapeInto, type MsegShape } from "./mseg";
+import { prepareSharedData, type SharedDataCancellation } from "./prepared-shared-data";
+import type { SharedDataConnection } from "../../kit/ui/plugin-state-direct-data";
+import type { MsegShape } from "./mseg";
+import { MSEG_PADDED_SAMPLES, renderMsegShapeInto } from "../../kit/ui/mseg";
 import type { RuntimeInstallCommand } from "./runtime-install-channel";
 
 /** Cosimo reserves inputs 0–2 for wavetables, then A/B for each of three MSEGs. */

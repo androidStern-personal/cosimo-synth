@@ -43,11 +43,8 @@ import {
     type AutoPreviewStrikeKind,
     type LoopSyncSource,
 } from "./auto-preview-sync";
-import {
-    clampMsegRateSeconds,
-    type MsegSurfaceOrientation,
-    type MsegState,
-} from "./mseg";
+import { clampMsegRateSeconds, type MsegState } from "./mseg";
+import type { MsegSurfaceOrientation } from "../../kit/ui/mseg";
 import {
     MODULATION_STATE_KEY,
     MODULATION_TARGET_OPTIONS,
@@ -141,10 +138,7 @@ import {
     type EffectiveWarpState,
     type RuntimeTablePresentation,
 } from "./runtime-table-state";
-import {
-    normalizeFilterSpectrumMessage,
-    type FilterSpectrumFrame,
-} from "./filter-spectrum";
+import { normalizeFilterSpectrumMessage, type FilterSpectrumFrame } from "../../kit/ui/filter-spectrum";
 import {
     DISTORTION_HISTORY_ENDPOINT_ID,
     DISTORTION_SCOPE_ENDPOINT_ID,
@@ -243,7 +237,6 @@ export const EFFECTIVE_UNISON_STATE_ENDPOINT_ID = "effectiveUnisonState";
 export const EFFECTIVE_FILTER_STATE_ENDPOINT_ID = "effectiveFilterState";
 export const FILTER_SPECTRUM_ENDPOINT_ID = "filterSpectrum";
 export const DISPLAY_SWIPE_THRESHOLD_PX = 2;
-export { MSEG_DRAG_THRESHOLD_PX } from "../../kit/ui/mseg-gestures";
 const FILTER_MODE_ENDPOINT_ID = "filterMode";
 const FILTER_CUTOFF_ENDPOINT_ID = "filterCutoff";
 const FILTER_CUTOFF_KEY_TRACK_ENABLED_ENDPOINT_ID = "filterCutoffKeyTrackEnabled";
