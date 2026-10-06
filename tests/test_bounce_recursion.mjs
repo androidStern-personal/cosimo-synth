@@ -30,35 +30,9 @@ function syntheticMipSamples(mipIndex) {
     return samples;
 }
 
-function wavetableSetupEvents() {
-    const events = [{
-        endpointID: "wavetableLoadBegin",
-        sessionScoped: true,
-        value: {
-            dspSessionId: 0,
-            oscillatorIndex: 0,
-            generation: 1,
-            tableIndex: 0,
-            frameCount: 1,
-        },
-    }];
-    for (let mipIndex = 0; mipIndex < 11; mipIndex += 1) {
-        events.push({
-            endpointID: "wavetableMipFrame",
-            sessionScoped: true,
-            value: {
-                dspSessionId: 0,
-                oscillatorIndex: 0,
-                generation: 1,
-                tableIndex: 0,
-                mipIndex,
-                frameIndexBase: 0,
-                frameCount: 1,
-                samples: syntheticMipSamples(mipIndex),
-            },
-        });
-    }
-    return events;
+/** The oscillator's table, prepared directly from its source frames as the shared offline engine requires. */
+function wavetableSources() {
+    return [{ input: 0, generation: 1, tableIndex: 0, frames: [syntheticMipSamples(10).slice(0, 2_048)] }];
 }
 
 function generationOneSnapshot() {
@@ -82,7 +56,7 @@ function generationOneSnapshot() {
             playMode: 0,
             glideTime: 0,
         },
-        setupEvents: wavetableSetupEvents(),
+        wavetableSources: wavetableSources(),
     });
 }
 
