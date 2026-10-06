@@ -362,6 +362,15 @@ test("public LiveValue adapter shares the engine subscription, projects canonica
     assert.equal(macro.getSnapshot(), 75, 'global macro remains observable without a voice');
     offCutoff(); offMacro();
     assert.equal(connection.listenerCount('effectiveModSourceState'), 1, 'legacy consumer still owns the driver');
+    // A consumer that resubscribes in the same commit keeps the newest generation.
     releaseModSourceLiveDriver(connection);
-    assert.equal(connection.listenerCount('effectiveModSourceState'), 0);
+    const offAgain = cutoff.subscribe(() => {});
+    await Promise.resolve();
+    assert.equal(acquireModSourceLiveDriver(connection), legacy);
+    releaseModSourceLiveDriver(connection);
+    connection.emitEndpoint('effectiveModSourceState', { voiceGeneration: 7, hasActive: 1, values: [.5,0,0,0,0,0,0,0,0,0] });
+    assert.equal(cutoff.getSnapshot(), null, 'a stale voice report cannot reactivate after a resubscription');
+    offAgain();
+    await Promise.resolve();
+    assert.equal(connection.listenerCount('effectiveModSourceState'), 0, 'the last release detaches once the commit settles');
 });

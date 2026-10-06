@@ -430,10 +430,18 @@ export function releaseModSourceLiveDriver(connection: PatchConnectionLike): voi
         return;
     }
     entry.refCount -= 1;
-    if (entry.refCount <= 0) {
+    if (entry.refCount > 0) {
+        return;
+    }
+    // A consumer that resubscribes in the same commit keeps the driver, and with
+    // it the newest voice generation, so a stale report cannot reactivate a light.
+    queueMicrotask(() => {
+        if (entry.refCount > 0 || sharedDrivers.get(connection) !== entry) {
+            return;
+        }
         entry.driver.detach();
         sharedDrivers.delete(connection);
-    }
+    });
 }
 
 /**

@@ -1337,6 +1337,15 @@ export function assertLatestMsegBufferMatchesStoredShape(snapshot) {
     assert.equal(Number.isSafeInteger(installed.deliverySerial) && installed.deliverySerial > 0, true);
 }
 
+/**
+ * Hold a pressed station past its reorder lift. The wait runs on the page's own
+ * timer queue, so the station's earlier hold timer has fired before the next
+ * pointer event is dispatched, however busy the renderer is.
+ */
+export async function holdForStationLift(page) {
+    await page.evaluate(() => new Promise((resolve) => setTimeout(resolve, 210)));
+}
+
 export async function beginRackReorderWithoutPointerCapture(page, {
     pointerId,
     targetEffectID = null,
@@ -1374,7 +1383,7 @@ export async function beginRackReorderWithoutPointerCapture(page, {
     // Reorder is deliberately distinct from scrolling: the hold must win
     // before movement crosses the lift threshold, including on the fallback
     // path used when pointer capture is unavailable.
-    await page.waitForTimeout(210);
+    await holdForStationLift(page);
 
     await page.evaluate(({ pointerId: browserPointerId, targetEffectID: browserTargetEffectID }) => {
         const list = document.querySelector('[data-role="rack-module-list"]');

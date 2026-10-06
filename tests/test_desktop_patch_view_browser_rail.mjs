@@ -81,6 +81,7 @@ import {
     rectContains,
     readGlobalModRailGeometry,
     isLaneParamSend,
+    holdForStationLift,
 } from "./helpers/desktop_patch_view_browser_suite.mjs";
 
 /**
@@ -6093,7 +6094,7 @@ test("subway stations select on tap, reorder on drag, and never touch sound para
         assert.ok(targetBox);
         await page.mouse.move(stationBox.x + (stationBox.width / 2), stationBox.y + (stationBox.height / 2));
         await page.mouse.down();
-        await page.waitForTimeout(210);
+        await holdForStationLift(page);
         await page.mouse.move(targetBox.x + (targetBox.width / 2), targetBox.y + (targetBox.height / 2), { steps: 12 });
         await page.mouse.up();
         snapshot = await waitForHarnessSnapshot(
@@ -6182,7 +6183,7 @@ test("every rack editor binds live controls and one drop commits one complete DS
         assert.ok(handleBox && targetBox, "Rack pointer-reorder endpoints are missing");
         await page.mouse.move(handleBox.x + handleBox.width / 2, handleBox.y + handleBox.height / 2);
         await page.mouse.down();
-        await page.waitForTimeout(210);
+        await holdForStationLift(page);
         await page.mouse.move(targetBox.x + targetBox.width / 2, targetBox.y + targetBox.height / 2, { steps: 12 });
         await page.mouse.up();
         snapshot = await waitForHarnessSnapshot(

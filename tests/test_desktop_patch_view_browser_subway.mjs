@@ -22,6 +22,7 @@ import {
     touchPointForModSourcePreviewTarget,
     waitForHarnessSnapshot,
     waitForReactFrames,
+    holdForStationLift,
 } from "./helpers/desktop_patch_view_browser_suite.mjs";
 import { decodePng, pngPixelAt, rgbDistance } from "./helpers/png_pixels.mjs";
 
@@ -2726,7 +2727,7 @@ test("a reorder dwell opens a folded branch before the exact drop commits", asyn
             stationBox.y + (stationBox.height / 2),
         );
         await page.mouse.down();
-        await page.waitForTimeout(200);
+        await holdForStationLift(page);
         await page.mouse.move(
             branchBadgeBox.x + (branchBadgeBox.width / 2),
             branchBadgeBox.y + (branchBadgeBox.height / 2),
@@ -3073,7 +3074,7 @@ test("the fixed FX footer rejects reorder drops without moving a graph path behi
 
         await page.mouse.move(sourcePoint.x, sourcePoint.y);
         await page.mouse.down();
-        await page.waitForTimeout(210);
+        await holdForStationLift(page);
         await page.mouse.move(sourcePoint.x + 12, sourcePoint.y);
         await page.locator('[data-role="rack-reorder-lifted-pill"][data-device-id="reverb#1"]').waitFor();
         await page.mouse.move(footerPoint.x, footerPoint.y, { steps: 8 });
@@ -4123,7 +4124,7 @@ test("dragging a station into the empty band crosses lanes and commits once", as
 
         await page.mouse.move(reverbBox.x + (reverbBox.width / 2), reverbBox.y + (reverbBox.height / 2));
         await page.mouse.down();
-        await page.waitForTimeout(200);
+        await holdForStationLift(page);
         await page.mouse.move(ghostBox.x + (ghostBox.width / 2), ghostBox.y + (ghostBox.height / 2), { steps: 12 });
 
         const lifted = page.locator('[data-role="rack-reorder-lifted-pill"][data-device-id="reverb#1"]');
@@ -4293,7 +4294,7 @@ test("the source-composed production ShadowRoot owns and styles the lifted real 
 
         await page.mouse.move(sourcePoint.x, sourcePoint.y);
         await page.mouse.down();
-        await page.waitForTimeout(210);
+        await holdForStationLift(page);
         await page.mouse.move(targetPoint.x, targetPoint.y);
         const lifted = page.locator(
             '[data-role="rack-reorder-lifted-pill"][data-device-id="reverb#1"]',
@@ -4371,7 +4372,7 @@ test("same-branch reorder commits the exact held preview once", async () => {
 
         await page.mouse.move(sourcePoint.x, sourcePoint.y);
         await page.mouse.down();
-        await page.waitForTimeout(200);
+        await holdForStationLift(page);
         await page.mouse.move(targetPoint.x, targetPoint.y, { steps: 8 });
         await page.waitForSelector('[data-role="rack-reorder-ghost"][data-device-id="reverb#1"]');
         assert.equal(
@@ -4421,7 +4422,7 @@ test("reorder release composes its move onto concurrent device state", async () 
 
         await page.mouse.move(sourcePoint.x, sourcePoint.y);
         await page.mouse.down();
-        await page.waitForTimeout(210);
+        await holdForStationLift(page);
         await page.mouse.move(targetPoint.x, targetPoint.y, { steps: 6 });
         await page.waitForSelector('[data-role="rack-reorder-lifted-pill"][data-device-id="reverb#1"]', {
             timeout: 2000,
@@ -4499,7 +4500,7 @@ test("a concurrent topology replacement cancels reorder without restoring its st
         const targetPoint = await centerOf(target);
         await page.mouse.move(sourcePoint.x, sourcePoint.y);
         await page.mouse.down();
-        await page.waitForTimeout(210);
+        await holdForStationLift(page);
         await page.mouse.move(targetPoint.x, targetPoint.y, { steps: 6 });
         await page.waitForSelector('[data-role="rack-reorder-lifted-pill"][data-device-id="reverb#1"]', {
             timeout: 2000,
@@ -4644,7 +4645,7 @@ test("station capture rejection still lifts and reorders outside the source stat
 
         await page.mouse.move(source.x, source.y);
         await page.mouse.down();
-        await page.waitForTimeout(210);
+        await holdForStationLift(page);
         await page.mouse.move(target.x, target.y);
         await page.waitForSelector(
             '[data-role="rack-reorder-ghost"][data-device-id="reverb#1"]',
@@ -4690,7 +4691,7 @@ test("post-lift capture rejection follows outside-list movement and commits the 
 
         await page.mouse.move(sourcePoint.x, sourcePoint.y);
         await page.mouse.down();
-        await page.waitForTimeout(210);
+        await holdForStationLift(page);
         await page.mouse.move(targetPoint.x, targetPoint.y);
         const lifted = page.locator(
             '[data-role="rack-reorder-lifted-pill"][data-device-id="reverb#1"]',
@@ -4772,7 +4773,7 @@ test("post-lift window fallback cancel, blur, and hidden state never publish", a
 
             await page.mouse.move(sourcePoint.x, sourcePoint.y);
             await page.mouse.down();
-            await page.waitForTimeout(210);
+            await holdForStationLift(page);
             await page.mouse.move(targetPoint.x, targetPoint.y);
             await page.waitForSelector(
                 '[data-role="rack-reorder-lifted-pill"][data-device-id="reverb#1"]',
