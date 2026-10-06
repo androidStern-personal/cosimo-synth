@@ -1,4 +1,5 @@
 import { articulationStateCodec } from "./synth-document-state";
+import { fullStoredStateValues } from "./full-stored-state";
 import { effectOutputTrimHostEndpointID, effectOutputTrimLaneEndpointID } from "./effect-output-trim";
 import {
     ArticulationSlotsExhausted,
@@ -157,19 +158,6 @@ function parseJsonDocument(input: unknown, label: string): ParseOutcome<unknown>
         const detail = cause instanceof Error ? cause.message : "unknown JSON parse failure";
         return parseError(`${label} is not valid JSON: ${detail}`);
     }
-}
-
-function readFullStoredStateValue(storedState: unknown, key: string): unknown {
-    if (!isRecord(storedState)) {
-        return undefined;
-    }
-
-    const nestedValues = isRecord(storedState.values) ? storedState.values : null;
-    if (nestedValues !== null && Object.hasOwn(nestedValues, key)) {
-        return nestedValues[key];
-    }
-
-    return Object.hasOwn(storedState, key) ? storedState[key] : undefined;
 }
 
 function createSourceDefinitions(): ReadonlyArray<SourceDefinition> {
@@ -794,8 +782,9 @@ class CosimoBridgeAdapter implements CosimoAdapterPort {
             return;
         }
 
-        const rawArticulations = readFullStoredStateValue(storedState, ARTICULATIONS_V4_STATE_KEY);
-        const rawRackState = readFullStoredStateValue(storedState, LANE_STATE_KEY);
+        const storedValues = fullStoredStateValues(storedState);
+        const rawArticulations = storedValues[ARTICULATIONS_V4_STATE_KEY];
+        const rawRackState = storedValues[LANE_STATE_KEY];
         if (rawArticulations !== undefined) {
             const parsed = articulationStateCodec.parse(rawArticulations);
             if (parsed.kind === "error") { this.detach(parsed.message); return; }

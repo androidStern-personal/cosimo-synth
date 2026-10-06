@@ -6,5 +6,7 @@
 export function synthPatchRoot() {
     const page = globalThis.location?.href;
     if (typeof page === "string" && page.length > 0) return new URL("/", page);
-    return new URL("../", import.meta.url);
+    const root = new URL(import.meta.url);
+    root.pathname = root.pathname.replace(/[^/]*\/[^/]*$/, "");
+    return root;
 }

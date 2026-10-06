@@ -1053,7 +1053,7 @@ export async function openBuiltDesktopBundlePage({
                 storedStateListeners.delete(listener);
             },
             requestFullStoredState(callback) {
-                queueMicrotask(() => callback({}));
+                queueMicrotask(() => callback({ parameters: [], values: {} }));
             },
             requestStoredStateValue(key) {
                 queueMicrotask(() => {
@@ -1233,7 +1233,7 @@ export async function openDesktopEntryPageWithInjectedResourceClient() {
                 storedStateListeners.delete(listener);
             },
             requestFullStoredState(callback) {
-                queueMicrotask(() => callback({}));
+                queueMicrotask(() => callback({ parameters: [], values: {} }));
             },
             requestStoredStateValue(key) {
                 queueMicrotask(() => {

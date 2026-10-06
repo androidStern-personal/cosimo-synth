@@ -235,7 +235,7 @@ async function openPackagedEnhancerLite() {
             },
             addStoredStateValueListener(listener) { storedStateListeners.add(listener); },
             removeStoredStateValueListener(listener) { storedStateListeners.delete(listener); },
-            requestFullStoredState(callback) { callback(Object.fromEntries(storedState)); },
+            requestFullStoredState(callback) { callback({ parameters: [], values: Object.fromEntries(storedState) }); },
             requestStoredStateValue(key) {
                 for (const listener of storedStateListeners) listener({ key, value: storedState.get(key) });
             },

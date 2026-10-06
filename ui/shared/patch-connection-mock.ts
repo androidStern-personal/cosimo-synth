@@ -1251,7 +1251,10 @@ export class MockPatchConnection implements PatchConnectionLike {
     }
 
     requestFullStoredState(callback: (state: Record<string, unknown>) => void) {
-        queueMicrotask(() => callback(Object.fromEntries(this.storedState.entries())));
+        queueMicrotask(() => callback({
+            parameters: [...this.parameterValues].map(([name, value]) => ({ name, value })),
+            values: Object.fromEntries(this.storedState.entries()),
+        }));
     }
 
     requestStoredStateValue(key: string) {

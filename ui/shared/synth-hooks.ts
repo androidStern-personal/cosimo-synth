@@ -1,4 +1,5 @@
 import { createSynthDocumentClient } from "./synth-document-client";
+import { fullStoredStateValues } from "./full-stored-state";
 import {
     useCallback,
     useEffect,
@@ -996,25 +997,6 @@ function buildShortMidi(status: number, noteNumber: number, velocity = 0) {
     return ((status & 0xff) << 16) | ((noteNumber & 0x7f) << 8) | (velocity & 0x7f);
 }
 
-function readFullStoredStateValue(storedState: unknown, key: string) {
-    const fullState = storedState && typeof storedState === "object"
-        ? storedState as Record<string, unknown>
-        : {};
-    const values = fullState.values && typeof fullState.values === "object"
-        ? fullState.values as Record<string, unknown>
-        : {};
-
-    if (Object.prototype.hasOwnProperty.call(values, key)) {
-        return values[key];
-    }
-
-    if (Object.prototype.hasOwnProperty.call(fullState, key)) {
-        return fullState[key];
-    }
-
-    return undefined;
-}
-
 function currentArticulationRouteIds(routes: ReadonlyArray<ModulationRoute>): ReadonlySet<string> {
     return new Set(routes.flatMap((route) => (
         getModulationArticulationCellIndex(route) === null ? [] : [route.id]
@@ -1040,14 +1022,14 @@ export function parseArticulationStateFromFullStoredState(
     storedState: unknown,
     fallbackRoutes: ReadonlyArray<ModulationRoute>,
 ) {
-    const rawModulation = readFullStoredStateValue(storedState, MODULATION_STATE_KEY);
+    const rawModulation = fullStoredStateValues(storedState)[MODULATION_STATE_KEY];
     const parsedModulation = rawModulation === undefined
         ? null
         : parseModulationState(decodeArticulationDocument(rawModulation));
     const acceptedRouteIds = parsedModulation?._tag === "ok"
         ? currentArticulationRouteIds(parsedModulation.value.routes)
         : currentArticulationRouteIds(fallbackRoutes);
-    const rawArticulations = readFullStoredStateValue(storedState, ARTICULATIONS_V4_STATE_KEY);
+    const rawArticulations = fullStoredStateValues(storedState)[ARTICULATIONS_V4_STATE_KEY];
 
     return {
         acceptedRouteIds,

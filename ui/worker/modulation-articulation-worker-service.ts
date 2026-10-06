@@ -1,4 +1,5 @@
 import type { PatchConnectionLike } from "../shared/cmajor-react";
+import { fullStoredStateValues } from "../shared/full-stored-state";
 import type { CmajorStatePublicationOutcome } from "../../kit/ui/plugin-state-cmajor";
 import type { EngineApplication } from "../../kit/ui/plugin-state-engine";
 import {
@@ -50,13 +51,6 @@ export type FrameworkModulationInput = {
 
 type StoredStateMessage = { key?: unknown; value?: unknown };
 type BootStoredState = Record<string, unknown>;
-
-/** Cmajor answers a full stored-state request with `{ parameters, values }`. */
-function storedValuesOf(fullState: unknown): BootStoredState {
-    if (!fullState || typeof fullState !== "object") return {};
-    const { values } = fullState as { values?: unknown };
-    return values && typeof values === "object" ? values as BootStoredState : {};
-}
 
 function parseStoredArticulations(
     value: unknown,
@@ -190,7 +184,7 @@ export class ModulationArticulationWorkerService {
         if (typeof this.connection.requestFullStoredState === "function") {
             this.connection.requestFullStoredState((storedState) => {
                 if (!this.started || epoch !== this.lifecycleEpoch) return;
-                this.applyBootState(storedValuesOf(storedState));
+                this.applyBootState(fullStoredStateValues(storedState));
                 this.finishBoot();
             });
             return;

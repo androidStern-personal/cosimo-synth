@@ -5,6 +5,7 @@ import {
     type ArticulationsState,
 } from "../shared/articulation-image";
 import type { PatchConnectionLike } from "../shared/cmajor-react";
+import { fullStoredStateValues } from "../shared/full-stored-state";
 import type { SpeedrunContract, SpeedrunContractParameter } from "./contract";
 import { LANE_STATE_KEY } from "../shared/lane-state";
 import {
@@ -398,10 +399,6 @@ export function intakePatch(input: unknown, options: PatchIntakeOptions): PatchI
 }
 
 /** Cmajor answers a full stored-state request with `{ parameters, values }`. */
-function storedStateValues(input: unknown): Record<string, unknown> {
-    return isRecord(input) && isRecord(input.values) ? { ...input.values } : {};
-}
-
 function soundStoredState(input: Readonly<Record<string, unknown>>): Record<string, unknown> {
     return Object.fromEntries([
         MODULATION_STATE_KEY,
@@ -425,7 +422,7 @@ function captureStoredState(connection: PatchConnectionLike, timeoutMs: number):
         )), timeoutMs);
         connection.requestFullStoredState?.((value) => {
             globalThis.clearTimeout(timeout);
-            resolve(storedStateValues(value));
+            resolve({ ...fullStoredStateValues(value) });
         });
     });
 }

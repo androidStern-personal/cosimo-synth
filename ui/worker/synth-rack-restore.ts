@@ -4,18 +4,12 @@ import type { EngineCancellation } from "../../kit/ui/plugin-state-engine";
 import { createPatchConnectionResourceClient } from "../../kit/ui/resource-client";
 import { synthPatchRoot } from "../shared/patch-root";
 import type { PatchConnectionLike } from "../shared/cmajor-react";
+import { fullStoredStateValues } from "../shared/full-stored-state";
 import { LANE_STATE_KEY } from "../shared/lane-state";
 import { getRuntimeDspSessionId, RUNTIME_STATE_ENDPOINT_ID } from "../shared/runtime-dsp-session";
 import { synthPluginState } from "../shared/synth-plugin-state";
 
 const sent = { kind: "sent", proof: "native-publication-processed" } as const;
-
-/** The saved rack in Cmajor's full-state reply, { parameters: [...], values: {...} }. */
-function storedRack(fullState: unknown): unknown {
-    if (typeof fullState !== "object" || fullState === null) return undefined;
-    const values = Reflect.get(fullState, "values");
-    return typeof values === "object" && values !== null ? Reflect.get(values, LANE_STATE_KEY) : undefined;
-}
 
 /**
  * Restores the saved rack through the synth's own rack field (its codec, its
@@ -89,7 +83,7 @@ export function createSynthRackRestore(connection: PatchConnectionLike, options:
             listen(RUNTIME_STATE_ENDPOINT_ID, onRuntimeState);
             connection.addStoredStateValueListener?.(onStoredValue);
             connection.requestFullStoredState?.(fullState => {
-                saved = storedRack(fullState);
+                saved = fullStoredStateValues(fullState)[LANE_STATE_KEY];
                 applyNow();
             });
         },
