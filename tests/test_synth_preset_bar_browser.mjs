@@ -107,14 +107,28 @@ test("Save as new keeps the sound, marks later edits as modified, and Revert res
         await page.getByRole("button", { name: "Cutoff 600" }).click();
         await view.waitForParameter("filterCutoff", 600);
         await modified(page).waitFor();
+        assert.equal((await view.calls()).replaced.length, 0, "a knob edit does not replace the sound");
         await bar(page).getByRole("button", { name: "Revert", exact: true }).click();
         await view.waitForParameter("filterCutoff", 2400);
         await modified(page).waitFor({ state: "detached" });
+        let calls = await view.calls();
+        assert.equal(calls.replaced.length, 1, "Revert replaced the sound once");
+        assert.equal(calls.replaced[0].filterCutoff, 2400);
+
+        await page.getByRole("button", { name: "Undo" }).click();
+        await view.waitForParameter("filterCutoff", 600);
+        calls = await view.calls();
+        assert.equal(calls.replaced.length, 2, "Undo of Revert replaces the sound again");
+        assert.equal(calls.replaced[1].filterCutoff, 600);
+        await page.getByRole("button", { name: "Redo" }).click();
+        await view.waitForParameter("filterCutoff", 2400);
+        assert.equal((await view.calls()).replaced.length, 3, "Redo of Revert replaces the sound again");
 
         await presetSelect(page).selectOption({ label: "Init" });
         await view.waitForParameter("filterCutoff", 1000);
         await presetSelect(page).selectOption({ label: "Bright" });
         await view.waitForParameter("filterCutoff", 2400);
+        assert.equal((await view.calls()).replaced.length, 5, "each preset recall replaced the sound");
     } finally {
         await view.close();
     }
@@ -132,6 +146,7 @@ test("snapshot slots switch between sounds, each switch one Undo entry", async (
         await slot("B").click();
         await page.waitForFunction(() => document.querySelector('[aria-label="Snapshot B"]')?.getAttribute("aria-pressed") === "true");
         assert.equal(await view.parameter("filterCutoff"), 2400, "an empty slot captures the current sound");
+        assert.equal((await view.calls()).replaced.length, 0, "capturing into an empty slot keeps the sound");
 
         await page.getByRole("button", { name: "Cutoff 600" }).click();
         await view.waitForParameter("filterCutoff", 600);
@@ -139,8 +154,15 @@ test("snapshot slots switch between sounds, each switch one Undo entry", async (
         await view.waitForParameter("filterCutoff", 2400);
         await slot("B").click();
         await view.waitForParameter("filterCutoff", 600);
+        let calls = await view.calls();
+        assert.deepEqual(calls.replaced.map(parameters => parameters.filterCutoff), [2400, 600], "each snapshot switch replaced the sound");
         await page.getByRole("button", { name: "Undo" }).click();
         await view.waitForParameter("filterCutoff", 2400);
+        await page.getByRole("button", { name: "Redo" }).click();
+        await view.waitForParameter("filterCutoff", 600);
+        calls = await view.calls();
+        assert.deepEqual(calls.replaced.map(parameters => parameters.filterCutoff), [2400, 600, 2400, 600],
+            "Undo and Redo of a snapshot switch replace the sound again");
     } finally {
         await view.close();
     }
@@ -176,6 +198,10 @@ test("a sound link carries the current sound and loads it as one Undo entry", as
         assert.equal((await target.calls()).replaced.length, 1);
         await page.getByRole("button", { name: "Undo" }).click();
         await target.waitForParameter("filterCutoff", 1000);
+        assert.equal((await target.calls()).replaced.length, 2, "Undo of a link load replaces the sound again");
+        await page.getByRole("button", { name: "Redo" }).click();
+        await target.waitForParameter("filterCutoff", 2400);
+        assert.equal((await target.calls()).replaced.length, 3, "Redo of a link load replaces the sound again");
     } finally {
         await target.close();
     }

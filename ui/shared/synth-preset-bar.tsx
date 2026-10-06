@@ -1,17 +1,9 @@
 import { memo, useEffect, useId, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
 
-import {
-    PresetBar,
-    SnapshotBar,
-    usePluginHistory,
-    usePluginState,
-    usePresets,
-    type PluginStateHistoryEntry,
-    type PluginStateFields,
-    type SoundValues,
-} from "../../kit/index";
+import { PresetBar, SnapshotBar, usePluginState, usePresets, type PluginStateFields, type SoundValues } from "../../kit/index";
+import { usePluginStateSnapshot } from "../../kit/ui/plugin-state-react";
 import { pluginManifestId } from "../../kit/ui/plugin-state-user-files";
-import { editOutcome, jsonEqual, parsePresetFile, soundChanges } from "../../kit/ui/presets";
+import { parsePresetFile } from "../../kit/ui/presets";
 import { useCurrentSound } from "../../kit/ui/use-presets";
 import { usePatchConnection } from "./cmajor-react";
 import {
@@ -27,7 +19,9 @@ import { synthPluginState, synthSourceMode } from "./synth-plugin-state";
 
 type Notice = { readonly kind: "status" | "error"; readonly text: string } | null;
 type ShareDialog = { readonly url: string; readonly message: string; readonly warning: boolean };
-type SharedSound = { readonly name: string; readonly values: SoundValues };
+type SharedSound = { readonly name: string; readonly values: SoundValues; readonly text: string };
+type StateSnapshot = NonNullable<ReturnType<typeof usePluginStateSnapshot>>;
+type HistoryEntry = StateSnapshot["history"]["undoEntry"];
 
 export interface SynthPresetBarProps {
     /** The phone shell row (ADR-026): Back, Polish meter, the preset name, and one menu. */
@@ -57,6 +51,8 @@ function parameterValues(values: Readonly<Record<string, unknown>>): Record<stri
     }
     return parameters;
 }
+
+const entryKey = (entry: HistoryEntry) => entry ? `${entry.scope.owner}/${entry.scope.document}/${entry.id}` : "";
 
 function canUseSoundLinks() {
     try {
@@ -90,11 +86,8 @@ type PresetControlsProps = Omit<SynthPresetBarProps, "polishMeter" | "backAvaila
 const PresetControls = memo(function PresetControls(props: PresetControlsProps) {
     const { compact, wavetableTables, onSoundReplaced } = props;
     const presets = usePresets(synthPluginState);
-    const editor = usePluginState(synthPluginState);
     const sound = useCurrentSound(synthPluginState);
     const sourceMode = usePluginState(synthSourceMode);
-    const activePreset = usePluginState(synthPluginState.activePreset);
-    const activeSnapshot = usePluginState(synthPluginState.activeSnapshot);
     const pluginId = pluginManifestId(usePatchConnection().manifest);
     const [menuOpen, setMenuOpen] = useState(false);
     const [notice, setNotice] = useState<Notice>(null);
@@ -104,38 +97,27 @@ const PresetControls = memo(function PresetControls(props: PresetControlsProps) 
     const ready = presets.status === "ready" && sound.status === "ready";
     const bounced = "value" in sourceMode.state && sourceMode.state.value === 1;
 
-    // The sound is replaced when it changes together with the active preset or snapshot, when it
-    // returns to the active preset (Revert, or recalling the active preset again), or when a sound
-    // link loads. A library action such as Save changes the active preset but not the sound. Undo
-    // and Redo of a replacement replace the sound again, so the history entries of replacements
-    // are remembered, following each one as Undo and Redo move it between the two stacks.
-    const { undoEntry, redoEntry, canUndoEntry, canRedoEntry } = usePluginHistory();
-    const replacementEntries = useRef(new WeakSet<PluginStateHistoryEntry>());
-    const linkLoading = useRef(false);
-    const observed = useRef<{
-        readonly preset: unknown; readonly snapshot: unknown; readonly sound: SoundValues; readonly dirty: boolean;
-        readonly undoEntry?: PluginStateHistoryEntry; readonly redoEntry?: PluginStateHistoryEntry;
-    } | null>(null);
-    const presetValue = "value" in activePreset.state ? activePreset.state.value : undefined;
-    const snapshotValue = "value" in activeSnapshot.state ? activeSnapshot.state.value : undefined;
-    const { dirty, active } = presets;
+    // A load or recall that changes the sound (preset, snapshot, Revert, sound link) replaces it,
+    // and so do Undo and Redo of one. Undo of a recall that kept the same preset changes only
+    // sound values, so the history entries of recalls are remembered; a recall made in another
+    // view is still recognised when its Undo changes the active preset or snapshot.
+    const snapshot = usePluginStateSnapshot();
+    const recallEntries = useRef(new Set<string>());
+    const seen = useRef<StateSnapshot | null>(null);
     useEffect(() => {
-        if (sound.status !== "ready") return;
-        const previous = observed.current;
-        observed.current = { preset: presetValue, snapshot: snapshotValue, sound: sound.saved, dirty, undoEntry, redoEntry };
-        if (!previous || jsonEqual(previous.sound, sound.saved)) return;
-        const entries = replacementEntries.current;
-        const undone = previous.undoEntry !== undefined && canRedoEntry(previous.undoEntry) ? previous.undoEntry : undefined;
-        const redone = previous.redoEntry !== undefined && canUndoEntry(previous.redoEntry) ? previous.redoEntry : undefined;
-        const replayed = (undone !== undefined && entries.has(undone)) || (redone !== undefined && entries.has(redone));
-        const replaced = replayed || linkLoading.current || previous.preset !== presetValue || previous.snapshot !== snapshotValue
-            || (undone === undefined && redone === undefined && previous.dirty && !dirty && active !== null);
-        linkLoading.current = false;
-        if (!replaced) return;
-        const entry = undone !== undefined ? redoEntry : redone !== undefined || undoEntry !== previous.undoEntry ? undoEntry : undefined;
-        if (entry !== undefined) entries.add(entry);
-        onSoundReplaced(parameterValues(sound.values));
-    }, [presetValue, snapshotValue, sound, dirty, active, undoEntry, redoEntry, canUndoEntry, canRedoEntry, onSoundReplaced]);
+        if (!snapshot || sound.status !== "ready") return;
+        const previous = seen.current;
+        seen.current = snapshot;
+        const change = snapshot.lastChange;
+        if (!previous || !change || change === previous.lastChange) return;
+        const { undoEntry, redoEntry } = snapshot.history;
+        const recalled = change.reason === "load" || change.reason === "recall";
+        if (recalled && undoEntry) recallEntries.current.add(entryKey(undoEntry));
+        const moved = entryKey(previous.history.undoEntry) === entryKey(redoEntry) ? redoEntry : undoEntry;
+        const replayed = change.reason === "history" && (change.keys.includes("activePreset") || change.keys.includes("activeSnapshot")
+            || recallEntries.current.has(entryKey(moved)));
+        if ((recalled || replayed) && change.keys.some(key => Object.hasOwn(sound.values, key))) onSoundReplaced(parameterValues(sound.values));
+    }, [snapshot, sound, onSoundReplaced]);
 
     // A link opened in the browser offers its sound once the presets are ready.
     const fragmentChecked = useRef(false);
@@ -148,7 +130,7 @@ const PresetControls = memo(function PresetControls(props: PresetControlsProps) 
             if (!pluginId) { setNotice({ kind: "error", text: "This view has no plugin ID, so it cannot read sound links." }); return; }
             const parsed = parsePresetFile(decoded.value, pluginId, synthPluginState);
             if (parsed.kind === "error") { setNotice({ kind: "error", text: parsed.message }); return; }
-            setSharedSound(parsed.value);
+            setSharedSound({ ...parsed.value, text: decoded.value });
         });
     }, [ready, pluginId]);
 
@@ -186,10 +168,7 @@ const PresetControls = memo(function PresetControls(props: PresetControlsProps) 
         if (!shared) return;
         const tables = validateSoundShareWavetables(shared.values, wavetableTables);
         if (!tables.ok) { setNotice({ kind: "error", text: tables.error.message }); return; }
-        linkLoading.current = true;
-        const accepted = await editor.edit({ ...soundChanges(synthPluginState, shared.values), activePreset: null }, { recall: true });
-        if (accepted.kind !== "accepted" || accepted.changed === false) linkLoading.current = false;
-        const result = editOutcome(accepted);
+        const result = await presets.loadJson(shared.text);
         if (result.kind === "failed") { setNotice({ kind: "error", text: result.message }); return; }
         const stripped = stripSoundShareFragment();
         setNotice(stripped.ok
