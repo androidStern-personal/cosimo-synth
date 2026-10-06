@@ -19,6 +19,6 @@ export default async function runWavetableTestWorker(
         () => createSynthRackRestore(connection, {
             onDefect: error => console.error("Cosimo rack restore failed", error),
         }),
-        () => createWavetableWorkerController(connection, { ...options, delivery: "shared" }),
+        () => createWavetableWorkerController(connection, options),
     ]);
 }
