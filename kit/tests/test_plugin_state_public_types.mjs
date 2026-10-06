@@ -119,6 +119,8 @@ async function edit() {
 `);
         await writeFile(path.join(directory, "tsconfig.json"), JSON.stringify({
             extends: path.join(root, "tsconfig.json"),
+            // The fixture declares values only to check their types, so it never reads them.
+            compilerOptions: { noUnusedLocals: false, noUnusedParameters: false },
             // Replacing include drops the project's style module declarations; name them again.
             files: [path.join(directory, "fixture.ts"), path.join(root, "kit/tests/helpers/plugin_state_public_react.tsx"),
                 path.join(root, "kit/ui/style-modules.d.ts")], include: [],
