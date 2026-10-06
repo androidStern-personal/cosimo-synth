@@ -7,8 +7,6 @@ import { fileURLToPath } from "node:url";
 import { stageCmajorWebRuntime } from "../../ui/vite.shared.mjs";
 import { startStaticWebServer } from "../../kit/tests/helpers/static_web_server.mjs";
 
-export { pathStaysWithinRepoRoot } from "../../kit/tests/helpers/static_web_server.mjs";
-
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const DESKTOP_HARNESS_READINESS_TIMEOUT_MS = 90_000;
 const SERVER_READINESS_POLL_INTERVAL_MS = 250;

@@ -7,7 +7,7 @@ import { chromium } from "playwright";
 
 import { routeHermeticPage } from "./helpers/hermetic_page.mjs";
 import { buildMaximalCurrentSpeedrunPatch } from "./helpers/speedrun_test_context.mjs";
-import { startStaticWebServer } from "./helpers/static_web_server.mjs";
+import { startStaticWebServer } from "../kit/tests/helpers/static_web_server.mjs";
 
 const repoRoot = path.resolve(import.meta.dirname, "..");
 const webRoot = path.join(repoRoot, "build", "web");

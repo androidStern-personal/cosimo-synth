@@ -11,9 +11,9 @@ import { computeResponsivePatchLayout } from "../patch_gui/responsive-layout.mjs
 import {
     desktopHarnessNpmCommand,
     desktopHarnessSpawnSpec,
-    pathStaysWithinRepoRoot,
     startStaticRepoServer,
 } from "./helpers/desktop_harness_browser.mjs";
+import { pathStaysWithinRepoRoot } from "../kit/tests/helpers/static_web_server.mjs";
 import { loadUIModule } from "../kit/tests/helpers/load_ui_module.mjs";
 
 const repoRoot = path.resolve(import.meta.dirname, "..");

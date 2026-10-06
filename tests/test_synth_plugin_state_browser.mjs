@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test, { before, after } from "node:test";
 import path from "node:path";
 import { chromium } from "playwright";
-import { startStaticWebServer } from "./helpers/static_web_server.mjs";
+import { startStaticWebServer } from "../kit/tests/helpers/static_web_server.mjs";
 import { stageCmajorWebRuntime } from "../ui/vite.shared.mjs";
 
 const root = path.resolve(import.meta.dirname, "..");
