@@ -139,6 +139,55 @@ test("preset files round-trip into the user library without loading the sound", 
     } finally { await close(); }
 });
 
+test("loading a preset file replaces the sound as one Undo entry and leaves no preset active", async () => {
+    const { page, run, view, close } = await open();
+    try {
+        await run("presets", "recall", "quiet");
+        const { text } = await page.evaluate(() => window.harness.exportJson("hot"));
+        assert.deepEqual(await run("presets", "loadJson", text), { kind: "done" });
+        let state = await view();
+        assert.deepEqual([state.gain, state.mode, state.active, state.dirty, state.user], [6, "warm", null, false, []],
+            "the file's sound is loaded, no preset is active, and the library is unchanged");
+        await run("history", "undo");
+        state = await view();
+        assert.deepEqual([state.gain, state.mode, state.active], [-12, "clean", { id: "quiet", name: "Quiet" }],
+            "one Undo restores the previous sound and active preset together");
+        await run("history", "redo");
+        assert.deepEqual(await view().then(({ gain, mode, active }) => ({ gain, mode, active })), { gain: 6, mode: "warm", active: null });
+
+        const other = text.replace("com.example.presets", "com.example.other");
+        assert.deepEqual(await run("presets", "loadJson", other),
+            { kind: "failed", message: 'This preset is for the plugin "com.example.other", not "com.example.presets".' });
+        const notSound = JSON.stringify({ ...JSON.parse(text), values: { gain: 1, activeSnapshot: "A" } });
+        assert.deepEqual(await run("presets", "loadJson", notSound),
+            { kind: "failed", message: 'The preset sets "activeSnapshot", which this plugin does not keep in presets.' });
+        assert.deepEqual(await view().then(({ gain, mode, active }) => ({ gain, mode, active })), { gain: 6, mode: "warm", active: null },
+            "a refused file changes nothing");
+    } finally { await close(); }
+});
+
+test("PresetBar's pasted JSON loads as the sound on Enter, or joins the library", async () => {
+    const { page, view, close } = await open();
+    try {
+        const { text } = await page.evaluate(() => window.harness.exportJson("hot"));
+        const paste = async () => {
+            await page.getByRole("button", { name: "More", exact: true }).click();
+            await page.getByRole("button", { name: "Paste JSON", exact: true }).click();
+            await page.getByRole("textbox", { name: "Preset JSON" }).fill(text);
+        };
+        await paste();
+        for (const name of ["Load", "Add to library", "Cancel"]) await page.getByRole("button", { name, exact: true }).waitFor();
+        await page.keyboard.press("Enter");
+        await page.waitForFunction(() => window.harness.view().gain === 6);
+        assert.deepEqual(await view().then(({ mode, active, user }) => ({ mode, active, user })), { mode: "warm", active: null, user: [] });
+
+        await paste();
+        await page.getByRole("button", { name: "Add to library", exact: true }).click();
+        await page.waitForFunction(() => window.harness.view().user.length === 1);
+        assert.deepEqual((await view()).user, ["Hot"]);
+    } finally { await close(); }
+});
+
 test("snapshots keep the leaving slot's tweaks, capture into empty slots, and undo a select", async () => {
     const { run, view, close } = await open();
     try {

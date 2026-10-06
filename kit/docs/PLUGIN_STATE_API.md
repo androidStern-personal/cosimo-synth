@@ -23,6 +23,7 @@ Every state, preset and snapshot name `kit/index.ts` exports. Anything not liste
 | `usePluginState(definition)` | hook | Returns the `PluginStateEditor` that edits several fields as one Undo entry. |
 | `usePluginHistory()` | hook | Returns the plugin's shared Undo and Redo as `PluginStateHistory`. |
 | `UndoHistory` | class | The immutable, bounded Undo/Redo bookkeeping the state service uses; usable on its own. |
+| `PluginStateFields` | type | Any state definition, as `definePluginState` returns it; the type of `definition` in `PresetBar`, `usePresets` and your own helpers that wrap them. |
 | `PluginStateCodec<Value>` | type | `parse`, `encode` and `equals` for a stored value. |
 | `PluginStateJson` | type | A JSON value; what `encode` returns and `parse` reads. |
 | `PluginStateValueResult<Value>` | type | What `parse` returns: `{ kind: "ok", value }` or `{ kind: "error", message }`. |
@@ -47,7 +48,7 @@ Every state, preset and snapshot name `kit/index.ts` exports. Anything not liste
 | `PluginStateHistory` | type | `usePluginHistory()`'s result. |
 | `PluginStateHistoryEntry` | type | An opaque token for guarded Undo and Redo. |
 | `presets({ factory?, initial? })` | function | Adds `presetLibrary` and `activePreset` to a definition; `initial` names the factory preset a new project starts on. |
-| `usePresets(definition)` | hook | Returns `Presets`: everything `PresetBar` shows and does. |
+| `usePresets(definition)` | hook | Returns `Presets`: the preset lists, state and actions `PresetBar` is built on. |
 | `snapshots({ slots? })` | function | Adds `snapshotSlots` and `activeSnapshot` to a definition. |
 | `useSnapshots(definition)` | hook | Returns `Snapshots`: everything `SnapshotBar` shows and does. |
 | `PresetBar` | component | The ready-made preset selector and menu. |
@@ -283,6 +284,7 @@ interface Presets {
     duplicate(id: string): Promise<PresetActionResult>;
     exportJson(id?: string): { kind: "done"; text: string } | { kind: "failed"; message: string };   // No id: the current sound.
     importJson(text: string): Promise<PresetActionResult>;  // Adds to the library; does not load it.
+    loadJson(text: string): Promise<PresetActionResult>;    // Loads the sound; one Undo entry; no preset is active afterwards.
 }
 
 type PresetActionResult = { readonly kind: "done" } | { readonly kind: "failed"; readonly message: string };
@@ -301,6 +303,6 @@ interface Snapshots {
 }
 ```
 
-Only `recall`, `revert` and `select` create Undo entries. A failed action's `message` is written for the user and says what to do next; the hook also keeps it in `error` until the next action succeeds.
+Only `recall`, `revert`, `loadJson` and `select` create Undo entries. `importJson` and `loadJson` refuse a file written for another plugin ID or one that sets a field that is not a sound field. A failed action's `message` is written for the user and says what to do next; the hook also keeps it in `error` until the next action succeeds.
 
-`<PresetBar definition={definition} className? />` shows a labelled preset selector with factory and user groups, a "Modified" indicator, Save, Save as new, Revert, and a More menu with Rename, Duplicate, Delete, Copy JSON and Paste JSON. `<SnapshotBar definition={definition} className? />` shows one toggle button per slot (`aria-pressed` marks the active slot; a dot marks a filled slot) and Clear for the active slot. Both install their default styles into the document or shadow root they render in, and take their colors from the shared `--editor-accent-start` and `--editor-surface-bg` custom properties (see [Knobs](KNOBS_API.md#styling)).
+`<PresetBar definition={definition} className? />` shows a labelled preset selector with factory and user groups, a "Modified" indicator, Save, Save as new, Revert, and a More menu with Rename, Duplicate, Delete, Copy JSON and Paste JSON. Paste JSON opens a field with Load (`loadJson`, also on Enter), Add to library (`importJson`) and Cancel. `<SnapshotBar definition={definition} className? />` shows one toggle button per slot (`aria-pressed` marks the active slot; a dot marks a filled slot) and Clear for the active slot. Both install their default styles into the document or shadow root they render in, and take their colors from the shared `--editor-accent-start` and `--editor-surface-bg` custom properties (see [Knobs](KNOBS_API.md#styling)).

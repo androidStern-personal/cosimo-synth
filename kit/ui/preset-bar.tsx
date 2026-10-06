@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useId, useState, type FormEvent, type KeyboardEvent } from "react";
 import css from "./preset-bar.css?inline";
 import type { PluginStateFields } from "./plugin-state-definition";
-import { usePresets, type PresetActionResult } from "./presets";
+import type { PresetActionResult } from "./presets";
+import { usePresets } from "./use-presets";
 import { retainStyles } from "./styles";
 
 type Form = { readonly mode: "save-as" | "rename" | "paste"; readonly text: string };
@@ -14,8 +15,9 @@ export interface PresetBarProps {
 }
 
 /**
- * Choose, save and manage presets. Recalling or reverting is one Undo entry; library changes
- * are not undoable. Colors follow the shared `--editor-accent-start` and `--editor-surface-bg` properties.
+ * Choose, save and manage presets. Recalling, reverting or loading a pasted preset is one Undo
+ * entry; library changes are not undoable. Pasted JSON loads as the sound (Enter) or joins the
+ * library. Colors follow the shared `--editor-accent-start` and `--editor-surface-bg` properties.
  */
 export function PresetBar({ definition, className = "" }: PresetBarProps) {
     const presets = usePresets(definition);
@@ -53,7 +55,7 @@ export function PresetBar({ definition, className = "" }: PresetBarProps) {
         if (!form) return;
         if (form.mode === "save-as") void run(() => presets.save(form.text));
         else if (form.mode === "rename" && active) void run(() => presets.rename(active.id, form.text));
-        else if (form.mode === "paste") void run(() => presets.importJson(form.text));
+        else if (form.mode === "paste") void run(() => presets.loadJson(form.text));
     };
     const open = (mode: Form["mode"]) => {
         setNotice(null);
@@ -79,7 +81,8 @@ export function PresetBar({ definition, className = "" }: PresetBarProps) {
             <label>{form.mode === "paste" ? "Preset JSON" : "Preset name"}
                 <input autoFocus value={form.text} onChange={event => setForm({ ...form, text: event.currentTarget.value })} />
             </label>
-            <button type="submit">{form.mode === "paste" ? "Add preset" : "Save"}</button>
+            <button type="submit">{form.mode === "paste" ? "Load" : "Save"}</button>
+            {form.mode === "paste" && <button type="button" onClick={() => { void run(() => presets.importJson(form.text)); }}>Add to library</button>}
             <button type="button" onClick={() => setForm(null)}>Cancel</button>
         </form> : <>
             <select aria-label="Preset" value={active?.id ?? ""} disabled={!ready}

@@ -1,7 +1,7 @@
 import { useCallback } from "react";
 import css from "./snapshot-bar.css?inline";
 import type { PluginStateFields } from "./plugin-state-definition";
-import { useSnapshots } from "./snapshots";
+import { useSnapshots } from "./use-snapshots";
 import { retainStyles } from "./styles";
 
 export interface SnapshotBarProps {

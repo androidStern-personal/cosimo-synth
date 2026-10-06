@@ -42,6 +42,8 @@ function useSpectra() {
             connection.addEndpointListener?.(ANALYZER_ENDPOINTS[role], listener);
             return { endpoint: ANALYZER_ENDPOINTS[role], listener };
         });
+        // The analyzer switch is a view-only runtime event, not state: it is not saved, not in presets
+        // and not an Undo entry, so it goes to the host directly instead of through the state editor.
         connection.sendEventOrValue?.(ANALYZER_ENDPOINTS.enabled, 1);
         return () => {
             connection.sendEventOrValue?.(ANALYZER_ENDPOINTS.enabled, 0);

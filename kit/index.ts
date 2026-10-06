@@ -8,7 +8,7 @@
 
 // State and history
 export { definePluginState, parameter, storedValue, preparedState, eventValue, preparationFailure } from "./ui/plugin-state-definition";
-export type { PluginStateCodec, PluginStateJson, PluginStateValueResult, PluginStateLifetime, PluginStateOptions,
+export type { PluginStateFields, PluginStateCodec, PluginStateJson, PluginStateValueResult, PluginStateLifetime, PluginStateOptions,
     PluginStatePrepareContext, PluginStateSharedPlan, PluginStatePreparationFailure } from "./ui/plugin-state-definition";
 // For custom delivery seams; see PLUGIN_STATE.md.
 export type { PluginStateDelivery, PluginStateDeliveryContext, PluginStateDocumentContext, PluginStateEffect, PluginStateSubmission,
@@ -23,10 +23,14 @@ export { createStatefulPatchView } from "./ui/plugin-state-view";
 export { UndoHistory } from "./ui/undo-history";
 
 // Presets and snapshots: declared as state, recalled as one Undo entry.
-export { presets, usePresets } from "./ui/presets";
-export type { Preset, PresetLibrary, FactoryPreset, PresetFile, PresetSummary, Presets, PresetActionResult, SoundValues } from "./ui/presets";
-export { snapshots, useSnapshots } from "./ui/snapshots";
-export type { SnapshotSlots, Snapshots } from "./ui/snapshots";
+export { presets } from "./ui/presets";
+export type { Preset, PresetLibrary, FactoryPreset, PresetFile, PresetActionResult, SoundValues } from "./ui/presets";
+export { usePresets } from "./ui/use-presets";
+export type { Presets, PresetSummary } from "./ui/use-presets";
+export { snapshots } from "./ui/snapshots";
+export type { SnapshotSlots } from "./ui/snapshots";
+export { useSnapshots } from "./ui/use-snapshots";
+export type { Snapshots } from "./ui/use-snapshots";
 export { PresetBar } from "./ui/preset-bar";
 export type { PresetBarProps } from "./ui/preset-bar";
 export { SnapshotBar } from "./ui/snapshot-bar";

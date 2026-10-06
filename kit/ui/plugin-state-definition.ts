@@ -186,7 +186,7 @@ export interface PluginStateStored<Value, Payload = unknown> {
     readonly [definitionInitial]?: (fields: PluginStateFields) => PluginStateValueResult<Value>;
 }
 
-/** The finite field declarations accepted by a state session. */
+/** A plugin's field declarations: what `definePluginState` returns, and what `PresetBar`, `usePresets` and the other whole-definition helpers take. */
 export type PluginStateFields = Readonly<Record<string, PluginStateParameter | PluginStateStored<unknown>>>;
 
 /** Infer the domain value of one author declaration. */

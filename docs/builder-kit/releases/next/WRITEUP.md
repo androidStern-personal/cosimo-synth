@@ -1,6 +1,6 @@
 # State management for audio plugins, built into Builder Kit
 
-Draft for the next release. Compared with the live Builder Kit 0.1.5 release; the public control lifecycle and examples now use the single `state.status` contract documented in [the API reference](../../../../kit/docs/PLUGIN_STATE_API.md). The candidate is **0.2.0**. It is staged for qualification and has not been published.
+Draft for the next release. Compared with the live Builder Kit 0.1.0 release; the public control lifecycle and examples now use the single `state.status` contract documented in [the API reference](../../../../kit/docs/PLUGIN_STATE_API.md). The candidate is **0.2.0**. It is staged for qualification and has not been published.
 
 Builder Kit now gives Cmajor plugin authors one API for parameters, editable complex state, saving, Undo/Redo, and getting prepared data into the audio engine.
 
@@ -8,7 +8,7 @@ Turn a control, edit an envelope, or select a different wavetable: those edits c
 
 For large audio data, the author supplies the preparation function. The framework supplies its writable destination, publishes complete data at an audio-block boundary, and releases replaced storage safely. Plugin authors do not write a packet uploader or manage that shared-memory handoff themselves.
 
-## What is new since 0.1.5
+## What is new since 0.1.0
 
 | Capability | What the author gets |
 |---|---|

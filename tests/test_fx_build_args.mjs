@@ -824,6 +824,17 @@ test("kit/index.ts names its public surface explicitly, in groups, and covers ev
     const exported = new Set(checker.getExportsOfModule(checker.getSymbolAtLocation(program.getSourceFile(entry))).map((symbol) => symbol.name));
     assert.ok(exported.size >= 85 && exported.size <= 115, `the public surface stays deliberate (${exported.size} names)`);
 
+    // The API reference's "Exported names" table lists every state, preset and snapshot export, and only real exports.
+    const reference = await readFile(path.join(repoRoot, "kit/docs/PLUGIN_STATE_API.md"), "utf8");
+    const tableStart = reference.indexOf("## Exported names");
+    const documented = new Set([...reference.slice(tableStart, reference.indexOf("\n## ", tableStart)).matchAll(/^\| `(\w+)/gm)].map((match) => match[1]));
+    const stateGroups = indexSource.slice(indexSource.indexOf("// State and history"), indexSource.indexOf("// Controls"));
+    const stateExports = [...stateGroups.matchAll(/^export (?:type )?\{([^}]*)\}|^export \* as (\w+)/gm)]
+        .flatMap((match) => match[2] ? [match[2]] : match[1].split(",").map((name) => name.trim()).filter(Boolean));
+    assert.ok(stateExports.includes("PluginStateFields"), "PluginStateFields is public: PresetBarProps.definition and usePresets(definition) take it");
+    assert.deepEqual(stateExports.filter((name) => !documented.has(name)), [], "every state, preset and snapshot export has a row in PLUGIN_STATE_API.md");
+    assert.deepEqual([...documented].filter((name) => !exported.has(name)), [], "every name the table lists is exported");
+
     const shipped = [path.join(repoRoot, "kit/scripts/new_plugin.mjs")];
     for (const directory of ["fx/enhancer_lite", "kit/examples"]) {
         for (const file of await readdir(path.join(repoRoot, directory), { recursive: true })) {

@@ -20,9 +20,10 @@ what a version number promises.
 - **Presets and snapshots as state.** Spread `presets()` and `snapshots()` into
   the declaration and render `PresetBar` and `SnapshotBar`. `presets({ initial })`
   names the preset a new instance starts from. Recalling a preset or selecting a
-  snapshot is one Undo entry. Library operations (saving, renaming, deleting a
-  preset; clearing a snapshot slot) are not Undo entries. `usePresets` and
-  `useSnapshots` serve custom interfaces.
+  snapshot is one Undo entry, and so is loading a pasted preset file as the
+  sound. Library operations (saving, renaming, deleting a preset; clearing a
+  snapshot slot) are not Undo entries. `usePresets` and `useSnapshots` serve
+  custom interfaces.
 - **Field status.** Each field reports `loading`, `invalid`, `unavailable`,
   `updating` or `idle`, with one current error and a retry action. Values stay
   editable while they save.
@@ -90,7 +91,7 @@ Copy this prompt into your coding agent:
 Take the new lockfile and tool pins through the normal merge, run `npm ci`,
 then run `npm run kit:setup` when strict doctor reports a tool mismatch.
 
-## 0.1.5 (2026-09-09) — Guided setup and safe updates
+## 0.1.0 (2026-10-04) — First release
 
 Guided setup into the Documents folder, a first-task choice, a tracked
 dependency lockfile, and an update flow that preserves local plugin edits.

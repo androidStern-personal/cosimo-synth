@@ -135,13 +135,14 @@ export default definePluginState({
 |---|---|
 | Recall or revert a preset | One entry: the sound and the active preset are restored together. |
 | Select a snapshot slot | One entry: the sound and the selected slot are restored. Slot contents are not. |
-| Save, save as new, rename, duplicate, delete, import a preset; clear a slot | None. Library operations are not Undo entries. |
+| Load a preset file as the sound | One entry: the sound and the active preset are restored. |
+| Save, save as new, rename, duplicate, delete a preset; add a preset file to the library; clear a slot | None. Library operations are not Undo entries. |
 
 Recall sets the fields a preset contains; a field the preset lacks keeps its value, and a key that is no longer a sound field is ignored. A preset is **modified** when the current sound differs from the active preset's values. Selecting a snapshot slot first stores the current sound in the slot being left, so tweaks made while it was selected are kept; selecting an empty slot stores the current sound in it.
 
 `presetLibrary` has `lifetime: "user"`: every instance of the plugin, in every project, shares it through the Cmajor user-files API, in a folder named after a hash of the manifest `ID`. Without that API (the browser preview, tests) the library lives in memory until the page closes. `activePreset` and the snapshot fields are saved with the project.
 
-**Copy JSON** writes the current sound as a preset file; **Paste JSON** adds a preset file to the library without loading it:
+**Copy JSON** writes the current sound as a preset file. **Paste JSON** reads one: **Load** (or Enter) makes it the sound, as one Undo entry, and leaves no preset active, because that sound is not in the library; **Add to library** saves it as a user preset without loading it:
 
 ```json
 { "kind": "builder-kit.preset", "version": 1, "plugin": "<manifest ID>", "name": "Warm", "values": { "gain": -3, "tone": 0.2 } }
@@ -156,7 +157,7 @@ The context passed to `prepare` carries `reason`, so the audio engine can treat 
 | `reason` | When |
 |---|---|
 | `load` | The plugin opened, or the host loaded a project. |
-| `recall` | A preset was recalled or reverted, or a snapshot slot was selected. |
+| `recall` | A preset was recalled or reverted, a preset file was loaded as the sound, or a snapshot slot was selected. |
 | `history` | Undo or Redo restored the value. |
 | `edit` | Any other change, including host automation of a declared dependency. |
 
@@ -167,7 +168,7 @@ prepare(pattern, { reason }) {
 }
 ```
 
-`PresetBar`, `SnapshotBar`, `usePresets` and `useSnapshots` mark their recalls. A custom preset interface marks its own with `editor.edit(changes, { recall: true })`; a recall cannot be part of a gesture.
+`PresetBar`, `SnapshotBar`, `usePresets` and `useSnapshots` mark their recalls, including a preset file loaded as the sound. A custom preset interface marks its own with `editor.edit(changes, { recall: true })`; a recall cannot be part of a gesture.
 
 ## Custom delivery
 

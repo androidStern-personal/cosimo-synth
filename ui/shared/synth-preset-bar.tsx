@@ -3,7 +3,8 @@ import { memo, useEffect, useId, useRef, useState, type KeyboardEvent, type Reac
 import { PresetBar, SnapshotBar, usePluginHistory, usePluginState, usePresets, type PluginStateHistoryEntry } from "../../kit/index";
 import type { PluginStateFields } from "../../kit/ui/plugin-state-definition";
 import { pluginManifestId } from "../../kit/ui/plugin-state-user-files";
-import { editOutcome, jsonEqual, parsePresetFile, soundChanges, useCurrentSound, type SoundValues } from "../../kit/ui/presets";
+import { editOutcome, jsonEqual, parsePresetFile, soundChanges, type SoundValues } from "../../kit/ui/presets";
+import { useCurrentSound } from "../../kit/ui/use-presets";
 import { usePatchConnection } from "./cmajor-react";
 import {
     advancePolishPeakDisplay,

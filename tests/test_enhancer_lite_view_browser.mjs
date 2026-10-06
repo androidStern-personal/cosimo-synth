@@ -209,6 +209,13 @@ async function openEnhancerLite(modulePath = sourceView, { manifest, userFileFix
     return page;
 }
 
+test("the generated state worker carries no React", async () => {
+    // state.ts imports presets() and snapshots(); the hooks live in separate modules so the worker stays free of React.
+    const worker = await readFile(path.join(repoRoot, "build/fx/enhancer_lite_runtime/worker.js"), "utf8");
+    assert.doesNotMatch(worker, /react[._]production|Symbol\.for\("react\.|__SECRET_INTERNALS|__CLIENT_INTERNALS|useSyncExternalStore/u,
+        "a module that state.ts reaches imports React or a React hook module");
+});
+
 for (const sourceModule of [sourceView, compiledView]) {
 test(`scalar controls share Undo/Redo and retain their history when the GUI reopens (${sourceModule})`, async () => {
     const page = await openEnhancerLite(sourceModule);
