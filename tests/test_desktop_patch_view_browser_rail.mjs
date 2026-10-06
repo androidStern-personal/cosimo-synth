@@ -1784,10 +1784,10 @@ test("Developer Settings updates and persists keyboard geometry without remounti
         beforeGoto: async (nextPage) => {
             await nextPage.setViewportSize({ width: 393, height: 852 });
             await nextPage.addInitScript(() => {
-                if (sessionStorage.getItem("cosimo.t79-keyboard-test-initialized") === "true") {
+                if (sessionStorage.getItem("cosimo.keyboard-geometry-test-initialized") === "true") {
                     return;
                 }
-                sessionStorage.setItem("cosimo.t79-keyboard-test-initialized", "true");
+                sessionStorage.setItem("cosimo.keyboard-geometry-test-initialized", "true");
                 localStorage.removeItem("cosimo.keyboard.presentation.preferences.v1");
             });
         },
@@ -1814,7 +1814,7 @@ test("Developer Settings updates and persists keyboard geometry without remounti
             rootNote: keyboard?.getAttribute("root-note") ?? null,
             noteCount: keyboard?.getAttribute("note-count") ?? null,
             naturalWidth: keyboard && "naturalWidth" in keyboard ? keyboard.naturalWidth : null,
-            sameElement: globalThis.__cosimoT79Keyboard === keyboard,
+            sameElement: globalThis.__cosimoKeyboardUnderTest === keyboard,
         };
     });
     const openDeveloperSettings = async () => {
@@ -1825,9 +1825,9 @@ test("Developer Settings updates and persists keyboard geometry without remounti
     };
 
     try {
-        const soundBefore = await getHarnessSnapshot(page);
+        const soundBefore = await waitForOpeningLaneDelivery(page);
         await page.evaluate(() => {
-            globalThis.__cosimoT79Keyboard = document.querySelector(
+            globalThis.__cosimoKeyboardUnderTest = document.querySelector(
                 '[data-role="sticky-keyboard"] .keyboard',
             );
         });
@@ -1866,14 +1866,14 @@ test("Developer Settings updates and persists keyboard geometry without remounti
                 configurable: true,
                 value: {
                     writeText: async (value) => {
-                        globalThis.__cosimoT79CopiedSettings = value;
+                        globalThis.__cosimoCopiedSettings = value;
                     },
                 },
             });
         });
         await settings.locator('[data-action="copy-perf-tuning-settings"]').click();
         await settings.locator('[data-role="perf-tuning-copy-feedback"][data-state="success"]').waitFor();
-        const copiedSettings = await page.evaluate(() => globalThis.__cosimoT79CopiedSettings ?? "");
+        const copiedSettings = await page.evaluate(() => globalThis.__cosimoCopiedSettings ?? "");
         assert.match(copiedSettings, /\n\[Keyboard\]\n/u);
         assert.match(copiedSettings, /keyboard\.visibleNoteCount: 14/u);
         assert.match(copiedSettings, /keyboard\.heightScale: 1\.25/u);
@@ -1918,9 +1918,9 @@ test("Developer Settings updates and persists keyboard geometry without remounti
     } finally {
         await page.evaluate(() => {
             localStorage.removeItem("cosimo.keyboard.presentation.preferences.v1");
-            sessionStorage.removeItem("cosimo.t79-keyboard-test-initialized");
-            delete globalThis.__cosimoT79Keyboard;
-            delete globalThis.__cosimoT79CopiedSettings;
+            sessionStorage.removeItem("cosimo.keyboard-geometry-test-initialized");
+            delete globalThis.__cosimoKeyboardUnderTest;
+            delete globalThis.__cosimoCopiedSettings;
         }).catch(() => {});
         await page.close();
     }
