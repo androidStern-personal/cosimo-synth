@@ -4,58 +4,11 @@ var MSEG_BODY_SAMPLES = 2048;
 var MSEG_PADDED_SAMPLES = MSEG_BODY_SAMPLES + 3;
 var MSEG_CURVE_POWER_LIMIT = 20;
 var MSEG_DEFAULT_NAME = "MSEG 1";
-var MSEG_POINT_HIT_RADIUS_PX = 22;
-var MSEG_SEGMENT_HIT_RADIUS_PX = 14;
-var MSEG_POINT_RADIUS_PX = 8;
-var MSEG_SELECTED_POINT_RADIUS_PX = 10;
-var MSEG_EDITOR_HORIZONTAL_PADDING_PX = 14;
-var MSEG_EDITOR_VERTICAL_PADDING_PX = 14;
-var MSEG_EDITOR_CURVE_TOLERANCE_PX = 0.5;
-var MSEG_EDITOR_MAX_SUBDIVISION_DEPTH = 12;
-var MSEG_TIME_AXIS_QUARTERS = [0.25, 0.5, 0.75];
-var MSEG_ORIENTATION_HYSTERESIS_RATIO = 1.08;
-function resolveMsegSurfaceOrientation(width, height, current) {
-  const safeWidth = Math.max(1, Number(width) || 0);
-  const safeHeight = Math.max(1, Number(height) || 0);
-  if (current === "horizontal") {
-    return safeHeight > safeWidth * MSEG_ORIENTATION_HYSTERESIS_RATIO ? "vertical" : "horizontal";
-  }
-  return safeWidth > safeHeight * MSEG_ORIENTATION_HYSTERESIS_RATIO ? "horizontal" : "vertical";
-}
 function objectFields(value) {
   return value !== null && typeof value === "object" ? value : {};
 }
 function clamp(value, min, max) {
   return Math.min(Math.max(value, min), max);
-}
-function greatestCommonDivisor(left, right) {
-  let dividend = Math.abs(Math.trunc(left));
-  let divisor = Math.abs(Math.trunc(right));
-  while (divisor !== 0) {
-    const remainder = dividend % divisor;
-    dividend = divisor;
-    divisor = remainder;
-  }
-  return Math.max(1, dividend);
-}
-function formatMsegSecondsTick(seconds) {
-  const roundedMilliseconds = Math.round(Math.max(0, Number(seconds) || 0) * 1e3);
-  const roundedSeconds = roundedMilliseconds / 1e3;
-  return `${roundedSeconds}s`;
-}
-function formatMsegNoteTick(totalDivision, quarterIndex) {
-  const totalNumerator = Math.max(1, Math.abs(Math.trunc(Number(totalDivision.numerator) || 1)));
-  const totalDenominator = Math.max(1, Math.abs(Math.trunc(Number(totalDivision.denominator) || 1)));
-  const numerator = totalNumerator * quarterIndex;
-  const denominator = totalDenominator * 4;
-  const divisor = greatestCommonDivisor(numerator, denominator);
-  return `${numerator / divisor}/${denominator / divisor}`;
-}
-function createMsegTimeAxisTicks(scale) {
-  return MSEG_TIME_AXIS_QUARTERS.map((fraction, index) => ({
-    fraction,
-    label: scale.kind === "seconds" ? formatMsegSecondsTick(scale.totalSeconds * fraction) : formatMsegNoteTick(scale.totalDivision, index + 1)
-  }));
 }
 function almostEqual(left, right, epsilon = 1e-12) {
   return Math.abs(left - right) <= epsilon;
@@ -76,66 +29,6 @@ function createDefaultMsegShape(name = MSEG_DEFAULT_NAME) {
       { x: 0, y: 0, curvePower: 0 },
       { x: 1, y: 1, curvePower: 0 }
     ]
-  };
-}
-function createMsegEditorMetrics(width, height, {
-  pointRadius = MSEG_POINT_RADIUS_PX,
-  horizontalPadding = MSEG_EDITOR_HORIZONTAL_PADDING_PX,
-  verticalPadding = MSEG_EDITOR_VERTICAL_PADDING_PX
-} = {}) {
-  const safeWidth = Math.max(1, Number(width) || 0);
-  const safeHeight = Math.max(1, Number(height) || 0);
-  const safePointRadius = Math.max(0, Number(pointRadius) || 0);
-  const safeHorizontalPadding = Math.max(0, Number(horizontalPadding) || 0);
-  const safeVerticalPadding = Math.max(0, Number(verticalPadding) || 0);
-  const maxInsetX = Math.max(0, (safeWidth - 1) * 0.5);
-  const maxInsetY = Math.max(0, (safeHeight - 1) * 0.5);
-  const insetX = Math.min(maxInsetX, safePointRadius + safeHorizontalPadding);
-  const insetY = Math.min(maxInsetY, safePointRadius + safeVerticalPadding);
-  const plotLeft = insetX;
-  const plotTop = insetY;
-  const plotRight = Math.max(plotLeft + 1, safeWidth - insetX);
-  const plotBottom = Math.max(plotTop + 1, safeHeight - insetY);
-  return {
-    width: safeWidth,
-    height: safeHeight,
-    pointRadius: safePointRadius,
-    plotLeft,
-    plotTop,
-    plotRight,
-    plotBottom,
-    plotWidth: Math.max(1, plotRight - plotLeft),
-    plotHeight: Math.max(1, plotBottom - plotTop)
-  };
-}
-function pointToMsegEditorCoordinates(point, width, height, options = {}) {
-  const metrics = createMsegEditorMetrics(width, height, options);
-  const orientation = options.orientation === "vertical" ? "vertical" : "horizontal";
-  const normalizedX = clamp01(Number(point?.x));
-  const normalizedY = clamp01(Number(point?.y));
-  if (orientation === "vertical") {
-    return {
-      x: metrics.plotLeft + normalizedY * metrics.plotWidth,
-      y: metrics.plotTop + normalizedX * metrics.plotHeight
-    };
-  }
-  return {
-    x: metrics.plotLeft + normalizedX * metrics.plotWidth,
-    y: metrics.plotTop + (1 - normalizedY) * metrics.plotHeight
-  };
-}
-function msegEditorCoordinatesToPoint(editorX, editorY, width, height, options = {}) {
-  const metrics = createMsegEditorMetrics(width, height, options);
-  const orientation = options.orientation === "vertical" ? "vertical" : "horizontal";
-  if (orientation === "vertical") {
-    return {
-      x: clamp01((Number(editorY) - metrics.plotTop) / metrics.plotHeight),
-      y: clamp01((Number(editorX) - metrics.plotLeft) / metrics.plotWidth)
-    };
-  }
-  return {
-    x: clamp01((Number(editorX) - metrics.plotLeft) / metrics.plotWidth),
-    y: clamp01(1 - (Number(editorY) - metrics.plotTop) / metrics.plotHeight)
   };
 }
 function normalizePoint(point, pointIndex, pointCount) {
@@ -175,262 +68,6 @@ function normalizeMsegShape(shape = createDefaultMsegShape()) {
     globalSmooth: Boolean(next.globalSmooth),
     points
   };
-}
-function powerScale(value, power) {
-  if (Math.abs(power) < 0.01) {
-    return value;
-  }
-  const numerator = Math.exp(power * value) - 1;
-  const denominator = Math.exp(power) - 1;
-  return numerator / denominator;
-}
-function evaluateMsegSegmentPoint(from, to, t) {
-  const clampedT = clamp01(t);
-  const curvedT = clamp01(powerScale(clampedT, from.curvePower));
-  return {
-    x: from.x + (to.x - from.x) * clampedT,
-    y: from.y + (to.y - from.y) * curvedT,
-    curvePower: from.curvePower
-  };
-}
-function distanceSquaredToLineSegment(targetX, targetY, fromX, fromY, toX, toY) {
-  const deltaX = toX - fromX;
-  const deltaY = toY - fromY;
-  const segmentLengthSquared = deltaX * deltaX + deltaY * deltaY;
-  if (segmentLengthSquared <= 1e-12) {
-    const pointDeltaX2 = targetX - fromX;
-    const pointDeltaY2 = targetY - fromY;
-    return pointDeltaX2 * pointDeltaX2 + pointDeltaY2 * pointDeltaY2;
-  }
-  const projection = clamp(
-    ((targetX - fromX) * deltaX + (targetY - fromY) * deltaY) / segmentLengthSquared,
-    0,
-    1
-  );
-  const closestX = fromX + deltaX * projection;
-  const closestY = fromY + deltaY * projection;
-  const pointDeltaX = targetX - closestX;
-  const pointDeltaY = targetY - closestY;
-  return pointDeltaX * pointDeltaX + pointDeltaY * pointDeltaY;
-}
-function sampleMsegSegmentEditorPolyline(shape, segmentIndex, width, height, editorOptions = {}) {
-  const normalizedShape = normalizeMsegShape(shape);
-  if (!Number.isInteger(segmentIndex) || segmentIndex < 0 || segmentIndex >= normalizedShape.points.length - 1) {
-    return [];
-  }
-  const from = normalizedShape.points[segmentIndex];
-  const to = normalizedShape.points[segmentIndex + 1];
-  const startCoordinates = pointToMsegEditorCoordinates(from, width, height, editorOptions);
-  const endCoordinates = pointToMsegEditorCoordinates(to, width, height, editorOptions);
-  if (almostEqual(from.x, to.x)) {
-    return [startCoordinates, endCoordinates];
-  }
-  const polyline = [startCoordinates];
-  const errorToleranceSquared = MSEG_EDITOR_CURVE_TOLERANCE_PX * MSEG_EDITOR_CURVE_TOLERANCE_PX;
-  const appendAdaptiveSamples = (startT, endT, startPointCoordinates, endPointCoordinates, depth) => {
-    if (depth >= MSEG_EDITOR_MAX_SUBDIVISION_DEPTH) {
-      polyline.push(endPointCoordinates);
-      return;
-    }
-    const midpointT = startT + (endT - startT) * 0.5;
-    const midpoint = evaluateMsegSegmentPoint(from, to, midpointT);
-    const midpointCoordinates = pointToMsegEditorCoordinates(midpoint, width, height, editorOptions);
-    const errorSquared = distanceSquaredToLineSegment(
-      midpointCoordinates.x,
-      midpointCoordinates.y,
-      startPointCoordinates.x,
-      startPointCoordinates.y,
-      endPointCoordinates.x,
-      endPointCoordinates.y
-    );
-    if (errorSquared <= errorToleranceSquared) {
-      polyline.push(endPointCoordinates);
-      return;
-    }
-    appendAdaptiveSamples(startT, midpointT, startPointCoordinates, midpointCoordinates, depth + 1);
-    appendAdaptiveSamples(midpointT, endT, midpointCoordinates, endPointCoordinates, depth + 1);
-  };
-  appendAdaptiveSamples(0, 1, startCoordinates, endCoordinates, 0);
-  return polyline;
-}
-function sampleMsegEditorPolyline(shape, width, height, editorOptions = {}) {
-  const normalizedShape = normalizeMsegShape(shape);
-  const polyline = [];
-  for (let segmentIndex = 0; segmentIndex < normalizedShape.points.length - 1; segmentIndex += 1) {
-    const segmentPolyline = sampleMsegSegmentEditorPolyline(
-      normalizedShape,
-      segmentIndex,
-      width,
-      height,
-      editorOptions
-    );
-    if (segmentPolyline.length === 0) {
-      continue;
-    }
-    if (polyline.length === 0) {
-      polyline.push(...segmentPolyline);
-      continue;
-    }
-    polyline.push(...segmentPolyline.slice(1));
-  }
-  return polyline;
-}
-function findEvaluationSegment(points, x) {
-  if (x <= points[0].x) {
-    return { from: points[0], to: points[0], laterPointWins: false };
-  }
-  for (let index = 0; index < points.length - 1; index += 1) {
-    const from = points[index];
-    const to = points[index + 1];
-    if (x < to.x) {
-      return { from, to, laterPointWins: false };
-    }
-    if (almostEqual(x, to.x)) {
-      let latestIndex = index + 1;
-      while (latestIndex + 1 < points.length && almostEqual(points[latestIndex + 1].x, x)) {
-        latestIndex += 1;
-      }
-      return {
-        from: points[latestIndex],
-        to: points[latestIndex],
-        laterPointWins: true
-      };
-    }
-  }
-  return {
-    from: points[points.length - 1],
-    to: points[points.length - 1],
-    laterPointWins: false
-  };
-}
-function evaluateNormalizedMsegShape(points, x) {
-  const clampedX = clamp01(Number(x));
-  const segment = findEvaluationSegment(points, clampedX);
-  if (segment.laterPointWins || almostEqual(segment.from.x, segment.to.x)) {
-    return segment.to.y;
-  }
-  const width = segment.to.x - segment.from.x;
-  const t = width <= 0 ? 1 : (clampedX - segment.from.x) / width;
-  const curvedT = clamp01(powerScale(t, segment.from.curvePower));
-  return segment.from.y + (segment.to.y - segment.from.y) * curvedT;
-}
-function evaluateMsegShape(shape, x) {
-  return evaluateNormalizedMsegShape(normalizeMsegShape(shape).points, x);
-}
-function renderMsegShape(shape) {
-  const padded = new Float32Array(MSEG_PADDED_SAMPLES);
-  renderMsegShapeInto(shape, padded);
-  return padded;
-}
-function renderMsegShapeInto(shape, padded) {
-  if (padded.length !== MSEG_PADDED_SAMPLES) throw new Error("Invalid MSEG destination length.");
-  const normalizedShape = normalizeMsegShape(shape);
-  for (let sampleIndex = 0; sampleIndex < MSEG_BODY_SAMPLES; sampleIndex += 1) {
-    const x = sampleIndex / (MSEG_BODY_SAMPLES - 1);
-    padded[sampleIndex + 1] = evaluateMsegShape(normalizedShape, x);
-  }
-  padded[0] = padded[1];
-  padded[MSEG_BODY_SAMPLES + 1] = padded[MSEG_BODY_SAMPLES];
-  padded[MSEG_BODY_SAMPLES + 2] = padded[MSEG_BODY_SAMPLES];
-}
-function findMsegPointHitIndex(shape, editorX, editorY, width, height, hitRadius = MSEG_POINT_HIT_RADIUS_PX, editorOptions = {}) {
-  const points = normalizeMsegShape(shape).points;
-  const targetX = Number(editorX);
-  const targetY = Number(editorY);
-  if (!Number.isFinite(targetX) || !Number.isFinite(targetY)) {
-    return -1;
-  }
-  const safeHitRadius = Math.max(0, Number(hitRadius) || 0);
-  let closestPointIndex = -1;
-  let closestDistanceSquared = safeHitRadius * safeHitRadius;
-  points.forEach((point, pointIndex) => {
-    const coordinates = pointToMsegEditorCoordinates(point, width, height, editorOptions);
-    const deltaX = targetX - coordinates.x;
-    const deltaY = targetY - coordinates.y;
-    const distanceSquared = deltaX * deltaX + deltaY * deltaY;
-    if (distanceSquared <= closestDistanceSquared) {
-      closestPointIndex = pointIndex;
-      closestDistanceSquared = distanceSquared;
-    }
-  });
-  return closestPointIndex;
-}
-function findMsegSegmentHitIndex(shape, editorX, editorY, width, height, hitRadius = MSEG_SEGMENT_HIT_RADIUS_PX, editorOptions = {}) {
-  const normalizedShape = normalizeMsegShape(shape);
-  const targetX = Number(editorX);
-  const targetY = Number(editorY);
-  if (!Number.isFinite(targetX) || !Number.isFinite(targetY)) {
-    return -1;
-  }
-  const safeHitRadius = Math.max(0, Number(hitRadius) || 0);
-  let closestSegmentIndex = -1;
-  let closestDistanceSquared = safeHitRadius * safeHitRadius;
-  for (let segmentIndex = 0; segmentIndex < normalizedShape.points.length - 1; segmentIndex += 1) {
-    const polyline = sampleMsegSegmentEditorPolyline(
-      normalizedShape,
-      segmentIndex,
-      width,
-      height,
-      editorOptions
-    );
-    for (let pointIndex = 0; pointIndex < polyline.length - 1; pointIndex += 1) {
-      const from = polyline[pointIndex];
-      const to = polyline[pointIndex + 1];
-      const distanceSquared = distanceSquaredToLineSegment(
-        targetX,
-        targetY,
-        from.x,
-        from.y,
-        to.x,
-        to.y
-      );
-      if (distanceSquared <= closestDistanceSquared) {
-        closestSegmentIndex = segmentIndex;
-        closestDistanceSquared = distanceSquared;
-      }
-    }
-  }
-  return closestSegmentIndex;
-}
-function deriveMsegSegmentCurvePower(shape, segmentIndex, x, y) {
-  const normalizedShape = normalizeMsegShape(shape);
-  if (!Number.isInteger(segmentIndex) || segmentIndex < 0 || segmentIndex >= normalizedShape.points.length - 1) {
-    throw new Error("segmentIndex must address a segment inside the shape");
-  }
-  const from = normalizedShape.points[segmentIndex];
-  const to = normalizedShape.points[segmentIndex + 1];
-  const width = to.x - from.x;
-  const deltaY = to.y - from.y;
-  if (width <= 1e-12 || Math.abs(deltaY) <= 1e-12) {
-    return 0;
-  }
-  const localX = clamp(clamp01(Number(x)), from.x, to.x);
-  const t = clamp((localX - from.x) / width, 1e-4, 1 - 1e-4);
-  const targetCurvedT = clamp((Number(y) - from.y) / deltaY, 1e-4, 1 - 1e-4);
-  if (!Number.isFinite(targetCurvedT) || almostEqual(targetCurvedT, t, 1e-4)) {
-    return 0;
-  }
-  let low = -MSEG_CURVE_POWER_LIMIT;
-  let high = MSEG_CURVE_POWER_LIMIT;
-  let lowValue = powerScale(t, low);
-  let highValue = powerScale(t, high);
-  const target = clamp(targetCurvedT, Math.min(lowValue, highValue), Math.max(lowValue, highValue));
-  const ascending = lowValue <= highValue;
-  for (let iteration = 0; iteration < 32; iteration += 1) {
-    const middle = (low + high) * 0.5;
-    const middleValue = powerScale(t, middle);
-    if (almostEqual(middleValue, target, 1e-5)) {
-      return clampCurvePower(middle);
-    }
-    if (ascending && middleValue < target || !ascending && middleValue > target) {
-      low = middle;
-      lowValue = middleValue;
-    } else {
-      high = middle;
-      highValue = middleValue;
-    }
-  }
-  return clampCurvePower((low + high) * 0.5);
 }
 function addMsegPoint(shape, x, y) {
   const normalizedShape = normalizeMsegShape(shape);
@@ -657,52 +294,27 @@ function sampleRenderedMsegBuffer(paddedBuffer, x) {
   );
 }
 export {
-  MSEG_BODY_SAMPLES,
-  MSEG_CURVE_POWER_LIMIT,
   MSEG_DEFAULT_DEPTH,
-  MSEG_DEFAULT_NAME,
-  MSEG_EDITOR_CURVE_TOLERANCE_PX,
-  MSEG_EDITOR_HORIZONTAL_PADDING_PX,
-  MSEG_EDITOR_VERTICAL_PADDING_PX,
   MSEG_NOTE_OFF_POLICY_FINISH_LOOP,
   MSEG_NOTE_OFF_POLICY_IGNORE,
   MSEG_NOTE_OFF_POLICY_IMMEDIATE,
-  MSEG_PADDED_SAMPLES,
-  MSEG_POINT_HIT_RADIUS_PX,
-  MSEG_POINT_RADIUS_PX,
   MSEG_RATE_KIND_SECONDS,
   MSEG_RATE_MAX_SECONDS,
   MSEG_RATE_MIN_SECONDS,
-  MSEG_SEGMENT_HIT_RADIUS_PX,
-  MSEG_SELECTED_POINT_RADIUS_PX,
   addMsegPoint2 as addMsegPoint,
-  clamp01,
   clampMsegDepth,
   clampMsegRateSeconds,
   createDefaultMsegPlayback,
   createDefaultMsegShape2 as createDefaultMsegShape,
-  createMsegEditorMetrics,
-  createMsegTimeAxisTicks,
   deleteMsegPoint2 as deleteMsegPoint,
-  deriveMsegSegmentCurvePower,
   deserializeMsegDepth,
   deserializeMsegPlayback,
   deserializeMsegShape,
-  evaluateMsegShape,
-  findMsegPointHitIndex,
-  findMsegSegmentHitIndex,
   moveMsegPoint2 as moveMsegPoint,
-  msegEditorCoordinatesToPoint,
   msegPlaybacksEqual,
   msegShapesEqual,
   normalizeMsegPlayback,
   normalizeMsegShape2 as normalizeMsegShape,
-  pointToMsegEditorCoordinates,
-  renderMsegShape,
-  renderMsegShapeInto,
-  resolveMsegSurfaceOrientation,
-  sampleMsegEditorPolyline,
-  sampleMsegSegmentEditorPolyline,
   sampleRenderedMsegBuffer,
   serializeMsegPlayback,
   serializeMsegShape,
