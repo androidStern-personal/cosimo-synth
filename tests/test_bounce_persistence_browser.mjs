@@ -1,10 +1,9 @@
 import assert from "node:assert/strict";
-import fs from "node:fs/promises";
-import { createServer } from "node:http";
 import path from "node:path";
 import test, { after, before } from "node:test";
 
 import { chromium } from "playwright";
+import { createWebServer } from "../web/server.mjs";
 import { createCurrentSpeedrunContext } from "./helpers/speedrun_test_context.mjs";
 
 const repoRoot = path.resolve(import.meta.dirname, "..");
@@ -14,48 +13,15 @@ let currentDefaults;
 let server;
 let baseUrl;
 
-function contentType(filePath) {
-    const extension = path.extname(filePath);
-    if (extension === ".html") return "text/html; charset=utf-8";
-    if (extension === ".js" || extension === ".mjs") return "text/javascript; charset=utf-8";
-    if (extension === ".json") return "application/json; charset=utf-8";
-    if (extension === ".svg") return "image/svg+xml";
-    if (extension === ".png") return "image/png";
-    if (extension === ".ttf") return "font/ttf";
-    return "application/octet-stream";
-}
-
-async function serve(request, response) {
-    try {
-        const requestUrl = new URL(request.url ?? "/", baseUrl);
-        const relative = decodeURIComponent(
-            requestUrl.pathname === "/" ? "index.html" : requestUrl.pathname.slice(1),
-        );
-        const filePath = path.resolve(webRoot, relative);
-        if (filePath !== webRoot && !filePath.startsWith(`${webRoot}${path.sep}`)) {
-            response.writeHead(403).end("Forbidden");
-            return;
-        }
-        const bytes = await fs.readFile(filePath);
-        response.writeHead(200, {
-            "cache-control": "no-store",
-            "content-type": contentType(filePath),
-        });
-        response.end(bytes);
-    } catch (error) {
-        response.writeHead(error?.code === "ENOENT" ? 404 : 500).end(String(error));
-    }
-}
-
 before(async () => {
     currentDefaults = (await createCurrentSpeedrunContext()).defaults;
-    server = createServer(serve);
+    server = createWebServer(webRoot);
     await new Promise((resolve, reject) => {
         server.once("error", reject);
         server.listen(0, "127.0.0.1", resolve);
     });
     const address = server.address();
-    baseUrl = `http://127.0.0.1:${address.port}/`;
+    baseUrl = `http://127.0.0.1:${address.port}/synth.html`;
     browser = await chromium.launch({
         headless: true,
         ignoreDefaultArgs: ["--mute-audio"],
