@@ -1343,7 +1343,7 @@ test("the fixed FX footer truncates the composed graph without covering its inte
     }
 });
 
-test("POLISH composes four compact modules, independent bypasses, and the T75 expansion handoff", async () => {
+test("POLISH composes four compact modules, independent bypasses, and the full-screen expansion handoff", async () => {
     const page = await openHarnessPage({
         laneDoc: populatedThreeBandLaneDocJson(),
         beforeGoto: (nextPage) => nextPage.setViewportSize({ width: 393, height: 852 }),
@@ -1584,13 +1584,13 @@ test("POLISH composes four compact modules, independent bypasses, and the T75 ex
         await fullCompKnob.press("Home");
         await waitForHarnessSnapshot(
             page,
-            "the full-screen Comp mirror to edit the real T74 binding",
+            "the full-screen Comp mirror to edit the real compression binding",
             (snapshot) => snapshot.parameterValues.polishCompressionClipAmount === 0,
         );
         await fullCompKnob.press("End");
         await waitForHarnessSnapshot(
             page,
-            "the full-screen Comp mirror to restore the real T74 binding",
+            "the full-screen Comp mirror to restore the real compression binding",
             (snapshot) => snapshot.parameterValues.polishCompressionClipAmount === 1,
         );
         const fullCompBypass = fullScreen.locator(
@@ -1599,7 +1599,7 @@ test("POLISH composes four compact modules, independent bypasses, and the T75 ex
         await fullCompBypass.click();
         await waitForHarnessSnapshot(
             page,
-            "the full-screen Comp action to enable the real T74 module",
+            "the full-screen Comp action to enable the real compression module",
             (snapshot) => snapshot.parameterValues.polishCompressionClipBypass === 0,
         );
         assert.equal(
@@ -1779,7 +1779,7 @@ test("POLISH composes four compact modules, independent bypasses, and the T75 ex
     }
 });
 
-test("the built desktop bundle exposes T74 controls and restores the T73 footer after the T75 editor", async () => {
+test("the built desktop bundle exposes the Polish controls and restores the FX footer after the full-screen editor", async () => {
     const page = await openBuiltDesktopBundlePage({
         beforeGoto: (nextPage) => nextPage.setViewportSize({ width: 393, height: 852 }),
     });
@@ -5348,7 +5348,7 @@ test("group bypass and dissolve ride the fork menu", async () => {
     }
 });
 
-test("a pre-T78 v1 document is rejected atomically without writes or upgrade", async () => {
+test("a version 1 lane document without output trims is rejected atomically without writes or upgrade", async () => {
     const page = await openHarnessPage();
 
     try {
@@ -5362,7 +5362,7 @@ test("a pre-T78 v1 document is rejected atomically without writes or upgrade", a
         const visibleBefore = await visibleLane();
         const currentBefore = await getHarnessSnapshot(page);
         const effectIds = Object.keys(EFFECT_ID_TO_LANE_TYPE);
-        const preT78 = {
+        const version1Document = {
             format: "cosimo.lane",
             version: 1,
             order: [...effectIds].reverse(),
@@ -5374,9 +5374,9 @@ test("a pre-T78 v1 document is rejected atomically without writes or upgrade", a
                 )),
             ])),
         };
-        const serializedPreT78 = JSON.stringify(preT78);
+        const serializedVersion1 = JSON.stringify(version1Document);
         assert.equal(
-            Object.values(preT78.params).every((params) => Object.keys(params).every(
+            Object.values(version1Document.params).every((params) => Object.keys(params).every(
                 (endpointID) => !endpointID.endsWith("OutputTrimDb"),
             )),
             true,
@@ -5384,9 +5384,9 @@ test("a pre-T78 v1 document is rejected atomically without writes or upgrade", a
         await clearHarnessDebugLog(page);
         await page.evaluate((serialized) => {
             window.__COSIMO_DESKTOP_HARNESS__.setStoredStateValue("lane.v1", serialized);
-        }, serializedPreT78);
+        }, serializedVersion1);
 
-        // Let any accepted React update and T78's delayed trim persistence
+        // Let any accepted React update and the delayed trim persistence
         // become observable before proving the rejection was all-or-none.
         await waitForReactFrames(page, 2);
         await page.waitForTimeout(180);
@@ -5394,7 +5394,7 @@ test("a pre-T78 v1 document is rejected atomically without writes or upgrade", a
         const snapshot = await getHarnessSnapshot(page);
         assert.deepEqual(await visibleLane(), visibleBefore);
         assert.deepEqual(snapshot.parameterValues, currentBefore.parameterValues);
-        assert.equal(String(snapshot.storedState["lane.v1"]), serializedPreT78);
+        assert.equal(String(snapshot.storedState["lane.v1"]), serializedVersion1);
         assert.equal(JSON.parse(String(snapshot.storedState["lane.v1"])).version, 1);
         assert.deepEqual(
             snapshot.sentMessages.filter(({ endpointID }) => endpointID === "laneTopology"),
@@ -5414,7 +5414,7 @@ test("a pre-T78 v1 document is rejected atomically without writes or upgrade", a
 });
 
 test("a fresh instrument opens on the starter trio", async () => {
-    // T7: no stored document at all — the true out-of-box state. The lane
+    // No stored document at all — the true out-of-box state. The lane
     // is the compact starter (drive → delay → reverb, all bypassed) with
     // the trunk's add ghost inviting the rest of the pool.
     const page = await openHarnessPage({ laneDoc: "fresh" });

@@ -1562,13 +1562,6 @@ test("collapsed articulation cards scroll without clipping the voice tab or row 
     }
 });
 
-// Retired 2026-08-19 with T05: the narrow (`sm:hidden`) articulation range-row
-// list was the compact presentation of the expanded editor, and the compact
-// articulation pane left mobile entirely — no shipping viewport reaches those
-// rows any more. The row-click replace contract returns with the T05A mobile
-// articulation redesign; desktop lane behavior stays covered by the range
-// click/drag/resize tests above.
-
 test("articulation card audition is press-hold and follows the most recently played note", async () => {
     const page = await openHarnessPage();
 
@@ -3541,7 +3534,7 @@ test("the drawer MSEG timing knob fits its existing row and reaches both range e
     }
 });
 
-test("T66: an open MSEG 2 Rate control edits a transient MSEG 1 route without moving the base Rate", async () => {
+test("an open MSEG 2 Rate control edits a transient MSEG 1 route without moving the base Rate", async () => {
     const page = await openHarnessPage({
         beforeGoto: (nextPage) => nextPage.setViewportSize({ width: 393, height: 852 }),
     });
@@ -3655,7 +3648,7 @@ test("T66: an open MSEG 2 Rate control edits a transient MSEG 1 route without mo
     }
 });
 
-test("T66: the active Mod-page full editor keeps MSEG 2 as its target while MSEG 1 is dropped on Rate", async () => {
+test("the active Mod-page full editor keeps MSEG 2 as its target while MSEG 1 is dropped on Rate", async () => {
     const page = await openHarnessPage({
         beforeGoto: (nextPage) => nextPage.setViewportSize({ width: 393, height: 852 }),
     });

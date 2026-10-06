@@ -1,9 +1,3 @@
-/**
- * T17 wall clock on this machine (same 169-case name set):
- * Before: 1,660.944 s / 27m 40.944s (build/t17-baseline-suite.log).
- * After: 433.675 s, 434.457 s, and 441.839 s across three green four-shard runs;
- * median 434.457 s / 7m 14.457s (3.82x faster, 73.8% less wall clock).
- */
 import test from "node:test";
 import assert from "node:assert/strict";
 
@@ -892,7 +886,7 @@ test("desktop voice visuals stack full-width above the compact panel grid", asyn
     }
 });
 
-test("T54 keeps the wavetable corner controls on symmetric insets at phone, plugin, and desktop sizes", async () => {
+test("the wavetable corner controls keep symmetric insets at phone, plugin, and desktop sizes", async () => {
     const readCornerGeometry = async (page, containerSelector, roles) => (
         await page.locator(containerSelector).evaluate((container, requestedRoles) => {
             const serialize = (element) => {
@@ -1681,8 +1675,8 @@ test("compact Voice splits its height 50/50 between the wavetable editor and the
     });
 
     try {
-        // T04 decision: the articulation/controls pane leaves compact mobile
-        // entirely; the freed height goes to the two remaining cards.
+        // The articulation/controls pane is absent on compact mobile;
+        // the freed height goes to the two remaining cards.
         assert.equal(await page.locator('[data-role="keyboard-controls"]').count(), 0);
 
         const measureRows = async () => {
@@ -4217,7 +4211,7 @@ test("voice controls expose the selected oscillator and shared filter modulation
         assert.equal(await targetKindFor("mobile-voice-cell-unisonWavetablePositionSpread"), "oscB.unisonWavetablePositionSpread");
         assert.equal(await targetKindFor("mobile-voice-cell-unisonWarpSpread"), "oscB.unisonWarpSpread");
 
-        // T05: the compact filter card presents its destinations on the
+        // The compact filter card presents its destinations on the
         // attached Cut/Res/Mix knob row instead of the desktop fields.
         assert.equal(await targetKindFor("voice-filter-knob-filterCutoff"), "filterCutoffOctaves");
         assert.equal(await targetKindFor("voice-filter-knob-filterQ"), "filterQ");
@@ -5592,8 +5586,8 @@ test("mobile workspace shows one tab-selected panel while all three stay mounted
                 positions: [0.72, 0.4, 0.2],
             });
         });
-        // T14: the compact graph is the editable surface; its playhead line
-        // carries the live progress the old preview clip showed.
+        // The compact graph is the editable surface; its playhead line
+        // carries the live progress.
         await page.waitForFunction(() => {
             const playhead = document.querySelector('[data-role="mod-source-mseg-playhead"]');
             return playhead !== null && Math.abs(Number(playhead.getAttribute("data-progress")) - 0.72) < 0.05;
@@ -6375,7 +6369,7 @@ test("the Voice page fits without scrolling, owned drags stay scroll-free, and n
 
     try {
         await page.waitForSelector('[data-role="mobile-voice-editor"]');
-        // T05: the Voice page is an instrument surface that splits its real
+        // The Voice page is an instrument surface that splits its real
         // height 50/50 — it must fit its panel with nothing left to scroll.
         const voiceOverflow = await page.evaluate(() => {
             const panel = document.querySelector('[data-role="mobile-workspace-panel-voice"]');
@@ -6383,8 +6377,8 @@ test("the Voice page fits without scrolling, owned drags stay scroll-free, and n
         });
         assert.ok(voiceOverflow >= 0 && voiceOverflow <= 1, `The Voice page must fit its panel: overflow ${voiceOverflow}`);
 
-        // T14: the redesigned Mod page fits its panel — the matrix can no
-        // longer sit invisibly below a tall graph (no blind scrolling).
+        // The Mod page fits its panel, so the matrix cannot sit invisibly
+        // below a tall graph (no blind scrolling).
         await page.setViewportSize({ width: 393, height: 600 });
         await page.locator('[data-role="mobile-workspace-tab-mod"]').click();
         await page.waitForSelector('[data-role="mobile-mod-source-selector"]');

@@ -90,7 +90,7 @@ import {
 
 /**
  * Tests that continue into routing controls need the product tap's selection
- * but not its T43 quick sheet. Dismiss it and restore the formerly-expanded
+ * but not its quick sheet. Dismiss it and restore the formerly-expanded
  * rail so those tests retain their explicit setup without bypassing the tap.
  */
 async function armModSourceForRoutingTest(page, selector) {
@@ -770,7 +770,7 @@ test("the drawer's voice-settings popover owns Play Mode and greys Glide while P
         await page.waitForTimeout(240);
         await expandGlobalModRail(page);
 
-        // T04 decision: the voice-settings toggle lives in the drawer and is
+        // The voice-settings toggle lives in the drawer and is
         // labeled with the active play mode.
         const voiceToggle = rail.locator('[data-role="mobile-global-mod-rail-voice-toggle"]');
         assert.equal((await voiceToggle.textContent())?.trim(), "Poly");
@@ -824,7 +824,7 @@ test("the drawer's voice-settings popover owns Play Mode and greys Glide while P
     }
 });
 
-test("T39A: Voice settings keeps Global Tune open for live source selection, drop, and route editing", async () => {
+test("Voice settings keeps Global Tune open for live source selection, drop, and route editing", async () => {
     const page = await openHarnessPage({
         beforeGoto: (nextPage) => nextPage.setViewportSize({ width: 393, height: 852 }),
     });
@@ -1040,7 +1040,7 @@ test("the Note key triggers audible output from every mobile editor state", asyn
         await page.click('[data-role="mobile-workspace-tab-mod"]');
         await pressNoteKey("Mod SOURCE panel");
 
-        // T14: the second top-level state is the MAPPINGS panel.
+        // The second top-level state is the MAPPINGS panel.
         await page.click('[data-role="mobile-mod-panel-tab-mappings"]');
         await page.locator('[data-role="mod-mappings-row"]').first().waitFor();
         await pressNoteKey("Mod MAPPINGS panel");
@@ -1498,7 +1498,7 @@ test("the global modulation rail owns one continuous SVG silhouette", async () =
     }
 });
 
-test("T60 live preferences park, scale, hide, restore, and float the Mod bar without losing presentation state", async () => {
+test("live preferences park, scale, hide, restore, and float the Mod bar without losing presentation state", async () => {
     const page = await openHarnessPage({
         beforeGoto: async (nextPage) => {
             await nextPage.setViewportSize({ width: 320, height: 568 });
@@ -1779,7 +1779,7 @@ test("T60 live preferences park, scale, hide, restore, and float the Mod bar wit
     }
 });
 
-test("T79 Developer Settings updates and persists keyboard geometry without remounting or changing sound", async () => {
+test("Developer Settings updates and persists keyboard geometry without remounting or changing sound", async () => {
     const page = await openHarnessPage({
         beforeGoto: async (nextPage) => {
             await nextPage.setViewportSize({ width: 393, height: 852 });
@@ -1926,7 +1926,7 @@ test("T79 Developer Settings updates and persists keyboard geometry without remo
     }
 });
 
-test("T79 the adjustable keybed fits edge-to-edge beside narrower octave paddles across layouts", async () => {
+test("the adjustable keybed fits edge-to-edge beside narrower octave paddles across layouts", async () => {
     const assertKeyboardUsesSurfaceWidth = (geometry, layoutName) => {
         const usableLeft = geometry.surface.left + geometry.surfaceBorderLeft;
         const usableRight = geometry.surface.right - geometry.surfaceBorderRight;
@@ -2102,7 +2102,7 @@ test("T79 the adjustable keybed fits edge-to-edge beside narrower octave paddles
     }
 });
 
-test("T79 height scaling reflows plugin and desktop workspaces around the complete keyboard region", async () => {
+test("height scaling reflows plugin and desktop workspaces around the complete keyboard region", async () => {
     for (const layout of [
         { name: "plugin", width: 1120, height: 680 },
         { name: "desktop", width: 1440, height: 900 },
@@ -2170,7 +2170,7 @@ test("T79 height scaling reflows plugin and desktop workspaces around the comple
     }
 });
 
-test("T79 compact adjacent surfaces reflow around visible, hidden, drawer, and full-editor keyboard states", async () => {
+test("compact adjacent surfaces reflow around visible, hidden, drawer, and full-editor keyboard states", async () => {
     for (const layout of [
         {
             name: "short floating phone",
@@ -2408,7 +2408,7 @@ test("T79 compact adjacent surfaces reflow around visible, hidden, drawer, and f
     }
 });
 
-test("T60 parked 320px source and tool targets grow with scale and own their inset hit area", async () => {
+test("parked 320px source and tool targets grow with scale and own their inset hit area", async () => {
     const scales = [
         { scale: 0.85, sourceWidth: 44.1094, toolWidth: 44.1094 },
         { scale: 1.1, sourceWidth: 46.9844, toolWidth: 46.9844 },
@@ -2509,7 +2509,7 @@ test("T60 parked 320px source and tool targets grow with scale and own their ins
     );
 });
 
-test("T60 parked trigger note stays fixed immediately before the right paddle on every page", async () => {
+test("the parked trigger note stays fixed immediately before the right paddle on every page", async () => {
     for (const viewport of [
         { width: 320, height: 568 },
         { width: 393, height: 852 },
@@ -2592,7 +2592,7 @@ test("T60 parked trigger note stays fixed immediately before the right paddle on
     }
 });
 
-test("T60 preserves the explicitly visible source group in both placement directions", async () => {
+test("placement changes preserve the explicitly visible source group in both directions", async () => {
     const page = await openHarnessPage({
         beforeGoto: async (nextPage) => {
             await nextPage.setViewportSize({ width: 320, height: 568 });
@@ -2664,7 +2664,7 @@ test("T60 preserves the explicitly visible source group in both placement direct
     }
 });
 
-test("T60 live placement changes preserve an active source drag through its real drop", async () => {
+test("live placement changes preserve an active source drag through its real drop", async () => {
     const page = await openHarnessPage({
         beforeGoto: async (nextPage) => {
             await nextPage.setViewportSize({ width: 393, height: 852 });
@@ -2744,7 +2744,7 @@ test("T60 live placement changes preserve an active source drag through its real
     }
 });
 
-test("T60 hide and restore keep quick and full MSEG editors mounted without dead transparent hit areas", async () => {
+test("hide and restore keep quick and full MSEG editors mounted without dead transparent hit areas", async () => {
     const page = await openHarnessPage({
         beforeGoto: async (nextPage) => {
             await nextPage.setViewportSize({ width: 320, height: 568 });
@@ -2932,7 +2932,7 @@ test("T60 hide and restore keep quick and full MSEG editors mounted without dead
     }
 });
 
-test("T70 parked Mod bar follows the open MSEG drawer lip without stealing editor hits", async () => {
+test("the parked Mod bar follows the open MSEG drawer lip without stealing editor hits", async () => {
     const page = await openHarnessPage({
         beforeGoto: async (nextPage) => {
             await nextPage.setViewportSize({ width: 393, height: 852 });
@@ -3026,7 +3026,7 @@ test("T70 parked Mod bar follows the open MSEG drawer lip without stealing edito
     }
 });
 
-test("T70 parked row tracks live MSEG drawer movement and detents across compact phones", async () => {
+test("the parked row tracks live MSEG drawer movement and detents across compact phones", async () => {
     for (const viewport of [
         { name: "portrait phone", width: 393, height: 852 },
         { name: "landscape phone", width: 568, height: 320 },
@@ -3237,7 +3237,7 @@ test("T70 parked row tracks live MSEG drawer movement and detents across compact
     }
 });
 
-test("T70 moving the MSEG drawer preserves a pending parked source drag through its drop", async () => {
+test("moving the MSEG drawer preserves a pending parked source drag through its drop", async () => {
     const page = await openHarnessPage({
         beforeGoto: async (nextPage) => {
             await nextPage.setViewportSize({ width: 393, height: 852 });
@@ -3402,7 +3402,7 @@ test("T70 moving the MSEG drawer preserves a pending parked source drag through 
     }
 });
 
-test("T71 drawer-to-full-screen MSEG gives its controls a row above the parked Mod bar", async () => {
+test("drawer-to-full-screen MSEG gives its controls a row above the parked Mod bar", async () => {
     const page = await openHarnessPage({
         beforeGoto: async (nextPage) => {
             await nextPage.setViewportSize({ width: 393, height: 852 });
@@ -3516,7 +3516,7 @@ test("T71 drawer-to-full-screen MSEG gives its controls a row above the parked M
     }
 });
 
-test("T71 full-screen MSEG and parked Mod bar stay operable across compact phones", async () => {
+test("full-screen MSEG and the parked Mod bar stay operable across compact phones", async () => {
     for (const viewport of [
         { name: "portrait phone", width: 393, height: 852 },
         { name: "landscape phone", width: 568, height: 320 },
@@ -3760,7 +3760,7 @@ test("T71 full-screen MSEG and parked Mod bar stay operable across compact phone
     }
 });
 
-test("T71 switching MSEG drawers starts a clean Undo session before full-screen expansion", async () => {
+test("switching MSEG drawers starts a clean Undo session before full-screen expansion", async () => {
     const page = await openHarnessPage({
         beforeGoto: async (nextPage) => {
             await nextPage.setViewportSize({ width: 393, height: 852 });
@@ -3840,7 +3840,7 @@ test("T71 switching MSEG drawers starts a clean Undo session before full-screen 
     }
 });
 
-test("T71 floating Mod-bar placements retain their full-editor overlay behavior", async () => {
+test("floating Mod-bar placements retain their full-editor overlay behavior", async () => {
     for (const placement of ["floating-left", "floating-right"]) {
         const page = await openHarnessPage({
             beforeGoto: async (nextPage) => {
@@ -3919,7 +3919,7 @@ test("T71 floating Mod-bar placements retain their full-editor overlay behavior"
     }
 });
 
-test("T60 parked row stays fixed, fully hittable, and drag-owned across compact compositions", async () => {
+test("the parked row stays fixed, fully hittable, and drag-owned across compact compositions", async () => {
     const layouts = [
         { name: "short 320px phone", width: 320, height: 568, scale: 0.85 },
         { name: "tall phone", width: 393, height: 852, scale: 1.1 },
@@ -4145,7 +4145,7 @@ test("T60 parked row stays fixed, fully hittable, and drag-owned across compact 
     }
 });
 
-test("T60 application preferences cross plugin and desktop breakpoints without changing sound or placement", async () => {
+test("application preferences cross plugin and desktop breakpoints without changing sound or placement", async () => {
     const layouts = [
         { name: "plugin", width: 1120, height: 680 },
         { name: "desktop", width: 1440, height: 900 },
@@ -4203,7 +4203,7 @@ test("T60 application preferences cross plugin and desktop breakpoints without c
     }
 });
 
-test("T39A: the horizontal Mod bar reaches the same Voice-settings Global Tune at plugin and desktop sizes", async () => {
+test("the horizontal Mod bar reaches the same Voice-settings Global Tune at plugin and desktop sizes", async () => {
     for (const layout of [
         { name: "plugin", width: 1120, height: 680 },
         { name: "desktop", width: 1440, height: 900 },
@@ -4259,7 +4259,7 @@ test("T39A: the horizontal Mod bar reaches the same Voice-settings Global Tune a
     }
 });
 
-test("T42 scales the complete Mod rail geometry and keeps both edges inside real phone chrome", async () => {
+test("the complete Mod rail geometry scales and keeps both edges inside real phone chrome", async () => {
     const SCALE = 1.1;
     const BASE = {
         railWidth: 40,
@@ -4384,7 +4384,7 @@ test("T42 scales the complete Mod rail geometry and keeps both edges inside real
     };
     const assertSafe = (geometry, label) => {
         assert.ok(geometry.rail && geometry.preset && geometry.tabs, `${label} requires rail and shell chrome.`);
-        // T54 keeps Voice corner controls on fixed, mirrored graph insets. This
+        // Voice corner controls sit on fixed, mirrored graph insets. This
         // movable overlay owns its screen/chrome safety, not their placement.
         assert.equal(geometry.documentFits, true, `${label} must not create horizontal overflow.`);
         assert.equal(
@@ -5145,7 +5145,7 @@ test("rack mod bar vertically pages one colored MSEG Envelope and Macro identity
         assert.equal(visualContract.sources.every(Boolean), true);
         assert.deepEqual(visualContract.sources.map((source) => source.number), ["1", "1", "1"]);
         assert.deepEqual(visualContract.sources.map((source) => source.accent), ["#cc59d2", "#b8e236", "#ff6428"]);
-        // T42 scales the complete B2 skeleton: a full-width 44px hit area
+        // The rail scales its complete skeleton: a full-width 44px hit area
         // around a 30.8px source module, on the rail's 11px rhythm.
         assert.equal(visualContract.sources.every((source) => (
             Math.abs(source.buttonWidth - 44) <= 0.1
@@ -5209,7 +5209,7 @@ test("rack mod bar vertically pages one colored MSEG Envelope and Macro identity
                 viewportClipMargin: viewportStyle?.overflowClipMargin ?? "",
             };
         });
-        // B2 selection: the module itself tints — no glow, no scale, no
+        // Selection: the module itself tints — no glow, no scale, no
         // underline. The tinted container is the entire selected treatment.
         assert.equal(selectedVisual.buttonFilter, "none");
         assert.equal(selectedVisual.buttonShadow, "none");
@@ -5218,7 +5218,7 @@ test("rack mod bar vertically pages one colored MSEG Envelope and Macro identity
         assert.notEqual(selectedVisual.artBackground, "rgba(0, 0, 0, 0)");
         assert.equal(selectedVisual.underlineDisplay, "none");
         assert.equal(selectedVisual.viewportOverflow, "clip");
-        // B2 modules carry no glow: the viewport clips hard so the next page
+        // Modules carry no glow: the viewport clips hard so the next page
         // cannot peek through the 10px rhythm gap.
         assert.equal(Number.parseFloat(selectedVisual.viewportClipMargin), 0);
 
@@ -5503,8 +5503,8 @@ test("the FX workspace has no separate route AMOUNT control: the target knob edi
         await armModSourceForRoutingTest(page, '[data-role="rack-mod-source-mseg-1"]');
         await collapseGlobalModRail(page);
 
-        // T09 settled cleanup: the separate AMOUNT slider is gone everywhere;
-        // the target knob, its ring, and the shared HUD own the job.
+        // There is no separate AMOUNT slider anywhere; the target knob, its
+        // ring, and the shared HUD own the job.
         const knob = page.locator('[data-role="rack-parameter-reverbSize"]');
         await knob.waitFor();
         assert.equal(
@@ -6662,7 +6662,7 @@ test("desktop distortion wet low-pass knob renders the full 20 Hz floor", async 
     }
 });
 
-test("T25A: the composed Drive graph keeps its transfer curve aligned with contrasting live clipping", async () => {
+test("the composed Drive graph keeps its transfer curve aligned with contrasting live clipping", async () => {
     const page = await openHarnessPage();
 
     try {
@@ -6811,7 +6811,7 @@ test("T25A: the composed Drive graph keeps its transfer curve aligned with contr
         assert.equal(renderedState.history.removedPeak > 0.1, true);
         assert.equal(overlayState.effectEnabled, "true", "the composed Drive path must be enabled during proof");
         assert.equal(overlayState.curveCount, 1, "live telemetry must not hide the transfer function");
-        assert.equal(overlayState.viewBox, "0 0 600 340", "the compact pre-T25 canvas geometry must stay restored");
+        assert.equal(overlayState.viewBox, "0 0 600 340", "the Drive graph keeps its compact canvas geometry");
         assert.equal(Math.abs(overlayState.curveLeft - 12) <= 0.5, true);
         assert.equal(Math.abs(overlayState.curveRight - 588) <= 0.5, true);
         assert.equal(overlayState.curveWidthFraction >= 0.9, true, "transfer function must span the restored plot");
@@ -6929,7 +6929,7 @@ test("T25A: the composed Drive graph keeps its transfer curve aligned with contr
     }
 });
 
-test("T02C: the wavetable graphic shades only the armed source's live Index route on the focused oscillator", async () => {
+test("the wavetable graphic shades only the armed source's live Index route on the focused oscillator", async () => {
     const page = await openHarnessPage({
         beforeGoto: (nextPage) => nextPage.setViewportSize({ width: 393, height: 852 }),
     });
@@ -7010,7 +7010,7 @@ test("T02C: the wavetable graphic shades only the armed source's live Index rout
         }, state);
         await waitForHarnessSnapshot(
             page,
-            "seeded the T02C Index shading route",
+            "seeded the Index shading route",
             (snapshot) => {
                 const route = readStoredModulationState(snapshot).routes[0];
                 return route?.amount === amount && route?.enabled === enabled;
@@ -7115,7 +7115,7 @@ test("the instrument is never text-selectable; only real text entry opts back in
             "Double-tapping the collapsed bar must select no text.",
         );
 
-        // T43 gives the double-tap a deterministic open-then-close outcome;
+        // A double-tap has a deterministic open-then-close outcome;
         // no sheet may remain to cover subsequent navigation.
         assert.equal(await page.locator('[data-role="quick-source-sheet"]').count(), 0);
 
@@ -7142,7 +7142,7 @@ test("the instrument is never text-selectable; only real text entry opts back in
     }
 });
 
-test("T13: the quick sheet opens from the bar over Voice/FX, resizes, dismisses, and hands off to the full editor", async () => {
+test("the quick sheet opens from the bar over Voice/FX, resizes, dismisses, and hands off to the full editor", async () => {
     const page = await openHarnessPage({
         beforeGoto: (nextPage) => nextPage.setViewportSize({ width: 393, height: 852 }),
     });
@@ -7235,7 +7235,7 @@ test("T13: the quick sheet opens from the bar over Voice/FX, resizes, dismisses,
     }
 });
 
-test("T43: source taps toggle and switch the Voice/FX quick sheet without stealing drags or Mod behavior", async () => {
+test("source taps toggle and switch the Voice/FX quick sheet without stealing drags or Mod behavior", async () => {
     const page = await openHarnessPage({
         beforeGoto: (nextPage) => nextPage.setViewportSize({ width: 393, height: 852 }),
     });
@@ -7340,7 +7340,7 @@ test("T43: source taps toggle and switch the Voice/FX quick sheet without steali
         );
         const dragSnapshot = await waitForHarnessSnapshot(
             page,
-            "T43 Envelope drag",
+            "Envelope drag",
             (nextSnapshot) => readStoredModulationState(nextSnapshot).routes.length === routesBeforeDrag.length + 2,
         );
         const createdRoutes = readStoredModulationState(dragSnapshot).routes.filter((route) => !existingRouteIds.has(route.id));
@@ -7421,7 +7421,7 @@ test("T43: source taps toggle and switch the Voice/FX quick sheet without steali
         await page.close();
     }
 });
-test("T20: long-press opens the ADR-017 parameter menu on Voice cells and quick-sheet cells", async () => {
+test("long-press opens the ADR-017 parameter menu on Voice cells and quick-sheet cells", async () => {
     const page = await openHarnessPage({
         beforeGoto: (nextPage) => nextPage.setViewportSize({ width: 393, height: 852 }),
     });
@@ -7534,7 +7534,7 @@ test("T20: long-press opens the ADR-017 parameter menu on Voice cells and quick-
         await page.click('[data-role="quick-source-sheet-full-editor"]');
         await page.locator('[data-role="mseg-editor-dialog"]').waitFor();
         // The floating Mod rail deliberately stays live ABOVE the editor
-        // (T11) and its persisted dock can cover parts of the controls row:
+        // and its persisted dock can cover parts of the controls row:
         // press a point of the Time knob the rail does not intercept.
         const timePress = await page.evaluate(() => {
             const knob = document.querySelector('[data-role="mseg-editor-cell-rate"]');
@@ -7564,7 +7564,7 @@ test("T20: long-press opens the ADR-017 parameter menu on Voice cells and quick-
     }
 });
 
-test("T20: desktop knobs and number fields long-press into the parameter menu", async () => {
+test("desktop knobs and number fields long-press into the parameter menu", async () => {
     const page = await openHarnessPage({
         beforeGoto: (nextPage) => nextPage.setViewportSize({ width: 1280, height: 900 }),
     });
@@ -7610,7 +7610,7 @@ test("T20: desktop knobs and number fields long-press into the parameter menu", 
     }
 });
 
-test("T13v2: the quick sheet's graphic is the REAL editor — MSEG points drag, the macro bar writes", async () => {
+test("the quick sheet's graphic is the REAL editor — MSEG points drag, the macro bar writes", async () => {
     const page = await openHarnessPage({
         beforeGoto: (nextPage) => nextPage.setViewportSize({ width: 393, height: 852 }),
     });
@@ -7674,7 +7674,7 @@ test("T13v2: the quick sheet's graphic is the REAL editor — MSEG points drag, 
     }
 });
 
-test("T21: a drag that dwell-navigates FX to Voice keeps eligibility and capture painting", async () => {
+test("a drag that dwell-navigates FX to Voice keeps eligibility and capture painting", async () => {
     // The drag machinery already captures cross-page targets; this pins the
     // PAINT: the mapping flag on the surface must survive React re-rendering
     // the surface's own attributes on the page switch.
@@ -7725,7 +7725,7 @@ test("T21: a drag that dwell-navigates FX to Voice keeps eligibility and capture
     }
 });
 
-test("T14: the Mod panels ARE the Voice selector component, restore per instance, and follow the bar", async () => {
+test("the Mod panels ARE the Voice selector component, restore per instance, and follow the bar", async () => {
     const page = await openHarnessPage({
         beforeGoto: (nextPage) => nextPage.setViewportSize({ width: 393, height: 852 }),
     });
@@ -7736,7 +7736,7 @@ test("T14: the Mod panels ARE the Voice selector component, restore per instance
         await tabs.waitFor();
 
         // Not an approximation: the SAME component and classes as the Voice
-        // A/B/C selector (T14's one-selector rule).
+        // A/B/C selector (one selector everywhere).
         assert.equal(await tabs.getAttribute("class"), "cosimo-tabs");
         assert.equal(await tabs.getAttribute("role"), "tablist");
         assert.deepEqual(
@@ -7780,7 +7780,7 @@ test("T14: the Mod panels ARE the Voice selector component, restore per instance
     }
 });
 
-test("T14: the SOURCE graph edits points directly with Expand explicit; the 320px toolbar stays composed", async () => {
+test("the SOURCE graph edits points directly with Expand explicit; the 320px toolbar stays composed", async () => {
     const page = await openHarnessPage({
         beforeGoto: (nextPage) => nextPage.setViewportSize({ width: 393, height: 852 }),
     });

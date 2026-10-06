@@ -90,8 +90,8 @@ import {
 
 /**
  * Routing tests need the source armed with the expanded rail still available.
- * T43 makes the product tap open its quick sheet and collapse the drawer, so
- * these tests explicitly dismiss that sheet and restore their routing setup.
+ * The product tap opens its quick sheet and collapses the drawer, so these
+ * tests explicitly dismiss that sheet and restore their routing setup.
  */
 async function armRackModSourceForRouting(page, selector) {
     await page.click(selector);
@@ -641,7 +641,7 @@ test("desktop effects rack renders the complete ordered eight-module surface", a
 });
 
 test("a rack-source tap opens the quick sheet over FX; the full editor round-trips the context", async () => {
-    // T43 opens the quick-editor sheet in place on the selection tap. The FX
+    // The selection tap opens the quick-editor sheet in place. The FX
     // context must stay live beneath, and Full editor routes to the real one.
     const page = await openHarnessPage({
         beforeGoto: (nextPage) => nextPage.setViewportSize({ width: 375, height: 667 }),
@@ -689,7 +689,7 @@ test("a rack-source tap opens the quick sheet over FX; the full editor round-tri
 });
 
 test("the quick sheet's Full editor opens the exact Envelope and Macro slots without introducing LFOs", async () => {
-    // T43: one source tap opens the exact quick sheet; its Full editor button
+    // One source tap opens the exact quick sheet; its Full editor button
     // deep-links to the detail editor. Exact-slot and no-LFO stay unchanged.
     const page = await openHarnessPage({
         beforeGoto: (nextPage) => nextPage.setViewportSize({ width: 375, height: 667 }),
@@ -1430,7 +1430,7 @@ test("an unmapped rack knob shows a neutral outer track and its modulation axis 
     }
 });
 
-test("T57 removes the redundant Create Mapping row without changing source-drop mapping", async () => {
+test("source-drop mapping needs no Create Mapping row", async () => {
     const layouts = [
         { name: "phone", width: 393, height: 852, compact: true },
         { name: "plugin", width: 1120, height: 680, compact: false },
@@ -1494,7 +1494,7 @@ test("T57 removes the redundant Create Mapping row without changing source-drop 
     }
 });
 
-test("T58 effect headers contain only the name in active and bypassed phone, plugin, and desktop editors", async () => {
+test("effect headers contain only the name in active and bypassed phone, plugin, and desktop editors", async () => {
     const effects = [
         { id: "filter", label: "Filter" },
         { id: "drive", label: "Distortion" },
@@ -2299,7 +2299,7 @@ test("mobile Mod selector drives the attached editor and stays contained at iPho
     });
 
     try {
-        // T43 makes one source tap open the quick sheet; env/macro detail is
+        // One source tap opens the quick sheet; env/macro detail is
         // reached through the sheet's Full editor button.
         await page.click('[data-role="mobile-workspace-tab-fx"]');
         await expandGlobalModRail(page);
@@ -2443,7 +2443,7 @@ test("mobile Mod MAPPINGS is a complete table with row editing, filters, and inl
         await page.click('[data-role="mobile-workspace-tab-mod"]');
         await page.click('[data-role="mobile-mod-panel-tab-mappings"]');
 
-        // T14: entry shows EVERY mapping — no hidden filter, no blind scroll.
+        // Entry shows EVERY mapping — no hidden filter, no blind scroll.
         const panel = page.locator('[data-role="mod-mappings-panel"]');
         await panel.waitFor();
         assert.equal(await panel.locator('[data-role="mod-mappings-count"]').innerText(), "3");
@@ -2468,7 +2468,7 @@ test("mobile Mod MAPPINGS is a complete table with row editing, filters, and inl
         assert.equal(geometry.rows.every((row) => row.left >= 0 && row.right <= 393 && row.height >= 44), true);
 
         // The MSEG row shows its relationship and carries a live mapped rail
-        // (T15: the rail is the shared cell language, band and all).
+        // (the rail is the shared cell language, band and all).
         const msegRow = panel.locator('[data-role="mod-mappings-row"]', { hasText: "MSEG 1" });
         assert.match(await msegRow.innerText(), /MSEG 1[\s\S]*Flanger[\s\S]*Depth/);
         assert.equal(
@@ -2477,7 +2477,7 @@ test("mobile Mod MAPPINGS is a complete table with row editing, filters, and inl
             "The row rail must present this route's own band.",
         );
 
-        // T15 exact editing: long-press the row rail into the ADR-017 menu,
+        // Exact editing: long-press the row rail into the ADR-017 menu,
         // type the amount, and the stored route follows.
         const railCell = msegRow.locator(".mobile-voice-cell").first();
         const cellBox = await railCell.boundingBox();
@@ -2541,7 +2541,7 @@ test("mobile Mod MAPPINGS is a complete table with row editing, filters, and inl
     }
 });
 
-test("T66: MAPPINGS edits MSEG Rate and oscillator Level route amounts without changing base values", async () => {
+test("MAPPINGS edits MSEG Rate and oscillator Level route amounts without changing base values", async () => {
     const page = await openHarnessPage({
         beforeGoto: async (nextPage) => {
             await nextPage.setViewportSize({ width: 393, height: 852 });
@@ -2657,7 +2657,7 @@ test("T66: MAPPINGS edits MSEG Rate and oscillator Level route amounts without c
     }
 });
 
-test("T15: mapping rows read as LED meters with a live polarity toggle, one label, and even spacing", async () => {
+test("mapping rows read as LED meters with a live polarity toggle, one label, and even spacing", async () => {
     // The row already names source and target in its identity column, so the
     // readout drops the duplicated label and spends the reclaimed height on
     // the amount itself: a segmented LED band lit from the base tick, with
@@ -2761,7 +2761,7 @@ test("T15: mapping rows read as LED meters with a live polarity toggle, one labe
 });
 
 test("a stored pool-instance route renders instance-labeled with its own base, and the picker speaks the per-document domain", async () => {
-    // T6 device instances: `lane.delay#2.delayMix` names a real document
+    // Device instances: `lane.delay#2.delayMix` names a real document
     // slot, so its row carries the SAME live base rail as instance #1 —
     // the base contract is the type's; the edited slot is the instance's.
     // (A route whose instance is absent from the document edits nothing
@@ -2793,7 +2793,7 @@ test("a stored pool-instance route renders instance-labeled with its own base, a
         await page.click('[data-role="mobile-mod-panel-tab-mappings"]');
 
         // The pool row: numbered category, mirror parameter label, and the
-        // same live base rail every instance gets since T6.
+        // same live base rail every instance gets.
         const poolRow = page.locator('[data-role="mod-mappings-row"][data-route-id="pool-route-1"]');
         await poolRow.waitFor();
         assert.equal(
@@ -2804,7 +2804,7 @@ test("a stored pool-instance route renders instance-labeled with its own base, a
         assert.equal(
             await poolRow.locator('[data-role="mod-mappings-amount-only"]').count(),
             0,
-            "an instance route's base is addressable since T6 — no amount-only fallback",
+            "an instance route's base is addressable — no amount-only fallback",
         );
         assert.equal(await poolRow.locator(".mod-led-rail").count(), 1);
 
@@ -2836,7 +2836,7 @@ test("a stored pool-instance route renders instance-labeled with its own base, a
     }
 });
 
-test("T15: base drags on log-scale rows walk the display scale, matching the knobs' settled rule", async () => {
+test("base drags on log-scale rows walk the display scale, matching the knobs' settled rule", async () => {
     // Cutoff and resonance felt "sigmoid" on rows: the drag moved the value
     // linearly in raw Hz while the tick sat on a log track, so the musical
     // range lived in the first pixels and the top went numb. The base axis
@@ -2913,7 +2913,7 @@ test("T15: base drags on log-scale rows walk the display scale, matching the kno
     }
 });
 
-test("T15: resonance amount drags walk the modulated value along the dial (effective-value), like the knobs", async () => {
+test("resonance amount drags walk the modulated value along the dial (effective-value), like the knobs", async () => {
     // Resonance's base (0.707) rests by the bottom of a log 0.1..20 domain:
     // a linear amount-domain drag crams all the audible travel into a few
     // pixels — the exact case the knobs resolved with modulationDragStyle
@@ -2993,7 +2993,7 @@ test("T15: resonance amount drags walk the modulated value along the dial (effec
     }
 });
 
-test("T15: a horizontal base drag on a mapping row writes finite values for stepless parameters", async () => {
+test("a horizontal base drag on a mapping row writes finite values for stepless parameters", async () => {
     // Continuous parameters record entrySpec.step 0 ("no quantization"). The
     // row rail's base axis must treat that as UNSNAPPED — never divide by the
     // zero step (the device bug: every drag frame sent NaN and the engine
@@ -3564,7 +3564,7 @@ test("mobile FX subpage keeps eight readable stations on the line and confines m
                 maximum: element.scrollHeight - element.clientHeight,
             }));
             assert.equal(graphScroll.maximum > 0 && graphScroll.top > 0, true,
-                `The eight stations must use the T73 graph scroller at ${width}px.`);
+                `The eight stations must use the graph scroller at ${width}px.`);
         } finally {
             await page.close();
         }
@@ -4008,7 +4008,7 @@ test("ADR-025 journey: a confirmed drop flashes, ticks, and pulses; bypass and d
         ));
         assert.equal(await page.locator('[data-role="rack-parameter-surface-reverbSize"] .rack-confirm-check').count(), 0);
 
-        // Bypass (ADR-025 amended for T15 rows): the mapping content dims as
+        // Bypass (ADR-025, mapping rows): the mapping content dims as
         // one piece, the source art greys, and the UNLIT power light carries
         // the whole state — no BYPASSED text anywhere. The rail band still
         // takes the bypassed treatment and the count never changes.
@@ -4078,7 +4078,7 @@ test("ADR-025 journey: a confirmed drop flashes, ticks, and pulses; bypass and d
         );
         await page.mouse.up();
 
-        // Delete lives ON the row (T15): no detail page, no confirmation,
+        // Delete lives ON the row: no detail page, no confirmation,
         // no toast — the row and its count contribution simply go.
         await row.locator("button[data-role^='mod-mappings-delete-']").click();
         await page.waitForFunction(() => (
@@ -4095,7 +4095,7 @@ test("ADR-025 journey: a confirmed drop flashes, ticks, and pulses; bypass and d
     }
 });
 
-test("T08A: the target claiming the drag shows an unmistakably stronger treatment than mere eligibility", async () => {
+test("the target claiming the drag shows an unmistakably stronger treatment than mere eligibility", async () => {
     // ADR-025 rows 12/13: every creatable target carries a thin source-colored
     // eligibility outline; the ONE target that has claimed the drop carries a
     // stronger source-colored capture treatment. Capture is sticky — one
@@ -4113,20 +4113,14 @@ test("T08A: the target claiming the drag shows an unmistakably stronger treatmen
         },
     });
     const cdp = await page.context().newCDPSession(page);
-    // Treatments fade (T08 added a ~140ms transition): a raw read can catch a
-    // mid-fade frame, so every read polls until two consecutive samples agree.
-    const readShadow = async (locator) => {
-        let previous = await locator.evaluate((element) => getComputedStyle(element).boxShadow);
-        for (let attempt = 0; attempt < 30; attempt += 1) {
-            await new Promise((resolve) => setTimeout(resolve, 90));
-            const next = await locator.evaluate((element) => getComputedStyle(element).boxShadow);
-            if (next === previous) {
-                return next;
-            }
-            previous = next;
-        }
-        throw new Error("The treatment never settled.");
-    };
+    // Treatments fade over a short transition, so a read waits for the
+    // element's finite transitions to end before taking its box-shadow.
+    const readShadow = (locator) => locator.evaluate(async (element) => {
+        await Promise.all(element.getAnimations()
+            .filter((animation) => animation.effect?.getComputedTiming().endTime !== Infinity)
+            .map((animation) => animation.finished.catch(() => undefined)));
+        return getComputedStyle(element).boxShadow;
+    });
     const waitForCapture = (hoveredRole, freedRole) => page.waitForFunction(([hovered, freed]) => (
         document.querySelector(`[data-role="${hovered}"]`)?.classList.contains("is-mod-hover") === true
         && document.querySelector(`[data-role="${freed}"]`)?.classList.contains("is-mod-hover") === false
