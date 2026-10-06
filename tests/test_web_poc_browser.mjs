@@ -791,7 +791,7 @@ async function measureProductUiLatestValueCadence(
     const gesture = await page.evaluate(async ({ expectedFinalAmount, updates }) => {
         const api = globalThis.__COSIMO_WEB_POC__;
         const root = document.querySelector("cosimo-desktop-react-view")?.shadowRoot;
-        // T14/T15: the mapping ROW is the product's amount-editing surface —
+        // The mapping row is the product's amount-editing surface:
         // its rail cell's vertical (rolling-axis) gesture edits this route's
         // amount through the canonical binding. The cadence drives that real
         // pointer path; there is no amount slider element any more.
@@ -1172,6 +1172,26 @@ async function openStartedMobileRackPage({ simulateWebKitZeroTouchButtons = fals
     return page;
 }
 
+let freshSoundCapture;
+/** The sound a fresh synth saves: every parameter at its default and no stored field edited. */
+function savedFreshSound() {
+    freshSoundCapture ??= (async () => {
+        const page = await browser.newPage();
+        try {
+            await page.goto(`${baseUrl}?test=1`, { waitUntil: "domcontentloaded" });
+            const saved = await page.waitForFunction(
+                () => localStorage.getItem("cosimo.web.patch-state.v2"),
+                null,
+                { timeout: 30_000 },
+            );
+            return JSON.parse(await saved.jsonValue());
+        } finally {
+            await page.close();
+        }
+    })();
+    return freshSoundCapture;
+}
+
 // Instrument-host coverage stays on the bare host; test_web_phone_shell_browser
 // exercises the public framed page, responsive layout and actual audio.
 before(async () => {
@@ -1223,26 +1243,33 @@ after(async () => {
 
 test("startup screen covers every mobile synth control until audio starts", async () => {
     const page = await browser.newPage({ ...devices["iPhone 13"] });
+    const controls = [
+        ["Warp chip", '[data-role="mobile-voice-warp-mode"]'],
+        ["previous parameter page", '[data-role="mobile-voice-page-previous"]'],
+        ["next parameter page", '[data-role="mobile-voice-page-next"]'],
+        ["Mod bar", '[data-role="mobile-global-mod-rail"]'],
+    ];
 
     try {
         await page.goto(`${baseUrl}?test=1`, { waitUntil: "domcontentloaded" });
         await page.waitForFunction(() => globalThis.__COSIMO_WEB_POC__?.getSnapshot().phase === "ready", null, {
             timeout: 30_000,
         });
+        // The engine is ready before the view has connected to the synth's state and drawn its controls.
+        await page.waitForFunction((selectors) => {
+            const root = document.querySelector("cosimo-desktop-react-view")?.shadowRoot;
+            return selectors.every((selector) => {
+                const bounds = root?.querySelector(selector)?.getBoundingClientRect();
+                return bounds !== undefined && bounds.width > 0 && bounds.height > 0;
+            });
+        }, controls.map(([, selector]) => selector), { timeout: 30_000 });
 
-        const ownership = await page.evaluate(() => {
+        const ownership = await page.evaluate((controls) => {
             const overlay = document.querySelector("#cosimo-start-overlay");
             const root = document.querySelector("cosimo-desktop-react-view")?.shadowRoot;
             if (!(overlay instanceof HTMLElement) || !(root instanceof ShadowRoot)) {
                 return null;
             }
-
-            const controls = [
-                ["Warp chip", '[data-role="mobile-voice-warp-mode"]'],
-                ["previous parameter page", '[data-role="mobile-voice-page-previous"]'],
-                ["next parameter page", '[data-role="mobile-voice-page-next"]'],
-                ["Mod bar", '[data-role="mobile-global-mod-rail"]'],
-            ];
 
             return controls.map(([label, selector]) => {
                 const control = root.querySelector(selector);
@@ -1261,7 +1288,7 @@ test("startup screen covers every mobile synth control until audio starts", asyn
                     hit: hit instanceof Element ? hit.id || hit.tagName : null,
                 };
             });
-        });
+        }, controls);
 
         assert.ok(ownership, "The ready browser synth must expose its startup screen and mobile controls.");
         for (const control of ownership) {
@@ -1543,16 +1570,16 @@ test("generated browser accepts 100 voice routes and rejects malformed or over-c
 });
 
 test("the production worker installs the current v6 100-route rack profile end to end", async () => {
-    const page = await browser.newPage({ viewport: { width: 960, height: 640 } });
     const profile = matrixBenchmarkProfiles.get("voice-rack-100");
     assert.ok(profile);
-    await page.addInitScript(({ modulationState, modulationStateKey }) => {
-        localStorage.setItem("cosimo.web.patch-state.v2", JSON.stringify({
-            format: "cosimo.browserPatchState",
-            version: 5,
-            sound: { parameters: {}, storedState: { [modulationStateKey]: modulationState } },
-        }));
-    }, { modulationState: profile.stateJSON, modulationStateKey: MODULATION_STATE_KEY });
+    const freshSound = await savedFreshSound();
+    const page = await browser.newPage({ viewport: { width: 960, height: 640 } });
+    await page.addInitScript((saved) => {
+        localStorage.setItem("cosimo.web.patch-state.v2", JSON.stringify(saved));
+    }, {
+        ...freshSound,
+        sound: { ...freshSound.sound, storedState: { [MODULATION_STATE_KEY]: profile.stateJSON } },
+    });
 
     try {
         await page.goto(`${baseUrl}?test=1`, { waitUntil: "domcontentloaded" });
@@ -1579,9 +1606,7 @@ test("the production worker installs the current v6 100-route rack profile end t
             }));
         });
         assert.equal(evidence.rejectedRouteCount, 0, JSON.stringify(evidence));
-        const stored = evidence.storedState?.[MODULATION_STATE_KEY]
-            ?? evidence.storedState?.values?.[MODULATION_STATE_KEY];
-        assert.equal(deserializeModulationState(stored).routes.length, 100);
+        assert.equal(deserializeModulationState(evidence.storedState.values[MODULATION_STATE_KEY]).routes.length, 100);
     } finally {
         await page.evaluate(() => localStorage.removeItem("cosimo.web.patch-state.v2")).catch(() => {});
         await page.close();
@@ -1687,7 +1712,7 @@ test("mobile product stays realtime with four-way unison and one MSEG filter rou
             await selectMobileWorkspaceSection(page, "voice");
         }
         await selectMobileWorkspaceSection(page, "mod");
-        // T14: Mod opens on SOURCE; the mappings table is the sibling panel.
+        // Mod opens on Source; the mappings table is the sibling panel.
         await page.evaluate(() => {
             const root = document.querySelector("cosimo-desktop-react-view")?.shadowRoot;
             const mappingsTab = root?.querySelector('[data-role="mobile-mod-panel-tab-mappings"]');
@@ -1746,7 +1771,7 @@ test("mobile product stays realtime with four-way unison and one MSEG filter rou
         t.diagnostic(JSON.stringify({ reportedMobileWorkload: latestValueCadence }));
 
         const persisted = await page.evaluate(() => globalThis.__COSIMO_WEB_POC__.storedState());
-        const modulationState = persisted?.[MODULATION_STATE_KEY] ?? persisted?.values?.[MODULATION_STATE_KEY];
+        const modulationState = persisted.values[MODULATION_STATE_KEY];
         const persistedModulation = deserializeModulationState(modulationState);
         assert.equal(persistedModulation.routes.length, 1);
         assert.ok(Number.isFinite(latestValueCadence.finalAmount), JSON.stringify(latestValueCadence));
@@ -2673,11 +2698,11 @@ test("generated product renders oscillator A, B, and C independently", async (t)
 
 test("generated preset-bar Init starts clean after the pre-Type saved-sound version cutoff", async (t) => {
     const page = await browser.newPage({ ...devices["iPhone 13"] });
-    const expectedRack = createDefaultLaneStateV2();
+    const defaultRack = createDefaultLaneStateV2();
     const preTypeRack = {
-        ...expectedRack,
+        ...defaultRack,
         devices: {
-            ...expectedRack.devices,
+            ...defaultRack.devices,
             "distortion#1": {
                 params: {
                     distortionMode: 0,
@@ -2689,7 +2714,7 @@ test("generated preset-bar Init starts clean after the pre-Type saved-sound vers
                 },
             },
         },
-        chain: expectedRack.chain.map((node) => (
+        chain: defaultRack.chain.map((node) => (
             node.kind === "device" && node.deviceId === "distortion#1"
                 ? { ...node, enabled: true }
                 : node
@@ -2711,7 +2736,7 @@ test("generated preset-bar Init starts clean after the pre-Type saved-sound vers
     });
 
     try {
-        await page.goto(`${baseUrl}?test=1&t56-pre-type-distortion=1`, { waitUntil: "domcontentloaded" });
+        await page.goto(`${baseUrl}?test=1`, { waitUntil: "domcontentloaded" });
         await page.waitForFunction(() => globalThis.__COSIMO_WEB_POC__?.getSnapshot().phase === "ready", null, {
             timeout: 30_000,
         });
@@ -2741,18 +2766,16 @@ test("generated preset-bar Init starts clean after the pre-Type saved-sound vers
             };
         });
 
+        // The startup screen covers the preset bar until audio starts.
+        await page.locator("#cosimo-start-overlay").click();
+        await page.waitForFunction(() => globalThis.__COSIMO_WEB_POC__?.getSnapshot().phase === "running");
         const presetBar = page.locator('[data-role="synth-preset-bar"]');
         await presetBar.locator('[data-action="toggle-sound-actions"]').click();
         await presetBar.locator('[data-role="sound-actions"]').getByLabel("Preset", { exact: true }).selectOption({ label: "Init" });
-        await page.waitForFunction((expectedRackJSON) => {
-            const saved = JSON.parse(localStorage.getItem("cosimo.web.patch-state.v2") ?? "{}");
-            const resetCompleted = saved?.version === 3
-                && saved?.sound?.storedState?.["lane.v1"] === expectedRackJSON;
-            const view = document.querySelector("cosimo-desktop-react-view");
-            const bar = view?.shadowRoot?.querySelector('[data-role="synth-preset-bar"]');
-            const hasError = (bar?.querySelectorAll('[role="alert"]').length ?? 0) > 0;
-            return resetCompleted || hasError;
-        }, JSON.stringify(expectedRack));
+        // The discarded old sound stays in storage until the current one replaces it.
+        await page.waitForFunction(() => (
+            JSON.parse(localStorage.getItem("cosimo.web.patch-state.v2") ?? "{}").version === 5
+        ));
         await page.waitForFunction(() => {
             const root = document.querySelector("cosimo-desktop-react-view")?.shadowRoot;
             const tab = (id) => root?.querySelector(`[data-role="mobile-voice-tab-${id}"]`);
@@ -2800,8 +2823,8 @@ test("generated preset-bar Init starts clean after the pre-Type saved-sound vers
             oscBMute: 1,
             oscCMute: 1,
         });
-        assert.equal(result.version, 4);
-        assert.deepEqual(result.rack, expectedRack);
+        assert.equal(result.version, 5);
+        assert.equal(result.rack, undefined, "Init keeps the default rack, which the synth does not store");
         assert.equal(result.oscBPan, 0);
         assert.deepEqual(result.oscillatorDefaults, initialState.oscillatorDefaults);
         assert.deepEqual(result.visibleDefaults, {
@@ -2820,8 +2843,6 @@ test("generated preset-bar Init starts clean after the pre-Type saved-sound vers
 });
 
 test("generated product preserves explicit version-5 oscillator enable and level values", async () => {
-    const page = await browser.newPage({ ...devices["iPhone 13"] });
-    const pageFailures = observePageFailures(page);
     const explicitOscillatorState = {
         oscAVolumeDb: -3.25,
         oscBVolumeDb: -12.5,
@@ -2830,16 +2851,18 @@ test("generated product preserves explicit version-5 oscillator enable and level
         oscBMute: 0,
         oscCMute: 0,
     };
-    await page.addInitScript((parameters) => {
-        localStorage.setItem("cosimo.web.patch-state.v2", JSON.stringify({
-            format: "cosimo.browserPatchState",
-            version: 5,
-            sound: { parameters, storedState: {} },
-        }));
-    }, explicitOscillatorState);
+    const freshSound = await savedFreshSound();
+    const page = await browser.newPage({ ...devices["iPhone 13"] });
+    const pageFailures = observePageFailures(page);
+    await page.addInitScript((saved) => {
+        localStorage.setItem("cosimo.web.patch-state.v2", JSON.stringify(saved));
+    }, {
+        ...freshSound,
+        sound: { ...freshSound.sound, parameters: { ...freshSound.sound.parameters, ...explicitOscillatorState } },
+    });
 
     try {
-        await page.goto(`${baseUrl}?test=1&t53-explicit-oscillators=1`, { waitUntil: "domcontentloaded" });
+        await page.goto(`${baseUrl}?test=1`, { waitUntil: "domcontentloaded" });
         await page.waitForFunction((expected) => {
             const values = globalThis.__COSIMO_WEB_POC__?.getSnapshot().parameterValues;
             return values !== undefined
@@ -2930,8 +2953,9 @@ test("generated product UI restores oscillator parameters and rack state through
         await page.mouse.up();
 
         await waitForAsyncPageCondition(page, async () => {
-            const state = await globalThis.__COSIMO_WEB_POC__.storedState();
-            const rack = JSON.parse(String(state.values?.["lane.v1"]));
+            const savedRack = (await globalThis.__COSIMO_WEB_POC__.storedState()).values["lane.v1"];
+            if (savedRack === undefined) return false;
+            const rack = JSON.parse(savedRack);
             return rack.chain?.[0]?.deviceId === "reverb#1"
                 && rack.chain?.find((node) => node.deviceId === "delay#1")?.enabled === true;
         });
@@ -2992,10 +3016,11 @@ test("generated mobile rack reorder survives WebKit zero-button touch moves with
         await waitForAsyncPageCondition(page, async () => {
             const root = document.querySelector("cosimo-desktop-react-view")?.shadowRoot;
             const list = root?.querySelector('[data-role="rack-module-list"]');
-            const stored = await globalThis.__COSIMO_WEB_POC__.storedState();
-            const rack = JSON.parse(String(stored.values?.["lane.v1"]));
+            // The synth saves the rack once it is first edited; until then it is the default.
+            const savedRack = (await globalThis.__COSIMO_WEB_POC__.storedState()).values["lane.v1"];
             return list?.firstElementChild?.getAttribute("data-role") === "rack-module-reverb"
-                && rack.chain?.[0]?.deviceId === "reverb#1";
+                && savedRack !== undefined
+                && JSON.parse(savedRack).chain?.[0]?.deviceId === "reverb#1";
         }, null, { timeout: 3_000 });
         const reorderResult = await page.evaluate(() => {
             const root = document.querySelector("cosimo-desktop-react-view")?.shadowRoot;
@@ -3302,7 +3327,7 @@ test("generated browser proof stacks full-width wavetable and filter rows on mob
         await page.waitForFunction(() => globalThis.__COSIMO_WEB_POC__?.getSnapshot().phase === "ready", null, {
             timeout: 30_000,
         });
-        // T05: compact mobile renders the ADR-024 focused wavetable editor
+        // Compact mobile renders the ADR-024 focused wavetable editor
         // above the filter card, splitting the Voice page's height 50/50.
         await page.waitForFunction(() => {
             const root = document.querySelector("cosimo-desktop-react-view")?.shadowRoot;

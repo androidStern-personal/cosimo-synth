@@ -9,11 +9,11 @@ import { synthPluginState } from "../shared/synth-plugin-state";
 
 const sent = { kind: "sent", proof: "native-publication-processed" } as const;
 
+/** The saved rack in Cmajor's full-state reply, { parameters: [...], values: {...} }. */
 function storedRack(fullState: unknown): unknown {
     if (typeof fullState !== "object" || fullState === null) return undefined;
     const values = Reflect.get(fullState, "values");
-    if (typeof values === "object" && values !== null && Object.hasOwn(values, LANE_STATE_KEY)) return Reflect.get(values, LANE_STATE_KEY);
-    return Object.hasOwn(fullState, LANE_STATE_KEY) ? Reflect.get(fullState, LANE_STATE_KEY) : undefined;
+    return typeof values === "object" && values !== null ? Reflect.get(values, LANE_STATE_KEY) : undefined;
 }
 
 /**

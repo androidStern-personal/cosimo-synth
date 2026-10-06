@@ -134,7 +134,7 @@ function showBounceRestoreState(restoreState) {
     if (restoreState.status === "error" && restoreState.error) {
         elements.error.dataset.kind = "bounce-restore";
         elements.error.textContent = [
-            "Bounced source unavailable — oscillator fallback is active.",
+            "The saved bounce bank could not be restored.",
             restoreState.error.message,
         ].join("\n\n");
         elements.error.style.display = "block";

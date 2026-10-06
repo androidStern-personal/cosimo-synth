@@ -494,10 +494,7 @@ test("a zero-parameter inventory cannot qualify lane-only v5 state as a saved so
         },
     };
 
-    installBrowserPatchStatePersistence(connection, {
-        storage,
-        requiredStoredStateKeys: ["lane.v1"],
-    });
+    installBrowserPatchStatePersistence(connection, { storage });
 
     assert.deepEqual(runtimeWrites, []);
 });
@@ -534,18 +531,14 @@ test("browser patch persistence restores once and coalesces echoed storage write
         },
     };
 
-    installBrowserPatchStatePersistence(connection, {
-        storage,
-        storageKey: "test.patch-state",
-        requiredStoredStateKeys: ["lane.v1"],
-    });
+    installBrowserPatchStatePersistence(connection, { storage, storageKey: "test.patch-state" });
 
     assert.deepEqual(runtimeWrites, [
         ["filterCutoff", 2_400],
         ["lane.v1", "restored"],
     ]);
     connection.sendStoredStateValue("lane.v1", "updated");
-    storedStateListener({ event: { key: "lane.v1", value: "updated" } });
+    storedStateListener({ key: "lane.v1", value: "updated" });
 
     assert.deepEqual(runtimeWrites, [
         ["filterCutoff", 2_400],
@@ -602,7 +595,7 @@ test("a browser snapshot of another version is discarded as one unit", () => {
     });
 });
 
-test("a version-5 browser snapshot missing every T62 and T74 Polish value emits no runtime writes", () => {
+test("a version-5 browser snapshot missing the Voice Enhancer and Polish values emits no runtime writes", () => {
     const runtimeWrites = [];
     const currentParameterEndpointIDs = [
         "filterCutoff",
@@ -706,10 +699,7 @@ test("browser persistence writes v5 only after the complete live sound image is 
         },
     };
 
-    const persistence = installBrowserPatchStatePersistence(connection, {
-        storage,
-        requiredStoredStateKeys: ["modulation.v6", "lane.v1"],
-    });
+    const persistence = installBrowserPatchStatePersistence(connection, { storage });
 
     assert.equal(parameterListeners.has("hostSlot0Guard"), false);
     parameterListeners.get("voiceEnhancerAmount")(0.35);
@@ -726,8 +716,14 @@ test("browser persistence writes v5 only after the complete live sound image is 
     assert.equal(typeof fullStoredStateCallback, "function");
 
     fullStoredStateCallback({
-        "modulation.v6": "current-modulation",
-        "lane.v1": "current-lane",
+        parameters: [
+            { name: "voiceEnhancerAmount", value: 0.35 },
+            { name: "polishEnhancerAmount", value: 0.6 },
+        ],
+        values: {
+            "modulation.v6": "current-modulation",
+            "lane.v1": "current-lane",
+        },
     });
 
     assert.deepEqual(storageWrites, [{
@@ -745,6 +741,71 @@ test("browser persistence writes v5 only after the complete live sound image is 
         },
     }]);
     assert.deepEqual(persistence.browserState, storageWrites[0]);
+});
+
+test("browser persistence saves the stored values the engine already holds, read from Cmajor's full-state reply", () => {
+    const parameterListeners = new Map();
+    const storageWrites = [];
+    const connection = {
+        inputEndpoints: [{ endpointID: "filterCutoff", purpose: "parameter" }],
+        addParameterListener(endpointID, listener) {
+            parameterListeners.set(endpointID, listener);
+        },
+        requestParameterValue(endpointID) {
+            parameterListeners.get(endpointID)(2_400);
+        },
+        // The patch worker wrote the sound before the page installed persistence,
+        // so it arrives only through this reply, in Cmajor's own shape.
+        requestFullStoredState(callback) {
+            callback({
+                parameters: [{ name: "filterCutoff", value: 2_400 }],
+                values: { "modulation.v6": "current-modulation", "lane.v1": "current-lane" },
+            });
+        },
+        sendEventOrValue() {},
+        sendStoredStateValue() {},
+    };
+    const storage = {
+        getItem() { return null; },
+        setItem(_key, value) { storageWrites.push(JSON.parse(value)); },
+    };
+
+    const persistence = installBrowserPatchStatePersistence(connection, { storage });
+
+    assert.deepEqual(storageWrites, [{
+        format: "cosimo.browserPatchState",
+        version: 5,
+        sound: {
+            parameters: { filterCutoff: 2_400 },
+            storedState: { "modulation.v6": "current-modulation", "lane.v1": "current-lane" },
+        },
+    }]);
+    assert.deepEqual(persistence.browserState, storageWrites[0]);
+});
+
+test("a fresh synth's sound, with no stored field edited yet, is saved once the engine has reported it", () => {
+    const storageWrites = [];
+    let reportCutoff;
+    const connection = {
+        inputEndpoints: [{ endpointID: "filterCutoff", purpose: "parameter" }],
+        addParameterListener(_endpointID, listener) { reportCutoff = listener; },
+        requestParameterValue() { reportCutoff(2_400); },
+        requestFullStoredState(callback) { callback({ parameters: [{ name: "filterCutoff", value: 2_400 }], values: {} }); },
+        sendEventOrValue() {},
+        sendStoredStateValue() {},
+    };
+    const storage = {
+        getItem() { return null; },
+        setItem(_key, value) { storageWrites.push(JSON.parse(value)); },
+    };
+
+    installBrowserPatchStatePersistence(connection, { storage });
+
+    assert.deepEqual(storageWrites, [{
+        format: "cosimo.browserPatchState",
+        version: 5,
+        sound: { parameters: { filterCutoff: 2_400 }, storedState: {} },
+    }]);
 });
 
 test("a complete current browser snapshot restores every parameter before structured state", () => {
@@ -859,7 +920,6 @@ function installHeldBackSampledMode() {
     const persistence = installBrowserPatchStatePersistence(connection, {
         storage,
         deferParameterRestore: (endpointID) => endpointID === "sourceMode",
-        requiredStoredStateKeys: ["bounce.v1"],
     });
     return { connection, parameterListeners, persistence, requested, runtimeWrites, storageWrites };
 }

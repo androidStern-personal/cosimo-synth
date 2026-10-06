@@ -1,12 +1,10 @@
 // The synth's patch hooks. They share the kit's connection context, so kit
 // components and these hooks see one provider, and add what only the synth
-// needs: analyzer activity leases, user-edit bus reporting, deferred gesture
-// presentation and a shared resource client.
+// needs: analyzer activity leases and a shared resource client.
 import {
     createElement,
     createContext,
     startTransition,
-    useCallback,
     useContext,
     useEffect,
     useMemo,
@@ -25,43 +23,18 @@ import {
     createPatchConnectionResourceClient,
     type ResourceClient,
 } from "./resource-client";
-import {
-    reportUserGestureEnd,
-    reportUserGestureStart,
-    reportUserParameterEdit,
-} from "./user-edit-bus";
 
 export type PatchConnectionLike = KitPatchConnectionLike & {
     sendNativeArticulationTriggerConfig?: (serializedConfig: string) => void;
     /** Browser/native restore bridge: the live two-phase transaction already
         committed this reference, so a stored-state echo must not reinstall it. */
     acceptCommittedBounceDocument?: (value: unknown) => unknown;
-    /**
-     * Bare/test adapters with neither parameter listeners nor current-value requests may opt in
-     * only when every hook initialValue is authoritative patch truth. Production adapters must
-     * expose the listener/request protocol instead.
-     */
-    parameterInitialValuesAreAuthoritative?: true;
 };
 
 /** Whether the current endpoint's pre-edit host value has been observed authoritatively. */
 export type PatchParameterHostBaseline<TValue> =
     | { readonly _tag: "pending" }
     | { readonly _tag: "host-confirmed"; readonly value: TValue };
-
-type ParameterBinding = {
-    value: unknown;
-    hostBaseline: PatchParameterHostBaseline<unknown>;
-    isReady: boolean;
-    setValue: (nextValue: unknown) => void;
-    beginGesture: () => void;
-    endGesture: () => void;
-};
-
-type ActivePatchParameterGesture = {
-    readonly patchConnection: PatchConnectionLike;
-    readonly endpointID: string;
-};
 
 export type PatchParameterPresentationPriority = "immediate" | "deferred-during-gesture";
 
@@ -103,164 +76,6 @@ export function useResourceClient(): ResourceClient {
         () => provided ?? createPatchConnectionResourceClient(patchConnection),
         [patchConnection, provided],
     );
-}
-
-export function usePatchParameter(
-    endpointID: string,
-    initialValue: unknown = 0,
-    active = true,
-    presentationPriority: PatchParameterPresentationPriority = "immediate",
-): ParameterBinding {
-    const patchConnection = usePatchConnection();
-    const [value, setValue] = useState<unknown>(initialValue);
-    const [hostBaselineSource, setHostBaselineSource] = useState<{
-        readonly patchConnection: PatchConnectionLike;
-        readonly endpointID: string;
-        readonly value: unknown;
-    } | null>(null);
-    const hostBaselineSourceRef = useRef(hostBaselineSource);
-    const initialValueRef = useRef(initialValue);
-    const valueRef = useRef<unknown>(initialValue);
-    const activeGestureRef = useRef<ActivePatchParameterGesture | null>(null);
-    initialValueRef.current = initialValue;
-    const presentValue = useCallback((nextValue: unknown) => {
-        valueRef.current = nextValue;
-        if (presentationPriority === "deferred-during-gesture" && activeGestureRef.current !== null) {
-            startTransition(() => setValue(nextValue));
-            return;
-        }
-
-        setValue(nextValue);
-    }, [presentationPriority]);
-    const confirmHostBaseline = useCallback((nextValue: unknown) => {
-        const previousSource = hostBaselineSourceRef.current;
-        if (
-            previousSource?.patchConnection === patchConnection
-            && previousSource.endpointID === endpointID
-        ) {
-            return;
-        }
-
-        const nextSource = { patchConnection, endpointID, value: nextValue };
-        hostBaselineSourceRef.current = nextSource;
-        setHostBaselineSource(nextSource);
-    }, [endpointID, patchConnection]);
-
-    const closeActiveGesture = useCallback((expectedOwner?: ActivePatchParameterGesture) => {
-        const activeGesture = activeGestureRef.current;
-        if (
-            activeGesture === null
-            || (expectedOwner !== undefined && (
-                activeGesture.patchConnection !== expectedOwner.patchConnection
-                || activeGesture.endpointID !== expectedOwner.endpointID
-            ))
-        ) {
-            return;
-        }
-
-        // A gesture belongs to the connection and endpoint where it began. Clear
-        // ownership before notifying either side so cleanup and a later pointer-up
-        // cannot close it twice.
-        activeGestureRef.current = null;
-        try {
-            activeGesture.patchConnection.sendParameterGestureEnd?.(activeGesture.endpointID);
-        } finally {
-            reportUserGestureEnd();
-        }
-    }, []);
-
-    useEffect(() => {
-        valueRef.current = initialValueRef.current;
-        setValue(initialValueRef.current);
-        const hasParameterListener = typeof patchConnection.addParameterListener === "function";
-        const canRequestParameterValue = typeof patchConnection.requestParameterValue === "function";
-        const usesAuthoritativeInitialValue = patchConnection.parameterInitialValuesAreAuthoritative === true
-            && !hasParameterListener
-            && !canRequestParameterValue;
-        if (!active) {
-            if (usesAuthoritativeInitialValue) {
-                confirmHostBaseline(initialValueRef.current);
-            }
-            return undefined;
-        }
-
-        let listening = true;
-        const listener = (nextValue: unknown) => {
-            if (!listening) {
-                return;
-            }
-
-            presentValue(nextValue);
-            const baselineSource = hostBaselineSourceRef.current;
-            const hasCurrentHostBaseline = baselineSource?.patchConnection === patchConnection
-                && baselineSource.endpointID === endpointID;
-            if (!hasCurrentHostBaseline) {
-                confirmHostBaseline(nextValue);
-            }
-        };
-
-        patchConnection.addParameterListener?.(endpointID, listener);
-        patchConnection.requestParameterValue?.(endpointID);
-        if (usesAuthoritativeInitialValue) {
-            confirmHostBaseline(initialValueRef.current);
-        }
-
-        return () => {
-            listening = false;
-            closeActiveGesture({ patchConnection, endpointID });
-            patchConnection.removeParameterListener?.(endpointID, listener);
-        };
-    }, [active, closeActiveGesture, confirmHostBaseline, endpointID, patchConnection, presentValue]);
-
-    const setParameterValue = useCallback((nextValue: unknown) => {
-        // Every write through this hook is a direct user edit — programmatic
-        // bulk writes (preset load, host restore) take the connection directly
-        // and never construct bindings (T12 seam A).
-        const changed = !Object.is(nextValue, valueRef.current);
-        const baselineSource = hostBaselineSourceRef.current;
-        if (!active || (
-            baselineSource?.patchConnection !== patchConnection
-            || baselineSource.endpointID !== endpointID
-        )) {
-            return;
-        }
-        patchConnection.sendEventOrValue?.(endpointID, nextValue);
-        presentValue(nextValue);
-        reportUserParameterEdit({ endpointID, changed });
-    }, [active, endpointID, patchConnection, presentValue]);
-
-    const beginGesture = useCallback(() => {
-        const baselineSource = hostBaselineSourceRef.current;
-        if (!active || (
-            baselineSource?.patchConnection !== patchConnection
-            || baselineSource.endpointID !== endpointID
-        )) {
-            return;
-        }
-        if (activeGestureRef.current !== null) {
-            return;
-        }
-        activeGestureRef.current = { patchConnection, endpointID };
-        patchConnection.sendParameterGestureStart?.(endpointID);
-        reportUserGestureStart();
-    }, [active, endpointID, patchConnection]);
-
-    const endGesture = useCallback(() => {
-        closeActiveGesture({ patchConnection, endpointID });
-    }, [closeActiveGesture, endpointID, patchConnection]);
-
-    return useMemo(() => ({
-        value,
-        hostBaseline: active && hostBaselineSource?.patchConnection === patchConnection
-            && hostBaselineSource.endpointID === endpointID
-            ? { _tag: "host-confirmed" as const, value: hostBaselineSource.value }
-            : { _tag: "pending" as const },
-        isReady: active && hostBaselineSource?.patchConnection === patchConnection
-            && hostBaselineSource.endpointID === endpointID,
-        setValue: setParameterValue,
-        beginGesture,
-        endGesture,
-    }), [active, beginGesture, endGesture, endpointID, hostBaselineSource, patchConnection, setParameterValue, value]);
 }
 
 export function usePatchEndpoint<TValue = unknown>(

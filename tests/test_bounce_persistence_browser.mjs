@@ -249,7 +249,10 @@ test("missing bank reload exposes a visible typed error and preserves durable sa
         assert.equal(snapshot.bounceRestore.error.code, "missing-bank");
         assert.equal(snapshot.parameterValues.sourceMode, 0);
         await assert.doesNotReject(page.locator("#cosimo-error").waitFor({ state: "visible" }));
-        assert.match(await page.locator("#cosimo-error").innerText(), /oscillator fallback is active/i);
+        assert.equal(
+            await page.locator("#cosimo-error").innerText(),
+            `The saved bounce bank could not be restored.\n\n${snapshot.bounceRestore.error.message}`,
+        );
         const durableSourceMode = await page.evaluate(() => (
             JSON.parse(localStorage.getItem("cosimo.web.patch-state.v2")).sound.parameters.sourceMode
         ));

@@ -4,7 +4,7 @@ import { synthPluginState } from "../../ui/shared/synth-plugin-state";
 import { Mseg } from "../../kit/index";
 import { normalizeMsegShape } from "../../ui/shared/mseg";
 import { createDefaultMsegShape as defaultKitCurve, addMsegPoint as addKitPoint } from "../../kit/ui/mseg";
-import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
+import { Component, useEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
 import { createModulationEditorFixture, createModulationProjectionHost } from "./modulation_editor_state";
 import { createRoot, type Root } from "react-dom/client";
 
@@ -83,7 +83,6 @@ import { ParameterMenuContext } from "../../ui/shared/parameter-context-menu";
 import { useParameterMenuShell } from "../../ui/shared/parameter-menu-shell";
 import { MobileModMappingsPanel } from "../../ui/desktop/mobile-mod-mappings-panel";
 import type { SynthKeyboardInputMode } from "../../ui/shared/synth-input-router";
-import { subscribeToUserEdits } from "../../ui/shared/user-edit-bus";
 import {
     addMsegPoint,
     createDefaultMsegPlayback,
@@ -1394,47 +1393,29 @@ export async function installMobileModMappingsAmountOnlyHarness(target: HTMLElem
 }
 
 export async function installPatchParameterRebindingHarness(target: HTMLElement) {
-    const parameterListeners = new Map<string, Set<(value: unknown) => void>>();
-    const requestedParameters: string[] = [];
-    const renderLog: Array<{ endpointID: string; value: number }> = [];
+    const connection = new MockPatchConnection(await loadHarnessManifest());
+    connection.setParameterValue("filterCutoff", 6_000);
+    connection.setParameterValue("filterQ", 2.5);
+    const renderLog: Array<{ endpointID: string; value: number; isReady: boolean }> = [];
     let selectEndpoint: ((endpointID: string) => void) | null = null;
 
-    const patchConnection: PatchConnectionLike = {
-        addParameterListener(endpointID, listener) {
-            const listeners = parameterListeners.get(endpointID) ?? new Set<(value: unknown) => void>();
-            listeners.add(listener);
-            parameterListeners.set(endpointID, listeners);
-        },
-        removeParameterListener(endpointID, listener) {
-            parameterListeners.get(endpointID)?.delete(listener);
-        },
-        requestParameterValue(endpointID) {
-            requestedParameters.push(endpointID);
-        },
-    };
     const mounted = mountHarness(target, (root) => {
         function Reader({ endpointID }: { endpointID: string }) {
-            const initialValue = endpointID === "parameterA" ? 0.1 : 0.25;
-            const binding = usePatchParameterBinding<number>({
-                endpointID,
-                initialValue,
-                coerce: Number,
-            });
-
+            const binding = usePatchParameterBinding<number>({ endpointID, initialValue: 0, coerce: Number });
             useEffect(() => {
-                renderLog.push({ endpointID: binding.endpointID, value: binding.value });
-            }, [binding.endpointID, binding.value]);
-
+                renderLog.push({ endpointID: binding.endpointID, value: binding.value, isReady: binding.isReady });
+            }, [binding.endpointID, binding.value, binding.isReady]);
             return null;
         }
 
         function Harness() {
-            const [endpointID, setEndpointID] = useState("parameterA");
+            const [endpointID, setEndpointID] = useState("filterCutoff");
             selectEndpoint = setEndpointID;
-
             return (
-                <PatchConnectionProvider patchConnection={patchConnection}>
-                    <Reader endpointID={endpointID} />
+                <PatchConnectionProvider patchConnection={connection}>
+                    <SynthStateProvider patchConnection={connection}>
+                        <Reader endpointID={endpointID} />
+                    </SynthStateProvider>
                 </PatchConnectionProvider>
             );
         }
@@ -1443,23 +1424,12 @@ export async function installPatchParameterRebindingHarness(target: HTMLElement)
     });
 
     window.__COSIMO_DESKTOP_MODULE_HARNESS__ = {
-        async emitParameter(endpointID: string, value: number) {
-            parameterListeners.get(endpointID)?.forEach((listener) => listener(value));
-            await waitForMicrotask();
-        },
         async selectEndpoint(endpointID: string) {
             selectEndpoint?.(endpointID);
             await waitForMicrotask();
         },
         getSnapshot() {
-            return {
-                listenerCounts: Object.fromEntries(Array.from(parameterListeners.entries()).map(([endpointID, listeners]) => (
-                    [endpointID, listeners.size]
-                ))),
-                requestedParameters: [...requestedParameters],
-                renderLog: cloneValue(renderLog),
-                lastRender: cloneValue(renderLog.at(-1) ?? null),
-            };
+            return { renderLog: cloneValue(renderLog), lastRender: cloneValue(renderLog.at(-1) ?? null) };
         },
         async unmount() {
             mounted.unmount();
@@ -1470,190 +1440,61 @@ export async function installPatchParameterRebindingHarness(target: HTMLElement)
     await waitForMicrotask();
 }
 
-export async function installPatchParameterHostBaselineHarness(target: HTMLElement) {
-    type HarnessConnection = PatchConnectionLike & {
-        readonly id: "first" | "second" | "fallback" | "untrusted";
-        readonly listeners: Map<string, Set<(value: unknown) => void>>;
-        readonly requests: string[];
-        readonly writes: Array<{ endpointID: string; value: number }>;
-        readonly gestures: string[];
-        emitResponse: (endpointID: string, value: number) => void;
+/** Renders each binding the synth must refuse, under its own error boundary, beside an inactive placeholder. */
+export async function installPatchParameterBindingRequirementsHarness(target: HTMLElement) {
+    const writes: string[] = [];
+    const patchConnection: PatchConnectionLike = {
+        sendEventOrValue(endpointID) { writes.push(endpointID); },
+        sendParameterGestureStart(endpointID) { writes.push(`start:${endpointID}`); },
+        sendParameterGestureEnd(endpointID) { writes.push(`end:${endpointID}`); },
     };
+    const errors: Record<string, string> = {};
+    let placeholder: PatchControlBinding<number> | null = null;
 
-    const createConnection = (
-        id: HarnessConnection["id"],
-        protocol: "listener" | "authoritative-initial" | "none" = "listener",
-    ): HarnessConnection => {
-        const listeners = new Map<string, Set<(value: unknown) => void>>();
-        const requests: string[] = [];
-        const writes: Array<{ endpointID: string; value: number }> = [];
-        const gestures: string[] = [];
-        const connection: HarnessConnection = {
-            id,
-            listeners,
-            requests,
-            writes,
-            gestures,
-            sendEventOrValue(endpointID, value) {
-                writes.push({ endpointID, value: Number(value) });
-                listeners.get(endpointID)?.forEach((listener) => listener(value));
-            },
-            sendParameterGestureStart(endpointID) {
-                gestures.push(`start:${endpointID}`);
-            },
-            sendParameterGestureEnd(endpointID) {
-                gestures.push(`end:${endpointID}`);
-            },
-            emitResponse(endpointID, value) {
-                listeners.get(endpointID)?.forEach((listener) => listener(value));
-            },
-        };
-        if (protocol === "listener") {
-            connection.addParameterListener = (endpointID, listener) => {
-                const endpointListeners = listeners.get(endpointID) ?? new Set();
-                endpointListeners.add(listener);
-                listeners.set(endpointID, endpointListeners);
-            };
-            connection.removeParameterListener = (endpointID, listener) => {
-                listeners.get(endpointID)?.delete(listener);
-            };
-            connection.requestParameterValue = (endpointID) => {
-                requests.push(endpointID);
-            };
-        } else if (protocol === "authoritative-initial") {
-            connection.parameterInitialValuesAreAuthoritative = true;
-        }
-        return connection;
-    };
-    const connections = {
-        first: createConnection("first"),
-        second: createConnection("second"),
-        fallback: createConnection("fallback", "authoritative-initial"),
-        untrusted: createConnection("untrusted", "none"),
-    } as const;
-    let binding: PatchControlBinding<number> | null = null;
-    let staleEndGesture: (() => void) | null = null;
-    let selectConnection: ((id: HarnessConnection["id"]) => void) | null = null;
-    let selectEndpoint: ((endpointID: string) => void) | null = null;
-    const userGestureCounts = { starts: 0, ends: 0 };
-    const unsubscribeFromUserEdits = subscribeToUserEdits({
-        onGestureStart: () => {
-            userGestureCounts.starts += 1;
-        },
-        onGestureEnd: () => {
-            userGestureCounts.ends += 1;
-        },
-    });
+    class Refusal extends Component<{ name: string; children: ReactNode }, { refused: boolean }> {
+        state = { refused: false };
+        static getDerivedStateFromError() { return { refused: true }; }
+        componentDidCatch(error: Error) { errors[this.props.name] = error.message; }
+        render() { return this.state.refused ? null : this.props.children; }
+    }
+
+    function Binding({ endpointID, active = true }: { endpointID: string; active?: boolean }) {
+        const binding = usePatchParameterBinding<number>({ endpointID, initialValue: 0.25, coerce: Number, active });
+        if (!active) placeholder = binding;
+        return null;
+    }
 
     const mounted = mountHarness(target, (root) => {
-        function Reader({ endpointID }: { endpointID: string }) {
-            binding = usePatchParameterBinding<number>({
-                endpointID,
-                initialValue: 0.1,
-                coerce: Number,
-            });
-            return (
-                <button
-                    type="button"
-                    data-role="host-baseline-control"
-                    disabled={binding.hostBaseline?._tag !== "host-confirmed"}
-                    onClick={() => binding?.commitValue(0.6)}
-                >
-                    Parameter
-                </button>
-            );
-        }
-
-        function Harness() {
-            const [connectionID, setConnectionID] = useState<HarnessConnection["id"]>("first");
-            const [endpointID, setEndpointID] = useState("parameterA");
-            selectConnection = setConnectionID;
-            selectEndpoint = setEndpointID;
-            return (
-                <PatchConnectionProvider patchConnection={connections[connectionID]}>
-                    <Reader endpointID={endpointID} />
-                </PatchConnectionProvider>
-            );
-        }
-
-        root.render(<Harness />);
+        root.render(
+            <PatchConnectionProvider patchConnection={patchConnection}>
+                <Refusal name="undeclared"><Binding endpointID="parameterA" /></Refusal>
+                <Refusal name="withoutProvider"><Binding endpointID="filterCutoff" /></Refusal>
+                <Refusal name="placeholder"><Binding endpointID="parameterA" active={false} /></Refusal>
+            </PatchConnectionProvider>,
+        );
     });
 
-    const requireBinding = () => {
-        if (binding === null) {
-            throw new Error("Patch parameter baseline harness is not ready.");
-        }
-        return binding;
-    };
-
     window.__COSIMO_DESKTOP_MODULE_HARNESS__ = {
-        async emitResponse(connectionID: HarnessConnection["id"], endpointID: string, value: number) {
-            connections[connectionID].emitResponse(endpointID, value);
-            await waitForMicrotask();
-        },
-        async writeValue(value: number) {
-            requireBinding().setValue(value);
-            await waitForMicrotask();
-        },
-        async commitValue(value: number) {
-            requireBinding().commitValue(value);
-            await waitForMicrotask();
-        },
-        async selectConnection(connectionID: HarnessConnection["id"]) {
-            selectConnection?.(connectionID);
-            await waitForMicrotask();
-            await waitForMicrotask();
-        },
-        async selectEndpoint(endpointID: string) {
-            staleEndGesture = requireBinding().endGesture;
-            selectEndpoint?.(endpointID);
-            await waitForMicrotask();
-            await waitForMicrotask();
-        },
-        async beginGesture() {
-            requireBinding().beginGesture();
-            await waitForMicrotask();
-        },
-        async endGesture() {
-            requireBinding().endGesture();
-            await waitForMicrotask();
-        },
-        async endStaleGesture() {
-            staleEndGesture?.();
-            await waitForMicrotask();
+        editPlaceholder(value: number) {
+            placeholder?.beginGesture();
+            placeholder?.setValue(value);
+            placeholder?.commitValue(value);
+            placeholder?.endGesture();
         },
         getSnapshot() {
-            const currentBinding = requireBinding();
             return {
-                value: currentBinding.value,
-                hostBaseline: cloneValue(currentBinding.hostBaseline),
-                controlDisabled: (target.querySelector('[data-role="host-baseline-control"]') as HTMLButtonElement | null)?.disabled ?? null,
-                first: {
-                    requests: [...connections.first.requests],
-                    writes: cloneValue(connections.first.writes),
-                    gestures: [...connections.first.gestures],
-                    listenerCounts: Object.fromEntries([...connections.first.listeners].map(([endpointID, listeners]) => [endpointID, listeners.size])),
+                errors: { ...errors },
+                placeholder: placeholder === null ? null : {
+                    endpointID: placeholder.endpointID,
+                    value: placeholder.value,
+                    isReady: placeholder.isReady,
+                    hostBaseline: cloneValue(placeholder.hostBaseline),
                 },
-                second: {
-                    requests: [...connections.second.requests],
-                    writes: cloneValue(connections.second.writes),
-                    gestures: [...connections.second.gestures],
-                    listenerCounts: Object.fromEntries([...connections.second.listeners].map(([endpointID, listeners]) => [endpointID, listeners.size])),
-                },
-                fallback: {
-                    requests: [...connections.fallback.requests],
-                    writes: cloneValue(connections.fallback.writes),
-                },
-                untrusted: {
-                    requests: [...connections.untrusted.requests],
-                    writes: cloneValue(connections.untrusted.writes),
-                },
-                userGestureCounts: { ...userGestureCounts },
+                writes: [...writes],
             };
         },
         async unmount() {
             mounted.unmount();
-            unsubscribeFromUserEdits();
             await waitForMicrotask();
         },
     };

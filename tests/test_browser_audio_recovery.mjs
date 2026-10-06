@@ -5,6 +5,7 @@ import test, { after, before } from "node:test";
 import { fileURLToPath } from "node:url";
 
 import { chromium, devices, webkit } from "playwright";
+import { createWebServer } from "../web/server.mjs";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const webRoot = path.join(repoRoot, "build", "web");
@@ -20,43 +21,8 @@ const chromiumExecutablePath = process.argv
     ?.slice("--chromium-executable=".length)
     ?? process.env.COSIMO_CHROMIUM_EXECUTABLE_PATH;
 const browsers = new Map();
-const webOrigin = "http://localhost";
-
-function contentType(filePath) {
-    const extension = path.extname(filePath);
-    if (extension === ".html") return "text/html; charset=utf-8";
-    if (extension === ".js" || extension === ".mjs") return "text/javascript; charset=utf-8";
-    if (extension === ".json") return "application/json; charset=utf-8";
-    if (extension === ".svg") return "image/svg+xml";
-    if (extension === ".ttf") return "font/ttf";
-    if (extension === ".wav") return "audio/wav";
-    return "application/octet-stream";
-}
-
-async function serveGeneratedWeb(route) {
-    try {
-        const requestUrl = new URL(route.request().url());
-        const relativePath = decodeURIComponent(
-            requestUrl.pathname === "/" ? "index.html" : requestUrl.pathname.slice(1),
-        );
-        const filePath = path.resolve(webRoot, relativePath);
-        if (path.relative(webRoot, filePath).startsWith("..")) {
-            await route.fulfill({ status: 403, body: "Forbidden" });
-            return;
-        }
-        await route.fulfill({
-            body: await fs.readFile(filePath),
-            contentType: contentType(filePath),
-            headers: { "cache-control": "no-store" },
-        });
-    } catch (error) {
-        const notFound = error && typeof error === "object" && error.code === "ENOENT";
-        await route.fulfill({
-            status: notFound ? 404 : 500,
-            body: notFound ? "Not found" : String(error),
-        });
-    }
-}
+let server;
+let synthUrl;
 
 async function installLifecycleProbe(page) {
     await page.addInitScript(() => {
@@ -202,7 +168,7 @@ async function installLifecycleProbe(page) {
             }
         };
 
-        globalThis.__COSIMO_T45_LIFECYCLE_PROBE__ = {
+        globalThis.__COSIMO_LIFECYCLE_PROBE__ = {
             clearReportedState() { reportedState = null; },
             async leave(signal) {
                 if (signal === "audio-context") {
@@ -257,11 +223,10 @@ function observeFailures(page) {
 
 async function openStartedPage(browserEngine) {
     const context = await browsers.get(browserEngine).newContext({ ...devices["iPhone 13"] });
-    await context.route(`${webOrigin}/**`, serveGeneratedWeb);
     const page = await context.newPage();
     const assertNoFailures = observeFailures(page);
     await installLifecycleProbe(page);
-    await page.goto(`${webOrigin}/?test=1`, { waitUntil: "domcontentloaded" });
+    await page.goto(`${synthUrl}?test=1`, { waitUntil: "domcontentloaded" });
     await page.waitForFunction(() => globalThis.__COSIMO_WEB_POC__?.getSnapshot().phase === "ready", null, {
         timeout: 30_000,
     });
@@ -294,7 +259,7 @@ async function openStartedPage(browserEngine) {
             noteUpCount += 1;
             soundingNotes.delete(Number(event.detail.note));
         });
-        globalThis.__COSIMO_T45_KEYBOARD_PROBE__ = {
+        globalThis.__COSIMO_KEYBOARD_PROBE__ = {
             snapshot: () => ({
                 currentKeyboardNoteCount: keyboard.currentKeyboardNotes?.size ?? null,
                 currentTouchCount: keyboard.currentTouches?.size ?? null,
@@ -317,8 +282,8 @@ async function captureIdentity(page) {
             audioRecoveryPhase: host.audioRecoveryPhase,
             audioSessionType: host.audioSessionType,
             heldNoteCount: host.heldNoteCount,
-            keyboard: globalThis.__COSIMO_T45_KEYBOARD_PROBE__.snapshot(),
-            lifecycle: globalThis.__COSIMO_T45_LIFECYCLE_PROBE__.snapshot(),
+            keyboard: globalThis.__COSIMO_KEYBOARD_PROBE__.snapshot(),
+            lifecycle: globalThis.__COSIMO_LIFECYCLE_PROBE__.snapshot(),
             parameterSentinel: host.parameterValues.macro1,
             persistedPatchState: localStorage.getItem("cosimo.web.patch-state.v2"),
             runtimeSessionIds: host.latestRuntimeStates
@@ -395,12 +360,12 @@ async function waitForMiddleCRelease(page) {
 async function waitForRecovery(page) {
     await page.waitForFunction(() => {
         const host = globalThis.__COSIMO_WEB_POC__.getSnapshot();
-        const lifecycle = globalThis.__COSIMO_T45_LIFECYCLE_PROBE__.snapshot();
+        const lifecycle = globalThis.__COSIMO_LIFECYCLE_PROBE__.snapshot();
         return host.audioRecoveryPhase === "active"
             && lifecycle.nativeAudioContextState === "running"
             && host.audioWorkletBlockCount >= 256;
     }, null, { timeout: 5_000 });
-    await page.evaluate(() => globalThis.__COSIMO_T45_LIFECYCLE_PROBE__.clearReportedState());
+    await page.evaluate(() => globalThis.__COSIMO_LIFECYCLE_PROBE__.clearReportedState());
 }
 
 async function waitForAudioSilence(page, label) {
@@ -410,16 +375,16 @@ async function waitForAudioSilence(page, label) {
             const silent = host.heldNoteCount === 0
                 && host.audioPeakCurrent <= 0.00001
                 && host.audioRms <= 0.00001;
-            globalThis.__COSIMO_T45_SILENT_POLLS__ = silent
-                ? (globalThis.__COSIMO_T45_SILENT_POLLS__ ?? 0) + 1
+            globalThis.__COSIMO_SILENT_POLLS__ = silent
+                ? (globalThis.__COSIMO_SILENT_POLLS__ ?? 0) + 1
                 : 0;
-            return globalThis.__COSIMO_T45_SILENT_POLLS__ >= 8;
+            return globalThis.__COSIMO_SILENT_POLLS__ >= 8;
         }, null, { timeout: 10_000 });
     } catch (error) {
         const snapshot = await page.evaluate(() => globalThis.__COSIMO_WEB_POC__.getSnapshot());
         throw new Error(`${label} did not drain to silence: ${JSON.stringify(snapshot)}`, { cause: error });
     } finally {
-        await page.evaluate(() => delete globalThis.__COSIMO_T45_SILENT_POLLS__);
+        await page.evaluate(() => delete globalThis.__COSIMO_SILENT_POLLS__);
     }
 }
 
@@ -445,7 +410,7 @@ async function assertAudible(page, label) {
 
 async function returnWithGestureRequired(page) {
     await page.evaluate(async () => {
-        const probe = globalThis.__COSIMO_T45_LIFECYCLE_PROBE__;
+        const probe = globalThis.__COSIMO_LIFECYCLE_PROBE__;
         probe.setResumePolicy("reject");
         await probe.leave("pagehide");
         probe.returnWith("pageshow");
@@ -469,6 +434,12 @@ before(async () => {
     assert.equal(builtDesktopApp, trackedDesktopApp, "Copy the current production desktop bundle before browser proof.");
     assert.match(builtDesktopApp, /cosimo-browser-audio-leave/, "The generated UI must include held-input release.");
     assert.match(builtDesktopApp, /cosimo-browser-audio-return/, "The generated UI must restore auto-preview after recovery.");
+    server = createWebServer(webRoot);
+    await new Promise((resolve, reject) => {
+        server.once("error", reject);
+        server.listen(0, "127.0.0.1", resolve);
+    });
+    synthUrl = `http://127.0.0.1:${server.address().port}/synth.html`;
     for (const browserEngine of browserEngines) {
         const launchedBrowser = browserEngine === "webkit"
             ? await webkit.launch({ headless })
@@ -482,6 +453,7 @@ before(async () => {
 
 after(async () => {
     await Promise.all(Array.from(browsers.values(), (launchedBrowser) => launchedBrowser.close()));
+    await new Promise((resolve) => server?.close(resolve));
 });
 
 for (const browserEngine of browserEngines) {
@@ -501,7 +473,7 @@ test(`[${browserEngine}] each lifecycle signal releases input and recovers the e
             const label = `${leaveSignal}/${returnSignal ?? "statechange"}`;
             await pressMiddleC(harness.page);
             const interrupted = await harness.page.evaluate((signal) => (
-                globalThis.__COSIMO_T45_LIFECYCLE_PROBE__.leave(signal)
+                globalThis.__COSIMO_LIFECYCLE_PROBE__.leave(signal)
             ), leaveSignal);
             await waitForMiddleCRelease(harness.page);
             await harness.page.mouse.up();
@@ -517,12 +489,12 @@ test(`[${browserEngine}] each lifecycle signal releases input and recovers the e
                         attempts: globalThis.__COSIMO_WEB_POC__.getSnapshot().audioRecoveryAttemptCount,
                     }));
                     await harness.page.evaluate(() => {
-                        globalThis.__COSIMO_T45_LIFECYCLE_PROBE__.setSessionState("inactive");
+                        globalThis.__COSIMO_LIFECYCLE_PROBE__.setSessionState("inactive");
                     });
                     const afterInactive = await harness.page.evaluate(() => ({
                         attempts: globalThis.__COSIMO_WEB_POC__.getSnapshot().audioRecoveryAttemptCount,
                         phase: globalThis.__COSIMO_WEB_POC__.getSnapshot().audioRecoveryPhase,
-                        lifecycle: globalThis.__COSIMO_T45_LIFECYCLE_PROBE__.snapshot(),
+                        lifecycle: globalThis.__COSIMO_LIFECYCLE_PROBE__.snapshot(),
                     }));
                     assert.equal(afterInactive.phase, "away", label);
                     assert.equal(afterInactive.attempts, beforeInactive.attempts, label);
@@ -530,7 +502,7 @@ test(`[${browserEngine}] each lifecycle signal releases input and recovers the e
                 }
                 await harness.page.evaluate(() => globalThis.__COSIMO_WEB_POC__.resetAudioMetrics());
                 await harness.page.evaluate(({ signal, reactivateSession }) => {
-                    const probe = globalThis.__COSIMO_T45_LIFECYCLE_PROBE__;
+                    const probe = globalThis.__COSIMO_LIFECYCLE_PROBE__;
                     probe.returnWith(signal);
                     if (reactivateSession) probe.setSessionState("active");
                 }, { signal: returnSignal, reactivateSession: leaveSignal === "blur" });
@@ -538,7 +510,7 @@ test(`[${browserEngine}] each lifecycle signal releases input and recovers the e
             await waitForRecovery(harness.page);
             await assertAudible(harness.page, label);
             const recoveredLifecycle = await harness.page.evaluate(() => (
-                globalThis.__COSIMO_T45_LIFECYCLE_PROBE__.snapshot()
+                globalThis.__COSIMO_LIFECYCLE_PROBE__.snapshot()
             ));
             assert.ok(recoveredLifecycle.audioContextCurrentTime > interrupted.audioContextCurrentTime, label);
             assert.equal(recoveredLifecycle.sessionState, "active", label);
@@ -551,18 +523,18 @@ test(`[${browserEngine}] each lifecycle signal releases input and recovers the e
             for (let cycle = 1; cycle <= 3; cycle += 1) {
                 await awayPage.bringToFront();
                 const interrupted = await harness.page.evaluate(() => (
-                    globalThis.__COSIMO_T45_LIFECYCLE_PROBE__.leaveCombined()
+                    globalThis.__COSIMO_LIFECYCLE_PROBE__.leaveCombined()
                 ));
                 assert.equal(interrupted.sessionState, "interrupted", `top-level cycle ${cycle}`);
                 await harness.page.waitForTimeout(250);
                 await harness.page.bringToFront();
                 await harness.page.evaluate(() => (
-                    globalThis.__COSIMO_T45_LIFECYCLE_PROBE__.returnCombined()
+                    globalThis.__COSIMO_LIFECYCLE_PROBE__.returnCombined()
                 ));
                 await waitForRecovery(harness.page);
                 await assertAudible(harness.page, `top-level cycle ${cycle}`);
                 const recoveredLifecycle = await harness.page.evaluate(() => (
-                    globalThis.__COSIMO_T45_LIFECYCLE_PROBE__.snapshot()
+                    globalThis.__COSIMO_LIFECYCLE_PROBE__.snapshot()
                 ));
                 assert.ok(
                     recoveredLifecycle.audioContextCurrentTime > interrupted.audioContextCurrentTime,
@@ -604,7 +576,7 @@ test(`[${browserEngine}] a trusted control touch retries audio without swallowin
 
         const recovery = await harness.page.evaluate(() => ({
             host: globalThis.__COSIMO_WEB_POC__.getSnapshot(),
-            lifecycle: globalThis.__COSIMO_T45_LIFECYCLE_PROBE__.snapshot(),
+            lifecycle: globalThis.__COSIMO_LIFECYCLE_PROBE__.snapshot(),
         }));
         assert.equal(recovery.host.audioRecoveryAttemptCount - baseline.audioRecoveryAttemptCount, 3);
         assert.equal(recovery.lifecycle.gestureResumeCount - baseline.lifecycle.gestureResumeCount, 1);
@@ -633,15 +605,15 @@ test(`[${browserEngine}] a mouse note retries audio and releases normally`, asyn
         await harness.page.mouse.up();
         await waitForMiddleCRelease(harness.page);
         await harness.page.waitForFunction((previousNoteUpCount) => (
-            globalThis.__COSIMO_T45_KEYBOARD_PROBE__.snapshot().noteUpCount
+            globalThis.__COSIMO_KEYBOARD_PROBE__.snapshot().noteUpCount
                 === previousNoteUpCount + 1
         ), baseline.keyboard.noteUpCount);
         await assertIdentityPreserved(harness.page, baseline, "mouse note recovery");
 
         const recovery = await harness.page.evaluate(() => ({
             host: globalThis.__COSIMO_WEB_POC__.getSnapshot(),
-            keyboard: globalThis.__COSIMO_T45_KEYBOARD_PROBE__.snapshot(),
-            lifecycle: globalThis.__COSIMO_T45_LIFECYCLE_PROBE__.snapshot(),
+            keyboard: globalThis.__COSIMO_KEYBOARD_PROBE__.snapshot(),
+            lifecycle: globalThis.__COSIMO_LIFECYCLE_PROBE__.snapshot(),
         }));
         assert.equal(recovery.keyboard.noteDownCount - baseline.keyboard.noteDownCount, 1);
         assert.equal(recovery.keyboard.noteUpCount - baseline.keyboard.noteUpCount, 1);
@@ -650,7 +622,7 @@ test(`[${browserEngine}] a mouse note retries audio and releases normally`, asyn
         assert.equal(recovery.lifecycle.resumeCallCount - baseline.lifecycle.resumeCallCount, 2);
         assert.equal(recovery.lifecycle.suspendCallCount - baseline.lifecycle.suspendCallCount, 2);
 
-        await harness.page.evaluate(() => globalThis.__COSIMO_T45_LIFECYCLE_PROBE__.leave("audio-context"));
+        await harness.page.evaluate(() => globalThis.__COSIMO_LIFECYCLE_PROBE__.leave("audio-context"));
         await harness.page.waitForFunction(() => (
             globalThis.__COSIMO_WEB_POC__.getSnapshot().audioRecoveryPhase === "blocked"
             && document.getElementById("cosimo-audio-recovery-notice")?.hidden === true
@@ -675,8 +647,8 @@ test(`[${browserEngine}] a recovery note asks the player to play again`, async (
                 ?.querySelector("cosimo-react-desktop-keyboard")?.shadowRoot;
             if (!keyboardRoot) throw new Error("The production keyboard is unavailable.");
             keyboardRoot.addEventListener("touchend", () => {
-                globalThis.__COSIMO_T45_RELEASE_AT_TOUCH_END__ =
-                    globalThis.__COSIMO_T45_KEYBOARD_PROBE__.snapshot();
+                globalThis.__COSIMO_RELEASE_AT_TOUCH_END__ =
+                    globalThis.__COSIMO_KEYBOARD_PROBE__.snapshot();
             }, { once: true });
         });
         await harness.page.touchscreen.tap(
@@ -684,10 +656,10 @@ test(`[${browserEngine}] a recovery note asks the player to play again`, async (
             bounds.y + bounds.height * 0.8,
         );
         await harness.page.waitForFunction(() => (
-            globalThis.__COSIMO_T45_RELEASE_AT_TOUCH_END__ !== undefined
+            globalThis.__COSIMO_RELEASE_AT_TOUCH_END__ !== undefined
         ));
         const releaseAtTouchEnd = await harness.page.evaluate(() => (
-            globalThis.__COSIMO_T45_RELEASE_AT_TOUCH_END__
+            globalThis.__COSIMO_RELEASE_AT_TOUCH_END__
         ));
         assert.equal(releaseAtTouchEnd.noteDownCount, baseline.keyboard.noteDownCount + 1);
         assert.equal(releaseAtTouchEnd.noteUpCount, baseline.keyboard.noteUpCount + 1);
@@ -707,8 +679,8 @@ test(`[${browserEngine}] a recovery note asks the player to play again`, async (
 
         const recovery = await harness.page.evaluate(() => ({
             host: globalThis.__COSIMO_WEB_POC__.getSnapshot(),
-            keyboard: globalThis.__COSIMO_T45_KEYBOARD_PROBE__.snapshot(),
-            lifecycle: globalThis.__COSIMO_T45_LIFECYCLE_PROBE__.snapshot(),
+            keyboard: globalThis.__COSIMO_KEYBOARD_PROBE__.snapshot(),
+            lifecycle: globalThis.__COSIMO_LIFECYCLE_PROBE__.snapshot(),
         }));
         assert.equal(recovery.keyboard.noteDownCount - baseline.keyboard.noteDownCount, 1);
         assert.equal(recovery.keyboard.noteUpCount - baseline.keyboard.noteUpCount, 1);
@@ -722,7 +694,7 @@ test(`[${browserEngine}] a recovery note asks the player to play again`, async (
             bounds.y + bounds.height * 0.8,
         );
         await harness.page.waitForFunction((previousCounts) => {
-            const keyboard = globalThis.__COSIMO_T45_KEYBOARD_PROBE__.snapshot();
+            const keyboard = globalThis.__COSIMO_KEYBOARD_PROBE__.snapshot();
             return keyboard.noteDownCount === previousCounts.noteDownCount + 2
                 && keyboard.noteUpCount === previousCounts.noteUpCount + 2
                 && document.getElementById("cosimo-audio-recovery-notice")?.hidden === true;
@@ -748,7 +720,7 @@ test("[chromium] lifting the recovery touch does not dismiss the play-again noti
     try {
         await returnWithGestureRequired(harness.page);
         await harness.page.evaluate(() => {
-            globalThis.__COSIMO_T45_LIFECYCLE_PROBE__.setResumePolicy("allow");
+            globalThis.__COSIMO_LIFECYCLE_PROBE__.setResumePolicy("allow");
         });
         const bounds = await noteBounds(harness.page);
         const point = {

@@ -3,12 +3,6 @@ export const BROWSER_PATCH_STATE_KEY = "cosimo.web.patch-state.v2";
 const BROWSER_PATCH_STATE_FORMAT = "cosimo.browserPatchState";
 // A saved state of any other version is discarded whole.
 const BROWSER_PATCH_STATE_VERSION = 5;
-const REQUIRED_SOUND_STORED_STATE_KEYS = Object.freeze([
-    "modulation.v6",
-    "articulations.v4",
-    "bounce.v1",
-    "lane.v1",
-]);
 
 function resolveStorage(storage) {
     if (storage !== undefined) return storage;
@@ -62,19 +56,17 @@ function parseBrowserPatchState(value) {
     };
 }
 
-function isCompleteSoundSnapshot(state, parameterEndpointIDs, requiredStoredStateKeys) {
+/**
+ * A sound is complete when it holds every visible parameter. Its stored state needs no
+ * particular key: the synth stores a field only once it is edited, so a missing key is
+ * a field still at its default.
+ */
+function isCompleteSoundSnapshot(state, parameterEndpointIDs) {
     if (state === null || parameterEndpointIDs.size === 0) return false;
 
     const savedParameterEndpointIDs = Object.keys(state.sound.parameters);
-    if (savedParameterEndpointIDs.length !== parameterEndpointIDs.size
-        || savedParameterEndpointIDs.some((endpointID) => !parameterEndpointIDs.has(endpointID))) {
-        return false;
-    }
-
-    return requiredStoredStateKeys.every((key) => (
-        Object.prototype.hasOwnProperty.call(state.sound.storedState, key)
-        && state.sound.storedState[key] !== undefined
-    ));
+    return savedParameterEndpointIDs.length === parameterEndpointIDs.size
+        && savedParameterEndpointIDs.every((endpointID) => parameterEndpointIDs.has(endpointID));
 }
 
 /** Decode v5 storage; the installer validates live completeness before use. */
@@ -93,15 +85,14 @@ export function readBrowserPatchState({
 
 /**
  * Restores the saved sound, parameters first and then stored state, and saves
- * every later parameter and stored-state write once the complete live sound has
- * been captured. A saved parameter that deferParameterRestore holds back reaches
- * the engine only through applyDeferredParameter.
+ * every later parameter and stored-state write once the engine has reported every
+ * parameter and its whole stored state. A saved parameter that deferParameterRestore
+ * holds back reaches the engine only through applyDeferredParameter.
  */
 export function installBrowserPatchStatePersistence(connection, {
     storage,
     storageKey = BROWSER_PATCH_STATE_KEY,
     deferParameterRestore = () => false,
-    requiredStoredStateKeys = REQUIRED_SOUND_STORED_STATE_KEYS,
 } = {}) {
     const activeStorage = resolveStorage(storage);
     const parameterEndpointIDs = new Set((connection.inputEndpoints ?? []).flatMap((endpoint) => (
@@ -111,11 +102,7 @@ export function installBrowserPatchStatePersistence(connection, {
             : []
     )));
     const savedBrowserState = readBrowserPatchState({ storage: activeStorage, storageKey });
-    const hasAcceptedSavedSound = isCompleteSoundSnapshot(
-        savedBrowserState,
-        parameterEndpointIDs,
-        requiredStoredStateKeys,
-    );
+    const hasAcceptedSavedSound = isCompleteSoundSnapshot(savedBrowserState, parameterEndpointIDs);
     let browserState = hasAcceptedSavedSound ? savedBrowserState : emptyBrowserPatchState();
     let acceptedBrowserState = browserState;
     let lastAttemptedSerializedState = hasAcceptedSavedSound
@@ -126,13 +113,7 @@ export function installBrowserPatchStatePersistence(connection, {
 
     const persistState = (nextState) => {
         browserState = nextState;
-        if (!isCompleteSoundSnapshot(
-            browserState,
-            parameterEndpointIDs,
-            requiredStoredStateKeys,
-        ) || !hasCapturedFullStoredState) {
-            return;
-        }
+        if (!hasCapturedFullStoredState || !isCompleteSoundSnapshot(browserState, parameterEndpointIDs)) return;
 
         let serializedState;
         try {
@@ -219,17 +200,16 @@ export function installBrowserPatchStatePersistence(connection, {
     };
 
     connection.addStoredStateValueListener?.((message) => {
-        const storedStateMessage = message?.event ?? message;
-        if (typeof storedStateMessage?.key === "string") {
-            persistStoredValue(storedStateMessage.key, storedStateMessage.value);
-        }
+        if (typeof message?.key === "string") persistStoredValue(message.key, message.value);
     });
 
-    connection.requestFullStoredState?.((fullStoredState) => {
-        if (!isRecord(fullStoredState)) return;
+    // Cmajor replies with { parameters: [...], values: {...} }; the stored state is
+    // in values, and the parameters are captured through their own listeners below.
+    connection.requestFullStoredState?.((fullState) => {
+        if (!isRecord(fullState?.values)) return;
 
         const storedState = {};
-        for (const [key, value] of Object.entries(fullStoredState)) {
+        for (const [key, value] of Object.entries(fullState.values)) {
             if (value !== undefined) storedState[key] = value;
         }
         hasCapturedFullStoredState = true;

@@ -379,204 +379,59 @@ test("route amount binding presents the canonical bridge value before the full m
     }
 });
 
-test("usePatchParameterBinding resets stale display state when the active endpoint changes", async () => {
+test("usePatchParameterBinding never shows one endpoint's value under another when the endpoint changes", async () => {
     const page = await openModulePage();
 
     try {
         await installHarness(page, "installPatchParameterRebindingHarness");
-        await page.waitForFunction(() => window.__COSIMO_DESKTOP_MODULE_HARNESS__?.getSnapshot?.().requestedParameters.length === 1);
-        await invokeHarness(page, "emitParameter", "parameterA", 0.8);
-        await page.waitForFunction(() => window.__COSIMO_DESKTOP_MODULE_HARNESS__?.getSnapshot?.().lastRender?.value === 0.8);
+        await page.waitForFunction(() => window.__COSIMO_DESKTOP_MODULE_HARNESS__?.getSnapshot?.().lastRender?.isReady === true);
+        assert.deepEqual((await getHarnessSnapshot(page)).lastRender, { endpointID: "filterCutoff", value: 6_000, isReady: true });
 
-        await invokeHarness(page, "selectEndpoint", "parameterB");
-        await page.waitForFunction(() => window.__COSIMO_DESKTOP_MODULE_HARNESS__?.getSnapshot?.().requestedParameters.length === 2);
-
+        await invokeHarness(page, "selectEndpoint", "filterQ");
+        await page.waitForFunction(() => window.__COSIMO_DESKTOP_MODULE_HARNESS__?.getSnapshot?.().lastRender?.endpointID === "filterQ");
         const snapshot = await getHarnessSnapshot(page);
-        assert.deepEqual(snapshot.requestedParameters, ["parameterA", "parameterB"]);
-        assert.deepEqual(snapshot.listenerCounts, { parameterA: 0, parameterB: 1 });
-        assert.deepEqual(snapshot.lastRender, { endpointID: "parameterB", value: 0.25 });
+        assert.deepEqual(snapshot.lastRender, { endpointID: "filterQ", value: 2.5, isReady: true });
+        assert.deepEqual(
+            snapshot.renderLog.filter((entry) => entry.endpointID === "filterQ" && entry.value === 6_000),
+            [],
+            "the cutoff value must never be presented as the Q value",
+        );
     } finally {
         await page.close();
     }
 });
 
-test("host readiness blocks ambiguous parameter writes and stale stored-state hydration", async () => {
+test("a parameter binding throws at render without a declaration or SynthStateProvider; an inactive one needs neither", async () => {
     const page = await openModulePage();
 
     try {
-        await installHarness(page, "installPatchParameterHostBaselineHarness");
-        await page.waitForFunction(() => (
-            window.__COSIMO_DESKTOP_MODULE_HARNESS__?.getSnapshot?.().first.requests.length === 1
-        ));
+        await installHarness(page, "installPatchParameterBindingRequirementsHarness");
+        await page.waitForFunction(() => {
+            const snapshot = window.__COSIMO_DESKTOP_MODULE_HARNESS__?.getSnapshot?.();
+            return Object.keys(snapshot?.errors ?? {}).length === 2 && snapshot.placeholder !== null;
+        });
         let snapshot = await getHarnessSnapshot(page);
-        assert.deepEqual(snapshot.hostBaseline, { _tag: "pending" });
-        assert.equal(snapshot.controlDisabled, true);
+        assert.deepEqual(snapshot.errors, {
+            undeclared: 'The "parameterA" control is not a synth parameter: declare it in synthParameterByEndpoint.',
+            withoutProvider: 'The "filterCutoff" control must render inside SynthStateProvider.',
+        });
+        assert.deepEqual(snapshot.placeholder, {
+            endpointID: "parameterA",
+            value: 0.25,
+            isReady: false,
+            hostBaseline: { _tag: "pending" },
+        });
 
-        await invokeHarness(page, "beginGesture");
-        await invokeHarness(page, "writeValue", 0.2);
-        await invokeHarness(page, "writeValue", 0.3);
-        await invokeHarness(page, "endGesture");
-        await invokeHarness(page, "commitValue", 0.4);
+        await invokeHarness(page, "editPlaceholder", 0.8);
         snapshot = await getHarnessSnapshot(page);
-        assert.equal(snapshot.value, 0.1, "rapid pre-baseline writes cannot change presentation");
-        assert.deepEqual(snapshot.first.writes, [], "rapid pre-baseline writes cannot reach the host");
-        assert.deepEqual(snapshot.first.gestures, [], "a pre-baseline gesture cannot reach the host");
-
-        await invokeHarness(page, "emitResponse", "first", "parameterA", 0.2);
-        await page.waitForFunction(() => (
-            window.__COSIMO_DESKTOP_MODULE_HARNESS__?.getSnapshot?.().hostBaseline?.value === 0.2
-        ));
-        snapshot = await getHarnessSnapshot(page);
-        assert.equal(snapshot.value, 0.2);
-        assert.equal(snapshot.controlDisabled, false);
-        assert.deepEqual(snapshot.hostBaseline, { _tag: "host-confirmed", value: 0.2 });
-
-        await invokeHarness(page, "beginGesture");
-        snapshot = await getHarnessSnapshot(page);
-        assert.deepEqual(snapshot.first.gestures, ["start:parameterA"]);
-        assert.deepEqual(snapshot.userGestureCounts, { starts: 1, ends: 0 });
-
-        await invokeHarness(page, "writeValue", 0.3);
-        snapshot = await getHarnessSnapshot(page);
-        assert.equal(snapshot.value, 0.3);
-        assert.deepEqual(snapshot.hostBaseline, { _tag: "host-confirmed", value: 0.2 });
-        assert.deepEqual(snapshot.first.writes, [{ endpointID: "parameterA", value: 0.3 }]);
-
-        await invokeHarness(page, "selectEndpoint", "parameterB");
-        await page.waitForFunction(() => (
-            window.__COSIMO_DESKTOP_MODULE_HARNESS__?.getSnapshot?.().first.requests.length === 2
-        ));
-        snapshot = await getHarnessSnapshot(page);
-        assert.equal(snapshot.value, 0.1);
-        assert.deepEqual(snapshot.hostBaseline, { _tag: "pending" });
-        assert.equal(snapshot.controlDisabled, true);
-        assert.deepEqual(snapshot.first.listenerCounts, { parameterA: 0, parameterB: 1 });
-        assert.deepEqual(snapshot.first.gestures, ["start:parameterA", "end:parameterA"]);
-        assert.deepEqual(snapshot.userGestureCounts, { starts: 1, ends: 1 });
-        await invokeHarness(page, "endGesture");
-        snapshot = await getHarnessSnapshot(page);
-        assert.deepEqual(snapshot.first.gestures, ["start:parameterA", "end:parameterA"], "pointer-up after rebinding cannot double-end the old gesture");
-
-        await invokeHarness(page, "writeValue", 0.8);
-        snapshot = await getHarnessSnapshot(page);
-        assert.equal(snapshot.value, 0.1, "an exact-value echo cannot exist when the pre-baseline write is blocked");
-        assert.deepEqual(snapshot.first.writes, [{ endpointID: "parameterA", value: 0.3 }]);
-        await invokeHarness(page, "emitResponse", "first", "parameterB", 0.8);
-        await page.waitForFunction(() => (
-            window.__COSIMO_DESKTOP_MODULE_HARNESS__?.getSnapshot?.().hostBaseline?.value === 0.8
-        ));
-        snapshot = await getHarnessSnapshot(page);
-        assert.equal(snapshot.value, 0.8, "an authoritative value equal to the attempted edit must still enable the endpoint");
-        assert.equal(snapshot.controlDisabled, false);
-
-        await invokeHarness(page, "beginGesture");
-        snapshot = await getHarnessSnapshot(page);
-        assert.deepEqual(snapshot.first.gestures.at(-1), "start:parameterB");
-        await invokeHarness(page, "endStaleGesture");
-        snapshot = await getHarnessSnapshot(page);
-        assert.deepEqual(
-            snapshot.first.gestures.slice(-1),
-            ["start:parameterB"],
-            "a delayed pointer-up owned by parameter A cannot close parameter B's gesture",
-        );
-        assert.deepEqual(snapshot.userGestureCounts, { starts: 2, ends: 1 });
-        await invokeHarness(page, "endGesture");
-        await invokeHarness(page, "beginGesture");
-
-        await invokeHarness(page, "selectConnection", "second");
-        await page.waitForFunction(() => (
-            window.__COSIMO_DESKTOP_MODULE_HARNESS__?.getSnapshot?.().second.requests.length === 1
-        ));
-        snapshot = await getHarnessSnapshot(page);
-        assert.equal(snapshot.value, 0.1, "a new connection starts from its own presentation default");
-        assert.deepEqual(snapshot.hostBaseline, { _tag: "pending" });
-        assert.equal(snapshot.controlDisabled, true);
-        assert.deepEqual(snapshot.first.listenerCounts, { parameterA: 0, parameterB: 0 });
-        assert.deepEqual(snapshot.second.listenerCounts, { parameterB: 1 });
-        assert.deepEqual(snapshot.first.gestures.slice(-2), ["start:parameterB", "end:parameterB"]);
-        assert.deepEqual(snapshot.userGestureCounts, { starts: 3, ends: 3 });
-
-        await invokeHarness(page, "writeValue", 0.8);
-        snapshot = await getHarnessSnapshot(page);
-        assert.equal(snapshot.value, 0.1);
-        assert.deepEqual(snapshot.hostBaseline, { _tag: "pending" });
-        assert.deepEqual(snapshot.second.writes, []);
-
-        await invokeHarness(page, "emitResponse", "first", "parameterB", 0.6);
-        snapshot = await getHarnessSnapshot(page);
-        assert.deepEqual(snapshot.hostBaseline, { _tag: "pending" }, "a detached connection response must be ignored");
-
-        await invokeHarness(page, "emitResponse", "second", "parameterB", 0.25);
-        await page.waitForFunction(() => (
-            window.__COSIMO_DESKTOP_MODULE_HARNESS__?.getSnapshot?.().hostBaseline?.value === 0.25
-        ));
-        snapshot = await getHarnessSnapshot(page);
-        assert.equal(snapshot.value, 0.25);
-        assert.deepEqual(snapshot.hostBaseline, { _tag: "host-confirmed", value: 0.25 });
-        assert.equal(snapshot.controlDisabled, false);
-
-        await invokeHarness(page, "writeValue", 0.8);
-        snapshot = await getHarnessSnapshot(page);
-        assert.equal(snapshot.value, 0.8);
-        assert.deepEqual(snapshot.second.writes, [{ endpointID: "parameterB", value: 0.8 }]);
-        await invokeHarness(page, "emitResponse", "second", "parameterB", Math.fround(0.8));
-        snapshot = await getHarnessSnapshot(page);
-        assert.equal(snapshot.value, Math.fround(0.8), "float32 host echoes work normally after readiness");
-        assert.deepEqual(snapshot.hostBaseline, { _tag: "host-confirmed", value: 0.25 });
-
-        await invokeHarness(page, "beginGesture");
-        await invokeHarness(page, "endGesture");
-        await invokeHarness(page, "endGesture");
-        snapshot = await getHarnessSnapshot(page);
-        assert.deepEqual(snapshot.second.gestures, ["start:parameterB", "end:parameterB"]);
-        assert.deepEqual(snapshot.userGestureCounts, { starts: 4, ends: 4 });
-
-        await invokeHarness(page, "selectConnection", "fallback");
-        await page.waitForFunction(() => (
-            window.__COSIMO_DESKTOP_MODULE_HARNESS__?.getSnapshot?.().hostBaseline?._tag === "host-confirmed"
-        ));
-        snapshot = await getHarnessSnapshot(page);
-        assert.deepEqual(
-            snapshot.hostBaseline,
-            { _tag: "host-confirmed", value: 0.1 },
-            "a bare adapter must explicitly declare its initial value authoritative",
-        );
-        assert.equal(snapshot.controlDisabled, false);
-        await invokeHarness(page, "writeValue", 0.4);
-        snapshot = await getHarnessSnapshot(page);
-        assert.deepEqual(snapshot.fallback.writes, [{ endpointID: "parameterB", value: 0.4 }]);
-
-        await invokeHarness(page, "selectConnection", "untrusted");
-        snapshot = await getHarnessSnapshot(page);
-        assert.deepEqual(snapshot.hostBaseline, { _tag: "pending" });
-        assert.equal(snapshot.controlDisabled, true);
-        await invokeHarness(page, "writeValue", 0.9);
-        snapshot = await getHarnessSnapshot(page);
-        assert.deepEqual(
-            snapshot.untrusted.writes,
-            [],
-            "an adapter with no response protocol and no explicit fallback cannot certify readiness",
-        );
+        assert.equal(snapshot.placeholder.value, 0.25);
+        assert.deepEqual(snapshot.writes, [], "an inactive binding writes nothing and opens no gesture");
     } finally {
         await page.close();
     }
+});
 
-    const unmountPage = await openModulePage();
-    try {
-        await installHarness(unmountPage, "installPatchParameterHostBaselineHarness");
-        await unmountPage.waitForFunction(() => (
-            window.__COSIMO_DESKTOP_MODULE_HARNESS__?.getSnapshot?.().first.requests.length === 1
-        ));
-        await invokeHarness(unmountPage, "emitResponse", "first", "parameterA", 0.2);
-        await invokeHarness(unmountPage, "beginGesture");
-        await invokeHarness(unmountPage, "unmount");
-        const unmountSnapshot = await getHarnessSnapshot(unmountPage);
-        assert.deepEqual(unmountSnapshot.first.gestures, ["start:parameterA", "end:parameterA"]);
-        assert.deepEqual(unmountSnapshot.userGestureCounts, { starts: 1, ends: 1 });
-    } finally {
-        await unmountPage.close();
-    }
-
+test("a disconnected articulation owner cannot hydrate the active editor", async () => {
     const hydrationPage = await openModulePage();
     try {
         await installHarness(hydrationPage, "installArticulationReconnectHydrationHarness");
