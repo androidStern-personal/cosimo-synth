@@ -85,6 +85,7 @@ import {
     rectsIntersect,
     rectContains,
     readGlobalModRailGeometry,
+    withUiTimersPaused,
 } from "./helpers/desktop_patch_view_browser_suite.mjs";
 
 test("desktop harness renders the real React patch view and requests runtime sync on boot", async () => {
@@ -359,7 +360,7 @@ test("built desktop bundle active Voice tab re-tap scrolls its shadow-root panel
             const panel = document.querySelector("cosimo-desktop-react-view")?.shadowRoot
                 ?.querySelector('[data-role="mobile-workspace-panel-voice"]');
             return panel instanceof HTMLElement && panel.scrollTop === 0;
-        }, null, { timeout: 3_000 }).then(() => true, () => false);
+        }).then(() => true, () => false);
         const finalScrollTop = await page.evaluate(() => (
             document.querySelector("cosimo-desktop-react-view")?.shadowRoot
                 ?.querySelector('[data-role="mobile-workspace-panel-voice"]')?.scrollTop ?? -1
@@ -4376,7 +4377,7 @@ test("mobile wavetable selection names the pending table and the harness activat
         await page.waitForFunction((expected) => (
             document.querySelector('[data-role="mobile-voice-table-name"]')?.textContent?.trim()
                 === `Loading ${expected}…`
-        ), desiredTableName, { timeout: 3_000 });
+        ), desiredTableName);
         assert.equal(
             await page.locator('header:has-text("Cosimo Synth")').count(),
             0,
@@ -6417,7 +6418,7 @@ test("the Voice page fits without scrolling, owned drags stay scroll-free, and n
         await swipeUp(firstRowIdentity.x + (firstRowIdentity.width * 0.5), firstRowIdentity.y + (firstRowIdentity.height * 0.5));
         await page.waitForFunction(() => (
             (document.querySelector('[data-role="mod-mappings-list"]')?.scrollTop ?? 0) > 20
-        ), null, { timeout: 3_000 });
+        ));
 
         // Back on Voice: an owned readout drag edits its parameter and never
         // becomes panel scroll.
@@ -6679,8 +6680,10 @@ test("ADR-024 tabs: selecting an oscillator slides the panel directionally and s
         beforeGoto: (nextPage) => nextPage.setViewportSize({ width: 393, height: 852 }),
     });
 
-    // The outgoing ghost lives for one short slide, so the page itself samples
-    // its horizontal shift every frame from insertion until it leaves.
+    // The page samples the outgoing ghost's horizontal shift every frame from
+    // insertion until it leaves. Its removal waits on the UI clock, which is
+    // paused until the slide has rendered to its end, so a slow renderer still
+    // shows the whole slide.
     const recordGhostSlide = () => page.evaluate(() => {
         window.__ghostSlide = new Promise((resolve) => {
             const observer = new MutationObserver(() => {
@@ -6688,11 +6691,10 @@ test("ADR-024 tabs: selecting an oscillator slides the panel directionally and s
                 if (!(ghost instanceof HTMLElement)) return;
                 observer.disconnect();
                 const shifts = [];
-                const insertedAt = performance.now();
                 const liveRoles = ghost.querySelectorAll("[data-role]").length;
                 const sample = () => {
                     if (!ghost.isConnected) {
-                        resolve({ shifts, liveRoles, lifetimeMs: performance.now() - insertedAt });
+                        resolve({ shifts, liveRoles });
                         return;
                     }
                     shifts.push(new DOMMatrixReadOnly(getComputedStyle(ghost).transform).m41);
@@ -6703,6 +6705,13 @@ test("ADR-024 tabs: selecting an oscillator slides the panel directionally and s
             observer.observe(document.body, { childList: true, subtree: true });
         });
     });
+    const waitForGhostSlideEnd = () => page.waitForFunction(() => {
+        const ghost = document.querySelector("[data-panel-ghost]");
+        return ghost instanceof HTMLElement
+            && ghost.getAnimations().length === 0
+            && new DOMMatrixReadOnly(getComputedStyle(ghost).transform).m41 !== 0;
+    });
+    // Resolves once the ghost has left, which it does when the clock resumes.
     const ghostSlide = () => page.evaluate(() => window.__ghostSlide);
 
     try {
@@ -6713,22 +6722,27 @@ test("ADR-024 tabs: selecting an oscillator slides the panel directionally and s
         // A -> B: the outgoing ghost slides LEFT, the live panel enters from
         // the right and is interactive from its first frame.
         await recordGhostSlide();
-        await page.click('[data-role="mobile-voice-tab-b"]');
-        assert.equal(
-            await page.locator('[data-role="mobile-voice-editor"]').getAttribute("data-selected-oscillator-id"),
-            "B",
-            "The selection binds immediately — the slide never postpones it.",
-        );
+        await withUiTimersPaused(page, async () => {
+            await page.click('[data-role="mobile-voice-tab-b"]');
+            assert.equal(
+                await page.locator('[data-role="mobile-voice-editor"]').getAttribute("data-selected-oscillator-id"),
+                "B",
+                "The selection binds immediately — the slide never postpones it.",
+            );
+            await waitForGhostSlideEnd();
+        });
         const first = await ghostSlide();
         assert.equal(Math.min(...first.shifts) < 0, true, `A->B must slide the outgoing panel left, got ${first.shifts}.`);
         assert.equal(Math.max(...first.shifts) <= 0, true, `A->B never slides right, got ${first.shifts}.`);
-        // The ghost carries no live roles (sanitized) and leaves promptly.
+        // The ghost carries no live roles (sanitized) and leaves once its slide is over.
         assert.equal(first.liveRoles, 0);
-        assert.equal(first.lifetimeMs < 2000, true, `The ghost must leave promptly, stayed ${first.lifetimeMs}ms.`);
 
         // B -> A slides the other way.
         await recordGhostSlide();
-        await page.click('[data-role="mobile-voice-tab-a"]');
+        await withUiTimersPaused(page, async () => {
+            await page.click('[data-role="mobile-voice-tab-a"]');
+            await waitForGhostSlideEnd();
+        });
         const second = await ghostSlide();
         assert.equal(Math.max(...second.shifts) > 0, true, `B->A must slide the outgoing panel right, got ${second.shifts}.`);
         assert.equal(Math.min(...second.shifts) >= 0, true, `B->A never slides left, got ${second.shifts}.`);

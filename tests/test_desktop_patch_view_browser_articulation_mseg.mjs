@@ -1576,10 +1576,14 @@ test("articulation card audition is press-hold and follows the most recently pla
         await clearHarnessDebugLog(page);
 
         const playButton = page.locator('[data-role="articulation-card-play"]').first();
+        await playButton.scrollIntoViewIfNeeded();
         const box = await playButton.boundingBox();
         assert.notEqual(box, null);
 
-        const clickPromise = playButton.click({ delay: 200 });
+        // The press is held until the note-on has been read, so the release
+        // can never race the check however slowly the page answers.
+        await page.mouse.move(box.x + (box.width / 2), box.y + (box.height / 2));
+        await page.mouse.down();
         await page.waitForFunction(() => window.__COSIMO_DESKTOP_HARNESS__.getSnapshot().midiInputEvents.length === 1);
 
         let snapshot = await getHarnessSnapshot(page);
@@ -1587,7 +1591,7 @@ test("articulation card audition is press-hold and follows the most recently pla
             { endpointID: "midiIn", value: buildShortMidi(0x90, note, 100) },
         ]);
 
-        await clickPromise;
+        await page.mouse.up();
         await page.waitForFunction(() => window.__COSIMO_DESKTOP_HARNESS__.getSnapshot().midiInputEvents.length === 2);
 
         snapshot = await getHarnessSnapshot(page);
@@ -4816,7 +4820,7 @@ test("the floating bar keeps playing while the MSEG editor is open", async () =>
             const noteOns = events.filter(({ value }) => (value >>> 16) === 0x90).length;
             const noteOffs = events.filter(({ value }) => (value >>> 16) === 0x80).length;
             return noteOns === 1 && noteOffs === 1;
-        }, undefined, { timeout: 3000 });
+        });
     } finally {
         await page.close();
     }

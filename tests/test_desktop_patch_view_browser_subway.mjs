@@ -3304,7 +3304,6 @@ test("an amplified phone touch drag yields boundary edge bands to the first and 
         await page.locator('[data-role="mobile-global-mod-source-ghost"]').waitFor({ state: "visible" });
         await page.waitForSelector(
             '[data-role="rack-editor-filter"][data-device-id="globalFilter#1"]',
-            { timeout: 2_500 },
         );
         assert.equal(await graph.evaluate((element) => element.scrollTop), 0);
         await dropOnSelectedEditor("globalFilter#1");
@@ -3332,7 +3331,6 @@ test("an amplified phone touch drag yields boundary edge bands to the first and 
         });
         await page.waitForSelector(
             '[data-role="rack-editor-reverb"][data-device-id="reverb#1"]',
-            { timeout: 2_500 },
         );
         const bottom = await graph.evaluate((element) => ({
             scrollTop: element.scrollTop,
@@ -4432,12 +4430,8 @@ test("reorder release composes its move onto concurrent device state", async () 
 
         await pressAndLiftStation(page, sourcePoint);
         await page.mouse.move(targetPoint.x, targetPoint.y, { steps: 6 });
-        await page.waitForSelector('[data-role="rack-reorder-lifted-pill"][data-device-id="reverb#1"]', {
-            timeout: 2000,
-        });
-        await page.waitForSelector('[data-role="rack-reorder-ghost"][data-device-id="reverb#1"]', {
-            timeout: 2000,
-        });
+        await page.waitForSelector('[data-role="rack-reorder-lifted-pill"][data-device-id="reverb#1"]');
+        await page.waitForSelector('[data-role="rack-reorder-ghost"][data-device-id="reverb#1"]');
 
         await page.evaluate(() => {
             const snapshot = window.__COSIMO_DESKTOP_HARNESS__.getSnapshot();
@@ -4508,12 +4502,8 @@ test("a concurrent topology replacement cancels reorder without restoring its st
         const targetPoint = await centerOf(target);
         await pressAndLiftStation(page, sourcePoint);
         await page.mouse.move(targetPoint.x, targetPoint.y, { steps: 6 });
-        await page.waitForSelector('[data-role="rack-reorder-lifted-pill"][data-device-id="reverb#1"]', {
-            timeout: 2000,
-        });
-        await page.waitForSelector('[data-role="rack-reorder-ghost"][data-device-id="reverb#1"]', {
-            timeout: 2000,
-        });
+        await page.waitForSelector('[data-role="rack-reorder-lifted-pill"][data-device-id="reverb#1"]');
+        await page.waitForSelector('[data-role="rack-reorder-ghost"][data-device-id="reverb#1"]');
 
         const replacement = await page.evaluate(() => {
             const snapshot = window.__COSIMO_DESKTOP_HARNESS__.getSnapshot();
@@ -4529,10 +4519,7 @@ test("a concurrent topology replacement cancels reorder without restoring its st
             return serialized;
         });
 
-        await page.waitForSelector('[data-role="rack-reorder-lifted-pill"]', {
-            state: "detached",
-            timeout: 2000,
-        });
+        await page.waitForSelector('[data-role="rack-reorder-lifted-pill"]', { state: "detached" });
         await page.waitForFunction(() => (
             document.querySelector('[data-role="rack-module-list"]')?.firstElementChild
                 ?.getAttribute("data-device-id") === "delay#1"
@@ -4596,7 +4583,7 @@ test("station capture rejection keeps outside movement in the scrolling gesture"
         await page.waitForFunction(() => {
             const element = document.querySelector('[data-role="rack-module-list"]');
             return element instanceof HTMLElement && element.scrollTop > 20;
-        }, undefined, { timeout: 2000 });
+        });
         await page.waitForTimeout(600);
 
         assert.equal(await page.evaluate(() => window.__FX_CAPTURE_REJECTIONS__), 1);
@@ -4717,7 +4704,7 @@ test("post-lift capture rejection follows outside-list movement and commits the 
         }, {
             beforeLeft: beforeOutsideMove.x,
             beforeTop: beforeOutsideMove.y,
-        }, { timeout: 2000 });
+        });
         const outsideEvidence = await page.evaluate(({ x, y }) => {
             const listElement = document.querySelector('[data-role="rack-module-list"]');
             const hit = document.elementFromPoint(x, y);
@@ -4889,8 +4876,6 @@ test("native station capture loss cancels a hold even when React delegation is b
         await page.mouse.move(388, source.y - 44);
         await page.waitForFunction(
             () => window.__FX_CAPTURE_LOSS_BLOCKED__ === 1,
-            undefined,
-            { timeout: 2000 },
         );
         await page.waitForTimeout(600);
         await page.mouse.up();

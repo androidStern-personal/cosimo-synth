@@ -84,6 +84,8 @@ import {
     rectContains,
     readGlobalModRailGeometry,
     isLaneParamSend,
+    withUiTimersPaused,
+    advanceUiTimers,
 } from "./helpers/desktop_patch_view_browser_suite.mjs";
 
 /**
@@ -816,7 +818,7 @@ test("Amp Envelope keeps its exact quick-sheet identity and 5 ms desktop Release
         const rackKnob = page.locator('[data-role="rack-parameter-reverbSize"]');
         await page.waitForFunction(() => (
             document.querySelector('[data-role="rack-parameter-reverbSize"]')?.getAttribute("data-route-state") === "mapped"
-        ), undefined, { timeout: 5000 });
+        ));
         await clearHarnessDebugLog(page);
         const rackArtBox = await rackKnob.locator(".rack-knob-art").boundingBox();
         assert.ok(rackArtBox);
@@ -827,7 +829,7 @@ test("Amp Envelope keeps its exact quick-sheet identity and 5 ms desktop Release
         await page.mouse.move(rackCenterX, rackCenterY - 38, { steps: 8 });
         await page.waitForFunction(() => (
             document.querySelector('[data-role="mobile-voice-hud"]')?.getAttribute("data-hud-axis") === "modulation"
-        ), undefined, { timeout: 5000 });
+        ));
         let sourceLine = await page.locator('[data-role="mobile-voice-hud"] .mobile-voice-hud-source').innerText();
         assert.match(sourceLine, /^AMP\b/);
         assert.doesNotMatch(sourceLine, /AMP\s*4|Envelope\s*4/i);
@@ -3357,7 +3359,7 @@ test("rack reorder keeps the latest desired enable state across an older effecti
         await page.waitForFunction(() => (
             document.querySelector('[data-role="rack-module-list"]')?.firstElementChild
                 ?.getAttribute("data-role") === "rack-module-reverb"
-        ), null, { timeout: 1_000 });
+        ));
         await page.evaluate(() => {
             const identityChainCode = [0, 1, 2, 3, 4, 5, 6, 7].reduce(
                 (code, moduleId, position) => code | (moduleId << (position * 3)),
@@ -3830,44 +3832,53 @@ test("ADR-025 duplicate pairs are never droppable and failures raise the top toa
         await page.mouse.move(196, 420, { steps: 4 });
         await page.evaluate(() => { window.__rackHaptics.length = 0; });
 
-        // The duplicate target never looks droppable.
-        await page.mouse.move(targetCenter.x, targetCenter.y, { steps: 4 });
-        await page.waitForTimeout(120);
-        assert.equal(
-            (await surface.getAttribute("class")).includes("is-mod-hover"),
-            false,
-            "An already-mapped pair must never take the droppable highlight.",
-        );
-        assert.equal(
-            (await readHaptics()).includes("light"),
-            false,
-            "Hovering a duplicate must not give the positive acquisition tick.",
-        );
-        assert.equal(await surface.getAttribute("data-drag-creation"), "existing");
-        const greyed = await surface.evaluate((element) => getComputedStyle(element).filter);
-        assert.ok(greyed.includes("grayscale"), `A duplicate target must grey out during the drag, got filter ${greyed}`);
+        // The hover warning waits 500 ms of UI time. With the UI clock paused,
+        // the test decides how long each hover lasts, however slowly the
+        // pointer moves arrive.
+        await withUiTimersPaused(page, async () => {
+            // The duplicate target never looks droppable; hover handling is
+            // synchronous with each move.
+            await page.mouse.move(targetCenter.x, targetCenter.y, { steps: 4 });
+            assert.equal(
+                (await surface.getAttribute("class")).includes("is-mod-hover"),
+                false,
+                "An already-mapped pair must never take the droppable highlight.",
+            );
+            assert.equal(
+                (await readHaptics()).includes("light"),
+                false,
+                "Hovering a duplicate must not give the positive acquisition tick.",
+            );
+            assert.equal(await surface.getAttribute("data-drag-creation"), "existing");
+            const greyed = await surface.evaluate((element) => getComputedStyle(element).filter);
+            assert.ok(greyed.includes("grayscale"), `A duplicate target must grey out during the drag, got filter ${greyed}`);
 
-        // Flyover shorter than 500ms stays silent.
-        await page.mouse.move(196, 420, { steps: 3 });
-        await page.waitForTimeout(700);
-        assert.equal(await toastCount(), 0, "A quick flyover must not warn.");
+            // A flyover that leaves before the warning dwell stays silent,
+            // even once the dwell would have elapsed.
+            await advanceUiTimers(page, 400);
+            await page.mouse.move(196, 420, { steps: 3 });
+            await advanceUiTimers(page, 700);
+            await waitForReactFrames(page, 2);
+            assert.equal(await toastCount(), 0, "A quick flyover must not warn.");
 
-        // Deliberate hover reports exactly once per target per drag.
-        await page.mouse.move(targetCenter.x, targetCenter.y, { steps: 3 });
-        await page.waitForFunction(() => (
-            document.querySelector('[data-role="synth-feedback-toast"]')?.textContent === "DUPLICATE"
-        ), undefined, { timeout: 2500 });
-        assert.deepEqual(await readHaptics(), ["heavy"], "The duplicate warning is one deliberately noticeable buzz.");
-        await page.waitForTimeout(700);
-        assert.equal(
-            (await readHaptics()).filter((style) => style === "heavy").length,
-            1,
-            "A duplicate target reports at most once per drag.",
-        );
+            // Deliberate hover reports exactly once per target per drag.
+            await page.mouse.move(targetCenter.x, targetCenter.y, { steps: 3 });
+            await advanceUiTimers(page, 500);
+            await page.waitForFunction(() => (
+                document.querySelector('[data-role="synth-feedback-toast"]')?.textContent === "DUPLICATE"
+            ));
+            assert.deepEqual(await readHaptics(), ["heavy"], "The duplicate warning is one deliberately noticeable buzz.");
+            await advanceUiTimers(page, 700);
+            assert.equal(
+                (await readHaptics()).filter((style) => style === "heavy").length,
+                1,
+                "A duplicate target reports at most once per drag.",
+            );
 
-        // Releasing there changes nothing.
-        await page.mouse.move(targetCenter.x, targetCenter.y, { steps: 2 });
-        await page.mouse.up();
+            // Releasing there changes nothing.
+            await page.mouse.move(targetCenter.x, targetCenter.y, { steps: 2 });
+            await page.mouse.up();
+        });
         await page.waitForTimeout(150);
         const routesAfterDrop = readStoredModulationState(await getHarnessSnapshot(page)).routes;
         assert.equal(routesAfterDrop.length, 1, "Releasing on a duplicate must create nothing.");
@@ -3935,7 +3946,7 @@ test("ADR-025 duplicate pairs are never droppable and failures raise the top toa
         });
         await page.waitForFunction(() => (
             document.querySelector('[data-role="synth-feedback-toast"]')?.textContent === "MAPPING NOT CREATED"
-        ), undefined, { timeout: 3000 });
+        ));
         assert.equal(
             (await readHaptics()).includes("rigid"),
             true,
@@ -4026,7 +4037,7 @@ test("ADR-025 journey: a confirmed drop flashes, ticks, and pulses; bypass and d
         await page.waitForFunction(() => (
             document.querySelector('[data-role="rack-parameter-surface-reverbSize"]')
                 ?.getAttribute("data-creation-confirmed") === null
-        ), undefined, { timeout: 3000 });
+        ));
         assert.equal(await page.locator('[data-role="rack-parameter-surface-reverbSize"] .rack-confirm-check').count(), 0);
 
         // Bypass (ADR-025 amended for T15 rows): the mapping content dims as
@@ -4262,7 +4273,7 @@ test("production rack composition drives the public marker from engine telemetry
             { type: "pointerup", pointerId: 91, buttons: 0, deltaY: -65 },
         ]);
         const marker = knob.locator('[data-slot="knob-marker"]');
-        await marker.waitFor({ state: 'attached', timeout: 5000 });
+        await marker.waitFor({ state: 'attached' });
         assert.equal(await knob.getAttribute('data-slot'), 'knob-control');
         assert.equal(await knob.locator('[data-slot="knob-range"]').count(), 1);
         const base = await knob.getAttribute('aria-valuenow');

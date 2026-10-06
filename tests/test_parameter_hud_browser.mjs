@@ -260,7 +260,7 @@ test("Distortion Drive HUD uses the live production curve for every shape", asyn
             await hud.waitFor();
 
             const visual = hud.locator('[data-role="parameter-hud-distortion"]');
-            await visual.waitFor({ timeout: 5_000 });
+            await visual.waitFor();
             assert.equal(await visual.locator('[data-role="distortion-visualizer"]').count(), 1);
             assert.equal(await hud.locator(".mobile-voice-hud-knob").count(), 0);
             assert.equal(

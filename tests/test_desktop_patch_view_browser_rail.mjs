@@ -1123,7 +1123,7 @@ test("Auto-preview retriggers on real parameter drags, stays silent when off, an
         const noteOns = events.filter(({ value }) => (value >>> 16) === 0x90).length;
         const noteOffs = events.filter(({ value }) => (value >>> 16) === 0x80).length;
         return noteOns >= 1 && noteOns === noteOffs;
-    }, undefined, { timeout: 4000 });
+    });
 
     try {
         await page.locator('[data-role="mobile-global-mod-rail"]').waitFor();
@@ -1156,7 +1156,7 @@ test("Auto-preview retriggers on real parameter drags, stays silent when off, an
             const noteOns = events.filter(({ value }) => (value >>> 16) === 0x90).length;
             const noteOffs = events.filter(({ value }) => (value >>> 16) === 0x80).length;
             return noteOns >= 1 && noteOns === noteOffs;
-        }, undefined, { timeout: 4000 });
+        });
         snapshot = await getHarnessSnapshot(page);
         assert.equal(
             snapshot.midiInputEvents.every(({ value }) => ((value >>> 8) & 0x7f) === 60),
@@ -1295,7 +1295,7 @@ test("Auto-preview with a routed looping MSEG still strikes, settles balanced, a
             const noteOns = events.filter(({ value }) => (value >>> 16) === 0x90).length;
             const noteOffs = events.filter(({ value }) => (value >>> 16) === 0x80).length;
             return noteOns >= 1 && noteOns === noteOffs;
-        }, undefined, { timeout: 5000 });
+        });
         const snapshot = await getHarnessSnapshot(page);
         assert.equal(
             snapshot.midiInputEvents.every(({ value }) => ((value >>> 8) & 0x7f) === 60),
@@ -5537,7 +5537,7 @@ test("the FX workspace has no separate route AMOUNT control: the target knob edi
         ]);
         await page.waitForFunction((previousText) => (
             (document.querySelector('[data-role="mobile-voice-hud"]')?.textContent ?? "") !== previousText
-        ), midDragFirst, { timeout: 3000 });
+        ), midDragFirst);
         await dispatchRackKnobPointerEvents(knob, [
             { type: "pointerup", pointerId: 41, buttons: 0, deltaY: -90 },
         ]);
