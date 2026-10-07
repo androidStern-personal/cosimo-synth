@@ -18,17 +18,22 @@ This study is retained as the adversarial baseline at `bc0f363`; its
 Bounce branch after M8. On `codex/bounce-in-place`, the feasibility verdict has
 been exercised as follows:
 
-- The browser V1 is implemented end to end: user-controlled real amplitude
-  release, one-shot sampled voices, two fixed staged/atomic bank slots,
+- The browser V1 is implemented end to end: one-shot sampled voices that
+  play their recording as captured, with no live envelope over it (a key
+  released before the recording's note-off ends it with a fixed 5 ms fade; a
+  key held that long lets the recorded tail play out), two fixed
+  staged/atomic bank slots,
   nearest-root repitch, live SR/tempo readback, fresh worker performer per
   root, deterministic i16 bank/digest, complete-chain capture, transactional
   neutral-layer flip, OPFS persistence with typed fallback, Revert, responsive
   waveform/UI, and recursive Bounce with conservative two-bank retirement [V].
 - The locked MVP chose one-shot playback rather than the study's proposed loop
   stretch. Default capture remains 19 roots over MIDI 24–96, 3 s hold, and a
-  6 s silence-truncated tail cap. The live capacity is 5,472,000 stereo frames;
-  each root carries its logical note-off offset so recursion does not apply the
-  release twice [P][V].
+  6 s silence-truncated tail cap. The live capacity is 5,472,000 stereo frames.
+  A capture skips the synth's fixed 156-frame output latency, so each
+  recording starts where its sound starts and its logical note-off offset is
+  the hold length; recursion therefore neither delays the sound nor applies
+  the release twice [P][V].
 - Browser deterministic proofs cover pluck, reverb/delay pad, nonlinear OTT,
   and generation-2 recursion. The M7 three-root recursion comparison measured
   0.000 dB mean/max root error, fixed 2,134 Wasm pages per worker, and roughly

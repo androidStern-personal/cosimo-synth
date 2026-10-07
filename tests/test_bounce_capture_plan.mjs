@@ -4,6 +4,7 @@ import test from "node:test";
 
 import {
     BOUNCE_DEFAULT_ROOTS,
+    BOUNCE_OUTPUT_LATENCY_FRAMES,
     createBounceCapturePlan,
     createBounceCaptureSnapshot,
 } from "../bounce/capture-plan.mjs";
@@ -12,6 +13,7 @@ import {
     renderBounceRoot,
 } from "../bounce/offline-render-core.mjs";
 import { loadUIModule } from "../kit/tests/helpers/load_ui_module.mjs";
+import { outputLatencyFrames } from "./helpers/bounce_offline_engine.mjs";
 
 const repoRoot = path.resolve(import.meta.dirname, "..");
 
@@ -55,6 +57,9 @@ test("capture snapshot clones the button-press state and planner pins V1 default
     assert.equal(plan.holdFrames, 144_000);
     assert.equal(plan.tailCapFrames, 288_000);
     assert.equal(plan.captureVelocity, 100);
+    assert.equal(plan.outputLatencyFrames, BOUNCE_OUTPUT_LATENCY_FRAMES);
+    assert.equal(BOUNCE_OUTPUT_LATENCY_FRAMES, outputLatencyFrames,
+        "a capture skips exactly the latency the synth's Polish bus declares");
     assert.equal(plan.jobs[0].sessionID + 18, plan.jobs[18].sessionID);
 });
 

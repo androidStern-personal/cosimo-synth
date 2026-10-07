@@ -14,6 +14,12 @@ export const BOUNCE_SILENCE_THRESHOLD_LINEAR = 10 ** (BOUNCE_SILENCE_THRESHOLD_D
 export const BOUNCE_SILENCE_WINDOW_SECONDS = 0.05;
 export const BOUNCE_TAIL_PADDING_SECONDS = 0.10;
 export const BOUNCE_OFFLINE_BLOCK_FRAMES = 128;
+/**
+ * The synth's output passes its fixed Polish bus, which delays every sound by
+ * this many frames (cmajor/Polish.cmajor declares it as the patch latency). A
+ * capture skips them so each recording starts where its sound starts.
+ */
+export const BOUNCE_OUTPUT_LATENCY_FRAMES = 156;
 
 function invariant(condition, message) {
     if (!condition) throw new Error(message);
@@ -250,6 +256,7 @@ export function createBounceCapturePlan(snapshotInput, {
         silenceWindowFrames,
         tailPaddingFrames,
         blockFrames,
+        outputLatencyFrames: BOUNCE_OUTPUT_LATENCY_FRAMES,
         jobs: Object.freeze(jobs),
     });
 }

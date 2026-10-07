@@ -103,10 +103,9 @@ function stereoRms(samples, firstFrame, frameCount) {
 }
 
 /**
- * Play every captured root as a bounced sound does: Source Mode Bounce, Voice
- * Filter off, a dry lane. A capture records the synth's output, so each root
- * already carries the output path's fixed latency and its playback arrives
- * that much later again; the comparison lines the two up.
+ * Play every captured root as a bounced sound does, key held to its end:
+ * Source Mode Bounce, Voice Filter off, a dry lane. The playback reaches the
+ * output after the synth's fixed output latency, which the comparison skips.
  */
 async function playbackAndCompare(t, CmajorClass, capture, label) {
     const sessionID = 0x515100;
