@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import path from "node:path";
+import { build } from "esbuild";
 import { loadUIModule } from "./helpers/load_ui_module.mjs";
 
 const root = path.resolve(import.meta.dirname, "../..");
@@ -49,6 +50,20 @@ test("URLs use an absolute host address as given and resolve relative ones from 
     assert.equal(client.getURL("remote.wav").href, "https://example.com/remote.wav");
     assert.equal(client.getURL("table.wav").href, "http://127.0.0.1:5173/assets/table.wav");
     assert.equal(createPatchConnectionResourceClient({}).getURL("table.wav").href, "http://127.0.0.1:5173/table.wav");
+});
+
+test("in a frame whose address cannot anchor a path, such as about:srcdoc, relative URLs resolve from the module's folder", async t => {
+    globalThis.location = { href: "about:srcdoc" };
+    t.after(() => { delete globalThis.location; });
+    const moduleURL = "http://127.0.0.1:5173/fx/gain/view/assets/index.js";
+    const bundle = await build({ entryPoints: [path.join(root, "kit/ui/resource-client.ts")], bundle: true, format: "esm", write: false,
+        define: { "import.meta.url": JSON.stringify(moduleURL) } });
+    const served = await import(`data:text/javascript;base64,${Buffer.from(bundle.outputFiles[0].text).toString("base64")}`);
+    const client = served.createPatchConnectionResourceClient({ readResource: async () => "hello",
+        getResourceAddress: path => path === "remote.wav" ? "https://example.com/remote.wav" : undefined });
+    assert.equal(await client.readText("notes.txt"), "hello");
+    assert.equal(client.getURL("remote.wav").href, "https://example.com/remote.wav");
+    assert.equal(client.getURL("table.wav").href, "http://127.0.0.1:5173/fx/gain/view/assets/table.wav");
 });
 
 test("a bundle served outside the patch folder names the patch folder, and relative reads resolve from it", async t => {
