@@ -86,35 +86,22 @@ class CosimoDesktopReactViewElement extends HTMLElement {
     private keyboardInputMode: SynthKeyboardInputMode = "hosted";
     private root: Root | null = null;
     private mountPoint: HTMLDivElement | null = null;
-    private modulationRuntimePatchConnection: PatchConnectionLike | null = null;
-    private stateLease: ReturnType<typeof acquireSynthViewState> | null = null;
+    private stateLease: { readonly connection: PatchConnectionLike; release(): void } | null = null;
 
     setPatchConnection(
         patchConnection: PatchConnectionLike,
         resourceClient?: ResourceClient,
         keyboardInputMode: SynthKeyboardInputMode = "hosted",
     ) {
-        if (this.modulationRuntimePatchConnection && this.modulationRuntimePatchConnection !== patchConnection) {
-            this.stateLease?.release();
-            this.stateLease = null;
-            this.modulationRuntimePatchConnection = null;
-        }
-
         this.patchConnection = patchConnection;
         this.resourceClient = resourceClient;
         this.keyboardInputMode = keyboardInputMode;
-        if (!this.modulationRuntimePatchConnection) {
-            this.stateLease = acquireSynthViewState(patchConnection);
-            this.modulationRuntimePatchConnection = patchConnection;
-        }
+        this.holdSynthState();
         this.renderApp();
     }
 
     connectedCallback() {
-        if (this.patchConnection && !this.stateLease) {
-            this.stateLease = acquireSynthViewState(this.patchConnection);
-            this.modulationRuntimePatchConnection = this.patchConnection;
-        }
+        this.holdSynthState();
         if (import.meta.env.DEV) {
             this.ensureLightDomStyles();
 
@@ -153,12 +140,18 @@ class CosimoDesktopReactViewElement extends HTMLElement {
     disconnectedCallback() {
         this.root?.unmount();
         this.root = null;
+        this.stateLease?.release();
+        this.stateLease = null;
+    }
 
-        if (this.modulationRuntimePatchConnection) {
-            this.stateLease?.release();
-            this.stateLease = null;
-            this.modulationRuntimePatchConnection = null;
+    /** One synth state client lives as long as this element shows its connection, even if the React tree remounts. */
+    private holdSynthState() {
+        if (!this.patchConnection || this.stateLease?.connection === this.patchConnection) {
+            return;
         }
+        this.stateLease?.release();
+        const { release } = acquireSynthViewState(this.patchConnection);
+        this.stateLease = { connection: this.patchConnection, release };
     }
 
     private ensureLightDomStyles() {
