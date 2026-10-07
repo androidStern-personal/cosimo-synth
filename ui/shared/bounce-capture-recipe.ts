@@ -10,10 +10,7 @@ import type { ResourceClient } from "../../kit/ui/resource-client";
 import {
     loadFactoryBankCatalog,
 } from "./wavetable-bank";
-import {
-    DEFAULT_SAMPLES_PER_FRAME,
-    extractSourceFramesFromSamples,
-} from "./wavetable-mip";
+import { extractSourceFramesFromSamples } from "./wavetable-mip";
 import {
     buildModulationRuntimeEvents,
     parseModulationState,
@@ -31,8 +28,6 @@ import {
 import { getModulationArticulationCellIndex } from "./modulation-runtime-program";
 
 const ARTICULATION_NOTE_META_ENDPOINT_ID = "articulationNoteMeta";
-const WAVETABLE_MIP_FRAME_BATCH_SIZE = 3;
-const WAVETABLE_BATCH_SAMPLE_COUNT = WAVETABLE_MIP_FRAME_BATCH_SIZE * DEFAULT_SAMPLES_PER_FRAME;
 const OSCILLATOR_TABLE_ENDPOINTS = [
     "oscAWavetableSelect",
     "oscBWavetableSelect",
@@ -355,10 +350,7 @@ export async function createProductBounceCaptureSnapshot({
 }
 
 export const bounceCaptureRecipeInternals = Object.freeze({
-    OSCILLATOR_TABLE_ENDPOINTS,
-    WAVETABLE_BATCH_SAMPLE_COUNT,
     articulationRootSetupEvents,
-    assertRecursiveBankMatchesDocument,
     recursiveBankSetupEvents,
     structuredRuntimeSetupEvents,
 });
