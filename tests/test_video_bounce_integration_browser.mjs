@@ -326,7 +326,7 @@ test("the preset dropdown opens current-patch Bounce Video and lazy-loads its re
             await artifactDownload.saveAs(outputArtifactPath);
             assert.equal((await fs.stat(outputArtifactPath)).size, videoProof.bytes);
         }
-        console.log(`# ${JSON.stringify({ videoBounceM4Integration: {
+        console.log(`# ${JSON.stringify({ videoBounceIntegration: {
             visualSamples,
             decodedVideo: videoProof,
             outputArtifactPath,

@@ -49,8 +49,10 @@ function rectInsidePhone(inspection, name) {
     );
 }
 
-test("M2 drives real DesktopPatchView gesture transients that PAINT inside the phone", {
-    timeout: 900_000,
+test("scripted gestures drive real DesktopPatchView transients that paint inside the phone", {
+    // About a thousand 1080x1920 frames are rasterized from the live page on
+    // the CPU; a four-core machine without a GPU draws under one a second.
+    timeout: 2_700_000,
 }, async () => {
     const page = await browser.newPage({ viewport: { width: 900, height: 700 } });
     const failures = [];
@@ -86,12 +88,26 @@ test("M2 drives real DesktopPatchView gesture transients that PAINT inside the p
             [],
             `${rendered.name} missed scripted ops`,
         );
-        // The mod rail paints on every frame of the shipped composition.
+        // The mod rail paints on every frame, except while it retreats past
+        // the phone's edge for a source drag.
         for (const framePixels of rendered.pixelProbes) {
+            const inspection = rendered.inspections.find(({ frame }) => frame === framePixels.frame);
+            if (inspection?.railMappingActive) continue;
             const rail = framePixels.regions.rail;
             assert.ok(
                 rail && rail.lumaRange > 24,
                 `${rendered.name} frame ${framePixels.frame}: rail paints flat (${JSON.stringify(rail)})`,
+            );
+        }
+    }
+
+    for (const name of ["filter-map", "fx-map"]) {
+        const retreated = probe(report, name).inspections.filter(({ railMappingActive }) => railMappingActive);
+        assert.ok(retreated.length > 0, `${name} never retreated the mod rail for its source drag`);
+        for (const { frame, rects: { rail, phone } } of retreated) {
+            assert.ok(
+                rail.left >= phone.left + phone.width - 1 || rail.left + rail.width <= phone.left + 1,
+                `${name} frame ${frame}: the retreated rail ${JSON.stringify(rail)} still overlaps the phone ${JSON.stringify(phone)}`,
             );
         }
     }
@@ -204,7 +220,7 @@ test("M2 drives real DesktopPatchView gesture transients that PAINT inside the p
     )), JSON.stringify(fxMap.map(({ interaction }) => interaction.confirmedTargetRole)));
 
     assert.deepEqual(failures, []);
-    console.log(`# ${JSON.stringify({ videoBounceM2Gestures: {
+    console.log(`# ${JSON.stringify({ videoBounceGestures: {
         durationInFrames: report.durationInFrames,
         probes: report.probes.map(({ name, startFrame, endFrame, blobBytes, inspections }) => ({
             name,

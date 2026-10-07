@@ -237,7 +237,7 @@ test("fixture patch plus uploaded MIDI produces a downloadable verified MP4 and 
     await page.getByTestId("error-cancelled").waitFor({ timeout: 60_000 });
     await page.waitForFunction(() => window.__COSIMO_SPEEDRUN_STUDIO__.snapshot().activeStage === null);
     assert.deepEqual(failures, []);
-    console.log(`# ${JSON.stringify({ speedrunM6MidiPipeline: snapshot.video.verification })}`);
+    console.log(`# ${JSON.stringify({ speedrunMidiPipeline: snapshot.video.verification })}`);
     await context.close();
 });
 
@@ -277,7 +277,7 @@ test("the current effects-lane split with delay#2 renders through the same verif
     assert.ok(snapshot.video.verification.audioWindows.some((window) => window.sectionId === "effect-delay#2"),
         JSON.stringify(snapshot.video.verification.audioWindows));
     assert.deepEqual(failures, []);
-    console.log(`# ${JSON.stringify({ speedrunM6EffectsLanePipeline: snapshot.video.verification })}`);
+    console.log(`# ${JSON.stringify({ speedrunEffectsLanePipeline: snapshot.video.verification })}`);
     await context.close();
 });
 
@@ -307,7 +307,7 @@ test("the maximal current patch reaches the ceiling and retains a warning-class 
     assert.match(await page.getByTestId("share-link-warning").innerText(), /complete link/u);
     assert.deepEqual(failures, []);
     console.log(`# ${JSON.stringify({
-        speedrunM7MaximalStudio: {
+        speedrunMaximalStudio: {
             ...snapshot.prepared,
             sectionCount: snapshot.prepared.sectionIds.length,
         },
@@ -351,7 +351,7 @@ test("the labeled WebM fallback produces one verified VP9 and Opus download", {
     assert.equal(blobProof.download, "studio-webm-fallback-speedrun.webm");
     assert.equal(blobProof.bytes, snapshot.video.verification.blobBytes);
     assert.deepEqual(failures, []);
-    console.log(`# ${JSON.stringify({ speedrunM7WebMFallback: snapshot.video.verification })}`);
+    console.log(`# ${JSON.stringify({ speedrunWebMFallback: snapshot.video.verification })}`);
     await context.close();
 });
 
@@ -445,7 +445,7 @@ test("five consecutive end-to-end renders release every checkpoint pool and keep
     assert.equal(disposed.resource.liveCheckpointWorkerCount, 0);
     assert.deepEqual(failures, []);
     console.log(`# ${JSON.stringify({
-        speedrunM7FiveRenderSoak: {
+        speedrunFiveRenderSoak: {
             heapBytes,
             heapSpreadBytes: settledHeapSpread,
             resources,

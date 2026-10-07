@@ -158,7 +158,7 @@ function createTestCoordinator({ capture, persistBank, stageBankInstall, verifyC
     });
 }
 
-test("M4 publishes one neutral bounce.v1 transaction and Revert restores exact document equality", async () => {
+test("a bounce publishes one neutral bounce.v1 transaction and Revert restores exact document equality", async () => {
     const before = oldPatchDocument();
     const capture = await candidateCapture();
     const log = [];

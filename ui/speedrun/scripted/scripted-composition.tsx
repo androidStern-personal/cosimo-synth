@@ -72,6 +72,8 @@ export type ScriptedFrameInspection = {
      * can never again stand in for "the pixels are on screen".
      */
     readonly rects: Readonly<Record<string, ScriptedInspectionRect | null>>;
+    /** The mod rail has retreated past the phone's edge for a source drag. */
+    readonly railMappingActive: boolean;
     readonly adsrActiveHandle: string | null;
     readonly macroValues: Readonly<Record<string, number>>;
     readonly framePositionText: string | null;
@@ -178,6 +180,8 @@ function inspectFrame(
             filterCurve: inspectionRect(root.querySelector('[data-role="filter-range-editor-surface"] path')),
             keyboard: inspectionRect(root.querySelector(".keyboard")),
         },
+        railMappingActive: root.querySelector('[data-role="mobile-global-mod-rail"]')
+            ?.getAttribute("data-mapping-active") === "true",
         adsrActiveHandle: root.querySelector('[data-role="adsr-editor-surface"]')
             ?.getAttribute("data-active-handle") ?? null,
         macroValues,

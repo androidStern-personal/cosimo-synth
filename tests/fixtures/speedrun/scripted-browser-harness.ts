@@ -103,6 +103,7 @@ function slimInspection(inspection: {
     readonly svgCount: number;
     readonly keyboardNoteCount: number;
     readonly keyboardActiveNoteCount: number;
+    readonly railMappingActive: boolean;
 }) {
     return {
         frame: inspection.frame,
@@ -112,6 +113,7 @@ function slimInspection(inspection: {
         svgCount: inspection.svgCount,
         keyboardNoteCount: inspection.keyboardNoteCount,
         keyboardActiveNoteCount: inspection.keyboardActiveNoteCount,
+        railMappingActive: inspection.railMappingActive,
     };
 }
 
