@@ -6,11 +6,13 @@ import {
     buildLaneRuntimeEventsV2,
 } from "../../shared/lane-state-v2";
 import { LANE_SLOT_PARAMS_ENDPOINT_ID } from "../../shared/lane-state";
+import { sendNativeArticulationTriggerConfig } from "../../shared/articulations";
 import { parseEffectOutputTrimHostEndpointID } from "../../shared/effect-output-trim";
 import { buildModulationRuntimeEvents } from "../../shared/modulation";
 import { getModulationArticulationCellIndex } from "../../shared/modulation-runtime-program";
 import { startPatchWorkerServices } from "../../shared/patch-worker-services";
-import { createModulationArticulationWorkerService } from "../../worker/modulation-articulation-worker-service";
+import { sharedMsegCommand } from "../../shared/shared-mseg";
+import { ModulationArticulationWorkerService } from "../../worker/modulation-articulation-worker-service";
 import { createSynthRackRestore } from "../../worker/synth-rack-restore";
 import { createWavetableWorkerController } from "../../worker/wavetable-worker";
 import { OSCILLATOR_IDS } from "../../shared/modulation-targets";
@@ -22,7 +24,7 @@ import type { CumulativePatchState } from "../partial-states";
 import { SPEEDRUN_SAMPLES_PER_FRAME } from "../timeline";
 import {
     OfflineEngineHost,
-    type OfflinePerformerClass,
+    type OfflineEngineClass,
 } from "./offline-engine-host";
 import {
     createSpeedrunResourceClient,
@@ -220,9 +222,7 @@ function installStateSummary(state: ReturnType<OfflineEngineHost["getInstallatio
     return `${wavetable}; mod=${Number(state.runtimeInstallAck?.acceptedModulationSerial) || 0}`
         + ` art=${Number(state.runtimeInstallAck?.acceptedArticulationSerial) || 0}`
         + ` rack=${Number(state.effectiveRackState?.laneCommittedChainLength) || 0}`
-        + ` params=${Number(state.effectiveRackState?.laneParamsAcknowledgedSerial) || 0}`
-        + ` mipSent=${state.inputEventCounts.get("wavetableMipFrame") ?? 0}`
-        + ` mipAck=${state.outputEventCounts.get("wavetableUploadAck") ?? 0}`;
+        + ` params=${Number(state.effectiveRackState?.laneParamsAcknowledgedSerial) || 0}`;
 }
 
 function status(code: number) {
@@ -296,27 +296,51 @@ async function yieldInstallTurn() {
 
 /** Render one cumulative checkpoint through the real worker-service stack. */
 export async function renderSpeedrunCheckpoint(
-    PerformerClass: OfflinePerformerClass,
+    EngineClass: OfflineEngineClass,
     job: SpeedrunCheckpointRenderJob,
 ): Promise<SpeedrunCheckpointRenderResult> {
-    const startedAt = globalThis.performance?.now?.() ?? 0;
-    const host = new OfflineEngineHost(PerformerClass, {
+    const host = new OfflineEngineHost(await EngineClass.createOfflinePerformer(job.sessionID, job.sampleRate), {
         modulation: job.state.modulation,
         lane: job.state.lane,
         articulations: job.state.articulations,
     }, job.resourceBaseURL);
-    await host.initialise(job.sessionID, job.sampleRate);
+    try {
+        return await renderInstalledCheckpoint(host, job);
+    } finally {
+        host.dispose();
+    }
+}
+
+async function renderInstalledCheckpoint(
+    host: OfflineEngineHost,
+    job: SpeedrunCheckpointRenderJob,
+): Promise<SpeedrunCheckpointRenderResult> {
+    const startedAt = globalThis.performance?.now?.() ?? 0;
     host.setInitialParameters({ ...job.state.parameters, ...rackOutputTrimParameters(job.state) });
     host.sendEventOrValue("tempo", { bpm: 120 });
 
-    const rackDefects: unknown[] = [];
+    // Wavetables and MSEG curves are prepared directly in the engine's shared
+    // storage, as the live worker prepares them.
+    const installDefects: SpeedrunInstallError[] = [];
+    const defect = (lane: SpeedrunInstallLane) => (cause: unknown) => {
+        installDefects.push(new SpeedrunInstallError(lane, cause instanceof Error ? cause.message : String(cause), { cause }));
+    };
+    const modulation = new ModulationArticulationWorkerService(host, {
+        curveCommand: (slotIndex, shapeIndex, shape) => sharedMsegCommand(host, slotIndex, shapeIndex, shape),
+        async publishTriggerConfig(config) {
+            sendNativeArticulationTriggerConfig(config, host);
+            return { kind: "sent", proof: "native-publication-processed" };
+        },
+        onDefect: defect("modulation"),
+    });
+    modulation.replaceModulation(job.state.modulation, (status) => {
+        if (status.kind === "failed") defect("modulation")(status.error.message);
+    });
     const services = await startPatchWorkerServices(host, [
-        createModulationArticulationWorkerService,
-        () => createSynthRackRestore(host, {
-            onDefect: (cause) => { rackDefects.push(cause); },
-        }),
+        () => modulation,
+        () => createSynthRackRestore(host, { onDefect: defect("rack") }),
         () => createWavetableWorkerController(host, {
-            maxFramesInFlight: 1,
+            delivery: "shared",
             serviceLoadTimeoutMs: 20_000,
             ...(job.resourceBundle
                 ? { resourceClient: createSpeedrunResourceClient(job.resourceBundle) }
@@ -330,10 +354,7 @@ export async function renderSpeedrunCheckpoint(
         while (installFrameCount < maxInstallFrames) {
             await host.pump(128);
             installFrameCount += 128;
-            if (rackDefects.length > 0) {
-                const cause = rackDefects[0];
-                throw new SpeedrunInstallError("rack", cause instanceof Error ? cause.message : String(cause), { cause });
-            }
+            if (installDefects.length > 0) throw installDefects[0];
             const installState = host.getInstallationState();
             const failure = installationFailure(installState, expected);
             if (failure) throw failure;

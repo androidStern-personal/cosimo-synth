@@ -14,7 +14,6 @@ test("offline host clears output FIFOs before ack listeners send the next comman
     const log = [];
     class ProbePerformer {
         outputCount = 1;
-        async initialise() {}
         getInputEndpoints() {
             return [
                 { endpointID: "next", endpointType: "event" },
@@ -35,12 +34,11 @@ test("offline host clears output FIFOs before ack listeners send the next comman
         setInputValue_gain(value) { log.push(["value", value]); }
     }
     const host = new OfflineEngineHost(
-        ProbePerformer,
+        { performer: new ProbePerformer(), sharedData: {}, dispose() {} },
         { modulation: {}, lane: {}, articulations: {} },
         "https://example.test/",
     );
     host.addEndpointListener("ack", () => host.sendEventOrValue("next", { serial: 2 }));
-    await host.initialise(1, 48_000);
     await host.pump(257);
 
     assert.deepEqual(log.slice(0, 3), [
