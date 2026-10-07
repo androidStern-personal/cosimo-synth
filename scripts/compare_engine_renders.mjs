@@ -77,9 +77,12 @@ async function readGitValue(directory, arguments_) {
     }
 }
 
+/** A package's GIT_TAG, resolved through the `set(NAME "commit")` pin it names. */
 function readPinnedGitTag(source, packageName) {
-    const packageBlock = new RegExp(`NAME\\s+${packageName}\\b[\\s\\S]*?GIT_TAG\\s+"([^"]+)"`, "u").exec(source);
-    return packageBlock?.[1] ?? null;
+    const tag = new RegExp(`NAME\\s+${packageName}\\b[\\s\\S]*?GIT_TAG\\s+"([^"]+)"`, "u").exec(source)?.[1];
+    const variable = tag === undefined ? null : /^\$\{(\w+)\}$/u.exec(tag)?.[1];
+    if (!variable) return tag ?? null;
+    return new RegExp(`set\\(${variable}\\s+"([^"]+)"\\)`, "u").exec(source)?.[1] ?? null;
 }
 
 async function readSourceProvenance(engineRealPath) {

@@ -38,17 +38,12 @@ function chordScore({ onFrame, offFrame, staggerFrames = 32 }) {
     ];
 }
 
-async function sharedPatchEnvelope() {
+async function readSharedSound() {
     return JSON.parse(await fs.readFile(sharedPatchFixturePath, "utf8"));
 }
 
-function sharedPatchModulationRoutes(envelope) {
-    const stored = envelope.preset.storedState["modulation.v6"];
-    return JSON.parse(stored).routes;
-}
-
-function sharedPatchLaneDocument(envelope) {
-    return JSON.parse(envelope.supplementalStoredState["lane.v1"]);
+function sharedPatchModulationRoutes(sound) {
+    return JSON.parse(sound.storedState["modulation.v6"]).routes;
 }
 
 async function buildStressSpec() {
@@ -160,12 +155,12 @@ async function buildStressSpec() {
     };
 }
 
-async function buildTransitionArtifacts(envelope) {
+async function buildTransitionArtifacts(sound) {
     const [modulation, program] = await Promise.all([
         loadUIModule(repoRoot, "ui/shared/modulation.ts"),
         loadUIModule(repoRoot, "ui/shared/modulation-runtime-program.ts"),
     ]);
-    const reducedRoutes = sharedPatchModulationRoutes(envelope)
+    const reducedRoutes = sharedPatchModulationRoutes(sound)
         .slice(0, 2)
         .map((routeInput, index) => modulation.normalizeRoute(routeInput, index));
     const [reinstall] = program.buildModulationRuntimeProgramEvents(null, reducedRoutes);
@@ -174,13 +169,13 @@ async function buildTransitionArtifacts(envelope) {
 
 /** @returns scenario list: { name, spec, score, totalFrames, expectSound } */
 export async function buildRenderScenarios() {
-    const envelope = await sharedPatchEnvelope();
+    const sound = await readSharedSound();
     const stress = await buildStressSpec();
-    const { reinstallProgramValue } = await buildTransitionArtifacts(envelope);
+    const { reinstallProgramValue } = await buildTransitionArtifacts(sound);
     const sharedSpec = {
-        parameters: envelope.preset.parameters,
-        modulationRoutes: sharedPatchModulationRoutes(envelope),
-        laneDocument: sharedPatchLaneDocument(envelope),
+        parameters: sound.parameters,
+        modulationRoutes: sharedPatchModulationRoutes(sound),
+        laneDocument: sound.storedState["lane.v1"],
     };
 
     return [
