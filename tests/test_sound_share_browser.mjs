@@ -39,13 +39,18 @@ const presetParameterIDs = productionPublicParameterIDs.filter((endpointID) => e
 const engines = [
     { key: "chromium", label: "Chromium", launcher: chromium },
     { key: "webkit", label: "Safari/WebKit", launcher: webkit },
-].filter(({ key }) => !process.env.COSIMO_WEB_BROWSER || process.env.COSIMO_WEB_BROWSER === key);
+].filter(({ key }) => !process.env.COSIMO_WEB_BROWSER || process.env.COSIMO_WEB_BROWSER === key)
+    .map((engine) => ({
+        ...engine,
+        skip: fs.existsSync(engine.launcher.executablePath()) ? false
+            : `Playwright's ${engine.label} is not installed on this machine, so this engine cannot run the share flow.`,
+    }));
 const browsers = new Map();
 let server;
 
 before(async () => {
     server = await startDesktopHarnessServer();
-    const launched = await Promise.all(engines.map(async ({ key, launcher }) => [
+    const launched = await Promise.all(engines.filter(({ skip }) => !skip).map(async ({ key, launcher }) => [
         key,
         await launcher.launch({ headless: true }),
     ]));
@@ -532,8 +537,9 @@ async function runRefusalAndCancellationFlow(engineKey) {
     }
 }
 
-for (const { key, label } of engines) {
+for (const { key, label, skip } of engines) {
     test(`${label}: maximal supported sound copies and restores exactly on desktop and phone`, {
+        skip,
         concurrency: false,
         timeout: 240_000,
     }, async () => {
@@ -541,6 +547,7 @@ for (const { key, label } of engines) {
     });
 
     test(`${label}: invalid, cancelled, unavailable-wavetable, and Bounce links are non-destructive`, {
+        skip,
         concurrency: false,
         timeout: 180_000,
     }, async () => {
