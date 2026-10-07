@@ -6,6 +6,8 @@ import test, { after, before } from "node:test";
 
 import { chromium } from "playwright";
 
+import { missingH264Encoder } from "./helpers/h264_encoder.mjs";
+
 const repoRoot = path.resolve(import.meta.dirname, "..");
 const webRoot = path.join(repoRoot, "build", "experiments", "remotion-web-renderer-spike");
 let browser;
@@ -56,7 +58,7 @@ after(async () => {
 
 test("renderMediaOnWeb emits a verified 10-second MP4 with visual primitives and blob-URL audio", {
     timeout: 240_000,
-}, async () => {
+}, async (t) => {
     const page = await browser.newPage();
     const failures = [];
     page.on("pageerror", (error) => failures.push(error.stack ?? error.message));
@@ -64,6 +66,12 @@ test("renderMediaOnWeb emits a verified 10-second MP4 with visual primitives and
         if (message.type() === "error") failures.push(`console: ${message.text()}`);
     });
     await page.goto(baseUrl, { waitUntil: "networkidle" });
+    const missingEncoder = await missingH264Encoder(page);
+    if (missingEncoder) {
+        t.skip(missingEncoder);
+        await page.close();
+        return;
+    }
     await page.waitForFunction(() => typeof globalThis.__COSIMO_REMOTION_SPIKE__?.run === "function");
     const report = await page.evaluate(() => globalThis.__COSIMO_REMOTION_SPIKE__.run());
 
