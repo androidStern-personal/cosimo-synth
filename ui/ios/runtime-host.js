@@ -426,16 +426,17 @@ globalThis.setStatusMessage = (message) => {
     const messageText = typeof message === "string" ? message : String(message ?? "");
     state.statusText = messageText;
 
-    const isErrorLike =
-        /(^|\\b)(error|failed|could not)\\b/i.test(messageText) ||
-        /no view available/i.test(messageText);
+    const isErrorLike = /\b(error|failed|could not)\b/i.test(messageText) || /no view available/i.test(messageText);
 
     if (!isErrorLike) {
         return;
     }
 
     state.isViewActive = false;
-    container.innerHTML = `<pre id="cmaj-error-text">${messageText}</pre>`;
+    const errorText = document.createElement("pre");
+    errorText.id = "cmaj-error-text";
+    errorText.textContent = messageText;
+    container.replaceChildren(errorText);
 };
 
 globalThis.__cosimoInspectHostPage = () => ({

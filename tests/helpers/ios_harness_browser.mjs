@@ -1,11 +1,8 @@
 import {
-    OSCILLATOR_VOLUME_MAX_DB,
-    OSCILLATOR_VOLUME_MIN_DB,
-} from "../../patch_gui/oscillator-defaults.js";
-import {
     startDesktopHarnessServer,
     startStaticRepoServer,
 } from "./desktop_harness_browser.mjs";
+import { createSynthParameterFixture, synthParameterEndpoints } from "./synth_parameter_fixture.mjs";
 
 export async function startIOSHarnessServer() {
     return startStaticRepoServer({ bundleTypeScript: true });
@@ -15,8 +12,27 @@ export async function startIOSSourceHarnessServer() {
     return startDesktopHarnessServer();
 }
 
-export function createIOSHarnessInitScript() {
-    return ({ rootUrl, oscillatorVolumeMinDb, oscillatorVolumeMaxDb, deferredParameterResponses = [] }) => {
+/**
+ * Every parameter the synth's state definition opens, with ranges and defaults
+ * read from the DSP source. The loaded wavetable position, table, and Glide
+ * differ from their authored defaults so edits and resets have something to change.
+ */
+function iosFixtureHostParameters() {
+    const { readParameter } = createSynthParameterFixture({
+        oscAWavetablePosition: 0.28,
+        oscAWavetableSelect: 0,
+        glideTime: 0.15,
+    });
+    return synthParameterEndpoints.map(readParameter);
+}
+
+/**
+ * The native side of the iPhone app as the bundled page sees it: the
+ * `cmaj_*` bridge functions, Cmajor's state channel for the synth's
+ * parameters and saved values, and the runtime endpoints the view listens to.
+ */
+function createIOSHarnessInitScript() {
+    return ({ rootUrl, hostParameters, deferredParameterReads = [] }) => {
         const originalFetch = globalThis.fetch.bind(globalThis);
         const fetchedUrls = [];
         const resourceReads = [];
@@ -25,43 +41,13 @@ export function createIOSHarnessInitScript() {
         const gestureStarts = [];
         const gestureEnds = [];
         const hapticEvents = [];
-        const endpointMessages = [];
         const storedState = new Map();
         const endpointReplyTypes = new Map();
         const failingResources = new Map();
-        const parameterValues = new Map([
-            ["oscAWavetablePosition", 0.28],
-            ["oscAWavetableSelect", 0],
-            ["playMode", 0],
-            ["glideTime", 0.15],
-            ["globalTune", 0],
-            ["ampAttack", 0.01],
-            ["ampDecay", 0.001],
-            ["ampSustain", 1],
-            ["ampRelease", 0.2],
-            ["oscAPan", 0],
-            ["oscAVolumeDb", 0],
-            ["oscBVolumeDb", 0],
-            ["oscCVolumeDb", 0],
-            ["oscAMute", 0],
-            ["oscBMute", 1],
-            ["oscCMute", 1],
-            ["distortionDriveDb", 12],
-            ["distortionKnee", 0.35],
-            ["distortionWet", 0.5],
-            ["distortionWetHPHz", 40],
-            ["distortionWetLPHz", 18000],
-            ["chorusMix", 0.5],
-            ["chorusMotionMode", 1],
-            ["chorusBloomMode", 0],
-            ["chorusTone", 0.5],
-            ["chorusFeedback", 0.42],
-            ["chorusRingAmount", 0],
-            ["chorusRingOffsetMode", 0],
-            ["chorusRingFineSemitones", 0],
-        ]);
-        const deferredParameters = new Set(deferredParameterResponses);
-        const pendingParameterResponses = new Map();
+        const parameterValues = new Map(hostParameters.map(({ endpoint, value }) => [endpoint, value]));
+        const parameterMetadata = new Map(hostParameters.map(({ endpoint, min, max, step, defaultValue }) => (
+            [endpoint, { min, max, step, defaultValue }])));
+        const deferredReads = new Set(deferredParameterReads);
         const pendingStateReads = new Map();
         let stateHost;
         let stateHostLoading;
@@ -86,7 +72,6 @@ export function createIOSHarnessInitScript() {
             failurePhase: 0,
             failureReasonCode: 0,
         };
-        let cachedManifest = null;
 
         const normalisePath = (requestedPath) => {
             const pathText = typeof requestedPath === "string" ? requestedPath : String(requestedPath ?? "");
@@ -116,7 +101,6 @@ export function createIOSHarnessInitScript() {
         };
 
         const emitEndpoint = (endpointID, value) => {
-            endpointMessages.push({ endpointID, value });
             for (const replyType of endpointReplyTypes.get(endpointID) ?? []) {
                 deliverMessage(replyType, value);
             }
@@ -129,175 +113,9 @@ export function createIOSHarnessInitScript() {
             });
         };
 
-        const emitStoredStateValue = (key) => {
-            deliverMessage("state_key_value", {
-                key,
-                value: storedState.get(key),
-            });
-        };
-
-        const status = {
-            manifest: null,
-            details: {
-                inputs: [
-                    { endpointID: "midiIn", purpose: "event" },
-                    {
-                        endpointID: "oscAWavetablePosition",
-                        purpose: "parameter",
-                        annotation: { name: "Wavetable Position", min: 0, max: 1, init: 0 },
-                    },
-                    {
-                        endpointID: "oscAWavetableSelect",
-                        purpose: "parameter",
-                        annotation: { name: "Wavetable Select", min: 0, max: 255, init: 0 },
-                    },
-                    {
-                        endpointID: "playMode",
-                        purpose: "parameter",
-                        annotation: { name: "Voice Mode", min: 0, max: 2, init: 0 },
-                    },
-                    {
-                        endpointID: "glideTime",
-                        purpose: "parameter",
-                        annotation: { name: "Glide Time", min: 0, max: 2, init: 0 },
-                    },
-                    {
-                        endpointID: "globalTune",
-                        purpose: "parameter",
-                        annotation: { name: "Global Tune", min: -24, max: 24, init: 0, unit: "st" },
-                    },
-                    {
-                        endpointID: "ampAttack",
-                        purpose: "parameter",
-                        annotation: { name: "Amp Envelope Attack", min: 0.001, max: 10, init: 0.01, unit: "s" },
-                    },
-                    {
-                        endpointID: "ampDecay",
-                        purpose: "parameter",
-                        annotation: { name: "Amp Envelope Decay", min: 0.001, max: 10, init: 0.001, unit: "s" },
-                    },
-                    {
-                        endpointID: "ampSustain",
-                        purpose: "parameter",
-                        annotation: { name: "Amp Envelope Sustain", min: 0, max: 1, init: 1 },
-                    },
-                    {
-                        endpointID: "ampRelease",
-                        purpose: "parameter",
-                        annotation: { name: "Amp Envelope Release", min: 0.005, max: 10, init: 0.2, unit: "s" },
-                    },
-                    {
-                        endpointID: "oscAPan",
-                        purpose: "parameter",
-                        annotation: { name: "Pan", min: -1, max: 1, init: 0 },
-                    },
-                    ...["A", "B", "C"].flatMap((oscillatorID) => ([
-                        {
-                            endpointID: `osc${oscillatorID}VolumeDb`,
-                            purpose: "parameter",
-                            annotation: {
-                                name: `Oscillator ${oscillatorID} Volume`,
-                                min: oscillatorVolumeMinDb,
-                                max: oscillatorVolumeMaxDb,
-                                init: 0,
-                                unit: "dB",
-                            },
-                        },
-                        {
-                            endpointID: `osc${oscillatorID}Mute`,
-                            purpose: "parameter",
-                            annotation: {
-                                name: `Oscillator ${oscillatorID} Mute`,
-                                min: 0,
-                                max: 1,
-                                init: oscillatorID === "A" ? 0 : 1,
-                                discrete: true,
-                                step: 1,
-                            },
-                        },
-                    ])),
-                    {
-                        endpointID: "distortionDriveDb",
-                        purpose: "parameter",
-                        annotation: { name: "Distortion Drive", min: 0, max: 36, init: 12 },
-                    },
-                    {
-                        endpointID: "distortionKnee",
-                        purpose: "parameter",
-                        annotation: { name: "Distortion Knee", min: 0, max: 1, init: 0.35 },
-                    },
-                    {
-                        endpointID: "distortionWet",
-                        purpose: "parameter",
-                        annotation: { name: "Distortion Mix", min: 0, max: 1, init: 0.5 },
-                    },
-                    {
-                        endpointID: "distortionWetHPHz",
-                        purpose: "parameter",
-                        annotation: { name: "Distortion Wet HP", min: 20, max: 4000, init: 40 },
-                    },
-                    {
-                        endpointID: "distortionWetLPHz",
-                        purpose: "parameter",
-                        annotation: { name: "Distortion Wet LP", min: 20, max: 20000, init: 18000 },
-                    },
-                    {
-                        endpointID: "chorusMix",
-                        purpose: "parameter",
-                        annotation: { name: "Chorus Mix", min: 0, max: 1, init: 0.5 },
-                    },
-                    {
-                        endpointID: "chorusMotionMode",
-                        purpose: "parameter",
-                        annotation: { name: "Chorus Motion", min: 0, max: 3, init: 1 },
-                    },
-                    {
-                        endpointID: "chorusBloomMode",
-                        purpose: "parameter",
-                        annotation: { name: "Chorus Bloom", min: 0, max: 4, init: 0 },
-                    },
-                    {
-                        endpointID: "chorusTone",
-                        purpose: "parameter",
-                        annotation: { name: "Chorus Tone", min: 0, max: 1, init: 0.5 },
-                    },
-                    {
-                        endpointID: "chorusFeedback",
-                        purpose: "parameter",
-                        annotation: { name: "Chorus Feedback", min: 0, max: 0.95, init: 0.42 },
-                    },
-                    {
-                        endpointID: "chorusRingAmount",
-                        purpose: "parameter",
-                        annotation: { name: "Chorus Ring", min: 0, max: 1, init: 0 },
-                    },
-                    {
-                        endpointID: "chorusRingOffsetMode",
-                        purpose: "parameter",
-                        annotation: { name: "Chorus Ring Pitch", min: 0, max: 3, init: 0 },
-                    },
-                    {
-                        endpointID: "chorusRingFineSemitones",
-                        purpose: "parameter",
-                        annotation: { name: "Chorus Ring Fine", min: -2, max: 2, init: 0 },
-                    },
-                ],
-            },
-        };
-
-        const ensureManifest = async () => {
-            if (cachedManifest) {
-                return cachedManifest;
-            }
-
-            const response = await originalFetch(new URL("/WavetableSynth.iOS.cmajorpatch", rootUrl));
-            if (!response.ok) {
-                throw new Error(`Could not load iPhone patch manifest: ${response.status}`);
-            }
-
-            cachedManifest = await response.json();
-            status.manifest = cachedManifest;
-            return cachedManifest;
+        const writeStoredValue = (key, value) => {
+            storedState.set(key, value);
+            storedStateWrites.push({ key, value });
         };
 
         globalThis.fetch = async (input, init) => {
@@ -308,28 +126,28 @@ export function createIOSHarnessInitScript() {
                     : String(input);
             fetchedUrls.push(url);
 
-            try {
-                const resolvedURL = new URL(url, rootUrl);
-                if (resolvedURL.origin === new URL(rootUrl).origin) {
-                    const resourcePath = normalisePath(resolvedURL.pathname);
-                    if (failingResources.has(resourcePath)) {
-                        return new Response(`Missing test resource ${resourcePath}`, {
-                            status: failingResources.get(resourcePath),
-                            headers: {
-                                "Content-Type": "text/plain; charset=utf-8",
-                            },
-                        });
-                    }
+            const resolvedURL = new URL(url, rootUrl);
+            if (resolvedURL.origin === new URL(rootUrl).origin) {
+                const resourcePath = normalisePath(resolvedURL.pathname);
+                if (failingResources.has(resourcePath)) {
+                    return new Response(`Missing test resource ${resourcePath}`, {
+                        status: failingResources.get(resourcePath),
+                        headers: {
+                            "Content-Type": "text/plain; charset=utf-8",
+                        },
+                    });
                 }
-            } catch {
-                // Ignore parse failures and fall through to the real fetch.
             }
 
             return originalFetch(input, init);
         };
 
         globalThis.cmaj_getPatchBootConfig = async () => {
-            const manifest = await ensureManifest();
+            const response = await originalFetch(new URL("/WavetableSynth.iOS.cmajorpatch", rootUrl));
+            if (!response.ok) {
+                throw new Error(`Could not load iPhone patch manifest: ${response.status}`);
+            }
+            const manifest = await response.json();
             const boot = {
                 manifest,
                 preferredView: manifest.view,
@@ -375,29 +193,29 @@ export function createIOSHarnessInitScript() {
             throw new Error(`Unexpected bridged audio request for ${resourcePath}`);
         };
 
+        // A deferred endpoint holds every native read of it until the test
+        // releases it, so the state stays open-pending as on a slow host.
+        const waitForRelease = (endpoint, signal) => new Promise((resolve, reject) => {
+            const waiting = pendingStateReads.get(endpoint) ?? new Set();
+            const finish = () => { waiting.delete(finish); signal.removeEventListener("abort", abort); resolve(); };
+            const abort = () => { waiting.delete(finish); reject(new Error("Native fixture read stopped")); };
+            if (signal.aborted) { abort(); return; }
+            waiting.add(finish);
+            pendingStateReads.set(endpoint, waiting);
+            signal.addEventListener("abort", abort, { once: true });
+        });
+
         const getStateHost = () => stateHostLoading ??= (async () => {
             const { createMockPluginStateHost } = await import(new URL("ui/shared/mock-plugin-state-host.ts", rootUrl).href);
             stateHost = createMockPluginStateHost({
                 readParameter: async (endpoint, signal) => {
-                    const annotation = status.details.inputs.find(input => input.endpointID === endpoint)?.annotation;
-                    if (!annotation) throw new Error(`Missing native fixture metadata for ${endpoint}`);
-                    // Preserve the existing fixture's request-time deferred reply.
-                    const value = parameterValues.get(endpoint) ?? 0;
-                    if (deferredParameters.has(endpoint)) {
-                        await new Promise((resolve, reject) => {
-                            const waiting = pendingStateReads.get(endpoint) ?? new Set();
-                            const finish = () => { waiting.delete(finish); signal.removeEventListener("abort", abort); resolve(); };
-                            const abort = () => { waiting.delete(finish); reject(new Error("Native fixture read stopped")); };
-                            if (signal.aborted) { abort(); return; }
-                            waiting.add(finish);
-                            pendingStateReads.set(endpoint, waiting);
-                            signal.addEventListener("abort", abort, { once: true });
-                        });
-                    }
-                    return { endpoint, value, min: annotation.min ?? 0,
-                        max: annotation.max ?? 1, step: annotation.step ?? 0, defaultValue: annotation.init ?? 0 };
+                    const metadata = parameterMetadata.get(endpoint);
+                    if (!metadata) throw new Error(`Missing native fixture metadata for ${endpoint}`);
+                    if (deferredReads.has(endpoint)) await waitForRelease(endpoint, signal);
+                    return { endpoint, value: parameterValues.get(endpoint), ...metadata };
                 },
                 writeParameter: (endpoint, value) => { void globalThis.cmaj_sendMessageToServer({ type: "send_value", id: endpoint, value }); },
+                storedValues: { read: key => storedState.get(key), write: writeStoredValue },
                 beginGesture: endpoint => gestureStarts.push(endpoint),
                 endGesture: endpoint => gestureEnds.push(endpoint),
                 onDefect: error => { throw error; },
@@ -415,11 +233,6 @@ export function createIOSHarnessInitScript() {
                 (await getStateHost()).sendMessageToServer(message);
                 return;
 
-            case "req_status":
-                await ensureManifest();
-                queueMicrotask(() => deliverMessage("status", status));
-                return;
-
             case "add_endpoint_listener":
                 addReplyType(message.endpoint, message.replyType);
                 return;
@@ -429,35 +242,7 @@ export function createIOSHarnessInitScript() {
                 return;
 
             case "req_param_value":
-                if (deferredParameters.has(message.id)) {
-                    if (!pendingParameterResponses.has(message.id)) {
-                        pendingParameterResponses.set(message.id, parameterValues.get(message.id) ?? 0);
-                    }
-                    return;
-                }
                 queueMicrotask(() => emitParameterValue(message.id));
-                return;
-
-            case "send_gesture_start":
-                gestureStarts.push(message.id);
-                return;
-
-            case "send_gesture_end":
-                gestureEnds.push(message.id);
-                return;
-
-            case "req_full_state":
-                queueMicrotask(() => deliverMessage(message.replyType, Object.fromEntries(storedState.entries())));
-                return;
-
-            case "req_state_value":
-                queueMicrotask(() => emitStoredStateValue(message.key));
-                return;
-
-            case "send_state_value":
-                storedState.set(message.key, message.value);
-                storedStateWrites.push({ key: message.key, value: message.value });
-                queueMicrotask(() => emitStoredStateValue(message.key));
                 return;
 
             case "send_value": {
@@ -465,8 +250,6 @@ export function createIOSHarnessInitScript() {
                 const value = message.value;
                 const oscillatorPositionMatch = /^osc([ABC])WavetablePosition$/.exec(endpointID);
                 const oscillatorSelectMatch = /^osc([ABC])WavetableSelect$/.exec(endpointID);
-                const oscillatorPanMatch = /^osc([ABC])Pan$/.exec(endpointID);
-                const ampEnvelopeMatch = /^amp(?:Attack|Decay|Sustain|Release)$/.test(endpointID);
                 sentMessages.push({ endpointID, value });
 
                 if (endpointID === "runtimeSyncRequest") {
@@ -492,23 +275,7 @@ export function createIOSHarnessInitScript() {
                     return;
                 }
 
-                if (
-                    oscillatorPositionMatch
-                    || oscillatorSelectMatch
-                    || oscillatorPanMatch
-                    || endpointID === "playMode"
-                    || endpointID === "glideTime"
-                    || endpointID === "globalTune"
-                    || ampEnvelopeMatch
-                    || endpointID === "chorusMix"
-                    || endpointID === "chorusMotionMode"
-                    || endpointID === "chorusBloomMode"
-                    || endpointID === "chorusTone"
-                    || endpointID === "chorusFeedback"
-                    || endpointID === "chorusRingAmount"
-                    || endpointID === "chorusRingOffsetMode"
-                    || endpointID === "chorusRingFineSemitones"
-                ) {
+                if (parameterValues.has(endpointID)) {
                     parameterValues.set(endpointID, value);
                     queueMicrotask(() => emitParameterValue(endpointID, value));
                     stateHost?.observeParameter(endpointID);
@@ -553,7 +320,7 @@ export function createIOSHarnessInitScript() {
             }
 
             default:
-                return;
+                throw new Error(`The iPhone fixture host does not handle ${type} messages.`);
             }
         };
 
@@ -722,7 +489,7 @@ export function createIOSHarnessInitScript() {
                 case "Q":
                 case "q": {
                     const isRelative = command === "s" || command === "q";
-                    const valueCount = command === "S" || command === "s" ? 4 : 4;
+                    const valueCount = 4;
                     while (tokenIndex < tokens.length && !/^[AaCcHhLlMmQqSsTtVvZz]$/.test(tokens[tokenIndex])) {
                         const values = Array.from({ length: valueCount }, () => readNumber());
                         if (values.some((value) => !Number.isFinite(value))) {
@@ -880,7 +647,6 @@ export function createIOSHarnessInitScript() {
                     gestureStarts: [...gestureStarts],
                     gestureEnds: [...gestureEnds],
                     hapticEvents: [...hapticEvents],
-                    endpointMessages: endpointMessages.map(({ endpointID, value }) => ({ endpointID, value })),
                     storedState: Object.fromEntries(storedState.entries()),
                     hostPage: globalThis.__cosimoInspectHostPage?.() ?? null,
                     readyNotificationCount,
@@ -893,7 +659,6 @@ export function createIOSHarnessInitScript() {
                 const shell = shadowRoot?.querySelector(".ios-shell");
                 const mainView = shadowRoot?.querySelector(".ios-main-view");
                 const footer = shadowRoot?.querySelector(".keyboard-footer");
-                const keyboardHost = shadowRoot?.querySelector(".keyboard-host");
                 const keyboard = shadowRoot?.querySelector(".keyboard");
                 const noteHolder = keyboard?.shadowRoot?.querySelector(".note-holder") ?? null;
                 const retryButton = shadowRoot?.querySelector('[data-role="mobile-voice-retry-load"]');
@@ -937,7 +702,6 @@ export function createIOSHarnessInitScript() {
                     displayStatus: shadowRoot?.querySelector("[data-role='ios-voice-status']")?.textContent?.trim()
                         ?? shadowRoot?.querySelector("[data-role='mobile-voice-table-name']")?.textContent?.trim()
                         ?? null,
-                    bankReadout: shadowRoot?.querySelector(".bank-readout")?.textContent?.trim() ?? null,
                     octaveReadout: shadowRoot?.querySelector("[data-role='octave-readout']")?.textContent?.trim() ?? null,
                     playModeValue: shadowRoot?.querySelector(".play-mode-select")?.value ?? null,
                     glideValue: shadowRoot?.querySelector(".glide-time-slider")?.value ?? null,
@@ -957,8 +721,6 @@ export function createIOSHarnessInitScript() {
                     shellPaddingRight: shellStyle?.paddingRight ?? null,
                     shellPaddingBottom: shellStyle?.paddingBottom ?? null,
                     shellPaddingLeft: shellStyle?.paddingLeft ?? null,
-                    msegDepthValue: shadowRoot?.querySelector(".mseg-depth-slider")?.value ?? null,
-                    msegDepthReadout: shadowRoot?.querySelector("[data-role='mseg-depth-readout']")?.textContent?.trim() ?? null,
                     distortionDriveReadout: shadowRoot?.querySelector("[data-role='distortion-drive-readout']")?.textContent?.trim() ?? null,
                     distortionMixReadout: shadowRoot?.querySelector("[data-role='distortion-mix-readout']")?.textContent?.trim() ?? null,
                     distortionGraphState: readDistortionDebug(),
@@ -972,7 +734,6 @@ export function createIOSHarnessInitScript() {
                     mainViewRect,
                     footerRect,
                     keyboardRect,
-                    keyboardHostRect: rectToObject(keyboardHost),
                     noteHolderRect,
                     footerBottomGap: shellRect && footerRect ? shellRect.bottom - footerRect.bottom : null,
                     mainToFooterGap: mainViewRect && footerRect ? footerRect.top - mainViewRect.bottom : null,
@@ -986,7 +747,6 @@ export function createIOSHarnessInitScript() {
                 gestureStarts.length = 0;
                 gestureEnds.length = 0;
                 hapticEvents.length = 0;
-                endpointMessages.length = 0;
             },
             setRuntimeState(nextState) {
                 runtimeState = {
@@ -995,25 +755,17 @@ export function createIOSHarnessInitScript() {
                 };
                 emitEndpoint("runtimeState", runtimeState);
             },
-            setParameterValue(endpointID, value, emitEndpointDirectly = false) {
+            /** The host changes a parameter on its own, as automation or a DAW control would. */
+            setParameterValue(endpointID, value) {
+                if (!parameterValues.has(endpointID)) throw new Error(`Unknown fixture parameter ${endpointID}`);
                 parameterValues.set(endpointID, value);
                 emitParameterValue(endpointID, value);
                 stateHost?.observeParameter(endpointID);
-
-                if (emitEndpointDirectly) {
-                    emitEndpoint(endpointID, value);
-                }
             },
-            releaseParameterResponse(endpointID) {
-                deferredParameters.delete(endpointID);
+            releaseParameterRead(endpointID) {
+                deferredReads.delete(endpointID);
                 for (const finish of pendingStateReads.get(endpointID) ?? []) finish();
                 pendingStateReads.delete(endpointID);
-                if (!pendingParameterResponses.has(endpointID)) {
-                    return;
-                }
-                const value = pendingParameterResponses.get(endpointID);
-                pendingParameterResponses.delete(endpointID);
-                queueMicrotask(() => emitParameterValue(endpointID, value));
             },
             emitDistortionScope(nextState) {
                 emitEndpoint("distortionScope", nextState);
@@ -1024,12 +776,11 @@ export function createIOSHarnessInitScript() {
             emitEffectiveMsegState(nextState) {
                 emitEndpoint("effectiveMsegState", nextState);
             },
-            emitEffectiveModSourceState(nextState) {
-                emitEndpoint("effectiveModSourceState", nextState);
-            },
+            /** The host restores one saved value, as a DAW does when it reloads a project. */
             setStoredStateValue(key, value) {
-                storedState.set(key, value);
-                emitStoredStateValue(key);
+                if (!stateHost?.replaceStoredValue(key, () => storedState.set(key, value))) {
+                    throw new Error(`The synth state does not own the saved value ${key}.`);
+                }
             },
             setFailingResource(path, status = 404) {
                 failingResources.set(normalisePath(path), Math.max(400, Math.trunc(Number(status) || 404)));
@@ -1043,7 +794,7 @@ export function createIOSHarnessInitScript() {
 
 export async function openIOSHarnessPage(browser, baseUrl, {
     viewportSize = null,
-    deferredParameterResponses = [],
+    deferredParameterReads = [],
 } = {}) {
     const context = await browser.newContext({
         viewport: viewportSize ?? { width: 390, height: 844 },
@@ -1060,9 +811,8 @@ export async function openIOSHarnessPage(browser, baseUrl, {
 
     await page.addInitScript(createIOSHarnessInitScript(), {
         rootUrl: baseUrl,
-        oscillatorVolumeMinDb: OSCILLATOR_VOLUME_MIN_DB,
-        oscillatorVolumeMaxDb: OSCILLATOR_VOLUME_MAX_DB,
-        deferredParameterResponses,
+        hostParameters: iosFixtureHostParameters(),
+        deferredParameterReads,
     });
     await page.goto(new URL("patch_gui/index.ios.html", baseUrl).toString(), {
         waitUntil: "load",
@@ -1110,6 +860,7 @@ export async function openIOSSourceHarnessPage(browser, baseUrl, {
                 throw new Error(`Could not load source-composed iPhone manifest: ${manifestResponse.status}`);
             }
             const patchConnection = new MockPatchConnection(await manifestResponse.json());
+            // Cmajor's PianoKeyboard exposes its shadow root as `root`; the iPhone keyboard binds touches there.
             Object.defineProperty(patchConnection.utilities.PianoKeyboard.prototype, "root", {
                 configurable: true,
                 get() {
@@ -1136,10 +887,21 @@ export async function closeIOSHarnessPage(page) {
     await page.context().close();
 }
 
-export async function waitForIOSHarnessReady(page) {
-    await page.waitForFunction(() => Boolean(window.__COSIMO_IOS_HARNESS__));
-    await page.waitForFunction(() => Boolean(document.querySelector("cosimo-synth-view")));
-    await page.waitForTimeout(250);
+/**
+ * Waits until the view is mounted and its Voice controls report the expected
+ * host state: "ready" once the synth state has opened, "loading" while a
+ * deferred parameter read holds it. Throws the host page's error instead.
+ */
+export async function waitForIOSHarnessReady(page, { controls = "ready" } = {}) {
+    const outcome = await page.waitForFunction((expectedState) => {
+        const errorText = document.getElementById("cmaj-error-text")?.textContent;
+        if (errorText) return { errorText };
+        const hostState = document.querySelector("cosimo-synth-view")?.shadowRoot
+            ?.querySelector(".play-mode-select")?.getAttribute("data-host-state");
+        return hostState === expectedState ? { errorText: null } : false;
+    }, controls);
+    const { errorText } = await outcome.jsonValue();
+    if (errorText) throw new Error(`The iPhone host page failed: ${errorText}`);
 }
 
 export async function waitForIOSSourceHarnessReady(page) {
@@ -1188,19 +950,18 @@ export async function setIOSHarnessRuntimeState(page, nextState) {
     }, nextState);
 }
 
-export async function setIOSHarnessParameterValue(page, endpointID, value, emitEndpoint = false) {
-    await page.evaluate(({ nextEndpointID, nextValue, shouldEmitEndpoint }) => {
-        window.__COSIMO_IOS_HARNESS__.setParameterValue(nextEndpointID, nextValue, shouldEmitEndpoint);
+export async function setIOSHarnessParameterValue(page, endpointID, value) {
+    await page.evaluate(({ nextEndpointID, nextValue }) => {
+        window.__COSIMO_IOS_HARNESS__.setParameterValue(nextEndpointID, nextValue);
     }, {
         nextEndpointID: endpointID,
         nextValue: value,
-        shouldEmitEndpoint: emitEndpoint,
     });
 }
 
-export async function releaseIOSHarnessParameterResponse(page, endpointID) {
+export async function releaseIOSHarnessParameterRead(page, endpointID) {
     await page.evaluate((nextEndpointID) => {
-        window.__COSIMO_IOS_HARNESS__.releaseParameterResponse(nextEndpointID);
+        window.__COSIMO_IOS_HARNESS__.releaseParameterRead(nextEndpointID);
     }, endpointID);
 }
 

@@ -79,8 +79,6 @@ import {
 import { useParameterMenuShell } from "../shared/parameter-menu-shell";
 import { KeyTrackStatus } from "../shared/key-track-status";
 import {
-} from "../shared/runtime-table-state";
-import {
     useSynthPatchViewModel,
     useOscillatorSelectionViewModel,
     type SynthCallbackControlReadiness,
@@ -179,7 +177,6 @@ type IOSResponsiveLayout = {
     keyboardNaturalNoteWidth: number;
     keyboardAccidentalWidth: number;
 };
-
 
 type IOSPlayPanelProps = {
     playModeValue: number;
@@ -1393,7 +1390,6 @@ function IOSPatchViewBody() {
         ["--cosimo-control-height" as string]: `${layout.controlHeight}px`,
     }) satisfies CSSProperties, [layout.controlHeight, layout.keyboardHeight, layout.stageMinHeight]);
 
-
     const handleSelectWavetable = useCallback((nextValue: number) => {
         synthView.handleSelectWavetable(nextValue);
     }, [synthView]);
@@ -1650,13 +1646,6 @@ function IOSPatchViewBody() {
                     selectedMsegMorph={synthView.selectedMsegMorph}
                     surfaceRef={msegEditorSurfaceRef}
                     orientation={msegEditorOrientation}
-
-
-
-
-
-
-
                     rateSeconds={synthView.msegState?.playback.rate.seconds ?? 1}
                     rateReady={synthView.callbackControlReadiness.mseg.rate}
                     onSelectShape={synthView.handleSelectMsegShape}
