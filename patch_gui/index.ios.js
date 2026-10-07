@@ -20425,7 +20425,6 @@ const p = (effectId, endpointID, label, shortLabel, min, max, initial, options =
   modulationTargetIndex: options.modulationTargetIndex ?? null,
   modulationApplication: options.modulationApplication ?? (options.modulationTargetIndex === void 0 || options.modulationTargetIndex === null ? null : "linear"),
   valueKind: options.valueKind,
-  modulationIdentityEndpointID: options.modulationIdentityEndpointID,
   modulationDragStyle: options.modulationDragStyle
 });
 function outputTrimParameter(effectId, endpointID, modulationTargetIndex) {
@@ -20515,13 +20514,7 @@ const definitions = [
       p("chorus", "chorusTone", "Tone", "Tone", 0, 1, 0.5, { modulationTargetIndex: 14 }),
       p("chorus", "chorusFeedback", "Feedback", "Fdbk", 0, 0.95, 0.42, { modulationTargetIndex: 15 }),
       p("chorus", "chorusRingAmount", "Ring", "Ring", 0, 1, 0, { modulationTargetIndex: 16 }),
-      p("chorus", "chorusRingFrequencyHz", "Ring Frequency", "Freq", 10, 2e4, 28, {
-        unit: "Hz",
-        scale: "log",
-        modulationTargetIndex: 17,
-        modulationApplication: "semitones",
-        modulationIdentityEndpointID: "chorusRingFineSemitones"
-      }),
+      p("chorus", "chorusRingFrequencyHz", "Ring Frequency", "Freq", 10, 2e4, 28, { unit: "Hz", scale: "log", modulationTargetIndex: 17, modulationApplication: "semitones" }),
       outputTrimParameter("chorus", "chorusOutputTrimDb", 42)
     ]
   },
@@ -20621,14 +20614,6 @@ function allRackParameterDescriptors() {
 }
 function getRackParameterDescriptor(endpointID) {
   return RACK_PARAMETER_BY_ENDPOINT_ID.get(endpointID) ?? null;
-}
-function rackModulationIdentityEndpointID(descriptor) {
-  return descriptor.modulationIdentityEndpointID ?? descriptor.endpointID;
-}
-function getRackParameterDescriptorForModulationEndpoint(endpointID) {
-  return RACK_PARAMETER_DESCRIPTORS.find(
-    (descriptor) => rackModulationIdentityEndpointID(descriptor) === endpointID
-  ) ?? null;
 }
 function formatRackParameterValue(descriptor, value) {
   if (descriptor.choices !== void 0) {
@@ -20746,7 +20731,7 @@ function maybeLaneBaseKindForRackEndpoint(endpointID) {
 }
 const rackModulationTargetIdentities = [
   ...rackModulationParameters.map((parameter2) => ({
-    kind: laneBaseKindForRackEndpoint(rackModulationIdentityEndpointID(parameter2)),
+    kind: laneBaseKindForRackEndpoint(parameter2.endpointID),
     group: "rack",
     runtimeIndex: parameter2.modulationTargetIndex
   })),
@@ -20830,7 +20815,7 @@ const LANE_DEVICE_ENDPOINTS = /* @__PURE__ */ new Map([
   ["globalFilter", ["globalFilterCutoff", "globalFilterResonance", "globalFilterDrive", "globalFilterOutputTrimDb"]],
   ["distortion", ["distortionDriveDb", "distortionKnee", "distortionWet", "distortionWetHPHz", "distortionWetLPHz", "distortionOutputTrimDb"]],
   ["ott", ["ottMix", "ottAmount", "ottTimePercent", "ottBandDrive", "ottEnvelopeMatch", "ottOutputTrimDb"]],
-  ["chorus", ["chorusMix", "chorusTone", "chorusFeedback", "chorusRingAmount", "chorusRingFineSemitones", "chorusOutputTrimDb"]],
+  ["chorus", ["chorusMix", "chorusTone", "chorusFeedback", "chorusRingAmount", "chorusRingFrequencyHz", "chorusOutputTrimDb"]],
   ["flanger", ["flangerRate", "flangerDepth", "flangerFeedback", "flangerMix", "flangerBaseDelayMs", "flangerOutputTrimDb"]],
   ["phaser", ["phaserRate", "phaserDepth", "phaserFrequency", "phaserFeedback", "phaserPhase", "phaserMix", "phaserOutputTrimDb"]],
   ["delay", ["delayTime", "delayFeedback", "delayFilter", "delayMix", "delayOutputTrimDb"]],
@@ -21910,7 +21895,7 @@ function createRackTargetDescriptor(parameter2) {
     isQuick: parameter2.quick,
     compound: parameter2.endpointID === "phaserRate" || parameter2.endpointID === "delayTime" ? "sync" : null,
     articulationParameterId: null,
-    modulationTargetKind: parameter2.modulationTargetIndex === null ? null : laneBaseKindForRackEndpoint(rackModulationIdentityEndpointID(parameter2))
+    modulationTargetKind: parameter2.modulationTargetIndex === null ? null : laneBaseKindForRackEndpoint(parameter2.endpointID)
   });
 }
 const TARGET_DESCRIPTORS = Object.freeze(
@@ -22076,7 +22061,7 @@ const ROUTE_AMOUNT_STEPS = {
 const RACK_MODULATION_PARAMETERS = allRackParameterDescriptors().filter((parameter2) => parameter2.modulationTargetIndex !== null);
 const RACK_MODULATION_PARAMETER_BY_KIND = new Map(
   RACK_MODULATION_PARAMETERS.map((parameter2) => [
-    laneBaseKindForRackEndpoint(rackModulationIdentityEndpointID(parameter2)),
+    laneBaseKindForRackEndpoint(parameter2.endpointID),
     parameter2
   ])
 );
@@ -24840,8 +24825,6 @@ const LANE_DEVICE_PARAM_LAYOUT = Object.freeze({
     "chorusTone",
     "chorusFeedback",
     "chorusRingAmount",
-    "chorusRingOffsetMode",
-    "chorusRingFineSemitones",
     "chorusRingFrequencyHz",
     "chorusRingKeyTrackEnabled",
     "chorusRingKeyTrackOffsetSemitones",
@@ -31253,7 +31236,7 @@ function parameterEntrySpecForModulationAmount(targetKind, baseValue) {
   if (!isRackModulationTarget(laneAmountAuthorityKind(targetKind))) {
     throw new Error(`Unknown modulation target "${targetKind}".`);
   }
-  const descriptor = getRackParameterDescriptorForModulationEndpoint(
+  const descriptor = getRackParameterDescriptor(
     parseLaneModulationTargetKind(targetKind)?.endpointID ?? ""
   );
   if (descriptor === null || descriptor.modulationTargetIndex === null) {

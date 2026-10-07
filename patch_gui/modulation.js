@@ -6,8 +6,7 @@ import {
   parseLaneModulationTargetKind
 } from "./lane-modulation-targets.js";
 import {
-  allRackParameterDescriptors,
-  rackModulationIdentityEndpointID
+  allRackParameterDescriptors
 } from "./rack-parameter-descriptors.js";
 import {
   MSEG_RATE_MAX_SECONDS,
@@ -277,7 +276,7 @@ var ROUTE_AMOUNT_STEPS = {
 var RACK_MODULATION_PARAMETERS = allRackParameterDescriptors().filter((parameter) => parameter.modulationTargetIndex !== null);
 var RACK_MODULATION_PARAMETER_BY_KIND = new Map(
   RACK_MODULATION_PARAMETERS.map((parameter) => [
-    laneBaseKindForRackEndpoint(rackModulationIdentityEndpointID(parameter)),
+    laneBaseKindForRackEndpoint(parameter.endpointID),
     parameter
   ])
 );

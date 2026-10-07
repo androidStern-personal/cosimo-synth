@@ -11,7 +11,7 @@
 import { laneInstanceNumber, laneMirrorRackKind, parseLaneModulationTargetKind, } from "./lane-modulation-targets.js";
 import { effectOutputTrimNormalizedValue, effectOutputTrimValueFromNormalized, } from "./effect-output-trim.js";
 import { MODULATION_TARGET_IDENTITIES, OSCILLATOR_IDS, laneBaseKindForRackEndpoint, } from "./modulation-targets.js";
-import { RACK_EFFECT_DESCRIPTORS, rackModulationIdentityEndpointID, } from "./rack-parameter-descriptors.js";
+import { RACK_EFFECT_DESCRIPTORS, } from "./rack-parameter-descriptors.js";
 import { casesHandled, err, ok, shouldNeverHappen } from "./result.js";
 import { GLOBAL_TUNE_ENDPOINT_ID, GLOBAL_TUNE_INITIAL_SEMITONES, GLOBAL_TUNE_MAX_SEMITONES, GLOBAL_TUNE_MIN_SEMITONES, GLOBAL_TUNE_MODULATION_MAX_SEMITONES, GLOBAL_TUNE_MODULATION_MIN_SEMITONES, GLOBAL_TUNE_TARGET_KIND, } from "./global-tune.js";
 import { OSCILLATOR_DEFAULT_VOLUME_NORMALIZED } from "./oscillator-defaults.js";
@@ -406,7 +406,7 @@ function createRackTargetDescriptor(parameter) {
         articulationParameterId: null,
         modulationTargetKind: parameter.modulationTargetIndex === null
             ? null
-            : laneBaseKindForRackEndpoint(rackModulationIdentityEndpointID(parameter)),
+            : laneBaseKindForRackEndpoint(parameter.endpointID),
     });
 }
 const TARGET_DESCRIPTORS = Object.freeze([

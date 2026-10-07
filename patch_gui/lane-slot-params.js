@@ -50,7 +50,7 @@ const LANE_DEVICE_PARAM_LAYOUT = Object.freeze({
         effectOutputTrimLaneEndpointID("ott"),
     ],
     chorus: [
-        "chorusMix", "chorusMotionMode", "chorusBloomMode", "chorusTone", "chorusFeedback", "chorusRingAmount", "chorusRingOffsetMode", "chorusRingFineSemitones",
+        "chorusMix", "chorusMotionMode", "chorusBloomMode", "chorusTone", "chorusFeedback", "chorusRingAmount",
         "chorusRingFrequencyHz", "chorusRingKeyTrackEnabled", "chorusRingKeyTrackOffsetSemitones",
         effectOutputTrimLaneEndpointID("chorus"),
     ],
