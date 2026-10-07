@@ -40,7 +40,9 @@ test("the browser preview runs Enhance That's real view with working presets, sn
     page.on("pageerror", (error) => errors.push(error.message));
     page.on("request", (request) => requests.push(new URL(request.url()).pathname));
     try {
-        const response = await page.goto(`${origin}/fx/enhancer_lite/view/harness.html`);
+        // The first request starts Vite's dependency optimization, which in
+        // this monorepo crawls every root page and can take over a minute.
+        const response = await page.goto(`${origin}/fx/enhancer_lite/view/harness.html`, { timeout: 180_000 });
         assert.equal(response.status(), 200);
         const view = page.locator("#plugin-preview > *").first();
         await view.waitFor();
