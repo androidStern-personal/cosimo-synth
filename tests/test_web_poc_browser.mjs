@@ -1473,7 +1473,9 @@ test("generated browser proof keeps the real keyboard pinned and renders non-sil
         assert.ok(snapshot.audioPeak > 0.00001, `Expected non-silent audio, received peak ${snapshot.audioPeak}.`);
 
         await page.setViewportSize({ width: 390, height: 844 });
-        await page.waitForTimeout(150);
+        // The phone width swaps the scrolling desktop grid for the phone workspace.
+        await page.waitForFunction(() => document.querySelector("cosimo-desktop-react-view")
+            ?.shadowRoot?.querySelector('[data-role^="mobile-workspace-panel-"]') != null);
         const mobileWidths = await sampleKeyboardWidths(page);
         const mobileLayout = await readKeyboardLayout(page);
         assert.ok(
@@ -2803,11 +2805,14 @@ test("generated browser proof plays and visibly presses notes from a touchscreen
             "The explicitly started synth must use iOS's audible playback session, not the silent-switch ambient session.",
         );
 
+        // The synth starts with its starter lane: Drive, Delay and Reverb.
+        const starterRack = ["drive", "delay", "reverb"];
         await page.locator('[data-role="mobile-workspace-tab-fx"]').click();
-        await page.waitForFunction(() => {
+        await page.waitForFunction((expected) => {
             const root = document.querySelector("cosimo-desktop-react-view")?.shadowRoot;
-            return root?.querySelectorAll('[data-role="rack-module-list"] > [data-rack-effect-id]').length === 8;
-        });
+            const rows = root?.querySelectorAll('[data-role="rack-module-list"] > [data-rack-effect-id]') ?? [];
+            return Array.from(rows, (row) => row.getAttribute("data-rack-effect-id")).join() === expected.join();
+        }, starterRack);
         const rackLayout = await page.evaluate(() => {
             const root = document.querySelector("cosimo-desktop-react-view")?.shadowRoot;
             const listBounds = root?.querySelector('[data-role="rack-module-list"]')?.getBoundingClientRect();
@@ -2828,7 +2833,7 @@ test("generated browser proof plays and visibly presses notes from a touchscreen
             };
         });
         assert.equal(rackLayout.amountWithinEditor, true, "The mapping amount must consume only the editor column.");
-        assert.equal(rackLayout.rowHeights.length, 8, JSON.stringify(rackLayout));
+        assert.equal(rackLayout.rowHeights.length, starterRack.length, JSON.stringify(rackLayout));
         assert.ok(rackLayout.rowHeights.every((height) => height >= 44), JSON.stringify(rackLayout));
         assert.ok(
             rackLayout.listHeight >= rackLayout.rowHeights.reduce((sum, height) => sum + height, 0),

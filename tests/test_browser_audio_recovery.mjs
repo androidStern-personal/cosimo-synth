@@ -16,9 +16,15 @@ const requestedBrowserEngine = process.argv.find((argument) => (
 const browserEngines = requestedBrowserEngine
     ? [requestedBrowserEngine]
     : ["chromium", "webkit"];
-const engineSkip = (engine) => (engine === "webkit" && !existsSync(webkit.executablePath())
-    ? "Playwright's WebKit is not installed on this machine, so the Safari engine checks cannot run."
-    : false);
+const engineSkip = (engine) => {
+    if (engine !== "webkit") return false;
+    if (!existsSync(webkit.executablePath())) {
+        return "Playwright's WebKit is not installed on this machine, so the Safari engine checks cannot run.";
+    }
+    return process.platform === "linux"
+        ? "Playwright's Linux WebKit hangs its web process when it suspends an AudioContext that runs an AudioWorklet, which every lifecycle check does; run them on macOS."
+        : false;
+};
 const headless = !process.argv.includes("--headed");
 const chromiumExecutablePath = process.argv
     .find((argument) => argument.startsWith("--chromium-executable="))
