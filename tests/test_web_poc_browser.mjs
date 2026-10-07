@@ -317,9 +317,9 @@ function installEndpointListenerProbe() {
             node.port.addEventListener("message", (event) => {
                 const payload = event.data?.type === "patch" ? event.data.payload : null;
                 // The worklet coalesces multi-event blocks into one
-                // cosimo-event-batch envelope; count the inner deliveries.
-                const deliveredTypes = payload?.type === "cosimo-event-batch"
-                    ? (payload.messages ?? []).map((message) => message?.type)
+                // cmaj-event-batch envelope; count the inner deliveries.
+                const deliveredTypes = payload?.type === "cmaj-event-batch"
+                    ? payload.messages.map((message) => message.type)
                     : [payload?.type];
                 for (const replyType of deliveredTypes) {
                     if (activeReplies.has(replyType)) activeDeliveries += 1;
