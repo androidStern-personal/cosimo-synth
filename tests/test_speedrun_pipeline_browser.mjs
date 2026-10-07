@@ -229,7 +229,7 @@ test("fixture patch plus uploaded MIDI produces a downloadable verified MP4 and 
     await page.getByRole("status").waitFor();
     const clipboard = await page.evaluate(() => navigator.clipboard.readText());
     assert.equal(clipboard, snapshot.prepared.shareURL);
-    assert.match(clipboard, /\/#p=2\./u);
+    assert.match(clipboard, /\/#p=3\./u);
 
     await page.getByTestId("render-video-button").click();
     await page.waitForFunction(() => window.__COSIMO_SPEEDRUN_STUDIO__.snapshot().activeStage === "video");
@@ -300,7 +300,7 @@ test("the maximal current patch reaches the ceiling and retains a warning-class 
     assert.equal(snapshot.prepared.durationInFrames, 2_700);
     assert.equal(snapshot.prepared.durationSeconds, 90);
     assert.equal(snapshot.prepared.compressionLevel, 3);
-    assert.match(snapshot.prepared.shareURL, /#p=2\.[A-Za-z0-9_-]+$/u);
+    assert.match(snapshot.prepared.shareURL, /#p=3\.[A-Za-z0-9_-]+$/u);
     assert.equal(snapshot.prepared.shareLengthClass, "warning");
     assert.equal(snapshot.prepared.shareError, null);
     assert.match(await page.locator(".compression-note").innerText(), /compression level 3/u);

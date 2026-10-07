@@ -19,7 +19,14 @@ before(async () => {
     await fs.access(path.join(webRoot, "index.html"));
     server = await startProductWebServer();
     baseUrl = server.baseUrl;
-    browser = await chromium.launch({ headless: true });
+    // Bounce Video records its stage through Region Capture of the page's own
+    // tab: that needs full Chromium (the headless shell cannot capture) and a
+    // share prompt that accepts itself.
+    browser = await chromium.launch({
+        headless: true,
+        channel: "chromium",
+        args: ["--auto-accept-this-tab-capture", "--autoplay-policy=no-user-gesture-required"],
+    });
 });
 
 after(async () => {
@@ -28,7 +35,7 @@ after(async () => {
 });
 
 test("the preset dropdown opens current-patch Bounce Video and lazy-loads its renderer", {
-    timeout: 1_800_000,
+    timeout: 600_000,
 }, async () => {
     const page = await browser.newPage({ viewport: { width: 960, height: 700 } });
     const failures = [];
@@ -45,16 +52,12 @@ test("the preset dropdown opens current-patch Bounce Video and lazy-loads its re
 
     try {
         await routeHermeticPage(page, baseUrl);
-        await page.goto(`${baseUrl}?test=1`, { waitUntil: "domcontentloaded" });
+        await page.goto(`${baseUrl}synth.html?test=1`, { waitUntil: "domcontentloaded" });
         await page.waitForFunction(() => globalThis.__COSIMO_WEB_POC__?.getSnapshot().phase === "ready", null, {
             timeout: 30_000,
         });
-        await page.evaluate(() => {
-            const toggle = document.querySelector("cosimo-desktop-react-view")?.shadowRoot
-                ?.querySelector('[data-role="synth-preset-bar"] [data-action="toggle-sound-actions"]');
-            if (!(toggle instanceof HTMLButtonElement)) throw new Error("The Sound actions menu is missing.");
-            toggle.click();
-        });
+        await page.locator("#cosimo-start-overlay").click();
+        await page.locator('[data-role="synth-preset-bar"] [data-action="toggle-sound-actions"]').click();
         await page.waitForFunction(() => {
             const root = document.querySelector("cosimo-desktop-react-view")?.shadowRoot;
             const video = root?.querySelector('[data-role="sound-actions"] [data-action="bounce-video"]');
@@ -125,35 +128,32 @@ test("the preset dropdown opens current-patch Bounce Video and lazy-loads its re
         assert.ok(audioProof.bytes > 100_000, JSON.stringify(audioProof));
         assert.equal(audioProof.type, "audio/wav");
 
+        // The stage is captured at its true 594x1056 CSS size, so all of it
+        // must be on screen.
+        await page.setViewportSize({ width: 960, height: 1100 });
         await page.locator('[data-role="video-bounce-render-video"]').click();
-        const rendererIframe = page.locator('iframe[title="Cosimo scripted video renderer"]');
-        const iframeHandle = await rendererIframe.elementHandle({ timeout: 120_000 });
-        assert.ok(iframeHandle, "The integrated renderer did not create its scripted phone iframe.");
-        const captureFrame = await iframeHandle.contentFrame();
-        assert.ok(captureFrame, "The scripted phone iframe has no content frame.");
         const visualSamples = [];
         for (const threshold of [0, 30, 60]) {
-            await captureFrame.waitForFunction((minimumFrame) => {
-                const stage = document.querySelector(".speedrun-scripted-frame[data-frame]");
-                const frame = Number(stage?.getAttribute("data-frame"));
-                const root = document.querySelector('[data-role="scripted-desktop-patch-view"]');
-                return Number.isFinite(frame)
-                    && frame >= minimumFrame
+            await page.waitForFunction((minimumFrame) => {
+                const stage = document.querySelector('[data-role="live-stage"]');
+                const root = stage?.querySelector('iframe[title="Cosimo live performance"]')?.contentDocument
+                    ?.querySelector('[data-role="live-desktop-patch-view"]');
+                return Number(stage?.getAttribute("data-frame")) >= minimumFrame
                     && root?.querySelectorAll("canvas").length >= 1
                     && root?.querySelectorAll("svg").length >= 1;
-            }, threshold, { timeout: 240_000 });
-            visualSamples.push(await captureFrame.evaluate(() => {
-                const stage = document.querySelector(".speedrun-scripted-frame[data-frame]");
-                const root = document.querySelector('[data-role="scripted-desktop-patch-view"]');
-                if (!(stage instanceof HTMLElement) || !(root instanceof HTMLElement)) {
-                    throw new Error("The real scripted capture stage is missing.");
+            }, threshold, { timeout: 60_000 });
+            visualSamples.push(await page.evaluate(() => {
+                const stage = document.querySelector('[data-role="live-stage"]');
+                const phone = stage?.querySelector('iframe[title="Cosimo live performance"]');
+                const root = phone?.contentDocument?.querySelector('[data-role="live-desktop-patch-view"]');
+                if (!(stage instanceof HTMLElement) || !root) {
+                    throw new Error("The live stage or its phone is missing.");
                 }
-                const frame = Number(stage.dataset.frame);
                 return {
-                    frame,
+                    frame: Number(stage.dataset.frame),
                     stageWidth: stage.getBoundingClientRect().width,
                     stageHeight: stage.getBoundingClientRect().height,
-                    viewport: { width: innerWidth, height: innerHeight },
+                    viewport: { width: phone.contentWindow.innerWidth, height: phone.contentWindow.innerHeight },
                     realSurface: root.querySelector(".cosimo-surface") !== null,
                     replicaSurface: root.querySelector(".speedrun-phone") !== null,
                     canvasCount: root.querySelectorAll("canvas").length,
@@ -168,8 +168,8 @@ test("the preset dropdown opens current-patch Bounce Video and lazy-loads its re
         assert.ok(visualSamples[1].frame < visualSamples[2].frame, JSON.stringify(visualSamples));
         for (const sample of visualSamples) {
             assert.deepEqual(sample.viewport, { width: 393, height: 852 });
-            assert.equal(sample.stageWidth, 1080);
-            assert.equal(sample.stageHeight, 1920);
+            assert.equal(sample.stageWidth, 594);
+            assert.equal(sample.stageHeight, 1056);
             assert.equal(sample.realSurface, true);
             assert.equal(sample.replicaSurface, false);
             assert.ok(sample.canvasCount >= 1, JSON.stringify(sample));
@@ -183,7 +183,7 @@ test("the preset dropdown opens current-patch Bounce Video and lazy-loads its re
             const flow = root?.querySelector('[data-role="video-bounce-flow"]');
             return flow?.querySelector('[data-role="video-bounce-download"]') !== null
                 || flow?.querySelector('[data-role="video-bounce-error"]') !== null;
-        }, null, { timeout: 1_500_000 });
+        }, null, { timeout: 120_000 });
         const renderError = await page.evaluate(() => {
             const root = document.querySelector("cosimo-desktop-react-view")?.shadowRoot;
             return root?.querySelector('[data-role="video-bounce-error"]')?.textContent?.trim() ?? null;
@@ -201,6 +201,14 @@ test("the preset dropdown opens current-patch Bounce Video and lazy-loads its re
                 video.addEventListener("loadedmetadata", resolve, { once: true });
                 video.addEventListener("error", () => reject(video.error ?? new Error("Video metadata failed.")), { once: true });
             });
+            // A MediaRecorder WebM names no duration; seeking past its end
+            // makes the element find one.
+            if (!Number.isFinite(video.duration)) {
+                await new Promise((resolve) => {
+                    video.addEventListener("durationchange", resolve, { once: true });
+                    video.currentTime = Number.MAX_SAFE_INTEGER;
+                });
+            }
             const canvas = document.createElement("canvas");
             canvas.width = 135;
             canvas.height = 240;
@@ -290,8 +298,9 @@ test("the preset dropdown opens current-patch Bounce Video and lazy-loads its re
             assert.match(videoProof.download, /-speedrun\.webm$/u);
             assert.deepEqual(videoProof.header.slice(0, 4), [0x1a, 0x45, 0xdf, 0xa3]);
         }
-        assert.equal(videoProof.width, 1080);
-        assert.equal(videoProof.height, 1920);
+        // One video pixel per stage CSS pixel at this page's pixel ratio of 1.
+        assert.equal(videoProof.width, 594);
+        assert.equal(videoProof.height, 1056);
         assert.ok(videoProof.duration > 1, JSON.stringify(videoProof));
         assert.equal(new Set(videoProof.frameSamples.map(({ sha256 }) => sha256)).size, 3);
         for (const [index, sample] of videoProof.frameSamples.entries()) {

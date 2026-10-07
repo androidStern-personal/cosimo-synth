@@ -1,4 +1,5 @@
 import React from "react";
+import { flushSync } from "react-dom";
 import { createRoot } from "react-dom/client";
 
 import type { SpeedrunTelemetryTrack } from "../audio/telemetry";
@@ -161,7 +162,9 @@ export async function runLiveVideoSession(
             phone,
         }));
     };
-    renderStage();
+    // Commit the stage now: the capture below must target it while the user's
+    // click activation is still fresh, and a scheduled render can miss a frame.
+    flushSync(renderStage);
 
     const audio = request.masterAudioUrl !== null ? createAudioClock(request.masterAudioUrl) : null;
     const wall = audio === null ? createWallClock(request.startAtSeconds ?? 0) : null;
@@ -188,7 +191,6 @@ export async function runLiveVideoSession(
         // Capture acquisition must run while the user's click activation is
         // fresh — before the seconds-long iframe boot consumes it.
         if (request.record) {
-            await new Promise((resolve) => requestAnimationFrame(() => resolve(null)));
             const stageElement = stageHost.querySelector<HTMLElement>('[data-role="live-stage"]');
             if (!stageElement) throw new Error("The live stage did not mount.");
             recorder = await acquireLiveStageRecorder({
