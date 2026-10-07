@@ -13,6 +13,7 @@ import {
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const currentCmakePath = "/opt/homebrew/bin/cmake";
+const homebrewGate = process.platform === "darwin" ? false : "The release toolchain is pinned to Homebrew binaries, which exist only on macOS.";
 
 test("release system commands are immutable absolute macOS paths", () => {
     assert.equal(Object.isFrozen(seqFxReleaseSystemCommands), true);
@@ -35,7 +36,7 @@ test("release system commands are immutable absolute macOS paths", () => {
     });
 });
 
-test("release toolchain resolves approved binaries while keeping manifest evidence path-free", async () => {
+test("release toolchain resolves approved binaries while keeping manifest evidence path-free", { skip: homebrewGate }, async () => {
     const toolchain = await resolveSeqFxReleaseToolchain({
         environment: {
             ...process.env,
@@ -77,7 +78,7 @@ test("release toolchain resolves approved binaries while keeping manifest eviden
     }
 });
 
-test("release toolchain ignores poisoned PATH and emits only the allowed child environment", async (context) => {
+test("release toolchain ignores poisoned PATH and emits only the allowed child environment", { skip: homebrewGate }, async (context) => {
     const poisonBin = await mkdtemp(path.join(os.tmpdir(), "seqfx-release-path-poison-"));
     const sentinel = path.join(poisonBin, "invoked.txt");
     context.after(() => rm(poisonBin, { force: true, recursive: true }));

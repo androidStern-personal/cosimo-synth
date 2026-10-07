@@ -48,6 +48,10 @@ import {
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const currentCmajorCommit = readCmajorPin().commit;
 const scriptPath = path.join(repoRoot, "scripts", "build_seqfx_beta_release.mjs");
+const onMacOS = process.platform === "darwin";
+const plutilGate = onMacOS ? false : "Bundle metadata is read with plutil, a macOS system tool.";
+const toolchainGate = onMacOS ? false : "The release plan resolves the pinned Homebrew toolchain, which exists only on macOS.";
+const cpioGate = spawnSync("cpio", ["--version"]).error ? "The payload is listed with cpio, which macOS ships and this machine lacks." : false;
 
 test("release staging rejects embedded source maps, source content, and TypeScript filenames", async (context) => {
     const fixtureRoot = await mkdtemp(path.join(os.tmpdir(), "seqfx-release-source-leak-"));
@@ -610,7 +614,7 @@ test("release config matches the current patch manifest and effect build registr
     assert.deepEqual(releaseContractErrors(seqFxReleaseConfig, await currentManifest()), []);
 });
 
-test("native metadata validation accepts the exact approved VST3 identity and no microphone permission", async (context) => {
+test("native metadata validation accepts the exact approved VST3 identity and no microphone permission", { skip: plutilGate }, async (context) => {
     const vst3Path = await createVst3MetadataFixture(context);
     const metadata = await verifyVst3Metadata(seqFxReleaseConfig, vst3Path);
 
@@ -643,7 +647,7 @@ test("built VST3 evidence records exact bundle and executable sizes and SHA-256"
     );
 });
 
-test("native metadata validation rejects identity, category, and binary drift together", async (context) => {
+test("native metadata validation rejects identity, category, and binary drift together", { skip: plutilGate }, async (context) => {
     const vst3Path = await createVst3MetadataFixture(context);
     const infoPlistPath = path.join(vst3Path, "Contents", "Info.plist");
     const moduleInfoPath = path.join(vst3Path, "Contents", "Resources", "moduleinfo.json");
@@ -669,7 +673,7 @@ test("native metadata validation rejects identity, category, and binary drift to
     );
 });
 
-test("native metadata validation rejects microphone permission keys and usage text", async (context) => {
+test("native metadata validation rejects microphone permission keys and usage text", { skip: plutilGate }, async (context) => {
     const vst3Path = await createVst3MetadataFixture(context);
     const infoPlistPath = path.join(vst3Path, "Contents", "Info.plist");
     execFileSync("plutil", [
@@ -686,7 +690,7 @@ test("native metadata validation rejects microphone permission keys and usage te
     );
 });
 
-test("release metadata attestation independently validates matching built and staged bundles", async (context) => {
+test("release metadata attestation independently validates matching built and staged bundles", { skip: plutilGate }, async (context) => {
     const builtVst3 = await createVst3MetadataFixture(context);
     const stagedVst3 = await createVst3MetadataFixture(context);
 
@@ -700,7 +704,7 @@ test("release metadata attestation independently validates matching built and st
     );
 });
 
-test("release metadata attestation rejects staged metadata drift", async (context) => {
+test("release metadata attestation rejects staged metadata drift", { skip: plutilGate }, async (context) => {
     const builtVst3 = await createVst3MetadataFixture(context);
     const stagedVst3 = await createVst3MetadataFixture(context);
     const stagedInfoPlist = path.join(stagedVst3, "Contents", "Info.plist");
@@ -897,7 +901,7 @@ test("read-only plan names exact side effects, current paths, and release blocke
     assert.ok(plan.explicitlyNeverPerformed.includes("Patreon upload"));
 });
 
-test("plan CLI is dry-run safe and returns machine-readable output", () => {
+test("plan CLI is dry-run safe and returns machine-readable output", { skip: toolchainGate }, () => {
     const statusBefore = execFileSync("git", ["status", "--porcelain"], {
         cwd: repoRoot,
         encoding: "utf8",
@@ -966,7 +970,7 @@ test("canonical payload fingerprint ignores timestamps but detects bytes and mod
     assert.notEqual(changedMode.digest, first.digest);
 });
 
-test("unsigned cpio payload bytes do not depend on filesystem inode or timestamp", async (context) => {
+test("unsigned cpio payload bytes do not depend on filesystem inode or timestamp", { skip: cpioGate }, async (context) => {
     const firstRoot = await mkdtemp(path.join(os.tmpdir(), "seqfx-release-cpio-a-"));
     const secondRoot = await mkdtemp(path.join(os.tmpdir(), "seqfx-release-cpio-b-"));
     context.after(() => Promise.all([
