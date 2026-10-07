@@ -81,12 +81,11 @@ What changes is only *when* a value is derived, never *what*:
   2048-entry array literal — listeners or not, then posted one port message
   per event per listener. JSC garbage-collection pauses from that churn are
   multi-ms audio-thread stalls: late callbacks and missed deadlines on the
-  phone HUD. `poolCosimoAudioWorkletEventDelivery`
-  (`web/audio-worklet-instrumentation.mjs`) now drops unlistened events in
-  wasm memory unread, and coalesces the events one block does deliver into
-  a single port message (the `cosimo-event-batch` envelope, unwrapped
-  before `deliverMessageFromServer`; a lone message keeps the original wire
-  shape).
+  phone HUD. The Cmajor fork's AudioWorklet helper now drops unlistened
+  events in wasm memory unread, and coalesces the events one block does
+  deliver into a single port message (the `cmaj-event-batch` envelope,
+  unwrapped before `deliverMessageFromServer`; a lone message keeps the
+  original wire shape).
 
 ## The acceptance gate
 
