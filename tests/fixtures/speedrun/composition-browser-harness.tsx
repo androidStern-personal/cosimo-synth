@@ -19,6 +19,7 @@ import {
     SPEEDRUN_VIDEO_HEIGHT,
     SPEEDRUN_VIDEO_WIDTH,
 } from "../../../ui/speedrun/stage";
+import { captionRevealFrames } from "../../../ui/speedrun/stage-captions";
 import type { SpeedrunRecipe } from "../../../ui/speedrun/recipe";
 import { assembleTimeline } from "../../../ui/speedrun/timeline";
 import clickTrackRecipeJson from "./click-track.recipe.json";
@@ -30,6 +31,9 @@ const clickTrackRecipe = clickTrackRecipeJson as unknown as SpeedrunRecipe;
 const clickTrackTimeline = assembleTimeline(clickTrackRecipe, {
     pacing: { sectionMinimum: 100, tail: 24 },
 });
+/** One click as each caption line of the click track ticks. */
+const clickCaptionEvents = [...captionRevealFrames(clickTrackTimeline.sections[0])]
+    .map(([line, atFrame]) => ({ line, atFrame }));
 
 const rootElement = document.querySelector<HTMLElement>("#root");
 if (rootElement === null) throw new Error("The speedrun composition root is missing.");
@@ -104,7 +108,7 @@ function createClickTrack() {
     const sampleRate = clickTrackTimeline.sampleRate;
     const frameCount = clickTrackTimeline.durationInFrames * clickTrackTimeline.samplesPerFrame;
     const samples = new Float32Array(frameCount * 2);
-    const events = clickTrackTimeline.sections.flatMap((section) => section.captionEvents);
+    const events = clickCaptionEvents;
     const clickLength = Math.round(sampleRate * 0.012);
     for (const event of events) {
         const firstSample = event.atFrame * clickTrackTimeline.samplesPerFrame;
@@ -235,6 +239,7 @@ async function renderAlignmentFixture() {
         return {
             ...(await verifyAlignment(blob, expectedFrames)),
             expectedFrames,
+            expectedDurationSeconds: clickTrackTimeline.durationInFrames / clickTrackTimeline.fps,
             blobBytes: blob.size,
             blobType: blob.type,
             finalProgress,
@@ -270,7 +275,7 @@ window.__COSIMO_SPEEDRUN_COMPOSITION__ = {
     durationInFrames: fixtureTimeline.durationInFrames,
     sectionBoundaries,
     endCardFrame,
-    clickCaptionEvents: clickTrackTimeline.sections[0].captionEvents,
+    clickCaptionEvents,
     setFrame: settleFrame,
     setClickFrame: settleClickFrame,
     inspect: inspectFrame,
