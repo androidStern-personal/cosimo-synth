@@ -127,7 +127,7 @@ test("actual Cosimo GUI and audio restore parameter, wavetable, rack, articulati
                     window.audioCapture.port.onmessage = event => resolve(event.data);
                     window.audioCapture.port.postMessage("capture");
                 });
-                return { table: window.dspTables[0], ack: window.__COSIMO_WEB_POC__.runtimeInstallAckForTest(), audio };
+                return { table: window.dspTables[0], ack: window.__COSIMO_WEB_POC__.getSnapshot().latestRuntimeInstallAck, audio };
             });
             assert.equal(actual.audio.bad, 0, label);
             assert.equal(actual.audio.samples, 8192, label);
@@ -235,7 +235,7 @@ test("actual Cosimo GUI and audio restore parameter, wavetable, rack, articulati
         console.error(JSON.stringify({ errors, checkpoints, state: await page.evaluate(() => ({
             client: window.historyClient?.getSnapshot().kind,
             modulation: window.historyClient?.getSnapshot().state?.fields["modulation.v6"],
-            ack: window.__COSIMO_WEB_POC__?.runtimeInstallAckForTest(),
+            ack: window.__COSIMO_WEB_POC__?.getSnapshot().latestRuntimeInstallAck,
         })).catch(() => null) }));
         throw error;
     } finally {

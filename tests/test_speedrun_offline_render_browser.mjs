@@ -5,7 +5,7 @@ import test from "node:test";
 
 import { chromium, webkit } from "playwright";
 
-import { createWebServer } from "../web/server.mjs";
+import { startProductWebServer } from "./helpers/bounce_browser_fixture.mjs";
 import {
     createCurrentSpeedrunContext,
     readSpeedrunFixture,
@@ -13,7 +13,6 @@ import {
 
 const repoRoot = path.resolve(import.meta.dirname, "..");
 let server;
-let baseUrl;
 let fixture;
 
 function packMidi(status, note, velocity) {
@@ -154,25 +153,18 @@ async function openHarness(browserType) {
         page.on("console", (message) => console.log(`[browser:${message.type()}] ${message.text()}`));
         page.on("pageerror", (error) => console.error(`[browser:error] ${error.stack ?? error}`));
     }
-    await page.goto(`${baseUrl}build/speedrun-audio-test/audio-browser-harness.html`);
+    await page.goto(`${server.baseUrl}build/speedrun-audio-test/audio-browser-harness.html`);
     await page.waitForFunction(() => Boolean(window.__COSIMO_SPEEDRUN_AUDIO_HARNESS__));
     return { browser, page };
 }
 
 test.before(async () => {
-    // The offline engine's shared memory needs a cross-origin isolated page,
-    // which the product web server's headers provide.
-    server = createWebServer(repoRoot);
-    await new Promise((resolve, reject) => {
-        server.once("error", reject);
-        server.listen(0, "127.0.0.1", resolve);
-    });
-    baseUrl = `http://127.0.0.1:${server.address().port}/`;
-    fixture = await buildFixture();
+    // The harness page loads the built web synth from the repository root.
+    [server, fixture] = await Promise.all([startProductWebServer(repoRoot), buildFixture()]);
 });
 
 test.after(async () => {
-    await new Promise((resolve) => server?.close(resolve));
+    await server?.close();
 });
 
 const browserEngines = [

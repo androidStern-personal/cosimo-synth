@@ -66,35 +66,6 @@ export type BounceBankView = {
     readonly pcm: Int16Array;
 };
 
-type BounceTestConfig = {
-    roots?: number[];
-    holdSeconds?: number;
-    tailCapSeconds?: number;
-    concurrency?: number;
-};
-
-type BounceTestDiagnostics = {
-    captures: Array<{
-        generation: number;
-        sourceGeneration: number;
-        digest: string;
-        roots: number[];
-        wasmMemoryPages: Array<number | null>;
-    }>;
-    retirements: Array<unknown>;
-};
-
-declare global {
-    // Browser acceptance tests may shorten duration/root count while still
-    // traversing the real worker/persistence/install transaction.
-    // eslint-disable-next-line no-var
-    var __COSIMO_BOUNCE_TEST_CONFIG__: BounceTestConfig | undefined;
-    // Test-only bounded telemetry. It contains counters/digests only,
-    // never PCM or a retained performer.
-    // eslint-disable-next-line no-var
-    var __COSIMO_BOUNCE_TEST_DIAGNOSTICS__: BounceTestDiagnostics | undefined;
-}
-
 export type BounceUIState = {
     readonly hydrated: boolean;
     readonly captureReady: boolean;
@@ -190,25 +161,6 @@ function assertCapture(capture: {
     let peak = 0;
     for (const sample of decoded.pcm) peak = Math.max(peak, Math.abs(sample));
     if (peak === 0) throw new Error("Bounce verification decoded a silent bank");
-}
-
-function readTestConfig(): BounceTestConfig {
-    const value = globalThis.__COSIMO_BOUNCE_TEST_CONFIG__;
-    return value && typeof value === "object" ? value : {};
-}
-
-function recordTestDiagnostic(
-    kind: keyof BounceTestDiagnostics,
-    value: BounceTestDiagnostics[typeof kind][number],
-) {
-    if (!globalThis.__COSIMO_BOUNCE_TEST_CONFIG__) return;
-    const diagnostics = globalThis.__COSIMO_BOUNCE_TEST_DIAGNOSTICS__ ??= {
-        captures: [],
-        retirements: [],
-    };
-    const values = diagnostics[kind] as unknown[];
-    values.push(value);
-    if (values.length > 64) values.splice(0, values.length - 64);
 }
 
 /**
@@ -417,38 +369,14 @@ export function useBounceInPlace() {
                 signal: abortController.signal,
                 onProgress: (preparation) => setState((current) => ({ ...current, preparation })),
             });
-            const testConfig = readTestConfig();
-            const planOptions = {
-                ...(recursiveRoots !== null
-                    ? { roots: [...recursiveRoots] }
-                    : (testConfig.roots ? { roots: testConfig.roots } : {})),
-                ...(testConfig.holdSeconds ? { holdSeconds: testConfig.holdSeconds } : {}),
-                ...(testConfig.tailCapSeconds ? { tailCapSeconds: testConfig.tailCapSeconds } : {}),
-            };
             const result = await coordinator.bounce({
                 preBouncePatchDocument: patchDocument,
                 captureRequest: {
                     snapshot: recipe.snapshot,
-                    planOptions,
-                    ...((testConfig.concurrency ?? (recursive ? 1 : null))
-                        ? { concurrency: testConfig.concurrency ?? 1 }
-                        : {}),
+                    planOptions: recursiveRoots === null ? {} : { roots: [...recursiveRoots] },
+                    ...(recursive ? { concurrency: 1 } : {}),
                     signal: abortController.signal,
                 },
-            });
-            const metrics = result.capture.metrics;
-            console.info("[bounce] capture completed (absolute VM timing is advisory)", {
-                roots: result.capture.plan.roots.length,
-                sampleRate: result.capture.plan.snapshot.sampleRate,
-                workers: testConfig.concurrency ?? (recursive ? 1 : "auto"),
-                metrics,
-            });
-            recordTestDiagnostic("captures", {
-                generation: result.bounceDocument.generation,
-                sourceGeneration: recipe.snapshot.sourceGeneration,
-                digest: result.capture.digest,
-                roots: [...result.capture.plan.roots],
-                wasmMemoryPages: metrics.map((entry) => entry.wasmMemoryPages),
             });
             setState((current) => ({
                 ...current,
@@ -466,39 +394,20 @@ export function useBounceInPlace() {
             // no live patch or in-flight state save still roots it. Presets and
             // snapshots never hold a Bounce reference.
             const supersededDigest = previousBounceDocument?.revertRef.bankDigest ?? null;
-            let retirement: unknown;
-            try {
-                if (supersededDigest === null) {
-                    const usage = await store.usage();
-                    retirement = Object.freeze({
-                        completed: true,
-                        reason: "no-superseded-bank",
-                        deletedDigests: Object.freeze([]),
-                        before: usage,
-                        after: usage,
-                    });
-                } else {
-                    retirement = await retireSupersededBounceBanks({
+            if (supersededDigest !== null) {
+                try {
+                    await retireSupersededBounceBanks({
                         store,
                         candidateDigests: [supersededDigest],
                         dspOverwrittenDigests: [supersededDigest],
                         livePatchDocument: result.patchDocument,
                     });
+                } catch (cause) {
+                    // Retirement is housekeeping after the Bounce is already
+                    // audible: failing keeps the bytes and never rolls it back.
+                    console.warn(`A superseded Bounce bank could not be deleted: ${errorMessage(cause)}`);
                 }
-            } catch (cause) {
-                // Retirement is strictly post-commit housekeeping. Its safe
-                // failure mode is retaining bytes, never misreporting or
-                // rolling back a Bounce that is already audible.
-                retirement = Object.freeze({
-                    completed: false,
-                    reason: `gc-failed: ${errorMessage(cause)}`,
-                    deletedDigests: Object.freeze([]),
-                    before: null,
-                    after: null,
-                });
             }
-            recordTestDiagnostic("retirements", retirement);
-            console.info("[bounce] bank retention", retirement);
         } catch (cause) {
             setState((current) => ({
                 ...current,

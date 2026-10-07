@@ -1,13 +1,10 @@
 import assert from "node:assert/strict";
-import path from "node:path";
 import test, { after, before } from "node:test";
 
 import { chromium } from "playwright";
-import { createWebServer } from "../web/server.mjs";
+import { persistOneRootBounce, startProductWebServer } from "./helpers/bounce_browser_fixture.mjs";
 import { createCurrentSpeedrunContext } from "./helpers/speedrun_test_context.mjs";
 
-const repoRoot = path.resolve(import.meta.dirname, "..");
-const webRoot = path.join(repoRoot, "build", "web");
 let browser;
 let currentDefaults;
 let server;
@@ -15,13 +12,8 @@ let baseUrl;
 
 before(async () => {
     currentDefaults = (await createCurrentSpeedrunContext()).defaults;
-    server = createWebServer(webRoot);
-    await new Promise((resolve, reject) => {
-        server.once("error", reject);
-        server.listen(0, "127.0.0.1", resolve);
-    });
-    const address = server.address();
-    baseUrl = `http://127.0.0.1:${address.port}/synth.html`;
+    server = await startProductWebServer();
+    baseUrl = `${server.baseUrl}synth.html`;
     browser = await chromium.launch({
         headless: true,
         ignoreDefaultArgs: ["--mute-audio"],
@@ -30,7 +22,7 @@ before(async () => {
 
 after(async () => {
     await browser?.close();
-    await new Promise((resolve) => server?.close(resolve));
+    await server?.close();
 });
 
 async function createTestPage() {
@@ -57,88 +49,10 @@ async function createTestPage() {
     return { context, page };
 }
 
-async function persistAudibleBounce(page) {
-    return page.evaluate(async (defaults) => {
-        const [{ buildBounceBank, encodeBounceBank }, { createBrowserBounceBankStore }, digestModule, documentModule] = await Promise.all([
-            import("./bounce/bank-format.mjs"),
-            import("./bounce/browser-bank-store.mjs"),
-            import("./bounce/digest.mjs"),
-            import("./bounce/document.mjs"),
-        ]);
-        const frameCount = 240_000;
-        const samples = new Int16Array(frameCount * 2);
-        for (let frame = 0; frame < frameCount; frame += 1) {
-            const sample = Math.round(Math.sin((frame * Math.PI * 2 * 220) / 48_000) * 1_500);
-            samples[frame * 2] = sample;
-            samples[(frame * 2) + 1] = sample;
-        }
-        const bank = buildBounceBank({
-            sampleRate: 48_000,
-            roots: [{ note: 60, samples }],
-        });
-        const bytes = encodeBounceBank(bank);
-        const digest = await digestModule.digestBounceBank(bytes);
-        const persistence = await createBrowserBounceBankStore().put(digest, bytes);
-        const bounce = documentModule.parseBounceDocument({
-            format: "cosimo.bounce",
-            version: 1,
-            digest,
-            bankByteLength: bytes.byteLength,
-            roots: [60],
-            segments: [{
-                rootNote: 60,
-                frameOffset: 0,
-                frameCount,
-                noteOffFrameOffset: 120_000,
-            }],
-            capture: {
-                sampleRate: 48_000,
-                tempoBpm: 120,
-                velocity: 100,
-                holdFrames: 120_000,
-                tailCapFrames: 120_000,
-            },
-            generation: 1,
-            revertRef: {
-                bankDigest: null,
-                patchDocument: documentModule.createBouncePatchDocument({
-                    parameters: { filterMode: 0, sourceMode: 0 },
-                    storedState: { [documentModule.BOUNCE_STATE_KEY]: null },
-                }),
-            },
-        });
-        const currentState = {
-            format: "cosimo.browserPatchState",
-            version: 5,
-            sound: {
-                parameters: defaults.parameters,
-                storedState: {
-                    "modulation.v6": defaults.modulation,
-                    "articulations.v4": defaults.articulations,
-                    "bounce.v1": defaults.bounce,
-                    "lane.v1": defaults.lane,
-                },
-            },
-        };
-        currentState.sound.parameters = {
-            ...currentState.sound.parameters,
-            ampRelease: 0.2,
-            filterMode: 0,
-            sourceMode: 1,
-        };
-        currentState.sound.storedState = {
-            ...currentState.sound.storedState,
-            [documentModule.BOUNCE_STATE_KEY]: documentModule.serializeBounceDocument(bounce),
-        };
-        localStorage.setItem("cosimo.web.patch-state.v2", JSON.stringify(currentState));
-        return { digest, persistence };
-    }, currentDefaults);
-}
-
 test("OPFS bounce survives reload, installs into the live sampler, and plays without re-render", async () => {
     const { context, page } = await createTestPage();
     try {
-        const persisted = await persistAudibleBounce(page);
+        const persisted = await persistOneRootBounce(page, currentDefaults);
         assert.equal(persisted.persistence.backend, "opfs");
 
         await page.reload({ waitUntil: "domcontentloaded" });

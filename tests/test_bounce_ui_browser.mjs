@@ -1,59 +1,19 @@
 import assert from "node:assert/strict";
-import fs from "node:fs/promises";
-import { createServer } from "node:http";
-import path from "node:path";
 import test, { after, before } from "node:test";
 
 import { chromium } from "playwright";
 
-const repoRoot = path.resolve(import.meta.dirname, "..");
-const webRoot = path.join(repoRoot, "build", "web");
+import { BOUNCE_DEFAULT_ROOTS } from "../bounce/capture-plan.mjs";
+import { persistOneRootBounce, startProductWebServer } from "./helpers/bounce_browser_fixture.mjs";
+import { createCurrentSpeedrunContext } from "./helpers/speedrun_test_context.mjs";
+
 let browser;
+let currentDefaults;
 let server;
-let baseUrl;
-
-function contentType(filePath) {
-    const extension = path.extname(filePath);
-    if (extension === ".html") return "text/html; charset=utf-8";
-    if (extension === ".js" || extension === ".mjs") return "text/javascript; charset=utf-8";
-    if (extension === ".json") return "application/json; charset=utf-8";
-    if (extension === ".svg") return "image/svg+xml";
-    if (extension === ".png") return "image/png";
-    if (extension === ".ttf") return "font/ttf";
-    if (extension === ".wav") return "audio/wav";
-    return "application/octet-stream";
-}
-
-async function serve(request, response) {
-    try {
-        const requestUrl = new URL(request.url ?? "/", baseUrl);
-        const relative = decodeURIComponent(
-            requestUrl.pathname === "/" ? "index.html" : requestUrl.pathname.slice(1),
-        );
-        const filePath = path.resolve(webRoot, relative);
-        if (filePath !== webRoot && !filePath.startsWith(`${webRoot}${path.sep}`)) {
-            response.writeHead(403).end("Forbidden");
-            return;
-        }
-        const bytes = await fs.readFile(filePath);
-        response.writeHead(200, {
-            "cache-control": "no-store",
-            "content-type": contentType(filePath),
-        });
-        response.end(bytes);
-    } catch (error) {
-        response.writeHead(error?.code === "ENOENT" ? 404 : 500).end(String(error));
-    }
-}
 
 before(async () => {
-    server = createServer(serve);
-    await new Promise((resolve, reject) => {
-        server.once("error", reject);
-        server.listen(0, "127.0.0.1", resolve);
-    });
-    const address = server.address();
-    baseUrl = `http://127.0.0.1:${address.port}/`;
+    currentDefaults = (await createCurrentSpeedrunContext()).defaults;
+    server = await startProductWebServer();
     browser = await chromium.launch({
         headless: true,
         ignoreDefaultArgs: ["--mute-audio"],
@@ -62,10 +22,23 @@ before(async () => {
 
 after(async () => {
     await browser?.close();
-    await new Promise((resolve) => server?.close(resolve));
+    await server?.close();
 });
 
-async function openStartedPage() {
+async function waitForPhase(page, phase, timeout) {
+    await page.waitForFunction(
+        (expected) => globalThis.__COSIMO_WEB_POC__?.getSnapshot().phase === expected,
+        phase,
+        { timeout },
+    );
+}
+
+/**
+ * Open the web synth with audio running. With `bounced`, the page first saves
+ * a sound already bounced to one root and reloads onto it, so its recursive
+ * Bounces render that one root.
+ */
+async function openStartedPage({ bounced = false } = {}) {
     const context = await browser.newContext({ viewport: { width: 1280, height: 800 } });
     const page = await context.newPage();
     const failures = [];
@@ -73,38 +46,43 @@ async function openStartedPage() {
     page.on("console", (message) => {
         if (message.type() === "error") failures.push(`console: ${message.text()}`);
     });
+    // Count Bounce render workers, and keep the Wasm memory size each one
+    // reports with its rendered root.
     await page.addInitScript(() => {
         const NativeWorker = globalThis.Worker;
+        globalThis.bounceWorkerWasmPages = [];
         globalThis.Worker = new Proxy(NativeWorker, {
             construct(target, argumentsList, newTarget) {
+                const worker = Reflect.construct(target, argumentsList, newTarget);
                 if (String(argumentsList[0]).includes("bounce-render-worker")) {
                     const count = Number(sessionStorage.getItem("cosimo.bounce.worker-count") ?? 0) + 1;
                     sessionStorage.setItem("cosimo.bounce.worker-count", String(count));
+                    worker.addEventListener("message", (event) => {
+                        if (event.data?.type === "render-root-complete") {
+                            globalThis.bounceWorkerWasmPages.push(event.data.result.metrics.wasmMemoryPages);
+                        }
+                    });
                 }
-                return Reflect.construct(target, argumentsList, newTarget);
+                return worker;
             },
         });
     });
-    await page.goto(`${baseUrl}?test=1`, { waitUntil: "domcontentloaded" });
-    await page.waitForFunction(
-        () => globalThis.__COSIMO_WEB_POC__?.getSnapshot().phase === "ready",
-        null,
-        { timeout: 120_000 },
-    );
+    await page.goto(`${server.baseUrl}synth.html?test`, { waitUntil: "domcontentloaded" });
+    await waitForPhase(page, "ready", 120_000);
+    if (bounced) {
+        await persistOneRootBounce(page, currentDefaults);
+        await page.reload({ waitUntil: "domcontentloaded" });
+        await waitForPhase(page, "ready", 120_000);
+    }
     await page.locator("#cosimo-start-overlay").click();
-    await page.waitForFunction(
-        () => globalThis.__COSIMO_WEB_POC__?.getSnapshot().phase === "running",
-        null,
-        { timeout: 30_000 },
-    );
-    await page.evaluate(() => {
-        globalThis.__COSIMO_BOUNCE_TEST_CONFIG__ = {
-            roots: [60],
-            holdSeconds: 0.08,
-            tailCapSeconds: 0.12,
-            concurrency: 1,
-        };
-    });
+    await waitForPhase(page, "running", 30_000);
+    if (bounced) {
+        await page.waitForFunction(
+            () => globalThis.__COSIMO_WEB_POC__.getSnapshot().bounceRestore.status === "ready",
+            null,
+            { timeout: 120_000 },
+        );
+    }
     return { context, failures, page };
 }
 
@@ -143,7 +121,8 @@ async function averageHeldNoteWorkletLoad(page, windowCount = 2) {
     return {
         windows,
         averageLoad: windows.reduce((sum, entry) => sum + entry.averageLoad, 0) / windows.length,
-        deadlineMisses: windows.reduce((sum, entry) => sum + entry.deadlineMisses, 0),
+        deadlineMissRate: windows.reduce((sum, entry) => sum + entry.deadlineMisses, 0)
+            / windows.reduce((sum, entry) => sum + entry.blockCount, 0),
     };
 }
 
@@ -159,12 +138,24 @@ async function setPerfProcessMultiplier(page, multiplier) {
 
 async function storedBounceDocument(page) {
     return page.evaluate(async () => {
-        const state = await globalThis.__COSIMO_WEB_POC__.storedState();
-        const value = state.values?.["bounce.v1"] ?? state["bounce.v1"] ?? null;
+        const value = (await globalThis.__COSIMO_WEB_POC__.storedState()).values["bounce.v1"] ?? null;
         return typeof value === "string" ? JSON.parse(value) : value;
     });
 }
 
+/** Wait until the saved sound holds this Bounce generation and plays its bank. */
+async function waitForBouncedGeneration(page, generation) {
+    await page.waitForFunction(async (expected) => {
+        const value = (await globalThis.__COSIMO_WEB_POC__.storedState()).values["bounce.v1"] ?? null;
+        const document = typeof value === "string" ? JSON.parse(value) : value;
+        return document?.generation === expected
+            && globalThis.__COSIMO_WEB_POC__.getSnapshot().parameterValues.sourceMode === 1;
+    }, generation, { timeout: 120_000 });
+    await waitForBounceAudioAvailable(page);
+    return storedBounceDocument(page);
+}
+
+/** The digests and total size of the banks in the browser bank store. */
 async function bounceStoreUsage(page) {
     return page.evaluate(async () => {
         const root = await navigator.storage.getDirectory();
@@ -185,27 +176,29 @@ async function bounceStoreUsage(page) {
     });
 }
 
-/** Open the synth's Sound actions menu, where Bounce audio lives. */
-async function openSoundActions(page) {
-    await page.evaluate(() => {
+/** Open or close the synth's Sound actions menu, where Bounce audio lives. */
+async function setSoundActionsOpen(page, open) {
+    await page.evaluate((expanded) => {
         const toggle = document.querySelector("cosimo-desktop-react-view")?.shadowRoot
             ?.querySelector('[data-role="synth-preset-bar"] [data-action="toggle-sound-actions"]');
         if (!(toggle instanceof HTMLButtonElement)) throw new Error("The Sound actions menu is missing.");
-        if (toggle.getAttribute("aria-expanded") !== "true") toggle.click();
-    });
+        if ((toggle.getAttribute("aria-expanded") === "true") !== expanded) toggle.click();
+    }, open);
 }
 
+/** Wait until Bounce audio can be pressed again, then close the menu that offers it. */
 async function waitForBounceAudioAvailable(page, timeout = 30_000) {
-    await openSoundActions(page);
+    await setSoundActionsOpen(page, true);
     await page.waitForFunction(() => {
         const action = document.querySelector("cosimo-desktop-react-view")?.shadowRoot
             ?.querySelector('[data-role="sound-actions"] [data-action="bounce-audio"]');
         return action instanceof HTMLButtonElement && !action.disabled;
     }, null, { timeout });
+    await setSoundActionsOpen(page, false);
 }
 
 async function clickBounceAudio(page) {
-    await openSoundActions(page);
+    await setSoundActionsOpen(page, true);
     await page.evaluate(() => {
         const action = document.querySelector("cosimo-desktop-react-view")?.shadowRoot
             ?.querySelector('[data-role="sound-actions"] [data-action="bounce-audio"]');
@@ -216,41 +209,11 @@ async function clickBounceAudio(page) {
     });
 }
 
-async function completeBounce(page, expectedGeneration) {
-    const before = await page.evaluate(() => ({
-        captures: globalThis.__COSIMO_BOUNCE_TEST_DIAGNOSTICS__?.captures.length ?? 0,
-        retirements: globalThis.__COSIMO_BOUNCE_TEST_DIAGNOSTICS__?.retirements.length ?? 0,
-    }));
-    await clickBounceAudio(page);
-    await page.waitForFunction(({ captures, retirements, generation }) => {
-        const diagnostics = globalThis.__COSIMO_BOUNCE_TEST_DIAGNOSTICS__;
-        const latest = diagnostics?.captures.at(-1);
-        return (diagnostics?.captures.length ?? 0) > captures
-            && (diagnostics?.retirements.length ?? 0) > retirements
-            && latest?.generation === generation;
-    }, {
-        captures: before.captures,
-        retirements: before.retirements,
-        generation: expectedGeneration,
-    }, { timeout: 120_000 });
-    await waitForBounceAudioAvailable(page);
-    return storedBounceDocument(page);
+function workerCount(page) {
+    return page.evaluate(() => Number(sessionStorage.getItem("cosimo.bounce.worker-count") ?? 0));
 }
 
-async function completeRevert(page, expectedGeneration) {
-    await page.locator('[data-role="bounce-revert"]').click();
-    await page.waitForFunction(async (generation) => {
-        const state = await globalThis.__COSIMO_WEB_POC__.storedState();
-        const value = state.values?.["bounce.v1"] ?? state["bounce.v1"] ?? null;
-        const document = typeof value === "string" ? JSON.parse(value) : value;
-        return document?.generation === generation
-            && globalThis.__COSIMO_WEB_POC__.getSnapshot().parameterValues.sourceMode === 1;
-    }, expectedGeneration, { timeout: 30_000 });
-    await waitForBounceAudioAvailable(page);
-    return storedBounceDocument(page);
-}
-
-test("Bounce UI cancels safely, completes through a real worker, and fits desktop plus 393x852", async () => {
+test("Bounce UI cancels safely, completes through real workers, and fits desktop plus 393x852", async () => {
     const { context, failures, page } = await openStartedPage();
     try {
         await waitForBounceAudioAvailable(page);
@@ -269,31 +232,22 @@ test("Bounce UI cancels safely, completes through a real worker, and fits deskto
         // or runtime source transition is allowed to leak from that attempt.
         await clickBounceAudio(page);
         const cancel = page.locator('[data-role="bounce-cancel"]');
-        await page.waitForTimeout(250);
-        const cancellationDiagnostic = await page.evaluate(() => {
-            const root = document.querySelector("cosimo-desktop-react-view")?.shadowRoot;
-            return {
-                cancelCount: root?.querySelectorAll('[data-role="bounce-cancel"]').length ?? 0,
-                error: root?.querySelector('[data-role="bounce-error-inline"]')?.textContent ?? null,
-                progress: root?.querySelector('[data-role="bounce-progress"]')?.textContent ?? null,
-            };
-        });
-        assert.equal(cancellationDiagnostic.cancelCount, 1, JSON.stringify(cancellationDiagnostic));
+        await cancel.waitFor({ state: "visible" });
         await cancel.evaluate((button) => button.click());
         await waitForBounceAudioAvailable(page);
         assert.equal(
             (await page.evaluate(() => globalThis.__COSIMO_WEB_POC__.getSnapshot())).parameterValues.sourceMode,
             0,
         );
-        const workerCountAfterCancel = await page.evaluate(() => (
-            Number(sessionStorage.getItem("cosimo.bounce.worker-count") ?? 0)
-        ));
+        assert.equal(await page.locator('[data-role="bounce-error-inline"]').count(), 0,
+            "a cancelled Bounce is not an error");
+        const workerCountAfterCancel = await workerCount(page);
 
         await clickBounceAudio(page);
         await page.locator('[data-role="bounce-progress"]').waitFor({ state: "visible" });
         await page.locator('[data-role="bounce-sampled-source-stage"]').waitFor({
             state: "visible",
-            timeout: 120_000,
+            timeout: 300_000,
         });
         await page.locator('[data-role="bounce-pcm-waveform"]').waitFor({ state: "visible" });
         await page.locator('[data-role="bounce-revert"]').waitFor({ state: "visible" });
@@ -301,12 +255,9 @@ test("Bounce UI cancels safely, completes through a real worker, and fits deskto
         await page.waitForFunction(() => (
             globalThis.__COSIMO_WEB_POC__.getSnapshot().parameterValues.sourceMode === 1
         ));
-        const storedState = await page.evaluate(() => globalThis.__COSIMO_WEB_POC__.storedState());
-        assert.ok(storedState.values?.["bounce.v1"] ?? storedState["bounce.v1"]);
-        assert.equal(
-            await page.evaluate(() => Number(sessionStorage.getItem("cosimo.bounce.worker-count") ?? 0)),
-            workerCountAfterCancel + 1,
-        );
+        assert.deepEqual((await storedBounceDocument(page)).roots, BOUNCE_DEFAULT_ROOTS);
+        assert.equal(await workerCount(page), workerCountAfterCancel + BOUNCE_DEFAULT_ROOTS.length,
+            "every root renders in a fresh worker");
         assert.equal(
             await page.locator('[data-role="oscillator-performance-controls"]').getAttribute("data-bounce-inert"),
             "true",
@@ -363,32 +314,16 @@ test("Bounce UI cancels safely, completes through a real worker, and fits deskto
         await page.waitForFunction(() => (
             globalThis.__COSIMO_WEB_POC__.getSnapshot().parameterValues.sourceMode === 0
         ));
-        const revertedState = await page.evaluate(() => globalThis.__COSIMO_WEB_POC__.storedState());
-        assert.equal(revertedState.values?.["bounce.v1"] ?? revertedState["bounce.v1"] ?? null, null);
+        assert.equal(await storedBounceDocument(page), null);
         await setPerfProcessMultiplier(page, 2);
         await averageHeldNoteWorkletLoad(page);
         const residentOscillatorLoad = await averageHeldNoteWorkletLoad(page);
-        assert.ok(
-            residentOscillatorLoad.averageLoad <= preInstallLoad.averageLoad * 1.10,
-            JSON.stringify({ preInstallLoad, sampledLoad, residentOscillatorLoad }),
-        );
-        assert.ok(
-            residentOscillatorLoad.deadlineMisses <= preInstallLoad.deadlineMisses,
-            JSON.stringify({ preInstallLoad, sampledLoad, residentOscillatorLoad }),
-        );
-        assert.ok(
-            sampledLoad.deadlineMisses <= preInstallLoad.deadlineMisses,
-            JSON.stringify({ preInstallLoad, sampledLoad, residentOscillatorLoad }),
-        );
-        console.log(`# ${JSON.stringify({
-            bounceG2: {
-                note: 60,
-                preInstallLoad,
-                sampledLoad,
-                residentOscillatorLoad,
-                absoluteVmTimingAdvisory: true,
-            },
-        })}`);
+        // Two measurements of the same audio path differ by scheduling noise,
+        // so every comparison with the oscillator baseline allows 10%.
+        const loads = JSON.stringify({ preInstallLoad, sampledLoad, residentOscillatorLoad });
+        assert.ok(residentOscillatorLoad.averageLoad <= preInstallLoad.averageLoad * 1.10, loads);
+        assert.ok(residentOscillatorLoad.deadlineMissRate <= preInstallLoad.deadlineMissRate * 1.10, loads);
+        assert.ok(sampledLoad.deadlineMissRate <= preInstallLoad.deadlineMissRate * 1.10, loads);
 
         assert.deepEqual(failures, []);
     } finally {
@@ -396,21 +331,21 @@ test("Bounce UI cancels safely, completes through a real worker, and fits deskto
     }
 });
 
-test("M7 recursively bounces the same roots, retires superseded bytes, and stays bounded for ten cycles", async () => {
-    const { context, failures, page } = await openStartedPage();
+test("a bounced sound bounces again on its own roots, retires superseded banks, and stays bounded for ten cycles", async () => {
+    const { context, failures, page } = await openStartedPage({ bounced: true });
     try {
-        const first = await completeBounce(page, 1);
-        assert.deepEqual(first.roots, [60]);
+        const first = await storedBounceDocument(page);
+        assert.equal(first.generation, 1);
 
-        // Deliberately color each fresh layer so the three generations have
-        // distinct content digests and exercise actual retirement rather than
-        // content-addressed deduplication.
+        // Colour each fresh layer so the generations have distinct content
+        // digests and exercise real retirement rather than deduplication.
         await page.evaluate(() => {
             const api = globalThis.__COSIMO_WEB_POC__;
             api.setParameter("filterMode", 1);
             api.setParameter("filterCutoff", 6_000);
         });
-        const second = await completeBounce(page, 2);
+        await clickBounceAudio(page);
+        const second = await waitForBouncedGeneration(page, 2);
         assert.deepEqual(second.roots, first.roots);
         assert.equal(second.revertRef.bankDigest, first.digest);
         assert.notEqual(second.digest, first.digest);
@@ -421,40 +356,44 @@ test("M7 recursively bounces the same roots, retires superseded bytes, and stays
             api.setParameter("filterMode", 4);
             api.setParameter("filterCutoff", 2_200);
         });
-        const third = await completeBounce(page, 3);
+        await clickBounceAudio(page);
+        const third = await waitForBouncedGeneration(page, 3);
         assert.deepEqual(third.roots, first.roots);
         assert.equal(third.revertRef.bankDigest, second.digest);
         assert.notEqual(third.digest, second.digest);
 
+        // Generation 1's bank goes once generation 3 overwrites its inactive
+        // DSP slot; that deletion follows the audible flip.
+        await page.waitForFunction(async (expected) => {
+            const root = await navigator.storage.getDirectory();
+            const directory = await root.getDirectoryHandle("cosimo-bounce-banks-v1");
+            const digests = [];
+            for await (const name of directory.keys()) {
+                const match = /^bank-([0-9a-f]{64})\.csbk$/.exec(name);
+                if (match) digests.push(match[1]);
+            }
+            return JSON.stringify(digests.sort()) === JSON.stringify(expected);
+        }, [second.digest, third.digest].sort(), { timeout: 30_000 });
         const afterThird = await bounceStoreUsage(page);
-        assert.deepEqual(
-            afterThird.entries.map((entry) => entry.digest),
-            [second.digest, third.digest].sort(),
-            "generation 1 must be gone after its inactive DSP slot is overwritten",
-        );
 
-        const reverted = await completeRevert(page, 2);
+        await page.locator('[data-role="bounce-revert"]').click();
+        const reverted = await waitForBouncedGeneration(page, 2);
         assert.equal(JSON.stringify(reverted), exactSecondDocument,
             "Revert must restore the latest pre-bounce document exactly");
 
         const soakUsage = [];
-        const soakHeap = [];
         for (let cycle = 0; cycle < 10; cycle += 1) {
-            const rebounced = await completeBounce(page, 3);
+            await clickBounceAudio(page);
+            const rebounced = await waitForBouncedGeneration(page, 3);
             assert.equal(rebounced.digest, third.digest,
                 `cycle ${cycle + 1} must reproduce generation 3 deterministically`);
             soakUsage.push(await bounceStoreUsage(page));
-            soakHeap.push((await page.evaluate(() => (
-                globalThis.__COSIMO_WEB_POC__.getSnapshot().usedJSHeapSize
-            ))) ?? null);
-            const cycleRevert = await completeRevert(page, 2);
-            assert.equal(JSON.stringify(cycleRevert), exactSecondDocument);
+            await page.locator('[data-role="bounce-revert"]').click();
+            assert.equal(JSON.stringify(await waitForBouncedGeneration(page, 2)), exactSecondDocument);
         }
 
-        const diagnostics = await page.evaluate(() => (
-            structuredClone(globalThis.__COSIMO_BOUNCE_TEST_DIAGNOSTICS__)
-        ));
-        const wasmPages = diagnostics.captures.flatMap((capture) => capture.wasmMemoryPages);
+        const wasmPages = await page.evaluate(() => globalThis.bounceWorkerWasmPages);
+        assert.equal(wasmPages.length, 12, "every recursive Bounce renders its one root in one worker");
         assert.equal(wasmPages.every(Number.isInteger), true);
         assert.equal(new Set(wasmPages).size, 1,
             `recursive worker wasm pages ratcheted: ${JSON.stringify(wasmPages)}`);
@@ -463,16 +402,6 @@ test("M7 recursively bounces the same roots, retires superseded bytes, and stays
             && usage.bankBytes === afterThird.bankBytes
         )), true, JSON.stringify({ afterThird, soakUsage }));
         assert.deepEqual(failures, []);
-        console.log(`# ${JSON.stringify({
-            bounceG5: {
-                cycles: 10,
-                workerWasmPages: wasmPages[0],
-                opfsBankCount: afterThird.bankCount,
-                opfsBankBytes: afterThird.bankBytes,
-                usedJSHeapSizeAdvisory: soakHeap,
-                absoluteVmTimingAdvisory: true,
-            },
-        })}`);
     } finally {
         await context.close();
     }

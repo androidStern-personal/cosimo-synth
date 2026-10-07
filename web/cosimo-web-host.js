@@ -460,12 +460,6 @@ globalThis.__COSIMO_WEB_POC__ = {
         const pressureValue = Math.max(0, Math.min(127, Math.round(Number(value) * 127)));
         sendMIDI(0xd0 | nextChannel, pressureValue);
     },
-    runtimeInstallAckForTest() {
-        if (!isTestMode) {
-            throw new Error("Runtime acknowledgements are only exposed in test mode.");
-        }
-        return state.latestRuntimeInstallAck ? { ...state.latestRuntimeInstallAck } : null;
-    },
     resetAudioMetrics() {
         state.audioWorkletPerfEpoch += 1;
         state.audioPeak = 0;
