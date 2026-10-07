@@ -757,7 +757,9 @@ test("the shared effect loader imports the SeqFX React dev module and keeps auto
     });
 
     await createLoaderHarness(page);
-    await page.locator('[data-role="seqfx-root"]').waitFor();
+    // The first dev-module request starts Vite's dependency optimization,
+    // which in this monorepo crawls every root page and can take over a minute.
+    await page.locator('[data-role="seqfx-root"]').waitFor({ timeout: 180_000 });
 
     const snapshot = await page.evaluate(() => ({
         customElementDefined: Boolean(window.customElements.get("builder-kit-state-view")),
