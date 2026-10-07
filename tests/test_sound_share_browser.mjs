@@ -277,7 +277,9 @@ async function waitForSharedLoadDialog(page) {
 }
 
 async function confirmSharedLoad(page) {
-    await presetBar(page).locator('[data-role="shared-load-dialog"]').getByRole("button", { name: "Load" }).click();
+    // A trusted click returns only once the page has applied the maximal
+    // sound, which the development harness renders for up to a minute.
+    await presetBar(page).locator('[data-role="shared-load-dialog"]').getByRole("button", { name: "Load" }).click({ timeout: 120_000 });
     await page.waitForFunction(() => window.location.hash === "", undefined, { timeout: 30_000 });
     await page.waitForTimeout(900);
 }
