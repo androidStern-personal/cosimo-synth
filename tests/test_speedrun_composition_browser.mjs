@@ -5,9 +5,7 @@ import { createServer } from "node:http";
 import path from "node:path";
 import test, { after, before } from "node:test";
 
-import { chromium } from "playwright";
-
-import { missingH264Encoder } from "./helpers/h264_encoder.mjs";
+import { launchChromium, missingH264Encoder } from "./helpers/h264_encoder.mjs";
 
 const repoRoot = path.resolve(import.meta.dirname, "..");
 const webRoot = path.join(repoRoot, "build", "speedrun-composition-test");
@@ -79,7 +77,7 @@ before(async () => {
     });
     const address = server.address();
     baseUrl = `http://127.0.0.1:${address.port}/`;
-    browser = await chromium.launch({ headless: true });
+    browser = await launchChromium();
 });
 
 after(async () => {

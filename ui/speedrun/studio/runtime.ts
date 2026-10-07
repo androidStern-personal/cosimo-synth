@@ -60,8 +60,9 @@ async function loadCatalog(webRootURL: URL): Promise<WavetableCatalog> {
 }
 
 /** Resolve the generated performer and derive the live contract instead of pinning a stale endpoint list. */
-export async function loadSpeedrunStudioRuntime(): Promise<SpeedrunStudioRuntime> {
-    const webRootURL = resolveSpeedrunWebRootURL();
+export async function loadSpeedrunStudioRuntime(
+    webRootURL = resolveSpeedrunWebRootURL(),
+): Promise<SpeedrunStudioRuntime> {
     const engineModuleURL = new URL("cmaj_Cosimo_Synth.offline.js", webRootURL);
     const [Synth, catalog] = await Promise.all([
         loadSynthClass(engineModuleURL),

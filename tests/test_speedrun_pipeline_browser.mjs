@@ -3,9 +3,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import test, { after, before } from "node:test";
 
-import { chromium } from "playwright";
-
-import { missingH264Encoder } from "./helpers/h264_encoder.mjs";
+import { launchChromium, missingH264Encoder } from "./helpers/h264_encoder.mjs";
 import { startProductWebServer } from "./helpers/product_web_server.mjs";
 import { routeHermeticPage } from "./helpers/hermetic_page.mjs";
 import { buildMaximalCurrentSpeedrunPatch } from "./helpers/speedrun_test_context.mjs";
@@ -93,8 +91,8 @@ async function newStudioPage({ trackResources = false } = {}) {
     page.on("console", (message) => {
         if (message.type() === "error") failures.push(`console: ${message.text()}`);
     });
-    await page.goto(new URL("speedrun/index.html", baseUrl).href, { waitUntil: "networkidle" });
-    await page.waitForFunction(() => window.__COSIMO_SPEEDRUN_STUDIO__?.ready === true);
+    await page.goto(new URL("speedrun-studio-test/studio-browser-harness.html", baseUrl).href, { waitUntil: "networkidle" });
+    await page.waitForFunction(() => window.speedrunStudio !== undefined);
     return { context, page, failures };
 }
 
@@ -125,7 +123,7 @@ async function drivePipeline(page, patch, {
     await page.getByTestId("video-quality").selectOption("very-low");
     await page.getByTestId("render-video-button").click();
     await page.getByTestId("video-ready").waitFor({ timeout: 360_000 });
-    return page.evaluate(() => window.__COSIMO_SPEEDRUN_STUDIO__.snapshot());
+    return page.evaluate(() => window.speedrunStudio.snapshot());
 }
 
 function assertVerifiedMP4(snapshot) {
@@ -167,10 +165,7 @@ function assertVerifiedWebM(snapshot) {
 before(async () => {
     server = await startProductWebServer();
     baseUrl = server.baseUrl;
-    browser = await chromium.launch({
-        headless: true,
-        args: ["--enable-precise-memory-info"],
-    });
+    browser = await launchChromium({ args: ["--enable-precise-memory-info"] });
 });
 
 after(async () => {
@@ -232,10 +227,10 @@ test("fixture patch plus uploaded MIDI produces a downloadable verified MP4 and 
     assert.match(clipboard, /\/#p=3\./u);
 
     await page.getByTestId("render-video-button").click();
-    await page.waitForFunction(() => window.__COSIMO_SPEEDRUN_STUDIO__.snapshot().activeStage === "video");
+    await page.waitForFunction(() => window.speedrunStudio.snapshot().activeStage === "video");
     await page.getByRole("button", { name: "Cancel video" }).click();
     await page.getByTestId("error-cancelled").waitFor({ timeout: 60_000 });
-    await page.waitForFunction(() => window.__COSIMO_SPEEDRUN_STUDIO__.snapshot().activeStage === null);
+    await page.waitForFunction(() => window.speedrunStudio.snapshot().activeStage === null);
     assert.deepEqual(failures, []);
     console.log(`# ${JSON.stringify({ speedrunMidiPipeline: snapshot.video.verification })}`);
     await context.close();
@@ -296,7 +291,7 @@ test("the maximal current patch reaches the ceiling and retains a warning-class 
     await page.getByTestId("analyze-button").click();
     await page.getByTestId("recipe-report").waitFor({ timeout: 30_000 });
 
-    const snapshot = await page.evaluate(() => window.__COSIMO_SPEEDRUN_STUDIO__.snapshot());
+    const snapshot = await page.evaluate(() => window.speedrunStudio.snapshot());
     assert.equal(snapshot.prepared.durationInFrames, 2_700);
     assert.equal(snapshot.prepared.durationSeconds, 90);
     assert.equal(snapshot.prepared.compressionLevel, 3);
@@ -403,7 +398,7 @@ test("five consecutive end-to-end renders release every checkpoint pool and keep
         const beforeAudioURLs = resources.at(-1).createdObjectURLCount;
         await page.getByTestId("render-audio-button").click();
         await page.waitForFunction((createdBefore) => {
-            const studio = window.__COSIMO_SPEEDRUN_STUDIO__.snapshot();
+            const studio = window.speedrunStudio.snapshot();
             const probe = window.__COSIMO_SPEEDRUN_RESOURCE_PROBE__.snapshot();
             return probe.createdObjectURLCount > createdBefore
                 && studio.activeStage === null
@@ -417,14 +412,14 @@ test("five consecutive end-to-end renders release every checkpoint pool and keep
         ));
         await page.getByTestId("render-video-button").click();
         await page.waitForFunction((createdBefore) => {
-            const studio = window.__COSIMO_SPEEDRUN_STUDIO__.snapshot();
+            const studio = window.speedrunStudio.snapshot();
             const probe = window.__COSIMO_SPEEDRUN_RESOURCE_PROBE__.snapshot();
             return probe.createdObjectURLCount > createdBefore
                 && studio.activeStage === null
                 && studio.video !== null
                 && studio.ownedObjectURLCount === 2;
         }, beforeVideoURLs, { timeout: 360_000 });
-        snapshots.push(await page.evaluate(() => window.__COSIMO_SPEEDRUN_STUDIO__.snapshot()));
+        snapshots.push(await page.evaluate(() => window.speedrunStudio.snapshot()));
         await inspectSettledRender();
     }
 
@@ -435,9 +430,9 @@ test("five consecutive end-to-end renders release every checkpoint pool and keep
     assert.ok(settledHeapSpread < 128 * 1024 * 1024, JSON.stringify(heapBytes));
     assert.ok(heapBytes.at(-1) <= heapBytes[0] + 128 * 1024 * 1024, JSON.stringify(heapBytes));
 
-    await page.evaluate(() => window.__COSIMO_SPEEDRUN_STUDIO__.dispose());
+    await page.evaluate(() => window.speedrunStudio.dispose());
     const disposed = await page.evaluate(() => ({
-        studio: window.__COSIMO_SPEEDRUN_STUDIO__.snapshot(),
+        studio: window.speedrunStudio.snapshot(),
         resource: window.__COSIMO_SPEEDRUN_RESOURCE_PROBE__.snapshot(),
     }));
     assert.equal(disposed.studio.ownedObjectURLCount, 0);
