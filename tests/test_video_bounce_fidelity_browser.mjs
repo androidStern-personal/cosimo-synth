@@ -29,11 +29,14 @@ const scenarios = [
     },
 ];
 
+// A blank region is one flat colour, a standard deviation near zero. The
+// Voice filter knob is a thin arc on a dark ground, so its painted spread is
+// smaller than the other landmarks'.
 const minimumRegionStandardDeviation = {
     title: 20,
     keyboard: 60,
     rail: 12,
-    knob: 20,
+    knob: 7,
     filter: 3,
     image: 10,
     hud: 15,
@@ -120,7 +123,7 @@ async function compareImages(page, liveDataUrl, captureDataUrl, landmarks) {
         canvas.width = width;
         canvas.height = height;
         const context = canvas.getContext("2d", { willReadFrequently: true });
-        if (!context) throw new Error("M0 fidelity comparison needs a 2D canvas.");
+        if (!context) throw new Error("The fidelity comparison needs a 2D canvas.");
         context.drawImage(live, 0, 0);
         const livePixels = context.getImageData(0, 0, width, height).data;
         context.clearRect(0, 0, width, height);
@@ -178,7 +181,7 @@ async function compareImages(page, liveDataUrl, captureDataUrl, landmarks) {
         diffCanvas.width = width;
         diffCanvas.height = height;
         const diffContext = diffCanvas.getContext("2d");
-        if (!diffContext) throw new Error("M0 fidelity diff needs a 2D canvas.");
+        if (!diffContext) throw new Error("The fidelity diff needs a 2D canvas.");
         const diff = diffContext.createImageData(width, height);
         for (let offset = 0; offset < diff.data.length; offset += 4) {
             const difference = Math.max(
@@ -212,7 +215,7 @@ after(async () => {
     await server?.stop();
 });
 
-test("M0 real DesktopPatchView stills retain every representative live element", { timeout: 180_000 }, async () => {
+test("real DesktopPatchView stills retain every representative live element", { timeout: 180_000 }, async () => {
     const report = [];
 
     for (const scenario of scenarios) {
@@ -307,5 +310,5 @@ test("M0 real DesktopPatchView stills retain every representative live element",
         path.join(artifactRoot, "report.json"),
         `${JSON.stringify({ chromium: browser.version(), viewport: "393x852", report }, null, 2)}\n`,
     );
-    console.log(`# ${JSON.stringify({ videoBounceM0Fidelity: report.map(({ scenario, global }) => ({ scenario, global })) })}`);
+    console.log(`# ${JSON.stringify({ videoBounceFidelity: report.map(({ scenario, global }) => ({ scenario, global })) })}`);
 });

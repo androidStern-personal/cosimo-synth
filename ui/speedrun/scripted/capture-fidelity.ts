@@ -82,7 +82,7 @@ function restoreCaptureSvgSizes(root: ParentNode) {
 }
 
 /**
- * Capture-only fallback for open shadow roots such as the preset-name bar.
+ * Capture-only fallback for open shadow roots such as the keyboard's.
  * Clone the rendered leaf into its light DOM and project it through a slot;
  * product components and their normal shadow-root path remain untouched.
  */
