@@ -11,6 +11,10 @@ import { claimEnhanceThatOutput, enhanceThatSourceErrors, parseEnhanceThatArgs,
 import { assertPayloadModes, buildUnsignedFlatPackage, deterministicFlatPackageXarArgs,
     normalizePayloadModes, payloadInventoryErrors, renderPackageInfo } from "../scripts/build_seqfx_beta_release.mjs";
 
+const macOSOnly = process.platform === "darwin"
+    ? false
+    : "The installer workflow runs macOS system tools (ditto, codesign, pkgutil) that exist only on macOS.";
+
 async function fixture(context) {
     const root = await realpath(await mkdtemp(path.join(os.tmpdir(), "enhance-that-package-source-")));
     context.after(() => rm(root, { recursive: true, force: true }));
@@ -110,7 +114,7 @@ test("unsigned validation cannot replace an existing system plugin", async conte
     assert.match(result.stderr, /unsigned validation installer cannot replace/u);
 });
 
-test("signed system-update workflow retains an identical backup outside scan, using a scripted signature adapter", { skip: process.platform !== "darwin" }, async context => {
+test("signed system-update workflow retains an identical backup outside scan, using a scripted signature adapter", { skip: macOSOnly }, async context => {
     const f = await fixture(context);
     const bundle = path.join(f.systemRoot, "EnhanceThat.vst3");
     await mkdir(path.join(bundle, "Contents/Resources"), { recursive: true });
@@ -128,7 +132,7 @@ test("signed system-update workflow retains an identical backup outside scan, us
     assert.ok(result.stderr.includes(backups[0]));
 });
 
-test("backup-copy failure preserves the original and reports the actual retained recovery path", { skip: process.platform !== "darwin" }, async context => {
+test("backup-copy failure preserves the original and reports the actual retained recovery path", { skip: macOSOnly }, async context => {
     const f = await fixture(context);
     const bundle = path.join(f.systemRoot, "EnhanceThat.vst3");
     await mkdir(path.join(bundle, "Contents/Resources"), { recursive: true });
@@ -143,7 +147,7 @@ test("backup-copy failure preserves the original and reports the actual retained
     assert.ok(backup && result.stderr.includes(backup));
 });
 
-test("sealed processor metadata mismatch stops a system update before creating recovery state", { skip: process.platform !== "darwin" }, async context => {
+test("sealed processor metadata mismatch stops a system update before creating recovery state", { skip: macOSOnly }, async context => {
     const f = await fixture(context);
     const bundle = path.join(f.systemRoot, "EnhanceThat.vst3");
     await mkdir(path.join(bundle, "Contents/Resources"), { recursive: true });
@@ -240,7 +244,7 @@ for (const location of ["user legacy", "user new", "system legacy"]) {
     });
 }
 
-test("AU system update rejects a mismatched component and preserves matching recovery", { skip: process.platform !== "darwin" }, async context => {
+test("AU system update rejects a mismatched component and preserves matching recovery", { skip: macOSOnly }, async context => {
     const f = await fixture(context);
     const vst3 = path.join(f.systemRoot, "EnhanceThat.vst3");
     const bundle = path.join(path.dirname(f.systemRoot), "Components/EnhanceThat.component");
@@ -272,7 +276,7 @@ test("AU system update rejects a mismatched component and preserves matching rec
         await readFile(path.join(vst3, "Contents/Resources/moduleinfo.json"), "utf8"));
 });
 
-test("both declared formats retain executable modes and survive existing flat-package extraction", { skip: process.platform !== "darwin" }, async context => {
+test("both declared formats retain executable modes and survive existing flat-package extraction", { skip: macOSOnly }, async context => {
     const f = await fixture(context);
     const config = { identity: { bundleName: "EnhanceThat", installerIdentifier: "dev.cosimo.enhancer-lite.pkg",
         pluginVersion: "0.1.0", patchId: "dev.cosimo.enhancer-lite" }, payloadBundles: [

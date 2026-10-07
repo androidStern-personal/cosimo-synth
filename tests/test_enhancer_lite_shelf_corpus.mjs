@@ -34,7 +34,7 @@ test("decoded Float32 integrity rejects copied input and output tampering", asyn
     try {
         await fs.access(path.join(corpusDirectory, "measurements.json"));
     } catch {
-        context.skip("local ignored Spectre shelf corpus is unavailable");
+        context.skip("The Spectre shelf corpus is a local, git-ignored recording set that is not on this machine.");
         return;
     }
 

@@ -6,13 +6,14 @@ import path from "node:path";
 import { chromium } from "playwright";
 import { build as bundle } from "esbuild";
 import { buildPluginStateFixture } from "./build_plugin_state_fixture.mjs";
+import { cmajorExternalCodegen, cmajorSourceDirectory } from "./cmajor_source.mjs";
 
 const root = path.resolve(import.meta.dirname, "../..");
 const fixture = path.join(root, "tests/browser/fixtures/plugin_state_system");
 
 /** Actual generated worker, React view, native storage and DSP checks shared by scenarios. */
 export async function startPluginStateBrowserFixture(build) {
-    const source = process.env.BUILDER_KIT_CMAJOR_SOURCE;
+    const source = cmajorSourceDirectory();
     let browser, page, server;
     const errors = [];
 
@@ -53,7 +54,6 @@ export async function startPluginStateBrowserFixture(build) {
     }
 
     try {
-        assert.ok(source, "Set BUILDER_KIT_CMAJOR_SOURCE to the isolated Cmajor fork");
         const manifestPath = await buildPluginStateFixture(build);
         const runtime = path.dirname(manifestPath);
         const staging = path.resolve(runtime, "../../..");
@@ -62,7 +62,7 @@ export async function startPluginStateBrowserFixture(build) {
         await bundle({ entryPoints: [viewSource], outfile: path.join(build, "view.js"), bundle: true, format: "esm",
             platform: "browser", jsx: "automatic", target: "es2022", logLevel: "silent" });
         const generated = path.join(build, "generated.js");
-        const codegen = spawnSync(path.join(root, "build/browser_plugin_state_generator/cosimo_cmajor_external_codegen"), [
+        const codegen = spawnSync(cmajorExternalCodegen(), [
             manifestPath, generated, "PluginStateSystem", "--target", "javascript", "--max-frames-per-block", "128",
         ], { encoding: "utf8", timeout: 60_000 });
         if (codegen.error) throw codegen.error;

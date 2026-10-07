@@ -35,35 +35,38 @@ const DELAY_FIELD_ENDPOINTS = Object.freeze([
     "delayFilterKeyTrackOffsetSemitones",
 ]);
 
-function readDelayFieldWrites(snapshot) {
+/**
+ * Every upload the lane sent for one slot, in order, as the fields it sets:
+ * a single-field edit sets one field; a record replaces the whole slot at
+ * once, so the DSP never sees a partial mix of old and new fields.
+ */
+function readSlotUploads(snapshot, slotId, fieldEndpoints) {
     return snapshot.sentMessages.flatMap(({ endpointID, value }) => {
-        if (endpointID !== "laneSlotParamValue"
-                || Number(value?.slotId) !== DELAY_SLOT_ID) {
-            return [];
+        if (Number(value?.slotId) !== slotId) return [];
+        if (endpointID === "laneSlotParamValue") {
+            const field = fieldEndpoints[Number(value?.paramIndex)] ?? `unknown:${String(value?.paramIndex)}`;
+            return [{ [field]: Number(value?.value) }];
         }
-        return [{
-            endpointID: DELAY_FIELD_ENDPOINTS[Number(value?.paramIndex)]
-                ?? `unknown:${String(value?.paramIndex)}`,
-            value: Number(value?.value),
-        }];
+        if (endpointID === "laneSlotParams") {
+            return [Object.fromEntries(fieldEndpoints.map((field, index) => [field, Number(value?.values?.[index])]))];
+        }
+        return [];
     });
 }
 
-function applyDelayFieldWrites(runtimeMirror, writes) {
-    for (const write of writes) {
-        runtimeMirror[write.endpointID] = write.value;
-    }
-    return runtimeMirror;
+function pickFields(upload, fields) {
+    return Object.fromEntries(fields.map((field) => [field, upload[field]]));
 }
 
-function applyDelayFieldWritesWithoutExclusiveModeOverlap(runtimeMirror, writes) {
-    for (const write of writes) {
-        applyDelayFieldWrites(runtimeMirror, [write]);
+/** Apply uploads in order; no state between them may run Sync and Key Track together. */
+function applyDelayUploadsWithoutExclusiveModeOverlap(runtimeMirror, uploads) {
+    for (const upload of uploads) {
+        Object.assign(runtimeMirror, upload);
         assert.equal(
             runtimeMirror.delayTimeMode >= 1
                 && runtimeMirror.delayTimeKeyTrackEnabled >= 1,
             false,
-            `Delay runtime prefix exposed Sync + Key Track after ${write.endpointID}`,
+            `Delay runtime exposed Sync + Key Track after ${JSON.stringify(upload)}`,
         );
     }
     return runtimeMirror;
@@ -99,30 +102,17 @@ function trackedThreeBandSplitLaneDocJson() {
     return JSON.stringify(document);
 }
 
-function readSplitFieldWrites(snapshot) {
-    return snapshot.sentMessages.flatMap(({ endpointID, value }) => {
-        if (endpointID !== "laneSlotParamValue"
-                || Number(value?.slotId) !== SPLIT_SLOT_ID) {
-            return [];
-        }
-        return [{
-            endpointID: SPLIT_FIELD_ENDPOINTS[Number(value?.paramIndex)]
-                ?? `unknown:${String(value?.paramIndex)}`,
-            value: Number(value?.value),
-        }];
-    });
-}
-
-function applySplitEnableWritesWithoutStaleOffset(runtimeMirror, writes, which) {
+/** Apply uploads in order; no state between them may enable Key Track with a stale offset. */
+function applySplitUploadsWithoutStaleOffset(runtimeMirror, uploads, which) {
     const enabledEndpointID = `xover${which}KeyTrackEnabled`;
     const offsetEndpointID = `xover${which}KeyTrackOffsetSemitones`;
-    for (const write of writes) {
-        runtimeMirror[write.endpointID] = write.value;
+    for (const upload of uploads) {
+        Object.assign(runtimeMirror, pickFields(upload, Object.keys(runtimeMirror).filter((field) => field in upload)));
         assert.equal(
             runtimeMirror[enabledEndpointID] >= 1
                 && runtimeMirror[offsetEndpointID] !== 0,
             false,
-            `${which} split prefix enabled Key Track with a stale offset after ${write.endpointID}`,
+            `${which} split enabled Key Track with a stale offset after ${JSON.stringify(upload)}`,
         );
     }
     return runtimeMirror;
@@ -560,22 +550,19 @@ test("Delay mode edits publish one mutually exclusive document and runtime state
                 && Number(params?.delayTimeKeyTrackEnabled) === 1
                 && Number(params?.delayTimeKeyTrackOffsetSemitones) === 0;
         });
-        const enableWrites = readDelayFieldWrites(snapshot);
-        assert.deepEqual(enableWrites, [
-            { endpointID: "delayTimeMode", value: 0 },
-            { endpointID: "delayTimeKeyTrackOffsetSemitones", value: 0 },
-            { endpointID: "delayTimeKeyTrackEnabled", value: 1 },
-        ]);
+        const modeFields = ["delayTimeMode", "delayTimeKeyTrackEnabled", "delayTimeKeyTrackOffsetSemitones"];
+        const enableUploads = readSlotUploads(snapshot, DELAY_SLOT_ID, DELAY_FIELD_ENDPOINTS);
+        assert.equal(enableUploads.length, 1, "the three dependent fields change in one record");
         const runtimeMirror = {
             delayTimeMode: 1,
             delayTimeKeyTrackEnabled: 0,
             delayTimeKeyTrackOffsetSemitones: 0,
         };
-        applyDelayFieldWritesWithoutExclusiveModeOverlap(runtimeMirror, enableWrites);
+        applyDelayUploadsWithoutExclusiveModeOverlap(runtimeMirror, enableUploads.map((upload) => pickFields(upload, modeFields)));
         assert.deepEqual(runtimeMirror, {
+            delayTimeMode: 0,
             delayTimeKeyTrackEnabled: 1,
             delayTimeKeyTrackOffsetSemitones: 0,
-            delayTimeMode: 0,
         });
 
         await page.evaluate(() => window.__COSIMO_DESKTOP_HARNESS__.clearDebugLog());
@@ -588,12 +575,9 @@ test("Delay mode edits publish one mutually exclusive document and runtime state
         const syncParams = readLaneDocument(snapshot).devices["delay#1"].params;
         assert.equal(syncParams.delayTimeMode, 1);
         assert.equal(syncParams.delayTimeKeyTrackEnabled, 0);
-        const syncWrites = readDelayFieldWrites(snapshot);
-        assert.deepEqual(syncWrites, [
-            { endpointID: "delayTimeKeyTrackEnabled", value: 0 },
-            { endpointID: "delayTimeMode", value: 1 },
-        ]);
-        applyDelayFieldWritesWithoutExclusiveModeOverlap(runtimeMirror, syncWrites);
+        const syncUploads = readSlotUploads(snapshot, DELAY_SLOT_ID, DELAY_FIELD_ENDPOINTS);
+        assert.equal(syncUploads.length, 1, "Sync and Key Track switch in one record");
+        applyDelayUploadsWithoutExclusiveModeOverlap(runtimeMirror, syncUploads.map((upload) => pickFields(upload, modeFields)));
         assert.equal(snapshot.laneParams.delayTimeMode, 1);
         assert.equal(runtimeMirror.delayTimeMode, 1);
         assert.equal(runtimeMirror.delayTimeKeyTrackEnabled, 0);
@@ -608,8 +592,8 @@ test("Delay mode edits publish one mutually exclusive document and runtime state
         ));
         const feedbackAfter = readLaneDocument(snapshot).devices["delay#1"].params.delayFeedback;
         assert.equal(snapshot.laneParams.delayFeedback, feedbackAfter);
-        assert.deepEqual(readDelayFieldWrites(snapshot), [
-            { endpointID: "delayFeedback", value: feedbackAfter },
+        assert.deepEqual(readSlotUploads(snapshot, DELAY_SLOT_ID, DELAY_FIELD_ENDPOINTS), [
+            { delayFeedback: feedbackAfter },
         ]);
     } finally {
         await page.close();
@@ -679,7 +663,7 @@ test("Frequency Split publishes centered enables safely and MAPPINGS edits its l
                 const afterSplit = readLaneDocument(afterLongPress).chain
                     .find((node) => node.groupId === "split#1");
                 assert.equal(afterSplit.xoverLowHz, beforeSplit.xoverLowHz);
-                assert.deepEqual(readSplitFieldWrites(afterLongPress), []);
+                assert.deepEqual(readSlotUploads(afterLongPress, SPLIT_SLOT_ID, SPLIT_FIELD_ENDPOINTS), []);
                 const action = page.locator(
                     '[data-role="rack-parameter-menu-item"][data-action="toggle-key-track"]',
                 );
@@ -703,16 +687,13 @@ test("Frequency Split publishes centered enables safely and MAPPINGS edits its l
             assert.equal(await status.evaluate((element) => getComputedStyle(element).pointerEvents), "none");
             assert.equal(boxesOverlap(statusBox, labelBox), false);
             assert.equal(boxesOverlap(statusBox, readoutBox), false);
-            const enableWrites = readSplitFieldWrites(snapshot);
-            assert.deepEqual(enableWrites, [
-                { endpointID: offsetEndpointID, value: 0 },
-                { endpointID: enabledEndpointID, value: 1 },
-            ]);
+            const enableUploads = readSlotUploads(snapshot, SPLIT_SLOT_ID, SPLIT_FIELD_ENDPOINTS);
+            assert.equal(enableUploads.length, 1, "centering and enabling change in one record");
             assert.deepEqual(
-                applySplitEnableWritesWithoutStaleOffset({
+                applySplitUploadsWithoutStaleOffset({
                     [enabledEndpointID]: 0,
                     [offsetEndpointID]: expected.retainedOffset,
-                }, enableWrites, expected.which),
+                }, enableUploads, expected.which),
                 { [enabledEndpointID]: 1, [offsetEndpointID]: 0 },
             );
 
@@ -722,8 +703,8 @@ test("Frequency Split publishes centered enables safely and MAPPINGS edits its l
                 const split = readLaneDocument(next)?.chain?.find((node) => node.groupId === "split#1");
                 return split?.[enabledEndpointID] === false;
             });
-            assert.deepEqual(readSplitFieldWrites(snapshot), [
-                { endpointID: enabledEndpointID, value: 0 },
+            assert.deepEqual(readSlotUploads(snapshot, SPLIT_SLOT_ID, SPLIT_FIELD_ENDPOINTS), [
+                { [enabledEndpointID]: 0 },
             ]);
         }
 
@@ -1091,8 +1072,11 @@ test("Voice Filter center-and-enable is one undoable parameter transaction", asy
             && Number(next.parameterValues.filterCutoffKeyTrackOffsetSemitones) === 0
             && next.parameterTransactions.length === 1
         ));
-        assert.deepEqual(snapshot.gestureStarts, ["filterCutoffKeyTrackEnabled"]);
-        assert.deepEqual(snapshot.gestureEnds, ["filterCutoffKeyTrackEnabled"]);
+        // The host sees a gesture around every parameter the edit changes,
+        // so touch automation records both values of the one transaction.
+        const transactionEndpoints = ["filterCutoffKeyTrackEnabled", "filterCutoffKeyTrackOffsetSemitones"];
+        assert.deepEqual(snapshot.gestureStarts, transactionEndpoints);
+        assert.deepEqual([...snapshot.gestureEnds].sort(), [...transactionEndpoints].sort());
         assert.deepEqual(
             snapshot.sentMessages
                 .filter(({ endpointID }) => endpointID.startsWith("filterCutoffKeyTrack"))
@@ -1101,7 +1085,7 @@ test("Voice Filter center-and-enable is one undoable parameter transaction", asy
                 { endpointID: "filterCutoffKeyTrackEnabled", value: 1 }],
         );
         assert.deepEqual(snapshot.parameterTransactions[0], {
-            ownerEndpointIDs: ["filterCutoffKeyTrackEnabled"],
+            ownerEndpointIDs: transactionEndpoints,
             changes: [{
                 endpointID: "filterCutoffKeyTrackOffsetSemitones",
                 before: 9.25,

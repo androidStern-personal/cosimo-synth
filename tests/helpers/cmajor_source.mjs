@@ -35,3 +35,16 @@ export function cmajorSourceDirectory() {
 export function cmajorWebApiDirectory() {
     return path.join(cmajorSourceDirectory(), "javascript/cmaj_api");
 }
+
+/**
+ * The Cmajor code generator the web build uses, built (or brought up to
+ * date) against that same checkout; returns the executable's path.
+ */
+export function cmajorExternalCodegen() {
+    const buildDirectory = path.join(root, "build/cmajor_external_codegen-host");
+    execFileSync("cmake", ["-S", path.join(root, "tools/cmajor_external_codegen"), "-B", buildDirectory,
+        "-DCMAKE_BUILD_TYPE=Release"], { cwd: root, stdio: ["ignore", "ignore", "inherit"] });
+    execFileSync("cmake", ["--build", buildDirectory, "--config", "Release", "--target", "cosimo_cmajor_external_codegen"],
+        { cwd: root, stdio: ["ignore", "ignore", "inherit"] });
+    return path.join(buildDirectory, "cosimo_cmajor_external_codegen");
+}
