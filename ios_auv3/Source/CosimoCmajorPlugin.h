@@ -1667,8 +1667,6 @@ private:
       devServerProbe: globalThis.__COSIMO_DEV_SERVER_PROBE ?? null,
       resourceBaseURL: bootSource === 'devServer' ? devServerURL : bundleResourceBaseURL,
       documentTitle: document.title,
-      htmlMarker: globalThis.__COSIMO_DEV_HTML_MARKER ?? '',
-      jsMarker: globalThis.__COSIMO_DEV_JS_MARKER ?? '',
       statusText: '',
       viewActive: Boolean(container),
       containerText: container?.innerText ?? '',
