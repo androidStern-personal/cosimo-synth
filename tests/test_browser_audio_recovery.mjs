@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { existsSync } from "node:fs";
 import fs from "node:fs/promises";
 import path from "node:path";
 import test, { after, before } from "node:test";
@@ -15,6 +16,9 @@ const requestedBrowserEngine = process.argv.find((argument) => (
 const browserEngines = requestedBrowserEngine
     ? [requestedBrowserEngine]
     : ["chromium", "webkit"];
+const engineSkip = (engine) => (engine === "webkit" && !existsSync(webkit.executablePath())
+    ? "Playwright's WebKit is not installed on this machine, so the Safari engine checks cannot run."
+    : false);
 const headless = !process.argv.includes("--headed");
 const chromiumExecutablePath = process.argv
     .find((argument) => argument.startsWith("--chromium-executable="))
@@ -440,7 +444,7 @@ before(async () => {
         server.listen(0, "127.0.0.1", resolve);
     });
     synthUrl = `http://127.0.0.1:${server.address().port}/synth.html`;
-    for (const browserEngine of browserEngines) {
+    for (const browserEngine of browserEngines.filter((engine) => !engineSkip(engine))) {
         const launchedBrowser = browserEngine === "webkit"
             ? await webkit.launch({ headless })
             : await chromium.launch({
@@ -457,7 +461,7 @@ after(async () => {
 });
 
 for (const browserEngine of browserEngines) {
-test(`[${browserEngine}] each lifecycle signal releases input and recovers the existing audio graph`, async () => {
+test(`[${browserEngine}] each lifecycle signal releases input and recovers the existing audio graph`, { skip: engineSkip(browserEngine) }, async () => {
     const harness = await openStartedPage(browserEngine);
     const baseline = await captureIdentity(harness.page);
     const scenarios = [
@@ -552,7 +556,7 @@ test(`[${browserEngine}] each lifecycle signal releases input and recovers the e
     }
 });
 
-test(`[${browserEngine}] a trusted control touch retries audio without swallowing the control`, async () => {
+test(`[${browserEngine}] a trusted control touch retries audio without swallowing the control`, { skip: engineSkip(browserEngine) }, async () => {
     const harness = await openStartedPage(browserEngine);
     const baseline = await captureIdentity(harness.page);
 
@@ -588,7 +592,7 @@ test(`[${browserEngine}] a trusted control touch retries audio without swallowin
     }
 });
 
-test(`[${browserEngine}] a mouse note retries audio and releases normally`, async () => {
+test(`[${browserEngine}] a mouse note retries audio and releases normally`, { skip: engineSkip(browserEngine) }, async () => {
     const harness = await openStartedPage(browserEngine);
     const baseline = await captureIdentity(harness.page);
 
@@ -634,7 +638,7 @@ test(`[${browserEngine}] a mouse note retries audio and releases normally`, asyn
     }
 });
 
-test(`[${browserEngine}] a recovery note asks the player to play again`, async () => {
+test(`[${browserEngine}] a recovery note asks the player to play again`, { skip: engineSkip(browserEngine) }, async () => {
     const harness = await openStartedPage(browserEngine);
     const baseline = await captureIdentity(harness.page);
 
