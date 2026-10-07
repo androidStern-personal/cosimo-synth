@@ -37,6 +37,11 @@ function contentType(filePath) {
 async function serve(request, response) {
     try {
         const requestUrl = new URL(request.url ?? "/", baseUrl);
+        // Google Chrome asks every page for an icon; the harness page has none.
+        if (requestUrl.pathname === "/favicon.ico") {
+            response.writeHead(204).end();
+            return;
+        }
         const relative = decodeURIComponent(requestUrl.pathname === "/" ? "composition-browser-harness.html" : requestUrl.pathname.slice(1));
         const filePath = path.resolve(webRoot, relative);
         if (filePath !== webRoot && !filePath.startsWith(`${webRoot}${path.sep}`)) {

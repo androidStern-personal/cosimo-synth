@@ -42,8 +42,11 @@ const engines = [
 ].filter(({ key }) => !process.env.COSIMO_WEB_BROWSER || process.env.COSIMO_WEB_BROWSER === key)
     .map((engine) => ({
         ...engine,
-        skip: fs.existsSync(engine.launcher.executablePath()) ? false
-            : `Playwright's ${engine.label} is not installed on this machine, so this engine cannot run the share flow.`,
+        skip: !fs.existsSync(engine.launcher.executablePath())
+            ? `Playwright's ${engine.label} is not installed on this machine, so this engine cannot run the share flow.`
+            : engine.key === "webkit" && process.platform !== "darwin"
+                ? "WebKit's copied text is read back from the macOS pasteboard (pbcopy and pbpaste), which only macOS has."
+                : false,
     }));
 const browsers = new Map();
 let server;
