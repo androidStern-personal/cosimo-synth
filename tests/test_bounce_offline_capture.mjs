@@ -1,115 +1,64 @@
 import assert from "node:assert/strict";
 import path from "node:path";
 import test from "node:test";
-import { pathToFileURL } from "node:url";
 import { Worker } from "node:worker_threads";
 
-import { installBounceBankInOfflinePerformer } from "../bounce/bank-install.mjs";
+import { bounceBankInstallMessages } from "../bounce/bank-install.mjs";
 import { captureBounceBank } from "../bounce/capture.mjs";
 import { createBounceCaptureSnapshot } from "../bounce/capture-plan.mjs";
-import { comparePeakNormalizedRms } from "../bounce/quality.mjs";
+import { loadUIModule } from "../kit/tests/helpers/load_ui_module.mjs";
+import { comparePeakNormalizedRms } from "./helpers/bounce_quality.mjs";
+import {
+    createHostedPerformer,
+    hostParameters,
+    loadOfflineEngine,
+    offlineEngineModuleURL,
+    outputLatencyFrames,
+} from "./helpers/bounce_offline_engine.mjs";
 
+const repoRoot = path.resolve(import.meta.dirname, "..");
 const sampleRate = 48_000;
 const blockFrames = 128;
 const fixtureRoots = Object.freeze([48, 60, 72]);
-const engineModuleURL = pathToFileURL(path.resolve(process.env.COSIMO_BOUNCE_ENGINE_MODULE ?? "build/web/cmaj_Cosimo_Synth.offline.js")).href;
 const nodeWorkerURL = new URL("../bounce/node-render-worker.mjs", import.meta.url);
 
 function packMidi(status, note, velocity) {
     return ((status & 0xff) << 16) | ((note & 0x7f) << 8) | (velocity & 0x7f);
 }
 
-function syntheticMipSamples(mipIndex) {
-    const samplesPerFrame = 2_048;
-    const samples = new Float32Array(samplesPerFrame * 3);
-    const cycleLength = Math.min(2_048, Math.max(256, (1 << mipIndex) * 32));
-    for (let index = 0; index < samplesPerFrame; index += 1) {
-        const phase = (index % cycleLength) / cycleLength;
-        // A band-limited-ish asymmetric shape exercises stereo/rack dynamics
-        // without driving the output limiter into the A/B tolerance budget.
-        samples[index] = (Math.sin(2 * Math.PI * phase)
-            + (0.18 * Math.sin(4 * Math.PI * phase))) / 1.18;
-    }
-    return samples;
-}
-
-function wavetableSources() {
-    return [{input:0,generation:1,tableIndex:0,frames:[syntheticMipSamples(10).slice(0,2048)]}];
-}
-
-function laneEvents(kind) {
-    if (kind === "pluck") return [];
-    const slotIds = new Int32Array(16);
-    if (kind === "pad") {
-        slotIds[0] = 6;
-        slotIds[1] = 7;
-        return [
-            {
-                endpointID: "laneSlotParams",
-                value: {
-                    slotId: 6,
-                    deliverySerial: 1,
-                    values: Float32Array.of(220, 0.58, 8_000, 0.34, 0, 8, 0, 0),
-                },
-            },
-            {
-                endpointID: "laneSlotParams",
-                value: {
-                    slotId: 7,
-                    deliverySerial: 2,
-                    values: Float32Array.of(0.82, 0.88, 0.32, 0.42, 0, 0, 0, 0),
-                },
-            },
-            {
-                endpointID: "laneTopology",
-                value: { chainLength: 2, slotIds, enabledMask: 3 },
-                advanceFrames: 1_024,
-            },
-        ];
-    }
-    slotIds[0] = 2;
-    return [
-        {
-            endpointID: "laneSlotParams",
-            value: {
-                slotId: 2,
-                deliverySerial: 1,
-                values: Float32Array.of(100, 88, 55, 45, 30, 0, 0, 0),
-            },
-        },
-        {
-            endpointID: "laneTopology",
-            value: { chainLength: 1, slotIds, enabledMask: 1 },
-            advanceFrames: 1_024,
-        },
-    ];
-}
-
-function fixtureSnapshot(kind) {
-    const release = kind === "pad" ? 3 : (kind === "pluck" ? 0.08 : 0.28);
-    return createBounceCaptureSnapshot({
-        sampleRate,
-        tempoBpm: 117,
-        settleFrames: 256,
-        parameters: {
-            sourceMode: 0,
-            oscAWavetableSelect: 0,
-            oscAVolumeDb: -18,
-            oscAPhaseRandom: 0,
-            oscARetrigger: 1,
-            oscBVolumeDb: -48,
-            oscBMute: 1,
-            oscCVolumeDb: -48,
-            oscCMute: 1,
-            filterMode: 0,
-            filterMix: 1,
-            ampRelease: release,
-            playMode: 0,
-            glideTime: 0,
-        },
-        wavetableSources: wavetableSources(),
-        setupEvents: laneEvents(kind),
+/**
+ * One cycle of an asymmetric, nearly band-limited shape: it exercises stereo
+ * and rack dynamics without driving the output limiter past the A/B budget.
+ */
+function sourceFrame() {
+    return Float32Array.from({ length: 2_048 }, (_, index) => {
+        const phase = index / 2_048;
+        return (Math.sin(2 * Math.PI * phase) + (0.18 * Math.sin(4 * Math.PI * phase))) / 1.18;
     });
+}
+
+/** The fixture sound's effects lane, edited from the synth's starter lane. */
+function fixtureLane(lane, kind) {
+    let state = lane.createDefaultLaneStateV2();
+    const edit = (next) => {
+        assert.ok(next, `the ${kind} lane edit must apply`);
+        state = next;
+    };
+    const setParams = (deviceId, params) => {
+        for (const [endpointID, value] of Object.entries(params)) {
+            edit(lane.setLaneDeviceParam(state, deviceId, endpointID, value));
+        }
+    };
+    if (kind === "pad") {
+        edit(lane.setLaneDeviceEnabled(state, "delay#1", true));
+        setParams("delay#1", { delayTime: 220, delayFeedback: 0.58, delayFilter: 8_000, delayMix: 0.34 });
+        edit(lane.setLaneDeviceEnabled(state, "reverb#1", true));
+        setParams("reverb#1", { reverbSize: 0.82, reverbDecay: 0.88, reverbDamping: 0.32, reverbMix: 0.42 });
+    } else if (kind === "ott") {
+        edit(lane.addLaneDevice(state, "ott", { kind: "trunk", index: 0 }));
+        setParams("ott#1", { ottMix: 100, ottAmount: 88, ottTimePercent: 55, ottBandDrive: 45, ottEnvelopeMatch: 30 });
+    }
+    return state;
 }
 
 function nodeWorkerFactory(url) {
@@ -136,12 +85,11 @@ function renderFrames(performer, frameCount) {
 
 function capturedRootAsFloat(bank, rootIndex) {
     const root = bank.roots[rootIndex];
-    const output = new Float32Array(root.frameCount * 2);
     const firstSample = root.frameOffset * 2;
-    for (let index = 0; index < output.length; index += 1) {
-        output[index] = bank.pcm[firstSample + index] / 32_768;
-    }
-    return output;
+    return Float32Array.from(
+        bank.pcm.subarray(firstSample, firstSample + (root.frameCount * 2)),
+        (value) => value / 32_768,
+    );
 }
 
 function stereoRms(samples, firstFrame, frameCount) {
@@ -154,72 +102,88 @@ function stereoRms(samples, firstFrame, frameCount) {
     return Math.sqrt(sum / Math.max(1, end - firstFrame));
 }
 
-async function playbackAndCompare(CmajorClass, capture, label) {
-    const performer = new CmajorClass();
-    await performer.initialise(0x515100, sampleRate);
-    performer.setInputValue_sourceMode(1, 0);
-    performer.setInputValue_filterMode(0, 0);
-    performer.setInputValue_ampRelease(0.2, 0);
-    performer.advance(128);
-    installBounceBankInOfflinePerformer(performer, capture.bank, {
-        dspSessionId: 0x515100,
-        generation: 1,
+/**
+ * Play every captured root as a bounced sound does: Source Mode Bounce, Voice
+ * Filter off, a dry lane. A capture records the synth's output, so each root
+ * already carries the output path's fixed latency and its playback arrives
+ * that much later again; the comparison lines the two up.
+ */
+async function playbackAndCompare(t, CmajorClass, capture, label) {
+    const sessionID = 0x515100;
+    const { performer } = await createHostedPerformer(t, CmajorClass, sessionID, sampleRate, {
+        sourceMode: 1,
+        filterMode: 0,
     });
+    performer.advance(128);
+    for (const message of bounceBankInstallMessages(capture.bank, { dspSessionId: sessionID, generation: 1 })) {
+        performer[`sendInputEvent_${message.endpointID}`](message.value);
+        performer.advance(2);
+    }
 
-    const comparisons = [];
     for (let index = 0; index < capture.bank.roots.length; index += 1) {
         const root = capture.bank.roots[index];
         performer.sendInputEvent_midiIn({ message: packMidi(0x90, root.note, 100) });
-        const playback = renderFrames(performer, root.frameCount);
-        const reference = capturedRootAsFloat(capture.bank, index);
-        const comparison = comparePeakNormalizedRms(reference, playback, sampleRate);
+        const playback = renderFrames(performer, outputLatencyFrames + root.frameCount).subarray(outputLatencyFrames * 2);
+        const comparison = comparePeakNormalizedRms(capturedRootAsFloat(capture.bank, index), playback, sampleRate);
         assert.ok(
             comparison.passes,
             `${label} root ${root.note}: mean ${comparison.meanDeltaDb.toFixed(3)} dB, max ${comparison.maxDeltaDb.toFixed(3)} dB`,
         );
-        comparisons.push({ root: root.note, ...comparison });
         performer.sendInputEvent_midiIn({ message: packMidi(0x80, root.note, 0) });
         renderFrames(performer, Math.round(0.25 * sampleRate));
     }
-    return comparisons;
 }
 
-test("M3 worker capture is deterministic and composes through sampled playback", async () => {
-    const engineModule = await import(engineModuleURL);
-    const statusProbe = new engineModule.default();
-    await statusProbe.initialise(9, 44_100);
-    statusProbe.advance(1);
-    assert.equal(statusProbe.getOutputEvent_engineStatus(0).event.sampleRateHz, 44_100);
-    assert.equal(statusProbe.getOutputEvent_engineStatus(0).event.tempoBpm, 120);
-
-    const deterministicOptions = {
-        snapshot: fixtureSnapshot("pluck"),
-        planOptions: { roots: [60] },
+test("worker capture is deterministic and composes through sampled playback", async (t) => {
+    const [CmajorClass, { bounceCaptureRecipeInternals }, lane, { synthPluginState }] = await Promise.all([
+        loadOfflineEngine(),
+        loadUIModule(repoRoot, "ui/shared/bounce-capture-recipe.ts"),
+        loadUIModule(repoRoot, "ui/shared/lane-state-v2.ts"),
+        loadUIModule(repoRoot, "ui/shared/synth-plugin-state.ts"),
+    ]);
+    const saved = (key, value = synthPluginState[key].initial.value) => synthPluginState[key].codec.encode(value);
+    const fixtureSnapshot = (kind) => createBounceCaptureSnapshot({
+        sampleRate,
+        tempoBpm: 117,
+        settleFrames: 256,
+        parameters: hostParameters(CmajorClass, {
+            oscAWavetableSelect: 0,
+            oscAVolumeDb: -18,
+            filterMode: 0,
+            ampRelease: kind === "pad" ? 3 : (kind === "pluck" ? 0.08 : 0.28),
+        }),
+        wavetableSources: [{ input: 0, generation: 1, tableIndex: 0, frames: [sourceFrame()] }],
+        setupEvents: bounceCaptureRecipeInternals.structuredRuntimeSetupEvents({
+            parameters: {},
+            storedState: {
+                "modulation.v6": saved("modulation.v6"),
+                "articulations.v4": saved("articulations.v4"),
+                "lane.v1": saved("lane.v1", fixtureLane(lane, kind)),
+            },
+        }).events,
+    });
+    const capture = (kind, roots, onProgress) => captureBounceBank({
+        snapshot: fixtureSnapshot(kind),
+        planOptions: { roots },
         workerURL: nodeWorkerURL,
-        engineModuleURL,
+        engineModuleURL: offlineEngineModuleURL,
         workerFactory: nodeWorkerFactory,
         concurrency: 1,
-    };
-    const deterministicA = await captureBounceBank(deterministicOptions);
-    const deterministicB = await captureBounceBank(deterministicOptions);
+        onProgress,
+    });
+
+    const deterministicA = await capture("pluck", [60]);
+    const deterministicB = await capture("pluck", [60]);
     assert.equal(deterministicA.digest, deterministicB.digest);
     assert.deepEqual(deterministicA.bytes, deterministicB.bytes);
 
     const captures = new Map();
     for (const kind of ["pluck", "pad", "ott"]) {
         const progress = [];
-        const capture = await captureBounceBank({
-            snapshot: fixtureSnapshot(kind),
-            planOptions: { roots: fixtureRoots },
-            workerURL: nodeWorkerURL,
-            engineModuleURL,
-            workerFactory: nodeWorkerFactory,
-            concurrency: 1,
-            onProgress: (value) => progress.push(value),
-        });
-        assert.deepEqual(capture.bank.roots.map((root) => root.note), fixtureRoots);
+        const result = await capture(kind, fixtureRoots, (value) => progress.push(value));
+        assert.deepEqual(result.bank.roots.map((root) => root.note), fixtureRoots);
         assert.equal(progress.length, fixtureRoots.length);
-        captures.set(kind, capture);
+        captures.set(kind, result);
     }
 
     const pad = captures.get("pad");
@@ -232,25 +196,7 @@ test("M3 worker capture is deterministic and composes through sampled playback",
             `pad root ${segment.rootNote} must contain an audible baked FX tail at +1 s`);
     }
 
-    const quality = {};
-    for (const [kind, capture] of captures) {
-        quality[kind] = await playbackAndCompare(engineModule.default, capture, kind);
+    for (const [kind, result] of captures) {
+        await playbackAndCompare(t, CmajorClass, result, kind);
     }
-    // Keep measured VM evidence in test output without treating absolute speed
-    // as a Mac/iOS veto. Relative gates are logged at the milestone boundary.
-    console.log(JSON.stringify({
-        digests: Object.fromEntries([...captures].map(([kind, capture]) => [kind, capture.digest])),
-        realtimeMultipliers: Object.fromEntries([...captures].map(([kind, capture]) => [
-            kind,
-            capture.metrics.map((entry) => Number(entry.realtimeMultiplier?.toFixed(3))),
-        ])),
-        quality: Object.fromEntries(Object.entries(quality).map(([kind, entries]) => [
-            kind,
-            entries.map((entry) => ({
-                root: entry.root,
-                meanDeltaDb: Number(entry.meanDeltaDb.toFixed(3)),
-                maxDeltaDb: Number(entry.maxDeltaDb.toFixed(3)),
-            })),
-        ])),
-    }));
 });

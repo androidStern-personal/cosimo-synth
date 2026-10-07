@@ -22,14 +22,3 @@ export function bounceBankInstallMessages(
         readonly firstDeliverySerial?: number;
     },
 ): Generator<BounceBankInstallMessage, void, unknown>;
-
-/** Install a bank into a generated offline performer. */
-export function installBounceBankInOfflinePerformer(
-    performer: Readonly<Record<string, unknown>> & { advance(frameCount: number): void },
-    bank: unknown,
-    options: {
-        readonly dspSessionId: number;
-        readonly generation: number;
-        readonly firstDeliverySerial?: number;
-    },
-): number;

@@ -14,7 +14,7 @@ function windowRms(samples, firstSample, sampleCount) {
 }
 
 /**
- * Product A/B gate: independently peak-normalize stereo-interleaved signals,
+ * The Bounce A/B gate: independently peak-normalize stereo-interleaved signals,
  * then compare 50 ms RMS windows. Windows below -80 dBFS in both signals are
  * outside the captured audible tail and are omitted. The mean absolute delta
  * must stay below 1 dB and no audible window may exceed 3 dB.

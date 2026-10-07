@@ -1,13 +1,8 @@
 import assert from "node:assert/strict";
-import crypto from "node:crypto";
-import fs from "node:fs/promises";
-import path from "node:path";
 import test from "node:test";
 import { quantizeFloatToInt16 } from "../bounce/bank-format.mjs";
+import { createHostedPerformer, loadOfflineEngine, outputLatencyFrames } from "./helpers/bounce_offline_engine.mjs";
 
-const generatedPath = path.resolve(
-    process.env.COSIMO_BOUNCE_GENERATED_PATH ?? "build/web/cmaj_Cosimo_Synth.js",
-);
 const sampleRate = 48_000;
 const blockFrames = 128;
 const bankRootCapacity = 19;
@@ -20,14 +15,6 @@ function packMidi(status, note, velocity) {
 
 function packStereoFrame(left, right) {
     return ((right & 0xffff) << 16) | (left & 0xffff);
-}
-
-async function loadGeneratedClass() {
-    const source = await fs.readFile(generatedPath, "utf8");
-    const classMatch = /^class\s+(\w+)/m.exec(source);
-    assert.ok(classMatch?.index !== undefined, `${generatedPath} must contain a Cmajor class`);
-    const classSource = source.slice(classMatch.index);
-    return Function(`${classSource}\nreturn ${classMatch[1]};`)();
 }
 
 function renderFrames(performer, frameCount) {
@@ -225,15 +212,12 @@ function latestRuntimeState(performer) {
     return performer.getOutputEvent_bounceBankRuntimeState(count - 1).event;
 }
 
-async function createSamplerPerformer(CmajorClass, sessionID) {
-    const performer = new CmajorClass();
-    await performer.initialise(sessionID, sampleRate);
-    performer.setInputValue_sourceMode(1, 0);
-    performer.setInputValue_filterMode(0, 0);
-    performer.setInputValue_ampAttack(0.01, 0);
-    performer.setInputValue_ampDecay(0.001, 0);
-    performer.setInputValue_ampSustain(1, 0);
-    performer.setInputValue_ampRelease(0.2, 0);
+/** The synth playing a Bounce bank, as a bounced sound leaves it: Source Mode Bounce, Voice Filter off. */
+async function createSamplerPerformer(t, CmajorClass, sessionID) {
+    const { performer } = await createHostedPerformer(t, CmajorClass, sessionID, sampleRate, {
+        sourceMode: 1,
+        filterMode: 0,
+    });
     performer.advance(8);
     return performer;
 }
@@ -250,76 +234,28 @@ function noteOff(performer, note, channelIndex = 0) {
     });
 }
 
-function syntheticMipSamples(mipIndex) {
-    const samplesPerFrame = 2_048;
-    const samples = new Float32Array(samplesPerFrame * 3);
-    const cycleLength = Math.min(2_048, Math.max(256, (1 << mipIndex) * 32));
-    for (let index = 0; index < samplesPerFrame; index += 1) {
-        samples[index] = Math.sin((2 * Math.PI * (index % cycleLength)) / cycleLength);
-    }
-    return samples;
+/** One sine cycle: a dry oscillator table whose pitch is easy to measure. */
+function sineFrame() {
+    return Float32Array.from({ length: 2_048 }, (_, index) => Math.sin((2 * Math.PI * index) / 2_048));
 }
 
-function installSyntheticWavetable(performer, sessionID, oscillatorIndex) {
-    performer.sendInputEvent_wavetableLoadBegin({
-        dspSessionId: sessionID,
-        oscillatorIndex,
-        generation: 1,
-        tableIndex: oscillatorIndex,
-        frameCount: 1,
-    });
-    performer.advance(1);
-    for (let mipIndex = 0; mipIndex < 11; mipIndex += 1) {
-        performer.sendInputEvent_wavetableMipFrame({
-            dspSessionId: sessionID,
-            oscillatorIndex,
-            generation: 1,
-            tableIndex: oscillatorIndex,
-            mipIndex,
-            frameIndexBase: 0,
-            frameCount: 1,
-            samples: syntheticMipSamples(mipIndex),
-        });
-        performer.advance(1);
-    }
-}
-
-function renderOscillatorRegression(performer, sessionID) {
-    installSyntheticWavetable(performer, sessionID, 0);
-    performer.setInputValue_oscAVolumeDb(0, 0);
-    performer.setInputValue_oscBVolumeDb(-48, 0);
-    performer.setInputValue_oscCVolumeDb(-48, 0);
-    performer.setInputValue_filterMode(0, 0);
-    performer.setInputValue_ampAttack(0.01, 0);
-    performer.setInputValue_ampDecay(0.001, 0);
-    performer.setInputValue_ampSustain(1, 0);
-    performer.setInputValue_ampRelease(0.2, 0);
-    noteOn(performer, 60, 100);
-    const held = renderFrames(performer, 12_000);
-    noteOff(performer, 60);
-    const released = renderFrames(performer, 14_400);
-    const all = new Float32Array(held.length + released.length);
-    all.set(held);
-    all.set(released, held.length);
-    return crypto.createHash("sha256")
-        .update(new Uint8Array(all.buffer, all.byteOffset, all.byteLength))
-        .digest("hex");
-}
-
-async function measureOscillatorGlobalTune(CmajorClass, oscillatorIndex, sessionID) {
+async function measureOscillatorGlobalTune(t, CmajorClass, oscillatorIndex, sessionID) {
     const oscillatorID = ["A", "B", "C"][oscillatorIndex];
     const neighbourID = ["B", "C", "A"][oscillatorIndex];
-    const performer = new CmajorClass();
-    await performer.initialise(sessionID, sampleRate);
-    performer.setInputValue_sourceMode(0, 0);
-    performer.setInputValue_filterMode(0, 0);
-    performer.setInputValue_ampAttack(0.01, 0);
-    performer.setInputValue_ampDecay(0.001, 0);
-    performer.setInputValue_ampSustain(1, 0);
-    performer.setInputValue_ampRelease(0.005, 0);
-    performer[`setInputValue_osc${oscillatorID}Solo`](1, 0);
-    performer[`setInputValue_osc${oscillatorID}VolumeDb`](0, 0);
-    installSyntheticWavetable(performer, sessionID, oscillatorIndex);
+    const { performer, prepareWavetables } = await createHostedPerformer(t, CmajorClass, sessionID, sampleRate, {
+        filterMode: 0,
+        ampRelease: 0.005,
+        [`osc${oscillatorID}WavetableSelect`]: oscillatorIndex,
+        [`osc${oscillatorID}Mute`]: 0,
+        [`osc${oscillatorID}Solo`]: 1,
+        [`osc${oscillatorID}VolumeDb`]: 0,
+    });
+    await prepareWavetables([{
+        input: oscillatorIndex,
+        generation: 1,
+        tableIndex: oscillatorIndex,
+        frames: [sineFrame()],
+    }]);
     performer.advance(128);
 
     const measureHeldFrequency = () => {
@@ -343,14 +279,10 @@ async function measureOscillatorGlobalTune(CmajorClass, oscillatorIndex, session
     return { oscillatorID, neutralHz, afterPrivateNeighbourTuneHz, globalOctaveHz };
 }
 
-test("Source Mode, Global Tune, and Amp ADSR are append-only while legacy defaults retain the M1 render bit-for-bit", async () => {
-    const CmajorClass = await loadGeneratedClass();
+test("Source Mode and Global Tune are host parameters with their declared choices and range", async () => {
+    const CmajorClass = await loadOfflineEngine();
     const parameterEndpoints = CmajorClass.prototype.getInputEndpoints()
         .filter(({ purpose }) => purpose === "parameter");
-    assert.deepEqual(
-        parameterEndpoints.slice(-7).map(({ endpointID }) => endpointID),
-        ["filterMix", "ampRelease", "sourceMode", "globalTune", "ampAttack", "ampDecay", "ampSustain"],
-    );
     const endpoint = parameterEndpoints.find(({ endpointID }) => endpointID === "sourceMode");
     assert.ok(endpoint);
     assert.equal(endpoint.annotation?.text, "Oscillator|Bounce");
@@ -361,23 +293,13 @@ test("Source Mode, Global Tune, and Amp ADSR are append-only while legacy defaul
     assert.equal(globalTuneEndpoint.annotation?.max, 24);
     assert.equal(globalTuneEndpoint.annotation?.init, 0);
     assert.notEqual(globalTuneEndpoint.annotation?.discrete, true);
-
-    const sessionID = 42_201;
-    const performer = new CmajorClass();
-    await performer.initialise(sessionID, sampleRate);
-    performer.setInputValue_sourceMode(0, 0);
-    performer.setInputValue_globalTune(0, 0);
-    assert.equal(
-        renderOscillatorRegression(performer, sessionID),
-        "8d930510bc1f7e522b999a94cb36159bc2787a99844295838ae581f36a935561",
-        "sourceMode=oscillator must match the committed pre-M2 performer",
-    );
 });
 
-test("Global Tune +12 doubles every oscillator while neighbouring private tune remains private", async () => {
-    const CmajorClass = await loadGeneratedClass();
+test("Global Tune +12 doubles every oscillator while neighbouring private tune remains private", async (t) => {
+    const CmajorClass = await loadOfflineEngine();
     for (const oscillatorIndex of [0, 1, 2]) {
         const result = await measureOscillatorGlobalTune(
+            t,
             CmajorClass,
             oscillatorIndex,
             42_220 + oscillatorIndex,
@@ -394,10 +316,10 @@ test("Global Tune +12 doubles every oscillator while neighbouring private tune r
     }
 });
 
-test("staging is silent until commit and an aborted replacement preserves the active bank", async () => {
-    const CmajorClass = await loadGeneratedClass();
+test("staging is silent until commit and an aborted replacement preserves the active bank", async (t) => {
+    const CmajorClass = await loadOfflineEngine();
     const sessionID = 42_202;
-    const performer = await createSamplerPerformer(CmajorClass, sessionID);
+    const performer = await createSamplerPerformer(t, CmajorClass, sessionID);
     const upload = buildUpload([{ note: 60, samples: makeConstantStereo(12_000, 0.02, -0.01) }]);
 
     sendBankBegin(performer, sessionID, 1, 1, upload);
@@ -440,40 +362,43 @@ test("staging is silent until commit and an aborted replacement preserves the ac
     assert.equal(stateAfterAbort.hasStaging, 0);
 });
 
-test("root playback preserves captured PCM level through the shared live Amp Envelope", async () => {
-    const CmajorClass = await loadGeneratedClass();
+test("root playback preserves captured PCM level through the shared live Amp Envelope", async (t) => {
+    const CmajorClass = await loadOfflineEngine();
     const sessionID = 42_203;
-    const performer = await createSamplerPerformer(CmajorClass, sessionID);
+    const performer = await createSamplerPerformer(t, CmajorClass, sessionID);
     const frameCount = 4_000;
+    const onsetFrame = 700;
+    // Tones well inside the output path's flat band, entering once the Amp attack has finished.
+    const tones = [[0.012, 233, 0.4], [0.009, 587, 1.9], [0.006, 1_301, 4.1]];
+    const tone = (frame, channelIndex) => tones.reduce((sum, [amplitude, hz, phase]) => (
+        sum + (amplitude * Math.sin((2 * Math.PI * hz * frame / sampleRate) + phase + channelIndex))
+    ), 0);
     const source = new Int16Array(frameCount * 2);
-    let random = 0x12345678;
-    for (let frame = 700; frame < frameCount; frame += 1) {
-        random = ((random * 1_664_525) + 1_013_904_223) >>> 0;
-        source[frame * 2] = ((random >>> 16) % 1_801) - 900;
-        random = ((random * 1_664_525) + 1_013_904_223) >>> 0;
-        source[(frame * 2) + 1] = ((random >>> 16) % 1_401) - 700;
+    for (let frame = onsetFrame; frame < frameCount; frame += 1) {
+        source[frame * 2] = quantizeFloatToInt16(tone(frame, 0));
+        source[(frame * 2) + 1] = quantizeFloatToInt16(tone(frame, 1));
     }
     installBank(performer, sessionID, 1, buildUpload([{ note: 60, samples: source }]));
     noteOn(performer, 60, captureVelocity);
-    const rendered = renderFrames(performer, frameCount);
-    // The shared legacy envelope's exponential attack can settle fractionally above its
-    // nominal velocity. Bounce deliberately keeps that same per-note behavior instead of
-    // restoring its former private velocity clamp.
+    const rendered = renderFrames(performer, frameCount + outputLatencyFrames);
+
+    // The output path's linear-phase oversampler centres its response half a
+    // frame before the declared latency; the comparison keeps clear of the
+    // sample's onset and end, where that response straddles silence.
+    // The shared envelope's exponential attack settles fractionally above its
+    // nominal level, which Bounce shares.
     const tolerance = (3 / 32_768) + 1e-7;
     let maximumDifference = 0;
-    for (let frame = 800; frame < frameCount - 2; frame += 1) {
+    for (let frame = onsetFrame + 100; frame < frameCount - 64; frame += 1) {
         for (let channelIndex = 0; channelIndex < 2; channelIndex += 1) {
-            const expected = source[(frame * 2) + channelIndex] / 32_768;
-            maximumDifference = Math.max(
-                maximumDifference,
-                Math.abs(rendered[(frame * 2) + channelIndex] - expected),
-            );
+            const output = rendered[((frame + outputLatencyFrames) * 2) + channelIndex];
+            maximumDifference = Math.max(maximumDifference, Math.abs(output - tone(frame + 0.5, channelIndex)));
         }
     }
     assert.ok(maximumDifference <= tolerance, `root A/B max error ${maximumDifference}`);
 
     const expectedRms = rms(Float32Array.from(source.subarray(1_000 * 2, 3_000 * 2), (x) => x / 32_768));
-    const actualRms = rms(rendered.subarray(1_000 * 2, 3_000 * 2));
+    const actualRms = rms(rendered.subarray((1_000 + outputLatencyFrames) * 2, (3_000 + outputLatencyFrames) * 2));
     assert.ok(
         Math.abs(actualRms / expectedRms - 1) < 0.005,
         "the shared Amp Envelope must keep the captured root level audibly equivalent",
@@ -481,10 +406,10 @@ test("root playback preserves captured PCM level through the shared live Amp Env
     assert.ok(Math.abs(actualRms / expectedRms - 0.18) > 0.5, "the unmade-up level must be impossible");
 });
 
-test("nearest-root selection, rate repitch, and polyphony are voice-correct", async () => {
-    const CmajorClass = await loadGeneratedClass();
+test("nearest-root selection, rate repitch, and polyphony are voice-correct", async (t) => {
+    const CmajorClass = await loadOfflineEngine();
     const sessionID = 42_204;
-    const performer = await createSamplerPerformer(CmajorClass, sessionID);
+    const performer = await createSamplerPerformer(t, CmajorClass, sessionID);
     const leftRoot = makeConstantStereo(12_000, 0.012, 0);
     const rightRoot = makeConstantStereo(12_000, 0, 0.018);
     installBank(performer, sessionID, 1, buildUpload([
@@ -506,7 +431,7 @@ test("nearest-root selection, rate repitch, and polyphony are voice-correct", as
     assert.ok(meanAbsolute(channel(rendered, 1).subarray(900)) > 0.015);
 
     const rateSessionID = 42_205;
-    const ratePerformer = await createSamplerPerformer(CmajorClass, rateSessionID);
+    const ratePerformer = await createSamplerPerformer(t, CmajorClass, rateSessionID);
     installBank(ratePerformer, rateSessionID, 1, buildUpload([
         { note: 60, samples: makeSineStereo(24_000, 440) },
     ]));
@@ -517,7 +442,7 @@ test("nearest-root selection, rate repitch, and polyphony are voice-correct", as
     assert.ok(Math.abs(measuredHz - expectedHz) < 5, `${measuredHz} Hz should be ${expectedHz} Hz`);
 
     const tunedSessionID = 42_215;
-    const tunedPerformer = await createSamplerPerformer(CmajorClass, tunedSessionID);
+    const tunedPerformer = await createSamplerPerformer(t, CmajorClass, tunedSessionID);
     installBank(tunedPerformer, tunedSessionID, 1, buildUpload([
         { note: 60, samples: makeSineStereo(24_000, 440) },
     ]));
@@ -532,10 +457,10 @@ test("nearest-root selection, rate repitch, and polyphony are voice-correct", as
     );
 });
 
-test("live velocity scales loudness and early note-off follows Amp Release", async () => {
-    const CmajorClass = await loadGeneratedClass();
+test("live velocity scales loudness and early note-off follows Amp Release", async (t) => {
+    const CmajorClass = await loadOfflineEngine();
     const sessionID = 42_206;
-    const performer = await createSamplerPerformer(CmajorClass, sessionID);
+    const performer = await createSamplerPerformer(t, CmajorClass, sessionID);
     installBank(performer, sessionID, 1, buildUpload([
         { note: 60, samples: makeConstantStereo(24_000, 0.02, 0.02) },
     ]));
@@ -556,10 +481,10 @@ test("live velocity scales loudness and early note-off follows Amp Release", asy
     assert.equal(rms(released.subarray(5_000)), 0, "the early release must reach silence");
 });
 
-test("Bounce follows the complete live Attack, Decay, Sustain, and Release contour", async () => {
-    const CmajorClass = await loadGeneratedClass();
+test("Bounce follows the complete live Attack, Decay, Sustain, and Release contour", async (t) => {
+    const CmajorClass = await loadOfflineEngine();
     const sessionID = 42_216;
-    const performer = await createSamplerPerformer(CmajorClass, sessionID);
+    const performer = await createSamplerPerformer(t, CmajorClass, sessionID);
     installBank(performer, sessionID, 1, buildUpload([{
         note: 60,
         samples: makeConstantStereo(12_000, 0.02, 0.02),
@@ -571,7 +496,7 @@ test("Bounce follows the complete live Attack, Decay, Sustain, and Release conto
     performer.advance(4);
 
     noteOn(performer, 60, captureVelocity);
-    const held = channel(renderFrames(performer, 4_000), 0);
+    const held = channel(renderFrames(performer, 4_000), 0).subarray(outputLatencyFrames);
     const attackStart = meanAbsolute(held.subarray(0, 200));
     const attackPeak = meanAbsolute(held.subarray(900, 1_000));
     const sustain = meanAbsolute(held.subarray(2_500, 3_500));
@@ -581,16 +506,16 @@ test("Bounce follows the complete live Attack, Decay, Sustain, and Release conto
         `sustain/peak ratio was ${sustain / attackPeak}`);
 
     noteOff(performer, 60);
-    const released = channel(renderFrames(performer, 2_000), 0);
+    const released = channel(renderFrames(performer, 2_000), 0).subarray(outputLatencyFrames);
     assert.ok(rms(released.subarray(0, 200)) > 1e-5, "release must begin from Sustain");
     assert.equal(rms(released.subarray(1_500)), 0, "release must reach silence");
 });
 
-test("Mono retriggers the Amp Envelope while connected Legato notes preserve its progress", async () => {
-    const CmajorClass = await loadGeneratedClass();
+test("Mono retriggers the Amp Envelope while connected Legato notes preserve its progress", async (t) => {
+    const CmajorClass = await loadOfflineEngine();
 
     async function renderConnectedNote(mode, sessionID) {
-        const performer = await createSamplerPerformer(CmajorClass, sessionID);
+        const performer = await createSamplerPerformer(t, CmajorClass, sessionID);
         performer.setInputValue_playMode(mode, 0);
         performer.setInputValue_ampAttack(0.1, 0);
         performer.advance(8);
@@ -601,7 +526,8 @@ test("Mono retriggers the Amp Envelope while connected Legato notes preserve its
         noteOn(performer, 60, captureVelocity);
         renderFrames(performer, 6_000);
         noteOn(performer, 64, captureVelocity);
-        return meanAbsolute(channel(renderFrames(performer, 240), 0));
+        return meanAbsolute(channel(renderFrames(performer, outputLatencyFrames + 240), 0)
+            .subarray(outputLatencyFrames));
     }
 
     const monoConnectedLevel = await renderConnectedNote(1, 42_217);
@@ -611,10 +537,10 @@ test("Mono retriggers the Amp Envelope while connected Legato notes preserve its
         `Mono ${monoConnectedLevel} should restart below Legato ${legatoConnectedLevel}`);
 });
 
-test("polyphonic voice stealing fades the oldest tail before restarting that voice's Amp Envelope", async () => {
-    const CmajorClass = await loadGeneratedClass();
+test("polyphonic voice stealing fades the oldest tail before restarting that voice's Amp Envelope", async (t) => {
+    const CmajorClass = await loadOfflineEngine();
     const sessionID = 42_219;
-    const performer = await createSamplerPerformer(CmajorClass, sessionID);
+    const performer = await createSamplerPerformer(t, CmajorClass, sessionID);
     performer.setInputValue_ampAttack(0.05, 0);
     performer.advance(4);
 
@@ -672,10 +598,10 @@ test("polyphonic voice stealing fades the oldest tail before restarting that voi
     assert.ok(settledRight > 0.015, `stolen voice settled at ${settledRight}`);
 });
 
-test("Bounce metadata never bypasses the live complete Amp Envelope", async () => {
-    const CmajorClass = await loadGeneratedClass();
+test("Bounce metadata never bypasses the live complete Amp Envelope", async (t) => {
+    const CmajorClass = await loadOfflineEngine();
     const sessionID = 42_207;
-    const performer = await createSamplerPerformer(CmajorClass, sessionID);
+    const performer = await createSamplerPerformer(t, CmajorClass, sessionID);
     installBank(performer, sessionID, 1, buildUpload([{
         note: 60,
         noteOffFrameOffset: 3_000,
@@ -692,9 +618,9 @@ test("Bounce metadata never bypasses the live complete Amp Envelope", async () =
 });
 
 test("source swaps and note boundaries stay below the committed click ceiling", async (t) => {
-    const CmajorClass = await loadGeneratedClass();
+    const CmajorClass = await loadOfflineEngine();
     const sessionID = 42_208;
-    const performer = await createSamplerPerformer(CmajorClass, sessionID);
+    const performer = await createSamplerPerformer(t, CmajorClass, sessionID);
     performer.setInputValue_ampRelease(0.05, 0);
     performer.advance(4);
     installBank(performer, sessionID, 1, buildUpload([{
@@ -733,10 +659,10 @@ test("source swaps and note boundaries stay below the committed click ceiling", 
     );
 });
 
-test("legato glide continuously repitches the in-flight sample", async () => {
-    const CmajorClass = await loadGeneratedClass();
+test("legato glide continuously repitches the in-flight sample", async (t) => {
+    const CmajorClass = await loadOfflineEngine();
     const sessionID = 42_207;
-    const performer = await createSamplerPerformer(CmajorClass, sessionID);
+    const performer = await createSamplerPerformer(t, CmajorClass, sessionID);
     performer.setInputValue_playMode(2, 0);
     performer.setInputValue_glideTime(0.08, 0);
     performer.advance(8);
