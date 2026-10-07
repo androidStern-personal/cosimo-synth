@@ -43,7 +43,15 @@ test("the maximal current patch deterministically compresses to the configured v
     assert.equal(analysis.oscillators.length, maximal.expected.oscillatorCount);
     assert.equal(analysis.effects.length, maximal.expected.effectCount);
     assert.equal(analysis.sources.length, maximal.expected.sourceCount);
-    assert.equal(analysis.demonstratedRouteIds.size, maximal.expected.routeCount);
+    // Every legal route is stored. The video has no Voice Enhancer or
+    // crossover section, so routes to those targets are reported as omitted
+    // and every other route is demonstrated.
+    const routes = maximal.patch.storedState["modulation.v6"].routes;
+    assert.equal(routes.length, maximal.expected.routeCount);
+    const unshown = (route) => route.targetKind.startsWith("voiceEnhancer") || route.targetKind.startsWith("lane.frequencySplit#");
+    const ids = (selected) => selected.map((route) => route.id).sort();
+    assert.deepEqual([...analysis.demonstratedRouteIds].sort(), ids(routes.filter((route) => !unshown(route))));
+    assert.deepEqual([...analysis.omitted.routesOnOmittedTargets].sort(), ids(routes.filter(unshown)));
     assert.equal(Object.keys(intake.value.document.parameters).length, maximal.expected.parameterCount);
 
     const uncompressed = modules.timeline.assembleTimeline(recipe, {
