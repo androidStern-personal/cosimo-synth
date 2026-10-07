@@ -257,7 +257,7 @@ test("shared MSEG overview mounts with plain callbacks and reports editor, slide
     }
 });
 
-test("shared editable MSEG surface mounts with plain points and forwards pointer callbacks", async () => {
+test("shared editable MSEG surface mounts plain points and reports a point drag as one edit gesture", async () => {
     const page = await openModulePage();
 
     try {
@@ -265,20 +265,24 @@ test("shared editable MSEG surface mounts with plain points and forwards pointer
         const surface = page.locator("svg");
         await surface.waitFor({ state: "visible" });
 
-        await surface.evaluate((element) => {
-            const target = element;
-            target.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true, clientX: 120, clientY: 180 }));
-            target.dispatchEvent(new PointerEvent("pointermove", { bubbles: true, clientX: 180, clientY: 120 }));
-            target.dispatchEvent(new PointerEvent("pointerup", { bubbles: true, clientX: 180, clientY: 120 }));
-        });
-
-        const snapshot = await getHarnessSnapshot(page);
+        let snapshot = await getHarnessSnapshot(page);
         assert.equal(snapshot.circleCount, 3);
-        assert.equal(snapshot.radii.includes("10"), true);
-        assert.equal(snapshot.radii.filter((value) => value === "8").length, 2);
-        assert.deepEqual(snapshot.pointerLog, ["down", "move", "up"]);
+        assert.deepEqual(snapshot.radii, ["10", "8", "8"], "the first point starts selected");
         assert.match(snapshot.surfaceClassName, /h-\[180px\]/);
         assert.doesNotMatch(snapshot.surfaceClassName, /h-\[320px\]/);
+
+        const middle = await page.locator('circle[data-point-index="1"]').boundingBox();
+        assert.ok(middle);
+        await page.mouse.move(middle.x + (middle.width / 2), middle.y + (middle.height / 2));
+        await page.mouse.down();
+        await page.mouse.move(middle.x + (middle.width / 2) + 20, middle.y + (middle.height / 2) + 40, { steps: 4 });
+        await page.mouse.up();
+
+        snapshot = await getHarnessSnapshot(page);
+        assert.ok(snapshot.editLog.includes("change"), "the drag edits the curve through the composition");
+        assert.equal(snapshot.editLog.at(-1), "end", "the drag ends as one committed gesture");
+        assert.equal(snapshot.editLog.filter((entry) => entry === "end").length, 1);
+        assert.deepEqual(snapshot.radii, ["8", "10", "8"], "the dragged point becomes the selection");
     } finally {
         await page.close();
     }

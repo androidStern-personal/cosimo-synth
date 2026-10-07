@@ -2795,26 +2795,33 @@ export async function installSharedMsegOverviewHarness(target: HTMLElement) {
 }
 
 export async function installSharedEditableMsegSurfaceHarness(target: HTMLElement) {
-    const pointerLog: string[] = [];
-    const selectedPointIndex = 1;
-    const points = [
-        { x: 0, y: 0, curvePower: 0 },
-        { x: 0.5, y: 1, curvePower: 0 },
-        { x: 1, y: 0, curvePower: 0 },
-    ];
+    const editLog: string[] = [];
+    const value = {
+        ...createDefaultMsegShape(),
+        points: [
+            { x: 0, y: 0, curvePower: 0 },
+            { x: 0.5, y: 1, curvePower: 0 },
+            { x: 1, y: 0, curvePower: 0 },
+        ],
+    };
 
     const mounted = mountHarness(target, (root) => {
         function Harness() {
             const surfaceRef = useRef<SVGSVGElement | null>(null);
+            const [shape, setShape] = useState(value);
 
             return (
                 <EditableMsegSurface
                     surfaceRef={surfaceRef}
-                    points={points}
-                    selectedPointIndex={selectedPointIndex}
-                    onPointerDown={() => pointerLog.push("down")}
-                    onPointerMove={() => pointerLog.push("move")}
-                    onPointerUp={() => pointerLog.push("up")}
+                    value={shape}
+                    composition={{
+                        editorKey: 0,
+                        onValueChange: (next) => {
+                            editLog.push("change");
+                            setShape({ ...shape, points: next.points });
+                        },
+                        onGestureEnd: (cancelled) => editLog.push(cancelled ? "cancel" : "end"),
+                    }}
                     className="h-[180px]"
                 />
             );
@@ -2828,7 +2835,7 @@ export async function installSharedEditableMsegSurfaceHarness(target: HTMLElemen
             const circles = Array.from(document.querySelectorAll("circle"));
 
             return {
-                pointerLog: cloneValue(pointerLog),
+                editLog: cloneValue(editLog),
                 circleCount: circles.length,
                 radii: circles.map((circle) => circle.getAttribute("r")),
                 surfaceClassName: document.querySelector("svg")?.className.baseVal ?? null,
@@ -2870,11 +2877,8 @@ export async function installSharedMsegOrientationHarness(target: HTMLElement) {
                     <EditableMsegSurface
                         surfaceRef={surfaceRef}
                         orientation={orientation}
-                        points={points}
-                        selectedPointIndex={1}
-                        onPointerDown={() => {}}
-                        onPointerMove={() => {}}
-                        onPointerUp={() => {}}
+                        value={{ ...createDefaultMsegShape(), points }}
+                        composition={{ editorKey: 0, onValueChange: () => {} }}
                         className="h-[180px]"
                         dataRole="shared-mseg-orientation-surface"
                     />
