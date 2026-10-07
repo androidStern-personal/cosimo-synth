@@ -70,6 +70,8 @@ what a version number promises.
   downloads. `npm run kit:setup` fetches them when strict doctor reports a
   mismatch.
 - **`npm run fx:dev` listens on `127.0.0.1` only.**
+- **A state update carries only the fields that changed.** Opening a plugin
+  window still receives the whole state; turning a knob sends that one field.
 - **The project `package.json`** is named `builder-kit-project` and requires
   Node 22 or newer.
 - **Tools for publishing the kit itself are no longer shipped.** The kit now

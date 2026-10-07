@@ -105,7 +105,7 @@ export function createCmajorPluginStateService<const Fields extends PluginStateF
     let finishStart = () => {};
     let failStart: (reason: unknown) => void = () => {};
     const publications = new Map<number, { readonly request: number; readonly scope: PluginStateScope }>();
-    // The state every attached GUI last received, so updates can leave out unchanged values.
+    // The state every attached GUI last received; an update carries only the fields that changed since.
     let broadcast: PluginStateSnapshot<Fields> | undefined;
     const send = (body: unknown) => {
         if (!isBoundedStateJson(body)) throw new Error("State-channel message exceeds the native JSON contract.");
@@ -559,7 +559,7 @@ export function createCmajorPluginStateClient<const Fields extends PluginStateFi
             subscribe(listener) {
                 let active = true;
                 let attachment: { readonly scope: PluginStateScope; readonly client: number } | undefined;
-                // The last state this GUI parsed; updates mark unchanged values against it.
+                // The last state this GUI parsed; an update fills the fields it leaves out from it.
                 let received: PluginStateSnapshot<Fields> | undefined;
                 const process = (body: unknown) => {
                     // Reject old mount correlations before codec work or projection.
@@ -585,6 +585,7 @@ export function createCmajorPluginStateClient<const Fields extends PluginStateFi
                     } else {
                         if (message.kind === "update" && attachment && sameScope(attachment.scope, message.scope)) received = message.state;
                         if (message.kind === "closed"
+                            || (message.kind === "resync" && attachment && sameScope(attachment.scope, message.scope))
                             || (message.kind === "reset" && attachment && message.scope.owner === attachment.scope.owner
                                 && message.scope.document > attachment.scope.document)
                             || (message.kind === "owner-changed" && attachment && !sameScope(attachment.scope, message.scope))) {

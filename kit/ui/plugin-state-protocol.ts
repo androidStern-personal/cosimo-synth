@@ -107,6 +107,10 @@ function scope(input: unknown): PluginStateScope | undefined {
         ? Object.freeze({ owner: input.owner, document: input.document }) : undefined;
 }
 
+function sameDocument(left: PluginStateScope | null, right: PluginStateScope): boolean {
+    return left !== null && left.owner === right.owner && left.document === right.document;
+}
+
 /** Validate an opaque history reference without assuming it belongs to the current document. */
 export function parseHistoryEntry(input: unknown): PluginStateHistoryEntry | undefined {
     if (!isRecord(input) || !counter(input.id)) return undefined;
@@ -244,28 +248,34 @@ export function parseServiceMessage(input: unknown): MessageResult<ServiceMessag
     return { kind: "invalid", message: `Malformed "${String(input.kind)}" state-channel message.` };
 }
 
+/** Whether `held`, the state a GUI last received, is the base an update names. */
+function holdsBase(held: PluginStateSnapshot | undefined, scope: PluginStateScope, base: unknown): boolean {
+    return held !== undefined && sameDocument(held.scope, scope) && held.revision === base;
+}
+
 /**
  * Serialize accepted values with their own codecs; snapshots never send runtime
- * objects as raw JSON. With `previous`, the snapshot every GUI last received in
- * this document, a value that has not changed since is sent as
- * `valueUnchanged: true` instead, so a large library does not cross the channel
- * on every knob movement.
+ * objects as raw JSON. With `base`, the snapshot every GUI last received in this
+ * document, the result names that base's revision and carries only the fields
+ * whose snapshot object changed since; the session replaces a field's object
+ * only when something about the field changed. A field whose status changed but
+ * whose value did not is sent with `valueUnchanged: true` instead of its value,
+ * so a large library does not cross the channel again when its save completes.
  */
 export function encodeStateSnapshot<Fields extends PluginStateFields>(definition: Fields, snapshot: PluginStateSnapshot<Fields>,
-    previous?: PluginStateSnapshot<Fields>): unknown {
-    const sameDocument = previous?.scope && snapshot.scope
-        && previous.scope.owner === snapshot.scope.owner && previous.scope.document === snapshot.scope.document;
-    const fields = Object.fromEntries(Object.entries(definition).map(([key, definitionField]) => {
-        const field = snapshot.fields[key];
-        if (!field || !("value" in field)) return [key, field];
-        const before = sameDocument ? previous.fields[key] : undefined;
-        if (before && "value" in before && before.version === field.version && Object.is(before.value, field.value)) {
+    base?: PluginStateSnapshot<Fields>): unknown {
+    const delta = base && snapshot.scope && sameDocument(base.scope, snapshot.scope) ? base : undefined;
+    const fields: Record<string, unknown> = {};
+    for (const [key, declaration] of Object.entries(definition)) {
+        const field = snapshot.fields[key], before = delta?.fields[key];
+        if (delta && field === before) continue;
+        if (!field || !("value" in field)) fields[key] = field;
+        else if (before && "value" in before && before.version === field.version && Object.is(before.value, field.value)) {
             const { value: _unchanged, ...rest } = field;
-            return [key, { ...rest, valueUnchanged: true }];
-        }
-        return [key, { ...field, value: definitionField.kind === "stored" ? definitionField.codec.encode(field.value) : field.value }];
-    }));
-    return { ...snapshot, fields };
+            fields[key] = { ...rest, valueUnchanged: true };
+        } else fields[key] = { ...field, value: declaration.kind === "stored" ? declaration.codec.encode(field.value) : field.value };
+    }
+    return { ...snapshot, ...(delta ? { base: delta.revision } : {}), fields };
 }
 
 function persistence(input: unknown): PluginStatePersistence | undefined {
@@ -366,27 +376,35 @@ function lastChange(input: unknown, declared: readonly string[], revision: numbe
     return Object.freeze({ reason: input.reason, keys: Object.freeze(keys), revision: input.revision });
 }
 
+/**
+ * Hydrate a whole state, or a delta against `held` when the input names a base
+ * revision: a field the delta leaves out keeps the held field object.
+ */
 function stateSnapshot<Fields extends PluginStateFields>(definition: Fields, input: unknown,
-    base?: PluginStateSnapshot<Fields>): PluginStateSnapshot<Fields> | undefined {
+    held?: PluginStateSnapshot<Fields>): PluginStateSnapshot<Fields> | undefined {
     if (!isRecord(input) || !counter(input.revision, false) || !isRecord(input.fields) || !isRecord(input.history)
         || typeof input.history.canUndo !== "boolean" || typeof input.history.canRedo !== "boolean") return undefined;
     const parsedScope = scope(input.scope);
     if (!parsedScope) return undefined;
+    if (input.base !== undefined && !holdsBase(held, parsedScope, input.base)) return undefined;
+    const base = input.base === undefined ? undefined : held;
     const undoEntry = parseHistoryEntry(input.history.undoEntry);
     const redoEntry = parseHistoryEntry(input.history.redoEntry);
     if ((input.history.undoEntry !== undefined && !undoEntry) || (input.history.redoEntry !== undefined && !redoEntry)) return undefined;
     for (const entry of [undoEntry, redoEntry]) {
-        if (entry && (entry.scope.owner !== parsedScope.owner || entry.scope.document !== parsedScope.document)) return undefined;
+        if (entry && !sameDocument(entry.scope, parsedScope)) return undefined;
     }
     const change = input.lastChange === undefined ? undefined : lastChange(input.lastChange, Object.keys(definition), input.revision);
     if (input.lastChange !== undefined && !change) return undefined;
-    const sameDocument = base?.scope?.owner === parsedScope.owner && base.scope.document === parsedScope.document;
     const fields: Record<string, PluginStateFieldSnapshot<unknown>> = Object.create(null);
     for (const [key, declaration] of Object.entries(definition)) {
-        if (!Object.hasOwn(input.fields, key)) return undefined;
-        const parsed = fieldSnapshot(declaration, input.fields[key], sameDocument ? base.fields[key] : undefined);
-        if (!parsed || (parsed.target && (parsed.target.key !== key || parsed.target.scope.owner !== parsedScope.owner
-            || parsed.target.scope.document !== parsedScope.document))) return undefined;
+        if (!Object.hasOwn(input.fields, key)) {
+            if (!base) return undefined;
+            fields[key] = base.fields[key];
+            continue;
+        }
+        const parsed = fieldSnapshot(declaration, input.fields[key], base?.fields[key]);
+        if (!parsed || (parsed.target && (parsed.target.key !== key || !sameDocument(parsed.target.scope, parsedScope)))) return undefined;
         fields[key] = parsed;
     }
     // SAFETY: every declared key was parsed with that declaration's codec. This
@@ -422,17 +440,18 @@ function receipt(input: unknown): PluginStateReceipt | undefined {
     const parsedAddress = address(input.address);
     const parsedResult = result(input.result);
     if (parsedAddress && parsedResult?.kind === "accepted" && parsedResult.historyEntry
-        && (parsedResult.historyEntry.scope.owner !== parsedAddress.owner || parsedResult.historyEntry.scope.document !== parsedAddress.document)) return undefined;
+        && !sameDocument(parsedResult.historyEntry.scope, parsedAddress)) return undefined;
     return parsedAddress && parsedResult ? { address: parsedAddress, result: parsedResult } : undefined;
 }
 
 /**
  * Parse a GUI body and hydrate every declared field through its domain codec.
- * `base` is the state this GUI last received; an update may only mark a value
- * unchanged against it.
+ * `held` is the state this GUI last received. An update built on it fills the
+ * fields it leaves out from it; an update built on any other state becomes
+ * `resync`, because applying it would show a mix of two states.
  */
 export function parseClientMessage<Fields extends PluginStateFields>(definition: Fields, input: unknown,
-    base?: PluginStateSnapshot<Fields>): MessageResult<PluginStateClientEvent<Fields>> {
+    held?: PluginStateSnapshot<Fields>): MessageResult<PluginStateClientEvent<Fields>> {
     if (!isBoundedStateJson(input) || !isRecord(input)) return { kind: "invalid", message: "Invalid GUI state-channel body." };
     if (typeof input.kind === "string" && !clientMessageKinds.has(input.kind)) return { kind: "unknown", messageKind: input.kind };
     if (input.kind === "closed" && name(input.reason)) return { kind: "ok", value: { kind: "closed", reason: input.reason } };
@@ -445,17 +464,20 @@ export function parseClientMessage<Fields extends PluginStateFields>(definition:
         const parsed = receipt(input);
         if (parsed) return { kind: "ok", value: { kind: "receipt", ...parsed } };
     }
-    if ((input.kind === "attached" || input.kind === "update") && parsedScope && counter(input.revision, false)) {
-        const state = stateSnapshot(definition, input.state, input.kind === "update" ? base : undefined);
-        if (state && state.revision === input.revision && state.scope?.owner === parsedScope.owner && state.scope.document === parsedScope.document) {
-            if (input.kind === "attached" && counter(input.request) && counter(input.client))
-                return { kind: "ok", value: { kind: "attached", request: input.request, client: input.client, scope: parsedScope, revision: input.revision, state } };
-            if (input.kind === "update") {
-                const parsedReceipt = input.receipt === undefined ? undefined : receipt(input.receipt);
-                if (input.receipt === undefined || parsedReceipt) return { kind: "ok", value: {
-                    kind: "update", scope: parsedScope, revision: input.revision, state, ...(parsedReceipt ? { receipt: parsedReceipt } : {}),
-                } };
-            }
+    if (input.kind === "attached" && parsedScope && counter(input.revision, false) && counter(input.request) && counter(input.client)) {
+        const state = stateSnapshot(definition, input.state);
+        if (state && state.revision === input.revision && sameDocument(state.scope, parsedScope))
+            return { kind: "ok", value: { kind: "attached", request: input.request, client: input.client, scope: parsedScope, revision: input.revision, state } };
+    }
+    if (input.kind === "update" && parsedScope && counter(input.revision, false) && isRecord(input.state)) {
+        const parsedReceipt = input.receipt === undefined ? undefined : receipt(input.receipt);
+        if (input.receipt === undefined || parsedReceipt) {
+            const withReceipt = parsedReceipt ? { receipt: parsedReceipt } : {};
+            if (counter(input.state.base, false) && !holdsBase(held, parsedScope, input.state.base))
+                return { kind: "ok", value: { kind: "resync", scope: parsedScope, ...withReceipt } };
+            const state = stateSnapshot(definition, input.state, held);
+            if (state && state.revision === input.revision && sameDocument(state.scope, parsedScope))
+                return { kind: "ok", value: { kind: "update", scope: parsedScope, revision: input.revision, state, ...withReceipt } };
         }
     }
     return { kind: "invalid", message: `Malformed "${String(input.kind)}" GUI state-channel message.` };

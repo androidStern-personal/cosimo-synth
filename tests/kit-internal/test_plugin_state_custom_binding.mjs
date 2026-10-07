@@ -7,6 +7,7 @@ import { loadUIModule } from "../../kit/tests/helpers/load_ui_module.mjs";
 const root = path.resolve(import.meta.dirname, "../..");
 const { definePluginState, parameter, storedValue, preparedState, eventValue } = await loadUIModule(root, "kit/ui/plugin-state-definition.ts");
 const { createCmajorPluginStateService } = await loadUIModule(root, "kit/ui/plugin-state-cmajor.ts");
+const { parseClientMessage } = await loadUIModule(root, "kit/ui/plugin-state-protocol.ts");
 
 const samplesCodec = {
     parse(input) {
@@ -35,6 +36,15 @@ class RawConnection {
 
 const scope = { owner: "custom-binding-owner", document: 0 };
 const nativeGain = { endpoint: "hostGain", value: 2.5, min: -12, max: 12, step: 0.5, defaultValue: 1 };
+
+/** The state a GUI holds after every update so far, decoded as the GUI decodes each one. */
+function heldState(definition, connection) {
+    return connection.messages("update").reduce((held, body) => {
+        const parsed = parseClientMessage(definition, body, held);
+        assert.equal(parsed.value?.kind, "update", "every update builds on the one before it");
+        return parsed.value.state;
+    }, undefined);
+}
 
 function publicationFor(connection, endpoint) {
     return connection.messages("publish").find(body => body.operations.some(operation => operation.endpoint === endpoint));
@@ -100,7 +110,7 @@ test("custom binding receives hydrated inputs, submits synchronously, and report
         await Promise.all(work);
         await setImmediate();
         assert.deepEqual(outcomes, [{ kind: "sent", proof: "native-publication-processed" }]);
-        const state = connection.messages("update").at(-1).state;
+        const state = heldState(definition, connection);
         assert.deepEqual(state.fields.curve.application, outcomes[0]);
         assert.deepEqual(state.fields.preview.application, outcomes[0]);
         assert.deepEqual(state.history, { canUndo: false, canRedo: false });

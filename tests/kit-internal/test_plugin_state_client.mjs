@@ -295,6 +295,33 @@ test("document reset clears drafts, settles uncertain commands honestly, and res
     assert.equal(channel.sent.filter(message => message.kind === "command").length, 2, "reset/close must never replay an uncertain command");
 });
 
+test("an update the GUI cannot apply settles its own receipt, interrupts the other unanswered edit and attaches again for the whole state", async () => {
+    const channel = new ControlledChannel();
+    const client = createPluginStateClient(definition, { channel, onDefect: error => assert.fail(String(error)) });
+    channel.deliver(attached());
+    const answered = client.dispatch({ kind: "edit", key: "gain", value: 0.9 });
+    const unanswered = client.dispatch({ kind: "edit", key: "curve", value: [1, 0] });
+    channel.deliver({ kind: "resync", scope: { owner: "owner", document: 7 } });
+    assert.equal(client.getSnapshot().kind, "ready", "a resync for another document is not this GUI's");
+    const accepted = { kind: "accepted", revision: 3, version: 1, changed: true };
+    channel.deliver({ kind: "resync", scope, receipt: receipt(1, accepted) });
+    assert.deepEqual(await answered, accepted, "the receipt that came with the update still settles its edit");
+    assert.deepEqual(await unanswered, { kind: "interrupted", reason: "reset", acceptance: "unknown" });
+    assert.equal(client.getSnapshot().kind, "connecting", "nothing is drawn from a state the GUI does not hold");
+    assert.deepEqual(channel.sent.at(-1), { kind: "attach", request: 2 });
+    channel.deliver({ kind: "resync", scope });
+    assert.equal(channel.sent.filter(message => message.kind === "attach").length, 2, "a GUI already attaching does not attach twice");
+    channel.deliver(attached(snapshot(4, [1, 0], 0.9), 2, 4));
+    assert.equal(client.getSnapshot().kind, "ready");
+    assert.equal(client.getSnapshot().client, 4);
+    assert.equal(client.getSnapshot().state.fields.gain.value, 0.9);
+    assert.deepEqual(client.getSnapshot().state.fields.curve.value, [1, 0]);
+    void client.dispatch({ kind: "edit", key: "gain", value: 0.5 });
+    assert.equal(channel.sent.at(-1).sequence, 1, "the new attachment numbers its commands from one");
+    assert.equal(channel.sent.filter(message => message.kind === "command").length, 3, "an interrupted edit is never replayed");
+    client.stop();
+});
+
 test("an edit requested by a Jotai observer cannot overtake the edit being displayed", async () => {
     const channel = new ControlledChannel();
     const client = createPluginStateClient(definition, { channel, onDefect: error => assert.fail(String(error)) });

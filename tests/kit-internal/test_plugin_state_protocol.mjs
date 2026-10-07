@@ -119,38 +119,80 @@ test("parameter observations require explicit native intent, origin and monotoni
     }
 });
 
-test("an unchanged value resolves only against the same field version in the same document", () => {
+test("an update carries only the fields that changed since its base, and the GUI fills the rest from the state it holds", () => {
     const { encodeStateSnapshot } = protocol;
     let parses = 0;
     const codec = { parse: value => { parses++; return Array.isArray(value) ? { kind: "ok", value: Object.freeze([...value]) } : { kind: "error", message: "list" }; },
         encode: value => [...value], equals: (a, b) => a.length === b.length && a.every((item, index) => item === b[index]) };
-    const definition = definePluginState({ library: storedValue({ initial: [], codec }) });
+    const definition = definePluginState({ gain: parameter("gain"), library: storedValue({ initial: [], codec }) });
     const scope = { owner: "owner", document: 1 };
-    const library = Object.freeze(["a", "b"]);
-    const snapshot = (revision, version, value = library, documentScope = scope) => ({ scope: documentScope, revision, history: { canUndo: false, canRedo: false },
-        fields: { library: { readiness: { kind: "ready" }, value, version, persistence: { kind: "pending" } } } });
-    const update = (state) => ({ kind: "update", scope: state.scope, revision: state.revision, state });
+    const field = (value, version, persistence = "pending") => ({ readiness: { kind: "ready" }, value, version, persistence: { kind: persistence } });
+    const first = { scope, revision: 1, history: { canUndo: false, canRedo: false },
+        fields: { gain: field(0.5, 0), library: field(Object.freeze(["a", "b"]), 4) } };
+    const next = (state, fields) => ({ ...state, revision: state.revision + 1, fields: { ...state.fields, ...fields } });
+    const wire = state => JSON.parse(JSON.stringify({ kind: "update", scope: state.scope, revision: state.revision, state }));
 
-    const full = encodeStateSnapshot(definition, snapshot(1, 4));
-    const base = parseClientMessage(definition, update(full)).value.state;
-    const elided = encodeStateSnapshot(definition, snapshot(2, 4), snapshot(1, 4));
-    assert.equal(elided.fields.library.valueUnchanged, true);
-    assert.equal("value" in elided.fields.library, false, "an unchanged value is not resent");
+    const held = parseClientMessage(definition, wire(encodeStateSnapshot(definition, first))).value.state;
+    const knob = next(first, { gain: field(0.75, 1) });
+    const tick = encodeStateSnapshot(definition, knob, first);
+    assert.deepEqual(Object.keys(tick.fields), ["gain"], "a field whose object did not change is left out");
+    assert.equal(tick.base, 1, "the update names the state it builds on");
     parses = 0;
-    const resolved = parseClientMessage(definition, update(elided), base);
-    assert.equal(resolved.value.state.fields.library.value, base.fields.library.value, "the GUI reuses its parsed value");
-    assert.equal(parses, 0, "and does not parse it again");
+    const applied = parseClientMessage(definition, wire(tick), held);
+    assert.equal(applied.kind, "ok");
+    assert.equal(applied.value.state.revision, 2);
+    assert.equal(applied.value.state.fields.gain.value, 0.75);
+    assert.strictEqual(applied.value.state.fields.library, held.fields.library, "a left-out field keeps the held field");
+    assert.equal(parses, 0, "and its value is not parsed again");
 
-    assert.equal(parseClientMessage(definition, update(elided)).kind, "invalid", "a marker without a base is a protocol error");
-    assert.equal(parseClientMessage(definition, update(encodeStateSnapshot(definition, snapshot(2, 5), snapshot(1, 5))),
-        base).kind, "invalid", "a marker for another version is a protocol error");
-    const otherDocument = { owner: "owner", document: 2 };
-    assert.equal(parseClientMessage(definition, update(encodeStateSnapshot(definition, snapshot(2, 4, library, otherDocument), snapshot(1, 4, library, otherDocument))),
-        base).kind, "invalid", "a base from another document is never used");
-    assert.deepEqual(encodeStateSnapshot(definition, snapshot(2, 5, Object.freeze(["c"])), snapshot(1, 4)).fields.library.value, ["c"],
+    const saved = next(knob, { library: field(knob.fields.library.value, 4, "observed-in-native-state") });
+    const status = encodeStateSnapshot(definition, saved, knob);
+    assert.deepEqual(Object.keys(status.fields), ["library"]);
+    assert.equal(status.fields.library.valueUnchanged, true, "a field whose status changed but whose value did not leaves its value out");
+    assert.equal("value" in status.fields.library, false);
+    const resolved = parseClientMessage(definition, wire(status), applied.value.state);
+    assert.strictEqual(resolved.value.state.fields.library.value, held.fields.library.value, "the GUI reuses its parsed value");
+    assert.equal(resolved.value.state.fields.library.persistence.kind, "observed-in-native-state");
+    assert.equal(parses, 0);
+    const forged = wire(status);
+    forged.state.fields.library.version = 5;
+    assert.equal(parseClientMessage(definition, forged, applied.value.state).kind, "invalid", "an unchanged value must keep its version");
+
+    const replaced = { ...next(saved, {}), scope: { owner: "owner", document: 2 } };
+    assert.equal("base" in encodeStateSnapshot(definition, replaced, saved), false, "the first update of another document is whole");
+    assert.deepEqual(encodeStateSnapshot(definition, next(saved, { library: field(Object.freeze(["c"]), 5) }), saved).fields.library.value, ["c"],
         "a changed value is sent in full");
-    assert.equal(parseClientMessage(definition, { kind: "attached", request: 1, client: 1, scope, revision: 2, state: elided }, base).kind, "invalid",
-        "an attach reply always carries every value");
+    assert.equal(parseClientMessage(definition, { kind: "attached", request: 1, client: 1, scope, revision: 2, state: tick }, held).kind, "invalid",
+        "an attach reply always carries every field");
+    const missing = wire(encodeStateSnapshot(definition, first));
+    delete missing.state.fields.library;
+    assert.equal(parseClientMessage(definition, missing, held).kind, "invalid", "a whole update cannot leave a field out");
+});
+
+test("an update built on a state the GUI does not hold asks it to attach again, keeping its receipt", () => {
+    const { encodeStateSnapshot } = protocol;
+    const codec = { parse: value => typeof value === "number" ? { kind: "ok", value } : { kind: "error", message: "number" }, encode: value => value, equals: (a, b) => a === b };
+    const definition = definePluginState({ gain: parameter("gain"), shape: storedValue({ initial: 0, codec }) });
+    const scope = { owner: "owner", document: 1 };
+    const field = (value, version) => ({ readiness: { kind: "ready" }, value, version, persistence: { kind: "pending" } });
+    const state = (revision, gain, documentScope = scope) => ({ scope: documentScope, revision, history: { canUndo: false, canRedo: false },
+        fields: { gain: field(gain, revision), shape: field(1, 0) } });
+    const held = parseClientMessage(definition, { kind: "update", scope, revision: 1, state: encodeStateSnapshot(definition, state(1, 0)) }).value.state;
+    const receipt = { address: { ...scope, client: 3, sequence: 2 }, result: { kind: "accepted", revision: 3, version: 3, changed: true } };
+    const third = state(3, 0.75);
+    const delta = (base, update = third) => ({ kind: "update", scope: update.scope, revision: update.revision,
+        state: { ...encodeStateSnapshot(definition, update), base, fields: { gain: update.fields.gain } } });
+
+    assert.equal(parseClientMessage(definition, delta(1), held).kind, "ok", "an update on the held revision applies");
+    assert.deepEqual(parseClientMessage(definition, { ...delta(2), receipt }, held),
+        { kind: "ok", value: { kind: "resync", scope, receipt } }, "a GUI that missed revision 2 attaches again; the receipt still settles its edit");
+    assert.deepEqual(parseClientMessage(definition, delta(1)), { kind: "ok", value: { kind: "resync", scope } }, "a GUI holding no state cannot apply a delta");
+    const otherScope = { owner: "owner", document: 2 };
+    assert.deepEqual(parseClientMessage(definition, delta(1, state(3, 0.75, otherScope)), held),
+        { kind: "ok", value: { kind: "resync", scope: otherScope } }, "the same revision in another document is not the held state");
+    for (const base of [-1, 1.5, "1", null]) assert.equal(parseClientMessage(definition, delta(base), held).kind, "invalid", JSON.stringify(base));
+    assert.equal(parseClientMessage(definition, { ...delta(2), receipt: { address: receipt.address } }, held).kind, "invalid",
+        "a malformed receipt is a protocol error even when the base is not held");
 });
 
 test("the last value change crosses to the GUI intact, and a malformed one is refused", () => {

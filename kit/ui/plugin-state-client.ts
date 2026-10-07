@@ -10,6 +10,8 @@ import type {
 export type PluginStateClientEvent<Fields extends PluginStateFields> =
     | { readonly kind: "attached"; readonly request: number; readonly scope: PluginStateScope; readonly client: number; readonly revision: number; readonly state: PluginStateSnapshot<Fields> }
     | { readonly kind: "update"; readonly scope: PluginStateScope; readonly revision: number; readonly state: PluginStateSnapshot<Fields>; readonly receipt?: PluginStateReceipt }
+    /** An update built on a state this GUI does not hold; the GUI attaches again for the whole state. */
+    | { readonly kind: "resync"; readonly scope: PluginStateScope; readonly receipt?: PluginStateReceipt }
     | { readonly kind: "receipt"; readonly address: PluginStateReceipt["address"]; readonly result: PluginStateResult }
     | { readonly kind: "reset" | "owner-changed"; readonly scope: PluginStateScope }
     | { readonly kind: "closed"; readonly reason: string }
@@ -155,6 +157,14 @@ export function createPluginStateClient<const Fields extends PluginStateFields>(
             ? { kind: "interrupted", reason, acceptance: "unknown" }
             : { kind: "rejected", reason: reason === "reset" ? "stale-scope" : "service-closed" });
     };
+    /** Give up this attachment and its unanswered commands, then attach for the whole current state. */
+    const attachAgain = () => {
+        interrupt("reset");
+        nextSequence = 0;
+        attachRequest++;
+        store.set(projection, Object.freeze({ kind: "connecting" }));
+        ports.channel.send({ kind: "attach", request: attachRequest });
+    };
     const close = (knownReceipt?: PluginStateReceipt) => {
         if (stopped) return;
         stopped = true;
@@ -212,23 +222,23 @@ export function createPluginStateClient<const Fields extends PluginStateFields>(
             if (message.request !== attachRequest || current.kind !== "connecting") return;
             duringAttach.clear();
             store.set(projection, Object.freeze({ kind: "failed", reason: message.reason }));
+        } else if (message.kind === "resync") {
+            if (!base || !sameScope(base.state.scope, message.scope)) return;
+            if (message.receipt) settle(message.receipt);
+            attachAgain();
         } else {
             if (expectedScope && (message.kind === "reset"
                 ? message.scope.owner !== expectedScope.owner || message.scope.document <= expectedScope.document
                 : sameScope(expectedScope, message.scope))) return;
             expectedScope = message.scope;
-            interrupt("reset");
-            nextSequence = 0;
-            attachRequest++;
-            store.set(projection, Object.freeze({ kind: "connecting" }));
-            ports.channel.send({ kind: "attach", request: attachRequest });
+            attachAgain();
         }
     };
     const receiveSafely = (message: PluginStateClientEvent<Fields>) => {
         try { receive(message); }
         catch (error) {
             ports.onDefect(error);
-            close(message.kind === "update" ? message.receipt : message.kind === "receipt" ? message : undefined);
+            close(message.kind === "update" || message.kind === "resync" ? message.receipt : message.kind === "receipt" ? message : undefined);
         }
     };
     try {

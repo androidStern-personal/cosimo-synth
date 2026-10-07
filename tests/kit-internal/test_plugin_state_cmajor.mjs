@@ -150,7 +150,7 @@ test("a native open send defect retains its cause, rejects startup, and releases
 /** The value most recently sent for `key`; later updates mark it unchanged instead of resending it. */
 function lastSentValue(connection, key) {
     return connection.sent.map(message => message.message).filter(body => body.kind === "update" || body.kind === "snapshot")
-        .findLast(body => "value" in body.state.fields[key])?.state.fields[key].value;
+        .findLast(body => body.state.fields[key] && "value" in body.state.fields[key])?.state.fields[key].value;
 }
 
 async function openService() {
@@ -164,6 +164,50 @@ async function openService() {
     } });
     await starting;
     return { connection, service, scope, defects };
+}
+
+// Native routing between the owner and its GUIs: an attach reply reaches its own GUI,
+// each GUI command reaches the owner, and every update reaches every attached GUI in
+// the order the owner sent it.
+function nativeRouter(owner) {
+    const views = [];
+    let nextClient = 0;
+    const updates = () => owner.connection.bodies("update");
+    const attach = view => {
+        const request = view.connection.bodies("attach").at(-1).request;
+        view.id = ++nextClient;
+        view.delivered = updates().length;
+        view.forwarded = view.connection.bodies("command").length;
+        owner.connection.deliver({ kind: "attached-client", request, scope: owner.scope, client: view.id });
+        const snapshot = owner.connection.bodies("snapshot").at(-1);
+        assert.equal(snapshot.to, view.id);
+        view.connection.deliver({ kind: "attached", request, scope: owner.scope, client: view.id, revision: snapshot.revision, state: snapshot.state });
+    };
+    return {
+        open() {
+            const connection = new RecordingPatchConnection();
+            const view = { connection, client: createCmajorPluginStateClient(definition, connection, { onDefect: error => assert.fail(String(error)) }) };
+            attach(view);
+            views.push(view);
+            return view;
+        },
+        /** Route what is queued. `missing` loses its updates, as if one message never arrived. */
+        flush(missing) {
+            for (const view of views) {
+                const commands = view.connection.bodies("command");
+                for (const { scope, client, sequence, command } of commands.slice(view.forwarded))
+                    owner.connection.deliver({ kind: "command", address: { ...scope, client, sequence }, command });
+                view.forwarded = commands.length;
+            }
+            for (const view of views) {
+                const pending = updates().slice(view.delivered);
+                view.delivered += pending.length;
+                if (view !== missing) for (const update of pending) view.connection.deliver(update);
+                if (view.client.getSnapshot().kind === "connecting") attach(view);
+            }
+        },
+        close() { for (const view of views) view.client.stop(); },
+    };
 }
 
 test("malformed addressed commands get exact rejections without closing the owner or consuming service history", async () => {
@@ -280,16 +324,12 @@ test("raw owner updates settle GUI edits with parsed canonical values and addres
 
 test("compound GUI edits cross the JSON channel as one history action and retain per-field save failure evidence", async t => {
     const owner = await openService();
-    const connection = new RecordingPatchConnection();
-    const client = createCmajorPluginStateClient(definition, connection, { onDefect: error => assert.fail(String(error)) });
-    t.after(async () => { client.stop(); await owner.service.stop(); });
-    const state = owner.connection.bodies("update").at(-1).state;
-    connection.deliver({ kind: "attached", request: 1, scope: owner.scope, client: 7, revision: state.revision, state });
+    const router = nativeRouter(owner);
+    const { client } = router.open();
+    t.after(async () => { router.close(); await owner.service.stop(); });
     const send = async command => {
         const pending = client.dispatch(command);
-        const message = connection.bodies("command").at(-1);
-        owner.connection.deliver({ kind: "command", address: { ...message.scope, client: message.client, sequence: message.sequence }, command: message.command });
-        connection.deliver(owner.connection.bodies("update").at(-1));
+        router.flush();
         return pending;
     };
     const edited = await send({ kind: "edit-many", edits: [
@@ -305,7 +345,7 @@ test("compound GUI edits cross the JSON channel as one history action and retain
     assert.ok(savedCurve); assert.ok(savedGain);
     owner.connection.deliver({ kind: "published", scope: owner.scope, request: savedGain.request, result: { kind: "observed" } });
     owner.connection.deliver({ kind: "published", scope: owner.scope, request: savedCurve.request, result: { kind: "failed", reason: "disk unavailable" } });
-    connection.deliver(owner.connection.bodies("update").at(-1));
+    router.flush();
     assert.equal(client.getSnapshot().state.fields.gain.persistence.kind, "host-managed");
     assert.deepEqual(client.getSnapshot().state.fields.curve.persistence, { kind: "failed", reason: "disk unavailable" });
     assert.deepEqual(client.getSnapshot().state.fields.curve.value, [1, 0], "a failed save preserves the accepted edit and its history");
@@ -407,44 +447,85 @@ test("unknown message kinds are reported once and ignored by the owner and the G
     await owner.service.stop();
 });
 
-test("updates leave out unchanged values, every attached GUI resolves them, and a new GUI's attach makes the next update complete", async () => {
+test("a knob tick after an attach carries only that field, and the GUI fills the rest from the state it holds", async () => {
     const owner = await openService();
-    const views = [];
-    const attach = () => {
-        const connection = new RecordingPatchConnection();
-        const client = createCmajorPluginStateClient(definition, connection, { onDefect: error => assert.fail(String(error)) });
-        const request = connection.bodies("attach").at(-1).request;
-        owner.connection.deliver({ kind: "attached-client", request, scope: owner.scope, client: views.length + 1 });
-        const snapshot = owner.connection.bodies("snapshot").at(-1);
-        connection.deliver({ kind: "attached", request, scope: owner.scope, client: snapshot.to, revision: snapshot.revision, state: snapshot.state });
-        views.push({ connection, client });
-        return client;
-    };
-    const broadcast = () => { for (const { connection } of views) connection.deliver(owner.connection.bodies("update").at(-1)); };
-    const command = (client, sequence, edit) => {
-        owner.connection.deliver({ kind: "command", address: { ...owner.scope, client, sequence }, command: edit });
-        broadcast();
-    };
-    const first = attach();
-    command(1, 1, { kind: "edit", key: "curve", value: [0, 0.3, 1] });
-    assert.deepEqual(owner.connection.bodies("update").at(-1).state.fields.curve.value, [0, 0.3, 1], "a changed value is sent");
-    command(1, 2, { kind: "edit", key: "gain", value: 4 });
-    const knobUpdate = owner.connection.bodies("update").at(-1).state.fields;
-    assert.equal(knobUpdate.curve.valueUnchanged, true, "a knob edit does not resend the curve");
-    assert.equal(knobUpdate.gain.value, 4);
-    assert.deepEqual(first.getSnapshot().state.fields.curve.value, [0, 0.3, 1]);
-    assert.equal(first.getSnapshot().state.fields.gain.value, 4);
-    const second = attach();
-    command(2, 1, { kind: "edit", key: "gain", value: 5 });
-    assert.deepEqual(owner.connection.bodies("update").at(-1).state.fields.curve.value, [0, 0.3, 1],
-        "the update after an attach is complete, because GUIs may hold different bases");
-    command(2, 2, { kind: "edit", key: "gain", value: 6 });
-    for (const client of [first, second]) {
-        assert.equal(client.getSnapshot().kind, "ready");
-        assert.deepEqual(client.getSnapshot().state.fields.curve.value, [0, 0.3, 1]);
-        assert.equal(client.getSnapshot().state.fields.gain.value, 6);
+    const router = nativeRouter(owner);
+    const view = router.open();
+    void view.client.dispatch({ kind: "edit", key: "curve", value: [0, 0.3, 1] });
+    router.flush();
+    const whole = owner.connection.bodies("update").at(-1);
+    assert.deepEqual(Object.keys(whole.state.fields), ["gain", "curve"], "the update after an attach is whole, because GUIs may hold different states");
+    assert.equal("base" in whole.state, false);
+    const ticking = view.client.dispatch({ kind: "edit", key: "gain", value: 4 });
+    router.flush();
+    assert.equal((await ticking).kind, "accepted");
+    const tick = owner.connection.bodies("update").at(-1);
+    assert.deepEqual(Object.keys(tick.state.fields), ["gain"], "a knob tick carries one field");
+    assert.equal(tick.state.base, whole.revision, "and names the state it builds on");
+    assert.equal(view.client.getSnapshot().state.fields.gain.value, 4);
+    assert.deepEqual(view.client.getSnapshot().state.fields.curve.value, [0, 0.3, 1]);
+    const save = owner.connection.bodies("publish").find(body => body.operations.some(operation => operation.key === "curve"));
+    owner.connection.deliver({ kind: "published", scope: owner.scope, request: save.request, result: { kind: "observed" } });
+    router.flush();
+    const saved = owner.connection.bodies("update").at(-1).state.fields;
+    assert.deepEqual(Object.keys(saved), ["curve"]);
+    assert.equal(saved.curve.valueUnchanged, true, "a finished save does not resend the curve");
+    assert.deepEqual(view.client.getSnapshot().state.fields.curve.persistence, { kind: "observed-in-native-state" });
+    assert.deepEqual(view.client.getSnapshot().state.fields.curve.value, [0, 0.3, 1]);
+    router.close();
+    await owner.service.stop();
+});
+
+test("a second GUI attaching in the middle of a drag shows the drag, and both GUIs follow it to the end", async () => {
+    const owner = await openService();
+    const router = nativeRouter(owner);
+    const first = router.open();
+    const tick = value => { void first.client.dispatch({ kind: "edit", key: "gain", value, gesture: 1 }); router.flush(); };
+    void first.client.dispatch({ kind: "begin", keys: ["gain"], gesture: 1 });
+    router.flush();
+    for (const value of [1, 1.5, 2]) tick(value);
+    const second = router.open();
+    assert.equal(second.client.getSnapshot().state.fields.gain.value, 2, "the attach reply shows the drag so far");
+    assert.deepEqual(second.client.getSnapshot().state.fields.gain.gesture, { client: first.id, gesture: 1 });
+    const attachedAt = owner.connection.bodies("update").length;
+    for (const value of [2.5, 3]) tick(value);
+    const [afterAttach, later] = owner.connection.bodies("update").slice(attachedAt);
+    assert.deepEqual(Object.keys(afterAttach.state.fields), ["gain", "curve"], "the first update after the attach is whole");
+    assert.deepEqual(Object.keys(later.state.fields), ["gain"], "later ticks carry one field again");
+    void first.client.dispatch({ kind: "end", keys: ["gain"], gesture: 1 });
+    router.flush();
+    for (const view of [first, second]) {
+        const { kind, state } = view.client.getSnapshot();
+        assert.equal(kind, "ready");
+        assert.equal(state.revision, owner.connection.bodies("update").at(-1).revision);
+        assert.equal(state.fields.gain.value, 3);
+        assert.equal(state.fields.gain.gesture, undefined);
+        assert.deepEqual(state.fields.curve.value, [0, 1]);
+        assert.equal(state.history.canUndo, true);
     }
-    for (const { client } of views) client.stop();
+    router.close();
+    await owner.service.stop();
+});
+
+test("a GUI that missed an update attaches again instead of applying the next one to a state it does not hold", async () => {
+    const owner = await openService();
+    const router = nativeRouter(owner);
+    const first = router.open();
+    const second = router.open();
+    const edit = (key, value, missing) => { void first.client.dispatch({ kind: "edit", key, value }); router.flush(missing); };
+    edit("gain", 3);
+    edit("curve", [1, 0], second);
+    assert.deepEqual(second.client.getSnapshot().state.fields.curve.value, [0, 1], "the lost update is not shown");
+    const attaches = second.connection.bodies("attach").length;
+    edit("gain", 4);
+    assert.equal(second.connection.bodies("attach").length, attaches + 1, "the next update names a state the GUI does not hold");
+    for (const view of [first, second]) {
+        assert.equal(view.client.getSnapshot().kind, "ready");
+        assert.equal(view.client.getSnapshot().state.fields.gain.value, 4);
+        assert.deepEqual(view.client.getSnapshot().state.fields.curve.value, [1, 0]);
+    }
+    assert.equal(first.connection.bodies("attach").length, 1, "a GUI that received every update keeps its attachment");
+    router.close();
     await owner.service.stop();
 });
 
@@ -576,7 +657,7 @@ test("a valid accepted receipt survives malformed snapshot data or a codec defec
         const update = JSON.parse(JSON.stringify(owner.connection.bodies("update").at(-1)));
         const historyEntry = update.receipt.result.historyEntry;
         assert.ok(historyEntry);
-        if (failure === "invalid-state") update.state.fields.gain.metadata.step = "broken";
+        if (failure === "invalid-state") update.state.fields.curve.persistence.kind = "broken";
         else update.state.fields.curve.value = [9, 1];
         connection.deliver(update);
         assert.deepEqual(await editing, { kind: "accepted", revision: 2, version: 1, changed: true, historyEntry }, failure);
