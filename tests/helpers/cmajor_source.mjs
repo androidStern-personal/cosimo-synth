@@ -41,10 +41,29 @@ export function cmajorWebApiDirectory() {
  * date) against that same checkout; returns the executable's path.
  */
 export function cmajorExternalCodegen() {
-    const buildDirectory = path.join(root, "build/cmajor_external_codegen-host");
-    execFileSync("cmake", ["-S", path.join(root, "tools/cmajor_external_codegen"), "-B", buildDirectory,
-        "-DCMAKE_BUILD_TYPE=Release"], { cwd: root, stdio: ["ignore", "ignore", "inherit"] });
-    execFileSync("cmake", ["--build", buildDirectory, "--config", "Release", "--target", "cosimo_cmajor_external_codegen"],
+    return buildCmakeTarget(path.join(root, "tools/cmajor_external_codegen"),
+        path.join(root, "build/cmajor_external_codegen-host"), "cosimo_cmajor_external_codegen");
+}
+
+/**
+ * The Cmajor fork's own shared-memory JavaScript generator, which takes
+ * engine code-generation options directly; built from the full toolchain
+ * checkout the code generator above compiles against.
+ */
+export function cmajorSharedMemoryGenerator() {
+    cmajorExternalCodegen();
+    const cache = readFileSync(path.join(root, "build/cmajor_external_codegen-host/CMakeCache.txt"), "utf8");
+    const toolchain = /^CPM_PACKAGE_builder_kit_cmajor_toolchain_SOURCE_DIR:INTERNAL=(.+)$/mu.exec(cache)?.[1]
+        ?? process.env.BUILDER_KIT_CMAJOR_SOURCE;
+    if (!toolchain) throw new Error("The code generator build did not report its Cmajor toolchain checkout.");
+    return buildCmakeTarget(path.join(toolchain, "tests/shared_memory_codegen"),
+        path.join(root, "build/shared_data_codegen"), "shared_memory_generator");
+}
+
+function buildCmakeTarget(sourceDirectory, buildDirectory, target) {
+    execFileSync("cmake", ["-S", sourceDirectory, "-B", buildDirectory, "-DCMAKE_BUILD_TYPE=Release"],
         { cwd: root, stdio: ["ignore", "ignore", "inherit"] });
-    return path.join(buildDirectory, "cosimo_cmajor_external_codegen");
+    execFileSync("cmake", ["--build", buildDirectory, "--config", "Release", "--target", target],
+        { cwd: root, stdio: ["ignore", "ignore", "inherit"] });
+    return path.join(buildDirectory, target);
 }

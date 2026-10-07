@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import path from "node:path";
 import test, { after, before } from "node:test";
 
 import { chromium } from "playwright";
@@ -6,19 +7,16 @@ import { chromium } from "playwright";
 import { buildPlugin } from "../kit/fx/build-effect.mjs";
 import { startStaticRepoServer } from "../kit/tests/helpers/static_web_server.mjs";
 import { readChocHostKeyboardRouter } from "./helpers/choc_host_keyboard_router.mjs";
+import { cmajorSourceDirectory } from "./helpers/cmajor_source.mjs";
 
-const chocSourceRoot = process.env.COSIMO_CHOC_SOURCE_ROOT;
-const shouldRun = typeof chocSourceRoot === "string" && chocSourceRoot.length > 0;
+// The CHOC checkout under qualification, by default the one inside the pinned Cmajor checkout.
+const chocSourceRoot = process.env.COSIMO_CHOC_SOURCE_ROOT || path.join(cmajorSourceDirectory(), "include/choc");
 
 let browser;
 let router;
 let server;
 
 before(async () => {
-    if (!shouldRun) {
-        return;
-    }
-
     ({ router } = await readChocHostKeyboardRouter(chocSourceRoot));
     await buildPlugin("enhancer-lite");
     await buildPlugin("seqfx");
@@ -338,9 +336,7 @@ function assertDiscardedPair(messages, key, reason) {
     );
 }
 
-test("the exact CHOC router reaches the native seam from the packaged Enhancer Lite target", {
-    skip: shouldRun ? false : "Set COSIMO_CHOC_SOURCE_ROOT to the exact CHOC checkout under qualification.",
-}, async (t) => {
+test("the exact CHOC router reaches the native seam from the packaged Enhancer Lite target", async (t) => {
     const page = await openPackagedEnhancerLite();
 
     try {
@@ -364,9 +360,7 @@ test("the exact CHOC router reaches the native seam from the packaged Enhancer L
     }
 });
 
-test("the exact CHOC router reaches the native forward/discard seam from packaged SeqFX controls", {
-    skip: shouldRun ? false : "Set COSIMO_CHOC_SOURCE_ROOT to the exact CHOC checkout under qualification.",
-}, async (t) => {
+test("the exact CHOC router reaches the native forward/discard seam from packaged SeqFX controls", async (t) => {
     const page = await openPackagedSeqFx();
 
     try {

@@ -54,11 +54,11 @@ also shown to make its regression fail.
 
 ## Run
 
-Set `BUILDER_KIT_CMAJOR_SOURCE` to the authored/pinned Cmajor source.
+The tests use the Cmajor checkout named by `BUILDER_KIT_CMAJOR_SOURCE`, or the kit's
+pinned checkout when it is unset, and build the code generators they need from it.
 The customer MSEG browser proof uses the actual `cmaj generate --target=webaudio-html`
 export and serves only that output. It defaults to `build/cmajor_command/bin/cmaj`;
-set `BUILDER_KIT_CMAJ_EXECUTABLE` to select another built customer command. The lower-level
-worklet lifecycle test still selects its isolated compiler with `CMAJOR_SHARED_GENERATOR`.
+set `BUILDER_KIT_CMAJ_EXECUTABLE` to select another built customer command.
 
 ```sh
 npm run test:plugin-state
