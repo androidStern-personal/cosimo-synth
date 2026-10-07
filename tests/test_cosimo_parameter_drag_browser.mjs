@@ -50,9 +50,13 @@ test("real Cosimo parameter drags never replay older values during dragging or a
         const box = await slider.boundingBox();
         const x = box.x + box.width / 2, y = box.y + box.height / 2;
         await page.mouse.move(x, y);
-        await page.mouse.down();
+        // A press that has not crossed the 4px drag threshold within the
+        // long-press time opens the parameter menu instead of dragging, and
+        // each input round trip on the throttled CPU is slow. Mark the drag
+        // before pressing and cross the threshold with the first move.
         await page.evaluate(() => { window.dragTrace.phase = "drag"; });
-        for (let step = 1; step <= 50; step++) await page.mouse.move(x + step * 3, y);
+        await page.mouse.down();
+        for (let step = 1; step <= 50; step++) await page.mouse.move(x + 3 + step * 3, y);
         await page.mouse.up();
         await page.evaluate(() => { window.dragTrace.phase = "released"; });
         await page.waitForTimeout(600); // Include delayed worklet observations after pointer-up.
