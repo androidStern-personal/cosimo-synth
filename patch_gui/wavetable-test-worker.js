@@ -153,35 +153,37 @@ function Vo(t, e) {
 }
 function Ho() {
   const t = globalThis.location?.href;
-  if (typeof t == "string" && t.length > 0) return new URL("/", t);
+  if (typeof t == "string" && URL.canParse("/", t)) return new URL("/", t);
   const e = new URL(import.meta.url);
   return e.pathname = e.pathname.replace(/\/[^/]*$/, "/"), e;
 }
 function In(t, e, n) {
-  return e instanceof URL ? e : typeof e == "string" && e.length > 0 ? /^[a-zA-Z][a-zA-Z\d+.-]*:/.test(e) ? new URL(e) : new URL(e.replace(/^\//, ""), n) : new URL(t, n);
+  return e instanceof URL ? e : typeof e == "string" && e.length > 0 ? /^[a-zA-Z][a-zA-Z\d+.-]*:/.test(e) ? new URL(e) : new URL(e.replace(/^\//, ""), n()) : new URL(t, n());
 }
 function hr(t, e = {}) {
-  const n = t ?? {}, r = e.patchRoot ?? Ho(), i = async (a, s = n.getResourceAddress?.(a)) => {
-    typeof fetch != "function" && $(`Cannot read ${a}: this host has neither a resource bridge nor fetch.`);
-    const c = In(a, s, r), m = await fetch(c.toString());
-    return m.ok || $(`Could not read ${a} from ${c} (HTTP ${m.status}).`), m.arrayBuffer();
-  }, o = async (a) => n.readResource ? bn(a, await n.readResource(a)) : new Uint8Array(await i(a));
+  const n = t ?? {};
+  let r = e.patchRoot;
+  const i = () => r ??= Ho(), o = async (s, c = n.getResourceAddress?.(s)) => {
+    typeof fetch != "function" && $(`Cannot read ${s}: this host has neither a resource bridge nor fetch.`);
+    const m = In(s, c, i), l = await fetch(m.toString());
+    return l.ok || $(`Could not read ${s} from ${m} (HTTP ${l.status}).`), l.arrayBuffer();
+  }, a = async (s) => n.readResource ? bn(s, await n.readResource(s)) : new Uint8Array(await o(s));
   return {
-    async readText(a) {
-      if (!n.readResource) return gn(new Uint8Array(await i(a)));
-      const s = await n.readResource(a);
-      return typeof s == "string" ? s : typeof s == "object" && s !== null && "text" in s && typeof s.text == "function" ? String(await s.text()) : gn(bn(a, s));
+    async readText(s) {
+      if (!n.readResource) return gn(new Uint8Array(await o(s)));
+      const c = await n.readResource(s);
+      return typeof c == "string" ? c : typeof c == "object" && c !== null && "text" in c && typeof c.text == "function" ? String(await c.text()) : gn(bn(s, c));
     },
-    async readJSON(a) {
-      return JSON.parse(await this.readText(a));
+    async readJSON(s) {
+      return JSON.parse(await this.readText(s));
     },
-    readBytes: o,
-    async readAudio(a) {
-      const s = n.getResourceAddress?.(a);
-      return s != null && typeof fetch == "function" ? vn(a, await i(a, s)) : n.readResourceAsAudioData ? Vo(a, await n.readResourceAsAudioData(a)) : vn(a, new Uint8Array(await o(a)).buffer);
+    readBytes: a,
+    async readAudio(s) {
+      const c = n.getResourceAddress?.(s);
+      return c != null && typeof fetch == "function" ? vn(s, await o(s, c)) : n.readResourceAsAudioData ? Vo(s, await n.readResourceAsAudioData(s)) : vn(s, new Uint8Array(await a(s)).buffer);
     },
-    getURL(a) {
-      return In(a, n.getResourceAddress?.(a), r);
+    getURL(s) {
+      return In(s, n.getResourceAddress?.(s), i);
     }
   };
 }

@@ -13634,7 +13634,7 @@ function decodedAudio(path, input) {
 }
 function defaultPatchRoot() {
   const page = globalThis.location?.href;
-  if (typeof page === "string" && page.length > 0) return new URL("/", page);
+  if (typeof page === "string" && URL.canParse("/", page)) return new URL("/", page);
   const folder = new URL(import.meta.url);
   folder.pathname = folder.pathname.replace(/\/[^/]*$/, "/");
   return folder;
@@ -13642,12 +13642,13 @@ function defaultPatchRoot() {
 function resourceURL(path, address2, patchRoot) {
   if (address2 instanceof URL) return address2;
   if (typeof address2 === "string" && address2.length > 0)
-    return /^[a-zA-Z][a-zA-Z\d+.-]*:/.test(address2) ? new URL(address2) : new URL(address2.replace(/^\//, ""), patchRoot);
-  return new URL(path, patchRoot);
+    return /^[a-zA-Z][a-zA-Z\d+.-]*:/.test(address2) ? new URL(address2) : new URL(address2.replace(/^\//, ""), patchRoot());
+  return new URL(path, patchRoot());
 }
 function createPatchConnectionResourceClient(source, options = {}) {
   const host = source ?? {};
-  const patchRoot = options.patchRoot ?? defaultPatchRoot();
+  let root = options.patchRoot;
+  const patchRoot = () => root ??= defaultPatchRoot();
   const fetchBuffer = async (path, address2 = host.getResourceAddress?.(path)) => {
     if (typeof fetch !== "function") fail(`Cannot read ${path}: this host has neither a resource bridge nor fetch.`);
     const url = resourceURL(path, address2, patchRoot);
@@ -13746,6 +13747,9 @@ function name(value) {
 function scope(input) {
   return isRecord$5(input) && name(input.owner) && counter(input.document, false) ? Object.freeze({ owner: input.owner, document: input.document }) : void 0;
 }
+function sameDocument(left, right) {
+  return left !== null && left.owner === right.owner && left.document === right.document;
+}
 function parseHistoryEntry(input) {
   if (!isRecord$5(input) || !counter(input.id)) return void 0;
   const parsedScope = scope(input.scope);
@@ -13754,6 +13758,9 @@ function parseHistoryEntry(input) {
 function address(input) {
   const parsedScope = scope(input);
   return parsedScope && isRecord$5(input) && counter(input.client) && counter(input.sequence) ? Object.freeze({ ...parsedScope, client: input.client, sequence: input.sequence }) : void 0;
+}
+function holdsBase(held, scope2, base) {
+  return held !== void 0 && sameDocument(held.scope, scope2) && held.revision === base;
 }
 function persistence(input) {
   if (!isRecord$5(input)) return void 0;
@@ -13851,24 +13858,29 @@ function lastChange(input, declared, revision) {
   if (keys.length !== listed.length || keys.some((key, index2) => key !== listed[index2])) return void 0;
   return Object.freeze({ reason: input.reason, keys: Object.freeze(keys), revision: input.revision });
 }
-function stateSnapshot(definition, input, base) {
+function stateSnapshot(definition, input, held) {
   if (!isRecord$5(input) || !counter(input.revision, false) || !isRecord$5(input.fields) || !isRecord$5(input.history) || typeof input.history.canUndo !== "boolean" || typeof input.history.canRedo !== "boolean") return void 0;
   const parsedScope = scope(input.scope);
   if (!parsedScope) return void 0;
+  if (input.base !== void 0 && !holdsBase(held, parsedScope, input.base)) return void 0;
+  const base = input.base === void 0 ? void 0 : held;
   const undoEntry = parseHistoryEntry(input.history.undoEntry);
   const redoEntry = parseHistoryEntry(input.history.redoEntry);
   if (input.history.undoEntry !== void 0 && !undoEntry || input.history.redoEntry !== void 0 && !redoEntry) return void 0;
   for (const entry of [undoEntry, redoEntry]) {
-    if (entry && (entry.scope.owner !== parsedScope.owner || entry.scope.document !== parsedScope.document)) return void 0;
+    if (entry && !sameDocument(entry.scope, parsedScope)) return void 0;
   }
   const change = input.lastChange === void 0 ? void 0 : lastChange(input.lastChange, Object.keys(definition), input.revision);
   if (input.lastChange !== void 0 && !change) return void 0;
-  const sameDocument = base?.scope?.owner === parsedScope.owner && base.scope.document === parsedScope.document;
   const fields = /* @__PURE__ */ Object.create(null);
   for (const [key, declaration] of Object.entries(definition)) {
-    if (!Object.hasOwn(input.fields, key)) return void 0;
-    const parsed = fieldSnapshot(declaration, input.fields[key], sameDocument ? base.fields[key] : void 0);
-    if (!parsed || parsed.target && (parsed.target.key !== key || parsed.target.scope.owner !== parsedScope.owner || parsed.target.scope.document !== parsedScope.document)) return void 0;
+    if (!Object.hasOwn(input.fields, key)) {
+      if (!base) return void 0;
+      fields[key] = base.fields[key];
+      continue;
+    }
+    const parsed = fieldSnapshot(declaration, input.fields[key], base?.fields[key]);
+    if (!parsed || parsed.target && (parsed.target.key !== key || !sameDocument(parsed.target.scope, parsedScope))) return void 0;
     fields[key] = parsed;
   }
   return Object.freeze({
@@ -13906,10 +13918,10 @@ function receipt(input) {
   if (!isRecord$5(input)) return void 0;
   const parsedAddress = address(input.address);
   const parsedResult = result(input.result);
-  if (parsedAddress && parsedResult?.kind === "accepted" && parsedResult.historyEntry && (parsedResult.historyEntry.scope.owner !== parsedAddress.owner || parsedResult.historyEntry.scope.document !== parsedAddress.document)) return void 0;
+  if (parsedAddress && parsedResult?.kind === "accepted" && parsedResult.historyEntry && !sameDocument(parsedResult.historyEntry.scope, parsedAddress)) return void 0;
   return parsedAddress && parsedResult ? { address: parsedAddress, result: parsedResult } : void 0;
 }
-function parseClientMessage(definition, input, base) {
+function parseClientMessage(definition, input, held) {
   if (!isBoundedStateJson(input) || !isRecord$5(input)) return { kind: "invalid", message: "Invalid GUI state-channel body." };
   if (typeof input.kind === "string" && !clientMessageKinds.has(input.kind)) return { kind: "unknown", messageKind: input.kind };
   if (input.kind === "closed" && name(input.reason)) return { kind: "ok", value: { kind: "closed", reason: input.reason } };
@@ -13922,21 +13934,20 @@ function parseClientMessage(definition, input, base) {
     const parsed = receipt(input);
     if (parsed) return { kind: "ok", value: { kind: "receipt", ...parsed } };
   }
-  if ((input.kind === "attached" || input.kind === "update") && parsedScope && counter(input.revision, false)) {
-    const state2 = stateSnapshot(definition, input.state, input.kind === "update" ? base : void 0);
-    if (state2 && state2.revision === input.revision && state2.scope?.owner === parsedScope.owner && state2.scope.document === parsedScope.document) {
-      if (input.kind === "attached" && counter(input.request) && counter(input.client))
-        return { kind: "ok", value: { kind: "attached", request: input.request, client: input.client, scope: parsedScope, revision: input.revision, state: state2 } };
-      if (input.kind === "update") {
-        const parsedReceipt = input.receipt === void 0 ? void 0 : receipt(input.receipt);
-        if (input.receipt === void 0 || parsedReceipt) return { kind: "ok", value: {
-          kind: "update",
-          scope: parsedScope,
-          revision: input.revision,
-          state: state2,
-          ...parsedReceipt ? { receipt: parsedReceipt } : {}
-        } };
-      }
+  if (input.kind === "attached" && parsedScope && counter(input.revision, false) && counter(input.request) && counter(input.client)) {
+    const state2 = stateSnapshot(definition, input.state);
+    if (state2 && state2.revision === input.revision && sameDocument(state2.scope, parsedScope))
+      return { kind: "ok", value: { kind: "attached", request: input.request, client: input.client, scope: parsedScope, revision: input.revision, state: state2 } };
+  }
+  if (input.kind === "update" && parsedScope && counter(input.revision, false) && isRecord$5(input.state)) {
+    const parsedReceipt = input.receipt === void 0 ? void 0 : receipt(input.receipt);
+    if (input.receipt === void 0 || parsedReceipt) {
+      const withReceipt = parsedReceipt ? { receipt: parsedReceipt } : {};
+      if (counter(input.state.base, false) && !holdsBase(held, parsedScope, input.state.base))
+        return { kind: "ok", value: { kind: "resync", scope: parsedScope, ...withReceipt } };
+      const state2 = stateSnapshot(definition, input.state, held);
+      if (state2 && state2.revision === input.revision && sameDocument(state2.scope, parsedScope))
+        return { kind: "ok", value: { kind: "update", scope: parsedScope, revision: input.revision, state: state2, ...withReceipt } };
     }
   }
   return { kind: "invalid", message: `Malformed "${String(input.kind)}" GUI state-channel message.` };
@@ -14039,6 +14050,13 @@ function createPluginStateClient(definition, ports) {
     duringAttach.clear();
     for (const ticket of pending) ticket.finish(ticket.sent ? { kind: "interrupted", reason, acceptance: "unknown" } : { kind: "rejected", reason: reason === "reset" ? "stale-scope" : "service-closed" });
   };
+  const attachAgain = () => {
+    interrupt("reset");
+    nextSequence = 0;
+    attachRequest++;
+    store.set(projection, Object.freeze({ kind: "connecting" }));
+    ports.channel.send({ kind: "attach", request: attachRequest });
+  };
   const close = (knownReceipt) => {
     if (stopped) return;
     stopped = true;
@@ -14097,14 +14115,14 @@ function createPluginStateClient(definition, ports) {
       if (message.request !== attachRequest || current.kind !== "connecting") return;
       duringAttach.clear();
       store.set(projection, Object.freeze({ kind: "failed", reason: message.reason }));
+    } else if (message.kind === "resync") {
+      if (!base || !sameScope$1(base.state.scope, message.scope)) return;
+      if (message.receipt) settle(message.receipt);
+      attachAgain();
     } else {
       if (expectedScope && (message.kind === "reset" ? message.scope.owner !== expectedScope.owner || message.scope.document <= expectedScope.document : sameScope$1(expectedScope, message.scope))) return;
       expectedScope = message.scope;
-      interrupt("reset");
-      nextSequence = 0;
-      attachRequest++;
-      store.set(projection, Object.freeze({ kind: "connecting" }));
-      ports.channel.send({ kind: "attach", request: attachRequest });
+      attachAgain();
     }
   };
   const receiveSafely = (message) => {
@@ -14112,7 +14130,7 @@ function createPluginStateClient(definition, ports) {
       receive(message);
     } catch (error) {
       ports.onDefect(error);
-      close(message.kind === "update" ? message.receipt : message.kind === "receipt" ? message : void 0);
+      close(message.kind === "update" || message.kind === "resync" ? message.receipt : message.kind === "receipt" ? message : void 0);
     }
   };
   try {
@@ -14259,7 +14277,7 @@ function createCmajorPluginStateClient(definition, connection, options) {
             listener({ ...message, request: request.local });
           } else {
             if (message.kind === "update" && attachment && sameScope(attachment.scope, message.scope)) received = message.state;
-            if (message.kind === "closed" || message.kind === "reset" && attachment && message.scope.owner === attachment.scope.owner && message.scope.document > attachment.scope.document || message.kind === "owner-changed" && attachment && !sameScope(attachment.scope, message.scope)) {
+            if (message.kind === "closed" || message.kind === "resync" && attachment && sameScope(attachment.scope, message.scope) || message.kind === "reset" && attachment && message.scope.owner === attachment.scope.owner && message.scope.document > attachment.scope.document || message.kind === "owner-changed" && attachment && !sameScope(attachment.scope, message.scope)) {
               attachment = void 0;
               received = void 0;
             }

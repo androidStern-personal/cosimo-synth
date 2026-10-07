@@ -64,7 +64,7 @@ function decodedAudio(path, input) {
 }
 function defaultPatchRoot() {
   const page = globalThis.location?.href;
-  if (typeof page === "string" && page.length > 0) return new URL("/", page);
+  if (typeof page === "string" && URL.canParse("/", page)) return new URL("/", page);
   const folder = new URL(import.meta.url);
   folder.pathname = folder.pathname.replace(/\/[^/]*$/, "/");
   return folder;
@@ -72,12 +72,13 @@ function defaultPatchRoot() {
 function resourceURL(path, address, patchRoot) {
   if (address instanceof URL) return address;
   if (typeof address === "string" && address.length > 0)
-    return /^[a-zA-Z][a-zA-Z\d+.-]*:/.test(address) ? new URL(address) : new URL(address.replace(/^\//, ""), patchRoot);
-  return new URL(path, patchRoot);
+    return /^[a-zA-Z][a-zA-Z\d+.-]*:/.test(address) ? new URL(address) : new URL(address.replace(/^\//, ""), patchRoot());
+  return new URL(path, patchRoot());
 }
 function createPatchConnectionResourceClient(source, options = {}) {
   const host = source ?? {};
-  const patchRoot = options.patchRoot ?? defaultPatchRoot();
+  let root = options.patchRoot;
+  const patchRoot = () => root ??= defaultPatchRoot();
   const fetchBuffer = async (path, address = host.getResourceAddress?.(path)) => {
     if (typeof fetch !== "function") fail(`Cannot read ${path}: this host has neither a resource bridge nor fetch.`);
     const url = resourceURL(path, address, patchRoot);

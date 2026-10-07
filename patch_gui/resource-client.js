@@ -75,10 +75,14 @@ function decodedAudio(path, input) {
     }
     return { sampleRate: Number(decoded.sampleRate) || 0, samples };
 }
-/** The folder the patch is served from: the page's origin, or this module's folder where there is no page. */
+/**
+ * The folder the patch is served from: the page's origin, or this module's folder
+ * where there is no page or the page's address cannot anchor a path, as in an
+ * about:srcdoc frame.
+ */
 function defaultPatchRoot() {
     const page = globalThis.location?.href;
-    if (typeof page === "string" && page.length > 0)
+    if (typeof page === "string" && URL.canParse("/", page))
         return new URL("/", page);
     const folder = new URL(import.meta.url);
     folder.pathname = folder.pathname.replace(/\/[^/]*$/, "/");
@@ -88,8 +92,8 @@ function resourceURL(path, address, patchRoot) {
     if (address instanceof URL)
         return address;
     if (typeof address === "string" && address.length > 0)
-        return /^[a-zA-Z][a-zA-Z\d+.-]*:/.test(address) ? new URL(address) : new URL(address.replace(/^\//, ""), patchRoot);
-    return new URL(path, patchRoot);
+        return /^[a-zA-Z][a-zA-Z\d+.-]*:/.test(address) ? new URL(address) : new URL(address.replace(/^\//, ""), patchRoot());
+    return new URL(path, patchRoot());
 }
 /**
  * A resource client over a patch connection. Text and bytes come through the
@@ -99,7 +103,9 @@ function resourceURL(path, address, patchRoot) {
  */
 export function createPatchConnectionResourceClient(source, options = {}) {
     const host = source ?? {};
-    const patchRoot = options.patchRoot ?? defaultPatchRoot();
+    // Found on the first relative read, so creating a client never depends on the page's address.
+    let root = options.patchRoot;
+    const patchRoot = () => root ??= defaultPatchRoot();
     const fetchBuffer = async (path, address = host.getResourceAddress?.(path)) => {
         if (typeof fetch !== "function")
             fail(`Cannot read ${path}: this host has neither a resource bridge nor fetch.`);
