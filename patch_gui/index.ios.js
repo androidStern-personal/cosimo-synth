@@ -1882,9 +1882,9 @@ function requireReactDomClient_production() {
       for (var styleName$17 in styles)
         styles.hasOwnProperty(styleName$17) && setValueForStyle(node, styleName$17, styles[styleName$17]);
   }
-  function isCustomElement(tagName) {
-    if (-1 === tagName.indexOf("-")) return false;
-    switch (tagName) {
+  function isCustomElement(tagName2) {
+    if (-1 === tagName2.indexOf("-")) return false;
+    switch (tagName2) {
       case "annotation-xml":
       case "color-profile":
       case "font-face":
@@ -26554,9 +26554,8 @@ function useOptionalSynthPluginParameterBinding(key, options) {
   const isReady = options.active !== false && valueState !== null;
   const hostValue = isReady && valueState !== null ? options.coerce(valueState.value) : options.initialValue;
   const initialValue = valueState !== null ? options.coerce(valueState.metadata?.defaultValue ?? options.initialValue) : options.initialValue;
-  const endpointID = key;
-  const presentation = reactExports.useRef({ isReady, coerce: options.coerce });
-  presentation.current = { isReady, coerce: options.coerce };
+  const presentation = reactExports.useRef({ isReady, coerce: options.coerce, setValue: parameter2?.setValue });
+  presentation.current = { isReady, coerce: options.coerce, setValue: parameter2?.setValue };
   const reportingGesture = reactExports.useRef(null);
   const notifications = reactExports.useRef(null);
   const deferredValue = reactExports.useDeferredValue(hostValue);
@@ -26573,15 +26572,15 @@ function useOptionalSynthPluginParameterBinding(key, options) {
     if (!current.isReady) return;
     const coercedValue = current.coerce(nextValue);
     const reporter = captureUserEditReporter();
-    reportAfter(parameter2?.setValue(coercedValue), (result2) => {
+    reportAfter(current.setValue?.(coercedValue), (result2) => {
       if (result2?.kind !== "accepted") return;
       if (typeof result2.changed !== "boolean") {
         reportStateDefect(new Error("An accepted Voice edit did not report whether its value changed."));
         return;
       }
-      reporter.parameterEdit({ endpointID, changed: result2.changed });
+      reporter.parameterEdit({ endpointID: key, changed: result2.changed });
     });
-  }, [endpointID, parameter2?.setValue, reportAfter]);
+  }, [key, reportAfter]);
   const beginGesture = reactExports.useCallback(() => {
     if (!presentation.current.isReady || reportingGesture.current) return;
     const gesture = { reporter: captureUserEditReporter(), started: false };
@@ -26612,7 +26611,7 @@ function useOptionalSynthPluginParameterBinding(key, options) {
     endGesture();
   }, [beginGesture, endGesture, setValue]);
   const binding = reactExports.useMemo(() => ({
-    endpointID,
+    endpointID: key,
     value,
     initialValue,
     isReady,
@@ -26621,7 +26620,7 @@ function useOptionalSynthPluginParameterBinding(key, options) {
     commitValue,
     beginGesture,
     endGesture
-  }), [beginGesture, commitValue, endGesture, endpointID, initialValue, isReady, key, setValue, value]);
+  }), [beginGesture, commitValue, endGesture, initialValue, isReady, key, setValue, value]);
   return parameter2 ? binding : null;
 }
 const runtimeFailurePhaseLoadSource = 1;
@@ -35044,8 +35043,8 @@ function isTextEntryElement(element) {
   if (element instanceof HTMLElement && element.isContentEditable) {
     return true;
   }
-  const tagName = element.tagName.toLowerCase();
-  if (tagName === "textarea" || tagName === "select") {
+  const tagName2 = element.tagName.toLowerCase();
+  if (tagName2 === "textarea" || tagName2 === "select") {
     return true;
   }
   if (element instanceof HTMLInputElement) {
@@ -38532,8 +38531,8 @@ function ensureIOSKeyboardElement(patchConnection, styleName, keyboardOptions) {
   if (!patchConnection.utilities?.PianoKeyboard) {
     return null;
   }
-  const tagName = getKeyboardTagName(styleName);
-  if (!window.customElements.get(tagName)) {
+  const tagName2 = getKeyboardTagName(styleName);
+  if (!window.customElements.get(tagName2)) {
     const BaseKeyboard = patchConnection.utilities.PianoKeyboard;
     class CosimoIOSKeyboard extends BaseKeyboard {
       constructor() {
@@ -38566,9 +38565,9 @@ function ensureIOSKeyboardElement(patchConnection, styleName, keyboardOptions) {
         keyboard.refreshActiveNoteElements();
       }
     }
-    window.customElements.define(tagName, CosimoIOSKeyboard);
+    window.customElements.define(tagName2, CosimoIOSKeyboard);
   }
-  return tagName;
+  return tagName2;
 }
 function IOSKeyboardDock({
   rootNote,
@@ -38581,7 +38580,7 @@ function IOSKeyboardDock({
   const hostRef = reactExports.useRef(null);
   const hostSize = useResizeObserver(hostRef);
   reactExports.useEffect(() => {
-    const tagName = ensureIOSKeyboardElement(
+    const tagName2 = ensureIOSKeyboardElement(
       patchConnection,
       `ios-${noteCount}-${naturalNoteWidth}-${accidentalWidth}`,
       {
@@ -38590,10 +38589,10 @@ function IOSKeyboardDock({
       }
     );
     const host = hostRef.current;
-    if (!tagName || !host) {
+    if (!tagName2 || !host) {
       return;
     }
-    const KeyboardElement = window.customElements.get(tagName);
+    const KeyboardElement = window.customElements.get(tagName2);
     if (!KeyboardElement) {
       return;
     }
@@ -40503,11 +40502,8 @@ function IOSPatchViewBody() {
     parameterMenuOverlays
   ] }) }) });
 }
-function IOSPatchView({
-  patchConnection,
-  resourceClient
-}) {
-  return /* @__PURE__ */ jsxRuntimeExports.jsx(PatchConnectionProvider, { patchConnection, resourceClient, children: /* @__PURE__ */ jsxRuntimeExports.jsx(SynthStateProvider, { patchConnection, children: /* @__PURE__ */ jsxRuntimeExports.jsx(IOSPatchViewBody, {}) }) });
+function IOSPatchView({ patchConnection }) {
+  return /* @__PURE__ */ jsxRuntimeExports.jsx(PatchConnectionProvider, { patchConnection, children: /* @__PURE__ */ jsxRuntimeExports.jsx(SynthStateProvider, { patchConnection, children: /* @__PURE__ */ jsxRuntimeExports.jsx(IOSPatchViewBody, {}) }) });
 }
 function formatErrorMessage(error) {
   if (error && typeof error === "object") {
@@ -40559,30 +40555,16 @@ class IOSPatchErrorBoundary extends reactExports.Component {
 }
 class CosimoIOSReactViewElement extends HTMLElement {
   patchConnection = null;
-  resourceClient;
   root = null;
   mountPoint = null;
-  modulationRuntimePatchConnection = null;
   stateLease = null;
-  setPatchConnection(patchConnection, resourceClient) {
-    if (this.modulationRuntimePatchConnection && this.modulationRuntimePatchConnection !== patchConnection) {
-      this.stateLease?.release();
-      this.stateLease = null;
-      this.modulationRuntimePatchConnection = null;
-    }
+  setPatchConnection(patchConnection) {
     this.patchConnection = patchConnection;
-    this.resourceClient = resourceClient;
-    if (!this.modulationRuntimePatchConnection) {
-      this.stateLease = acquireSynthViewState(patchConnection);
-      this.modulationRuntimePatchConnection = patchConnection;
-    }
+    this.holdSynthState();
     this.renderApp();
   }
   connectedCallback() {
-    if (this.patchConnection && !this.stateLease) {
-      this.stateLease = acquireSynthViewState(this.patchConnection);
-      this.modulationRuntimePatchConnection = this.patchConnection;
-    }
+    this.holdSynthState();
     if (!this.shadowRoot) {
       this.attachShadow({ mode: "open" });
     }
@@ -40605,44 +40587,38 @@ class CosimoIOSReactViewElement extends HTMLElement {
   disconnectedCallback() {
     this.root?.unmount();
     this.root = null;
-    if (this.modulationRuntimePatchConnection) {
-      this.stateLease?.release();
-      this.stateLease = null;
-      this.modulationRuntimePatchConnection = null;
+    this.stateLease?.release();
+    this.stateLease = null;
+  }
+  /** One synth state client lives as long as this element shows its connection, even if the React tree remounts. */
+  holdSynthState() {
+    if (!this.patchConnection || this.stateLease?.connection === this.patchConnection) {
+      return;
     }
+    this.stateLease?.release();
+    const { release } = acquireSynthViewState(this.patchConnection);
+    this.stateLease = { connection: this.patchConnection, release };
   }
   renderApp() {
     if (!this.root || !this.patchConnection) {
       return;
     }
     this.root.render(
-      /* @__PURE__ */ jsxRuntimeExports.jsx(IOSPatchErrorBoundary, { children: /* @__PURE__ */ jsxRuntimeExports.jsx(
-        IOSPatchView,
-        {
-          patchConnection: this.patchConnection,
-          resourceClient: this.resourceClient
-        }
-      ) })
+      /* @__PURE__ */ jsxRuntimeExports.jsx(IOSPatchErrorBoundary, { children: /* @__PURE__ */ jsxRuntimeExports.jsx(IOSPatchView, { patchConnection: this.patchConnection }) })
     );
   }
 }
-function getTagName() {
-  return "cosimo-synth-view";
-}
-function createIOSPatchView(patchConnection, options = {}) {
-  const tagName = getTagName();
+const tagName = "cosimo-synth-view";
+function createIOSPatchView(patchConnection) {
   if (!window.customElements.get(tagName)) {
     window.customElements.define(tagName, CosimoIOSReactViewElement);
   }
   const element = document.createElement(tagName);
-  element.setPatchConnection(patchConnection, options.resourceClient);
+  element.setPatchConnection(patchConnection);
   return element;
-}
-function createPatchView(patchConnection) {
-  return createIOSPatchView(patchConnection);
 }
 export {
   createIOSPatchView,
-  createPatchView as default
+  createIOSPatchView as default
 };
 //# sourceMappingURL=index.ios.js.map
