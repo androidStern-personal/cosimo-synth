@@ -89,7 +89,6 @@ export async function createVideoBounceSession(
             async renderVideo(options) {
                 const artifact = await session.renderVideo({
                     preferredContainer: preferredContainer(options.container),
-                    videoBitrate: options.quality,
                     compositionMode: VIDEO_COMPOSITION_MODE,
                     onProgress: (progress) => options.onProgress(progress.progress),
                 });

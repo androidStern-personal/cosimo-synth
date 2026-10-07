@@ -10,7 +10,6 @@ import { startProductWebServer, webRoot } from "./helpers/product_web_server.mjs
 
 const outputArtifactPath = process.env.COSIMO_VIDEO_BOUNCE_OUTPUT?.trim() || null;
 const requestedContainer = outputArtifactPath === null ? "webm" : "mp4";
-const requestedQuality = outputArtifactPath === null ? "very-low" : "high";
 let browser;
 let server;
 let baseUrl;
@@ -114,10 +113,9 @@ test("the preset dropdown opens current-patch Bounce Video and lazy-loads its re
         assert.equal(flow.fitsVertically, true);
         assert.equal(flow.error, null);
         assert.equal(flow.audioAction, "Render Audio");
-        assert.deepEqual(flow.selectLabels, ["Format", "Quality"]);
+        assert.deepEqual(flow.selectLabels, ["Format"]);
 
         await page.locator('select[aria-label="Format"]').selectOption(requestedContainer);
-        await page.locator('select[aria-label="Quality"]').selectOption(requestedQuality);
         await page.locator('[data-role="video-bounce-render-audio"]').click();
         await page.locator('[data-role="video-bounce-render-video"]').waitFor({ timeout: 120_000 });
 
