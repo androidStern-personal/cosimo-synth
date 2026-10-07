@@ -482,11 +482,6 @@ export async function settleCaptureSubtree(
     await Promise.resolve();
     await nextAnimationFrame();
     await nextAnimationFrame();
-    if (rasterizerWorkarounds) {
-        inlineCaptureSvgPresentation(root);
-        inlineCaptureColors(root);
-        await emulateCaptureMasks(root);
-    }
     if (scrubAnimations) {
         await scrubAnimations();
     } else {
@@ -503,9 +498,15 @@ export async function settleCaptureSubtree(
         // browser one paint turn before Remotion reads the frame bitmap.
         await nextAnimationFrame();
     }
-    // Last, so it reads each element's final visibility for this frame — a
-    // reveal in the closing scrub must not serialize with a stale mask.
+    // Last, so they read this frame's final tree: an element that mounts or is
+    // replaced during the settle turns must not reach the rasterizer without
+    // its inlined paint, and a reveal in the closing scrub must not serialize
+    // with a stale mask.
     if (rasterizerWorkarounds) {
+        inlineCaptureSvgPresentation(root);
+        inlineCaptureColors(root);
+        await emulateCaptureMasks(root);
+        await Promise.all([...root.querySelectorAll<HTMLImageElement>("img")].map(decodeImage));
         maskCaptureHiddenLeaves(root);
         await nextAnimationFrame();
     }
