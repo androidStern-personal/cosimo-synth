@@ -279,7 +279,7 @@ async function fixture() {
 }
 
 test("exact emitted line owns download failure, occupied-folder refusal, fresh install and safe resumable setup", {
-    skip: process.platform !== "darwin" || process.arch !== "arm64" ? "macOS arm64 installer seam; cold OS/runtime qualification is separate" : false,
+    skip: process.platform !== "darwin" || process.arch !== "arm64" ? "The installer unpacks and runs the macOS arm64 Node runtime, so this flow runs only on Apple silicon Macs." : false,
 }, async (t) => {
     const f = await fixture();
     try {
