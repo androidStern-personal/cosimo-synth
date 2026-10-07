@@ -4,9 +4,9 @@ import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { Worker } from 'node:worker_threads';
 import { setImmediate } from 'node:timers/promises';
+import { cmajorSourceDirectory } from './helpers/cmajor_source.mjs';
 
-const source = process.env.BUILDER_KIT_CMAJOR_SOURCE;
-assert.ok(source, 'Set BUILDER_KIT_CMAJOR_SOURCE to the authored Cmajor checkout');
+const source = cmajorSourceDirectory();
 const apiURL = pathToFileURL(path.join(source, 'javascript/cmaj_api/cmaj-shared-data.js')).href;
 const { createSharedDataMemory, createSharedDataReader } = await import(apiURL);
 const { compileSharedDataReader } = await import(pathToFileURL(path.join(source, 'javascript/cmaj_api/cmaj-shared-data-reader.js')).href);

@@ -3,7 +3,7 @@ import test, { before, after } from "node:test";
 import path from "node:path";
 import { chromium } from "playwright";
 import { startStaticWebServer } from "../kit/tests/helpers/static_web_server.mjs";
-import { stageCmajorWebRuntime } from "../ui/vite.shared.mjs";
+import { cmajorWebApiDirectory } from "./helpers/cmajor_source.mjs";
 
 const root = path.resolve(import.meta.dirname, "..");
 let browser;
@@ -11,9 +11,7 @@ let server;
 before(async () => {
     server = await startStaticWebServer(root, {
         bundleTypeScript: true,
-        mounts: { "/cmaj_api": () => process.env.BUILDER_KIT_CMAJOR_SOURCE
-            ? path.join(process.env.BUILDER_KIT_CMAJOR_SOURCE, "javascript/cmaj_api")
-            : stageCmajorWebRuntime(root, { buildDirectory: path.join(root, "build/cmajor_web_runtime-synth-state-tests"), instanceId: String(process.pid) }) },
+        mounts: { "/cmaj_api": () => cmajorWebApiDirectory() },
     });
     browser = await chromium.launch({ headless: true });
 });

@@ -4,9 +4,9 @@ import path from 'node:path';
 import {pathToFileURL} from 'node:url';
 import {setImmediate} from 'node:timers/promises';
 import {loadUIModule} from '../kit/tests/helpers/load_ui_module.mjs';
+import { cmajorSourceDirectory } from './helpers/cmajor_source.mjs';
 
-const source=process.env.BUILDER_KIT_CMAJOR_SOURCE;
-assert.ok(source,'Set BUILDER_KIT_CMAJOR_SOURCE to the authored Cmajor checkout');
+const source=cmajorSourceDirectory();
 const {createSharedDataMemory,createSharedDataPreparation,createSharedDataReader}=await import(pathToFileURL(path.join(source,'javascript/cmaj_api/cmaj-shared-data.js')));
 const {createDirectDataPort}=await loadUIModule(path.resolve(import.meta.dirname,'..'),'kit/ui/plugin-state-direct-data.ts');
 

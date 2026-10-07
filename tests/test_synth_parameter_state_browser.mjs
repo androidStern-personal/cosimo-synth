@@ -3,13 +3,11 @@ import assert from 'node:assert/strict';
 import path from 'node:path';
 import { chromium } from 'playwright';
 import { startStaticWebServer } from "../kit/tests/helpers/static_web_server.mjs";
-import { stageCmajorWebRuntime } from '../ui/vite.shared.mjs';
+import { cmajorWebApiDirectory } from './helpers/cmajor_source.mjs';
 const root=path.resolve(import.meta.dirname,'..');
 
 test('ordinary synth parameters and MSEG edits share real public React Undo while host automation stays outside history',async()=>{
-    const server=await startStaticWebServer(root,{bundleTypeScript:true,mounts:{'/cmaj_api':()=>process.env.BUILDER_KIT_CMAJOR_SOURCE
-        ?path.join(process.env.BUILDER_KIT_CMAJOR_SOURCE,'javascript/cmaj_api')
-        :stageCmajorWebRuntime(root,{buildDirectory:path.join(root,'build/cmajor_web_runtime-ordinary-state'),instanceId:String(process.pid)})}});
+    const server=await startStaticWebServer(root,{bundleTypeScript:true,mounts:{'/cmaj_api':()=>cmajorWebApiDirectory()}});
     const browser=await chromium.launch({headless:true});
     const page=await browser.newPage(),errors=[];
     page.on('pageerror',error=>errors.push(error.message));

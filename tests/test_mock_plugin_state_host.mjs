@@ -3,7 +3,7 @@ import test from "node:test";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
 import { loadUIModule } from "../kit/tests/helpers/load_ui_module.mjs";
-import { stageCmajorWebRuntime } from "../ui/vite.shared.mjs";
+import { cmajorWebApiDirectory } from "./helpers/cmajor_source.mjs";
 import { createSynthParameterFixture, synthParameterEndpoints } from "./helpers/synth_parameter_fixture.mjs";
 
 const root = path.resolve(import.meta.dirname, "..");
@@ -11,9 +11,7 @@ const { createMockPluginStateHost } = await loadUIModule(root, "ui/shared/mock-p
 const { createCmajorPluginStateClient } = await loadUIModule(root, "kit/ui/plugin-state-cmajor.ts");
 const { synthPluginState } = await loadUIModule(root, "ui/shared/synth-plugin-state.ts");
 const { createDefaultModulationState, MODULATION_STATE_KEY } = await loadUIModule(root, "ui/shared/modulation.ts");
-const runtime = process.env.BUILDER_KIT_CMAJOR_SOURCE
-    ? path.join(process.env.BUILDER_KIT_CMAJOR_SOURCE, "javascript/cmaj_api")
-    : stageCmajorWebRuntime(root, { buildDirectory: path.join(root, "build/cmajor_web_runtime-mock-state-tests"), instanceId: String(process.pid) });
+const runtime = cmajorWebApiDirectory();
 const loadChannel = () => import(pathToFileURL(path.join(runtime, "cmaj-plugin-state-channel.js")).href);
 async function until(predicate) {
     const deadline = Date.now() + 2000;

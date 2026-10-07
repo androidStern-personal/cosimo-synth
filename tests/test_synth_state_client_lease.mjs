@@ -3,15 +3,13 @@ import test from "node:test";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
 import { loadUIModule } from "../kit/tests/helpers/load_ui_module.mjs";
-import { stageCmajorWebRuntime } from "../ui/vite.shared.mjs";
+import { cmajorWebApiDirectory } from "./helpers/cmajor_source.mjs";
 import { createSynthParameterFixture } from "./helpers/synth_parameter_fixture.mjs";
 
 const root = path.resolve(import.meta.dirname, "..");
 const { acquireSynthViewState } = await loadUIModule(root, "ui/shared/synth-state-client.ts");
 const { createMockPluginStateHost } = await loadUIModule(root, "ui/shared/mock-plugin-state-host.ts");
-const runtime = process.env.BUILDER_KIT_CMAJOR_SOURCE
-    ? path.join(process.env.BUILDER_KIT_CMAJOR_SOURCE, "javascript/cmaj_api")
-    : stageCmajorWebRuntime(root, { buildDirectory: path.join(root, "build/cmajor_web_runtime-state-lease-tests"), instanceId: String(process.pid) });
+const runtime = cmajorWebApiDirectory();
 
 async function until(predicate) {
     const deadline = Date.now() + 2000;

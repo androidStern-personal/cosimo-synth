@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
 import { loadUIModule } from "../../kit/tests/helpers/load_ui_module.mjs";
-import { stageCmajorWebRuntime } from "../../ui/vite.shared.mjs";
+import { cmajorWebApiDirectory } from "./cmajor_source.mjs";
 import { createSynthParameterFixture } from "./synth_parameter_fixture.mjs";
 
 const root = path.resolve(import.meta.dirname, "../..");
@@ -14,9 +14,7 @@ const modules = Promise.all([
 ]);
 let runtime;
 export async function loadChannel() {
-    runtime ??= process.env.BUILDER_KIT_CMAJOR_SOURCE
-        ? path.join(process.env.BUILDER_KIT_CMAJOR_SOURCE, "javascript/cmaj_api")
-        : stageCmajorWebRuntime(root, { buildDirectory: path.join(root, "build/cmajor_web_runtime-modulation-regressions"), instanceId: String(process.pid) });
+    runtime ??= cmajorWebApiDirectory();
     return import(pathToFileURL(path.join(runtime, "cmaj-plugin-state-channel.js")).href);
 }
 export async function waitForModulation(predicate, describe = () => "") {

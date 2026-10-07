@@ -2,8 +2,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
-const source = process.env.BUILDER_KIT_CMAJOR_SOURCE;
-assert.ok(source, 'Set BUILDER_KIT_CMAJOR_SOURCE to the authored Cmajor checkout');
+import { cmajorSourceDirectory } from './helpers/cmajor_source.mjs';
+const source = cmajorSourceDirectory();
 const { createSharedDataMemory, createSharedDataPreparation, createSharedDataReader } = await import(
     pathToFileURL(path.join(source, 'javascript/cmaj_api/cmaj-shared-data.js')));
 

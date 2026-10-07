@@ -183,10 +183,10 @@ function assertKeyAWasCapturedButNotForwarded(log, controlName) {
 }
 
 test("native standalone keeps musical typing after pointer-drag controls", {
-    skip: !shouldRunNativeProbe
-        ? "Set COSIMO_RUN_NATIVE_KEYBOARD_PROBE=1 to run the macOS standalone keyboard probe."
-        : !isMacOS
-            ? "The native standalone keyboard probe only runs on macOS."
+    skip: !isMacOS
+        ? "The probe builds and drives the macOS standalone app, so it runs only on macOS."
+        : !shouldRunNativeProbe
+            ? "The probe takes over the real mouse and keyboard; set COSIMO_RUN_NATIVE_KEYBOARD_PROBE=1 to run it."
             : false,
     timeout: 900_000,
 }, async (t) => {

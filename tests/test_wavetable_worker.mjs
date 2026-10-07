@@ -3,13 +3,9 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
-import { stageCmajorWebRuntime } from "../ui/vite.shared.mjs";
+import { cmajorWebApiDirectory } from "./helpers/cmajor_source.mjs";
 
-const stateRuntime = process.env.BUILDER_KIT_CMAJOR_SOURCE
-    ? path.join(process.env.BUILDER_KIT_CMAJOR_SOURCE, "javascript/cmaj_api")
-    : stageCmajorWebRuntime(path.resolve(import.meta.dirname, ".."), {
-    buildDirectory: path.resolve(import.meta.dirname, "../build/cmajor_web_runtime-worker-state-tests"),
-});
+const stateRuntime = cmajorWebApiDirectory();
 const { PluginStateChannel } = await import(pathToFileURL(path.join(stateRuntime, "cmaj-plugin-state-channel.js")));
 const { createSharedDataMemory, createSharedDataPreparation, createSharedDataReader } = await import(
     pathToFileURL(path.join(stateRuntime, "cmaj-shared-data.js")));
