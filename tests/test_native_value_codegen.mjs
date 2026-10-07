@@ -7,10 +7,12 @@ import { pathToFileURL } from 'node:url';
 import { createServer } from 'node:http';
 import { stageCustomerStateFixture } from "./helpers/build_customer_state_fixture.mjs";
 import { loadUIModule } from '../kit/tests/helpers/load_ui_module.mjs';
+import { cmajorSourceDirectory } from './helpers/cmajor_source.mjs';
 
 const root = path.resolve(import.meta.dirname, '..');
-const source = process.env.BUILDER_KIT_CMAJOR_SOURCE;
-assert.ok(source, 'Set BUILDER_KIT_CMAJOR_SOURCE to the authored Cmajor checkout');
+const source = cmajorSourceDirectory();
+const wasmCompilerSkip = process.env.COSIMO_NATIVE_VALUE_WASM_CXX ? false
+    : 'Needs a wasm32-wasi C++ compiler; set COSIMO_NATIVE_VALUE_WASM_CXX, COSIMO_NATIVE_VALUE_WASI_SYSROOT and COSIMO_NATIVE_VALUE_WASI_CXX_INCLUDE.';
 const buildRoot = path.join(root, 'build/shared_state_native_final');
 await mkdir(buildRoot, { recursive: true });
 const staging = await stageCustomerStateFixture(buildRoot, "plugin_state_shared_data", "shared_mseg");
@@ -66,7 +68,7 @@ settings_codec: nativeValue({ codec: Native.boolean(), initial: false }),`);
 });
 
 test('generated nested native getter reads shared Wasm storage', {
-    skip: !process.env.COSIMO_NATIVE_VALUE_WASM_CXX,
+    skip: wasmCompilerSkip,
 }, async () => {
     const sysroot = process.env.COSIMO_NATIVE_VALUE_WASI_SYSROOT;
     const includes = process.env.COSIMO_NATIVE_VALUE_WASI_CXX_INCLUDE;
@@ -122,7 +124,7 @@ test('generated nested native getter reads shared Wasm storage', {
 });
 
 test('Chromium executes generated native getter with complete snapshots across blocks', {
-    skip: !process.env.COSIMO_NATIVE_VALUE_WASM_CXX,
+    skip: wasmCompilerSkip,
 }, async () => {
     const { chromium } = await import('playwright');
     const server = createServer(async (request, response) => {

@@ -4,13 +4,16 @@ import path from "node:path";
 import { readFile, readlink, symlink, mkdir, copyFile, chmod, writeFile, unlink } from "node:fs/promises";
 import { spawnSync } from "node:child_process";
 import { stageCustomerStateFixture, buildCustomerStateFixture } from "./helpers/build_customer_state_fixture.mjs";
+import { cmajorSourceDirectory } from "./helpers/cmajor_source.mjs";
 
 const root = path.resolve(import.meta.dirname, "..");
 
-test("actual desktop factory runs its worker, consumes articulation and reapplies identical saved state", async () => {
-    const source = process.env.BUILDER_KIT_CMAJOR_SOURCE;
-    const runtime = process.env.COSIMO_CMAJOR_RUNTIME_LIBRARY;
-    assert.ok(source && runtime, "Set the qualified Cmajor source and runtime explicitly");
+const runtime = process.env.COSIMO_CMAJOR_RUNTIME_LIBRARY;
+
+test("actual desktop factory runs its worker, consumes articulation and reapplies identical saved state", {
+    skip: runtime ? false : "Needs the native Cmajor runtime library from a full toolchain build; set COSIMO_CMAJOR_RUNTIME_LIBRARY to that library.",
+}, async () => {
+    const source = cmajorSourceDirectory();
     const build = path.join(root, "build/plugin_state_desktop_qualification");
     const staging = await stageCustomerStateFixture(build, "plugin_state_desktop_wrapper", "desktop_wrapper_state");
     const { manifestPath: generatedManifest } = await buildCustomerStateFixture(staging, "desktop-wrapper-state",

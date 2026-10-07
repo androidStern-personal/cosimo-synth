@@ -3,14 +3,15 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
-const source = process.env.BUILDER_KIT_CMAJOR_SOURCE;
+import { cmajorSourceDirectory } from './helpers/cmajor_source.mjs';
 const wasmPath = process.env.COSIMO_NATIVE_VALUE_WASM;
-assert.ok(source && wasmPath, 'Set authored Cmajor source and the compiled NativeValueTests.cpp Wasm path');
-const { createSharedDataMemory, createSharedDataPreparation, createSharedDataReader } = await import(
-    pathToFileURL(path.join(source, 'javascript/cmaj_api/cmaj-shared-data.js')));
-const module = await WebAssembly.compile(await readFile(wasmPath));
 
-test('compiled C++ NativeValue reads real shared Wasm allocation snapshots', async () => {
+test('compiled C++ NativeValue reads real shared Wasm allocation snapshots', {
+    skip: wasmPath ? false : 'Needs tests/native/NativeValueTests.cpp compiled to Wasm by the native build; set COSIMO_NATIVE_VALUE_WASM to that file.',
+}, async () => {
+    const { createSharedDataMemory, createSharedDataPreparation, createSharedDataReader } = await import(
+        pathToFileURL(path.join(cmajorSourceDirectory(), 'javascript/cmaj_api/cmaj-shared-data.js')));
+    const module = await WebAssembly.compile(await readFile(wasmPath));
     const memory = new WebAssembly.Memory({ initial: 8, maximum: 32, shared: true });
     let reader;
     const { exports: native } = new WebAssembly.Instance(module, { env: { memory,

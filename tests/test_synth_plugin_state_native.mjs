@@ -6,12 +6,16 @@ import { mkdir, readFile, realpath, symlink, writeFile } from "node:fs/promises"
 import path from "node:path";
 import { build } from "vite";
 import { loadUIModule } from "../kit/tests/helpers/load_ui_module.mjs";
+import { cmajorSourceDirectory } from "./helpers/cmajor_source.mjs";
 
 const root = path.resolve(import.meta.dirname, "..");
-test("actual synth QuickJS owner applies an amount-only edit and shared Undo to real audio", { timeout: 240000 }, async () => {
-    const source = process.env.BUILDER_KIT_CMAJOR_SOURCE;
-    const runtime = process.env.COSIMO_CMAJOR_RUNTIME_LIBRARY;
-    assert.ok(source && runtime, "Set the qualified source and runtime explicitly");
+const runtime = process.env.COSIMO_CMAJOR_RUNTIME_LIBRARY;
+
+test("actual synth QuickJS owner applies an amount-only edit and shared Undo to real audio", {
+    skip: runtime ? false : "Needs the native Cmajor runtime library from a full toolchain build; set COSIMO_CMAJOR_RUNTIME_LIBRARY to that library.",
+    timeout: 240000,
+}, async () => {
+    const source = cmajorSourceDirectory();
     const out = path.join(root, "build/plugin_state_synth_qualification");
     await mkdir(out, { recursive: true });
     for (const name of ["cmajor", "assets"]) {
