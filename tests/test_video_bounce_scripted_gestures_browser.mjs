@@ -5,6 +5,7 @@ import test, { after, before } from "node:test";
 import { chromium } from "playwright";
 
 import { routeHermeticPage } from "./helpers/hermetic_page.mjs";
+import { railRetreated } from "./helpers/scripted_rail.mjs";
 import { startStaticWebServer } from "../kit/tests/helpers/static_web_server.mjs";
 
 const repoRoot = path.resolve(import.meta.dirname, "..");
@@ -88,11 +89,9 @@ test("scripted gestures drive real DesktopPatchView transients that paint inside
             [],
             `${rendered.name} missed scripted ops`,
         );
-        // The mod rail paints on every frame, except while it retreats past
-        // the phone's edge for a source drag.
+        // The mod rail paints on every frame it is on the phone.
         for (const framePixels of rendered.pixelProbes) {
-            const inspection = rendered.inspections.find(({ frame }) => frame === framePixels.frame);
-            if (inspection?.railMappingActive) continue;
+            if (railRetreated(rendered.inspections, framePixels.frame)) continue;
             const rail = framePixels.regions.rail;
             assert.ok(
                 rail && rail.lumaRange > 24,
@@ -102,7 +101,11 @@ test("scripted gestures drive real DesktopPatchView transients that paint inside
     }
 
     for (const name of ["filter-map", "fx-map"]) {
-        const retreated = probe(report, name).inspections.filter(({ railMappingActive }) => railMappingActive);
+        // The rail slides out from the frame a source drag starts, so it is
+        // off the phone from the drag's second frame on.
+        const { inspections } = probe(report, name);
+        const retreated = inspections.filter(({ frame, railMappingActive }) => railMappingActive
+            && inspections.some((previous) => previous.frame === frame - 1 && previous.railMappingActive));
         assert.ok(retreated.length > 0, `${name} never retreated the mod rail for its source drag`);
         for (const { frame, rects: { rail, phone } } of retreated) {
             assert.ok(

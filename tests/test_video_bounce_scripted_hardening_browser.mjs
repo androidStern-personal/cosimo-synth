@@ -6,6 +6,7 @@ import test, { after, before } from "node:test";
 import { chromium } from "playwright";
 
 import { routeHermeticPage } from "./helpers/hermetic_page.mjs";
+import { railRetreated } from "./helpers/scripted_rail.mjs";
 import { startStaticWebServer } from "../kit/tests/helpers/static_web_server.mjs";
 
 const repoRoot = path.resolve(import.meta.dirname, "..");
@@ -78,13 +79,13 @@ test("full scripted renders are deterministic and paint the overlays", {
         assert.deepEqual(render.missedOps, []);
 
         // Paint-level gate: the mod rail must be visible pixels — not merely a
-        // DOM node — on every probed frame of the shipped composition, except
-        // while it retreats past the phone's edge for a source drag.
+        // DOM node — on every probed frame it is on the phone and the end card
+        // does not cover it.
         assert.equal(render.pixelProbes.length, report.digestFrames.length);
         for (const probe of render.pixelProbes) {
             const phone = probe.regions.phone;
             assert.ok(phone && phone.lumaRange > 40, `frame ${probe.frame} phone region is blank`);
-            if (render.inspections.find(({ frame }) => frame === probe.frame).railMappingActive) continue;
+            if (probe.frame >= report.endCardStartFrame || railRetreated(render.inspections, probe.frame)) continue;
             const rail = probe.regions.rail;
             assert.ok(rail, `frame ${probe.frame} probed no rail region`);
             assert.ok(
