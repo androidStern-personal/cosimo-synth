@@ -1,3 +1,5 @@
+// Runs against the built web app (npm run web:build first), or against a deployed
+// one when COSIMO_WEB_BASE_URL is set.
 import assert from "node:assert/strict";
 import fs from "node:fs/promises";
 import test from "node:test";
