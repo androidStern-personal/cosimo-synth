@@ -325,7 +325,7 @@ export function resolveModulationTargetBase(targetKind: ModulationTargetKind): M
                 },
             };
         }
-        // T6: every instance has its own lane.v2 document slot, and the base
+        // Every instance has its own lane.v2 document slot, and the base
         // CONTRACT (endpoint, spec, labels) is the type's. Which slot a
         // binding edits comes from the deviceId its caller threads through
         // useLaneOrHostParameterBinding.

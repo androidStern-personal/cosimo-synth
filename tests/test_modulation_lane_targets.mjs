@@ -308,7 +308,7 @@ test("no lane route carries a per-note articulation cell — pool routes include
 
 test("every pool instance's base resolves the type's editing contract", async () => {
     const resolver = await loadUIModule(repoRoot, "ui/shared/modulation-target-base.ts");
-    // T6: the lane.v2 document has a real slot for every instance, so the
+    // The lane.v2 document has a real slot for every instance, so the
     // base contract (endpoint, spec, labels) is the TYPE's; WHICH document
     // slot a binding edits comes from the deviceId its caller threads.
     const second = resolver.resolveModulationTargetBase("lane.delay#2.delayMix");

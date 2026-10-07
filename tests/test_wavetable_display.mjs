@@ -1150,7 +1150,7 @@ test("compact-cutover options suppress the background fill and slice caption wit
 });
 
 /* ------------------------------------------------------------------ */
-/* T02C — Index modulation range overlay                               */
+/* Index modulation range overlay                                      */
 /* ------------------------------------------------------------------ */
 
 const OVERLAY_ACCENT = [105, 213, 197];

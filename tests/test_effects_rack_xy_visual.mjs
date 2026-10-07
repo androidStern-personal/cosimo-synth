@@ -110,7 +110,7 @@ test("pointer and keyboard X/Y gestures reach each tabled pair through the host 
 
     try {
         // The XY sweep spans all eight device types; the fresh default is
-        // the starter trio (T7), so seed the legacy resident-eight document.
+        // the starter trio, so seed a document with all eight resident.
         await page.addInitScript((value) => {
             window.__COSIMO_DESKTOP_HARNESS_INITIAL__ = {
                 storedState: { "lane.v1": value },

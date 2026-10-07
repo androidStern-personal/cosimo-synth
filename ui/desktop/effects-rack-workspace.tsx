@@ -248,7 +248,7 @@ type EffectsRackWorkspaceProps = {
 };
 
 /**
- * The rail's audition wiring (T10B): the Note key's press lifecycle, the
+ * The rail's audition wiring: the Note key's press lifecycle, the
  * Auto-preview mode, and the on-screen keyboard toggle. Required whenever the
  * mobile rail renders — a compact surface without them is a wiring defect.
  */
@@ -4571,7 +4571,7 @@ export function EffectsRackWorkspace({
     const [selectedGroupId, setSelectedGroupId] = useState<string | null>(null);
     const [polishSelected, setPolishSelected] = useState(false);
     const [groupMenu, setGroupMenu] = useState<SubwayGroupMenuRequest | null>(null);
-    // Selection is a DEVICE INSTANCE (T6): the effect id derives from it.
+    // Selection is a DEVICE INSTANCE: the effect id derives from it.
     const [selectedDeviceId, setSelectedDeviceId] = useState<string>("distortion#1");
     const selectedEffectId = effectIdForLaneDeviceId(selectedDeviceId);
     const [quickEndpointByEffect, setQuickEndpointByEffect] = useState<Readonly<Record<EffectModuleId, string>>>(() => (

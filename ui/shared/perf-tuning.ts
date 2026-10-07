@@ -38,7 +38,7 @@ export type PerfTuningState = {
     readonly minGapMs: number;
     /** How long a settled preview keeps looping before it releases. */
     readonly holdMs: number;
-    /** Defer restrikes to the routed looping MSEG's grid (T12B). */
+    /** Defer restrikes to the routed looping MSEG's grid. */
     readonly loopSync: boolean;
     readonly drag: ModSourceTouchTuning;
 };

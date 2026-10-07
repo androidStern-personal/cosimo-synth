@@ -203,7 +203,7 @@ test("an amp route in dB units can lift any base to the +6 dB rail", async () =>
     );
 });
 
-test("T02C: only a live mapped route shades the wavetable graphic, using the rail band's clamped travel", async () => {
+test("only a live mapped route shades the wavetable graphic, using the rail band's clamped travel", async () => {
     const { projectMobileVoiceRailBand, wavetableModulationShadingRange } = await railModulePromise;
     const domain = { min: 0, max: 1 };
 

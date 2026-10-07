@@ -1,5 +1,5 @@
 /**
- * The Auto-preview loop-sync quantizer (T12B) — pure strike-time math.
+ * The Auto-preview loop-sync quantizer — pure strike-time math.
  *
  * When a retrigger is due and an eligible looping MSEG is sounding, the strike
  * defers to the loop's grid instead of firing mid-cycle. MSEGs run per voice

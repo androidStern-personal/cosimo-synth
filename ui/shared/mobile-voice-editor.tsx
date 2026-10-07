@@ -568,7 +568,7 @@ export function MobileVoiceFocusedEditor({
         ? formatMobileVoiceValue("percent", clamp01(bindings.warpAmount.value))
         : formatMobileVoiceValue("percent", clamp01(bindings.framePosition.value));
 
-    // T02C: the graphic shades the selected source's possible Index travel,
+    // The graphic shades the selected source's possible Index travel,
     // derived from the SAME presentation the Index cell rail draws (canonical
     // amount, polarity, clamping — never a second projection).
     const indexPresentation = cellApi.presentCell("framePosition");

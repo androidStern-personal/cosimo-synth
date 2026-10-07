@@ -891,7 +891,7 @@ function formatMixDisplay(value: number) {
 const VOICE_FILTER_OWNER_ACCENT = "#a98cff";
 
 /**
- * T04A: the armed source's filter travel, per axis. The travel start is the
+ * The armed source's filter travel, per axis. The travel start is the
  * filter at source = 0 (base for a unipolar axis, the mirrored offset for a
  * bipolar one); the end is the filter at full deflection. Endpoints clamp
  * to the audible parameter ranges.
@@ -2986,7 +2986,7 @@ function FilterSection({
             throw new Error("Compact FilterSection requires filterMix, routes, and armedSource.");
         }
         const filterOff = filterMode.value === 0;
-        // T04A: the travel overlay renders only while the armed source has a
+        // The travel overlay renders only while the armed source has a
         // filter mapping — color must never claim a mapping that does not
         // exist. Each axis is live only through its own route.
         const modulationTravel = armedCutoffRoute === null && armedQRoute === null

@@ -141,7 +141,7 @@
 
 /* ADR-025 row 13: capture stays in the dragged source's own color — mixing
    toward white was the audited divergence. The :not() qualifiers keep this
-   rule MORE specific than the eligibility outline above (T08A: without them
+   rule MORE specific than the eligibility outline above (without them
    eligibility wins and capture is invisible), and structurally bar an
    existing/ineligible pair from ever taking the capture treatment. */
 .cosimo-surface[data-mod-source-mapping] [data-modulation-target-kind].is-mod-hover:not([data-drag-creation="existing"]):not([data-drag-creation="ineligible"]) {

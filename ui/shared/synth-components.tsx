@@ -733,7 +733,7 @@ export function WavetableCanvas({
     /** ADR-024 compact seams; defaults preserve the established drawing. */
     paintBackground?: boolean;
     showSliceCaption?: boolean;
-    /** T02C: the selected source's Index travel, shaded onto the graphic. */
+    /** The selected source's Index travel, shaded onto the graphic. */
     modulationRange?: WavetableModulationRangeOverlay | null;
 }) {
     const canvasRef = useRef<HTMLCanvasElement | null>(null);

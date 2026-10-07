@@ -1,5 +1,5 @@
 /**
- * Pure geometry for the perimeter-docked mobile Mod rail (T10B).
+ * Pure geometry for the perimeter-docked mobile Mod rail.
  *
  * The rail docks flush against the left or right screen edge, travels
  * vertically inside a keep-out band (safe areas plus fixed chrome), snaps to

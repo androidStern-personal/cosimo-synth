@@ -1,5 +1,5 @@
 /**
- * The Auto-preview note memory (T12C): remembers the most recent completed
+ * The Auto-preview note memory: remembers the most recent completed
  * group of intentional user notes while every tracked note still contributes
  * to the group's held-note boundary.
  *

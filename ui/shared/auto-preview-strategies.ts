@@ -44,7 +44,7 @@ export type PreviewStrategyEngineDeps = {
     readonly strike: () => void;
     /** Release the engine-owned preview group. */
     readonly release: () => void;
-    /** T12B quantizer against the live loop source; returns a time >= now. */
+    /** Loop-sync quantizer against the live loop source; returns a time >= now. */
     readonly quantizeStrike: (nowMs: number, kind: AutoPreviewStrikeKind) => number;
     /** Next cycle boundary of the eligible loop, or null when none. */
     readonly nextLoopBoundary: (nowMs: number) => number | null;

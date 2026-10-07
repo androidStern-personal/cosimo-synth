@@ -2319,7 +2319,7 @@ export function useSynthPatchViewModel({
     previewNoteMemoryRef.current = previewNoteMemory;
     const heldMidiNotesRef = useRef(new Map<number, HeldMidiNote>());
     const heldMidiOrderRef = useRef(0);
-    /** When the newest voice started (any note-on we emitted or tracked) — the T12B loop-phase anchor. */
+    /** When the newest voice started (any note-on we emitted or tracked) — the loop-sync phase anchor. */
     const lastNoteOnAtRef = useRef<number | null>(null);
     const [articulationHeldInput, setArticulationHeldInput] = useState<ArticulationHeldInput>({
         note: null,
@@ -3441,8 +3441,8 @@ export function useSynthPatchViewModel({
         const heldCountBefore = heldMidiNotesRef.current.size;
 
         if (isNoteOn) {
-            // The newest note-on anchors every per-voice MSEG loop's phase
-            // (T12B): loop-sync boundaries are computed from this moment.
+            // The newest note-on anchors every per-voice MSEG loop's phase:
+            // loop-sync boundaries are computed from this moment.
             lastNoteOnAtRef.current = performance.now();
             if (intentional) {
                 lastPlayedNoteRef.current = safeNote;
@@ -3506,7 +3506,7 @@ export function useSynthPatchViewModel({
         sendMidiInputEvent(0x90, note, 100);
     }, [handleStopArticulationAudition, isArticulationBaseReady, selectArticulationSlot, sendMidiInputEvent]);
 
-    // The Mod rail's Note key (T10B): one piano key fixed to the most recently
+    // The Mod rail's Note key: one piano key fixed to the most recently
     // played intentional pitch. It goes through sendMidiInputEvent so it joins
     // the held set without replacing chord memory, and it remembers its own
     // started pitch so a keyboard note played mid-press cannot orphan the
@@ -3541,7 +3541,7 @@ export function useSynthPatchViewModel({
     const autoPreviewEngineRef = useRef<AutoPreviewEngine | null>(null);
     const autoPreviewOwnedGroupRef = useRef<AutoPreviewOwnedGroup | null>(null);
     const autoPreviewOffTimerRef = useRef<number | null>(null);
-    // T12B loop-sync state: the strike currently deferred to a loop boundary,
+    // Loop-sync state: the strike currently deferred to a loop boundary,
     // a reach-in to clear it from outside the mount closure, and live MSEG
     // rates mirrored for the resolver.
     const autoPreviewPendingStrikeRef = useRef<{ timer: number; capMs: number | null } | null>(null);
@@ -3595,7 +3595,7 @@ export function useSynthPatchViewModel({
             }
         };
         autoPreviewClearPendingRef.current = clearPendingStrike;
-        // T12B: the slowest looping MSEG that modulates anything is the
+        // The slowest looping MSEG that modulates anything is the
         // audible rhythm; its cycle grid (anchored at the newest note-on,
         // which restarts every per-voice MSEG) is what strikes align to.
         // Unmapped MSEGs are ignored entirely.
