@@ -5,12 +5,11 @@ import test, { after, before } from "node:test";
 
 import { chromium } from "playwright";
 
+import { startProductWebServer } from "./helpers/product_web_server.mjs";
 import { routeHermeticPage } from "./helpers/hermetic_page.mjs";
 import { buildMaximalCurrentSpeedrunPatch } from "./helpers/speedrun_test_context.mjs";
-import { startStaticWebServer } from "../kit/tests/helpers/static_web_server.mjs";
 
 const repoRoot = path.resolve(import.meta.dirname, "..");
-const webRoot = path.join(repoRoot, "build", "web");
 let browser;
 let server;
 let baseUrl;
@@ -93,7 +92,7 @@ async function newStudioPage({ trackResources = false } = {}) {
     page.on("console", (message) => {
         if (message.type() === "error") failures.push(`console: ${message.text()}`);
     });
-    await page.goto(new URL("speedrun/", baseUrl).href, { waitUntil: "networkidle" });
+    await page.goto(new URL("speedrun/index.html", baseUrl).href, { waitUntil: "networkidle" });
     await page.waitForFunction(() => window.__COSIMO_SPEEDRUN_STUDIO__?.ready === true);
     return { context, page, failures };
 }
@@ -165,7 +164,7 @@ function assertVerifiedWebM(snapshot) {
 }
 
 before(async () => {
-    server = await startStaticWebServer(webRoot);
+    server = await startProductWebServer();
     baseUrl = server.baseUrl;
     browser = await chromium.launch({
         headless: true,
@@ -175,7 +174,7 @@ before(async () => {
 
 after(async () => {
     await browser?.close();
-    await server?.stop();
+    await server?.close();
 });
 
 test("fixture patch plus uploaded MIDI produces a downloadable verified MP4 and adjacent share link", {

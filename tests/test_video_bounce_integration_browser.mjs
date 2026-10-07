@@ -6,10 +6,8 @@ import test, { after, before } from "node:test";
 import { chromium } from "playwright";
 
 import { routeHermeticPage } from "./helpers/hermetic_page.mjs";
-import { startStaticWebServer } from "../kit/tests/helpers/static_web_server.mjs";
+import { startProductWebServer, webRoot } from "./helpers/product_web_server.mjs";
 
-const repoRoot = path.resolve(import.meta.dirname, "..");
-const webRoot = path.join(repoRoot, "build", "web");
 const outputArtifactPath = process.env.COSIMO_VIDEO_BOUNCE_OUTPUT?.trim() || null;
 const requestedContainer = outputArtifactPath === null ? "webm" : "mp4";
 const requestedQuality = outputArtifactPath === null ? "very-low" : "high";
@@ -19,14 +17,14 @@ let baseUrl;
 
 before(async () => {
     await fs.access(path.join(webRoot, "index.html"));
-    server = await startStaticWebServer(webRoot);
+    server = await startProductWebServer();
     baseUrl = server.baseUrl;
     browser = await chromium.launch({ headless: true });
 });
 
 after(async () => {
     await browser?.close();
-    await server?.stop();
+    await server?.close();
 });
 
 test("the preset dropdown opens current-patch Bounce Video and lazy-loads its renderer", {

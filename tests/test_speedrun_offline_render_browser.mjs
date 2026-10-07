@@ -5,7 +5,7 @@ import test from "node:test";
 
 import { chromium, webkit } from "playwright";
 
-import { startProductWebServer } from "./helpers/bounce_browser_fixture.mjs";
+import { startProductWebServer } from "./helpers/product_web_server.mjs";
 import {
     createCurrentSpeedrunContext,
     readSpeedrunFixture,

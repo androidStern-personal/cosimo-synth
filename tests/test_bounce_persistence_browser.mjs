@@ -2,7 +2,8 @@ import assert from "node:assert/strict";
 import test, { after, before } from "node:test";
 
 import { chromium } from "playwright";
-import { persistOneRootBounce, startProductWebServer } from "./helpers/bounce_browser_fixture.mjs";
+import { persistOneRootBounce } from "./helpers/bounce_browser_fixture.mjs";
+import { startProductWebServer } from "./helpers/product_web_server.mjs";
 import { createCurrentSpeedrunContext } from "./helpers/speedrun_test_context.mjs";
 
 let browser;
