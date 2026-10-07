@@ -9,6 +9,7 @@ import {
     LANE_DEVICE_TYPE_ORDER,
     addLaneDevice,
     createDefaultLaneStateV2,
+    laneDefaultParamsForType,
     parseLaneInstanceId,
     parseLaneStateV2,
     serializeLaneStateV2,
@@ -261,12 +262,14 @@ function createMaximalLane(): LaneStateV2 {
         if (parsedID === null) throw new Error(`Maximal Effects Lane device id ${deviceID} is invalid.`);
         const effectID = LANE_TYPE_TO_EFFECT_ID.get(parsedID.deviceType);
         if (effectID === undefined) throw new Error(`Maximal Effects Lane type ${parsedID.deviceType} has no effect.`);
+        // Every lane field once: the effect's parameters move off their
+        // defaults; the lane-only Key Track and Output Trim fields keep theirs.
         const descriptors = getRackEffectDescriptor(effectID).parameters;
         return [deviceID, {
-            params: Object.fromEntries(descriptors.map((descriptor, parameterIndex) => [
-                descriptor.endpointID,
-                laneParameterValue(descriptor, parameterIndex),
-            ])),
+            params: Object.fromEntries(Object.entries(laneDefaultParamsForType(parsedID.deviceType)).map(([endpointID, initial]) => {
+                const parameterIndex = descriptors.findIndex((descriptor) => descriptor.endpointID === endpointID);
+                return [endpointID, parameterIndex < 0 ? initial : laneParameterValue(descriptors[parameterIndex]!, parameterIndex)];
+            })),
         }];
     }));
     const candidate: LaneStateV2 = {

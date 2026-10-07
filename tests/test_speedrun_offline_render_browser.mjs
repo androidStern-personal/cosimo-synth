@@ -160,7 +160,9 @@ async function openHarness(browserType) {
 
 test.before(async () => {
     // The harness page loads the built web synth from the repository root.
-    [server, fixture] = await Promise.all([startProductWebServer(repoRoot), buildFixture()]);
+    // Start the server first so after() can stop it even when the fixture fails.
+    server = await startProductWebServer(repoRoot);
+    fixture = await buildFixture();
 });
 
 test.after(async () => {

@@ -1,9 +1,10 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
+import { existsSync } from "node:fs";
 import { chromium, webkit } from "playwright";
 
-import { startStaticRepoServer } from "./helpers/desktop_harness_browser.mjs";
+import { startProductWebServer } from "./helpers/product_web_server.mjs";
 import { loadUIModule } from "../kit/tests/helpers/load_ui_module.mjs";
 import {
     createCurrentSpeedrunContext,
@@ -120,18 +121,19 @@ async function openHarness(browserType) {
 }
 
 test.before(async () => {
-    [server, fixture] = await Promise.all([
-        startStaticRepoServer(),
-        buildFixture(),
-    ]);
+    // Keep the server reachable by after() even when the fixture build fails.
+    server = await startProductWebServer(repoRoot);
+    fixture = await buildFixture();
 });
 
 test.after(async () => {
-    await server?.stop();
+    await server?.close();
 });
 
 for (const [browserName, browserType] of [["Chromium", chromium], ["WebKit", webkit]]) {
     test(`${browserName}: maximal source and restored link render identical audible PCM`, {
+        skip: existsSync(browserType.executablePath()) ? false
+            : `Playwright's ${browserName} is not installed on this machine, so this engine cannot render the sound.`,
         timeout: 240_000,
     }, async () => {
         const { browser, page } = await openHarness(browserType);
