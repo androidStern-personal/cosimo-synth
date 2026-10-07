@@ -5,9 +5,9 @@
 //
 // The renders are exact (fixed session id, synthetic wavetable), so the
 // thresholds below sit far from both the passing and the failing regimes:
-// before the steal fade, cutting a sounding tail produced a one-sample step
-// of roughly the tail's whole level (~0.4); with the fade, per-sample
-// motion stays at the signal's own slope (~0.02).
+// cutting a sounding tail would produce a one-sample step of roughly the
+// tail's whole level, while a fade keeps per-sample motion near the signal's
+// own slope (under a tenth of the tail level).
 import test from "node:test";
 import assert from "node:assert/strict";
 import path from "node:path";
@@ -24,6 +24,13 @@ import {
 const repoRoot = path.resolve(import.meta.dirname, "..");
 const enginePath = path.join(repoRoot, "build", "web", "cmaj_Cosimo_Synth.offline.js");
 const EngineClass = await loadOfflineEngineClass(enginePath);
+
+/** An installed offline runtime whose shared engine memory is released when the test ends. */
+async function installedRuntime(t, spec) {
+    const runtime = await createInstalledPerformer({ EngineClass, ...spec });
+    t.after(() => runtime.dispose());
+    return runtime;
+}
 
 const noteOn = (atFrame, note = 60, velocity = 100) => ({ atFrame, midi: [0x90, note, velocity] });
 const noteOff = (atFrame, note = 60) => ({ atFrame, midi: [0x80, note, 64] });
@@ -46,10 +53,9 @@ function maxDiffStep(left, right, fromFrame, toFrame) {
     return max;
 }
 
-test("rapid retriggering renders bit-identically on identical input", async () => {
+test("rapid retriggering renders bit-identically on identical input", async (t) => {
     const render = async () => {
-        const performer = await createInstalledPerformer({
-            EngineClass,
+        const { performer } = await installedRuntime(t, {
             parameters: { playMode: 1, ampAttack: 0.001, ampDecay: 0.03, ampSustain: 0.8, ampRelease: 0.4 },
         });
         const score = [];
@@ -63,13 +69,12 @@ test("rapid retriggering renders bit-identically on identical input", async () =
     assert.equal(firstSampleDifference(await render(), await render()), null);
 });
 
-test("a hard retrigger of a sounding voice fades instead of truncating", async () => {
+test("a hard retrigger of a sounding voice fades instead of truncating", async (t) => {
     // Mono, slow attack (so the new note's own rise is gentle), loud recent
-    // tail: the 6th note lands on the 5th's release. Before the steal fade
-    // this cut the tail in one sample (diff step ~= tail level ~0.45).
+    // tail: the 6th note lands on the 5th's release. Without a steal fade the
+    // tail would end in one sample, a step as large as the tail itself.
     const build = async (noteCount) => {
-        const performer = await createInstalledPerformer({
-            EngineClass,
+        const { performer } = await installedRuntime(t, {
             parameters: { playMode: 1, ampAttack: 0.01, ampDecay: 0.05, ampSustain: 0.9, ampRelease: 0.8 },
         });
         const score = [];
@@ -87,17 +92,22 @@ test("a hard retrigger of a sounding voice fades instead of truncating", async (
 
     assert.equal(maxAbsoluteDiff(control, retriggered, 0, onset), 0, "determinism before the retrigger");
 
+    let tailLevel = 0;
+    for (let frame = onset - 256; frame < onset; frame += 1) {
+        tailLevel = Math.max(tailLevel, Math.abs(control[frame * 2]));
+    }
+    assert.ok(tailLevel > 0.01, `the stolen voice must still be sounding (tail ${tailLevel})`);
+
     const window = 1024;
     const changed = maxAbsoluteDiff(control, retriggered, onset, onset + window);
     const worstStep = maxDiffStep(control, retriggered, onset, onset + window);
-    assert.ok(changed > 0.2, `retrigger must audibly change the render (changed ${changed})`);
-    assert.ok(worstStep < 0.05, `no one-sample cut may remain (worst step ${worstStep})`);
+    assert.ok(changed > tailLevel / 2, `retrigger must audibly change the render (changed ${changed}, tail ${tailLevel})`);
+    assert.ok(worstStep < tailLevel / 4, `no one-sample cut may remain (worst step ${worstStep}, tail ${tailLevel})`);
 });
 
-test("legatoRestarts governs whether a legato retune restarts the MSEG", async () => {
+test("legatoRestarts governs whether a legato retune restarts the MSEG", async (t) => {
     const msegPositionAfterLegato = async (legatoRestarts) => {
-        const performer = await createInstalledPerformer({
-            EngineClass,
+        const { performer, prepareMseg } = await installedRuntime(t, {
             parameters: { playMode: 2, ampAttack: 0.001, ampSustain: 1.0, mseg1Rate: 2.0 },
             modulationRoutes: [{
                 id: "declick-legato", sourceKind: "mseg", sourceSlot: 1,
@@ -106,12 +116,14 @@ test("legatoRestarts governs whether a legato retune restarts the MSEG", async (
         });
         performer.resetOutputEventCount_runtimeInstallAck();
         const send = (endpointID, value) => performer[`sendInputEvent_${endpointID}`](value);
-        const body = Array.from({ length: 2048 }, (_, index) => index / 2047);
-        const buffer = [body[0], ...body, 1, 1];
-        send("modulationMsegBuffer", { dspSessionId: DRIVER_SESSION_ID, deliverySerial: 2, slot: 1, shapeIndex: 0, buffer });
-        performer.advance(DRIVER_BLOCK_FRAMES);
-        send("modulationMsegBuffer", { dspSessionId: DRIVER_SESSION_ID, deliverySerial: 3, slot: 1, shapeIndex: 1, buffer });
-        performer.advance(DRIVER_BLOCK_FRAMES);
+        const ramp = { points: [{ x: 0, y: 0, curvePower: 0 }, { x: 1, y: 1, curvePower: 0 }] };
+        for (const shapeIndex of [0, 1]) {
+            await prepareMseg({
+                dspSessionId: DRIVER_SESSION_ID, deliverySerial: 2 + shapeIndex,
+                slotIndex: 0, shapeIndex, shape: ramp,
+            });
+            performer.advance(DRIVER_BLOCK_FRAMES);
+        }
         send("modulationMsegPlayback", {
             dspSessionId: DRIVER_SESSION_ID, deliverySerial: 4,
             slot: 1, holdFinalValue: true, rateKind: 0,

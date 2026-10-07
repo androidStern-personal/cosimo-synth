@@ -156,6 +156,15 @@ function reportProvenance(report) {
     }, null, 2));
 }
 
+async function renderScenario(EngineClass, scenario) {
+    const runtime = await createInstalledPerformer({ EngineClass, ...scenario.spec });
+    try {
+        return renderScore(runtime.performer, scenario.score, scenario.totalFrames);
+    } finally {
+        runtime.dispose();
+    }
+}
+
 async function main() {
     let options;
     try {
@@ -208,10 +217,8 @@ async function main() {
         let failed = false;
 
         for (const scenario of scenarios) {
-            const performerA = await createInstalledPerformer({ EngineClass: EngineA, ...scenario.spec });
-            const renderedA = renderScore(performerA, scenario.score, scenario.totalFrames);
-            const performerB = await createInstalledPerformer({ EngineClass: EngineB, ...scenario.spec });
-            const renderedB = renderScore(performerB, scenario.score, scenario.totalFrames);
+            const renderedA = await renderScenario(EngineA, scenario);
+            const renderedB = await renderScenario(EngineB, scenario);
             const difference = firstSampleDifference(renderedA.samples, renderedB.samples);
             const peak = peakAbsolute(renderedA.samples);
             const renderedSilence = scenario.expectSound && peak <= 1e-6;
