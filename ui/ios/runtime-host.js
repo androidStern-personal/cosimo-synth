@@ -217,10 +217,41 @@ class IOSPianoKeyboard extends HTMLElement {
     }
 }
 
-class EmbeddedPatchConnectionBase extends EventListenerList {
+/** Cmajor's PatchConnection over the native app's `cmaj_*` bridge functions. */
+class EmbeddedPatchConnection extends EventListenerList {
     utilities = {
         PianoKeyboard: IOSPianoKeyboard,
     };
+
+    constructor(runtimeState) {
+        super();
+        this.manifest = JSON.parse(JSON.stringify(runtimeState.boot.manifest ?? {}));
+
+        if (runtimeState.boot.preferredView) {
+            this.manifest.view = runtimeState.boot.preferredView;
+        }
+
+        // Inside the app the bundle is served by the cosimo:// scheme handler and every
+        // resource is read through the native bridge; only a bundle served over the web
+        // offers a fetchable address.
+        if (!runtimeState.bundleResourceBaseURL.startsWith("cosimo://")) {
+            this.getResourceAddress = (path) => new URL(toResourcePath(path), runtimeState.resourceBaseURL).toString();
+        }
+
+        globalThis.cmaj_deliverMessageFromServer = (message) => this.deliverMessageFromServer(message);
+    }
+
+    async readResource(path) {
+        return globalThis._internalReadResource(path);
+    }
+
+    async readResourceAsAudioData(path, annotation) {
+        return globalThis._internalReadResourceAsAudioData(path, annotation);
+    }
+
+    sendMessageToServer(message) {
+        globalThis.cmaj_sendMessageToServer(message);
+    }
 
     requestStatusUpdate() {
         this.sendMessageToServer({ type: "req_status" });
@@ -325,30 +356,10 @@ class EmbeddedPatchConnectionBase extends EventListenerList {
     }
 }
 
-async function importRuntimeModules(runtimeState) {
+async function importPatchView(runtimeState) {
     try {
         const viewSource = runtimeState.boot.preferredView?.src || "patch_gui/index.ios.js";
-        const patchViewModule = await import(new URL(viewSource, runtimeState.resourceBaseURL).toString());
-
-        return {
-            PatchConnection: EmbeddedPatchConnectionBase,
-            createPatchViewHolder: async (patchConnection) => {
-                const createView = patchViewModule.default ?? patchViewModule.createIOSPatchView;
-                const view = await createView?.(patchConnection);
-
-                if (!view) {
-                    return undefined;
-                }
-
-                const holder = document.createElement("div");
-                holder.style.display = "block";
-                holder.style.position = "relative";
-                holder.style.width = "100%";
-                holder.style.height = "100%";
-                holder.appendChild(view);
-                return holder;
-            },
-        };
+        return await import(new URL(viewSource, runtimeState.resourceBaseURL).toString());
     } catch (error) {
         if (
             runtimeState.bootSource === "devServer" &&
@@ -363,40 +374,6 @@ async function importRuntimeModules(runtimeState) {
     }
 }
 
-function createEmbeddedPatchConnectionClass(PatchConnectionClass, runtimeState) {
-    return class EmbeddedPatchConnection extends PatchConnectionClass {
-        constructor() {
-            super();
-            this.manifest = JSON.parse(JSON.stringify(runtimeState.boot.manifest ?? {}));
-
-            if (runtimeState.boot.preferredView) {
-                this.manifest.view = runtimeState.boot.preferredView;
-            }
-
-            // Inside the app the bundle is served by the cosimo:// scheme handler and every
-            // resource is read through the native bridge; only a bundle served over the web
-            // offers a fetchable address.
-            if (!runtimeState.bundleResourceBaseURL.startsWith("cosimo://")) {
-                this.getResourceAddress = (path) => new URL(toResourcePath(path), runtimeState.resourceBaseURL).toString();
-            }
-
-            globalThis.cmaj_deliverMessageFromServer = (message) => this.deliverMessageFromServer(message);
-        }
-
-        async readResource(path) {
-            return globalThis._internalReadResource(path);
-        }
-
-        async readResourceAsAudioData(path, annotation) {
-            return globalThis._internalReadResourceAsAudioData(path, annotation);
-        }
-
-        sendMessageToServer(message) {
-            globalThis.cmaj_sendMessageToServer(message);
-        }
-    };
-}
-
 const runtimeState = getRuntimeState();
 const container = document.getElementById("cmaj-view-container");
 const state = {
@@ -404,7 +381,6 @@ const state = {
     phase: "created",
     isViewActive: false,
     statusText: "",
-    hasReadyNotification: false,
     catalogSnapshot: null,
     runtimeSnapshot: {
         hasRuntimeStateEvent: false,
@@ -452,8 +428,6 @@ globalThis.__cosimoInspectHostPage = () => ({
     resourceBaseURL: state.runtimeState.resourceBaseURL,
     phase: state.phase,
     documentTitle: document.title,
-    htmlMarker: globalThis.__COSIMO_DEV_HTML_MARKER ?? "",
-    jsMarker: globalThis.__COSIMO_DEV_JS_MARKER ?? "",
     statusText: state.statusText,
     viewActive: state.isViewActive,
     containerText: container?.innerText ?? "",
@@ -520,8 +494,7 @@ function cloneInspectableValue(value) {
     }
 }
 
-async function refreshCatalogSnapshot(patchConnection) {
-    const resourceClient = patchConnection?.resourceClient ?? createPatchConnectionResourceClient(patchConnection);
+async function refreshCatalogSnapshot(resourceClient) {
     state.catalogSnapshot = { pending: true };
     globalThis.__cosimoLatestCatalogSnapshot = state.catalogSnapshot;
 
@@ -568,66 +541,44 @@ async function refreshCatalogSnapshot(patchConnection) {
 async function initialisePatch() {
     setPhase("initialise");
 
-    if (typeof globalThis.cmaj_notifyHostPageReady === "function" && !state.hasReadyNotification) {
-        state.hasReadyNotification = true;
+    if (typeof globalThis.cmaj_notifyHostPageReady === "function") {
         globalThis.cmaj_notifyHostPageReady();
     }
 
-    setPhase("import-runtime-modules");
-    const runtimeModules = await importRuntimeModules(state.runtimeState);
+    setPhase("import-patch-view");
+    const patchViewModule = await importPatchView(state.runtimeState);
     setPhase("create-patch-connection");
-    const EmbeddedPatchConnection = createEmbeddedPatchConnectionClass(runtimeModules.PatchConnection, state.runtimeState);
-    const patchConnection = new EmbeddedPatchConnection();
-    patchConnection.resourceClient = createPatchConnectionResourceClient(patchConnection);
+    const patchConnection = new EmbeddedPatchConnection(state.runtimeState);
     globalThis.__cosimoPatchConnection = patchConnection;
 
-    if (typeof patchConnection.addEndpointListener === "function") {
-        try {
-            patchConnection.addEndpointListener("runtimeState", (value) => {
-                state.runtimeSnapshot.hasRuntimeStateEvent = true;
-                state.runtimeSnapshot.latestRuntimeState = cloneInspectableValue(value);
-            });
-        } catch (error) {
-            state.runtimeSnapshot.latestRuntimeState = {
-                inspectError: describeError(error),
-            };
-        }
+    patchConnection.addEndpointListener("runtimeState", (value) => {
+        state.runtimeSnapshot.hasRuntimeStateEvent = true;
+        state.runtimeSnapshot.latestRuntimeState = cloneInspectableValue(value);
+    });
+    patchConnection.addEndpointListener("effectiveWavetablePosition", (value) => {
+        state.runtimeSnapshot.hasEffectiveWavetablePositionEvent = true;
+        state.runtimeSnapshot.latestEffectiveWavetablePosition = cloneInspectableValue(value);
+    });
 
-        try {
-            patchConnection.addEndpointListener("effectiveWavetablePosition", (value) => {
-                state.runtimeSnapshot.hasEffectiveWavetablePositionEvent = true;
-                state.runtimeSnapshot.latestEffectiveWavetablePosition = cloneInspectableValue(value);
-            });
-        } catch (error) {
-            state.runtimeSnapshot.latestEffectiveWavetablePosition = {
-                inspectError: describeError(error),
-            };
-        }
+    void refreshCatalogSnapshot(createPatchConnectionResourceClient(patchConnection));
+
+    setPhase("create-patch-view");
+    const view = await patchViewModule.default(patchConnection);
+
+    if (!view) {
+        globalThis.setStatusMessage("Could not create a patch view.");
+        return;
     }
 
-    void refreshCatalogSnapshot(patchConnection);
-
-    const createViewIfNeeded = async () => {
-        if (state.isViewActive) {
-            return;
-        }
-
-        setPhase("create-patch-view");
-        container.innerHTML = "";
-        const view = await runtimeModules.createPatchViewHolder(patchConnection);
-        setPhase("patch-view-created");
-
-        if (!view) {
-            globalThis.setStatusMessage("Could not create a patch view.");
-            return;
-        }
-
-        state.isViewActive = true;
-        setPhase("patch-view-active");
-        container.appendChild(view);
-    };
-
-    await createViewIfNeeded();
+    const holder = document.createElement("div");
+    holder.style.display = "block";
+    holder.style.position = "relative";
+    holder.style.width = "100%";
+    holder.style.height = "100%";
+    holder.appendChild(view);
+    state.isViewActive = true;
+    setPhase("patch-view-active");
+    container.replaceChildren(holder);
 }
 
 window.addEventListener("error", (event) => {

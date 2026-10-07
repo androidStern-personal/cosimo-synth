@@ -4,7 +4,6 @@ import { createRoot, type Root } from "react-dom/client";
 import cssText from "./styles.css?inline";
 import { IOSPatchView } from "./IOSPatchView";
 import type { PatchConnectionLike } from "../shared/cmajor-react";
-import type { ResourceClient } from "../../kit/ui/resource-client";
 import { acquireSynthViewState } from "../shared/synth-state-client";
 
 type ErrorBoundaryState = {
@@ -73,33 +72,18 @@ class IOSPatchErrorBoundary extends Component<
 
 class CosimoIOSReactViewElement extends HTMLElement {
     private patchConnection: PatchConnectionLike | null = null;
-    private resourceClient: ResourceClient | undefined;
     private root: Root | null = null;
     private mountPoint: HTMLDivElement | null = null;
-    private modulationRuntimePatchConnection: PatchConnectionLike | null = null;
-    private stateLease: ReturnType<typeof acquireSynthViewState> | null = null;
+    private stateLease: { readonly connection: PatchConnectionLike; release(): void } | null = null;
 
-    setPatchConnection(patchConnection: PatchConnectionLike, resourceClient?: ResourceClient) {
-        if (this.modulationRuntimePatchConnection && this.modulationRuntimePatchConnection !== patchConnection) {
-            this.stateLease?.release();
-            this.stateLease = null;
-            this.modulationRuntimePatchConnection = null;
-        }
-
+    setPatchConnection(patchConnection: PatchConnectionLike) {
         this.patchConnection = patchConnection;
-        this.resourceClient = resourceClient;
-        if (!this.modulationRuntimePatchConnection) {
-            this.stateLease = acquireSynthViewState(patchConnection);
-            this.modulationRuntimePatchConnection = patchConnection;
-        }
+        this.holdSynthState();
         this.renderApp();
     }
 
     connectedCallback() {
-        if (this.patchConnection && !this.stateLease) {
-            this.stateLease = acquireSynthViewState(this.patchConnection);
-            this.modulationRuntimePatchConnection = this.patchConnection;
-        }
+        this.holdSynthState();
         if (!this.shadowRoot) {
             this.attachShadow({ mode: "open" });
         }
@@ -125,12 +109,18 @@ class CosimoIOSReactViewElement extends HTMLElement {
     disconnectedCallback() {
         this.root?.unmount();
         this.root = null;
+        this.stateLease?.release();
+        this.stateLease = null;
+    }
 
-        if (this.modulationRuntimePatchConnection) {
-            this.stateLease?.release();
-            this.stateLease = null;
-            this.modulationRuntimePatchConnection = null;
+    /** One synth state client lives as long as this element shows its connection, even if the React tree remounts. */
+    private holdSynthState() {
+        if (!this.patchConnection || this.stateLease?.connection === this.patchConnection) {
+            return;
         }
+        this.stateLease?.release();
+        const { release } = acquireSynthViewState(this.patchConnection);
+        this.stateLease = { connection: this.patchConnection, release };
     }
 
     private renderApp() {
@@ -140,34 +130,22 @@ class CosimoIOSReactViewElement extends HTMLElement {
 
         this.root.render(
             <IOSPatchErrorBoundary>
-                <IOSPatchView
-                    patchConnection={this.patchConnection}
-                    resourceClient={this.resourceClient}
-                />
+                <IOSPatchView patchConnection={this.patchConnection} />
             </IOSPatchErrorBoundary>
         );
     }
 }
 
-function getTagName() {
-    return "cosimo-synth-view";
-}
+const tagName = "cosimo-synth-view";
 
-export function createIOSPatchView(
-    patchConnection: PatchConnectionLike,
-    options: { resourceClient?: ResourceClient } = {},
-) {
-    const tagName = getTagName();
-
+export function createIOSPatchView(patchConnection: PatchConnectionLike) {
     if (!window.customElements.get(tagName)) {
         window.customElements.define(tagName, CosimoIOSReactViewElement);
     }
 
     const element = document.createElement(tagName) as CosimoIOSReactViewElement;
-    element.setPatchConnection(patchConnection, options.resourceClient);
+    element.setPatchConnection(patchConnection);
     return element;
 }
 
-export default function createPatchView(patchConnection: PatchConnectionLike) {
-    return createIOSPatchView(patchConnection);
-}
+export default createIOSPatchView;

@@ -13,7 +13,6 @@ import {
     PatchConnectionProvider,
     type PatchConnectionLike,
 } from "../shared/cmajor-react";
-import type { ResourceClient } from "../../kit/ui/resource-client";
 import { SynthStateProvider } from "../shared/synth-plugin-state-react";
 import {
     EditableMsegSurface,
@@ -1672,15 +1671,9 @@ function IOSPatchViewBody() {
     );
 }
 
-export function IOSPatchView({
-    patchConnection,
-    resourceClient,
-}: {
-    patchConnection: PatchConnectionLike;
-    resourceClient?: ResourceClient;
-}) {
+export function IOSPatchView({ patchConnection }: { patchConnection: PatchConnectionLike }) {
     return (
-        <PatchConnectionProvider patchConnection={patchConnection} resourceClient={resourceClient}>
+        <PatchConnectionProvider patchConnection={patchConnection}>
             <SynthStateProvider patchConnection={patchConnection}>
                 <IOSPatchViewBody />
             </SynthStateProvider>
