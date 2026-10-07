@@ -147,7 +147,7 @@ test("a native open send defect retains its cause, rejects startup, and releases
     await service.stop();
 });
 
-/** The value most recently sent for `key`; later updates mark it unchanged instead of resending it. */
+/** The value most recently sent for `key`; later updates leave the field out or mark its value unchanged. */
 function lastSentValue(connection, key) {
     return connection.sent.map(message => message.message).filter(body => body.kind === "update" || body.kind === "snapshot")
         .findLast(body => body.state.fields[key] && "value" in body.state.fields[key])?.state.fields[key].value;
