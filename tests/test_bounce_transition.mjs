@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import { buildBounceBank, encodeBounceBank } from "../bounce/bank-format.mjs";
-import { digestBounceBank } from "../bounce/capture.mjs";
+import { digestBounceBank } from "../bounce/digest.mjs";
 import {
     createBounceCapturePlan,
     createBounceCaptureSnapshot,

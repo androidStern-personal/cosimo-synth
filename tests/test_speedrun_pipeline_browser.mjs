@@ -5,6 +5,7 @@ import test, { after, before } from "node:test";
 
 import { chromium } from "playwright";
 
+import { missingH264Encoder } from "./helpers/h264_encoder.mjs";
 import { startProductWebServer } from "./helpers/product_web_server.mjs";
 import { routeHermeticPage } from "./helpers/hermetic_page.mjs";
 import { buildMaximalCurrentSpeedrunPatch } from "./helpers/speedrun_test_context.mjs";
@@ -179,9 +180,15 @@ after(async () => {
 
 test("fixture patch plus uploaded MIDI produces a downloadable verified MP4 and adjacent share link", {
     timeout: 420_000,
-}, async () => {
+}, async (t) => {
     const midiBytes = await fs.readFile(path.join(repoRoot, "demo", "one_note.mid"));
     const { context, page, failures } = await newStudioPage();
+    const noH264 = await missingH264Encoder(page);
+    if (noH264) {
+        t.skip(noH264);
+        await context.close();
+        return;
+    }
     const snapshot = await drivePipeline(page, {
         label: "Studio MIDI Fixture",
         parameters: {
@@ -236,13 +243,19 @@ test("fixture patch plus uploaded MIDI produces a downloadable verified MP4 and 
 
 test("the current effects-lane split with delay#2 renders through the same verified MP4 path", {
     timeout: 420_000,
-}, async () => {
+}, async (t) => {
     const [midiBytes, lane] = await Promise.all([
         fs.readFile(path.join(repoRoot, "demo", "one_note.mid")),
         fs.readFile(path.join(repoRoot, "tests", "fixtures", "speedrun", "effects-lane-split.json"), "utf8")
             .then(JSON.parse),
     ]);
     const { context, page, failures } = await newStudioPage();
+    const noH264 = await missingH264Encoder(page);
+    if (noH264) {
+        t.skip(noH264);
+        await context.close();
+        return;
+    }
     const snapshot = await drivePipeline(page, {
         label: "Studio Split Delay",
         parameters: {
@@ -344,9 +357,15 @@ test("the labeled WebM fallback produces one verified VP9 and Opus download", {
 
 test("five consecutive end-to-end renders release every checkpoint pool and keep object URLs and heap bounded", {
     timeout: 900_000,
-}, async () => {
+}, async (t) => {
     const midiBytes = await fs.readFile(path.join(repoRoot, "demo", "one_note.mid"));
     const { context, page, failures } = await newStudioPage({ trackResources: true });
+    const noH264 = await missingH264Encoder(page);
+    if (noH264) {
+        t.skip(noH264);
+        await context.close();
+        return;
+    }
     const cdp = await context.newCDPSession(page);
     await cdp.send("HeapProfiler.enable");
     const patch = {

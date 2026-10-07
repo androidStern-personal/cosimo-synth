@@ -7,6 +7,8 @@ import test, { after, before } from "node:test";
 
 import { chromium } from "playwright";
 
+import { missingH264Encoder } from "./helpers/h264_encoder.mjs";
+
 const repoRoot = path.resolve(import.meta.dirname, "..");
 const webRoot = path.join(repoRoot, "build", "speedrun-composition-test");
 const goldenRoot = path.join(repoRoot, "tests", "goldens", "speedrun-composition");
@@ -178,11 +180,9 @@ test("each caption line ticks on the frame its operation finishes", async () => 
 
 test("decoded click onsets in the rendered MP4 land within one frame of their captions", { timeout: 360_000 }, async (t) => {
     const { page, failures } = await newHarnessPage();
-    const h264 = await page.evaluate(async () => (await VideoEncoder.isConfigSupported({
-        codec: "avc1.640028", width: 1080, height: 1920, bitrate: 1_800_000,
-    })).supported === true);
-    if (!h264) {
-        t.skip("This browser has no H.264 encoder (Playwright's open-source Chromium ships none), and the MP4 must carry H.264.");
+    const noH264 = await missingH264Encoder(page);
+    if (noH264) {
+        t.skip(noH264);
         await page.close();
         return;
     }
