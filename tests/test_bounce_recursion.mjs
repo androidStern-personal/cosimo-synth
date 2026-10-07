@@ -7,7 +7,12 @@ import { captureBounceBank } from "../bounce/capture.mjs";
 import { createBounceCaptureSnapshot } from "../bounce/capture-plan.mjs";
 import { comparePeakNormalizedRms } from "./helpers/bounce_quality.mjs";
 import { loadUIModule } from "../kit/tests/helpers/load_ui_module.mjs";
-import { hostParameters, loadOfflineEngine, offlineEngineModuleURL } from "./helpers/bounce_offline_engine.mjs";
+import {
+    hostParameters,
+    loadOfflineEngine,
+    offlineEngineModuleURL,
+    outputLatencyFrames,
+} from "./helpers/bounce_offline_engine.mjs";
 
 const repoRoot = path.resolve(import.meta.dirname, "..");
 const sampleRate = 48_000;
@@ -36,6 +41,15 @@ function stereoRms(samples) {
     let sum = 0;
     for (const sample of samples) sum += sample * sample;
     return Math.sqrt(sum / samples.length);
+}
+
+/** How many dB a root's level falls from 10 ms to 50 ms after its note-off, in 5 ms windows. */
+function releaseDropDb(bank, index, noteOffFrame) {
+    const windowFrames = Math.round(0.005 * sampleRate);
+    const level = (seconds) => stereoRms(rootFloat(
+        bank, index, noteOffFrame + Math.round(seconds * sampleRate), windowFrames,
+    ));
+    return 20 * Math.log10(level(0.01) / level(0.05));
 }
 
 test("a recursive capture installs generation 1 in every fresh worker and reproduces its held sound", async () => {
@@ -80,26 +94,25 @@ test("a recursive capture installs generation 1 in every fresh worker and reprod
     assert.equal(generationTwo.plan.snapshot.sourceBankDigest, generationOne.digest);
     assert.match(generationTwo.digest, /^[0-9a-f]{64}$/);
 
-    // The held sound must survive recursion. After note-off the live Amp
-    // Release scales the baked release again, because the live envelope owns
-    // Bounce loudness, so each generation's tail is quieter than its source's.
+    // A capture records the synth's output, which the Polish bus delays by its
+    // fixed latency, so generation 2 hears generation 1 that much later. The
+    // held sound must survive recursion unchanged.
     const holdFrames = Math.round(holdSeconds * sampleRate);
     for (let index = 0; index < roots.length; index += 1) {
         const held = comparePeakNormalizedRms(
             rootFloat(generationOne.bank, index, 0, holdFrames),
-            rootFloat(generationTwo.bank, index, 0, holdFrames),
+            rootFloat(generationTwo.bank, index, outputLatencyFrames, holdFrames),
             sampleRate,
         );
         assert.ok(held.passes,
             `root ${roots[index]} held A/B: mean ${held.meanDeltaDb.toFixed(3)} dB, max ${held.maxDeltaDb.toFixed(3)} dB`);
-        const tailFrames = Math.min(
-            generationOne.bank.roots[index].frameCount,
-            generationTwo.bank.roots[index].frameCount,
-        ) - holdFrames;
-        const tailOne = stereoRms(rootFloat(generationOne.bank, index, holdFrames, tailFrames));
-        const tailTwo = stereoRms(rootFloat(generationTwo.bank, index, holdFrames, tailFrames));
-        assert.ok(tailTwo > 0 && tailTwo < tailOne,
-            `root ${roots[index]} recursive tail RMS ${tailTwo} must sit below its source's ${tailOne}`);
+        // The live Amp Envelope owns a bounced sound's loudness, so after
+        // note-off its exponential Amp Release fades the baked release once
+        // more: the recursive tail falls twice as many decibels in the same time.
+        const sourceDrop = releaseDropDb(generationOne.bank, index, holdFrames + outputLatencyFrames);
+        const recursiveDrop = releaseDropDb(generationTwo.bank, index, holdFrames + (2 * outputLatencyFrames));
+        assert.ok(Math.abs((recursiveDrop / sourceDrop) - 2) < 0.2,
+            `root ${roots[index]} release falls ${recursiveDrop.toFixed(2)} dB recursively against ${sourceDrop.toFixed(2)} dB in its source`);
     }
 
     const wasmPages = [generationOne, generationTwo].flatMap((result) => (
