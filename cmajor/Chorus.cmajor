@@ -13,7 +13,6 @@ namespace wt
     let chorusInnerPairOffset = 0.5f;
     let chorusDriftMs = 0.33f;
     let chorusLoopDrive = 1.3f;
-    let chorusRingFallbackHz = 28.0f;
     let chorusRingGlideMs = 5.0f;
     let chorusMaxDelayMs = 96.0f;
     let chorusMaxDiffusionDelayMs = 72.0f;
@@ -106,14 +105,6 @@ namespace wt
         return 7.0f;
     }
 
-    float32 chorusRingOffsetSemitones (int32 mode)
-    {
-        if (mode == 1) return -5.0f;
-        if (mode == 2) return 12.0f;
-        if (mode == 3) return -12.0f;
-        return 7.0f;
-    }
-
     processor ChorusBus
     {
         input stream float32<2> in;
@@ -129,11 +120,6 @@ namespace wt
         input value float32 ringKeyTrackEnabledIn [[ name: "Chorus Ring Key Track", min: 0.0f, max: 1.0f, init: 0.0f, discrete: true, step: 1.0f, text: "Off|On", rampFrames: 0 ]];
         input value float32 ringKeyTrackOffsetSemitonesIn [[ name: "Chorus Ring Key Track Offset", min: -48.0f, max: 48.0f, init: 0.0f, unit: "st", rampFrames: 0 ]];
         input value float32 ringRouteOffsetSemitonesIn [[ name: "Chorus Ring Route Offset", min: -60.0f, max: 60.0f, init: 0.0f, unit: "st", rampFrames: 0 ]];
-        // Ring Pitch and Ring Fine do not shape the synth's ring: its frequency
-        // comes from ringFrequencyHzIn or Key Track. The lane record still
-        // carries their slots.
-        input value float32 ringOffsetModeIn [[ name: "Chorus Ring Pitch", min: 0.0f, max: 3.0f, init: 0.0f, discrete: true, step: 1.0f, text: "+5th|Low 5th|+Oct|-Oct", rampFrames: 0 ]];
-        input value float32 ringFineSemitonesIn [[ name: "Chorus Ring Fine", min: -2.0f, max: 2.0f, init: 0.0f, unit: "st", rampFrames: 128 ]];
 
         // Effects Lane pool lifecycle only: a pool slot entering a committed
         // chain is a newly created device and must sound like one — empty

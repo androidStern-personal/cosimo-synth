@@ -77,7 +77,7 @@ namespace wt
     let rackModTargetChorusTone                 = 14;
     let rackModTargetChorusFeedback             = 15;
     let rackModTargetChorusRingAmount           = 16;
-    let rackModTargetChorusRingFineSemitones    = 17;
+    let rackModTargetChorusRingFrequencySemitones = 17;
     let rackModTargetFlangerRate                = 18;
     let rackModTargetFlangerDepth               = 19;
     let rackModTargetFlangerFeedback            = 20;
@@ -129,7 +129,7 @@ namespace wt
     let rackModTargetLaneChorusTone = rackModStaticTargetCount + rackModTargetChorusTone;
     let rackModTargetLaneChorusFeedback = rackModStaticTargetCount + rackModTargetChorusFeedback;
     let rackModTargetLaneChorusRingAmount = rackModStaticTargetCount + rackModTargetChorusRingAmount;
-    let rackModTargetLaneChorusRingFineSemitones = rackModStaticTargetCount + rackModTargetChorusRingFineSemitones;
+    let rackModTargetLaneChorusRingFrequencySemitones = rackModStaticTargetCount + rackModTargetChorusRingFrequencySemitones;
     let rackModTargetLaneFlangerRate = rackModStaticTargetCount + rackModTargetFlangerRate;
     let rackModTargetLaneFlangerDepth = rackModStaticTargetCount + rackModTargetFlangerDepth;
     let rackModTargetLaneFlangerFeedback = rackModStaticTargetCount + rackModTargetFlangerFeedback;

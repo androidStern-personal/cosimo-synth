@@ -1,5 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
 import path from "node:path";
 
 import { loadUIModule } from "../kit/tests/helpers/load_ui_module.mjs";
@@ -45,10 +46,8 @@ test("a one-field rack edit reaches the engine as one positional field delta; an
 test("the slot param layout mirrors the engine's positional constants", async () => {
     const params = await laneParamsPromise;
     assert.equal(params.LANE_SLOT_PARAM_COUNT, 12);
-    assert.equal(params.getLaneSlotParamIndex("chorus", "chorusOutputTrimDb"), 11);
     assert.equal(params.getLaneSlotParamIndex("delay", "delayTime"), 0);
     assert.equal(params.getLaneSlotParamIndex("delay", "delayDivision"), 5);
-    assert.equal(params.getLaneSlotParamIndex("chorus", "chorusRingFineSemitones"), 7);
     assert.equal(params.getLaneSlotParamIndex("phaser", "phaserMix"), 7);
     assert.equal(params.getLaneSlotParamIndex("distortion", "distortionType"), 6);
     assert.equal(params.getLaneSlotParamIndex("globalFilter", "delayTime"), null);
@@ -57,6 +56,19 @@ test("the slot param layout mirrors the engine's positional constants", async ()
     assert.equal(params.getLaneSlotId("delay", 2), 22);
     assert.throws(() => params.getLaneSlotId("delay", 5));
     assert.throws(() => params.buildLaneSlotParamValues("delay", { delayTime: 90 }));
+});
+
+test("the Chorus record matches the engine's laneChorusParam constants name for name", async () => {
+    const [params, engine] = await Promise.all([
+        laneParamsPromise,
+        readFile(path.join(repoRoot, "cmajor/EffectsRack.cmajor"), "utf8"),
+    ]);
+    const engineLayout = [...engine.matchAll(/let laneChorusParam(\w+)\s*=\s*(\d+);/gu)]
+        .map(([, name, index]) => [`chorus${name}`, Number(index)]);
+    assert.deepEqual(
+        engineLayout,
+        params.laneDeviceParamEndpoints("chorus").map((endpointID, index) => [endpointID, index]),
+    );
 });
 
 test("branch tags ride the slot id's upper bits and a serial chain replays all-trunk", async () => {

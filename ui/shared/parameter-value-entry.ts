@@ -8,7 +8,7 @@
 
 import {
     getRackEffectDescriptor,
-    getRackParameterDescriptorForModulationEndpoint,
+    getRackParameterDescriptor,
     type RackParameterDescriptor,
 } from "./rack-parameter-descriptors";
 import { laneMirrorRackKind, parseLaneModulationTargetKind } from "./lane-modulation-targets";
@@ -899,7 +899,7 @@ export function parameterEntrySpecForModulationAmount(
     if (!isRackModulationTarget(laneAmountAuthorityKind(targetKind))) {
         throw new Error(`Unknown modulation target "${targetKind}".`);
     }
-    const descriptor = getRackParameterDescriptorForModulationEndpoint(
+    const descriptor = getRackParameterDescriptor(
         parseLaneModulationTargetKind(targetKind)?.endpointID ?? "",
     );
     if (descriptor === null || descriptor.modulationTargetIndex === null) {
@@ -922,7 +922,7 @@ export function modulationAmountBaseBindingSpec(
     const authorityKind = laneAmountAuthorityKind(targetKind);
     const needsBase = voiceTargetKind === "filterCutoffOctaves"
         || (isRackModulationTarget(authorityKind)
-            && getRackParameterDescriptorForModulationEndpoint(
+            && getRackParameterDescriptor(
                 parseLaneModulationTargetKind(targetKind)?.endpointID ?? "",
             )?.modulationApplication === "octaves");
     if (!needsBase) {

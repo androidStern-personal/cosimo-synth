@@ -30,8 +30,6 @@ export type RackParameterDescriptor = {
     readonly modulationApplication: "linear" | "octaves" | "semitones" | null;
     /** Selects the hard-silence law and accelerated low-tail control taper. */
     readonly valueKind?: "effect-output-trim-db";
-    /** Stable pre-redesign route identity when presentation and base storage move. */
-    readonly modulationIdentityEndpointID?: string;
     /**
      * Vertical modulation drags walk the MODULATED value along the knob's own
      * dial instead of sweeping the linear amount span. Opt-in for parameters
@@ -128,7 +126,6 @@ const p = (
     modulationApplication: options.modulationApplication
         ?? (options.modulationTargetIndex === undefined || options.modulationTargetIndex === null ? null : "linear"),
     valueKind: options.valueKind,
-    modulationIdentityEndpointID: options.modulationIdentityEndpointID,
     modulationDragStyle: options.modulationDragStyle,
 });
 
@@ -225,10 +222,7 @@ const definitions: ReadonlyArray<Omit<RackEffectDescriptor, "parameters"> & { re
             p("chorus", "chorusTone", "Tone", "Tone", 0, 1, 0.5, { modulationTargetIndex: 14 }),
             p("chorus", "chorusFeedback", "Feedback", "Fdbk", 0, 0.95, 0.42, { modulationTargetIndex: 15 }),
             p("chorus", "chorusRingAmount", "Ring", "Ring", 0, 1, 0, { modulationTargetIndex: 16 }),
-            p("chorus", "chorusRingFrequencyHz", "Ring Frequency", "Freq", 10, 20_000, 28, {
-                unit: "Hz", scale: "log", modulationTargetIndex: 17, modulationApplication: "semitones",
-                modulationIdentityEndpointID: "chorusRingFineSemitones",
-            }),
+            p("chorus", "chorusRingFrequencyHz", "Ring Frequency", "Freq", 10, 20_000, 28, { unit: "Hz", scale: "log", modulationTargetIndex: 17, modulationApplication: "semitones" }),
             outputTrimParameter("chorus", "chorusOutputTrimDb", 42),
         ],
     },
@@ -335,20 +329,6 @@ export function allRackParameterDescriptors(): ReadonlyArray<RackParameterDescri
 /** Look up a parameter through the catalog's allocation-free endpoint index. */
 export function getRackParameterDescriptor(endpointID: string): RackParameterDescriptor | null {
     return RACK_PARAMETER_BY_ENDPOINT_ID.get(endpointID) ?? null;
-}
-
-/** Persisted modulation identity; may deliberately differ from the presented base endpoint. */
-export function rackModulationIdentityEndpointID(descriptor: RackParameterDescriptor): string {
-    return descriptor.modulationIdentityEndpointID ?? descriptor.endpointID;
-}
-
-/** Resolve either a current endpoint or an append-only modulation identity. */
-export function getRackParameterDescriptorForModulationEndpoint(
-    endpointID: string,
-): RackParameterDescriptor | null {
-    return RACK_PARAMETER_DESCRIPTORS.find(
-        (descriptor) => rackModulationIdentityEndpointID(descriptor) === endpointID,
-    ) ?? null;
 }
 
 /** Format a raw engine value with the descriptor's unit and scale vocabulary. */

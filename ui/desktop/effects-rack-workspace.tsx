@@ -35,7 +35,6 @@ import {
     formatRackParameterValue,
     getRackEffectDescriptor,
     getRackParameterDescriptor,
-    rackModulationIdentityEndpointID,
     type RackEffectDescriptor,
     type RackParameterDescriptor,
 } from "../shared/rack-parameter-descriptors";
@@ -864,7 +863,7 @@ function useLaneKindResolver(): (descriptor: RackParameterDescriptor) => RackMod
     return useCallback((descriptor: RackParameterDescriptor) => (
         laneKindForDevice(
             laneDeviceIdForDescriptor(selectedDeviceId, descriptor),
-            rackModulationIdentityEndpointID(descriptor),
+            descriptor.endpointID,
         )
     ), [selectedDeviceId]);
 }
@@ -5054,7 +5053,7 @@ export function EffectsRackWorkspace({
     const kindForDescriptor = useCallback((descriptor: RackParameterDescriptor) => (
         laneKindForDevice(
             laneDeviceIdForDescriptor(selectedDeviceId, descriptor),
-            rackModulationIdentityEndpointID(descriptor),
+            descriptor.endpointID,
         )
     ), [selectedDeviceId]);
     const selectedTargetKind = kindForDescriptor(selectedTarget);

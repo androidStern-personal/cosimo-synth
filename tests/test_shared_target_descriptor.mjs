@@ -132,9 +132,7 @@ test("every rack target is bound to its real Cmajor endpoint", async () => {
             descriptor.modulationTargetKind,
             parameter.modulationTargetIndex === null
                 ? null
-                : (await import("../patch_gui/modulation-targets.js")).laneBaseKindForRackEndpoint(
-                    rackCatalog.rackModulationIdentityEndpointID(parameter),
-                ),
+                : (await import("../patch_gui/modulation-targets.js")).laneBaseKindForRackEndpoint(parameter.endpointID),
             parameter.endpointID,
         );
         assert.ok(Math.abs(descriptor.binding.toEngine(descriptor.initialValue) - parameter.initial) < 1e-6);

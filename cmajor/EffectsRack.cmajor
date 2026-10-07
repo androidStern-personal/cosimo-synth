@@ -257,18 +257,16 @@ namespace wt
     let laneOttParamOutputTrimDb = 5;
 
     // Chorus-type pool slots.
-    let laneChorusParamMix               = 0;
-    let laneChorusParamMotionMode        = 1;
-    let laneChorusParamBloomMode         = 2;
-    let laneChorusParamTone              = 3;
-    let laneChorusParamFeedback          = 4;
-    let laneChorusParamRingAmount        = 5;
-    let laneChorusParamRingOffsetMode    = 6;
-    let laneChorusParamRingFineSemitones = 7;
-    let laneChorusParamRingFrequencyHz = 8;
-    let laneChorusParamRingKeyTrackEnabled = 9;
-    let laneChorusParamRingKeyTrackOffsetSemitones = 10;
-    let laneChorusParamOutputTrimDb = 11;
+    let laneChorusParamMix         = 0;
+    let laneChorusParamMotionMode  = 1;
+    let laneChorusParamBloomMode   = 2;
+    let laneChorusParamTone        = 3;
+    let laneChorusParamFeedback    = 4;
+    let laneChorusParamRingAmount  = 5;
+    let laneChorusParamRingFrequencyHz = 6;
+    let laneChorusParamRingKeyTrackEnabled = 7;
+    let laneChorusParamRingKeyTrackOffsetSemitones = 8;
+    let laneChorusParamOutputTrimDb = 9;
 
     // Flanger-type pool slots.
     let laneFlangerParamRate     = 0;
@@ -331,13 +329,12 @@ namespace wt
         table[wrap<rackModuleCount> (rackModuleOtt), 4] = 128;
         table[wrap<rackModuleCount> (rackModuleOtt), laneOttParamOutputTrimDb] = 64;
         // chorus: mix 128, motion 0, bloom 0, tone 128, feedback 128,
-        // ringAmount 128, ring pitch 0/fine 128, ordinary frequency 128.
+        // ringAmount 128, ring frequency 128.
         table[wrap<rackModuleCount> (rackModuleChorus), 0] = 128;
         table[wrap<rackModuleCount> (rackModuleChorus), 3] = 128;
         table[wrap<rackModuleCount> (rackModuleChorus), 4] = 128;
         table[wrap<rackModuleCount> (rackModuleChorus), 5] = 128;
-        table[wrap<rackModuleCount> (rackModuleChorus), 7] = 128;
-        table[wrap<rackModuleCount> (rackModuleChorus), 8] = 128;
+        table[wrap<rackModuleCount> (rackModuleChorus), laneChorusParamRingFrequencyHz] = 128;
         table[wrap<rackModuleCount> (rackModuleChorus), laneChorusParamOutputTrimDb] = 64;
         // flanger: rate 64, depth 64, feedback 64, mix 128
         table[wrap<rackModuleCount> (rackModuleFlanger), 0] = 64;
@@ -1581,9 +1578,7 @@ namespace wt
                     chorusPool[ordinal].ringKeyTrackEnabledIn <- pp[laneChorusParamRingKeyTrackEnabled];
                     chorusPool[ordinal].ringKeyTrackOffsetSemitonesIn <- pp[laneChorusParamRingKeyTrackOffsetSemitones];
                     chorusPool[ordinal].ringRouteOffsetSemitonesIn <-
-                        rackModIn[wrap<rackModTargetCount> (laneBase + rackModTargetChorusRingFineSemitones)];
-                    chorusPool[ordinal].ringOffsetModeIn <- pp[laneChorusParamRingOffsetMode];
-                    chorusPool[ordinal].ringFineSemitonesIn <- pp[laneChorusParamRingFineSemitones];
+                        rackModIn[wrap<rackModTargetCount> (laneBase + rackModTargetChorusRingFrequencySemitones)];
                     chorusPool[ordinal].trackingPitchHzIn <- trackingPitchHzIn;
                 }
 

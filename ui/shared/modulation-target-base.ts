@@ -15,7 +15,7 @@
  */
 
 import {
-    allRackParameterDescriptors,
+    getRackParameterDescriptor,
     type RackParameterDescriptor,
 } from "./rack-parameter-descriptors";
 import { laneMirrorRackKind, parseLaneModulationTargetKind } from "./lane-modulation-targets";
@@ -258,17 +258,6 @@ export function keyTrackModulationTargetBasePresentation(
     };
 }
 
-const rackDescriptorsByEndpoint: ReadonlyMap<string, RackParameterDescriptor> = new Map(
-    allRackParameterDescriptors().flatMap((descriptor: RackParameterDescriptor) => [
-        [descriptor.endpointID, descriptor] as const,
-        ...(
-            descriptor.modulationIdentityEndpointID === undefined
-                ? []
-                : [[descriptor.modulationIdentityEndpointID, descriptor] as const]
-        ),
-    ]),
-);
-
 const voiceControlByParameterKind: ReadonlyMap<OscillatorModulationParameterKind, MobileVoiceBindableControlID> = new Map(
     MOBILE_VOICE_PAGES.flatMap((page) => page.cells)
         .flatMap((controlID) => {
@@ -340,8 +329,8 @@ export function resolveModulationTargetBase(targetKind: ModulationTargetKind): M
         // CONTRACT (endpoint, spec, labels) is the type's. Which slot a
         // binding edits comes from the deviceId its caller threads through
         // useLaneOrHostParameterBinding.
-        const descriptor = rackDescriptorsByEndpoint.get(parsedLane.endpointID);
-        if (descriptor === undefined) {
+        const descriptor = getRackParameterDescriptor(parsedLane.endpointID);
+        if (descriptor === null) {
             throw new Error(`Rack modulation target "${targetKind}" has no rack descriptor.`);
         }
         const entrySpec = parameterEntrySpecForRackParameter(descriptor, descriptor.initial);

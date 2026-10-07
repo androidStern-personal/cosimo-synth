@@ -30,7 +30,6 @@ import {
 } from "./modulation-targets";
 import {
     RACK_EFFECT_DESCRIPTORS,
-    rackModulationIdentityEndpointID,
     type RackParameterDescriptor,
 } from "./rack-parameter-descriptors";
 import { casesHandled, err, ok, shouldNeverHappen, type Result } from "./result";
@@ -694,7 +693,7 @@ function createRackTargetDescriptor(parameter: RackParameterDescriptor): TargetD
         articulationParameterId: null,
         modulationTargetKind: parameter.modulationTargetIndex === null
             ? null
-            : laneBaseKindForRackEndpoint(rackModulationIdentityEndpointID(parameter)),
+            : laneBaseKindForRackEndpoint(parameter.endpointID),
     });
 }
 

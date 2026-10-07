@@ -424,8 +424,6 @@ function branchTailLaneDocJson(groupKind) {
             "chorus#1": {
                 params: {
                     ...params.chorus,
-                    chorusRingOffsetMode: 0,
-                    chorusRingFineSemitones: 0,
                     chorusRingKeyTrackEnabled: 0,
                     chorusRingKeyTrackOffsetSemitones: 0,
                 },

@@ -6,7 +6,6 @@ import {
 } from "./lane-modulation-targets";
 import {
     allRackParameterDescriptors,
-    rackModulationIdentityEndpointID,
     type RackParameterDescriptor,
 } from "./rack-parameter-descriptors";
 import {
@@ -154,7 +153,7 @@ const RACK_MODULATION_PARAMETERS = allRackParameterDescriptors()
     .filter((parameter) => parameter.modulationTargetIndex !== null);
 const RACK_MODULATION_PARAMETER_BY_KIND = new Map<RackModulationTargetKind, RackParameterDescriptor>(
     RACK_MODULATION_PARAMETERS.map((parameter) => [
-        laneBaseKindForRackEndpoint(rackModulationIdentityEndpointID(parameter)),
+        laneBaseKindForRackEndpoint(parameter.endpointID),
         parameter,
     ]),
 );

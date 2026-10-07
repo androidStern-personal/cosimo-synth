@@ -98,7 +98,7 @@ test("every device type's every pool endpoint parses, mirrors a real rack target
         globalFilter: ["globalFilterCutoff", "globalFilterResonance", "globalFilterDrive"],
         distortion: ["distortionDriveDb", "distortionKnee", "distortionWet", "distortionWetHPHz", "distortionWetLPHz"],
         ott: ["ottMix", "ottAmount", "ottTimePercent", "ottBandDrive", "ottEnvelopeMatch"],
-        chorus: ["chorusMix", "chorusTone", "chorusFeedback", "chorusRingAmount", "chorusRingFineSemitones"],
+        chorus: ["chorusMix", "chorusTone", "chorusFeedback", "chorusRingAmount", "chorusRingFrequencyHz"],
         flanger: ["flangerRate", "flangerDepth", "flangerFeedback", "flangerMix", "flangerBaseDelayMs"],
         phaser: ["phaserRate", "phaserDepth", "phaserFrequency", "phaserFeedback", "phaserPhase", "phaserMix"],
         delay: ["delayTime", "delayFeedback", "delayFilter", "delayMix"],

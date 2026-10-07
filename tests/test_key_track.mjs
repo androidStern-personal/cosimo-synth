@@ -213,20 +213,20 @@ test("Voice Enhancer Ratio is the exact continuous 0.5x to 32x view of semitone 
     }
 });
 
-test("lane records append Key Track fields without moving deployed parameter indexes", async () => {
+test("lane records place each parameter, Key Track fields included, at its wire index", async () => {
     const slots = await loadUIModule(repoRoot, "ui/shared/lane-slot-params.ts");
 
     assert.equal(slots.getLaneSlotParamIndex("globalFilter", "globalFilterCutoff"), 1);
     assert.equal(slots.getLaneSlotParamIndex("distortion", "distortionWetHPHz"), 4);
     assert.equal(slots.getLaneSlotParamIndex("distortion", "distortionWetLPHz"), 5);
-    assert.equal(slots.getLaneSlotParamIndex("chorus", "chorusRingFineSemitones"), 7);
+    assert.equal(slots.getLaneSlotParamIndex("chorus", "chorusRingAmount"), 5);
     assert.equal(slots.getLaneSlotParamIndex("flanger", "flangerRate"), 0);
     assert.equal(slots.getLaneSlotParamIndex("phaser", "phaserFrequency"), 4);
     assert.equal(slots.getLaneSlotParamIndex("delay", "delayTime"), 0);
     assert.equal(slots.getLaneSlotParamIndex("delay", "delayFilter"), 2);
 
     assert.equal(slots.getLaneSlotParamIndex("globalFilter", "globalFilterCutoffKeyTrackEnabled"), 4);
-    assert.equal(slots.getLaneSlotParamIndex("chorus", "chorusRingFrequencyHz"), 8);
+    assert.equal(slots.getLaneSlotParamIndex("chorus", "chorusRingFrequencyHz"), 6);
     assert.equal(slots.getLaneSlotParamIndex("flanger", "flangerBaseDelayMs"), 4);
     assert.equal(slots.getLaneSlotParamIndex("delay", "delayFilterKeyTrackOffsetSemitones"), 9);
     assert.equal(slots.LANE_SLOT_PARAM_COUNT, 12);
@@ -266,32 +266,6 @@ test("incomplete pre-Key-Track lane records are rejected instead of default-fill
     assert.equal(parsed._tag, "err");
 });
 
-test("incomplete legacy Chorus Ring lane records are rejected", async () => {
-    const lane = await loadUIModule(repoRoot, "ui/shared/lane-state-v2.ts");
-    const legacy = {
-        format: "cosimo.lane",
-        version: 2,
-        output: { mix: 1, bypassed: false },
-        devices: {
-            "chorus#1": { params: {
-                chorusMix: 0.5,
-                chorusMotionMode: 1,
-                chorusBloomMode: 0,
-                chorusTone: 0.5,
-                chorusFeedback: 0.42,
-                chorusRingAmount: 0.8,
-                chorusRingOffsetMode: 1,
-                chorusRingFineSemitones: 0.75,
-                chorusOutputTrimDb: 0,
-            } },
-        },
-        chain: [{ kind: "device", deviceId: "chorus#1", enabled: true }],
-    };
-
-    const parsed = lane.parseLaneStateV2(legacy);
-    assert.equal(parsed._tag, "err");
-});
-
 test("a complete Chorus record parses, and one carrying a ring clamp switch is rejected", async () => {
     const lane = await loadUIModule(repoRoot, "ui/shared/lane-state-v2.ts");
     const completeParams = {
@@ -301,8 +275,6 @@ test("a complete Chorus record parses, and one carrying a ring clamp switch is r
         chorusTone: 0.5,
         chorusFeedback: 0.42,
         chorusRingAmount: 0,
-        chorusRingOffsetMode: 0,
-        chorusRingFineSemitones: 0,
         chorusRingFrequencyHz: 28,
         chorusRingKeyTrackEnabled: 1,
         chorusRingKeyTrackOffsetSemitones: 7,

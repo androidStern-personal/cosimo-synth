@@ -1,6 +1,5 @@
 import {
     allRackParameterDescriptors,
-    rackModulationIdentityEndpointID,
     type RackParameterDescriptor,
 } from "./rack-parameter-descriptors";
 
@@ -199,7 +198,7 @@ export function maybeLaneBaseKindForRackEndpoint(endpointID: string): RackModula
 
 const rackModulationTargetIdentities: ModulationTargetIdentity[] = [
     ...rackModulationParameters.map((parameter): ModulationTargetIdentity => ({
-        kind: laneBaseKindForRackEndpoint(rackModulationIdentityEndpointID(parameter)),
+        kind: laneBaseKindForRackEndpoint(parameter.endpointID),
         group: "rack",
         runtimeIndex: parameter.modulationTargetIndex,
     })),
