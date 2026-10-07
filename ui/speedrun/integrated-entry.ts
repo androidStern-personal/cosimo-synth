@@ -8,7 +8,7 @@ import { SPEEDRUN_MAX_DURATION_IN_FRAMES } from "./timeline";
 import { loadSpeedrunStudioRuntime } from "./studio/runtime";
 
 // Load-bearing re-exports: performance/render iframes import THIS bundle by
-// URL and destructure these entry points from it (see the srcdoc bootstraps
+// URL and destructure these entry points from it (see the frame bootstraps
 // in live/live-session.ts and scripted/iframe-renderer.ts). Do not remove.
 export { runLivePerformanceInCurrentDocument } from "./live/live-performance";
 export { renderScriptedVideoInCurrentDocument } from "./scripted/iframe-renderer";

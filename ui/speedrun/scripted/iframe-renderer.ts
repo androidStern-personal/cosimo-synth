@@ -11,6 +11,7 @@ import {
     SPEEDRUN_VIDEO_WIDTH,
 } from "../stage";
 import type { SpeedrunVideoFormat } from "../studio/video-support";
+import { writeFrameDocument } from "../frame-document";
 import { ScriptedCaptureTimeController } from "./capture-time";
 import {
     prepareScriptedCaptureEnvironment,
@@ -153,7 +154,7 @@ async function awaitDocumentStyles() {
 export async function renderScriptedVideoInCurrentDocument(
     request: ScriptedRenderRequest,
 ): Promise<ScriptedRenderResult> {
-    // The iframe path shadows web storage entirely (see the srcdoc bootstrap);
+    // The iframe path shadows web storage entirely (see frame-document.ts);
     // this remains for the direct-document path the test fixtures use, so a
     // stale shell state can never leak into a capture.
     sessionStorage.removeItem(WORKSPACE_SHELL_STORAGE_KEY);
@@ -300,7 +301,7 @@ function waitForIframeRuntime(iframe: HTMLIFrameElement, signal: AbortSignal | u
 }
 
 /**
- * Rejections from the srcdoc realm carry that realm's Error/DOMException
+ * Rejections from the iframe realm carry that realm's Error/DOMException
  * constructors, so the parent's instanceof-based classification (cancel
  * detection, message preservation in studioError) silently fails on them.
  * Rebuild the error with parent-realm identity — the same treatment the
@@ -358,35 +359,16 @@ export async function renderScriptedVideoInIframe(
     const bundledStyle = new RegExp(`/${VIDEO_BOUNCE_BUNDLE_FILE.replace(".", "\\.")}(?:[?#]|$)`, "u").test(moduleURL)
         ? `<link rel="stylesheet" href=${JSON.stringify(new URL(`./${VIDEO_BOUNCE_STYLE_FILE}`, moduleURL).href)}>`
         : "";
-    iframe.srcdoc = `<!doctype html>
-<html><head><meta charset="utf-8">${bundledStyle}
-<style>html,body{margin:0;width:393px;height:852px;overflow:visible;background:#07080c}</style></head>
-<body><script type="module">
-// A same-origin srcdoc iframe shares the parent's web storage. Shadow both
-// stores with in-memory stubs BEFORE product code loads, so a stale shell or
-// rail-dock state cannot leak into the capture and the scripted navigation
-// cannot pollute the user's real session.
-for (const storageName of ["sessionStorage", "localStorage"]) {
-    const entries = new Map();
-    Object.defineProperty(window, storageName, {
-        configurable: true,
-        value: {
-            get length() { return entries.size; },
-            key: (index) => [...entries.keys()][index] ?? null,
-            getItem: (key) => (entries.has(String(key)) ? entries.get(String(key)) : null),
-            setItem: (key, value) => { entries.set(String(key), String(value)); },
-            removeItem: (key) => { entries.delete(String(key)); },
-            clear: () => { entries.clear(); },
-        },
-    });
-}
-import(${JSON.stringify(moduleURL)}).then(({ renderScriptedVideoInCurrentDocument }) => {
+    document.body.append(iframe);
+    writeFrameDocument(iframe, {
+        head: `${bundledStyle}
+<style>html,body{margin:0;width:393px;height:852px;overflow:visible;background:#07080c}</style>`,
+        moduleScript: `import(${JSON.stringify(moduleURL)}).then(({ renderScriptedVideoInCurrentDocument }) => {
     window.__COSIMO_SCRIPTED_IFRAME__ = { render: renderScriptedVideoInCurrentDocument };
 }).catch((error) => {
     window.__COSIMO_SCRIPTED_IFRAME_ERROR__ = error?.stack || error?.message || String(error);
-});
-</script></body></html>`;
-    document.body.append(iframe);
+});`,
+    });
 
     try {
         const runtime = await waitForIframeRuntime(iframe, request.signal);
