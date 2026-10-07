@@ -87,7 +87,7 @@ slot also resets deterministically.
 
 ## Evidence boundary
 
-The original T27 extraction, numeric fixtures, retained audio corpus, renders,
+The original extraction, numeric fixtures, retained audio corpus, renders,
 and measurements remain in `reference_labs/polish_comp_clip/`. They preserve
 four distinct kinds of evidence:
 

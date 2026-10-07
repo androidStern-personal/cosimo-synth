@@ -263,7 +263,7 @@
     text-align: right;
 }
 
-/* T28: the lane terminates at one visible, immutable boundary. This is a
+/* The lane terminates at one visible, immutable boundary. This is a
    selector only—there are deliberately no drag, menu, power, or add affordances. */
 .rack-polish-boundary {
     position: relative;

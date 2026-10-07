@@ -2272,7 +2272,7 @@ test("generated product renders oscillator A, B, and C independently", async (t)
     }
 });
 
-test("generated preset-bar Init starts clean after the pre-Type saved-sound version cutoff", async (t) => {
+test("generated preset-bar Init starts clean when the saved state has another version, discarding it whole", async (t) => {
     const page = await browser.newPage({ ...devices["iPhone 13"] });
     const defaultRack = createDefaultLaneStateV2();
     const preTypeRack = {
@@ -2418,7 +2418,7 @@ test("generated preset-bar Init starts clean after the pre-Type saved-sound vers
     }
 });
 
-test("generated product preserves explicit version-5 oscillator enable and level values", async () => {
+test("generated product keeps explicit oscillator enable and level values across a reload", async () => {
     const explicitOscillatorState = {
         oscAVolumeDb: -3.25,
         oscBVolumeDb: -12.5,

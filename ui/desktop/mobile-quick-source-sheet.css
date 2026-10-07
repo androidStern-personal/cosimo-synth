@@ -1,5 +1,5 @@
 /*
- * T13 quick-editor sheet. Non-modal bottom sheet over the Voice/FX workspace:
+ * Quick-editor sheet. Non-modal bottom sheet over the Voice/FX workspace:
  * below the Mod rail (z 60) and the HUD/toast layer (z 70), above the page.
  * It is a DRAWER: it slides up from the live keyboard inset, so keyboard
  * resizing preserves both surfaces instead of covering either one. The strip
@@ -27,8 +27,7 @@
     }
 
     /* One compact top row: the whole row is the grab rail; the title and
-       the two actions ride it (T13 feedback: chrome must not dwarf the
-       graphic). */
+       the two actions ride it, so the chrome never dwarfs the graphic. */
     .quick-source-sheet-top {
         display: flex;
         height: 34px;
