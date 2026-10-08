@@ -1,5 +1,13 @@
+// Every function the host supplies to the synth's Cmajor code. The desktop,
+// iPhone and browser hosts bind these names to native code (see
+// native/three_oscillator_renderer/RendererExternalFunctionProvider.h).
+// `cmaj test` has no native provider, so Cmajor tests include
+// tests/cmajor_support/ThreeOscillatorRendererTestHost.cmajor and a renderer
+// seam from tests/cmajor_rack instead of this file.
 namespace CosimoThreeOscillatorRenderer
 {
+    external int32 sharedMsegSerial (int32 inputIndex, int32 dspSession);
+    external float32 sampleSharedMseg (int32 inputIndex, int32 dspSession, int32 deliveryToken, float32 position);
     external int32 updateSharedTables (int32 dspSession, int32[] packedInts);
     external int32 renderShared (float32[] packedFloats, int32[] packedInts);
     external int32 renderAll (float32[] packedFloats,

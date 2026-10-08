@@ -3,7 +3,7 @@
 // RackModulationProducer.cmajtest; this file deliberately contains no shadow
 // reducer implementation.
 
-## global ("../../cmajor/KeyTrack.cmajor", "../../cmajor/Mseg.cmajor", "../../cmajor/VoiceEnhancer.cmajor", "../../cmajor/FixedFrameOscillator.cmajor", "../../cmajor/VoiceReducer.cmajor")
+## global ("../cmajor_support/ThreeOscillatorRendererTestHost.cmajor", "../../cmajor/KeyTrack.cmajor", "../../cmajor/Mseg.cmajor", "../../cmajor/VoiceEnhancer.cmajor", "../../cmajor/FixedFrameOscillator.cmajor", "../../cmajor/VoiceReducer.cmajor")
 
 ## testFunction()
 

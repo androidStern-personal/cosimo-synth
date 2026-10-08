@@ -1,0 +1,42 @@
+// Stands in for the host's shared-data functions under `cmaj test`.
+//
+// In the product these functions are declared `external` in
+// cmajor/ThreeOscillatorRendererExternal.cmajor and the desktop, iPhone and
+// browser hosts supply them natively
+// (native/three_oscillator_renderer/RendererExternalFunctionProvider.h).
+// `cmaj test` has no native provider, so test sources include this file
+// instead of the external declarations.
+//
+// Each function returns exactly what the native host returns when no shared
+// wavetable or MSEG allocation has been published for the session, which is
+// the state every Cmajor test runs in: the tests upload wavetables and MSEG
+// curves through the patch's own events, not through shared memory.
+//
+// renderAll is not here: tests that render audio choose their own renderer
+// seam (tests/cmajor_rack/NoopThreeOscillatorRenderer.cmajor or
+// ConstantThreeOscillatorRenderer.cmajor).
+namespace CosimoThreeOscillatorRenderer
+{
+    // No shared wavetable has changed: the bitmask of updated oscillators is
+    // empty and packedInts is left untouched.
+    int32 updateSharedTables (int32 dspSession, int32[] packedInts)
+    {
+        return 0;
+    }
+
+    // Serial 0 means "no shared curve delivered". SharedVoiceEngine only adopts
+    // a curve whose serial is one past its last accepted modulation serial,
+    // which is never 0, so no shared MSEG is ever installed.
+    int32 sharedMsegSerial (int32 inputIndex, int32 dspSession)
+    {
+        return 0;
+    }
+
+    // The native host answers 0.5, the curve's neutral midpoint, whenever the
+    // delivery token does not name a live shared curve. With sharedMsegSerial
+    // always 0 no token can name one, so 0.5 is the only answer it would give.
+    float32 sampleSharedMseg (int32 inputIndex, int32 dspSession, int32 deliveryToken, float32 position)
+    {
+        return 0.5f;
+    }
+}

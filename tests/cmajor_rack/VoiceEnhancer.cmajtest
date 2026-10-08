@@ -2,7 +2,7 @@
 // production SharedVoiceEngine seam so the assertion includes its required
 // post-filter, pre-Amp-Envelope placement rather than only a DSP helper.
 
-## global ("../../cmajor/KeyTrack.cmajor", "../../cmajor/Mseg.cmajor", "../../cmajor/VoiceEnhancer.cmajor", "../../cmajor/FixedFrameOscillator.cmajor", "../../cmajor/VoiceReducer.cmajor", "ConstantThreeOscillatorRenderer.cmajor")
+## global ("../cmajor_support/ThreeOscillatorRendererTestHost.cmajor", "../../cmajor/KeyTrack.cmajor", "../../cmajor/Mseg.cmajor", "../../cmajor/VoiceEnhancer.cmajor", "../../cmajor/FixedFrameOscillator.cmajor", "../../cmajor/VoiceReducer.cmajor", "ConstantThreeOscillatorRenderer.cmajor")
 
 ## testProcessor (undefined, { frequency: 600 })
 
