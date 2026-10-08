@@ -369,6 +369,14 @@ void CmajorBounceOfflinePerformer::process (float* left,
     patch->process (channels, frameCount, [] (std::uint32_t, choc::midi::MessageView) {});
 }
 
+std::uint32_t CmajorBounceOfflinePerformer::outputLatencyFrames() const
+{
+    // The latency the loaded patch declares, the same figure a plugin host is given.
+    if (patch == nullptr)
+        throw std::logic_error ("Native Bounce latency is unknown before initialise");
+    return static_cast<std::uint32_t> (std::lround (patch->getFramesLatency()));
+}
+
 std::size_t CmajorBounceOfflinePerformer::residentBytes() const noexcept
 {
     return configuration.performerResidentBytesEstimate;
