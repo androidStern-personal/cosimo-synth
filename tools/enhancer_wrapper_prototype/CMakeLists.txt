@@ -5,7 +5,7 @@ project(CosimoT26EnhancerWrapperProbe LANGUAGES CXX OBJCXX)
 get_filename_component(COSIMO_REPO_ROOT "${CMAKE_CURRENT_LIST_DIR}/../.." ABSOLUTE)
 include("${COSIMO_REPO_ROOT}/kit/cmake/dependencies.cmake")
 
-# The T26 research probe builds against JUCE 7, not the kit's pinned JUCE.
+# The Enhancer wrapper research probe builds against JUCE 7, not the kit's pinned JUCE.
 CPMAddPackage(
     NAME cosimo_t26_juce
     GIT_REPOSITORY "${BUILDER_KIT_JUCE_GIT_URL}"
@@ -16,7 +16,7 @@ CPMAddPackage(
 set(COSIMO_T26_JUCE_SOURCE_DIR "${cosimo_t26_juce_SOURCE_DIR}")
 
 set(COSIMO_T26_PROBE_OUTPUT_DIR "${CMAKE_BINARY_DIR}/direct" CACHE PATH
-    "Destination for the T26 research probe")
+    "Destination for the Enhancer wrapper research probe")
 
 add_executable(enhancer_wrapper_probe
     "${COSIMO_T26_JUCE_SOURCE_DIR}/modules/juce_core/juce_core.mm"
