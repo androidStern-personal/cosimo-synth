@@ -822,6 +822,9 @@ function normalizeModulationState(value = createDefaultModulationState()) {
     )
   };
 }
+function modulationStatesEqual(left, right) {
+  return left === right || canonicalJsonValuesEqual(left, right);
+}
 function serializeModulationState(state) {
   const parsedState = parseModulationState(state);
   if (parsedState._tag === "err") {
@@ -953,6 +956,7 @@ export {
   isRackModulationTarget,
   isVoiceModulationSource,
   modulationRoutePairKey,
+  modulationStatesEqual,
   normalizeEnvelope,
   normalizeEnvelopeSlot,
   normalizeMacroName,

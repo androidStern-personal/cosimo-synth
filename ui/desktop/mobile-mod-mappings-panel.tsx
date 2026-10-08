@@ -15,6 +15,7 @@
  */
 
 import {
+    memo,
     useCallback,
     useEffect,
     useMemo,
@@ -249,7 +250,7 @@ function MappingAmountOnlyControl({
     );
 }
 
-function MappingRow({
+function MappingRowView({
     route,
     routeIndex,
     isJustCreated,
@@ -553,6 +554,29 @@ function MappingRow({
     );
 }
 
+/** Mapping routes are frozen records of primitive fields, so equal fields render the same row. */
+function sameRouteRecord(left: ModulationRoute, right: ModulationRoute): boolean {
+    if (left === right) return true;
+    const entries = Object.entries(left);
+    return entries.length === Object.keys(right).length
+        && entries.every(([key, value]) => Object.hasOwn(right, key) && Object.is(value, Reflect.get(right, key)));
+}
+
+/**
+ * Undo, Redo and preset recall replace the whole parsed document, so every
+ * route arrives as a new object even when only one mapping changed. A row
+ * renders again only when its own route or its own props change.
+ */
+const MappingRow = memo(MappingRowView, (previous, next) => {
+    const previousEntries = Object.entries(previous);
+    return previousEntries.length === Object.keys(next).length
+        && previousEntries.every(([key, value]) => (
+            key === "route"
+                ? sameRouteRecord(previous.route, next.route)
+                : Object.hasOwn(next, key) && Object.is(value, Reflect.get(next, key))
+        ));
+});
+
 /* ------------------------------------------------------------------ */
 /* LED readout                                                          */
 /* ------------------------------------------------------------------ */
@@ -631,7 +655,7 @@ function MappingLedCell({ cell, api, baseValue, rolePrefix }: {
 /* Panel                                                                */
 /* ------------------------------------------------------------------ */
 
-export function MobileModMappingsPanel({
+function MobileModMappingsPanelView({
     routes,
     recentConfirmedRouteId,
     hudContainer,
@@ -1035,3 +1059,6 @@ export function MobileModMappingsPanel({
         </section>
     );
 }
+
+/** The table re-renders for its own routes and props, not for every render of the patch view around it. */
+export const MobileModMappingsPanel = memo(MobileModMappingsPanelView);

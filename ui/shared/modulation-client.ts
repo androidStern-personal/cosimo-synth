@@ -3,7 +3,7 @@ import type { PluginStateStored } from "../../kit/ui/plugin-state-definition";
 import { captureUserEditReporter } from "./user-edit-bus";
 import {
     MODULATION_MSEG_SLOT_COUNT, MODULATION_STATE_KEY, clampModulationRouteAmount,
-    normalizeRoute, normalizeRoutes, normalizeEnvelopeSlot, createDefaultRoute, createAvailableGeneratedRouteId, createDefaultModulationState,
+    normalizeRoute, normalizeRoutes, normalizeEnvelopeSlot, createDefaultRoute, createAvailableGeneratedRouteId, createDefaultModulationState, modulationStatesEqual,
     type ModulationState, type ModulationStateChangeKind, type GeneratedModulationRouteInput,
 } from "./modulation";
 import {
@@ -44,13 +44,11 @@ export function createModulationStateClient(client: StateClient) {
     const isReady = () => !stopped && field()?.readiness.kind === "ready";
     const emit = (kind: ModulationStateChangeKind) => { for (const listener of listeners) listener(getState(), kind); };
     const getRouteAmount = (id: string): number | null => getState()?.routes.find(route => route.id === id)?.amount ?? null;
-    const projection = () => {
-        const state = getState();
-        return {
-            value: JSON.stringify(state),
-            ready: isReady(),
-        };
-    };
+    const projection = () => ({ value: getState(), ready: isReady() });
+    // Parsed banks compare as canonical trees; neither is encoded to compare it.
+    const sameBank = (left: ModulationState | null, right: ModulationState | null) => (
+        left === null || right === null ? left === right : modulationStatesEqual(left, right)
+    );
     // Comparison keys and subscribed amounts are derived notification state.
     // Every read and edit above still obtains the bank from the shared client.
     let previousProjection = projection();
@@ -64,7 +62,7 @@ export function createModulationStateClient(client: StateClient) {
         const scope = currentScope();
         if (scope !== observedScope) { gesture = undefined; observedScope = scope; }
         const next = projection();
-        if (next.value === previousProjection.value && next.ready === previousProjection.ready) return;
+        if (sameBank(next.value, previousProjection.value) && next.ready === previousProjection.ready) return;
         const kind = next.ready === previousProjection.ready ? submissionKind : "general";
         submissionKind = "general";
         previousProjection = next;

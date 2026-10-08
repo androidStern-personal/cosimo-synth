@@ -958,6 +958,11 @@ export function normalizeModulationState(value: unknown = createDefaultModulatio
     };
 }
 
+/** Two parsed documents are equal when their canonical JSON trees are; neither is parsed again. */
+export function modulationStatesEqual(left: ModulationState, right: ModulationState): boolean {
+    return left === right || canonicalJsonValuesEqual(left, right);
+}
+
 export function serializeModulationState(state: ModulationState) {
     const parsedState = parseModulationState(state);
     if (parsedState._tag === "err") {

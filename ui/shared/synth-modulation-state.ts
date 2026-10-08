@@ -1,5 +1,5 @@
 import type { PluginStateCodec } from "../../kit/index";
-import { parseModulationState, serializeModulationState, type ModulationState } from "./modulation";
+import { modulationStatesEqual, parseModulationState, serializeModulationState, type ModulationState } from "./modulation";
 
 // The strict parser builds fresh JSON records. Freeze that owned tree so callers
 // cannot mutate either the current value or a value retained by shared history.
@@ -18,5 +18,5 @@ export const modulationStateCodec: PluginStateCodec<ModulationState> = {
         return { kind: "ok", value: parsed.value };
     },
     encode: serializeModulationState,
-    equals: (left, right) => serializeModulationState(left) === serializeModulationState(right),
+    equals: modulationStatesEqual,
 };

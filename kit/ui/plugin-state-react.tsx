@@ -276,6 +276,32 @@ function sameControlSource(left: ControlSource, right: ControlSource): boolean {
             : sameControlDetails(Reflect.get(before, key), Reflect.get(after, key))));
 }
 
+const fieldSources = new WeakMap<Client, Map<string, Atom<ControlSource>>>();
+/**
+ * Select the complete field contract, including private version/retry guards.
+ * Unrelated revisions must neither render a control nor renew its closure.
+ * Every control of one field shares its selection, so an accepted update
+ * selects each field once however many controls show it.
+ */
+function fieldSourceFor(client: Client, key: string): Atom<ControlSource> {
+    let byKey = fieldSources.get(client);
+    if (!byKey) { byKey = new Map(); fieldSources.set(client, byKey); }
+    let selected = byKey.get(key);
+    if (!selected) {
+        selected = selectAtom(
+            client.reactivity.snapshot,
+            (snapshot): ControlSource => snapshot.kind === "ready" ? {
+                kind: "ready", client: snapshot.client, scope: snapshot.state.scope,
+                field: snapshot.state.fields[key], pending: snapshot.pendingFields.includes(key),
+                hasDraft: snapshot.draftFields.includes(key),
+            } : snapshot,
+            sameControlSource,
+        );
+        byKey.set(key, selected);
+    }
+    return selected;
+}
+
 /** Internal adapter seam: absence is explicit; an unready declared field still returns its control. */
 export function useOptionalPluginState<Field extends PluginStateParameter | PluginStateStored<unknown>>(declaration: Field | null): PluginStateControl<PluginStateFieldValue<Field>> | null {
     const context = useContext(Context);
@@ -284,17 +310,7 @@ export function useOptionalPluginState<Field extends PluginStateParameter | Plug
     const projection = client ? projectionFor(client) : null;
     const key = definition && declaration !== null ? Object.keys(definition).find(key => definition[key] === declaration) : undefined;
     if (client && key === undefined) throw new Error("The field does not belong to this plugin state definition.");
-    // Select the complete field contract, including private version/retry guards.
-    // Unrelated revisions must neither render this control nor renew its closure.
-    const selected = useMemo(() => client && key !== undefined ? selectAtom(
-        client.reactivity.snapshot,
-        (snapshot): ControlSource => snapshot.kind === "ready" ? {
-            kind: "ready", client: snapshot.client, scope: snapshot.state.scope,
-            field: snapshot.state.fields[key], pending: snapshot.pendingFields.includes(key),
-            hasDraft: snapshot.draftFields.includes(key),
-        } : snapshot,
-        sameControlSource,
-    ) : null, [client, key]);
+    const selected = client && key !== undefined ? fieldSourceFor(client, key) : null;
     const source = useClientValue(client, selected, connectingClient);
     const state: PluginStateControlState<PluginStateFieldValue<Field>> = (() => {
         if (source.kind === "connecting") return loadingControl;
