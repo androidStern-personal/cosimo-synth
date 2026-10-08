@@ -6,7 +6,8 @@
 //
 // builds (or incrementally refreshes) build/cmajor_command/bin/cmaj, then runs
 // the command with BUILDER_KIT_CMAJ pointing at it. `node` as the command means
-// this Node executable.
+// this Node executable; `cmaj` means the pinned cmaj itself, so a script never
+// picks up whichever cmaj happens to be on PATH.
 
 import { spawnSync } from "node:child_process";
 import os from "node:os";
@@ -54,7 +55,8 @@ if (isMainModule(import.meta.url)) {
         process.exit(1);
     }
 
-    const result = spawnSync(command === "node" ? process.execPath : command, args, { stdio: "inherit", env: withSourceCmaj() });
+    const executables = { node: process.execPath, cmaj: sourceCmajExecutable };
+    const result = spawnSync(executables[command] ?? command, args, { stdio: "inherit", env: withSourceCmaj() });
 
     process.exitCode = result.status ?? 1;
 }
