@@ -47,7 +47,8 @@ import {
 } from "../../ui/shared/parameter-value-entry";
 import { KeyboardDock, ensureKeyboardElement, type PianoKeyboardElement } from "../../ui/desktop/desktop-keyboard-adapter";
 import { PrecisionNumberField } from "../../ui/desktop/desktop-precision-number-field";
-import { NexusNumberField, setNexusNumberConstructorForTests, type NexusNumberWidgetLike } from "../../ui/desktop/desktop-nexus-number-field";
+import Nexus from "nexusui";
+import { NexusNumberField } from "../../ui/desktop/desktop-nexus-number-field";
 import { ArticulationControlSurface, type ArticulationCardView } from "../../ui/desktop/articulation-ui";
 import {
     EditableMsegSurface,
@@ -454,7 +455,7 @@ export async function installNexusNumberFieldHarness(target: HTMLElement) {
     const setValueCalls: number[] = [];
     let externalValueSetter: ((nextValue: number) => void) | null = null;
 
-    class FakeNexusNumber implements NexusNumberWidgetLike {
+    class FakeNexusNumber {
         value: number;
         decimalPlaces = 0;
         colors = {
@@ -521,16 +522,10 @@ export async function installNexusNumberFieldHarness(target: HTMLElement) {
         }
     }
 
-    setNexusNumberConstructorForTests(FakeNexusNumber as unknown as new (
-        host: HTMLDivElement,
-        options: {
-            size: [number, number];
-            value: number;
-            min: number;
-            max: number;
-            step: number;
-        },
-    ) => NexusNumberWidgetLike);
+    // The field creates its widget from the Nexus library; a recording widget
+    // stands in for Nexus.Number until the harness unmounts.
+    const libraryNumber = Nexus.Number;
+    Nexus.Number = FakeNexusNumber as unknown as typeof Nexus.Number;
 
     const mounted = mountHarness(target, (root) => {
         function Harness() {
@@ -620,7 +615,7 @@ export async function installNexusNumberFieldHarness(target: HTMLElement) {
         },
         async unmount() {
             mounted.unmount();
-            setNexusNumberConstructorForTests(null);
+            Nexus.Number = libraryNumber;
             await waitForMicrotask();
         },
     };
