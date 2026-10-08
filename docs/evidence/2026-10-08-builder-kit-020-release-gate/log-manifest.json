@@ -1,0 +1,127 @@
+{
+  "transformations": [
+    "<REPO> replaces the evaluated worktree absolute path",
+    "<HOME> replaces the machine home directory",
+    "<TMP> replaces macOS temporary-directory prefixes",
+    "Repeated inline base64 JavaScript bundles are replaced by their data-URI SHA-256 and character count; stack line/column suffixes are preserved. Authored sources remain available at the evaluated commit.",
+    "gzip compression with mtime=0"
+  ],
+  "logs": [
+    {
+      "file": "logs/dsp-direct-pinned-compiler.log.gz",
+      "source_file": "dsp-direct-pinned-compiler.log",
+      "raw_bytes": 8205,
+      "raw_sha256": "fbebb78997b70e99a9bdd66ae88b88164c4192cc88fc6d311e7b6c3af4558cf7",
+      "sanitized_bytes": 7807,
+      "sanitized_sha256": "701075a7f96e60d04be9d3c19ad8fb542bbd7a4e39f83ae3d7c96d296a54f739",
+      "gzip_bytes": 1179,
+      "gzip_sha256": "6c6663f3efd2432d5ff89d5755bb260bcad3f583df98e506bdfe982ded947844",
+      "omitted_inline_bundles": []
+    },
+    {
+      "file": "logs/native-test-sdk-recheck.log.gz",
+      "source_file": "native-test-sdk-recheck.log",
+      "raw_bytes": 1246,
+      "raw_sha256": "6933b004700bb1544b51879fa375afe38b0a8734d9655a7480103b4252d8a476",
+      "sanitized_bytes": 1246,
+      "sanitized_sha256": "6933b004700bb1544b51879fa375afe38b0a8734d9655a7480103b4252d8a476",
+      "gzip_bytes": 458,
+      "gzip_sha256": "6c07b5841aad5ef3595e8b76457ef46b45c7d1732952b758c37db51feda7ba34",
+      "omitted_inline_bundles": []
+    },
+    {
+      "file": "logs/npm-ci-typecheck-test.log.gz",
+      "source_file": "npm-ci-typecheck-test.log",
+      "raw_bytes": 15005949,
+      "raw_sha256": "6592b52c78e0ad8e43e81de898471a4ee01cdd2f5c146b8dc1f95a80f93e26e8",
+      "sanitized_bytes": 254793,
+      "sanitized_sha256": "a3ef4d2dbc8e834e6e888aa25e5b0acce3b7c85ff3d318cf4359ceb64953bb2f",
+      "gzip_bytes": 38555,
+      "gzip_sha256": "5459d1e7e62586f8f4bc78e4507f29706b56f313e830654db46a9ab881c92f59",
+      "omitted_inline_bundles": [
+        {
+          "sha256": "774044c6a0f231639abbb1f35a528024399ce0366e575b8a5f4e1b59abf8b4bc",
+          "characters": 2458580
+        },
+        {
+          "sha256": "774044c6a0f231639abbb1f35a528024399ce0366e575b8a5f4e1b59abf8b4bc",
+          "characters": 2458580
+        },
+        {
+          "sha256": "774044c6a0f231639abbb1f35a528024399ce0366e575b8a5f4e1b59abf8b4bc",
+          "characters": 2458580
+        },
+        {
+          "sha256": "774044c6a0f231639abbb1f35a528024399ce0366e575b8a5f4e1b59abf8b4bc",
+          "characters": 2458580
+        },
+        {
+          "sha256": "774044c6a0f231639abbb1f35a528024399ce0366e575b8a5f4e1b59abf8b4bc",
+          "characters": 2458580
+        },
+        {
+          "sha256": "774044c6a0f231639abbb1f35a528024399ce0366e575b8a5f4e1b59abf8b4bc",
+          "characters": 2458580
+        }
+      ]
+    },
+    {
+      "file": "logs/npm-test-xcode-sdk.log.gz",
+      "source_file": "npm-test-xcode-sdk.log",
+      "raw_bytes": 15050109,
+      "raw_sha256": "4bb762423ef3686cd742fc49246ad25265ad0d698aff149272fc855d6afb2472",
+      "sanitized_bytes": 299231,
+      "sanitized_sha256": "3b1b3aa1f09743df6399b1e8250c07effe05b91821a04116fffaa1901e941e25",
+      "gzip_bytes": 47364,
+      "gzip_sha256": "cbdcaccdb48209ee6c85258bb74d089ef5db4626bc3f3f02bef88fc56f98ef9b",
+      "omitted_inline_bundles": [
+        {
+          "sha256": "774044c6a0f231639abbb1f35a528024399ce0366e575b8a5f4e1b59abf8b4bc",
+          "characters": 2458580
+        },
+        {
+          "sha256": "774044c6a0f231639abbb1f35a528024399ce0366e575b8a5f4e1b59abf8b4bc",
+          "characters": 2458580
+        },
+        {
+          "sha256": "774044c6a0f231639abbb1f35a528024399ce0366e575b8a5f4e1b59abf8b4bc",
+          "characters": 2458580
+        },
+        {
+          "sha256": "774044c6a0f231639abbb1f35a528024399ce0366e575b8a5f4e1b59abf8b4bc",
+          "characters": 2458580
+        },
+        {
+          "sha256": "774044c6a0f231639abbb1f35a528024399ce0366e575b8a5f4e1b59abf8b4bc",
+          "characters": 2458580
+        },
+        {
+          "sha256": "774044c6a0f231639abbb1f35a528024399ce0366e575b8a5f4e1b59abf8b4bc",
+          "characters": 2458580
+        }
+      ]
+    },
+    {
+      "file": "logs/remaining-test-suites.log.gz",
+      "source_file": "remaining-test-suites.log",
+      "raw_bytes": 69541,
+      "raw_sha256": "7cdd1782680f4c9e1d04da627bab1e71e9d46528d8ad7f85f36e0511d398cfc8",
+      "sanitized_bytes": 69541,
+      "sanitized_sha256": "7cdd1782680f4c9e1d04da627bab1e71e9d46528d8ad7f85f36e0511d398cfc8",
+      "gzip_bytes": 13873,
+      "gzip_sha256": "2f1259f022a4b47dd8660f47091ef8186e3bf4882e6d5050d538c72b01f6b017",
+      "omitted_inline_bundles": []
+    },
+    {
+      "file": "logs/test-dsp.log.gz",
+      "source_file": "test-dsp.log",
+      "raw_bytes": 334,
+      "raw_sha256": "3c48f1f94948b57ddfed63fca4b1e8bdfa0b5ab74263aa211049c9996cefa6d7",
+      "sanitized_bytes": 323,
+      "sanitized_sha256": "3702c199c33bf97389256b7712ced7e24dcac3e9210115dee2299de4e46744bc",
+      "gzip_bytes": 216,
+      "gzip_sha256": "feaea2f5239a141c76f55dae266aec88484bff8ac02d9325907c8608c47edb24",
+      "omitted_inline_bundles": []
+    }
+  ]
+}

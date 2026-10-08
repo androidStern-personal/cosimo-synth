@@ -1,0 +1,35 @@
+Environment captured after the gate; no global configuration was changed.
+$ sw_vers
+ProductName:		macOS
+ProductVersion:		27.0.1
+BuildVersion:		26A434
+$ uname -m
+arm64
+$ node --version
+v22.16.0
+$ npm --version
+11.4.1
+$ cmake --version
+cmake version 4.2.3
+
+CMake suite maintained and supported by Kitware (kitware.com/cmake).
+$ xcodebuild -version
+Xcode 26.5
+Build version 17F5022i
+$ xcode-select -p
+/Applications/Xcode-beta-root.app/Contents/Developer
+$ xcrun --find clang++
+/Applications/Xcode-beta-root.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/clang++
+$ xcrun --find ld
+/Applications/Xcode-beta-root.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/ld
+$ xcrun --show-sdk-path
+/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk
+$ c++ --version
+Apple clang version 21.0.0 (clang-2100.1.1.101)
+Target: arm64-apple-darwin27.0.0
+Thread model: posix
+InstalledDir: /Applications/Xcode-beta-root.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin
+
+Original shell SDKROOT: unset
+Successful shell-only SDKROOT: /Applications/Xcode-beta-root.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk
+Minimal compiler probe failed with the default SDK and passed with the shell-only SDKROOT.
