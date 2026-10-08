@@ -46,8 +46,8 @@ namespace wt
     //
     // ADR-012: "Every continuous creative parameter owned by a rack module is eligible
     // to be a modulation destination, including Mix/Wet." Established identities
-    // remain 0..35; T50 appends Flanger Base Delay and both split crossovers at
-    // 36..38. T78 appends one Output Trim destination per editable effect type at
+    // are append-only: 0..35, then Flanger Base Delay and both split crossovers at
+    // 36..38, then one Output Trim destination per editable effect type at
     // 39..46. Rack order, enabled state and discrete mode selectors are deliberately
     // absent - they are not continuous, and the glossary's "Routable Effect Parameter"
     // excludes them in v1. Hiding a destination from the v1 UI is a UI-surface

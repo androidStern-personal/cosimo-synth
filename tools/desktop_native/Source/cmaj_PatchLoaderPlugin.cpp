@@ -581,7 +581,7 @@ public:
     {
         auto restoredState = juce::ValueTree::readFromData (data, static_cast<size_t> (size));
 
-        // Live may send an empty, non-Cmajor, or pre-T78 state chunk when
+        // Live may send an empty, non-Cmajor, or other-version state chunk when
         // opening the device. Reject the whole document before
         // handing any parameter/stored-state value to the patch.
         if (! isCurrentCompleteSoundState (restoredState))

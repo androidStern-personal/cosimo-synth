@@ -1,4 +1,4 @@
-// T62's per-voice Enhancer is transparent at Amount 0. This exercises the
+// The per-voice Enhancer is transparent at Amount 0. This exercises the
 // production SharedVoiceEngine seam so the assertion includes its required
 // post-filter, pre-Amp-Envelope placement rather than only a DSP helper.
 

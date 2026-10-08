@@ -57,7 +57,7 @@ namespace wt
     // Runtime order matches ui/shared/modulation-targets.ts: ten local targets
     // for each oscillator, the two established shared filter targets, the
     // continuous MSEG/envelope controls, append-only Filter Mix and Global
-    // Tune, the complete Amp Envelope controls, then T62's three append-only
+    // Tune, the complete Amp Envelope controls, then the three append-only
     // per-voice Enhancer destinations.
     let modulationOscillatorTargetCount = 10;
     let modulationVoiceTargetCount = (oscillatorCount * modulationOscillatorTargetCount) + 29;
@@ -1279,7 +1279,7 @@ namespace wt
 
     // Per-note loudness ADSR. Its attack and release equations deliberately
     // match RetriggerableASR: at A=10 ms, D=1 ms, S=1 the gain stream is
-    // sample-identical to every pre-T38 sound, including velocity response.
+    // sample-identical to RetriggerableASR's, including velocity response.
     //
     // The attack starts from zero. That is click-free because the engine
     // never retriggers this envelope while it is audible: a hard retrigger

@@ -547,7 +547,7 @@ namespace wt
         return base + offset;
     }
 
-    // T78 Output Trim is a post-effect dB stage. -100 dB is the UI/host's finite
+    // Output Trim is a post-effect dB stage. -100 dB is the UI/host's finite
     // sentinel for exact digital silence; unlike an ordinary clamp, that endpoint
     // remains silent under positive modulation. Other base values take modulation
     // as a dB offset and clamp before conversion to linear gain.
@@ -674,7 +674,7 @@ namespace wt
         // which keeps the sync divisions meaningful in a standalone render.
         input value float32 tempoBpmIn [[ init: 120.0f ]];
 
-        // T78's only host-parameter exception to Effects Lane record ownership:
+        // The only host-parameter exception to Effects Lane record ownership:
         // one append-only Output Trim identity for every resident effect instance.
         // Type + ordinal is the identity; moving a slot never changes the endpoint.
         input value float32 laneGlobalFilter1OutputTrimDb [[ name: "Global Filter 1 Output Trim", min: -100.0f, max: 35.0f, init: 0.0f, unit: "dB", rampFrames: 64 ]];
@@ -844,7 +844,7 @@ namespace wt
         float32[lanePoolInstanceCount, laneTrackedFrequencyCount] trackedFrequencyHz;
         float32[lanePoolInstanceCount] trackedDelayTimeMs;
         float32[lanePoolInstanceCount] trackedFlangerBaseDelayMs;
-        // T78 Output Trim smoothing stays sparse: only a slot actually walked by
+        // Output Trim smoothing stays sparse: only a slot actually walked by
         // advanceLaneSlot advances its cell. A slot entering the chain snaps on the
         // transition's fully-dry commit frame, then fades in with the topology.
         let effectOutputTrimRampFrames = 64;

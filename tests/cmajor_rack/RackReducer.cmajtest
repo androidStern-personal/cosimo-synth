@@ -30,7 +30,7 @@ bool testCompleteMappingDomainCellCountsArePinned()
 bool testRackDestinationVocabularyIsCompleteAndContiguous()
 {
     // The STATIC vocabulary appends Flanger Base Delay at 36, the two
-    // Frequency Split crossover identities at 37..38, and T78's eight
+    // Frequency Split crossover identities at 37..38, and the eight
     // per-effect Output Trim identities at 39..46.
     // destinations; the Effects Lane pool block follows it on the same bus
     // (M1: delay #2's four destinations), and the bus width is their sum.

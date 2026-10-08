@@ -93,7 +93,7 @@ function percentile(sortedValues, fraction) {
 
 export function processReference(channels, sampleRate, macroValue) {
     if (!Array.isArray(channels) || channels.length !== 2) {
-        throw new Error("The T27 reference renderer requires exactly two channels");
+        throw new Error("The Polish Compression / Clip reference renderer requires exactly two channels");
     }
     if (channels[0].length !== channels[1].length) throw new Error("Reference channels differ in length");
     if (!Number.isFinite(sampleRate) || sampleRate <= 0) throw new Error("Invalid sample rate");

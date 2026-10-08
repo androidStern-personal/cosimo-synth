@@ -6,10 +6,10 @@
 namespace cosimo::complete_sound
 {
 
-/** T78 is a greenfield complete-sound cut; earlier native chunks are invalid. */
+/** The complete-sound document version; a native chunk with any other version is invalid. */
 inline constexpr int version = 2;
 
-/** Every resident per-effect Output Trim host identity required by T78 state. */
+/** Every resident per-effect Output Trim host identity a complete sound requires. */
 inline constexpr std::array<std::string_view, 40> t78EffectOutputTrimParameterIDs {{
     "laneGlobalFilter1OutputTrimDb",
     "laneGlobalFilter2OutputTrimDb",
@@ -53,7 +53,7 @@ inline constexpr std::array<std::string_view, 40> t78EffectOutputTrimParameterID
     "laneReverb5OutputTrimDb",
 }};
 
-/** Apply one caller-owned presence/value predicate to the complete T78 bank. */
+/** Apply one caller-owned presence/value predicate to the complete Output Trim bank. */
 template <typename HasParameter>
 bool hasEveryT78EffectOutputTrimParameter (HasParameter&& hasParameter)
 {

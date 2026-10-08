@@ -364,7 +364,7 @@ static AudioComponentDescription CosimoComponentDescription()
 {
     if (self.instrumentUnit == nil)
     {
-        completion (nil, CosimoMakeError (54, @"Instantiate the AUv3 before qualifying T78 Output Trim parameters."));
+        completion (nil, CosimoMakeError (54, @"Instantiate the AUv3 before qualifying its per-effect Output Trim parameters."));
         return;
     }
 
@@ -372,7 +372,7 @@ static AudioComponentDescription CosimoComponentDescription()
 
     if (identifiers.count != cosimo::complete_sound::t78EffectOutputTrimParameterIDs.size())
     {
-        completion (nil, CosimoMakeError (55, @"Could not materialise the complete canonical T78 Output Trim identifier bank."));
+        completion (nil, CosimoMakeError (55, @"Could not materialise the complete canonical Output Trim identifier bank."));
         return;
     }
 

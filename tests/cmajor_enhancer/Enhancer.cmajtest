@@ -1,5 +1,5 @@
-// Behavioural contract for the isolated production wt::EnhancerBus. T28 owns
-// composition into the final Polish chain; these tests drive T26's real module.
+// Behavioural contract for the isolated production wt::EnhancerBus. Its place
+// in the Polish chain is tested in Polish.cmajtest; these tests drive the module alone.
 
 function requireMeasuredWrapperLatency (relativePath)
 {

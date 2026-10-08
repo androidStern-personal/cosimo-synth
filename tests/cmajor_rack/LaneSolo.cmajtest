@@ -1,4 +1,4 @@
-// T55 branch Solo is a transient runtime overlay: one selected branch per
+// Branch Solo is a transient runtime overlay: one selected branch per
 // group unit, independent across units. It never changes the topology upload.
 // Solo transitions use the rack's existing dry-depth transition so switching
 // does not hard-cut the processed signal or reset branch effect state.

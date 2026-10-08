@@ -1,4 +1,4 @@
-// T78's common post-effect gain law. Full rack dispatch tests remain in the
+// The common post-effect Output Trim gain law. Full rack dispatch tests remain in the
 // lane topology family; these assertions pin the exact silence, dB offset,
 // clamp, bypass, and eight-type target vocabulary at their owner.
 

@@ -248,7 +248,7 @@ for (const artifact of allArtifacts) {
 
 const worstMatch = Math.max(...measurements.map((row) => Math.abs(row.levelMatch.rmsDeltaDb)));
 process.stdout.write(
-    `T27 reference bundle ${mode === "--write" ? "written" : "verified"}: `
+    `Polish Compression / Clip reference bundle ${mode === "--write" ? "written" : "verified"}: `
     + `${artifactRows.length} WAV files, ${measurements.length} comparisons, `
     + `worst RMS match ${worstMatch.toExponential(3)} dB\n`,
 );
