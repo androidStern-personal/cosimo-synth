@@ -7,6 +7,7 @@ import { fileURLToPath } from "node:url";
 
 import { chromium, devices, webkit } from "playwright";
 import { createWebServer } from "../web/server.mjs";
+import { setSoundParameters } from "./helpers/web_synth_sound.mjs";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const webRoot = path.join(repoRoot, "build", "web");
@@ -245,7 +246,7 @@ async function openStartedPage(browserEngine) {
         const host = globalThis.__COSIMO_WEB_POC__?.getSnapshot();
         return host?.phase === "running" && host.hasActiveTable && host.audioWorkletBlockCount >= 256;
     }, null, { timeout: 30_000 });
-    await page.evaluate(() => globalThis.__COSIMO_WEB_POC__.setParameter("macro1", 0.731));
+    await setSoundParameters(page, { macro1: 0.731 });
     await page.waitForFunction(() => {
         const hostValue = globalThis.__COSIMO_WEB_POC__.getSnapshot().parameterValues.macro1;
         const persistedValue = JSON.parse(

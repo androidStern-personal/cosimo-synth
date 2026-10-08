@@ -28,6 +28,8 @@ import {
     createFullDefaultLaneStateV2,
     serializeLaneStateV2,
 } from "../patch_gui/lane-state-v2.js";
+import { installVirtualMidiController, mpePressure, mpeSlide, sendMidi } from "./helpers/virtual_midi_controller.mjs";
+import { pasteSound, setSoundParameters } from "./helpers/web_synth_sound.mjs";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const browserEngine = process.env.COSIMO_WEB_BROWSER ?? "chromium";
@@ -581,11 +583,8 @@ async function measureMappingsWithAdjacentEmpty(
 }
 
 async function applyNeutralMatrixExpressionContract(page) {
-    await page.evaluate(() => {
-        const api = globalThis.__COSIMO_WEB_POC__;
-        api.setMpePressureForTest(100 / 127, 1);
-        api.setMpeSlideForTest(100 / 127, 1);
-    });
+    await sendMidi(page, mpePressure(100 / 127, 1));
+    await sendMidi(page, mpeSlide(100 / 127, 1));
 }
 
 /**
@@ -947,7 +946,6 @@ async function openStartedMobileRackPage({ simulateWebKitZeroTouchButtons = fals
 }
 
 const savedPatchStateKey = "cosimo.web.patch-state.v2";
-const synthPluginId = JSON.parse(await fs.readFile(path.join(repoRoot, "WavetableSynth.cmajorpatch"), "utf8")).ID;
 
 /**
  * A sound as the browser saves it: a fresh synth's saved sound with these
@@ -1091,22 +1089,6 @@ async function setMacroValue(page, slot, value) {
     ), { endpointID: `macro${slot}`, expected: value });
 }
 
-/** Loads a sound with the preset bar's Paste JSON: one recall through the synth's state. */
-async function pasteSound(page, values) {
-    // A compact layout keeps the preset bar inside the Sound actions menu.
-    const presets = page.getByRole("group", { name: "Presets" });
-    const soundActions = page.locator('[data-action="toggle-sound-actions"]');
-    const inMenu = !await presets.isVisible();
-    if (inMenu) await soundActions.click();
-    await presets.getByRole("button", { name: "More", exact: true }).click();
-    await presets.getByRole("button", { name: "Paste JSON", exact: true }).click();
-    await presets.getByLabel("Preset JSON").fill(JSON.stringify({
-        kind: "builder-kit.preset", version: 1, plugin: synthPluginId, name: "Test sound", values,
-    }));
-    await presets.getByRole("button", { name: "Load", exact: true }).click();
-    if (inMenu && await page.locator('[data-role="sound-actions"]').isVisible()) await soundActions.click();
-}
-
 /**
  * Loads mappings, and any parameters with them, as one preset recall. Mappings
  * that compile to the engine's current program install nothing, so the load is
@@ -1161,19 +1143,22 @@ async function closeVoiceEditHistory(page) {
     await page.locator('[data-role="mobile-global-mod-rail"][data-expanded="false"]').waitFor();
 }
 
-/** One articulation on runtime slot 0 that keeps every route's own amount. */
-const inheritingArticulationBank = {
+/**
+ * One articulation on runtime slot 0 that keeps every route's own amount,
+ * played by notes up to velocity 95. Louder notes play without an articulation.
+ */
+const quietNoteArticulationBank = {
     format: "cosimo.articulations",
     version: 4,
     selectedSlotId: "articulation-1",
-    activeTriggerMode: "chain",
+    activeTriggerMode: "vel",
     slots: [{
         id: "articulation-1",
         runtimeSlot: 0,
         name: "Articulation 1",
         color: "#d2a128",
         key: 36,
-        velRange: { min: 1, max: 127 },
+        velRange: { min: 1, max: 95 },
         chainRange: { min: 0, max: 127 },
         overrides: {},
         routeAmounts: {},
@@ -1714,6 +1699,7 @@ test("16 sounding voices sustain 100 mappings, isolated live edits, and the full
     timeout: 360_000,
 }, async (t) => {
     const page = await browser.newPage({ ...devices["iPhone 13"] });
+    await installVirtualMidiController(page);
     const pageFailures = observePageFailures(page);
     const readFilterQ = () => page.evaluate(() => {
         const filter = globalThis.__COSIMO_WEB_POC__.getSnapshot().latestEffectiveFilterState;
@@ -1756,41 +1742,51 @@ test("16 sounding voices sustain 100 mappings, isolated live edits, and the full
         await openSynthOnSavedSound(page, await savedSound({
             parameters: oscillatorParameters({ UnisonVoices: 1, WarpMode: 0 }),
             modulation: mixedHundredMappings,
-            articulations: inheritingArticulationBank,
+            articulations: quietNoteArticulationBank,
         }), { routes: mixedHundredMappings.routes });
         // Articulation installs count down from zero on their own lane.
         await page.waitForFunction(() => (
             Number(globalThis.__COSIMO_WEB_POC__.getSnapshot().latestRuntimeInstallAck?.acceptedArticulationSerial) < 0
         ), null, { timeout: 10_000 });
+        // The velocity map reaches the MIDI input over the synth's state just
+        // after the articulation installs, so a probe note below the played
+        // range shows when a quiet note starts selecting the articulation.
+        const firstPlayedStart = await page.evaluate(async () => {
+            const api = globalThis.__COSIMO_WEB_POC__;
+            const starts = () => api.getSnapshot().voiceArticulationStarts;
+            const deadline = performance.now() + 10_000;
+            for (;;) {
+                const probeStart = starts().length;
+                api.noteOn(40, 95, 1);
+                while (starts().length === probeStart) {
+                    if (performance.now() > deadline) throw new Error("The probe note never started a voice.");
+                    await new Promise((resolve) => setTimeout(resolve, 10));
+                }
+                api.noteOff(40, 1);
+                if (starts()[probeStart].hasArticulation === 1) return starts().length;
+                if (performance.now() > deadline) throw new Error("Quiet notes never selected the articulation.");
+            }
+        });
         await page.evaluate(() => {
             const api = globalThis.__COSIMO_WEB_POC__;
-            for (let note = 48; note < 56; note += 1) {
-                api.sendEvent("articulatedNoteOn", {
-                    channel: 1,
-                    pitch: note,
-                    velocity: 0.75,
-                    hasArticulation: true,
-                    selectorA: 0,
-                    selectorB: 0,
-                    durationSamples: 0,
-                    ageSamples: 0,
-                });
-            }
+            for (let note = 48; note < 56; note += 1) api.noteOn(note, 95, 1);
             for (let note = 56; note < 64; note += 1) api.noteOn(note, 96, 1);
         });
-        await page.waitForFunction(() => {
+        await page.waitForFunction((firstStart) => {
             const snapshot = globalThis.__COSIMO_WEB_POC__.getSnapshot();
-            return snapshot.audioPeak > 0.00001 && snapshot.startedVoiceIndices.length === 16;
-        }, null, {
+            return snapshot.audioPeak > 0.00001
+                && snapshot.startedVoiceIndices.length === 16
+                && snapshot.voiceArticulationStarts.length === firstStart + 16;
+        }, firstPlayedStart, {
             timeout: 10_000,
         });
         assert.deepEqual(
             await page.evaluate(() => globalThis.__COSIMO_WEB_POC__.getSnapshot().startedVoiceIndices),
             Array.from({ length: 16 }, (_, voiceIndex) => voiceIndex),
         );
-        const articulationStarts = await page.evaluate(() => (
-            globalThis.__COSIMO_WEB_POC__.getSnapshot().voiceArticulationStarts
-        ));
+        const articulationStarts = await page.evaluate((firstStart) => (
+            globalThis.__COSIMO_WEB_POC__.getSnapshot().voiceArticulationStarts.slice(firstStart)
+        ), firstPlayedStart);
         assert.equal(articulationStarts.filter((event) => event.hasArticulation === 1).length, 8);
         assert.equal(articulationStarts.filter((event) => event.hasArticulation === 0).length, 8);
         assert.equal(
@@ -1802,7 +1798,7 @@ test("16 sounding voices sustain 100 mappings, isolated live edits, and the full
         );
 
         // A disabled route keeps its amount in the engine's tables but must stay inert.
-        await page.evaluate(() => globalThis.__COSIMO_WEB_POC__.setMpeSlideForTest(1, 1));
+        await sendMidi(page, mpeSlide(1, 1));
         await loadMappings(page, hundredVoiceTailSentinelMappings);
         await waitForFilterQ("above", 10);
         const tailSentinelHighQ = await readFilterQ();
@@ -1816,7 +1812,7 @@ test("16 sounding voices sustain 100 mappings, isolated live edits, and the full
         ))));
         await waitForFilterQ("below", 2);
         const tailSentinelBaseQ = await readFilterQ();
-        await page.evaluate(() => globalThis.__COSIMO_WEB_POC__.setMpeSlideForTest(0, 1));
+        await sendMidi(page, mpeSlide(0, 1));
         assert.ok(tailSentinelHighQ - tailSentinelBaseQ >= 8, JSON.stringify({
             inactiveVoiceTailBaseQ,
             tailSentinelBaseQ,
@@ -2223,16 +2219,13 @@ test("generated product renders oscillator A, B, and C independently", async (t)
         }, null, { timeout: 30_000 });
 
         // The fresh rack's devices are all bypassed.
-        await page.evaluate(() => globalThis.__COSIMO_WEB_POC__.setParameter("filterMode", 0));
+        await setSoundParameters(page, { filterMode: 0 });
 
         const oscillatorRms = {};
         for (const oscillator of ["A", "B", "C"]) {
-            await page.evaluate((activeOscillator) => {
-                const api = globalThis.__COSIMO_WEB_POC__;
-                for (const candidate of ["A", "B", "C"])
-                    api.setParameter(`osc${candidate}Mute`, candidate === activeOscillator ? 0 : 1);
-            }, oscillator);
-            await page.waitForTimeout(100);
+            await setSoundParameters(page, Object.fromEntries(["A", "B", "C"].map((candidate) => (
+                [`osc${candidate}Mute`, candidate === oscillator ? 0 : 1]
+            ))));
             oscillatorRms[oscillator] = await measureHeldNote(page);
             assert.ok(
                 oscillatorRms[oscillator] > 1e-5,
@@ -2240,21 +2233,11 @@ test("generated product renders oscillator A, B, and C independently", async (t)
             );
         }
 
-        await page.evaluate(() => {
-            const api = globalThis.__COSIMO_WEB_POC__;
-            for (const oscillator of ["A", "B", "C"])
-                api.setParameter(`osc${oscillator}Mute`, 0);
-        });
+        await setSoundParameters(page, { oscAMute: 0, oscBMute: 0, oscCMute: 0 });
         const combinedRms = await measureHeldNote(page);
         assert.ok(combinedRms > 1e-5, `The combined A/B/C sound must be audible; received RMS ${combinedRms}.`);
 
-        await page.evaluate(() => {
-            const api = globalThis.__COSIMO_WEB_POC__;
-            api.setParameter("filterCutoff", 40);
-            api.setParameter("filterQ", 0.707);
-            api.setParameter("filterMode", 1);
-        });
-        await page.waitForTimeout(100);
+        await setSoundParameters(page, { filterCutoff: 40, filterQ: 0.707, filterMode: 1 });
         const lowpassRms = await measureHeldNote(page);
         assert.ok(
             lowpassRms < combinedRms * 0.6,

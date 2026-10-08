@@ -444,22 +444,6 @@ globalThis.__COSIMO_WEB_POC__ = {
         sendMIDI(0x90 | nextChannel, note, velocity);
         state.heldNotes.add(heldNoteKey(nextChannel, note));
     },
-    setMpeSlideForTest(value = 0, channel = 1) {
-        if (!isTestMode) {
-            throw new Error("MPE slide injection is only exposed in test mode.");
-        }
-        const nextChannel = midiChannel(channel);
-        const controllerValue = Math.max(0, Math.min(127, Math.round(Number(value) * 127)));
-        sendMIDI(0xb0 | nextChannel, 74, controllerValue);
-    },
-    setMpePressureForTest(value = 0, channel = 1) {
-        if (!isTestMode) {
-            throw new Error("MPE pressure injection is only exposed in test mode.");
-        }
-        const nextChannel = midiChannel(channel);
-        const pressureValue = Math.max(0, Math.min(127, Math.round(Number(value) * 127)));
-        sendMIDI(0xd0 | nextChannel, pressureValue);
-    },
     resetAudioMetrics() {
         state.audioWorkletPerfEpoch += 1;
         state.audioPeak = 0;
@@ -488,11 +472,6 @@ globalThis.__COSIMO_WEB_POC__ = {
         });
         return state.audioWorkletPerfEpoch;
     },
-    sendEvent(endpointID, value) {
-        if (!isTestMode) throw new Error("Direct engine events are only available in test mode.");
-        if (!state.connection) throw new Error("Cosimo is not ready.");
-        state.connection.sendEventOrValue(endpointID, value);
-    },
     setPerfProcessMultiplier(multiplier) {
         if (!isTestMode || !state.connection?.audioNode?.port) {
             throw new Error("Performance load amplification is only available in test mode.");
@@ -501,11 +480,6 @@ globalThis.__COSIMO_WEB_POC__ = {
             type: "patch",
             payload: { type: "cosimo-perf-process-multiplier", multiplier },
         });
-    },
-    setParameter(endpointID, value) {
-        if (!isTestMode) throw new Error("Direct parameter writes are only available in test mode.");
-        if (!state.connection) throw new Error("Cosimo is not ready.");
-        state.connection.sendEventOrValue(endpointID, value);
     },
     start: startAudio,
     storedState() {

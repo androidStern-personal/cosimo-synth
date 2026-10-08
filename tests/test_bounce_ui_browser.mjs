@@ -7,6 +7,7 @@ import { BOUNCE_DEFAULT_ROOTS } from "../bounce/capture-plan.mjs";
 import { persistOneRootBounce } from "./helpers/bounce_browser_fixture.mjs";
 import { startProductWebServer } from "./helpers/product_web_server.mjs";
 import { createCurrentSpeedrunContext } from "./helpers/speedrun_test_context.mjs";
+import { setSoundParameters } from "./helpers/web_synth_sound.mjs";
 
 // Deadline misses need a realtime audio output: Linux headless has none, so its
 // coarse worklet clock turns scheduling jitter into misses that differ run to run.
@@ -346,11 +347,7 @@ test("a bounced sound bounces again on its own roots, retires superseded banks, 
 
         // Colour each fresh layer so the generations have distinct content
         // digests and exercise real retirement rather than deduplication.
-        await page.evaluate(() => {
-            const api = globalThis.__COSIMO_WEB_POC__;
-            api.setParameter("filterMode", 1);
-            api.setParameter("filterCutoff", 6_000);
-        });
+        await setSoundParameters(page, { filterMode: 1, filterCutoff: 6_000 });
         await clickBounceAudio(page);
         const second = await waitForBouncedGeneration(page, 2);
         assert.deepEqual(second.roots, first.roots);
@@ -358,11 +355,7 @@ test("a bounced sound bounces again on its own roots, retires superseded banks, 
         assert.notEqual(second.digest, first.digest);
         const exactSecondDocument = JSON.stringify(second);
 
-        await page.evaluate(() => {
-            const api = globalThis.__COSIMO_WEB_POC__;
-            api.setParameter("filterMode", 4);
-            api.setParameter("filterCutoff", 2_200);
-        });
+        await setSoundParameters(page, { filterMode: 4, filterCutoff: 2_200 });
         await clickBounceAudio(page);
         const third = await waitForBouncedGeneration(page, 3);
         assert.deepEqual(third.roots, first.roots);
