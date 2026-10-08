@@ -117,6 +117,8 @@ export async function completeInstallation({ root = repoRoot, log = console.log,
         stage = "final-checks";
         const doctor = await collectDoctorReport({ root });
         if (!doctor.ok) return { ok: false, error: { code: "final-checks", details: doctor.problems } };
+        // A warning does not block the install, but the customer should see it, such as a feed outage.
+        for (const warning of doctor.warnings) log(`Builder Kit: ${warning}`);
         log("Builder Kit: setup and strict environment checks passed");
         return { ok: true };
     } catch (error) {

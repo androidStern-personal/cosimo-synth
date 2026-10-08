@@ -564,12 +564,25 @@ test("exact emitted line owns download failure, occupied-folder refusal, fresh i
             assert.equal(existsSync(path.join(root, ".git/FETCH_HEAD")), false);
         });
         await t.test("final doctor failure returns a safe actionable status, never ready", async () => {
+            // A plugin config whose name matches no patch is a doctor problem the
+            // installer's own stages cannot notice; only the final doctor reports it.
+            const orphanDirectory = path.join(project, "fx/orphan_config");
+            await fs.mkdir(orphanDirectory, { recursive: true });
+            await fs.writeFile(path.join(orphanDirectory, "Orphan.plugin.json"), '{ "schemaVersion": 1 }\n');
+            try {
+                const result = await f.run(line);
+                assert.notEqual(result.status, 0, result.output);
+                assert.match(result.output, /Orphan\.plugin\.json matches no \.cmajorpatch/u);
+                assert.doesNotMatch(result.output, /is ready/u);
+            } finally { await fs.rm(orphanDirectory, { recursive: true, force: true }); }
+        });
+        await t.test("an unreachable kit feed after a complete install is a warning, and the project is ready", async () => {
             f.faults.denyPath = "/kit.git/HEAD";
             try {
                 const result = await f.run(line);
-                assert.notEqual(result.status, 0);
-                assert.match(result.output, /kit feed returned HTTP 503/u);
-                assert.doesNotMatch(result.output, /is ready/u);
+                assert.equal(result.status, 0, result.output);
+                assert.match(result.output, /The kit feed is not reachable: HTTP 503/u);
+                assert.match(result.output, /is ready/u);
             } finally { f.faults.denyPath = ""; }
         });
         await t.test("linked installer state never writes outside the project", async () => {
