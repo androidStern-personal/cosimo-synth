@@ -31405,8 +31405,8 @@ const SOURCE_FAMILIES = [
     identityIconUrl: new URL("data:image/svg+xml,%3csvg%20width='256'%20height='256'%20xmlns='http://www.w3.org/2000/svg'%3e%3cg%20fill-rule='evenodd'%3e%3cpath%20d='M128%20226c-13.27%200-25.936-2.584-37.994-7.752-12.059-5.168-22.49-12.154-31.295-20.959-8.805-8.805-15.791-19.236-20.959-31.295C32.584%20153.936%2030%20141.271%2030%20128c0-13.27%202.584-25.936%207.752-37.994%205.168-12.059%2012.154-22.49%2020.959-31.295%208.805-8.805%2019.236-15.791%2031.295-20.959C102.064%2032.584%20114.729%2030%20128%2030c13.27%200%2025.936%202.584%2037.994%207.752%2012.059%205.168%2022.49%2012.154%2031.295%2020.959%208.805%208.805%2015.791%2019.236%2020.959%2031.295C223.416%20102.064%20226%20114.729%20226%20128c0%2013.27-2.584%2025.936-7.752%2037.994-5.168%2012.059-12.154%2022.49-20.959%2031.295-8.805%208.805-19.236%2015.791-31.295%2020.959C153.936%20223.416%20141.271%20226%20128%20226zm0-16c11.104%200%2021.701-2.162%2031.791-6.486%2010.09-4.325%2018.818-10.17%2026.186-17.537%207.367-7.368%2013.212-16.096%2017.537-26.186C207.838%20149.701%20210%20139.104%20210%20128s-2.162-21.701-6.486-31.791c-4.325-10.09-10.17-18.818-17.537-26.186-7.368-7.367-16.096-13.212-26.186-17.537C149.701%2048.162%20139.104%2046%20128%2046s-21.701%202.162-31.791%206.486c-10.09%204.325-18.818%2010.17-26.186%2017.537-7.367%207.368-13.212%2016.096-17.537%2026.186C48.162%20106.299%2046%20116.896%2046%20128s2.162%2021.701%206.486%2031.791c4.325%2010.09%2010.17%2018.818%2017.537%2026.186%207.368%207.367%2016.096%2013.212%2026.186%2017.537C106.299%20207.838%20116.896%20210%20128%20210z'%20fill-rule='nonzero'/%3e%3cpath%20d='M128%2096c9.941%200%2018-8.059%2018-18s-8.059-18-18-18a17.932%2017.932%200%200%200-11.945%204.534A17.956%2017.956%200%200%200%20110%2078c0%209.941%208.059%2018%2018%2018z'/%3e%3c/g%3e%3c/svg%3e", import.meta.url).href
   }
 ];
-const RACK_MODULATION_SOURCE_PAGES = [1, 2, 3].map(
-  (sourceSlot) => SOURCE_FAMILIES.map((family) => ({
+function describeSource(family, sourceSlot) {
+  return {
     sourceKind: family.sourceKind,
     sourceSlot,
     label: `${family.label} ${sourceSlot}`,
@@ -31414,31 +31414,36 @@ const RACK_MODULATION_SOURCE_PAGES = [1, 2, 3].map(
     iconUrl: family.iconUrl,
     identityIconUrl: family.identityIconUrl,
     accent: family.accent
-  }))
+  };
+}
+const NUMBERED_SLOT_COUNTS = {
+  mseg: MODULATION_MSEG_SLOT_COUNT,
+  env: MODULATION_ENV_SLOT_COUNT,
+  macro: MODULATION_MACRO_SLOT_COUNT
+};
+function sourceKey(sourceKind, sourceSlot) {
+  return `${sourceKind} ${sourceSlot}`;
+}
+const SOURCES_BY_KEY = new Map(
+  SOURCE_FAMILIES.flatMap((family) => {
+    const numbered = Array.from(
+      { length: NUMBERED_SLOT_COUNTS[family.sourceKind] },
+      (_, index2) => describeSource(family, index2 + 1)
+    );
+    const ampEnvelope = family.sourceKind === "env" ? [{ ...describeSource(family, AMP_ENVELOPE_SOURCE_SLOT), label: "Amp Envelope", shortLabel: "AMP" }] : [];
+    return [...numbered, ...ampEnvelope];
+  }).map((source) => [sourceKey(source.sourceKind, source.sourceSlot), source])
 );
 function findRackModulationSource(sourceKind, sourceSlot) {
-  const source = RACK_MODULATION_SOURCE_PAGES[sourceSlot - 1]?.find(
-    (candidate) => candidate.sourceKind === sourceKind
-  );
-  if (source !== void 0) {
-    return source;
+  const source = SOURCES_BY_KEY.get(sourceKey(sourceKind, sourceSlot));
+  if (source === void 0) {
+    throw new Error(`Unknown rack modulation source: ${sourceKind} ${sourceSlot}`);
   }
-  if (sourceSlot === 4 && sourceKind === "env") {
-    const family = SOURCE_FAMILIES.find((candidate) => candidate.sourceKind === "env");
-    if (family !== void 0) {
-      return {
-        sourceKind,
-        sourceSlot,
-        label: "Amp Envelope",
-        shortLabel: "AMP",
-        iconUrl: family.iconUrl,
-        identityIconUrl: family.identityIconUrl,
-        accent: family.accent
-      };
-    }
-  }
-  throw new Error(`Unknown rack modulation source: ${sourceKind} ${sourceSlot}`);
+  return source;
 }
+[1, 2, 3].map(
+  (sourceSlot) => SOURCE_FAMILIES.map((family) => findRackModulationSource(family.sourceKind, sourceSlot))
+);
 var reactDomExports = requireReactDom();
 const PARAMETER_GESTURE_MODULATION_PIXELS_PER_FULL_SPAN = 360;
 const BASE_RADIUS$1 = 25;
