@@ -8,6 +8,11 @@ probe_build_dir="$repo_dir/build/native_bounce_quickjs"
 runtime_library="${COSIMO_CMAJOR_RUNTIME_LIBRARY:-}"
 host_os="$(uname -s)"
 
+if [[ -z "$runtime_library" && "$host_os" != "Darwin" ]] && ! pkg-config --exists gtk+-3.0; then
+    printf 'SKIP native Bounce QuickJS driver probe: building the Cmajor runtime on Linux needs the GTK 3 development package (gtk+-3.0), which this machine lacks.\n'
+    exit 0
+fi
+
 if [[ -z "$runtime_library" || ! -f "$runtime_library" ]]; then
     if [[ "$host_os" == "Darwin" ]]; then
         cmake -S "$repo_dir/tools/cmajor_runtime_build" -B "$runtime_build_dir" \
