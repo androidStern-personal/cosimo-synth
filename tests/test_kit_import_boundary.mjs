@@ -138,11 +138,12 @@ test("kit modules never import ui/shared, bounce, or fx plugin code", async () =
     }
 });
 
-test("synth and plugin code never re-exports a kit module", async () => {
-    const modulePaths = await listSourceModules(SYNTH_MODULE_ROOTS);
+test("synth, plugin and test code never re-exports a kit module", async () => {
+    const modulePaths = await listSourceModules([...SYNTH_MODULE_ROOTS, "tests"]);
 
     assert.ok(modulePaths.includes("ui/shared/mseg.ts"), "expected the walk to include ui/shared/mseg.ts");
     assert.ok(modulePaths.includes("fx/seqfx/view/SeqFxPatchView.tsx"), "expected the walk to include fx plugin views");
+    assert.ok(modulePaths.includes("tests/test_modulation_state_client.mjs"), "expected the walk to include the tests");
 
     for (const modulePath of modulePaths) {
         const source = await fs.readFile(path.join(repoRoot, modulePath), "utf8");
@@ -152,13 +153,17 @@ test("synth and plugin code never re-exports a kit module", async () => {
                 continue;
             }
 
-            const target = path.posix.join(path.posix.dirname(modulePath), specifier);
+            // A test can also hand the bundler source that resolves from the repository root.
+            const targets = [path.posix.join(path.posix.dirname(modulePath), specifier)];
+            if (modulePath.startsWith("tests/")) targets.push(path.posix.normalize(specifier));
 
-            assert.doesNotMatch(
-                target,
-                /^kit\//,
-                `${modulePath} re-exports "${specifier}"; import it from the kit module directly where it is used`,
-            );
+            for (const target of targets) {
+                assert.doesNotMatch(
+                    target,
+                    /^kit\//,
+                    `${modulePath} re-exports "${specifier}"; import it from the kit module directly where it is used`,
+                );
+            }
         }
     }
 });

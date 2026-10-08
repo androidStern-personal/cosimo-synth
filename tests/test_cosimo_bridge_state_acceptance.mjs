@@ -1,27 +1,31 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import path from "node:path";
-import { build } from "esbuild";
+import { loadUIModules } from "./helpers/load_ui_modules.mjs";
 import { createSynthParameterFixture } from "./helpers/synth_parameter_fixture.mjs";
 
 const root = path.resolve(import.meta.dirname, "..");
-const bundled = await build({ stdin: { contents: `
-export { createCosimoBridgeAdapter } from "./ui/shared/cosimo-bridge-adapter";
-export { acquireSynthViewState } from "./ui/shared/synth-state-client";
-export { synthPluginState, synthParameterByEndpoint } from "./ui/shared/synth-plugin-state";
-export { createDefaultModulationState, createDefaultRoute, MODULATION_STATE_KEY } from "./ui/shared/modulation";
-export { createPluginStateSession } from "./kit/ui/plugin-state-session";
-`, resolveDir: root }, bundle: true, format: "esm", platform: "node", target: "es2022", write: false, loader: { ".css": "text" } });
-const api = await import(`data:text/javascript;base64,${Buffer.from(bundled.outputFiles[0].text).toString("base64")}`);
-const key = api.MODULATION_STATE_KEY;
+const [
+    { createCosimoBridgeAdapter },
+    { acquireSynthViewState },
+    { synthPluginState, synthParameterByEndpoint },
+    { createDefaultModulationState, createDefaultRoute, MODULATION_STATE_KEY: key },
+    { createPluginStateSession },
+] = await loadUIModules(root, [
+    "ui/shared/cosimo-bridge-adapter.ts",
+    "ui/shared/synth-state-client.ts",
+    "ui/shared/synth-plugin-state.ts",
+    "ui/shared/modulation.ts",
+    "kit/ui/plugin-state-session.ts",
+]);
 
 // Only the external wire/native-storage seam is recorded here. The production
 // session creates every accepted/rejected receipt, value, lock and history entry;
 // the adapter and test controls acquire the same production view lease.
 async function fixture() {
     const routeId = "oscA.warpAmount::mseg-1";
-    const bank = api.createDefaultModulationState();
-    bank.routes = [api.createDefaultRoute({ id: routeId, sourceKind: "mseg", sourceSlot: 1, targetKind: "oscA.warpAmount", amount: 0.4 })];
+    const bank = createDefaultModulationState();
+    bank.routes = [createDefaultRoute({ id: routeId, sourceKind: "mseg", sourceSlot: 1, targetKind: "oscA.warpAmount", amount: 0.4 })];
     bank.msegSlots[0].shapeA.points[0].y = 0.27;
     const articulations = { format: "cosimo.articulations", version: 4, selectedSlotId: "articulation-0", activeTriggerMode: "key", slots: [{
         id: "articulation-0", runtimeSlot: 0, name: "First", color: "#d2a128", key: 36,
@@ -30,13 +34,13 @@ async function fixture() {
     }] };
     const stored = new Map([[key, JSON.stringify(bank)], ["articulations.v4", JSON.stringify(articulations)]]);
     const { values: parameters, readParameter } = createSynthParameterFixture({ globalTune: 0, mseg1Morph: 0.63 });
-    const nativeParameters = () => Object.keys(api.synthParameterByEndpoint).map(readParameter);
+    const nativeParameters = () => Object.keys(synthParameterByEndpoint).map(readParameter);
     let scope = { owner: "prototype-adapter-test", document: 1 };
     let restoring = false;
     const pendingAttaches = [];
     const views = new Set(), jobs = [], publications = [], rawWrites = [], rawSends = [], commands = [], defects = [];
     let nextClient = 0;
-    const session = api.createPluginStateSession(api.synthPluginState, { native: {
+    const session = createPluginStateSession(synthPluginState, { native: {
         publish(publication) {
             publications.push(publication);
             for (const operation of publication.operations) {
@@ -113,9 +117,9 @@ async function fixture() {
         views.add(view); return view;
     }
     const main = connection();
-    const lease = api.acquireSynthViewState(main);
-    const other = api.acquireSynthViewState(connection());
-    const adapter = api.createCosimoBridgeAdapter({ connection: main });
+    const lease = acquireSynthViewState(main);
+    const other = acquireSynthViewState(connection());
+    const adapter = createCosimoBridgeAdapter({ connection: main });
     await new Promise(resolve => setImmediate(resolve));
     assert.equal(adapter.getSnapshot().connection._tag, "ready");
     rawWrites.length = 0; rawSends.length = 0; commands.length = 0;
