@@ -173,3 +173,40 @@ Once repairs are authorized and verified, rerun the complete requested gate
 against the repaired candidate. Install only qualified artifacts from that
 worktree, then open the current Enhance That and synth in Ableton. Keep build,
 install, DAW discovery/UI, and listening results separate.
+
+## Repaired run, 2026-10-08, this Mac
+
+Source repaired on `claude/builder-kit-020-review-fixes` on top of this evidence
+commit. Nothing in the kit's public API changed.
+
+| Blocker | Root cause | Repair |
+| --- | --- | --- |
+| Installer final-doctor assertion | The fixture denied the kit feed and expected a failure. With every tool current an unreachable feed is a warning by design (an installed project works offline), so the fixture no longer produced a doctor failure. | The test plants a plugin config with no patch, which only the final doctor reports, and keeps its assertions. A second test states the feed policy: a feed outage after a complete install exits 0, prints the warning and reports ready. The installer now prints the doctor's warnings. |
+| Missing `test:dsp` | The script existed only in the customer template. | The root package runs the kit's DSP runner through `scripts/source_cmaj.mjs`, the pinned source-built compiler the production build uses. The `test:cmajor:*` scripts use it too instead of a `cmaj` on PATH. |
+| SDK/linker mismatch | `xcrun` resolves the Command Line Tools macOS 27 SDK while `xcode-select` names Xcode 26.5 beta, and that SDK's `libSystem.B.tbd` is malformed for Apple Clang 21. | Machine configuration, not repository code. The gate sets `SDKROOT` to the selected Xcode's SDK. |
+
+`npm run test:dsp` then exposed two older problems in the synth's own DSP tests:
+the rack and voice suites had been unrunnable since 2026-09-11, when the synth's
+Cmajor began calling host-provided external functions that plain `cmaj test`
+cannot supply (26 of 105 rack tests passed); and the three macro tests compared
+the real patch against audio recorded by the oscillator removed on 2026-08-13.
+The external declarations now live in one file and `tests/cmajor_support`
+provides a Cmajor stand-in host for `cmaj test`; the rack suite passes 105 of
+105; the macro suite is deleted (macro modulation is proved audibly by the web
+engine rack test, the renderer by `tests/native/run_three_oscillator_*`).
+
+The real-time browser test "16 sounding voices sustain 100 mappings" then
+failed for the first time on a machine with audio: Undo or Redo of the
+1484-cell modulation document took about 280 ms from click to engine
+acknowledgement against a 40 ms contract. Main-thread profiles put the time in
+the GUI (every mapping row re-rendered twice per swap, one selector per
+control, documents compared by re-encoding), not in the engine (about 6 ms).
+After memoizing rows and sharing one selection per field it measures 39 ms
+average, 25 Hz, no deadline misses.
+
+Gate results on the repaired commit: typecheck clean; `npm test` green;
+`npm run test:dsp` 148 of 148; `npm run fx:prod:build -- enhancer-lite` built
+and installed `~/Library/Audio/Plug-Ins/VST3/EnhanceThat.vst3`;
+`npm run synth:desktop:build` built and installed
+`~/Library/Audio/Plug-Ins/VST3/CosimoDesktopNative.vst3` and the Component.
+Ableton discovery and listening were not performed by the agent.
