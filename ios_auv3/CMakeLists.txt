@@ -62,8 +62,8 @@ if (NOT EXISTS "${COSIMO_IOS_GENERATOR_SCRIPT}")
     message(FATAL_ERROR "Generator script not found: ${COSIMO_IOS_GENERATOR_SCRIPT}")
 endif()
 
-include("${COSIMO_REPO_ROOT}/kit/cmake/CosimoDependencies.cmake")
-cosimo_add_production_dependencies()
+include("${COSIMO_REPO_ROOT}/kit/cmake/dependencies.cmake")
+builder_kit_dependencies()
 
 set(
     CMAJOR_VERSION
@@ -82,7 +82,7 @@ endif()
 
 set(JUCE_ENABLE_MODULE_SOURCE_GROUPS ON)
 
-add_subdirectory("${COSIMO_JUCE_SOURCE_DIR}" juce)
+add_subdirectory("${BUILDER_KIT_JUCE_SOURCE_DIR}" juce)
 
 file(
     GLOB_RECURSE COSIMO_REACT_UI_FILES
@@ -104,7 +104,7 @@ file(
 file(
     GLOB_RECURSE COSIMO_CMAJOR_WEB_FILES
     CONFIGURE_DEPENDS
-    "${COSIMO_CMAJOR_SOURCE_DIR}/javascript/cmaj_api/*"
+    "${BUILDER_KIT_CMAJOR_SOURCE_DIR}/javascript/cmaj_api/*"
 )
 
 set(
@@ -143,7 +143,6 @@ add_custom_command(
         "${COSIMO_REPO_ROOT}/assets/factory-bank-catalog.json"
         "${COSIMO_REPO_ROOT}/ui/build.mjs"
         "${COSIMO_REPO_ROOT}/ui/vite.shared.mjs"
-        "${COSIMO_REPO_ROOT}/kit/fx/vite.shared.mjs"
         "${COSIMO_REPO_ROOT}/ui/vite.worker.config.mjs"
         "${COSIMO_REPO_ROOT}/ios_auv3/vite.config.mjs"
         ${COSIMO_FACTORY_SOURCE_FILES}
@@ -220,8 +219,8 @@ target_compile_definitions(CosimoSynth PRIVATE
 )
 
 target_include_directories(CosimoSynth PRIVATE
-    "${COSIMO_CMAJOR_SOURCE_DIR}/include"
-    "${COSIMO_CHOC_SOURCE_DIR}"
+    "${BUILDER_KIT_CMAJOR_SOURCE_DIR}/include"
+    "${BUILDER_KIT_CHOC_SOURCE_DIR}"
     "${CMAKE_CURRENT_LIST_DIR}/Source"
     "${COSIMO_REPO_ROOT}/native/bounce"
     "${COSIMO_REPO_ROOT}/native/three_oscillator_renderer"
@@ -280,7 +279,7 @@ foreach(bundle_target CosimoSynth_Standalone CosimoSynth_AUv3)
             "$<TARGET_FILE_DIR:${bundle_target}>/cmaj_api"
         COMMAND
             "${CMAKE_COMMAND}" -E copy_directory
-            "${COSIMO_CMAJOR_SOURCE_DIR}/javascript/cmaj_api"
+            "${BUILDER_KIT_CMAJOR_SOURCE_DIR}/javascript/cmaj_api"
             "$<TARGET_FILE_DIR:${bundle_target}>/cmaj_api"
         COMMAND
             "${CMAKE_COMMAND}" -E rm -rf

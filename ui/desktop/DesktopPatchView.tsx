@@ -46,7 +46,7 @@ import {
     isVideoBounceAvailable,
     VideoBounceFlow,
 } from "./video-bounce-flow";
-import type { ResourceClient } from "../shared/resource-client";
+import type { ResourceClient } from "../../kit/ui/resource-client";
 import {
     usePatchParameterBinding,
     type PatchControlBinding,
@@ -67,17 +67,9 @@ import {
     getModulationTargetDescriptor,
     type EffectModuleId,
 } from "../shared/target-descriptor";
-import {
-    type SynthFocusBindings,
-    type SynthKeyboardInputMode,
-} from "../shared/synth-input-router";
-import {
-    MSEG_RATE_MAX_SECONDS,
-    MSEG_RATE_MIN_SECONDS,
-    clampMsegRateSeconds,
-    type MsegState,
-    type MsegSurfaceOrientation,
-} from "../shared/mseg";
+import type { SynthFocusBindings, SynthKeyboardInputMode } from "../shared/synth-input-router";
+import { MSEG_RATE_MAX_SECONDS, MSEG_RATE_MIN_SECONDS, clampMsegRateSeconds, type MsegState } from "../shared/mseg";
+import type { MsegSurfaceOrientation } from "../../kit/ui/mseg";
 import {
     EditableMsegSurface,
     FilterResponseGraph,
@@ -89,7 +81,6 @@ import {
     MsegPreview,
     RangeField,
     SYNTH_COMPACT_CONTROL_CHROME_CLASS,
-    SYNTH_COMPACT_CONTROL_TEXT_CLASS,
     SYNTH_GRID_CARD_INSET_SHADOW_CLASS,
     SYNTH_GRID_CARD_SHELL_CLASS,
     SYNTH_GRID_CARD_SIZE_CLASS,
@@ -136,22 +127,19 @@ import {
     type ParameterMenuRequest,
 } from "../shared/parameter-context-menu";
 import { KeyTrackStatus } from "../shared/key-track-status";
-import {
-    EDITOR_HIT_RADIUS_PX,
-    EDITOR_VALUE_HANDLE_RADIUS_PX,
-    useEditorSurfaceSize,
-} from "../shared/editor-tokens";
+import { EDITOR_HIT_RADIUS_PX, EDITOR_VALUE_HANDLE_RADIUS_PX } from "../../kit/ui/editor-curve-geometry";
+import { useElementSize } from "../../kit/ui/use-element-size";
 import {
     applyRollingAxisSample,
     createRollingAxisState,
     type RollingAxis,
     type RollingAxisPointerType,
     type RollingAxisState,
-} from "../shared/rolling-axis-classifier";
+} from "../../kit/ui/rolling-axis-classifier";
 import { useParameterMenuShell } from "../shared/parameter-menu-shell";
 import { clearUiTimeout, uiTimeout } from "../shared/ui-timers";
 import type { RackParameterDescriptor } from "../shared/rack-parameter-descriptors";
-import { findRackModulationSource } from "../shared/rack-modulation-sources";
+import { findRackModulationSource, type RackModulationSource } from "../shared/rack-modulation-sources";
 import { VOICE_FILTER_KNOB_DESCRIPTORS } from "../shared/voice-filter-descriptors";
 import { VoiceEnhancerGraph } from "../shared/voice-enhancer-graph";
 import {
@@ -242,17 +230,12 @@ import {
     GLIDE_TIME_MAX_SECONDS,
     GLIDE_TIME_MIN_SECONDS,
     GLIDE_TIME_STEP_SECONDS,
-    SYNTH_PRESET_EFFECT_ID,
     useOscillatorSelectionViewModel,
     useSynthPatchViewModel,
     type SynthCallbackControlReadiness,
     type SynthPatchViewModel,
 } from "../shared/synth-hooks";
-import { createSynthPresetBar } from "../shared/effects/synth-preset-bar";
-import { createSynthStandaloneEffectPresetController } from "../shared/effects/synth-standalone-presets";
-import { createSynthPresetInitOptions } from "../shared/effects/synth-init-state";
-import { buildSynthPresetMigrations } from "../shared/effects/synth-preset-migrations";
-import type { EffectStoredStateAdapter } from "../shared/effects/effect-preset-v2";
+import { SynthPresetBar, type SynthPresetBarProps } from "../shared/synth-preset-bar";
 import { clearLaneSoloAudition } from "../shared/lane-solo-audition";
 import {
     ArticulationControlSurface,
@@ -262,11 +245,8 @@ import {
     type GainEnvelopeView,
     type MsegThumbnailPoint,
 } from "./articulation-ui";
-import {
-    FILTER_SPECTRUM_RENDER_MODE_OPTIONS,
-    cycleFilterSpectrumRenderMode,
-    type FilterSpectrumRenderMode,
-} from "../shared/filter-spectrum";
+import { FILTER_SPECTRUM_RENDER_MODE_OPTIONS } from "../../kit/ui/filter-spectrum";
+import type { FilterSpectrumRenderMode } from "../../kit/index";
 import {
     FILTER_CUTOFF_MAX_HZ,
     FILTER_CUTOFF_MIN_HZ,
@@ -276,17 +256,22 @@ import {
     filterQToNormalized,
     normalizedToFilterCutoffHz,
     normalizedToFilterQ,
-} from "../shared/filter-response";
+} from "../../kit/ui/filter-response";
 import {
     MODULATION_ENV_SLOT_COUNT,
     MODULATION_MACRO_SLOT_COUNT,
     MODULATION_MSEG_SLOT_COUNT,
     clampModulationRouteAmount,
-    isVoiceModulationSource,
     type ModulationRoute,
-    type ModulationRouteUpdate,
 } from "../shared/modulation";
-import type { RackModulationSource } from "../shared/rack-modulation-sources";
+
+function cycleFilterSpectrumRenderMode(currentMode: FilterSpectrumRenderMode): FilterSpectrumRenderMode {
+    const currentIndex = FILTER_SPECTRUM_RENDER_MODE_OPTIONS.findIndex((option) => option.value === currentMode);
+    const nextIndex = currentIndex >= 0
+        ? (currentIndex + 1) % FILTER_SPECTRUM_RENDER_MODE_OPTIONS.length
+        : 0;
+    return FILTER_SPECTRUM_RENDER_MODE_OPTIONS[nextIndex].value;
+}
 
 const KEYBOARD_ROOT_NOTE_DEFAULT = 36;
 const KEYBOARD_ROOT_NOTE_MIN = 12;
@@ -571,7 +556,7 @@ type FilterSectionProps = {
         coefficients: Record<string, number>;
     };
     className?: string;
-    /** T05 compact mode: attached knob row, forced round-bars, Off greys all. */
+    /** Compact mode: attached knob row, forced round-bars, Off greys all. */
     compact?: boolean;
     filterMix?: PatchControlBinding<number>;
     routes?: ModulationRoute[];
@@ -619,7 +604,7 @@ type MsegEditorModalProps = {
 type ModulationMatrixSectionProps = {
     compact?: boolean;
     focusedSource?: MobileModSource | null;
-    /** Compact only: the floating Mod bar's selection — the page shares it (T14). */
+    /** Compact only: the floating Mod bar's selection, which the page shares. */
     armedSource?: GlobalModRailState["selectedSource"] | null;
     onArmSource?: (source: GlobalModRailState["selectedSource"]) => void;
     selectedMsegSlot: number;
@@ -634,7 +619,6 @@ type ModulationMatrixSectionProps = {
         sustain: number;
         releaseSeconds: number;
     } | null;
-    routes: ModulationRoute[];
     onSelectMsegSlot: (slotIndex: number) => void;
     onSelectMsegShape: (shapeIndex: number) => void;
     onOpenMsegEditor: () => void;
@@ -643,9 +627,6 @@ type ModulationMatrixSectionProps = {
     onToggleMsegLoop: () => void;
     onSelectEnvelopeSlot: (slotIndex: number) => void;
     onEnvelopeChange: (field: "attackSeconds" | "decaySeconds" | "sustain" | "releaseSeconds", nextValue: number) => void;
-    onAddRoute: () => void;
-    onRemoveRoute: (routeIndex: number) => void;
-    onRouteChange: (routeIndex: number, update: ModulationRouteUpdate) => void;
     msegRateFocusBindings: SynthFocusBindings;
     msegDirectEditing?: {composition: import("../shared/synth-components").MsegCompositionBindings} | null;
 };
@@ -667,10 +648,6 @@ function envelopeEntryParameter(parameter: EnvelopeEntryParameter): EnvelopeEntr
     return parameter;
 }
 
-function formatSeconds(seconds: number) {
-    return `${seconds.toFixed(3)} s`;
-}
-
 function formatKeyboardRootLabel(rootNote: number) {
     const octave = Math.floor(rootNote / 12) - 1;
     return `C${octave}`;
@@ -678,21 +655,6 @@ function formatKeyboardRootLabel(rootNote: number) {
 
 function formatPercent(value: number) {
     return `${Math.round(value * 100)}%`;
-}
-
-function formatSignedPercent(value: number) {
-    const percentValue = Math.round(value * 100);
-    return `${percentValue > 0 ? "+" : ""}${percentValue}%`;
-}
-
-function formatDriveDb(value: number) {
-    return `${value.toFixed(1)} dB`;
-}
-
-function formatSemitoneOffset(value: number) {
-    const semitones = clamp(value, -2, 2);
-    const prefix = semitones > 0 ? "+" : "";
-    return `${prefix}${semitones.toFixed(2)} st`;
 }
 
 function envelopeTimeEntrySpec(currentSeconds: number, minSeconds = ENVELOPE_TIME_MIN_SECONDS) {
@@ -874,10 +836,6 @@ function formatEnvelopeBubbleValue(
     return formatParameterEntry(envelopeTimeEntrySpec(value, minimumSeconds), value).display;
 }
 
-function formatSignedOctaves(value: number) {
-    return `${value > 0 ? "+" : ""}${value.toFixed(2)} oct`;
-}
-
 function cycleWarpMode(currentMode: number) {
     const currentIndex = WARP_MODE_OPTIONS.findIndex((option) => option.value === currentMode);
     const nextIndex = currentIndex >= 0
@@ -933,7 +891,7 @@ function formatMixDisplay(value: number) {
 const VOICE_FILTER_OWNER_ACCENT = "#a98cff";
 
 /**
- * T04A: the armed source's filter travel, per axis. The travel start is the
+ * The armed source's filter travel, per axis. The travel start is the
  * filter at source = 0 (base for a unipolar axis, the mirrored offset for a
  * bipolar one); the end is the filter at full deflection. Endpoints clamp
  * to the audible parameter ranges.
@@ -1805,7 +1763,7 @@ function DesktopEnvelopeEditor({
     compact?: boolean;
 }) {
     const svgRef = useRef<SVGSVGElement | null>(null);
-    const surfaceSize = useEditorSurfaceSize(svgRef);
+    const surfaceSize = useElementSize(svgRef);
     const activeDragRef = useRef<ActiveEnvelopeDrag | null>(null);
     const [activeHandle, setActiveHandle] = useState<EnvelopeDragTarget | null>(null);
     const [activeField, setActiveField] = useState<EnvelopeEditableField | null>(null);
@@ -2365,133 +2323,16 @@ function StatusHeader({ statusText }: HeaderProps) {
 function SynthPresetBarHost({
     isHidden,
     focusedEditorOpen = false,
-    storedStateAdapters,
-    wavetableTables,
-    polishMeter,
-    compactSynth = false,
-    backAvailable = false,
-    onShellBack,
-    perfTuningAvailable = false,
-    onOpenPerfTuning,
-    onBounceGuardReady,
-    bounceAudioAvailable,
-    onBounceAudio,
-    onBounceVideo,
-}: {
+    compactSynth,
+    ...barProps
+}: Omit<SynthPresetBarProps, "compact"> & {
     isHidden: boolean;
     focusedEditorOpen?: boolean;
-    storedStateAdapters: EffectStoredStateAdapter[];
-    wavetableTables: SynthPatchViewModel["tableOptions"];
-    polishMeter: SynthPatchViewModel["observedPolishMeter"];
-    /** ADR-026 compact synth composition: Back slot, centered name, … popover. */
-    compactSynth?: boolean;
-    backAvailable?: boolean;
-    onShellBack?: () => void;
-    /** Developer builds only: reveals the shell menu's Developer settings row. */
-    perfTuningAvailable?: boolean;
-    onOpenPerfTuning?: () => void;
-    onBounceGuardReady?: (
-        guard: ((continuation: () => void) => void) | null,
-    ) => void;
-    bounceAudioAvailable: boolean;
-    onBounceAudio: () => void;
-    onBounceVideo: (patchInput: unknown) => void;
+    /** ADR-026 compact synth composition: Back slot, centered name, … menu. */
+    compactSynth: boolean;
 }) {
-    const patchConnection = usePatchConnection();
-    const hostRef = useRef<HTMLDivElement | null>(null);
-    const presetBarRef = useRef<ReturnType<typeof createSynthPresetBar> | null>(null);
-    const onShellBackRef = useRef(onShellBack);
-    onShellBackRef.current = onShellBack;
-    const onOpenPerfTuningRef = useRef(onOpenPerfTuning);
-    onOpenPerfTuningRef.current = onOpenPerfTuning;
-    const onBounceGuardReadyRef = useRef(onBounceGuardReady);
-    onBounceGuardReadyRef.current = onBounceGuardReady;
-    const onBounceAudioRef = useRef(onBounceAudio);
-    onBounceAudioRef.current = onBounceAudio;
-    const onBounceVideoRef = useRef(onBounceVideo);
-    onBounceVideoRef.current = onBounceVideo;
-    const wavetableTablesRef = useRef(wavetableTables);
-    wavetableTablesRef.current = wavetableTables;
-    const presetController = useMemo(() => createSynthStandaloneEffectPresetController({
-        effectID: SYNTH_PRESET_EFFECT_ID,
-        legacyFileStorePluginID: "dev.cosimo.wavetable-synth",
-        patchConnection,
-        storedStateAdapters,
-        presetMigrations: buildSynthPresetMigrations,
-        synth: createSynthPresetInitOptions(patchConnection, storedStateAdapters, {
-            getShippedWavetableTables: () => wavetableTablesRef.current,
-        }),
-        onSoundReplacementApplied: (replacement) => {
-            if (replacement.kind !== "bounce") {
-                clearLaneSoloAudition(patchConnection);
-            }
-        },
-    }), [patchConnection, storedStateAdapters]);
-
-    useEffect(() => {
-        const host = hostRef.current;
-
-        if (!host) {
-            return;
-        }
-
-        const presetBar = createSynthPresetBar();
-        presetBar.controller = presetController;
-        const handleShellBack = () => onShellBackRef.current?.();
-        const handleBounceAudio = () => {
-            presetBar.requestBounceSoundReplacement(() => onBounceAudioRef.current());
-        };
-        const handleBounceVideo = (event: Event) => {
-            const detail = (event as CustomEvent<{ readonly patchInput: unknown }>).detail;
-            onBounceVideoRef.current(detail.patchInput);
-        };
-        presetBar.addEventListener("cosimo-shell-back", handleShellBack);
-        const handleOpenPerfTuning = () => onOpenPerfTuningRef.current?.();
-        presetBar.addEventListener("cosimo-open-perf-tuning", handleOpenPerfTuning);
-        presetBar.addEventListener("cosimo-bounce-audio", handleBounceAudio);
-        presetBar.addEventListener("cosimo-bounce-video", handleBounceVideo);
-        presetBarRef.current = presetBar;
-        host.replaceChildren(presetBar);
-        presetController.attach();
-        onBounceGuardReadyRef.current?.((continuation) => {
-            presetBar.requestBounceSoundReplacement(continuation);
-        });
-
-        return () => {
-            onBounceGuardReadyRef.current?.(null);
-            presetController.detach();
-            presetBar.removeEventListener("cosimo-shell-back", handleShellBack);
-            presetBar.removeEventListener("cosimo-open-perf-tuning", handleOpenPerfTuning);
-            presetBar.removeEventListener("cosimo-bounce-audio", handleBounceAudio);
-            presetBar.removeEventListener("cosimo-bounce-video", handleBounceVideo);
-            presetBar.controller = null;
-            presetBarRef.current = null;
-            presetBar.remove();
-        };
-    }, [presetController]);
-
-    useEffect(() => {
-        const presetBar = presetBarRef.current;
-        if (!presetBar) {
-            return;
-        }
-        presetBar.toggleAttribute("compact-synth", compactSynth);
-        presetBar.shellBackAvailable = compactSynth && backAvailable;
-        presetBar.perfTuningAvailable = perfTuningAvailable;
-        presetBar.audioBounceAvailable = bounceAudioAvailable;
-        presetBar.videoBounceAvailable = isVideoBounceAvailable();
-    }, [backAvailable, bounceAudioAvailable, compactSynth, perfTuningAvailable, presetController]);
-
-    useEffect(() => {
-        const presetBar = presetBarRef.current;
-        if (presetBar !== null) {
-            presetBar.polishMeterFrame = polishMeter;
-        }
-    }, [polishMeter, presetController]);
-
     return (
         <div
-            ref={hostRef}
             data-role="synth-preset-bar-host"
             hidden={isHidden}
             style={focusedEditorOpen ? { zIndex: 70 } : undefined}
@@ -2499,16 +2340,18 @@ function SynthPresetBarHost({
                 // The compact shell row is exactly the 40px token: the bar's own
                 // chrome is the only border, so the host adds none (ADR-026).
                 compactSynth ? "" : "border border-white/[0.06] "
-            }bg-black/20 [--knob-track-value-color:#87d7f5] [--preset-bar-border-radius:12px]`}
-        />
+            }bg-black/20`}
+        >
+            <SynthPresetBar compact={compactSynth} {...barProps} />
+        </div>
     );
 }
 
 /**
- * T05: the Voice filter's compact knob row uses the shared production knob
+ * The Voice filter's compact knob row uses the shared production knob
  * (ADR-025 dual-ring) bound to the voice filter endpoints. The rack context
  * menu is deliberately not offered here — value editing happens on the knob
- * and modulation feedback on its ring, per the T04 settled list.
+ * and modulation feedback on its ring.
  */
 
 
@@ -3143,7 +2986,7 @@ function FilterSection({
             throw new Error("Compact FilterSection requires filterMix, routes, and armedSource.");
         }
         const filterOff = filterMode.value === 0;
-        // T04A: the travel overlay renders only while the armed source has a
+        // The travel overlay renders only while the armed source has a
         // filter mapping — color must never claim a mapping that does not
         // exist. Each axis is live only through its own route.
         const modulationTravel = armedCutoffRoute === null && armedQRoute === null
@@ -3926,21 +3769,19 @@ function MsegEditorModal({
         const modalRoot = backdropRef.current;
         const shellBack = compactShellBack
             ? modalRoot.parentElement
-                ?.querySelector<HTMLElement>('[data-role="synth-preset-bar-host"] cosimo-preset-bar')
-                ?.shadowRoot
-                ?.querySelector<HTMLButtonElement>('[data-action="shell-back"]') ?? null
+                ?.querySelector<HTMLButtonElement>('[data-role="synth-preset-bar-host"] [data-action="shell-back"]') ?? null
             : null;
         const siblings = Array.from(modalRoot.parentElement?.children ?? []).filter(
             (candidate): candidate is HTMLElement => candidate instanceof HTMLElement
                 && candidate !== modalRoot
-                // T28 keeps the compact preset/Back row as live global shell
+                // The compact preset/Back row stays live global shell
                 // above focused editors; universal Back owns dismissal.
                 && candidate.getAttribute("data-role") !== "synth-preset-bar-host"
-                // The floating Mod bar is the universal play surface (T11);
+                // The floating Mod bar is the universal play surface;
                 // editing a shape while auditioning it is the point, so the
                 // modal must never deaden it.
                 && candidate.getAttribute("data-role") !== "mobile-global-mod-rail-portal"
-                // T60 groups the portal with the bottom tabs so a parked row
+                // The portal is grouped with the bottom tabs so a parked row
                 // can consume exactly one dock row. During full-screen editing
                 // the tabs are absent, leaving this wrapper as the bar owner.
                 && candidate.querySelector('[data-role="mobile-global-mod-rail-portal"]') === null,
@@ -4180,7 +4021,6 @@ function ModulationMatrixSection({
     observedMsegPlayhead,
     selectedEnvelopeSlot,
     selectedEnvelope,
-    routes,
     onSelectMsegSlot,
     onSelectMsegShape,
     onOpenMsegEditor,
@@ -4189,9 +4029,6 @@ function ModulationMatrixSection({
     onToggleMsegLoop,
     onSelectEnvelopeSlot,
     onEnvelopeChange,
-    onAddRoute,
-    onRemoveRoute,
-    onRouteChange,
     msegRateFocusBindings,
     msegDirectEditing = null,
 }: ModulationMatrixSectionProps) {
@@ -4245,7 +4082,7 @@ function ModulationMatrixSection({
         ));
     }, [focusedSource, onSelectEnvelopeSlot, onSelectMsegSlot]);
 
-    // T14: the page and the floating Mod bar share ONE selection. The bar's
+    // The page and the floating Mod bar share ONE selection. The bar's
     // armed source drives the page's editor here; the page's own selectors
     // push back through onArmSource, so the shape the user sees is always the
     // shape the full editor opens.
@@ -5098,7 +4935,6 @@ function ModulationMatrixSection({
                                     morphShapeAPoints={msegState.shapeA?.points ?? null}
                                     morphShapeBPoints={msegState.shapeB?.points ?? null}
                                     morphValue={selectedMsegMorph.value}
-                                    showMorphCurve={isMsegMorphAdjusting}
                                     editShapeIndex={msegState.editShapeIndex ?? 0}
                                     className="h-full w-full"
                                     progressFillEnd={observedMsegPlayhead.progressFillEnd}
@@ -5232,8 +5068,6 @@ function msegSourceSlotFromIndex(slotIndex: number): MsegSourceSlot {
     throw new RangeError(`Unknown MSEG slot index: ${slotIndex}`);
 }
 
-type MobileWorkspaceSection = WorkspaceTabId;
-
 function parseMobileModSourceDetail(detail: string | null): MobileModSource | null {
     if (detail === null) {
         return null;
@@ -5329,8 +5163,9 @@ function DesktopPatchViewBody({
         };
     }, [activeMsegRouteSource.sourceKind, activeMsegRouteSource.sourceSlot]);
     const [selectedRackEffectId, setSelectedRackEffectId] = useState<EffectModuleId>("drive");
-    // T74 owns the compact action and controlled state only. T75 composes its
-    // dedicated surface from this seam without changing the rack footprint.
+    // The rack's compact Polish module owns only the open action and this
+    // state; the full-page editor composes from it without changing the rack
+    // footprint.
     const [polishEditorExpanded, setPolishEditorExpanded] = useState(false);
     const polishFxScrollContextRef = useRef<Array<{
         readonly element: HTMLElement;
@@ -5509,8 +5344,6 @@ function DesktopPatchViewBody({
     const synthView = useSynthPatchViewModel({
         oscillatorID: oscillatorSelection.selectedOscillatorID,
         stageRef,
-        msegEditorSurfaceRef,
-        msegSurfaceOrientation,
         keyboardRef: keyboardElementRef,
         voiceModeCount: VOICE_MODE_OPTIONS.length,
         keyboardInputMode,
@@ -5527,20 +5360,14 @@ function DesktopPatchViewBody({
         autoPreviewEnabled,
         oscillatorTargetsActive: !bounceController.state.sampled,
     });
-    const bounceGuardRef = useRef<((continuation: () => void) => void) | null>(null);
-    const handleBounceGuardReady = useCallback((
-        guard: ((continuation: () => void) => void) | null,
-    ) => {
-        bounceGuardRef.current = guard;
-    }, []);
-    const requestBounceGuard = useCallback((continuation: () => void) => {
-        const guard = bounceGuardRef.current;
-        if (guard) {
-            guard(continuation);
-        } else {
-            continuation();
-        }
-    }, []);
+    const handleBounceAudio = useCallback(() => {
+        void bounceController.bounce();
+    }, [bounceController]);
+    const { resetArticulationPatchBases } = synthView;
+    const handleSoundReplaced = useCallback((parameters: Readonly<Record<string, number>>) => {
+        clearLaneSoloAudition(patchConnection);
+        resetArticulationPatchBases(parameters);
+    }, [patchConnection, resetArticulationPatchBases]);
     const modRailAudition = useMemo<ModRailAuditionBindings>(() => ({
         onNoteKeyDown: synthView.handleStartNoteKeyAudition,
         onNoteKeyUp: synthView.handleStopNoteKeyAudition,
@@ -5581,7 +5408,7 @@ function DesktopPatchViewBody({
     const [keyboardControlMode, setKeyboardControlMode] = useState<"articulation" | "voice">("articulation");
     const [isArticulationEditorExpanded, setIsArticulationEditorExpanded] = useState(false);
     const [dismissedContextualToolbarKey, setDismissedContextualToolbarKey] = useState<string | null>(null);
-    // T14: the Mod page and the floating bar share ONE selection. The page's
+    // The Mod page and the floating bar share ONE selection. The page's
     // selectors arm the bar through this signal (the rail workspace owns the
     // real selection state and re-reports it); the bar's own changes reach
     // the page through the mirrored globalModRailState.selectedSource. The
@@ -5596,7 +5423,7 @@ function DesktopPatchViewBody({
         setGlobalModRailState((current) => ({ ...current, selectedSource: source }));
         setArmModSourceSignal((previous) => ({ source, serial: (previous?.serial ?? 0) + 1 }));
     }, []);
-    // T14: choosing a source from the floating bar while inside Mod surfaces
+    // Choosing a source from the floating bar while inside Mod surfaces
     // the SOURCE panel (never the quick sheet over the full panel).
     const [modPagerFocusSerial, setModPagerFocusSerial] = useState(0);
     const modPagerSourceKey = `${globalModRailState.selectedSource.sourceKind}-${globalModRailState.selectedSource.sourceSlot}`;
@@ -5874,7 +5701,7 @@ function DesktopPatchViewBody({
                     onSelectCard={synthView.handleSelectArticulationSlot}
                     onCardPlayPressStart={synthView.handleStartArticulationAudition}
                     onCardPlayPressEnd={synthView.handleStopArticulationAudition}
-                    onCapture={() => synthView.handleCaptureArticulationSlot({ autoAssign: !isArticulationEditorExpanded })}
+                    onCapture={synthView.handleCaptureArticulationSlot}
                     onUpdate={synthView.handleUpdateSelectedArticulationSlot}
                     onRevert={synthView.handleRevertSelectedArticulationSlot}
                     onUndoDiscard={synthView.handleUndoDiscardedArticulationEdit}
@@ -5957,7 +5784,7 @@ function DesktopPatchViewBody({
         });
     }, [workspacePanelElement]);
 
-    // T06: dwell navigation during a source drag. The drag gesture keeps its
+    // Dwell navigation during a source drag. The drag gesture keeps its
     // owner; these only change what is presented under the held source.
     const handleDragDwellNavigate = useCallback((dwellKey: string) => {
         if (dwellKey.startsWith("workspace-tab:")) {
@@ -6010,7 +5837,7 @@ function DesktopPatchViewBody({
         }));
     }, []);
 
-    // T43: the source and open state are one value. Replacing this value keeps
+    // The source and open state are one value. Replacing this value keeps
     // the mounted sheet alive while changing A -> B, so its heading and cells
     // can never observe different source snapshots.
     const [quickEditorSource, setQuickEditorSource] = useState<MobileModSource | null>(null);
@@ -6036,7 +5863,7 @@ function DesktopPatchViewBody({
         }
     }, [quickEditorSource]);
 
-    /* T20 — the ADR-017 long-press parameter menu: one shared shell state
+    /* The ADR-017 long-press parameter menu: one shared shell state
        machine (also used by the iOS shell). */
     const { openParameterMenu: openShellParameterMenu, parameterMenuOverlays } = useParameterMenuShell({
         routes: synthView.routes,
@@ -6212,7 +6039,6 @@ function DesktopPatchViewBody({
                                 onBounce={() => void bounceController.bounce()}
                                 onCancel={bounceController.cancel}
                                 onRevert={() => void bounceController.revert()}
-                                requestBounceGuard={requestBounceGuard}
                                 compact
                                 className="h-full"
                             />
@@ -6246,7 +6072,6 @@ function DesktopPatchViewBody({
                                 state={bounceController.state}
                                 onBounce={() => void bounceController.bounce()}
                                 onCancel={bounceController.cancel}
-                                requestBounceGuard={requestBounceGuard}
                                 compact
                                 showReadyAction={false}
                             />
@@ -6264,7 +6089,6 @@ function DesktopPatchViewBody({
                             onBounce={() => void bounceController.bounce()}
                             onCancel={bounceController.cancel}
                             onRevert={() => void bounceController.revert()}
-                            requestBounceGuard={requestBounceGuard}
                             className={DESKTOP_VOICE_VISUALIZATION_CARD_CLASS}
                         />
                     )}
@@ -6307,7 +6131,6 @@ function DesktopPatchViewBody({
                             state={bounceController.state}
                             onBounce={() => void bounceController.bounce()}
                             onCancel={bounceController.cancel}
-                            requestBounceGuard={requestBounceGuard}
                             showReadyAction={false}
                         />
                     </div>
@@ -6340,7 +6163,7 @@ function DesktopPatchViewBody({
                 armedSource={globalModRailState.selectedSource}
             />
         </section>
-        {/* T05: the articulation/controls pane leaves compact mobile; the
+        {/* The articulation/controls pane is absent on compact mobile; the
             wavetable editor and filter split the freed height 50/50. */}
         {isCompactViewport ? null : (
             <section
@@ -6391,7 +6214,6 @@ function DesktopPatchViewBody({
                             observedMsegPlayhead={synthView.observedMsegPlayhead}
                             selectedEnvelopeSlot={synthView.selectedEnvelopeSlot}
                             selectedEnvelope={synthView.selectedEnvelope}
-                            routes={synthView.routes}
                             onSelectMsegSlot={synthView.handleSelectMsegSlot}
                             onSelectMsegShape={synthView.handleSelectMsegShape}
                             onOpenMsegEditor={synthView.msegEditor.openEditor}
@@ -6400,9 +6222,6 @@ function DesktopPatchViewBody({
                             onToggleMsegLoop={synthView.handleToggleMsegLoop}
                             onSelectEnvelopeSlot={synthView.handleSelectEnvelopeSlot}
                             onEnvelopeChange={synthView.handleEnvelopeChange}
-                            onAddRoute={synthView.handleAddRoute}
-                            onRemoveRoute={synthView.handleRemoveRoute}
-                            onRouteChange={synthView.handleRouteChange}
                             msegRateFocusBindings={synthView.keyboardRouting.msegRateFocusBindings}
                             msegDirectEditing={{composition: synthView.msegEditor.composition}}
                         />
@@ -6434,7 +6253,6 @@ function DesktopPatchViewBody({
                         observedMsegPlayhead={synthView.observedMsegPlayhead}
                         selectedEnvelopeSlot={synthView.selectedEnvelopeSlot}
                         selectedEnvelope={synthView.selectedEnvelope}
-                        routes={synthView.routes}
                         onSelectMsegSlot={synthView.handleSelectMsegSlot}
                         onSelectMsegShape={synthView.handleSelectMsegShape}
                         onOpenMsegEditor={synthView.msegEditor.openEditor}
@@ -6443,9 +6261,6 @@ function DesktopPatchViewBody({
                         onToggleMsegLoop={synthView.handleToggleMsegLoop}
                         onSelectEnvelopeSlot={synthView.handleSelectEnvelopeSlot}
                         onEnvelopeChange={synthView.handleEnvelopeChange}
-                        onAddRoute={synthView.handleAddRoute}
-                        onRemoveRoute={synthView.handleRemoveRoute}
-                        onRouteChange={synthView.handleRouteChange}
                         msegRateFocusBindings={synthView.keyboardRouting.msegRateFocusBindings}
                     />
                 )}
@@ -6550,22 +6365,22 @@ function DesktopPatchViewBody({
                 isHidden={synthView.msegEditor.isOpen && !isCompactViewport}
                 focusedEditorOpen={polishEditorExpanded
                     || (isCompactViewport && synthView.msegEditor.isOpen)}
-                storedStateAdapters={synthView.presetStoredStateAdapters}
-                wavetableTables={synthView.tableOptions}
-                polishMeter={synthView.observedPolishMeter}
                 compactSynth={isCompactViewport}
                 backAvailable={polishEditorExpanded
                     || synthView.msegEditor.isOpen
                     || mobileReturnTarget !== null}
-                onShellBack={handleUniversalBack}
-                perfTuningAvailable={PERF_TUNING_AVAILABLE}
-                onOpenPerfTuning={openPerfTuning}
-                onBounceGuardReady={handleBounceGuardReady}
+                onBack={handleUniversalBack}
+                polishMeter={synthView.observedPolishMeter}
+                wavetableTables={synthView.tableOptions}
                 bounceAudioAvailable={bounceController.state.hydrated
                     && bounceController.state.captureReady
                     && !bounceController.state.busy}
-                onBounceAudio={() => void bounceController.bounce()}
+                onBounceAudio={handleBounceAudio}
+                videoBounceAvailable={isVideoBounceAvailable()}
                 onBounceVideo={handleBounceVideo}
+                developerSettingsAvailable={PERF_TUNING_AVAILABLE}
+                onOpenDeveloperSettings={openPerfTuning}
+                onSoundReplaced={handleSoundReplaced}
             />
             <PolishFullScreenEditor
                 open={polishEditorExpanded}
@@ -6829,7 +6644,7 @@ function DesktopPatchViewBody({
                     }
                 }}
                 onUpdateArticulation={synthView.handleUpdateSelectedArticulationSlot}
-                onSaveAsNewArticulation={() => synthView.handleCaptureArticulationSlot({ autoAssign: true })}
+                onSaveAsNewArticulation={synthView.handleCaptureArticulationSlot}
                 onRevertArticulation={synthView.handleRevertSelectedArticulationSlot}
             />
 

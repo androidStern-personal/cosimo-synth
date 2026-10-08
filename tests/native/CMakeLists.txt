@@ -3,8 +3,8 @@ cmake_minimum_required(VERSION 3.16)
 project(CosimoNativeCmajorProbes LANGUAGES CXX)
 
 get_filename_component(COSIMO_REPO_ROOT "${CMAKE_CURRENT_LIST_DIR}/../.." ABSOLUTE)
-include("${COSIMO_REPO_ROOT}/kit/cmake/CosimoDependencies.cmake")
-cosimo_add_production_dependencies()
+include("${COSIMO_REPO_ROOT}/kit/cmake/dependencies.cmake")
+builder_kit_dependencies()
 
 find_package(Threads REQUIRED)
 
@@ -40,8 +40,8 @@ function(cosimo_configure_cmajor_probe target)
     target_compile_features(${target} PRIVATE cxx_std_17)
     target_compile_definitions(${target} PRIVATE CMAJOR_DLL=1)
     target_include_directories(${target} PRIVATE
-        "${COSIMO_CMAJOR_SOURCE_DIR}/include"
-        "${COSIMO_CHOC_SOURCE_DIR}"
+        "${BUILDER_KIT_CMAJOR_SOURCE_DIR}/include"
+        "${BUILDER_KIT_CHOC_SOURCE_DIR}"
         "${COSIMO_REPO_ROOT}/native/three_oscillator_renderer"
         "${COSIMO_REPO_ROOT}/native/three_oscillator_renderer/third_party/xsimd/include"
     )

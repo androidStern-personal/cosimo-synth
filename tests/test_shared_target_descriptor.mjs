@@ -5,7 +5,7 @@ import path from "node:path";
 
 import fc from "fast-check";
 
-import { loadUIModule } from "./helpers/load_ui_module.mjs";
+import { loadUIModule } from "../kit/tests/helpers/load_ui_module.mjs";
 
 const repoRoot = path.resolve(import.meta.dirname, "..");
 const catalogPromise = loadUIModule(repoRoot, "ui/shared/target-descriptor.ts");
@@ -132,9 +132,7 @@ test("every rack target is bound to its real Cmajor endpoint", async () => {
             descriptor.modulationTargetKind,
             parameter.modulationTargetIndex === null
                 ? null
-                : (await import("../patch_gui/modulation-targets.js")).laneBaseKindForRackEndpoint(
-                    rackCatalog.rackModulationIdentityEndpointID(parameter),
-                ),
+                : (await import("../patch_gui/modulation-targets.js")).laneBaseKindForRackEndpoint(parameter.endpointID),
             parameter.endpointID,
         );
         assert.ok(Math.abs(descriptor.binding.toEngine(descriptor.initialValue) - parameter.initial) < 1e-6);

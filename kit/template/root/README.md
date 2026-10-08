@@ -33,7 +33,7 @@ After the first-session strict doctor and choice above, follow this section only
 when you choose to build the included plugin as-is.
 
 Ask your coding agent to follow the **Included Enhance That, Unchanged** route in
-`kit/skills/cosimo-make-plugin/SKILL.md`. That is the authoritative procedure.
+`kit/skills/make-plugin/SKILL.md`. That is the authoritative procedure.
 It keeps the included `enhancer-lite` target unchanged, runs the typecheck and
 tests, builds the dedicated native plug-in, and installs it. Product-owner
 placeholder details do not block this unchanged included plug-in.

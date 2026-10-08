@@ -14,8 +14,8 @@ if(APPLE AND (CMAKE_OSX_DEPLOYMENT_TARGET STREQUAL ""
 endif()
 
 get_filename_component(COSIMO_REPO_ROOT "${CMAKE_CURRENT_LIST_DIR}/../.." ABSOLUTE)
-include("${COSIMO_REPO_ROOT}/kit/cmake/CosimoDependencies.cmake")
-cosimo_add_cmajor_toolchain_dependencies()
+include("${COSIMO_REPO_ROOT}/kit/cmake/dependencies.cmake")
+builder_kit_toolchain_dependencies()
 
 set(BUILD_CMAJ ON CACHE BOOL "Build the pinned Cmajor command" FORCE)
 set(BUILD_CMAJ_LIB OFF CACHE BOOL "Do not build the Cmajor shared library" FORCE)
@@ -28,7 +28,7 @@ foreach(configuration DEBUG RELEASE RELWITHDEBINFO MINSIZEREL)
     set("CMAKE_RUNTIME_OUTPUT_DIRECTORY_${configuration}" "${CMAKE_BINARY_DIR}/bin")
 endforeach()
 
-add_subdirectory("${COSIMO_CMAJOR_SOURCE_DIR}" cmajor)
+add_subdirectory("${BUILDER_KIT_CMAJOR_SOURCE_DIR}" cmajor)
 
 # LLVM is linked statically; its build-machine search directory is not a
 # runtime dependency and must not be embedded in the shipped tool.

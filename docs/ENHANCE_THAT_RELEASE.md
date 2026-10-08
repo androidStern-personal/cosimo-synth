@@ -11,8 +11,7 @@ remain inactive evidence, not prerequisites for the next build.
 Keep the name **Enhance That**, bundle `EnhanceThat.vst3`, patch/bundle ID
 `dev.cosimo.enhancer-lite`, codes `CsEL` / `Cosi`, and processor CID
 `ABCDEF019182FAEB436F73694373454C`. The rename preserves saved sounds and stable
-parameter IDs. `previousProductName: CosimoEnhancerLite` enables recovery from
-the old filename; do not invent a new plugin identity to bypass an old copy.
+parameter IDs. Do not invent a new plugin identity to bypass an old copy.
 
 The eight sound controls remain Frequency, Q, Routing, Amount / Mid, Side,
 Character, Intensity and Shape. Keep their automation/gesture repairs: a changed
@@ -53,16 +52,16 @@ After the selected AU passes its host/customer qualification, use
 
 ```sh
 node scripts/build_enhance_that_release.mjs --plan --include-au
-COSIMO_CMAKE_JOBS=4 node scripts/build_enhance_that_release.mjs \
+BUILDER_KIT_CMAKE_JOBS=4 node scripts/build_enhance_that_release.mjs \
   --unsigned --include-au
 ```
 
 For an explicitly VST3-only release, set `au_decision` to the agreed reason:
 
 ```sh
-COSIMO_CMAKE_JOBS=4 node scripts/build_enhance_that_release.mjs \
+BUILDER_KIT_CMAKE_JOBS=4 node scripts/build_enhance_that_release.mjs \
   --unsigned --verify-repeatable-packaging --au-deferred "$au_decision"
-COSIMO_CMAKE_JOBS=4 COSIMO_NOTARY_PROFILE="$notary_profile" \
+BUILDER_KIT_CMAKE_JOBS=4 COSIMO_NOTARY_PROFILE="$notary_profile" \
   node scripts/build_enhance_that_release.mjs --release --au-deferred "$au_decision"
 ```
 

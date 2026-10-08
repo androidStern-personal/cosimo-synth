@@ -1,1 +1,0 @@
-../../../kit/ui/effects/effect-view-loader.js

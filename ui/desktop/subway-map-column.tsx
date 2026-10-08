@@ -18,7 +18,6 @@ import {
     type SubwayGhostCell,
     type SubwayRow,
     type SubwayStationCell,
-    type SubwayTint,
 } from "../shared/lane-subway-layout";
 import { getRackEffectDescriptor } from "../shared/rack-parameter-descriptors";
 import type { EffectModuleId } from "../shared/target-descriptor";
@@ -40,7 +39,7 @@ import {
 } from "../shared/subway-connector-geometry";
 
 /**
- * The subway-map rack column (M3/M4, locked direction: canvas "FX Rack
+ * The subway-map rack column (design reference: canvas "FX Rack
  * Subway Map"). The lane.v2 document renders THROUGH the layout model as a
  * line map — the whole topology always in view: trunk stations on the
  * infra-teal line, parallel groups forking at a dot junction with lettered

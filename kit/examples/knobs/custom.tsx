@@ -10,7 +10,7 @@ function Needle() {
         <circle cx="50" cy="50" r="38" fill="var(--demo-disc)" stroke="currentColor" strokeWidth="1" opacity=".8" />
         <circle cx="50" cy="50" r="30" fill="none" stroke="currentColor" opacity=".1" />
         <g transform={`rotate(${-135 + position * 270} 50 50)`}>
-            <path d="M 50 24 L 50 38" stroke="var(--knob-color)" strokeWidth={isDragging ? 5 : 3} strokeLinecap="round" />
+            <path d="M 50 24 L 50 38" stroke="var(--editor-accent-start, #d2fa6a)" strokeWidth={isDragging ? 5 : 3} strokeLinecap="round" />
         </g>
     </svg>;
 }

@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs/promises";
 import path from "node:path";
 
-import { loadUIModule } from "./helpers/load_ui_module.mjs";
+import { loadUIModule } from "../kit/tests/helpers/load_ui_module.mjs";
 
 const repoRoot = path.resolve(import.meta.dirname, "..");
 
@@ -84,7 +84,7 @@ test("lane state owns trim by effect-instance identity and full replay addresses
         reverb: "reverbOutputTrimDb",
     };
 
-    assert.equal(slotParams.LANE_SLOT_PARAM_COUNT, 13);
+    assert.equal(slotParams.LANE_SLOT_PARAM_COUNT, 12);
     for (const [deviceType, endpointID] of Object.entries(endpointByType)) {
         const endpoints = slotParams.laneDeviceParamEndpoints(deviceType);
         assert.equal(endpoints.at(-1), endpointID);
@@ -134,13 +134,13 @@ test("lane state owns trim by effect-instance identity and full replay addresses
         { _tag: "ok", value: moved },
     );
 
-    const preT78 = JSON.parse(laneState.serializeLaneStateV2(initial));
-    delete preT78.devices["delay#1"].params.delayOutputTrimDb;
-    let preT78Result;
+    const incomplete = JSON.parse(laneState.serializeLaneStateV2(initial));
+    delete incomplete.devices["delay#1"].params.delayOutputTrimDb;
+    let incompleteResult;
     assert.doesNotThrow(() => {
-        preT78Result = laneState.parseLaneStateV2(preT78);
-    }, "unsupported pre-T78 state must reject at the schema boundary, not throw mid-materialization");
-    assert.equal(preT78Result._tag, "err", "T78 explicitly adds no old-preset compatibility path");
+        incompleteResult = laneState.parseLaneStateV2(incomplete);
+    }, "a lane record without Output Trim must reject at the schema boundary, not throw mid-materialization");
+    assert.equal(incompleteResult._tag, "err", "a lane record without Output Trim is rejected");
 });
 
 test("the sparse modulation program grows to 235 rack cells and executes only mapped trim routes", async () => {
@@ -209,10 +209,10 @@ test("the sparse modulation program grows to 235 rack cells and executes only ma
 });
 
 test("host automation is reconciled into lane state and every UI projection preserves hard silence", async () => {
-    const [trim, laneState, initState, targetBase, routePresentation, catalog] = await Promise.all([
+    const [trim, laneState, synthState, targetBase, routePresentation, catalog] = await Promise.all([
         loadUIModule(repoRoot, "ui/shared/effect-output-trim.ts"),
         loadUIModule(repoRoot, "ui/shared/lane-state-v2.ts"),
-        loadUIModule(repoRoot, "ui/shared/effects/synth-init-state.ts"),
+        loadUIModule(repoRoot, "ui/shared/synth-plugin-state.ts"),
         loadUIModule(repoRoot, "ui/shared/modulation-target-base.ts"),
         loadUIModule(repoRoot, "ui/shared/rack-route-presentation.ts"),
         loadUIModule(repoRoot, "ui/shared/rack-parameter-descriptors.ts"),
@@ -236,42 +236,18 @@ test("host automation is reconciled into lane state and every UI projection pres
     );
     assert.equal(Object.hasOwn(synchronized.devices["reverb#1"].params, "polishOutputTrimDb"), false);
 
-    const transactionEvents = [];
-    const transactionStoredWrites = [];
-    const adapter = initState.createSynthRackInitStateAdapter({
-        sendEventOrValue(endpointID, value) {
-            transactionEvents.push({ endpointID, value });
-        },
-        sendStoredStateValue(key, value) {
-            transactionStoredWrites.push({ key, value });
-        },
-    });
-    const transactionContext = {
-        parameters: hostParameters,
-        storedState: { "lane.v1": laneState.serializeLaneStateV2(initial) },
-    };
+    // Presets, snapshots, Init and sound links recall the trim parameters and the lane
+    // document in one edit; the lane field depends on every trim and is prepared from them.
+    const laneField = synthState.synthPluginState["lane.v1"];
+    assert.deepEqual([...laneField.engine.dependencies].sort(), [...trim.allEffectOutputTrimHostEndpointIDs()].sort());
     assert.deepEqual(
-        adapter.normalizeForTransaction(initial, transactionContext),
+        laneField.engine.prepare(initial, { parameters: hostParameters }),
         synchronized,
-        "preset/Init/URL transactions must replay the lane mirror from the host parameter authority",
+        "the engine receives the lane document reconciled with the host trim parameters",
     );
-    assert.deepEqual(
-        JSON.parse(adapter.serializeForTransaction(initial, transactionContext)),
-        synchronized,
-    );
-    adapter.apply(initial, transactionContext);
-    assert.deepEqual(
-        transactionEvents.filter(({ endpointID }) => (
-            trim.parseEffectOutputTrimHostEndpointID(endpointID) !== null
-        )),
-        [
-            { endpointID: "laneDistortion1OutputTrimDb", value: 4.5 },
-            { endpointID: "laneDelay1OutputTrimDb", value: -18 },
-            { endpointID: "laneReverb1OutputTrimDb", value: trim.EFFECT_OUTPUT_TRIM_SILENCE_DB },
-        ],
-        "loading a preset or shared URL must install the matching real host parameters",
-    );
-    assert.deepEqual(JSON.parse(transactionStoredWrites[0].value), synchronized);
+    for (const endpointID of trim.allEffectOutputTrimHostEndpointIDs()) {
+        assert.equal(synthState.synthPluginState[endpointID]?.kind, "parameter", `${endpointID} is a recalled host parameter`);
+    }
 
     assert.equal(
         trim.effectOutputTrimEffectiveDb(trim.EFFECT_OUTPUT_TRIM_SILENCE_DB, 35),
@@ -318,16 +294,12 @@ test("same-type replacement suppresses a delayed old host callback until reset a
     ]);
     const listeners = new Map();
     const requested = [];
-    const sent = [];
     const connection = {
         addParameterListener(endpointID, listener) {
             listeners.set(endpointID, listener);
         },
         requestParameterValue(endpointID) {
             requested.push(endpointID);
-        },
-        sendEventOrValue(endpointID, value) {
-            sent.push({ endpointID, value });
         },
     };
     let current = laneState.createDefaultLaneStateV2();
@@ -349,9 +321,8 @@ test("same-type replacement suppresses a delayed old host callback until reset a
     assert.equal(reset.devices["delay#1"].params.delayOutputTrimDb, 0);
     mirror.captureLaneState(reset);
     current = reset;
-    laneState.commitLaneStateV2(connection, reset);
     assert.deepEqual(
-        sent.filter(({ endpointID }) => endpointID === "laneDelay1OutputTrimDb"),
+        laneState.buildLaneRuntimeEventsV2(reset).filter(({ endpointID }) => endpointID === "laneDelay1OutputTrimDb"),
         [{ endpointID: "laneDelay1OutputTrimDb", value: 0 }],
     );
 
@@ -397,15 +368,11 @@ test("cross-type swap suppresses the replacement endpoint's stale callback until
         loadUIModule(repoRoot, "ui/shared/lane-state-v2.ts"),
     ]);
     const listeners = new Map();
-    const sent = [];
     const connection = {
         addParameterListener(endpointID, listener) {
             listeners.set(endpointID, listener);
         },
         requestParameterValue() {},
-        sendEventOrValue(endpointID, value) {
-            sent.push({ endpointID, value });
-        },
     };
     let current = laneState.createDefaultLaneStateV2();
     const acceptedHostValues = [];
@@ -426,9 +393,8 @@ test("cross-type swap suppresses the replacement endpoint's stale callback until
     assert.equal(swapped.devices["flanger#1"].params.flangerOutputTrimDb, 0);
     mirror.captureLaneState(swapped);
     current = swapped;
-    laneState.commitLaneStateV2(connection, swapped);
     assert.deepEqual(
-        sent.filter(({ endpointID }) => endpointID === "laneFlanger1OutputTrimDb"),
+        laneState.buildLaneRuntimeEventsV2(swapped).filter(({ endpointID }) => endpointID === "laneFlanger1OutputTrimDb"),
         [{ endpointID: "laneFlanger1OutputTrimDb", value: 0 }],
     );
 
@@ -448,11 +414,17 @@ test("cross-type swap suppresses the replacement endpoint's stale callback until
 });
 
 test("live bindings use type-instance host gestures and the iPhone Distortion editor ends with Output Trim", async () => {
-    const [bindingsSource, mirrorSource, synthHooksSource, iosSource] = await Promise.all([
+    const [bindingsSource, mirrorSource, synthHooksSource, iosSource, pluginStateSource] = await Promise.all([
         fs.readFile(path.join(repoRoot, "ui/shared/lane-param-bindings.ts"), "utf8"),
         fs.readFile(path.join(repoRoot, "ui/shared/effect-output-trim-host-mirror.ts"), "utf8"),
         fs.readFile(path.join(repoRoot, "ui/shared/synth-hooks.ts"), "utf8"),
         fs.readFile(path.join(repoRoot, "ui/ios/IOSPatchView.tsx"), "utf8"),
+        fs.readFile(path.join(repoRoot, "ui/shared/synth-plugin-state.ts"), "utf8"),
+    ]);
+    const [trim, laneState, { synthPluginState }] = await Promise.all([
+        loadUIModule(repoRoot, "ui/shared/effect-output-trim.ts"),
+        loadUIModule(repoRoot, "ui/shared/lane-state-v2.ts"),
+        loadUIModule(repoRoot, "ui/shared/synth-plugin-state.ts"),
     ]);
 
     assert.match(bindingsSource, /effectOutputTrimHostEndpointID\([\s\S]*parsedDeviceId\.instanceNumber/);
@@ -461,7 +433,27 @@ test("live bindings use type-instance host gestures and the iPhone Distortion ed
     assert.match(bindingsSource, /hostBinding\.beginGesture\(\)/);
     assert.match(bindingsSource, /hostBinding\.endGesture\(\)/);
     assert.match(mirrorSource, /allEffectOutputTrimHostEndpointIDs\(\)/);
-    assert.match(bindingsSource, /scheduleOutputTrimPersist\(created\)/);
+
+    // The host trim parameters are the automation authority. The shared plugin
+    // state declares them, folds them into the rack before rack delivery, and the
+    // view only re-reads accepted state when automation moves a trim. Nothing in
+    // the view writes trim values back into the stored rack document.
+    for (const endpoint of trim.allEffectOutputTrimHostEndpointIDs()) {
+        assert.deepEqual(synthPluginState[endpoint], { kind: "parameter", endpoint });
+    }
+    const rack = synthPluginState["lane.v1"].engine;
+    assert.deepEqual([...rack.dependencies].sort(), [...trim.allEffectOutputTrimHostEndpointIDs()].sort());
+    const prepared = rack.prepare(laneState.createDefaultLaneStateV2(), {
+        parameters: { laneDistortion1OutputTrimDb: 4.5, laneDelay1OutputTrimDb: -18 },
+    });
+    assert.equal(prepared.devices["distortion#1"].params.distortionOutputTrimDb, 4.5);
+    assert.equal(prepared.devices["delay#1"].params.delayOutputTrimDb, -18);
+    assert.match(
+        pluginStateSource,
+        /\[LANE_STATE_KEY\]: preparedState\(\{[\s\S]*?dependencies: allEffectOutputTrimHostEndpointIDs\(\),\s*prepare: \(value, \{ parameters \}\) => synchronizeLaneOutputTrimsFromHostParameters\(value, parameters\),\s*engine: synthRackDelivery,/,
+    );
+    assert.match(bindingsSource, /new EffectOutputTrimHostMirror\(connection, \(\) => \{[\s\S]*?\bread\(\);\s*\}\);/);
+    assert.doesNotMatch(bindingsSource, /scheduleOutputTrimPersist|sendStoredStateValue/);
 
     assert.match(synthHooksSource, /distortionOutputTrim:\s*PatchControlBinding<number>/);
     assert.match(

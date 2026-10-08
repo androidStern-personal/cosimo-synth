@@ -39,3 +39,17 @@ is unaffected by a failed fetch, merge, test, or build.
 Keep the checkpoint until you have tried the updated plugin and reopened a
 saved DAW project successfully. Customized plugin repair and merge decisions
 remain yours; upstream releases do not include bespoke development support.
+
+## Going back to the previous release
+
+If the update worked but you want the previous release back, ask:
+
+> Switch my project back to the update checkpoint branch. Cherry-pick the plugin changes I committed after the update, keep the updated branch as it is, then check, build and install as usual.
+
+The checkpoint branch still has the previous kit. Any plugin edits you made
+after the update are copied across one commit at a time. If one of them uses
+something only the new release has, the agent stops and explains the choice.
+
+A fix to the kit always arrives as a new patch release, such as 0.2.1. A
+published release is never changed in place, so updating again is how you get
+the fix.

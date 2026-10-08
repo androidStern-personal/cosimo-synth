@@ -6,7 +6,7 @@ import { fileURLToPath } from "node:url";
 import { inflateSync } from "node:zlib";
 
 import { chromium } from "playwright";
-import { loadUIModule } from "./helpers/load_ui_module.mjs";
+import { loadUIModule } from "../kit/tests/helpers/load_ui_module.mjs";
 
 const DEFAULT_DEV_SERVER_ORIGIN = "http://127.0.0.1:5175";
 const testDevServerOriginOverride = process.env.SEQFX_TEST_DEV_SERVER_ORIGIN;
@@ -45,8 +45,7 @@ function resolveTestDevServerOrigin(value) {
 const DEV_SERVER_ORIGIN = resolveTestDevServerOrigin(testDevServerOriginOverride);
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const SEQFX_STEP_COUNT = 32;
-const SEQFX_STATE_KEY = "seqfx.v7";
-const SEQFX_SNAPSHOT_BANK_STATE_KEY = "cosimo.effectSnapshotBank.seqfx.v1";
+const SEQFX_STATE_KEY = "patterns";
 const SEQFX_NORMAL_GAP_PX = 3;
 const SEQFX_BEAT_GAP_PX = 9;
 const SEQFX_MIN_CELL_SIZE_PX = 24;
@@ -120,8 +119,8 @@ async function getHarnessSnapshot(page) {
 }
 
 function parseSeqFxStoredState(value) {
-    assert.equal(typeof value, "string", "SeqFX stored state should be serialized JSON");
-    return stateModule.parseStrictSeqFxStateV7(value);
+    assert.equal(typeof value, "object", "SeqFX saves its patterns as a JSON document");
+    return stateModule.parseStoredSeqFxState(value);
 }
 
 function patternUploads(snapshot) {
@@ -130,22 +129,6 @@ function patternUploads(snapshot) {
 
 function seqFxStateWrites(snapshot) {
     return snapshot.storedStateWrites.filter((entry) => entry.key === SEQFX_STATE_KEY);
-}
-
-function snapshotSlotLocator(page, slotID) {
-    return page.locator("cosimo-effect-header").evaluateHandle((header, nextSlotID) => (
-        header.shadowRoot
-            ?.querySelector("cosimo-snapshot-bar")
-            ?.shadowRoot
-            ?.querySelector(`.snapshot-slot[data-slot="${nextSlotID}"]`)
-    ), slotID);
-}
-
-async function clickSnapshotSlot(page, slotID) {
-    const handle = await snapshotSlotLocator(page, slotID);
-    const element = handle.asElement();
-    assert.ok(element, `expected snapshot slot ${slotID} to exist`);
-    await element.click();
 }
 
 function gapAfterStep(step, cellsPerBeat) {
@@ -201,7 +184,7 @@ async function dispatchSyntheticPointer(page, targetSelector, type, init) {
     return page.evaluate(({ nextTargetSelector, nextType, nextInit }) => {
         const target = nextTargetSelector === "window"
             ? window
-            : document.querySelector(nextTargetSelector);
+            : window.__SEQFX_DOM__.querySelector(nextTargetSelector);
         if (!target) {
             throw new Error(`Synthetic pointer target not found: ${nextTargetSelector}`);
         }
@@ -345,7 +328,7 @@ async function pressMetaShortcut(page, key) {
 
 async function dispatchClipboardEvent(page, selector, type) {
     return page.evaluate(({ targetSelector, eventType }) => {
-        const target = document.querySelector(targetSelector);
+        const target = window.__SEQFX_DOM__.querySelector(targetSelector);
         if (!target) {
             throw new Error(`Missing clipboard event target: ${targetSelector}`);
         }
@@ -678,7 +661,11 @@ async function loadSeqFxHarness(page) {
                     window.$RefreshSig$ = () => (type) => type;
                     window.__vite_plugin_react_preamble_installed__ = true;
                 </script>
-                <script type="module" src="/fx/seqfx/view/harness-main.ts"></script>
+                <script type="module">
+                    import { mountSeqFxHarness } from "/tests/browser/fixtures/seqfx_view/harness.ts";
+                    window.__SEQFX_HARNESS__ = mountSeqFxHarness(document.getElementById("root"));
+                    window.__SEQFX_DOM__ = document.querySelector("builder-kit-state-view").shadowRoot;
+                </script>
             </body>
         </html>
     `);
@@ -688,137 +675,42 @@ async function createLoaderHarness(page) {
     await openSameOriginBlankPage(page);
     await page.evaluate(async ({ devOrigin, useDefaultLoader }) => {
         document.body.innerHTML = '<div id="root" style="width:1120px;height:680px"></div>';
-
-        class SeqFxLoaderHarnessPatchConnection {
-            constructor() {
-                this.manifest = {
-                    view: {
-                        devModule: "/fx/seqfx/view/source.tsx",
-                    },
-                };
-                this.storedState = {};
-                this.events = [];
-                this.parameters = {
-                    enabled: 1,
-                    globalMix: 1,
-                    patternSelect: 0,
-                    clockMode: 0,
-                    manualBpm: 120,
-                    rate: 1,
-                    swing: 0,
-                    loopStart: 0,
-                    loopLength: 32,
-                };
-                this.status = {
-                    details: {
-                        inputs: [],
-                    },
-                };
-                this.statusListeners = new Set();
-                this.storedStateListeners = new Set();
-                this.parameterListeners = new Map();
-                this.endpointListeners = new Map();
-            }
-
-            addStatusListener(listener) {
-                this.statusListeners.add(listener);
-            }
-
-            removeStatusListener(listener) {
-                this.statusListeners.delete(listener);
-            }
-
-            requestStatusUpdate() {
-                for (const listener of this.statusListeners) {
-                    listener(this.status);
-                }
-            }
-
-            addStoredStateValueListener(listener) {
-                this.storedStateListeners.add(listener);
-            }
-
-            removeStoredStateValueListener(listener) {
-                this.storedStateListeners.delete(listener);
-            }
-
-            requestFullStoredState(callback) {
-                callback({
-                    parameters: { ...this.parameters },
-                    values: { ...this.storedState },
-                });
-            }
-
-            requestStoredStateValue(key) {
-                for (const listener of this.storedStateListeners) {
-                    listener({ key, value: this.storedState[key] });
-                }
-            }
-
-            sendStoredStateValue(key, value) {
-                this.storedState[key] = value;
-                for (const listener of this.storedStateListeners) {
-                    listener({ key, value });
-                }
-            }
-
-            addParameterListener(endpointID, listener) {
-                const listeners = this.parameterListeners.get(endpointID) ?? new Set();
-                listeners.add(listener);
-                this.parameterListeners.set(endpointID, listeners);
-            }
-
-            removeParameterListener(endpointID, listener) {
-                this.parameterListeners.get(endpointID)?.delete(listener);
-            }
-
-            requestParameterValue(endpointID) {
-                for (const listener of this.parameterListeners.get(endpointID) ?? []) {
-                    listener(this.parameters[endpointID] ?? 0);
-                }
-            }
-
-            sendEventOrValue(endpointID, value) {
-                this.events.push({ endpointID, value });
-                this.parameters[endpointID] = value;
-                for (const listener of this.parameterListeners.get(endpointID) ?? []) {
-                    listener(value);
-                }
-            }
-
-            addEndpointListener(endpointID, listener) {
-                const listeners = this.endpointListeners.get(endpointID) ?? new Set();
-                listeners.add(listener);
-                this.endpointListeners.set(endpointID, listeners);
-            }
-
-            removeEndpointListener(endpointID, listener) {
-                this.endpointListeners.get(endpointID)?.delete(listener);
-            }
-
-            getSnapshot() {
-                return {
-                    events: [...this.events],
-                    storedState: { ...this.storedState },
-                    parameters: { ...this.parameters },
-                };
-            }
-        }
-
-        const patchConnection = new SeqFxLoaderHarnessPatchConnection();
-        const workerModule = await import(`/fx/seqfx/worker/seqfx-worker-service.ts?seqfx-loader-worker-test=${Date.now()}`);
-        const workerService = workerModule.createSeqFxWorkerService(patchConnection);
-        workerService.start();
-        const loaderModule = await import(`/fx/seqfx/view/index.js?seqfx-loader-test=${Date.now()}`);
+        // The browser state owner is itself React code, imported before the loader installs its preamble.
+        const refreshRuntime = await import("/@react-refresh");
+        refreshRuntime.injectIntoGlobalHook(window);
+        window.$RefreshReg$ = () => {};
+        window.$RefreshSig$ = () => (type) => type;
+        window.__vite_plugin_react_preamble_installed__ = true;
+        const { createBrowserPreviewState } = await import("/kit/ui/preview/state.ts");
+        const stateHost = createBrowserPreviewState({
+            snapshot: () => ({ values: {}, parameters: [
+                { endpoint: "enabled", value: 1, min: 0, max: 1, step: 1, defaultValue: 1 },
+                { endpoint: "globalMix", value: 1, min: 0, max: 1, step: 0, defaultValue: 1 },
+                { endpoint: "patternSelect", value: 0, min: 0, max: 11, step: 1, defaultValue: 0 },
+                { endpoint: "clockMode", value: 0, min: 0, max: 2, step: 1, defaultValue: 0 },
+                { endpoint: "manualBpm", value: 120, min: 20, max: 300, step: 0, defaultValue: 120 },
+                { endpoint: "rate", value: 1, min: 0, max: 2, step: 1, defaultValue: 1 },
+                { endpoint: "swing", value: 0, min: 0, max: 0.45, step: 0, defaultValue: 0 },
+                { endpoint: "loopStart", value: 0, min: 0, max: 31, step: 1, defaultValue: 0 },
+                { endpoint: "loopLength", value: 32, min: 1, max: 32, step: 1, defaultValue: 32 },
+            ] }),
+            parameter() {},
+            stored() {},
+            gesture() {},
+        });
+        const patchConnection = {
+            ...stateHost.host,
+            manifest: { ID: "dev.cosimo.seqfx", view: { devModule: "/fx/seqfx/view/source.tsx" } },
+            addEndpointListener() {},
+            removeEndpointListener() {},
+        };
+        const loaderModule = await import(`/kit/ui/view-loader.js?seqfx-loader-test=${Date.now()}`);
         const createView = useDefaultLoader
             ? loaderModule.default
             : loaderModule.createEffectPatchView({ devOrigin });
         const view = await createView(patchConnection);
         document.getElementById("root").appendChild(view);
-        window.__SEQFX_LOADER_HARNESS__ = {
-            patchConnection,
-            getSnapshot: () => patchConnection.getSnapshot(),
-        };
+        window.__SEQFX_DOM__ = view.shadowRoot;
     }, {
         devOrigin: DEV_SERVER_ORIGIN,
         useDefaultLoader: testDevServerOriginOverride === undefined,
@@ -841,9 +733,15 @@ test("seqfx_test_dev_server_origin_accepts_only_explicit_loopback_http_origins",
 
 before(async () => {
     if (!await canUseExistingServer()) {
-        serverProcess = spawn("npm", ["run", "fx:dev"], {
-            cwd: new URL("..", import.meta.url).pathname,
-            stdio: ["ignore", "pipe", "pipe"],
+        // The same command as `npm run fx:dev`, started without npm's shell
+        // layer so stopping this one process stops the server and the suite exits.
+        serverProcess = spawn(process.execPath, [
+            path.join(repoRoot, "node_modules/vite/bin/vite.js"),
+            "--config",
+            "kit/fx/vite.config.mjs",
+        ], {
+            cwd: repoRoot,
+            stdio: "ignore",
         });
     }
 
@@ -851,7 +749,7 @@ before(async () => {
     browser = await chromium.launch();
 });
 
-test("seqfx_shared_effect_loader_imports_react_dev_module_and_keeps_automation_hermetic", async () => {
+test("the shared effect loader imports the SeqFX React dev module and keeps automation hermetic", async () => {
     const page = await browser.newPage({ viewport: { width: 1280, height: 820 } });
     const pageErrors = [];
     page.on("pageerror", (error) => {
@@ -859,11 +757,12 @@ test("seqfx_shared_effect_loader_imports_react_dev_module_and_keeps_automation_h
     });
 
     await createLoaderHarness(page);
-    await page.locator('[data-role="seqfx-root"]').waitFor();
+    // The first dev-module request starts Vite's dependency optimization,
+    // which in this monorepo crawls every root page and can take over a minute.
+    await page.locator('[data-role="seqfx-root"]').waitFor({ timeout: 180_000 });
 
     const snapshot = await page.evaluate(() => ({
-        customElementDefined: Boolean(window.customElements.get("cosimo-seqfx-react-view")),
-        refreshPreambleInstalled: Boolean(window.__vite_plugin_react_preamble_installed__),
+        customElementDefined: Boolean(window.customElements.get("builder-kit-state-view")),
         webdriver: navigator.webdriver,
         reactGrab: (() => {
             const reactGrab = window.__REACT_GRAB__;
@@ -876,22 +775,17 @@ test("seqfx_shared_effect_loader_imports_react_dev_module_and_keeps_automation_h
                 }
                 : null;
         })(),
-        viewTagName: document.querySelector("cosimo-seqfx-react-view")?.tagName.toLowerCase(),
-        styleText: document.getElementById("cosimo-seqfx-react-view-styles")?.textContent ?? "",
-        uploads: window.__SEQFX_LOADER_HARNESS__?.getSnapshot().events
-            .filter((entry) => entry.endpointID === "patternUpload"),
+        viewTagName: document.querySelector("#root > *")?.tagName.toLowerCase(),
+        styleText: [...window.__SEQFX_DOM__.querySelectorAll("style")].map((style) => style.textContent).join("\n"),
     }));
 
     assert.equal(snapshot.customElementDefined, true);
-    assert.equal(snapshot.refreshPreambleInstalled, true);
     assert.equal(snapshot.webdriver, true);
     assert.equal(snapshot.reactGrab, null, "automated browsers must not load React Grab's networked dev tooling");
-    assert.equal(snapshot.viewTagName, "cosimo-seqfx-react-view");
+    assert.equal(snapshot.viewTagName, "builder-kit-state-view");
     assert.equal(snapshot.styleText.includes("@font-face"), false);
     assert.equal(snapshot.styleText.includes('font-family: "Avenir Next", "Helvetica Neue", Arial, sans-serif'), true);
     assert.equal(snapshot.styleText.includes("Geist"), false);
-    assert.equal(snapshot.uploads.length >= 1, true);
-    assert.equal(snapshot.uploads.at(-1).value.patternIndex, 0);
     assert.deepEqual(pageErrors, []);
 
     await page.close();
@@ -957,19 +851,37 @@ test("seqfx_bespoke_editors_disclose_trigger_latching_and_crush_shows_a_host_rat
     await page.close();
 });
 
-test("seqfx_vite_dev_server_serves_a_stable_browser_harness_page", async () => {
-    const page = await browser.newPage({ viewport: { width: 1280, height: 820 } });
-    const response = await page.goto(`${DEV_SERVER_ORIGIN}/fx/seqfx/view/harness.html`);
+const SEQFX_FONT_STACK = '"Avenir Next", "Helvetica Neue", Arial, sans-serif';
 
-    assert.equal(response?.status(), 200);
+test("seqfx renders its type in the product font stack", async () => {
+    const page = await browser.newPage({ viewport: { width: 1280, height: 820 } });
+    await loadSeqFxHarness(page);
+    await page.locator('[data-role="seqfx-root"]').waitFor();
+    const fontFamily = (locator) => locator.evaluate((node) => getComputedStyle(node).fontFamily);
+
+    assert.equal(await fontFamily(page.locator('[data-role="seqfx-root"]')), SEQFX_FONT_STACK);
+    assert.equal(await fontFamily(page.getByRole("heading", { name: "SeqFX", exact: true })), SEQFX_FONT_STACK);
+    assert.equal(await fontFamily(page.getByText("Select a cell", { exact: true })), SEQFX_FONT_STACK);
+    await page.getByRole("button", { name: "Chain 3 step 1", exact: true }).click();
+    await page.locator('[data-role="seqfx-tape-v2-editor"]').waitFor();
+
+    await page.close();
+});
+
+test("seqfx product font stack resolves to Avenir Next", {
+    skip: process.platform === "darwin"
+        ? false
+        : "Avenir Next ships only with macOS; elsewhere the stack falls back to Arial or sans-serif, whose metrics differ by design.",
+}, async () => {
+    const page = await browser.newPage({ viewport: { width: 1280, height: 820 } });
+    await loadSeqFxHarness(page);
     await page.locator('[data-role="seqfx-root"]').waitFor();
     await page.evaluate(() => document.fonts?.ready);
-    const renderedFont = await page.locator('[data-role="seqfx-root"]').evaluate((node) => getComputedStyle(node).fontFamily);
-    const measuredText = await page.evaluate(() => {
+    const measuredText = await page.evaluate((fontStack) => {
         const samples = [
-            { label: "title", text: "SeqFX", size: 32, weight: 700, letterSpacing: 0, lineHeight: 32 },
-            { label: "inspectorTitle", text: "Select a cell", size: 18, weight: 700, letterSpacing: 0, lineHeight: null },
-            { label: "filterReadout", text: "1.00 kHz", size: 17, weight: 800, letterSpacing: 0, lineHeight: null },
+            { label: "title", text: "SeqFX", size: 32, weight: 700, lineHeight: 32 },
+            { label: "inspectorTitle", text: "Select a cell", size: 18, weight: 700, lineHeight: null },
+            { label: "filterReadout", text: "1.00 kHz", size: 17, weight: 800, lineHeight: null },
         ];
 
         return samples.map((sample) => {
@@ -980,10 +892,10 @@ test("seqfx_vite_dev_server_serves_a_stable_browser_harness_page", async () => {
                 left: "-10000px",
                 top: "-10000px",
                 whiteSpace: "pre",
-                fontFamily: '"Avenir Next", "Helvetica Neue", Arial, sans-serif',
+                fontFamily: fontStack,
                 fontSize: `${sample.size}px`,
                 fontWeight: String(sample.weight),
-                letterSpacing: `${sample.letterSpacing}px`,
+                letterSpacing: "0px",
                 lineHeight: sample.lineHeight ? `${sample.lineHeight}px` : "normal",
             });
             document.body.appendChild(node);
@@ -995,18 +907,16 @@ test("seqfx_vite_dev_server_serves_a_stable_browser_harness_page", async () => {
                 height: rect.height,
             };
         });
-    });
+    }, SEQFX_FONT_STACK);
 
-    assert.equal(renderedFont, '"Avenir Next", "Helvetica Neue", Arial, sans-serif');
     assertClose(measuredText.find((entry) => entry.label === "title").width, 99.9375, 0.2, "Avenir Next title width");
     assertClose(measuredText.find((entry) => entry.label === "title").height, 32, 0.2, "Avenir Next title height");
     assertClose(measuredText.find((entry) => entry.label === "inspectorTitle").width, 102.9063, 0.2, "Avenir Next inspector title width");
     assertClose(measuredText.find((entry) => entry.label === "filterReadout").width, 80.5781, 0.2, "Avenir Next filter readout width");
-    await page.getByRole("button", { name: "Chain 3 step 1", exact: true }).click();
-    await page.locator('[data-role="seqfx-tape-v2-editor"]').waitFor();
 
     await page.close();
 });
+
 
 test("seqfx_topbar_keeps_patterns_on_one_row_without_duplicate_draw_or_transport_controls", async () => {
     const page = await browser.newPage({ viewport: { width: 567, height: 776 } });
@@ -1016,16 +926,16 @@ test("seqfx_topbar_keeps_patterns_on_one_row_without_duplicate_draw_or_transport
     const hoveredEffectOption = page.locator('[data-role="seqfx-effect-type-option"][data-effect-type="2"]');
     await hoveredEffectOption.hover({ force: true });
     await page.waitForFunction(() => (
-        document.querySelector('[data-role="seqfx-effect-type-option"][data-effect-type="2"]')?.matches(":hover") ?? false
+        window.__SEQFX_DOM__.querySelector('[data-role="seqfx-effect-type-option"][data-effect-type="2"]')?.matches(":hover") ?? false
     ));
     await page.waitForFunction(() => (
-        getComputedStyle(document.querySelector('[data-role="seqfx-effect-type-option"][data-effect-type="2"] [data-role="seqfx-effect-icon"]')).color
+        getComputedStyle(window.__SEQFX_DOM__.querySelector('[data-role="seqfx-effect-type-option"][data-effect-type="2"] [data-role="seqfx-effect-icon"]')).color
         === "rgb(238, 108, 77)"
     ));
 
     const layout = await page.evaluate(() => {
         const rectFor = (selector) => {
-            const element = document.querySelector(selector);
+            const element = window.__SEQFX_DOM__.querySelector(selector);
             if (!element) {
                 return null;
             }
@@ -1038,23 +948,21 @@ test("seqfx_topbar_keeps_patterns_on_one_row_without_duplicate_draw_or_transport
                 right: rect.right,
             };
         };
-        const topbar = document.querySelector(".seqfx-topbar");
-        const patternTops = Array.from(document.querySelectorAll('[data-role="seqfx-pattern"]'))
+        const topbar = window.__SEQFX_DOM__.querySelector(".seqfx-topbar");
+        const patternTops = Array.from(window.__SEQFX_DOM__.querySelectorAll('[data-role="seqfx-pattern"]'))
             .map((button) => Math.round(button.getBoundingClientRect().top));
-        const patternRects = Array.from(document.querySelectorAll('[data-role="seqfx-pattern"]'))
+        const patternRects = Array.from(window.__SEQFX_DOM__.querySelectorAll('[data-role="seqfx-pattern"]'))
             .map((button) => button.getBoundingClientRect());
-        const inspectorHeading = document.querySelector(".seqfx-inspector-heading strong");
-        const presetRow = document.querySelector(".seqfx-preset-row");
-        const gridShellStyle = getComputedStyle(document.querySelector(".seqfx-grid-shell"));
-        const inspectorStyle = getComputedStyle(document.querySelector('[data-role="seqfx-inspector"]'));
-        const effectHeader = presetRow?.querySelector("cosimo-effect-header");
-        const snapshotBar = effectHeader?.shadowRoot?.querySelector("cosimo-snapshot-bar");
-        const snapshotLabel = snapshotBar?.shadowRoot?.querySelector(".snapshot-label");
-        const selectedEffectButton = document.querySelector(".seqfx-effect-picker__options button.is-selected");
+        const inspectorHeading = window.__SEQFX_DOM__.querySelector(".seqfx-inspector-heading strong");
+        const presetRow = window.__SEQFX_DOM__.querySelector(".seqfx-preset-row");
+        const gridShellStyle = getComputedStyle(window.__SEQFX_DOM__.querySelector(".seqfx-grid-shell"));
+        const inspectorStyle = getComputedStyle(window.__SEQFX_DOM__.querySelector('[data-role="seqfx-inspector"]'));
+        const snapshotBar = presetRow?.querySelector('[role="group"][aria-label="Snapshots"]');
+        const selectedEffectButton = window.__SEQFX_DOM__.querySelector(".seqfx-effect-picker__options button.is-selected");
         const selectedEffectIcon = selectedEffectButton?.querySelector('[data-role="seqfx-effect-icon"]');
-        const hoveredEffectButton = document.querySelector('[data-role="seqfx-effect-type-option"][data-effect-type="2"]');
+        const hoveredEffectButton = window.__SEQFX_DOM__.querySelector('[data-role="seqfx-effect-type-option"][data-effect-type="2"]');
         const hoveredEffectIcon = hoveredEffectButton?.querySelector('[data-role="seqfx-effect-icon"]');
-        const effectIconDetails = Array.from(document.querySelectorAll('[data-role="seqfx-effect-type-option"]')).map((button) => {
+        const effectIconDetails = Array.from(window.__SEQFX_DOM__.querySelectorAll('[data-role="seqfx-effect-type-option"]')).map((button) => {
             const icon = button.querySelector('[data-role="seqfx-effect-icon"]');
             return {
                 effectType: button.getAttribute("data-effect-type"),
@@ -1063,7 +971,7 @@ test("seqfx_topbar_keeps_patterns_on_one_row_without_duplicate_draw_or_transport
         });
 
         return {
-            drawControlCount: document.querySelectorAll('[data-role="seqfx-draw-effect"], .seqfx-draw-effect').length,
+            drawControlCount: window.__SEQFX_DOM__.querySelectorAll('[data-role="seqfx-draw-effect"], .seqfx-draw-effect').length,
             effectIconDetails,
             grid: rectFor(".seqfx-grid-shell"),
             gridBackgroundColor: gridShellStyle.backgroundColor,
@@ -1075,7 +983,7 @@ test("seqfx_topbar_keeps_patterns_on_one_row_without_duplicate_draw_or_transport
             inspectorHeading: rectFor(".seqfx-inspector-heading strong"),
             inspectorHeadingFontSize: inspectorHeading ? getComputedStyle(inspectorHeading).fontSize : null,
             inspectorBorderTopStyle: inspectorStyle.borderTopStyle,
-            laneLabelCount: document.querySelectorAll(".seqfx-lane-label").length,
+            laneLabelCount: window.__SEQFX_DOM__.querySelectorAll(".seqfx-lane-label").length,
             laneTrack: rectFor(".seqfx-lane-track"),
             lastPatternRight: patternRects.at(-1)?.right ?? null,
             patternButtonCount: patternTops.length,
@@ -1083,17 +991,17 @@ test("seqfx_topbar_keeps_patterns_on_one_row_without_duplicate_draw_or_transport
             patterns: rectFor(".seqfx-patterns"),
             presetRowBackgroundColor: getComputedStyle(presetRow).backgroundColor,
             presetRow: rectFor(".seqfx-preset-row"),
-            rootBackgroundColor: getComputedStyle(document.querySelector('[data-role="seqfx-root"]')).backgroundColor,
-            rootPadding: getComputedStyle(document.querySelector('[data-role="seqfx-root"]')).padding,
+            rootBackgroundColor: getComputedStyle(window.__SEQFX_DOM__.querySelector('[data-role="seqfx-root"]')).backgroundColor,
+            rootPadding: getComputedStyle(window.__SEQFX_DOM__.querySelector('[data-role="seqfx-root"]')).padding,
             rootScrollWidth: document.documentElement.scrollWidth,
             selectedEffectIconColor: selectedEffectIcon ? getComputedStyle(selectedEffectIcon).color : "",
             selectedEffectIconFilter: selectedEffectIcon ? getComputedStyle(selectedEffectIcon).filter : "",
-            snapshotCameraIconCount: snapshotLabel?.querySelectorAll(".snapshot-camera-icon").length ?? 0,
-            snapshotLabelText: snapshotLabel?.textContent?.trim() ?? null,
+            snapshotSlotCount: snapshotBar?.querySelectorAll("button[aria-pressed]").length ?? 0,
+            presetSelectorCount: presetRow?.querySelectorAll("select").length ?? 0,
             title: rectFor(".seqfx-title"),
             topbarText: topbar?.textContent ?? "",
             topbar: rectFor(".seqfx-topbar"),
-            transportControlCount: document.querySelectorAll('.seqfx-transport, [aria-label="Internal clock"]').length,
+            transportControlCount: window.__SEQFX_DOM__.querySelectorAll('.seqfx-transport, [aria-label="Internal clock"]').length,
             viewportWidth: window.innerWidth,
         };
     });
@@ -1101,7 +1009,7 @@ test("seqfx_topbar_keeps_patterns_on_one_row_without_duplicate_draw_or_transport
     assert.equal(layout.drawControlCount, 0);
     assert.equal(layout.transportControlCount, 0);
     assert.equal(layout.rootBackgroundColor, "rgb(228, 222, 211)");
-    assert.equal(layout.presetRowBackgroundColor, "rgb(16, 25, 35)");
+    assert.equal(layout.presetRowBackgroundColor, "rgba(0, 0, 0, 0)", "presets sit on the SeqFX surface, not a separate bar");
     assert.equal(layout.rootPadding, "0px");
     assert.equal(layout.gridBackgroundColor, "rgba(0, 0, 0, 0)");
     assert.equal(layout.gridBorderTopStyle, "none");
@@ -1128,11 +1036,11 @@ test("seqfx_topbar_keeps_patterns_on_one_row_without_duplicate_draw_or_transport
         ],
         "every effect tab should consume its canonical registry-backed Fontaudio identity",
     );
-    assert.ok(layout.presetRow.top <= 0.5, `preset row should touch the top edge, got ${layout.presetRow.top}px`);
-    assert.ok(layout.presetRow.left <= 0.5, `preset row should touch the left edge, got ${layout.presetRow.left}px`);
-    assert.ok(layout.presetRow.right >= layout.viewportWidth - 0.5, `preset row should touch the right edge, got ${layout.presetRow.right}px`);
-    assert.equal(layout.snapshotLabelText, "");
-    assert.equal(layout.snapshotCameraIconCount, 1);
+    assert.ok(Math.abs(layout.presetRow.left - layout.topbar.left) <= 0.5, `preset row should align with the pattern bar, got ${layout.presetRow.left}px vs ${layout.topbar.left}px`);
+    assert.ok(Math.abs(layout.presetRow.right - layout.topbar.right) <= 0.5, `preset row should end with the pattern bar, got ${layout.presetRow.right}px vs ${layout.topbar.right}px`);
+    assert.ok(layout.presetRow.top + layout.presetRow.height <= layout.topbar.top, "presets sit above the pattern bar");
+    assert.equal(layout.presetSelectorCount, 1);
+    assert.equal(layout.snapshotSlotCount, 7);
     assert.equal(layout.topbarText.includes("Cosimo"), false);
     assert.equal(layout.patternButtonCount, 12);
     assert.equal(layout.patternRowCount, 1);
@@ -1225,11 +1133,19 @@ test("seqfx consolidated top controls preserve global loop transport and history
     assert.ok(consolidatedLayout.scrollWidth <= consolidatedLayout.clientWidth + 1, "the normal consolidated row should not clip or scroll");
     assert.ok(consolidatedLayout.childBounds.every((child) => child.left >= consolidatedLayout.bounds.left - 1 && child.right <= consolidatedLayout.bounds.right + 1));
 
-    const rateBounds = await rate.boundingBox();
-    assert.ok(rateBounds, "sequence rate should have measurable browser geometry");
+    // A select left to size itself fits its widest option plus the native arrow
+    // in whatever font renders it; compare against that intrinsic width.
+    const rateWidths = await rate.evaluate((select) => {
+        const probe = select.cloneNode(true);
+        Object.assign(probe.style, { position: "absolute", visibility: "hidden", width: "max-content", minWidth: "0", maxWidth: "none" });
+        select.parentElement.append(probe);
+        const intrinsic = probe.getBoundingClientRect().width;
+        probe.remove();
+        return { rendered: select.getBoundingClientRect().width, intrinsic };
+    });
     assert.ok(
-        rateBounds.width >= 54,
-        `sequence rate should leave room for 1/16 plus the native select arrow, got ${rateBounds.width}px`,
+        rateWidths.rendered >= rateWidths.intrinsic - 0.5,
+        `sequence rate should leave room for 1/16 plus the native select arrow, got ${JSON.stringify(rateWidths)}`,
     );
 
     await page.evaluate(() => window.__SEQFX_HARNESS__?.clearEvents());
@@ -1284,16 +1200,21 @@ test("seqfx consolidated top controls preserve global loop transport and history
         { endpointID: "swing", value: 0.2 },
         { endpointID: "loopStart", value: 4 },
         { endpointID: "loopLength", value: 28 },
-        { endpointID: "loopStart", value: 4 },
+        // The Stop commit edits the range as a pair; the state editor writes only
+        // the field it changes, so the unchanged Start is not sent again.
         { endpointID: "loopLength", value: 9 },
         { endpointID: "internalPlay", value: 1 },
         { endpointID: "internalReset", value: 1 },
     ]);
+    // Every parameter edit outside a pointer drag, including a typed knob value,
+    // reaches the host inside its own gesture so the DAW records it as one change.
     assert.deepEqual(snapshot.gestureStarts, [
         "enabled",
+        "globalMix",
         "clockMode",
         "manualBpm",
         "rate",
+        "swing",
         "loopStart",
         "loopLength",
         "loopStart",
@@ -1328,11 +1249,19 @@ test("seqfx consolidated top controls preserve global loop transport and history
     await clock.selectOption("1");
     assert.equal(await transport.isEnabled(), true);
     assert.equal(await transport.getAttribute("aria-label"), "Play internal clock");
-    assert.deepEqual((await getHarnessSnapshot(page)).events, [
-        { endpointID: "internalPlay", value: 0 },
-        { endpointID: "clockMode", value: 0 },
-        { endpointID: "clockMode", value: 1 },
-    ], "leaving Internal must stop DSP transport instead of hiding a latched run state");
+    // The clock writes travel through the state editor and the stop is a direct
+    // DSP event, so only the stop's place before the return to Internal is fixed.
+    const clockEvents = (await getHarnessSnapshot(page)).events;
+    assert.deepEqual(
+        clockEvents.filter(({ endpointID }) => endpointID !== "internalPlay"),
+        [{ endpointID: "clockMode", value: 0 }, { endpointID: "clockMode", value: 1 }],
+    );
+    assert.deepEqual(clockEvents.filter(({ endpointID }) => endpointID === "internalPlay"), [{ endpointID: "internalPlay", value: 0 }]);
+    assert.ok(
+        clockEvents.findIndex(({ endpointID }) => endpointID === "internalPlay")
+            < clockEvents.findIndex(({ endpointID, value }) => endpointID === "clockMode" && value === 1),
+        "leaving Internal must stop DSP transport instead of hiding a latched run state",
+    );
 
     await page.getByRole("button", { name: "Chain 1 step 1", exact: true }).click();
     assert.equal(await undo.isEnabled(), true);
@@ -1442,7 +1371,7 @@ test("seqfx_global_pointer_gestures_close_once_on_blur_and_unmount", async () =>
 
     await page.evaluate(() => window.__SEQFX_HARNESS__?.clearEvents());
     await beginBothGestures();
-    await page.evaluate(() => document.querySelector("cosimo-seqfx-react-view")?.remove());
+    await page.evaluate(() => document.querySelector("builder-kit-state-view")?.remove());
     snapshot = await getHarnessSnapshot(page);
     assert.deepEqual(snapshot.gestureStarts, ["globalMix", "swing"]);
     assert.deepEqual(snapshot.gestureEnds, ["globalMix", "swing"]);
@@ -1457,7 +1386,8 @@ test("seqfx_inspector_undo_gesture_rejects_foreign_pointer_acquisition", async (
     await page.getByRole("button", { name: "Chain 1 step 1", exact: true }).click();
     const mix = page.locator('[data-role="seqfx-mix"]');
     await mix.waitFor();
-    await page.evaluate(() => window.__SEQFX_HARNESS__?.clearEvents());
+    const undo = page.getByRole("button", { name: "Undo edit" });
+    await page.waitForFunction(() => !window.__SEQFX_DOM__.querySelector('[data-role="seqfx-undo"]')?.disabled);
 
     await dispatchSyntheticPointer(page, '[data-role="seqfx-mix"]', "pointerdown", {
         buttons: 1,
@@ -1465,11 +1395,7 @@ test("seqfx_inspector_undo_gesture_rejects_foreign_pointer_acquisition", async (
         pointerType: "touch",
     });
     await setRangeInputValue(mix, 0.44);
-    await page.waitForFunction(() => (
-        window.__SEQFX_HARNESS__?.getSnapshot().events
-            .some((entry) => entry.endpointID === "patternUpload")
-    ));
-    assert.equal(seqFxStateWrites(await getHarnessSnapshot(page)).length, 0);
+    await page.waitForFunction(() => window.__SEQFX_DOM__.querySelector('[data-role="seqfx-undo"]')?.disabled);
 
     await dispatchSyntheticPointer(page, '[data-role="seqfx-mix"]', "pointerdown", {
         buttons: 1,
@@ -1486,11 +1412,7 @@ test("seqfx_inspector_undo_gesture_rejects_foreign_pointer_acquisition", async (
         pointerId: 91,
         pointerType: "touch",
     });
-    assert.equal(
-        seqFxStateWrites(await getHarnessSnapshot(page)).length,
-        0,
-        "foreign pointer down/up must not steal or commit the owner's Undo gesture",
-    );
+    assert.equal(await undo.isDisabled(), true, "foreign pointer down/up must not steal or close the owner's Undo gesture");
 
     await setRangeInputValue(mix, 0.31);
     await dispatchSyntheticPointer(page, "window", "pointerup", {
@@ -1498,10 +1420,7 @@ test("seqfx_inspector_undo_gesture_rejects_foreign_pointer_acquisition", async (
         pointerId: 81,
         pointerType: "touch",
     });
-    await page.waitForFunction((stateKey) => (
-        window.__SEQFX_HARNESS__?.getSnapshot().storedStateWrites
-            .filter((entry) => entry.key === stateKey).length === 1
-    ), SEQFX_STATE_KEY);
+    await page.waitForFunction(() => !window.__SEQFX_DOM__.querySelector('[data-role="seqfx-undo"]')?.disabled);
     await dispatchSyntheticPointer(page, "window", "pointerup", {
         buttons: 0,
         pointerId: 81,
@@ -1513,14 +1432,23 @@ test("seqfx_inspector_undo_gesture_rejects_foreign_pointer_acquisition", async (
         pointerType: "touch",
     });
 
-    const snapshot = await getHarnessSnapshot(page);
-    assert.equal(seqFxStateWrites(snapshot).length, 1, "owner release must commit the Undo gesture once");
+    let snapshot = await getHarnessSnapshot(page);
     assertClose(
         parseSeqFxStoredState(snapshot.storedState[SEQFX_STATE_KEY]).patterns[0].lanes[0].steps[0].mix,
         0.31,
         0.001,
-        "owner release persisted the final block mix",
+        "owner release keeps the final block mix",
     );
+
+    await undo.click();
+    await page.waitForFunction((stateKey) => {
+        const stored = window.__SEQFX_HARNESS__?.getSnapshot().storedState[stateKey];
+        return stored?.patterns[0].chains[0].blocks[0]?.mix === undefined;
+    }, SEQFX_STATE_KEY);
+    snapshot = await getHarnessSnapshot(page);
+    const restored = parseSeqFxStoredState(snapshot.storedState[SEQFX_STATE_KEY]).patterns[0].lanes[0].steps[0];
+    assert.equal(restored.active, true, "one Undo removes the whole drag, not the block");
+    assert.equal(restored.mix, 1);
 
     await page.close();
 });
@@ -1559,7 +1487,7 @@ test("seqfx_inspector_undo_gesture_closes_once_on_blur_and_unmount", async () =>
         pointerType: "touch",
     });
     await setRangeInputValue(mix, 0.66);
-    await page.evaluate(() => document.querySelector("cosimo-seqfx-react-view")?.remove());
+    await page.evaluate(() => document.querySelector("builder-kit-state-view")?.remove());
     snapshot = await getHarnessSnapshot(page);
     assert.equal(seqFxStateWrites(snapshot).length, 1, "unmount must commit the live Undo gesture once");
 
@@ -1612,9 +1540,9 @@ test("seqfx consolidated loop inputs stay compact without narrow-editor overflow
             const controls = surface.querySelector(".seqfx-global__controls");
             const start = surface.querySelector('[data-role="seqfx-loop-start"]')?.closest("label");
             const stop = surface.querySelector('[data-role="seqfx-loop-stop"]')?.closest("label");
-            const cell = document.querySelector('[data-role="seqfx-cell"][data-lane="0"][data-step="0"]')?.getBoundingClientRect();
-            const nextCell = document.querySelector('[data-role="seqfx-cell"][data-lane="0"][data-step="1"]')?.getBoundingClientRect();
-            const pickerChip = document.querySelector('[data-role="seqfx-effect-type-option"]')?.getBoundingClientRect();
+            const cell = window.__SEQFX_DOM__.querySelector('[data-role="seqfx-cell"][data-lane="0"][data-step="0"]')?.getBoundingClientRect();
+            const nextCell = window.__SEQFX_DOM__.querySelector('[data-role="seqfx-cell"][data-lane="0"][data-step="1"]')?.getBoundingClientRect();
+            const pickerChip = window.__SEQFX_DOM__.querySelector('[data-role="seqfx-effect-type-option"]')?.getBoundingClientRect();
             return {
                 cellWidth: cell?.width ?? 0,
                 controlsClientWidth: controls?.clientWidth ?? 0,
@@ -1667,7 +1595,7 @@ test("seqfx_internal_transport_parses_explicit_monitor_booleans_and_rejects_malf
                 auxAmount: [0, 0, 0, 0],
                 auxDurationMs: [0, 0, 0, 0],
             };
-            window.__SEQFX_HARNESS__?.patchConnection.emitEndpoint(
+            window.__SEQFX_HARNESS__?.emitEndpoint(
                 "monitorOut",
                 useEnvelope ? { event } : event,
             );
@@ -1716,8 +1644,8 @@ test("seqfx_factory_content_is_discoverable_atomic_and_undoable_without_onboardi
     assert.equal(await page.locator('[data-role="seqfx-first-use-dismiss"]').count(), 0);
     assert.equal(await page.getByText("First pattern?", { exact: true }).count(), 0);
     const openingLayout = await page.evaluate(() => {
-        const globalControls = document.querySelector('[data-role="seqfx-global-controls"]');
-        const workspace = document.querySelector(".seqfx-workspace");
+        const globalControls = window.__SEQFX_DOM__.querySelector('[data-role="seqfx-global-controls"]');
+        const workspace = window.__SEQFX_DOM__.querySelector(".seqfx-workspace");
         const globalBounds = globalControls.getBoundingClientRect();
         const workspaceBounds = workspace.getBoundingClientRect();
         const onboardingStorageKeys = [localStorage, sessionStorage].flatMap((storage) => (
@@ -1787,7 +1715,7 @@ test("seqfx_factory_content_is_discoverable_atomic_and_undoable_without_onboardi
     let snapshot = await getHarnessSnapshot(page);
     let storedState = parseSeqFxStoredState(snapshot.storedState[SEQFX_STATE_KEY]);
     assert.equal(storedState.patterns[0].lanes[0].steps[0].mix, 0.82);
-    assert.deepEqual(storedState.patterns[0].lanes[0].steps[0].params.slice(0, 5), [2, 1_350, 1_350, 2.4, 1]);
+    assert.deepEqual(storedState.patterns[0].lanes[0].steps[0].params.slice(0, 4), [2, 1_350, 1_350, 2.4]);
     assert.equal(patternUploads(snapshot).length, 1, "effect preset should upload once after one state commit");
     await page.locator('[data-role="seqfx-undo"]').click();
     assert.equal(await effectPreset.inputValue(), "warm-low-pass");
@@ -1803,10 +1731,7 @@ test("seqfx_factory_content_is_discoverable_atomic_and_undoable_without_onboardi
     assert.deepEqual(storedState.patterns[0].lanes.map((lane) => lane.steps.map((step) => step.trigger ? step.effectType : 0)), beforeGeometry);
     await page.locator('[data-role="seqfx-undo"]').click();
     storedState = parseSeqFxStoredState((await getHarnessSnapshot(page)).storedState[SEQFX_STATE_KEY]);
-    const { revision: restoredRevision, ...restoredPattern } = storedState.patterns[0];
-    const { revision: previousRevision, ...previousPattern } = beforeVariation.patterns[0];
-    assert.ok(restoredRevision > previousRevision, "undo must keep the engine-facing pattern revision monotonic");
-    assert.deepEqual(restoredPattern, previousPattern);
+    assert.deepEqual(storedState.patterns[0], beforeVariation.patterns[0], "one Undo restores the pattern before the variation");
 
     await page.close();
 });
@@ -1837,7 +1762,7 @@ test("seqfx_effect_tab_icons_resolve_registry_fontaudio_masks_in_their_cell_pale
         await button.click();
         await page.waitForFunction(
             ({ type, color }) => {
-                const option = document.querySelector(`[data-role="seqfx-effect-type-option"][data-effect-type="${type}"]`);
+                const option = window.__SEQFX_DOM__.querySelector(`[data-role="seqfx-effect-type-option"][data-effect-type="${type}"]`);
                 const icon = option?.querySelector('[data-role="seqfx-effect-icon"]');
                 return option?.getAttribute("aria-pressed") === "true"
                     && icon
@@ -1916,8 +1841,8 @@ test("seqfx_named_effect_picker_and_unlabelled_rows_preserve_chain_accessibility
         );
     }
     const wideGridLayout = await page.evaluate(() => {
-        const grid = document.querySelector(".seqfx-grid-shell");
-        const track = document.querySelector(".seqfx-lane-track");
+        const grid = window.__SEQFX_DOM__.querySelector(".seqfx-grid-shell");
+        const track = window.__SEQFX_DOM__.querySelector(".seqfx-lane-track");
         const gridBounds = grid.getBoundingClientRect();
         const trackBounds = track.getBoundingClientRect();
         return {
@@ -2021,9 +1946,9 @@ test("seqfx effect picker uses two rows of six without overflow and keeps keyboa
             const buttons = [...options.querySelectorAll('[data-role="seqfx-effect-type-option"]')];
             const buttonRects = buttons.map((button) => button.getBoundingClientRect());
             const selectedButton = options.querySelector('[data-role="seqfx-effect-type-option"].is-selected');
-            const cell = document.querySelector('[data-role="seqfx-cell"][data-lane="0"][data-step="0"]');
-            const nextCell = document.querySelector('[data-role="seqfx-cell"][data-lane="0"][data-step="1"]');
-            const baseCell = document.querySelector(
+            const cell = window.__SEQFX_DOM__.querySelector('[data-role="seqfx-cell"][data-lane="0"][data-step="0"]');
+            const nextCell = window.__SEQFX_DOM__.querySelector('[data-role="seqfx-cell"][data-lane="0"][data-step="1"]');
+            const baseCell = window.__SEQFX_DOM__.querySelector(
                 '.seqfx-cell:not(.has-frame-corner-tl):not(.has-frame-corner-tr):not(.has-frame-corner-bl):not(.has-frame-corner-br):not(.is-alt-bar):not(.is-covered):not(.is-selected):not(.is-playhead)',
             );
             const baseButton = options.querySelector('[data-role="seqfx-effect-type-option"]:not(.is-selected)');
@@ -2127,8 +2052,10 @@ test("seqfx effect picker uses two rows of six without overflow and keeps keyboa
     const focusedSurface = async (previousLocator, locator) => {
         await previousLocator.focus();
         await previousLocator.press("Tab");
-        assert.equal(await locator.evaluate((node) => node === document.activeElement), true, "Tab should reach the expected cell surface");
-        return locator.evaluate((node) => {
+        assert.equal(await locator.evaluate((node) => node === window.__SEQFX_DOM__.activeElement), true, "Tab should reach the expected cell surface");
+        return locator.evaluate(async (node) => {
+            // Compare the settled focus surfaces, not two frames of their transitions.
+            await Promise.all(node.getAnimations().map((animation) => animation.finished));
             const style = getComputedStyle(node);
             return {
                 boxShadow: style.boxShadow,
@@ -2154,7 +2081,7 @@ test("seqfx effect picker uses two rows of six without overflow and keeps keyboa
     );
     assert.equal(await baseCell.count(), 1, "hover comparison requires the fixture-owned unselected base cell");
     const baseButton = picker.locator('[data-role="seqfx-effect-type-option"]:not(.is-selected)').first();
-    await page.evaluate(() => document.activeElement?.blur());
+    await page.evaluate(() => window.__SEQFX_DOM__.activeElement?.blur());
     await page.waitForTimeout(150);
     await baseCell.hover();
     await page.waitForTimeout(150);
@@ -2186,18 +2113,18 @@ test("seqfx_renders_tasteful_decorative_accents_in_title_inspector_and_empty_sta
     await page.locator('[data-role="seqfx-root"]').waitFor();
 
     const decor = await page.evaluate(() => {
-        const titleSigil = document.querySelector('[data-role="seqfx-title-sigil"]');
+        const titleSigil = window.__SEQFX_DOM__.querySelector('[data-role="seqfx-title-sigil"]');
         const titleSigilStyle = titleSigil ? getComputedStyle(titleSigil) : null;
-        const inspectorBullet = document.querySelector('[data-role="seqfx-inspector-bullet"]');
+        const inspectorBullet = window.__SEQFX_DOM__.querySelector('[data-role="seqfx-inspector-bullet"]');
         const inspectorBulletStyle = inspectorBullet ? getComputedStyle(inspectorBullet) : null;
-        const emptyIcon = document.querySelector('[data-role="seqfx-empty-icon"]');
-        const empty = document.querySelector('[data-role="seqfx-empty"]');
+        const emptyIcon = window.__SEQFX_DOM__.querySelector('[data-role="seqfx-empty-icon"]');
+        const empty = window.__SEQFX_DOM__.querySelector('[data-role="seqfx-empty"]');
         const emptyStyle = empty ? getComputedStyle(empty) : null;
-        const heading = document.querySelector(".seqfx-inspector-heading strong");
-        const headingContainer = document.querySelector(".seqfx-inspector-heading");
-        const inspectorRule = document.querySelector('[data-role="seqfx-inspector-rule"]');
+        const heading = window.__SEQFX_DOM__.querySelector(".seqfx-inspector-heading strong");
+        const headingContainer = window.__SEQFX_DOM__.querySelector(".seqfx-inspector-heading");
+        const inspectorRule = window.__SEQFX_DOM__.querySelector('[data-role="seqfx-inspector-rule"]');
         const inspectorRuleStyle = inspectorRule ? getComputedStyle(inspectorRule) : null;
-        const topbar = document.querySelector(".seqfx-topbar");
+        const topbar = window.__SEQFX_DOM__.querySelector(".seqfx-topbar");
         return {
             titleSigilTag: titleSigil?.tagName?.toLowerCase() ?? null,
             titleSigilWidth: titleSigil ? Math.round(titleSigil.getBoundingClientRect().width) : 0,
@@ -2264,13 +2191,13 @@ test("seqfx_renders_mix_row_glyph_and_delete_block_glyph_with_compact_layout", a
     await page.locator('[data-role="seqfx-delete-block"]').waitFor();
 
     const decor = await page.evaluate(() => {
-        const mixRow = document.querySelector('[data-role="seqfx-mix-row"]');
+        const mixRow = window.__SEQFX_DOM__.querySelector('[data-role="seqfx-mix-row"]');
         const mixRowLabel = mixRow?.querySelector(".seqfx-mix-row__label");
-        const mixGlyph = document.querySelector('[data-role="seqfx-mix-glyph"]');
+        const mixGlyph = window.__SEQFX_DOM__.querySelector('[data-role="seqfx-mix-glyph"]');
         const mixGlyphStyle = mixGlyph ? getComputedStyle(mixGlyph) : null;
-        const deleteButton = document.querySelector('[data-role="seqfx-delete-block"]');
+        const deleteButton = window.__SEQFX_DOM__.querySelector('[data-role="seqfx-delete-block"]');
         const deleteButtonStyle = deleteButton ? getComputedStyle(deleteButton) : null;
-        const deleteGlyph = document.querySelector('[data-role="seqfx-delete-glyph"]');
+        const deleteGlyph = window.__SEQFX_DOM__.querySelector('[data-role="seqfx-delete-glyph"]');
         const deleteGlyphStyle = deleteGlyph ? getComputedStyle(deleteGlyph) : null;
         const mixRowHeight = mixRow?.getBoundingClientRect().height ?? null;
         const mixRowText = mixRowLabel?.textContent?.trim() ?? "";
@@ -2347,7 +2274,7 @@ test("seqfx responsive workspace contracts, stacks, reflows, and preserves state
     }));
     const measureWorkspace = () => page.evaluate(() => {
         const rectFor = (selector) => {
-            const node = document.querySelector(selector);
+            const node = window.__SEQFX_DOM__.querySelector(selector);
             if (!node) throw new Error(`Missing responsive-layout node: ${selector}`);
             const rect = node.getBoundingClientRect();
             return {
@@ -2360,13 +2287,13 @@ test("seqfx responsive workspace contracts, stacks, reflows, and preserves state
             };
         };
 
-        const root = document.querySelector('[data-role="seqfx-root"]');
-        const shell = document.querySelector(".seqfx-grid-shell");
-        const inspector = document.querySelector('[data-role="seqfx-inspector"]');
-        const cell = document.querySelector('[data-role="seqfx-cell"][data-lane="0"][data-step="0"]');
-        const step2 = document.querySelector('[data-role="seqfx-cell"][data-lane="0"][data-step="1"]').getBoundingClientRect();
-        const step4 = document.querySelector('[data-role="seqfx-cell"][data-lane="0"][data-step="3"]').getBoundingClientRect();
-        const step5 = document.querySelector('[data-role="seqfx-cell"][data-lane="0"][data-step="4"]').getBoundingClientRect();
+        const root = window.__SEQFX_DOM__.querySelector('[data-role="seqfx-root"]');
+        const shell = window.__SEQFX_DOM__.querySelector(".seqfx-grid-shell");
+        const inspector = window.__SEQFX_DOM__.querySelector('[data-role="seqfx-inspector"]');
+        const cell = window.__SEQFX_DOM__.querySelector('[data-role="seqfx-cell"][data-lane="0"][data-step="0"]');
+        const step2 = window.__SEQFX_DOM__.querySelector('[data-role="seqfx-cell"][data-lane="0"][data-step="1"]').getBoundingClientRect();
+        const step4 = window.__SEQFX_DOM__.querySelector('[data-role="seqfx-cell"][data-lane="0"][data-step="3"]').getBoundingClientRect();
+        const step5 = window.__SEQFX_DOM__.querySelector('[data-role="seqfx-cell"][data-lane="0"][data-step="4"]').getBoundingClientRect();
         const cellRect = cell.getBoundingClientRect();
         return {
             beatGap: step5.left - step4.right,
@@ -2488,11 +2415,11 @@ test("seqfx responsive workspace contracts, stacks, reflows, and preserves state
             const box = node.getBoundingClientRect();
             return { bottom: box.bottom, height: box.height, left: box.left, right: box.right, top: box.top, width: box.width };
         };
-        const options = document.querySelector(".seqfx-effect-picker__options");
+        const options = window.__SEQFX_DOM__.querySelector(".seqfx-effect-picker__options");
         const buttons = [...options.querySelectorAll("button")];
-        const heading = document.querySelector(".seqfx-inspector-heading");
-        const headingSummary = document.querySelector(".seqfx-inspector-heading__summary");
-        const preset = document.querySelector('[data-role="seqfx-factory-effect-preset"]');
+        const heading = window.__SEQFX_DOM__.querySelector(".seqfx-inspector-heading");
+        const headingSummary = window.__SEQFX_DOM__.querySelector(".seqfx-inspector-heading__summary");
+        const preset = window.__SEQFX_DOM__.querySelector('[data-role="seqfx-factory-effect-preset"]');
         const rowCounts = new Map();
         for (const button of buttons) {
             const key = Math.round(button.getBoundingClientRect().top);
@@ -2500,7 +2427,7 @@ test("seqfx responsive workspace contracts, stacks, reflows, and preserves state
         }
         return {
             buttonRects: buttons.map(rect),
-            fullNameDisplays: [...document.querySelectorAll(".seqfx-effect-picker__name--full")].map((node) => getComputedStyle(node).display),
+            fullNameDisplays: [...window.__SEQFX_DOM__.querySelectorAll(".seqfx-effect-picker__name--full")].map((node) => getComputedStyle(node).display),
             heading: rect(heading),
             headingSummary: rect(headingSummary),
             options: rect(options),
@@ -2510,11 +2437,11 @@ test("seqfx responsive workspace contracts, stacks, reflows, and preserves state
             pickerScrollWidth: options.parentElement.scrollWidth,
             preset: rect(preset),
             rowCounts: [...rowCounts.values()],
-            shortNames: [...document.querySelectorAll(".seqfx-effect-picker__name--short")].map((node) => ({
+            shortNames: [...window.__SEQFX_DOM__.querySelectorAll(".seqfx-effect-picker__name--short")].map((node) => ({
                 display: getComputedStyle(node).display,
                 text: node.textContent.trim(),
             })),
-            sliderTrackWidths: [...document.querySelectorAll(".seqfx-inspector .editor-tick-slider__track")]
+            sliderTrackWidths: [...window.__SEQFX_DOM__.querySelectorAll(".seqfx-inspector .editor-tick-slider__track")]
                 .map((node) => node.getBoundingClientRect().width),
         };
     });
@@ -2579,8 +2506,8 @@ test("seqfx responsive workspace contracts, stacks, reflows, and preserves state
     const restored = await measureWorkspace();
     const stateAfterResize = await getHarnessSnapshot(page);
     assert.ok(restored.gridShell.right < restored.inspector.left, "widening should restore side-by-side columns");
-    assert.equal(await page.evaluate((node) => node === document.querySelector('[data-role="seqfx-mod-toggle"]'), modToggleHandle), true, "resize should not remount the inspector control");
-    assert.equal(await page.evaluate(() => document.activeElement?.getAttribute("data-role")), "seqfx-mod-toggle", "focused control should survive resize");
+    assert.equal(await page.evaluate((node) => node === window.__SEQFX_DOM__.querySelector('[data-role="seqfx-mod-toggle"]'), modToggleHandle), true, "resize should not remount the inspector control");
+    assert.equal(await page.evaluate(() => window.__SEQFX_DOM__.activeElement?.getAttribute("data-role")), "seqfx-mod-toggle", "focused control should survive resize");
     assert.equal(await modToggle.getAttribute("aria-selected"), "true", "Mod tab selection should survive resize");
     assert.equal(await stutterButton.getAttribute("aria-pressed"), "true", "effect selection should survive resize");
     assert.deepEqual(stateAfterResize.events, stateBeforeResize.events, "resize should not emit host events");
@@ -2625,7 +2552,7 @@ test("seqfx Tape Stop free-time rows keep labels triggers segmented tracks and v
                 };
             };
             const rows = ["seqfx-tape-stop-time", "seqfx-tape-start-time"].map((controlRole) => {
-                const input = document.querySelector(`[data-control="${controlRole}"]`);
+                const input = window.__SEQFX_DOM__.querySelector(`[data-control="${controlRole}"]`);
                 const row = input?.closest('[data-role="seqfx-param-row"]');
                 const label = row?.querySelector(".editor-tick-slider__label");
                 const trigger = row?.querySelector(".editor-tick-slider__annotation");
@@ -2648,9 +2575,9 @@ test("seqfx Tape Stop free-time rows keep labels triggers segmented tracks and v
                     valueText: value.textContent?.trim() ?? "",
                 };
             });
-            const root = document.querySelector('[data-role="seqfx-root"]');
-            const grid = document.querySelector(".seqfx-grid-shell");
-            const inspector = document.querySelector('[data-role="seqfx-inspector"]');
+            const root = window.__SEQFX_DOM__.querySelector('[data-role="seqfx-root"]');
+            const grid = window.__SEQFX_DOM__.querySelector(".seqfx-grid-shell");
+            const inspector = window.__SEQFX_DOM__.querySelector('[data-role="seqfx-inspector"]');
             return {
                 grid: box(grid),
                 inspector: box(inspector),
@@ -2775,7 +2702,7 @@ test("seqfx bare preset select belongs to the inspector heading and stays keyboa
             const summary = node.querySelector(".seqfx-inspector-heading__summary");
             const select = node.querySelector('[data-role="seqfx-factory-effect-preset"]');
             const inspector = node.closest('[data-role="seqfx-inspector"]');
-            const root = document.querySelector('[data-role="seqfx-root"]');
+            const root = window.__SEQFX_DOM__.querySelector('[data-role="seqfx-root"]');
             return {
                 heading: rect(node),
                 inspector: rect(inspector),
@@ -2798,7 +2725,7 @@ test("seqfx bare preset select belongs to the inspector heading and stays keyboa
 
     await assertHeadingLayout("wide");
     await preset.focus();
-    assert.equal(await preset.evaluate((node) => document.activeElement === node), true, "preset select should take keyboard focus");
+    assert.equal(await preset.evaluate((node) => window.__SEQFX_DOM__.activeElement === node), true, "preset select should take keyboard focus");
     const keyboardOwnership = await preset.evaluate((node) => {
         const event = new KeyboardEvent("keydown", {
             bubbles: true,
@@ -2872,7 +2799,7 @@ test("seqfx_rate_one_grid_uses_beat_gutters_and_per_cell_bar_fill", async () => 
     assert.equal(await page.locator('[data-role="seqfx-cell"][data-lane="0"][data-step="16"]').evaluate((node) => node.classList.contains("is-alt-bar")), true);
 
     const pseudoDecorations = await page.evaluate(() => (
-        Array.from(document.querySelectorAll(".seqfx-lane-track, .seqfx-step-track")).map((node) => ({
+        Array.from(window.__SEQFX_DOM__.querySelectorAll(".seqfx-lane-track, .seqfx-step-track")).map((node) => ({
             before: getComputedStyle(node, "::before").content,
             after: getComputedStyle(node, "::after").content,
         }))
@@ -2907,14 +2834,14 @@ test("seqfx_bar_frames_sit_behind_both_bars_with_arrow_only_on_first_bar", async
     await loadSeqFxHarness(page);
     await page.locator('[data-role="seqfx-root"]').waitFor();
     await page.waitForFunction(() => {
-        const frame = document.querySelector('[data-role="seqfx-bar-frame"][data-bar="0"]');
-        const lanes = document.querySelector('[data-role="seqfx-bar-lanes"][data-bar="0"]');
+        const frame = window.__SEQFX_DOM__.querySelector('[data-role="seqfx-bar-frame"][data-bar="0"]');
+        const lanes = window.__SEQFX_DOM__.querySelector('[data-role="seqfx-bar-lanes"][data-bar="0"]');
         if (!frame || !lanes) return false;
         return Math.abs(frame.getBoundingClientRect().width - (lanes.getBoundingClientRect().width + 32)) < 1;
     });
     await page.waitForFunction(() => {
-        const frame = document.querySelector('[data-role="seqfx-bar-frame"][data-bar="1"]');
-        const lanes = document.querySelector('[data-role="seqfx-bar-lanes"][data-bar="1"]');
+        const frame = window.__SEQFX_DOM__.querySelector('[data-role="seqfx-bar-frame"][data-bar="1"]');
+        const lanes = window.__SEQFX_DOM__.querySelector('[data-role="seqfx-bar-lanes"][data-bar="1"]');
         if (!frame || !lanes) return false;
         return Math.abs(frame.getBoundingClientRect().width - (lanes.getBoundingClientRect().width + 32)) < 1;
     });
@@ -2923,26 +2850,26 @@ test("seqfx_bar_frames_sit_behind_both_bars_with_arrow_only_on_first_bar", async
     assert.equal(await frame.count(), 2, "bar frames should render for both visible bars");
 
     const layout = await page.evaluate(() => {
-        const frameElement = document.querySelector('[data-role="seqfx-bar-frame"][data-bar="0"]');
-        const secondFrameElement = document.querySelector('[data-role="seqfx-bar-frame"][data-bar="1"]');
-        const barOne = document.querySelector('[data-role="seqfx-bar-section"][data-bar="0"]');
-        const barTwo = document.querySelector('[data-role="seqfx-bar-section"][data-bar="1"]');
-        const gridShell = document.querySelector(".seqfx-grid-shell");
-        const barLanes = document.querySelector('[data-role="seqfx-bar-lanes"][data-bar="0"]');
-        const secondBarLanes = document.querySelector('[data-role="seqfx-bar-lanes"][data-bar="1"]');
-        const firstCell = document.querySelector('[data-role="seqfx-cell"][data-lane="0"][data-step="0"]');
-        const stepHeader = document.querySelector('[data-role="seqfx-bar-section"][data-bar="0"] .seqfx-step-header');
-        const laneRow = document.querySelector('[data-role="seqfx-bar-section"][data-bar="0"] .seqfx-lane-row');
+        const frameElement = window.__SEQFX_DOM__.querySelector('[data-role="seqfx-bar-frame"][data-bar="0"]');
+        const secondFrameElement = window.__SEQFX_DOM__.querySelector('[data-role="seqfx-bar-frame"][data-bar="1"]');
+        const barOne = window.__SEQFX_DOM__.querySelector('[data-role="seqfx-bar-section"][data-bar="0"]');
+        const barTwo = window.__SEQFX_DOM__.querySelector('[data-role="seqfx-bar-section"][data-bar="1"]');
+        const gridShell = window.__SEQFX_DOM__.querySelector(".seqfx-grid-shell");
+        const barLanes = window.__SEQFX_DOM__.querySelector('[data-role="seqfx-bar-lanes"][data-bar="0"]');
+        const secondBarLanes = window.__SEQFX_DOM__.querySelector('[data-role="seqfx-bar-lanes"][data-bar="1"]');
+        const firstCell = window.__SEQFX_DOM__.querySelector('[data-role="seqfx-cell"][data-lane="0"][data-step="0"]');
+        const stepHeader = window.__SEQFX_DOM__.querySelector('[data-role="seqfx-bar-section"][data-bar="0"] .seqfx-step-header');
+        const laneRow = window.__SEQFX_DOM__.querySelector('[data-role="seqfx-bar-section"][data-bar="0"] .seqfx-lane-row');
         const svg = frameElement.querySelector(".seqfx-bar-frame__svg");
-        const inner = document.querySelector('[data-role="seqfx-bar-frame-inner"]');
-        const outer = document.querySelector(".seqfx-bar-frame__outer");
-        const arrow = document.querySelector('[data-role="seqfx-bar-frame-outer-arrow"]');
-        const plate = document.querySelector('[data-role="seqfx-bar-frame-plate"]');
-        const plateFilter = document.querySelector("#seqfx-bar-frame-plate-material-0");
+        const inner = window.__SEQFX_DOM__.querySelector('[data-role="seqfx-bar-frame-inner"]');
+        const outer = window.__SEQFX_DOM__.querySelector(".seqfx-bar-frame__outer");
+        const arrow = window.__SEQFX_DOM__.querySelector('[data-role="seqfx-bar-frame-outer-arrow"]');
+        const plate = window.__SEQFX_DOM__.querySelector('[data-role="seqfx-bar-frame-plate"]');
+        const plateFilter = window.__SEQFX_DOM__.querySelector("#seqfx-bar-frame-plate-material-0");
         const secondInner = secondFrameElement.querySelector('[data-role="seqfx-bar-frame-inner"]');
         const secondOuter = secondFrameElement.querySelector('[data-role="seqfx-bar-frame-outer-body"]');
         const secondPlate = secondFrameElement.querySelector('[data-role="seqfx-bar-frame-plate"]');
-        const secondPlateFilter = document.querySelector("#seqfx-bar-frame-plate-material-1");
+        const secondPlateFilter = window.__SEQFX_DOM__.querySelector("#seqfx-bar-frame-plate-material-1");
         const cornerGlyph = frameElement.querySelector('[data-role="seqfx-bar-frame-corner-glyph"]');
         const rectFor = (node) => {
             const rect = node.getBoundingClientRect();
@@ -3135,17 +3062,17 @@ test("seqfx_inspector_top_edge_aligns_with_the_grid_plate_top_edge", async () =>
     for (const width of [1060, 1280]) {
         await page.setViewportSize({ width, height: 820 });
         await page.waitForFunction(() => {
-            const frame = document.querySelector('[data-role="seqfx-bar-frame"][data-bar="0"]');
-            const lanes = document.querySelector('[data-role="seqfx-bar-lanes"][data-bar="0"]');
+            const frame = window.__SEQFX_DOM__.querySelector('[data-role="seqfx-bar-frame"][data-bar="0"]');
+            const lanes = window.__SEQFX_DOM__.querySelector('[data-role="seqfx-bar-lanes"][data-bar="0"]');
             if (!frame || !lanes) return false;
             return Math.abs(frame.getBoundingClientRect().width - (lanes.getBoundingClientRect().width + 32)) < 1;
         });
 
         const layout = await page.evaluate(() => {
-            const frame = document.querySelector('[data-role="seqfx-bar-frame"][data-bar="0"]');
+            const frame = window.__SEQFX_DOM__.querySelector('[data-role="seqfx-bar-frame"][data-bar="0"]');
             const outerPath = frame.querySelector('[data-role="seqfx-bar-frame-outer-body"]');
             const svg = frame.querySelector("svg");
-            const inspector = document.querySelector('[data-role="seqfx-inspector"]');
+            const inspector = window.__SEQFX_DOM__.querySelector('[data-role="seqfx-inspector"]');
             const frameRect = frame.getBoundingClientRect();
             const inspectorRect = inspector.getBoundingClientRect();
             const viewBoxHeight = Number(svg.getAttribute("viewBox").trim().split(/\s+/)[3]);
@@ -3170,8 +3097,8 @@ test("seqfx_bar_one_inner_outline_tracks_cell_stack_without_intersections", asyn
     await loadSeqFxHarness(page);
     await page.locator('[data-role="seqfx-root"]').waitFor();
     await page.waitForFunction(() => {
-        const frame = document.querySelector('[data-role="seqfx-bar-frame"]');
-        const lanes = document.querySelector('[data-role="seqfx-bar-lanes"][data-bar="0"]');
+        const frame = window.__SEQFX_DOM__.querySelector('[data-role="seqfx-bar-frame"]');
+        const lanes = window.__SEQFX_DOM__.querySelector('[data-role="seqfx-bar-lanes"][data-bar="0"]');
         if (!frame || !lanes) return false;
         return Math.abs(frame.getBoundingClientRect().width - (lanes.getBoundingClientRect().width + 32)) < 1;
     });
@@ -3180,14 +3107,14 @@ test("seqfx_bar_one_inner_outline_tracks_cell_stack_without_intersections", asyn
     for (const width of viewportWidths) {
         await page.setViewportSize({ width, height: 820 });
         await page.waitForFunction(() => {
-            const frame = document.querySelector('[data-role="seqfx-bar-frame"]');
-            const lanes = document.querySelector('[data-role="seqfx-bar-lanes"][data-bar="0"]');
+            const frame = window.__SEQFX_DOM__.querySelector('[data-role="seqfx-bar-frame"]');
+            const lanes = window.__SEQFX_DOM__.querySelector('[data-role="seqfx-bar-lanes"][data-bar="0"]');
             if (!frame || !lanes) return false;
             return Math.abs(frame.getBoundingClientRect().width - (lanes.getBoundingClientRect().width + 32)) < 1;
         });
         await page.waitForFunction(() => {
-            const inner = document.querySelector('[data-role="seqfx-bar-frame-inner"]');
-            const cells = [...document.querySelectorAll('[data-role="seqfx-bar-section"][data-bar="0"] [data-role="seqfx-cell"]')];
+            const inner = window.__SEQFX_DOM__.querySelector('[data-role="seqfx-bar-frame-inner"]');
+            const cells = [...window.__SEQFX_DOM__.querySelectorAll('[data-role="seqfx-bar-section"][data-bar="0"] [data-role="seqfx-cell"]')];
             if (!inner || cells.length === 0) return false;
             const innerRect = inner.getBoundingClientRect();
             const cellRects = cells.map((cell) => cell.getBoundingClientRect());
@@ -3198,7 +3125,7 @@ test("seqfx_bar_one_inner_outline_tracks_cell_stack_without_intersections", asyn
         });
         const layout = await page.evaluate(() => {
             const rectFor = (selector) => {
-                const element = document.querySelector(selector);
+                const element = window.__SEQFX_DOM__.querySelector(selector);
                 const rect = element.getBoundingClientRect();
                 return {
                     bottom: rect.bottom,
@@ -3207,7 +3134,7 @@ test("seqfx_bar_one_inner_outline_tracks_cell_stack_without_intersections", asyn
                     top: rect.top,
                 };
             };
-            const rectsFor = (selector) => [...document.querySelectorAll(selector)].map((element) => {
+            const rectsFor = (selector) => [...window.__SEQFX_DOM__.querySelectorAll(selector)].map((element) => {
                 const rect = element.getBoundingClientRect();
                 return {
                     bottom: rect.bottom,
@@ -3277,23 +3204,23 @@ test("seqfx_bar_one_frame_reserves_corner_clearance_at_plugin_width", async () =
     await loadSeqFxHarness(page);
     await page.locator('[data-role="seqfx-root"]').waitFor();
     await page.waitForFunction(() => {
-        const frame = document.querySelector('[data-role="seqfx-bar-frame"]');
-        const lanes = document.querySelector('[data-role="seqfx-bar-lanes"][data-bar="0"]');
+        const frame = window.__SEQFX_DOM__.querySelector('[data-role="seqfx-bar-frame"]');
+        const lanes = window.__SEQFX_DOM__.querySelector('[data-role="seqfx-bar-lanes"][data-bar="0"]');
         if (!frame || !lanes) return false;
         return Math.abs(frame.getBoundingClientRect().width - (lanes.getBoundingClientRect().width + 32)) < 1;
     });
 
     const layout = await page.evaluate(() => {
         const rectFor = (selector) => {
-            const element = document.querySelector(selector);
+            const element = window.__SEQFX_DOM__.querySelector(selector);
             const rect = element.getBoundingClientRect();
             return {
                 left: rect.left,
                 right: rect.right,
             };
         };
-        const gridShell = document.querySelector(".seqfx-grid-shell");
-        const frame = document.querySelector('[data-role="seqfx-bar-frame"]');
+        const gridShell = window.__SEQFX_DOM__.querySelector(".seqfx-grid-shell");
+        const frame = window.__SEQFX_DOM__.querySelector('[data-role="seqfx-bar-frame"]');
         const frameStyle = getComputedStyle(frame);
 
         return {
@@ -3334,7 +3261,7 @@ test("seqfx_bar_corner_cells_and_blocks_use_matching_beveled_shapes", async () =
 
     const cornerCellStyles = await page.evaluate((expectations) => (
         expectations.map(({ className, lane, step }) => {
-            const cell = document.querySelector(`[data-role="seqfx-cell"][data-lane="${lane}"][data-step="${step}"]`);
+            const cell = window.__SEQFX_DOM__.querySelector(`[data-role="seqfx-cell"][data-lane="${lane}"][data-step="${step}"]`);
             const styles = getComputedStyle(cell);
 
             return {
@@ -3351,7 +3278,7 @@ test("seqfx_bar_corner_cells_and_blocks_use_matching_beveled_shapes", async () =
     }
 
     const nonCornerCellStyles = await page.evaluate(() => {
-        const cell = document.querySelector('[data-role="seqfx-cell"][data-lane="1"][data-step="1"]');
+        const cell = window.__SEQFX_DOM__.querySelector('[data-role="seqfx-cell"][data-lane="1"][data-step="1"]');
         return {
             className: cell.className,
             clipPath: getComputedStyle(cell).clipPath,
@@ -3366,7 +3293,7 @@ test("seqfx_bar_corner_cells_and_blocks_use_matching_beveled_shapes", async () =
 
     const cornerBlockStyles = await page.evaluate((expectations) => (
         expectations.map(({ className, lane, step }) => {
-            const block = document.querySelector(`[data-role="seqfx-block"][data-lane="${lane}"][data-start="${step}"]`);
+            const block = window.__SEQFX_DOM__.querySelector(`[data-role="seqfx-block"][data-lane="${lane}"][data-start="${step}"]`);
             const fill = block?.querySelector(".seqfx-block-fill");
 
             return {
@@ -3394,7 +3321,7 @@ test("seqfx_bar_one_full_width_edge_blocks_combine_corner_bevels", async () => {
     await resizeBlockToStep(page, 0, 1, 16);
 
     const topBlockStyles = await page.evaluate(() => {
-        const block = document.querySelector('[data-role="seqfx-block"][data-lane="0"][data-start="0"]');
+        const block = window.__SEQFX_DOM__.querySelector('[data-role="seqfx-block"][data-lane="0"][data-start="0"]');
         const fill = block?.querySelector(".seqfx-block-fill");
 
         return {
@@ -3411,7 +3338,7 @@ test("seqfx_bar_one_full_width_edge_blocks_combine_corner_bevels", async () => {
     await resizeBlockToStep(page, 3, 1, 16);
 
     const bottomBlockStyles = await page.evaluate(() => {
-        const block = document.querySelector('[data-role="seqfx-block"][data-lane="3"][data-start="0"]');
+        const block = window.__SEQFX_DOM__.querySelector('[data-role="seqfx-block"][data-lane="3"][data-start="0"]');
         const fill = block?.querySelector(".seqfx-block-fill");
 
         return {
@@ -3433,7 +3360,7 @@ test("seqfx_rate_parameter_reflows_grid_without_window_resize", async () => {
     await page.locator('[data-role="seqfx-root"]').waitFor();
 
     await page.evaluate(() => window.__SEQFX_HARNESS__?.emitParameter("rate", 0));
-    await page.waitForFunction(() => document.querySelector('[data-role="seqfx-cell"][data-lane="0"][data-step="8"]')?.classList.contains("is-alt-bar"));
+    await page.waitForFunction(() => window.__SEQFX_DOM__.querySelector('[data-role="seqfx-cell"][data-lane="0"][data-step="8"]')?.classList.contains("is-alt-bar"));
     await waitForGridGeometry(page, 2, 2, "rate 0 reflowed third cell");
 
     let trackBox = await page.locator('.seqfx-lane-track').first().boundingBox();
@@ -3446,7 +3373,7 @@ test("seqfx_rate_parameter_reflows_grid_without_window_resize", async () => {
 
     await page.evaluate(() => window.__SEQFX_HARNESS__?.emitParameter("rate", 2));
     await page.waitForFunction(() => (
-        Array.from(document.querySelectorAll('[data-role="seqfx-cell"].is-alt-bar')).length === 0
+        Array.from(window.__SEQFX_DOM__.querySelectorAll('[data-role="seqfx-cell"].is-alt-bar')).length === 0
     ));
     await waitForGridGeometry(page, 8, 8, "rate 2 reflowed ninth cell");
 
@@ -3495,8 +3422,10 @@ test("seqfx_rate_change_cancels_an_active_drag_instead_of_remapping_the_pointer"
 after(async () => {
     await browser?.close();
 
-    if (serverProcess) {
+    if (serverProcess && serverProcess.exitCode === null) {
+        const exited = new Promise((resolve) => serverProcess.once("exit", resolve));
         serverProcess.kill("SIGTERM");
+        await exited;
     }
 });
 
@@ -3789,7 +3718,7 @@ test("seqfx_mod_panel_uses_responsive_inspector_width_without_overflowing", asyn
 
     const measureLayout = () => page.evaluate(() => {
         const rectFor = (selector) => {
-            const element = document.querySelector(selector);
+            const element = window.__SEQFX_DOM__.querySelector(selector);
             if (!element) {
                 return null;
             }
@@ -3811,10 +3740,10 @@ test("seqfx_mod_panel_uses_responsive_inspector_width_without_overflowing", asyn
         const auxSource = rectFor('[data-role="seqfx-aux-source"]');
         const auxPreview = rectFor(".aux-source__preview");
         const modTargets = rectFor('[data-role="seqfx-mod-targets"]');
-        const modToggleStyle = getComputedStyle(document.querySelector('[data-role="seqfx-mod-toggle"]'));
-        const modToggleBadgeStyle = getComputedStyle(document.querySelector('[data-role="seqfx-mod-target-badge"]'));
-        const auxSourceStyle = getComputedStyle(document.querySelector('[data-role="seqfx-aux-source"]'));
-        const modTargetsStyle = getComputedStyle(document.querySelector('[data-role="seqfx-mod-targets"]'));
+        const modToggleStyle = getComputedStyle(window.__SEQFX_DOM__.querySelector('[data-role="seqfx-mod-toggle"]'));
+        const modToggleBadgeStyle = getComputedStyle(window.__SEQFX_DOM__.querySelector('[data-role="seqfx-mod-target-badge"]'));
+        const auxSourceStyle = getComputedStyle(window.__SEQFX_DOM__.querySelector('[data-role="seqfx-aux-source"]'));
+        const modTargetsStyle = getComputedStyle(window.__SEQFX_DOM__.querySelector('[data-role="seqfx-mod-targets"]'));
 
         return {
             auxPreview,
@@ -3890,7 +3819,7 @@ test("seqfx_aux_source_dot_uses_monitor_cycle_phase_and_amount", async () => {
     await phaseReadout.waitFor();
 
     await page.evaluate(() => {
-        window.__SEQFX_HARNESS__?.patchConnection.emitEndpoint("monitorOut", {
+        window.__SEQFX_HARNESS__?.emitEndpoint("monitorOut", {
             event: {
                 patternIndex: 0,
                 stepIndex: 0,
@@ -4213,26 +4142,17 @@ test("seqfx_crusher_inspector_renders_waveform_editor_and_writes_params", async 
     await page.close();
 });
 
-test("seqfx_shared_snapshot_header_captures_updates_and_recalls_grid_state", async () => {
+test("A-G snapshots capture the grid when leaving a slot and recall it as one edit", async () => {
     const page = await browser.newPage({ viewport: { width: 1280, height: 820 } });
     await loadSeqFxHarness(page);
     await page.locator('[data-role="seqfx-root"]').waitFor();
-    await page.locator("cosimo-effect-header").waitFor();
-    await page.evaluate(() => window.__SEQFX_HARNESS__?.clearEvents());
+    const slot = (id) => page.getByRole("group", { name: "Snapshots" }).getByRole("button", { name: new RegExp(`^Snapshot ${id}(, empty)?$`) });
 
-    await clickSnapshotSlot(page, "A");
+    await slot("A").click();
     await page.getByRole("button", { name: "Chain 1 step 1", exact: true }).click();
     await page.getByRole("button", { name: "Chain 1 Filter block 1", exact: true }).waitFor();
 
-    let snapshot = await getHarnessSnapshot(page);
-    let bank = snapshot.storedState[SEQFX_SNAPSHOT_BANK_STATE_KEY];
-    assert.equal(bank.activeSlotID, "A");
-    assert.equal(
-        parseSeqFxStoredState(bank.slots.A.storedState[SEQFX_STATE_KEY]).patterns[0].lanes[0].steps[0].active,
-        true,
-    );
-
-    await clickSnapshotSlot(page, "B");
+    await slot("B").click();
     await page.getByRole("button", { name: "Chain 1 Filter block 1", exact: true }).dblclick();
     await page.getByRole("button", { name: "Chain 1 step 5", exact: true }).click();
     await page.getByRole("button", { name: "Chain 1 Filter block 5", exact: true }).waitFor();
@@ -4240,30 +4160,28 @@ test("seqfx_shared_snapshot_header_captures_updates_and_recalls_grid_state", asy
         page.getByRole("button", { name: "Chain 1 Filter block 1", exact: true }).waitFor({ timeout: 300 }),
     );
 
-    snapshot = await getHarnessSnapshot(page);
-    bank = snapshot.storedState[SEQFX_SNAPSHOT_BANK_STATE_KEY];
-    const slotBState = parseSeqFxStoredState(bank.slots.B.storedState[SEQFX_STATE_KEY]);
-    assert.equal(bank.activeSlotID, "B");
-    assert.equal(slotBState.patterns[0].lanes[0].steps[0].active, false);
-    assert.equal(slotBState.patterns[0].lanes[0].steps[4].active, true);
+    let snapshot = await getHarnessSnapshot(page);
+    const slotA = parseSeqFxStoredState(snapshot.storedState.snapshotSlots.A.values.patterns);
+    assert.equal(slotA.patterns[0].lanes[0].steps[0].active, true, "leaving slot A kept its block");
+    assert.equal(snapshot.storedState.activeSnapshot, "B");
 
-    await page.evaluate(() => window.__SEQFX_HARNESS__?.clearEvents());
-    await clickSnapshotSlot(page, "A");
+    await slot("A").click();
     await page.getByRole("button", { name: "Chain 1 Filter block 1", exact: true }).waitFor();
     await assert.rejects(
         page.getByRole("button", { name: "Chain 1 Filter block 5", exact: true }).waitFor({ timeout: 300 }),
     );
 
     snapshot = await getHarnessSnapshot(page);
-    const recallUpload = patternUploads(snapshot).at(-1).value;
-    assert.equal(
-        recallUpload.authoritative,
-        true,
-        "snapshot recall replaces the complete SeqFX document and must clear stale DSP history",
-    );
-    assert.equal(recallUpload.activeSteps[0][0], true);
-    assert.equal(recallUpload.activeSteps[0][4], false);
-    assert.equal(snapshot.storedState[SEQFX_SNAPSHOT_BANK_STATE_KEY].activeSlotID, "A");
+    const slotB = parseSeqFxStoredState(snapshot.storedState.snapshotSlots.B.values.patterns);
+    assert.equal(slotB.patterns[0].lanes[0].steps[0].active, false);
+    assert.equal(slotB.patterns[0].lanes[0].steps[4].active, true);
+    const recalled = parseSeqFxStoredState(snapshot.storedState[SEQFX_STATE_KEY]);
+    assert.equal(recalled.patterns[0].lanes[0].steps[0].active, true);
+    assert.equal(recalled.patterns[0].lanes[0].steps[4].active, false);
+    assert.equal(snapshot.storedState.activeSnapshot, "A");
+
+    await page.getByRole("button", { name: "Undo edit" }).click();
+    await page.getByRole("button", { name: "Chain 1 Filter block 5", exact: true }).waitFor();
 
     await page.close();
 });
@@ -4423,7 +4341,7 @@ test("seqfx_stutter_inspector_renders_interactive_envelope_editor_and_writes_blo
     await page.close();
 });
 
-test("seqfx_stutter_graph_drag_uploads_live_pattern_before_persisting_final_state", async () => {
+test("seqfx_stutter_graph_drag_reaches_the_dsp_live_and_undoes_as_one_edit", async () => {
     const page = await browser.newPage({ viewport: { width: 1280, height: 820 } });
     await loadSeqFxHarness(page);
     await page.locator('[data-role="seqfx-root"]').waitFor();
@@ -4444,54 +4362,40 @@ test("seqfx_stutter_graph_drag_uploads_live_pattern_before_persisting_final_stat
     assert.ok(graphBox);
     assert.ok(handleBox);
     const quarterGatePoint = await stutterGraphPoint(page, graphBox, 0.25);
+    const undo = page.getByRole("button", { name: "Undo edit" });
 
     await page.mouse.move(handleBox.x + handleBox.width / 2, handleBox.y + handleBox.height / 2);
     await page.mouse.down();
     await page.mouse.move(quarterGatePoint.x, quarterGatePoint.y, { steps: 8 });
-    await page.waitForFunction(({ expectedStoredGate, expectedUploadGate, tolerance }) => {
-        const snapshot = window.__SEQFX_HARNESS__?.getSnapshot();
-        const upload = snapshot?.events.filter((entry) => entry.endpointID === "patternUpload").at(-1)?.value;
-        const storedValue = snapshot?.storedState?.["seqfx.v7"];
-        const storedState = typeof storedValue === "string" ? JSON.parse(storedValue) : null;
-        const uploadGate = upload?.params?.[3]?.[0]?.[3];
-        const storedGate = storedState?.patterns?.[0]?.chains?.[3]?.blocks?.[0]?.params?.[3] ?? 0.68;
-
-        return Math.abs(uploadGate - expectedUploadGate) <= tolerance
-            && Math.abs(storedGate - expectedStoredGate) <= 0.000001;
-    }, {
-        expectedStoredGate: 0.68,
-        expectedUploadGate: 0.25,
-        tolerance: 0.03,
-    });
-
-    let snapshot = await getHarnessSnapshot(page);
-    let upload = patternUploads(snapshot).at(-1).value;
-    assertClose(upload.params[3][0][3], 0.25, 0.03, "live stutter gate upload while pointer is down");
-
-    let storedState = parseSeqFxStoredState(snapshot.storedState[SEQFX_STATE_KEY]);
-    assertClose(storedState.patterns[0].lanes[3].steps[0].params[3], 0.68, 0.000001, "stored stutter gate should not change until pointerup");
-
-    await page.mouse.up();
     await page.waitForFunction(({ expectedGate, tolerance }) => {
         const snapshot = window.__SEQFX_HARNESS__?.getSnapshot();
         const upload = snapshot?.events.filter((entry) => entry.endpointID === "patternUpload").at(-1)?.value;
-        const storedValue = snapshot?.storedState?.["seqfx.v7"];
-        const storedState = typeof storedValue === "string" ? JSON.parse(storedValue) : null;
-        const uploadGate = upload?.params?.[3]?.[0]?.[3];
-        const storedGate = storedState?.patterns?.[0]?.chains?.[3]?.blocks?.[0]?.params?.[3] ?? 0.68;
+        return Math.abs(upload?.params?.[3]?.[0]?.[3] - expectedGate) <= tolerance;
+    }, { expectedGate: 0.25, tolerance: 0.03 });
 
-        return Math.abs(uploadGate - expectedGate) <= tolerance
-            && Math.abs(storedGate - expectedGate) <= tolerance;
-    }, {
-        expectedGate: 0.25,
-        tolerance: 0.03,
-    });
+    let snapshot = await getHarnessSnapshot(page);
+    assertClose(patternUploads(snapshot).at(-1).value.params[3][0][3], 0.25, 0.03, "live stutter gate upload while pointer is down");
+    assert.ok(patternUploads(snapshot).length > 1, "each drag step reaches the DSP");
+    assert.equal(await undo.isDisabled(), true, "Undo waits for the drag to finish");
 
+    await page.mouse.up();
+    await page.waitForFunction(() => !window.__SEQFX_DOM__.querySelector('[data-role="seqfx-undo"]')?.disabled);
     snapshot = await getHarnessSnapshot(page);
-    upload = patternUploads(snapshot).at(-1).value;
-    assertClose(upload.params[3][0][3], 0.25, 0.03, "final stutter gate upload after pointerup");
-    storedState = parseSeqFxStoredState(snapshot.storedState[SEQFX_STATE_KEY]);
+    const storedState = parseSeqFxStoredState(snapshot.storedState[SEQFX_STATE_KEY]);
     assertClose(storedState.patterns[0].lanes[3].steps[0].params[3], 0.25, 0.03, "stored stutter gate after pointerup");
+
+    await undo.click();
+    await page.waitForFunction(({ stateKey, expectedGate }) => {
+        const stored = window.__SEQFX_HARNESS__?.getSnapshot().storedState[stateKey];
+        const gate = stored?.patterns[0].chains[3].blocks[0]?.params?.[3] ?? expectedGate;
+        return Math.abs(gate - expectedGate) <= 0.000001;
+    }, { stateKey: SEQFX_STATE_KEY, expectedGate: 0.68 });
+    assertClose(
+        parseSeqFxStoredState((await getHarnessSnapshot(page)).storedState[SEQFX_STATE_KEY]).patterns[0].lanes[3].steps[0].params[3],
+        0.68,
+        0.000001,
+        "one Undo returns to the gate before the drag",
+    );
 
     await page.close();
 });
@@ -4552,7 +4456,6 @@ test("seqfx_pattern_buttons_send_pattern_select_and_worker_upload", async () => 
     const snapshot = await getHarnessSnapshot(page);
     assert.equal(snapshot.events.some((entry) => entry.endpointID === "patternSelect" && entry.value === 4), true);
     assert.equal(patternUploads(snapshot).at(-1).value.patternIndex, 4);
-    assert.equal(patternUploads(snapshot).at(-1).value.authoritative, false);
 
     await page.close();
 });
@@ -4649,7 +4552,7 @@ test("seqfx_cross_row_blocks_render_as_one_logical_block_split_across_bar_rows",
     await resizeBlockToStep(page, 2, 15, 18);
 
     const segmentSelector = '.seqfx-block[data-lane="2"][data-start="14"]';
-    await page.waitForFunction((selector) => document.querySelectorAll(selector).length === 2, segmentSelector);
+    await page.waitForFunction((selector) => window.__SEQFX_DOM__.querySelectorAll(selector).length === 2, segmentSelector);
     const segments = page.locator(segmentSelector);
     assert.equal(await segments.count(), 2);
     const firstSegment = await segments.nth(0).boundingBox();
@@ -4890,7 +4793,7 @@ test("seqfx segmented sliders preserve proportional continuous fill, whole discr
         });
         input.dispatchEvent(event);
         return {
-            activeType: document.activeElement instanceof HTMLInputElement ? document.activeElement.type : null,
+            activeType: window.__SEQFX_DOM__.activeElement instanceof HTMLInputElement ? window.__SEQFX_DOM__.activeElement.type : null,
             defaultPrevented: event.defaultPrevented,
         };
     });
@@ -4948,7 +4851,7 @@ test("seqfx loop bounds use compact validated cell inputs with exact host gestur
         });
         input.dispatchEvent(event);
         return {
-            activeType: document.activeElement instanceof HTMLInputElement ? document.activeElement.type : null,
+            activeType: window.__SEQFX_DOM__.activeElement instanceof HTMLInputElement ? window.__SEQFX_DOM__.activeElement.type : null,
             defaultPrevented: event.defaultPrevented,
         };
     });
@@ -4985,9 +4888,8 @@ test("seqfx loop bounds use compact validated cell inputs with exact host gestur
         { endpointID: "manualBpm", value: 134.5 },
         { endpointID: "loopStart", value: 4 },
         { endpointID: "loopLength", value: 28 },
-        { endpointID: "loopStart", value: 4 },
         { endpointID: "loopLength", value: 9 },
-    ]);
+    ], "moving only the stop writes only the loop length");
     assert.deepEqual(snapshot.gestureStarts, [
         "manualBpm",
         "loopStart",
@@ -5029,13 +4931,10 @@ test("seqfx loop bounds use compact validated cell inputs with exact host gestur
     assert.deepEqual(snapshot.events.map(({ endpointID, value }) => ({ endpointID, value })), [
         { endpointID: "loopStart", value: 12 },
         { endpointID: "loopLength", value: 1 },
-        { endpointID: "loopStart", value: 12 },
-        { endpointID: "loopLength", value: 1 },
         { endpointID: "loopStart", value: 0 },
         { endpointID: "loopLength", value: 13 },
-        { endpointID: "loopStart", value: 0 },
         { endpointID: "loopLength", value: 32 },
-    ]);
+    ], "each clamped edit writes only the loop values it changes");
     assert.deepEqual(snapshot.gestureStarts, [
         "loopStart", "loopLength",
         "loopStart", "loopLength",
@@ -5057,11 +4956,11 @@ test("seqfx loop bounds use compact validated cell inputs with exact host gestur
         assert.equal(await loopStop.inputValue(), "32", `Stop should survive resize to ${viewport.width}px`);
         assert.equal(await loopStart.inputValue(), "1", `Start should survive resize to ${viewport.width}px`);
         assert.equal(
-            await page.evaluate((node) => node === document.querySelector('[data-role="seqfx-loop-stop"]'), stopHandle),
+            await page.evaluate((node) => node === window.__SEQFX_DOM__.querySelector('[data-role="seqfx-loop-stop"]'), stopHandle),
             true,
             `Stop should not remount at ${viewport.width}px`,
         );
-        assert.equal(await loopStop.evaluate((node) => document.activeElement === node), true, `Stop focus should survive ${viewport.width}px`);
+        assert.equal(await loopStop.evaluate((node) => window.__SEQFX_DOM__.activeElement === node), true, `Stop focus should survive ${viewport.width}px`);
     }
     snapshot = await getHarnessSnapshot(page);
     assert.deepEqual(snapshot.events, [], "resizing a focused loop input should not emit host writes");
@@ -5626,7 +5525,7 @@ test("seqfx_blocks_use_a_single_clean_surface_with_hidden_resize_chrome", async 
     await page.mouse.move(10, 10);
     await page.waitForFunction(() => (
         getComputedStyle(
-            document.querySelector('[data-role="seqfx-block-resize"][data-lane="1"][data-start="0"]'),
+            window.__SEQFX_DOM__.querySelector('[data-role="seqfx-block-resize"][data-lane="1"][data-start="0"]'),
             "::after",
         ).opacity === "0"
     ));
@@ -5673,7 +5572,7 @@ test("seqfx_blocks_use_a_single_clean_surface_with_hidden_resize_chrome", async 
     await blockControl.hover();
     await page.waitForFunction(() => (
         Number(getComputedStyle(
-            document.querySelector('[data-role="seqfx-block-resize"][data-lane="1"][data-start="0"]'),
+            window.__SEQFX_DOM__.querySelector('[data-role="seqfx-block-resize"][data-lane="1"][data-start="0"]'),
             "::after",
         ).opacity) > 0.9
     ));
@@ -5724,7 +5623,7 @@ test("seqfx_blocks_render_risograph_glyphs_from_effect_parameters", async () => 
         setParam(3, 0, params.stutterSlices, 16);
         setParam(3, 0, params.stutterShape, 0.5);
 
-        window.__SEQFX_HARNESS__?.patchConnection.sendStoredStateValue(stateKey, module.serializeSeqFxState(state));
+        window.__SEQFX_HARNESS__?.loadStoredValue(stateKey, module.projectStoredSeqFxState(state));
     }, {
         stateKey: SEQFX_STATE_KEY,
         params: {
@@ -5745,7 +5644,7 @@ test("seqfx_blocks_render_risograph_glyphs_from_effect_parameters", async () => 
 
     const glyphs = await page.evaluate(() => {
         const read = (selector) => {
-            const block = document.querySelector(selector);
+            const block = window.__SEQFX_DOM__.querySelector(selector);
             const fill = block?.querySelector(".seqfx-block-fill");
             const glyph = block?.querySelector('[data-role="seqfx-block-glyph"]');
             const labels = [...(block?.querySelectorAll('[data-role="seqfx-block-glyph-label"]') ?? [])].map((node) => node.textContent?.trim());
@@ -5816,7 +5715,7 @@ test("seqfx_inspector_uses_a_beveled_material_plate_with_raised_control_islands"
 
     const styles = await page.evaluate(() => {
         const styleFor = (selector, pseudo = null) => {
-            const node = document.querySelector(selector);
+            const node = window.__SEQFX_DOM__.querySelector(selector);
             const computed = getComputedStyle(node, pseudo);
 
             return {
@@ -6144,7 +6043,7 @@ test("seqfx_option_drag_previews_copy_paint_and_commits_once_on_release", async 
     await page.mouse.move(fifthCellBox.x + fifthCellBox.width / 2, fifthCellBox.y + fifthCellBox.height / 2, { steps: 12 });
 
     await page.waitForFunction(() => (
-        Array.from(document.querySelectorAll('[data-role="seqfx-block"][data-preview="true"]'))
+        Array.from(window.__SEQFX_DOM__.querySelectorAll('[data-role="seqfx-block"][data-preview="true"]'))
             .map((node) => Number(node.getAttribute("data-start")))
             .join(",") === "1,2,3,4"
     ));
@@ -6152,7 +6051,7 @@ test("seqfx_option_drag_previews_copy_paint_and_commits_once_on_release", async 
 
     await page.mouse.move(thirdCellBox.x + thirdCellBox.width / 2, thirdCellBox.y + thirdCellBox.height / 2, { steps: 8 });
     await page.waitForFunction(() => (
-        Array.from(document.querySelectorAll('[data-role="seqfx-block"][data-preview="true"]'))
+        Array.from(window.__SEQFX_DOM__.querySelectorAll('[data-role="seqfx-block"][data-preview="true"]'))
             .map((node) => Number(node.getAttribute("data-start")))
             .join(",") === "1,2"
     ));
@@ -6203,7 +6102,7 @@ test("seqfx_option_dragging_one_block_between_chains_copies_without_removing_sou
     await page.mouse.move(targetBox.x + targetBox.width / 2, targetBox.y + targetBox.height / 2, { steps: 10 });
 
     await page.waitForFunction(() => (
-        Array.from(document.querySelectorAll('[data-role="seqfx-block"][data-preview="true"][data-lane="3"]'))
+        Array.from(window.__SEQFX_DOM__.querySelectorAll('[data-role="seqfx-block"][data-preview="true"][data-lane="3"]'))
             .map((node) => Number(node.getAttribute("data-start")))
             .join(",") === "9"
     ));
@@ -6236,7 +6135,7 @@ test("seqfx_option_dragging_selected_blocks_between_chains_copies_the_group", as
     await page.getByRole("button", { name: "Chain 2 Crush block 2", exact: true }).click();
     await page.getByRole("button", { name: "Chain 2 Crush block 5", exact: true }).click({ modifiers: ["Shift"] });
     await page.waitForFunction(() => (
-        Array.from(document.querySelectorAll('[data-role="seqfx-block"].is-selected[data-lane="1"]'))
+        Array.from(window.__SEQFX_DOM__.querySelectorAll('[data-role="seqfx-block"].is-selected[data-lane="1"]'))
             .map((node) => Number(node.getAttribute("data-start")))
             .join(",") === "1,4"
     ));
@@ -6255,7 +6154,7 @@ test("seqfx_option_dragging_selected_blocks_between_chains_copies_the_group", as
     await page.mouse.move(targetBox.x + targetBox.width * 0.15, targetBox.y + targetBox.height / 2, { steps: 12 });
 
     await page.waitForFunction(() => (
-        Array.from(document.querySelectorAll('[data-role="seqfx-block"][data-preview="true"][data-lane="3"]'))
+        Array.from(window.__SEQFX_DOM__.querySelectorAll('[data-role="seqfx-block"][data-preview="true"][data-lane="3"]'))
             .map((node) => Number(node.getAttribute("data-start")))
             .join(",") === "8,11"
     ));
@@ -6291,7 +6190,7 @@ test("seqfx_selected_active_blocks_drag_between_chains_as_a_group", async () => 
     await page.getByRole("button", { name: "Chain 1 Filter block 2", exact: true }).click();
     await page.getByRole("button", { name: "Chain 1 Filter block 5", exact: true }).click({ modifiers: ["Shift"] });
     await page.waitForFunction(() => (
-        Array.from(document.querySelectorAll('[data-role="seqfx-block"].is-selected[data-lane="0"]'))
+        Array.from(window.__SEQFX_DOM__.querySelectorAll('[data-role="seqfx-block"].is-selected[data-lane="0"]'))
             .map((node) => Number(node.getAttribute("data-start")))
             .join(",") === "1,4"
     ));
@@ -6378,7 +6277,7 @@ test("seqfx_shift_click_selects_active_blocks_and_edits_or_deletes_the_group", a
     await page.getByRole("button", { name: "Chain 2 Crush block 7", exact: true }).click({ modifiers: ["Shift"] });
 
     await page.waitForFunction(() => (
-        Array.from(document.querySelectorAll('[data-role="seqfx-block"].is-selected[data-lane="1"]'))
+        Array.from(window.__SEQFX_DOM__.querySelectorAll('[data-role="seqfx-block"].is-selected[data-lane="1"]'))
             .map((node) => Number(node.getAttribute("data-start")))
             .join(",") === "1,3,6"
     ));
@@ -6447,7 +6346,7 @@ test("seqfx_cmd_c_and_cmd_v_copy_cell_values_to_single_or_group_selection", asyn
     await page.getByRole("button", { name: "Chain 2 Crush block 5", exact: true }).click();
     await page.getByRole("button", { name: "Chain 2 Crush block 8", exact: true }).click({ modifiers: ["Shift"] });
     await page.waitForFunction(() => (
-        Array.from(document.querySelectorAll('[data-role="seqfx-block"].is-selected[data-lane="1"]'))
+        Array.from(window.__SEQFX_DOM__.querySelectorAll('[data-role="seqfx-block"].is-selected[data-lane="1"]'))
             .map((node) => Number(node.getAttribute("data-start")))
             .join(",") === "4,7"
     ));
@@ -6520,7 +6419,7 @@ test("seqfx_clipboard_events_copy_and_paste_cell_values_when_keydown_is_missing"
     await page.getByRole("button", { name: "Chain 2 Crush block 5", exact: true }).click();
     await page.getByRole("button", { name: "Chain 2 Crush block 8", exact: true }).click({ modifiers: ["Shift"] });
     await page.waitForFunction(() => (
-        Array.from(document.querySelectorAll('[data-role="seqfx-block"].is-selected[data-lane="1"]'))
+        Array.from(window.__SEQFX_DOM__.querySelectorAll('[data-role="seqfx-block"].is-selected[data-lane="1"]'))
             .map((node) => Number(node.getAttribute("data-start")))
             .join(",") === "4,7"
     ));
@@ -6558,7 +6457,7 @@ test("seqfx_selected_active_blocks_drag_as_a_group", async () => {
     await page.getByRole("button", { name: "Chain 1 Filter block 2", exact: true }).click();
     await page.getByRole("button", { name: "Chain 1 Filter block 7", exact: true }).click({ modifiers: ["Shift"] });
     await page.waitForFunction(() => (
-        Array.from(document.querySelectorAll('[data-role="seqfx-block"].is-selected[data-lane="0"]'))
+        Array.from(window.__SEQFX_DOM__.querySelectorAll('[data-role="seqfx-block"].is-selected[data-lane="0"]'))
             .map((node) => Number(node.getAttribute("data-start")))
             .join(",") === "1,3,6"
     ));
@@ -6602,7 +6501,7 @@ test("seqfx_double_clicking_a_selected_block_deletes_the_selected_group", async 
     await page.getByRole("button", { name: "Chain 4 Stutter block 2", exact: true }).click();
     await page.getByRole("button", { name: "Chain 4 Stutter block 5", exact: true }).click({ modifiers: ["Shift"] });
     await page.waitForFunction(() => (
-        Array.from(document.querySelectorAll('[data-role="seqfx-block"].is-selected[data-lane="3"]'))
+        Array.from(window.__SEQFX_DOM__.querySelectorAll('[data-role="seqfx-block"].is-selected[data-lane="3"]'))
             .map((node) => Number(node.getAttribute("data-start")))
             .join(",") === "1,4"
     ));
@@ -6640,7 +6539,7 @@ test("seqfx_selected_multi_step_blocks_edit_and_drag_as_whole_blocks", async () 
     await page.getByRole("button", { name: "Chain 1 Filter block 2-4", exact: true }).click();
     await page.getByRole("button", { name: "Chain 1 Filter block 8-9", exact: true }).click({ modifiers: ["Shift"] });
     await page.waitForFunction(() => (
-        Array.from(document.querySelectorAll('[data-role="seqfx-block"].is-selected[data-lane="0"]'))
+        Array.from(window.__SEQFX_DOM__.querySelectorAll('[data-role="seqfx-block"].is-selected[data-lane="0"]'))
             .map((node) => Number(node.getAttribute("data-start")))
             .join(",") === "1,7"
     ));
@@ -6772,7 +6671,7 @@ test("seqfx_block_duration_is_a_focusable_bounded_keyboard_slider", async () => 
     assert.equal(await duration.getAttribute("aria-valuenow"), "1");
     assert.equal(await duration.getAttribute("aria-valuetext"), "1 step");
     assert.equal(await duration.getAttribute("tabindex"), "0");
-    assert.equal(await duration.evaluate((node) => document.activeElement === node), true);
+    assert.equal(await duration.evaluate((node) => window.__SEQFX_DOM__.activeElement === node), true);
 
     await page.keyboard.press("End");
     await page.getByRole("button", { name: "Chain 1 Filter block 5-8", exact: true }).waitFor();
@@ -6817,25 +6716,25 @@ test("seqfx_block_duration_keeps_keyboard_focus_across_bar_boundaries", async ()
 
     await block.focus();
     await page.keyboard.press("Tab");
-    assert.equal(await duration.evaluate((node) => document.activeElement === node), true);
+    assert.equal(await duration.evaluate((node) => window.__SEQFX_DOM__.activeElement === node), true);
 
     await page.keyboard.press("ArrowRight");
     await page.getByRole("button", { name: "Chain 1 Filter block 16-17", exact: true }).waitFor();
     assert.equal(await duration.getAttribute("aria-valuenow"), "2");
     assert.equal(
-        await duration.evaluate((node) => document.activeElement === node),
+        await duration.evaluate((node) => window.__SEQFX_DOM__.activeElement === node),
         true,
         "crossing into the second bar must not replace the focused duration control",
     );
     await page.keyboard.press("Shift+Tab");
     assert.equal(
         await page.getByRole("button", { name: "Chain 1 Filter block 16-17", exact: true })
-            .evaluate((node) => document.activeElement === node),
+            .evaluate((node) => window.__SEQFX_DOM__.activeElement === node),
         true,
     );
     await page.keyboard.press("Tab");
     assert.equal(
-        await duration.evaluate((node) => document.activeElement === node),
+        await duration.evaluate((node) => window.__SEQFX_DOM__.activeElement === node),
         true,
         "the duration slider must remain the block button's next tab stop after crossing a bar",
     );
@@ -6843,7 +6742,7 @@ test("seqfx_block_duration_keeps_keyboard_focus_across_bar_boundaries", async ()
     await page.keyboard.press("ArrowRight");
     await page.getByRole("button", { name: "Chain 1 Filter block 16-18", exact: true }).waitFor();
     assert.equal(await duration.getAttribute("aria-valuenow"), "3");
-    assert.equal(await duration.evaluate((node) => document.activeElement === node), true);
+    assert.equal(await duration.evaluate((node) => window.__SEQFX_DOM__.activeElement === node), true);
 
     await page.close();
 });

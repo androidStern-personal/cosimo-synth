@@ -18,7 +18,7 @@ import { useCallback, useEffect, useMemo, useRef } from "react";
 
 import { useOptionalPatchConnection, type PatchConnectionLike } from "./cmajor-react";
 import type { LiveValue } from "../../kit/index";
-import { knobArcPoint } from "./parameter-knob-artwork";
+import { knobArcPoint } from "../../kit/ui/knob-geometry";
 import type { ModulationSourceKind } from "./modulation-targets";
 import {
     hasUiMediaClock,
@@ -430,10 +430,18 @@ export function releaseModSourceLiveDriver(connection: PatchConnectionLike): voi
         return;
     }
     entry.refCount -= 1;
-    if (entry.refCount <= 0) {
+    if (entry.refCount > 0) {
+        return;
+    }
+    // A consumer that resubscribes in the same commit keeps the driver, and with
+    // it the newest voice generation, so a stale report cannot reactivate a light.
+    queueMicrotask(() => {
+        if (entry.refCount > 0 || sharedDrivers.get(connection) !== entry) {
+            return;
+        }
         entry.driver.detach();
         sharedDrivers.delete(connection);
-    }
+    });
 }
 
 /**
@@ -495,7 +503,7 @@ export function useModSourceLight(spec: ModSourceLightSpec): (element: Element |
 
 /** Adapt the existing engine monitor to the kit's read-only value contract.
  * Projection returns the parameter's canonical units, never SVG coordinates.
- * The same driver serves legacy lights and these subscribers, so there is one
+ * The same driver serves the traveling lights and these subscribers, so there is one
  * upstream monitor subscription per patch connection.
  */
 export function createModSourceValue(connection: PatchConnectionLike, source: ModSourceIdentity,

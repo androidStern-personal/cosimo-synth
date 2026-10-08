@@ -102,7 +102,7 @@
     box-shadow: 0 26px 80px rgb(0 0 0 / 0.48);
 }
 
-/* T79: the shell keeps its workspace gutter while the keyboard cancels that
+/* The shell keeps its workspace gutter while the keyboard cancels that
    same inline token to fill the platform-safe horizontal band. Safe-area
    custom properties are host-testable overrides; browser insets remain the
    production fallback. */
@@ -141,7 +141,7 @@
 
 /* ADR-025 row 13: capture stays in the dragged source's own color — mixing
    toward white was the audited divergence. The :not() qualifiers keep this
-   rule MORE specific than the eligibility outline above (T08A: without them
+   rule MORE specific than the eligibility outline above (without them
    eligibility wins and capture is invisible), and structurally bar an
    existing/ineligible pair from ever taking the capture treatment. */
 .cosimo-surface[data-mod-source-mapping] [data-modulation-target-kind].is-mod-hover:not([data-drag-creation="existing"]):not([data-drag-creation="ineligible"]) {
@@ -250,7 +250,7 @@
     overscroll-behavior: contain;
 }
 
-/* T28's compact shell row survives focused MSEG editing. The editor owns all
+/* The compact shell row survives focused MSEG editing. The editor owns all
    space below that one 40px row; tabs, keyboard, and workspace content remain
    behind the focused layer exactly as ADR-026 otherwise specifies. */
 @media (max-width: 639px) {
@@ -261,7 +261,7 @@
         left: var(--cosimo-shell-pad);
     }
 
-    /* T71: a visible parked row remains global shell chrome during focused
+    /* A visible parked row remains global shell chrome during focused
        MSEG editing. Reserve its exact row plus the shell border so the full
        editor's controls end where the parked row begins. */
     .is-mobile-shell

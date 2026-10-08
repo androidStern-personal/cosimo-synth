@@ -61,7 +61,7 @@ int main (int argc, char** argv)
         });
         expectDefaults();
         // Every invalid member must restore the whole authored default record.
-        for (const auto invalid : { std::pair<int, std::int32_t>{0, -1}, {1, 2}, {2, 0x40400000},
+        for (const auto& invalid : { std::pair<int, std::int32_t>{0, -1}, {1, 2}, {2, 0x40400000},
                                     {2, 0x7fc00000}, {2, 0x7f800000}, {3, 2}, {4, 99} })
         {
             auto corrupted = words;

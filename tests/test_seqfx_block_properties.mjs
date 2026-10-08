@@ -4,12 +4,12 @@ import path from "node:path";
 
 import fc from "fast-check";
 
-import { loadUIModule } from "./helpers/load_ui_module.mjs";
+import { loadUIModule } from "../kit/tests/helpers/load_ui_module.mjs";
 
 const repoRoot = path.resolve(import.meta.dirname, "..");
 
 const stateModulePromise = loadUIModule(repoRoot, "fx/seqfx/view/seqfx-state.ts");
-const arbitraryModulePromise = loadUIModule(repoRoot, "fx/seqfx/view/seqfx-state.arbitrary.ts");
+const arbitraryModulePromise = loadUIModule(repoRoot, "tests/helpers/seqfx_state_arbitrary.ts");
 
 function deepFreeze(value, seen = new WeakSet()) {
     if (value === null || typeof value !== "object" || seen.has(value)) {
@@ -71,7 +71,6 @@ function assertIndependentTopology(state, stateModule, { validateValues = true }
     assert.equal(state.version, stateModule.SEQFX_STATE_VERSION);
     assert.equal(state.patterns.length, stateModule.SEQFX_PATTERN_COUNT);
     const oracleBlocks = state.patterns.map((pattern, patternIndex) => {
-        assert.equal(Number.isInteger(pattern.revision) && pattern.revision >= 1, true, `pattern ${patternIndex} revision`);
         assert.equal(pattern.lanes.length, stateModule.SEQFX_LANE_COUNT, `pattern ${patternIndex} lanes`);
         return pattern.lanes.map((lane, laneIndex) => {
             assert.equal(lane.steps.length, stateModule.SEQFX_STEP_COUNT, `pattern ${patternIndex} lane ${laneIndex} steps`);

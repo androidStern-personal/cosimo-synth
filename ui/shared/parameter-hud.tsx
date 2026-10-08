@@ -212,7 +212,7 @@ function ParameterHudWavetable({
     );
 }
 
-function ignoreFilterValue(_value: number): void {}
+function ignoreFilterValue(): void {}
 
 function ParameterHudFilter({
     visualization,

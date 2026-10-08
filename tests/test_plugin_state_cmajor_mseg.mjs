@@ -1,12 +1,12 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import path from "node:path";
-import { loadUIModule } from "./helpers/load_ui_module.mjs";
+import { loadUIModule } from "../kit/tests/helpers/load_ui_module.mjs";
 
 const root = path.resolve(import.meta.dirname, "..");
 const { definePluginState, storedValue, eventValue } = await loadUIModule(root, "kit/ui/plugin-state-definition.ts");
 const { createCmajorPluginStateService } = await loadUIModule(root, "kit/ui/plugin-state-cmajor.ts");
-const { renderMsegShape, MSEG_BODY_SAMPLES, MSEG_PADDED_SAMPLES } = await loadUIModule(root, "ui/shared/mseg.ts");
+const { renderMsegShape, MSEG_BODY_SAMPLES, MSEG_PADDED_SAMPLES } = await loadUIModule(root, "kit/ui/mseg.ts");
 
 test("ordinary authored MSEG rendering reaches the raw event channel as finite padded samples without prepare wrappers", async t => {
     const ramp = { points: [{ x: 0, y: 0, curvePower: 0 }, { x: 1, y: 1, curvePower: 0 }] };

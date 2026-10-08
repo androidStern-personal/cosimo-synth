@@ -33,6 +33,9 @@ struct SharedObservations
     std::uint32_t performerCount = 0;
 };
 
+// Like the synth, the performer's output trails its notes by a fixed latency.
+constexpr std::uint32_t performerLatencyFrames = 37;
+
 class DecayingSinePerformer final : public OfflinePerformer
 {
 public:
@@ -83,14 +86,21 @@ public:
         }
         for (auto frame = std::uint32_t { 0 }; frame < frameCount; ++frame)
         {
-            auto gain = 0.25;
-            if (released)
+            if (renderedFrames + frame < performerLatencyFrames)
             {
-                const auto age = renderedFrames + frame - releaseFrame;
+                left[frame] = right[frame] = 0.0f;
+                continue;
+            }
+            // The sound as it was performerLatencyFrames ago.
+            const auto soundFrame = renderedFrames + frame - performerLatencyFrames;
+            auto gain = 0.25;
+            if (released && soundFrame >= releaseFrame)
+            {
+                const auto age = soundFrame - releaseFrame;
                 gain = age < 320 ? 0.25 * (1.0 - static_cast<double> (age) / 320.0) : 0.0;
             }
             const auto phase = 2.0 * 3.14159265358979323846
-                             * (110.0 + rootNote) * (renderedFrames + frame) / sampleRate;
+                             * (110.0 + rootNote) * soundFrame / sampleRate;
             left[frame] = static_cast<float> (std::sin (phase) * gain);
             right[frame] = left[frame];
         }
@@ -99,6 +109,8 @@ public:
         if (cancellation != nullptr && renderedFrames >= 128)
             const_cast<std::atomic<bool>*> (cancellation)->store (true);
     }
+
+    std::uint32_t outputLatencyFrames() const override { return performerLatencyFrames; }
 
     std::size_t residentBytes() const noexcept override { return 135'615'616; }
 
@@ -176,6 +188,15 @@ void testSequentialCaptureAndFlush()
                 "driver emitted a silent captured root");
         expect (root.metrics.performerResidentBytes == 135'615'616,
                 "driver lost performer memory accounting");
+        expect (root.metrics.renderedFrameCount
+                    == performerLatencyFrames + makePlan().holdFrames + makePlan().tailCapFrames,
+                "driver did not render the performer latency before the capture");
+
+        // The recording starts where the sound starts: its first frames are already loud.
+        auto openingPeak = 0;
+        for (std::size_t sample = 0; sample < 64 * 2; ++sample)
+            openingPeak = std::max (openingPeak, std::abs (static_cast<int> (root.interleavedStereo[sample])));
+        expect (openingPeak > 3276, "driver kept the performer latency's silence at the start");
     }
 }
 

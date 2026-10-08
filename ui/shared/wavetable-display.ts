@@ -132,7 +132,7 @@ export type WavetableRenderModel = WavetableStaticScene & {
 };
 
 /**
- * T02C: the selected source's possible Index travel, shaded onto the graphic.
+ * The selected source's possible Index travel, shaded onto the graphic.
  * Positions use the Index parameter's normalized 0..1 axis; the caller owns
  * the canonical route projection (mobile-voice-rail-projection) and passes
  * only its already-clamped result.
@@ -224,7 +224,7 @@ function lerp(start: number, end: number, amount: number): number {
 }
 
 /**
- * T02C tint strengths: a hue shift only, strong enough to read on thin
+ * Overlay tint strengths: a hue shift only, strong enough to read on thin
  * low-alpha lines while the depth fade and lighting stay untouched.
  */
 const MODULATION_OVERLAY_LINE_MIX = 0.6;
@@ -728,7 +728,7 @@ function createGuideLines(camera: Camera, projection: Projection): GuideLine[] {
     ];
 }
 
-function buildProjectionFromFrames(contourSamples: Float32Array[], width: number, height: number, frameCount: number, drawableInsets: WavetableDrawableInsets = {}): { camera: Camera; projection: Projection } {
+function buildProjection(width: number, height: number, drawableInsets: WavetableDrawableInsets = {}): { camera: Camera; projection: Projection } {
     const camera = createCamera();
     const stableWorldPoints = [
         { x: -1, y: FLOOR_Y, z: 0 },
@@ -1081,7 +1081,7 @@ export function buildWavetableStaticScene({
     const surfacePointCount = getSurfacePointCount(safeWidth, frames[0].length);
     const contourSamples = frames.map((frame) => decimateFrame(frame, contourPointCount));
     const surfaceSamples = frames.map((frame) => decimateFrame(frame, surfacePointCount));
-    const { camera, projection } = buildProjectionFromFrames(contourSamples, safeWidth, safeHeight, frameCount, drawableInsets);
+    const { camera, projection } = buildProjection(safeWidth, safeHeight, drawableInsets);
     const contourFrames = contourSamples.map((samples, frameIndex) =>
         createProjectedFrame(samples, frameIndex, frameCount, camera, projection)
     );
@@ -1167,7 +1167,7 @@ export function drawWavetableModel(context: WavetableRenderContext, model: Wavet
     // Frame/Index display. The retained artwork is identical either way.
     const { paintBackground = true, showSliceCaption = true, modulationRange = null } = options;
     const meshColour = mixRGB(theme.meshColor, [214, 246, 255], 0.34);
-    // T02C: map the overlay's normalized positions through the same frame-state
+    // Map the overlay's normalized positions through the same frame-state
     // law the current slice uses, then tint colours only — every alpha, glow,
     // and geometry stays exactly the untinted draw's.
     const overlayLowIndex = modulationRange === null

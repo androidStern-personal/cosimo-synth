@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import path from "node:path";
 
-import { loadUIModule } from "./helpers/load_ui_module.mjs";
+import { loadUIModule } from "../kit/tests/helpers/load_ui_module.mjs";
 import { createModulationFixture } from "./helpers/modulation_state_fixture.mjs";
 
 const repoRoot = path.resolve(import.meta.dirname, "..");
@@ -161,8 +161,10 @@ test("owner boot reads the current modulation document and the other declared sy
     connection.requestFullStoredState = undefined;
     const { bridge, restore, client } = await createModulationFixture(t, connection);
 
-
-    assert.deepEqual(connection.requestedKeys, ["modulation.v6", "lane.v1", "articulations.v4"]);
+    assert.deepEqual(connection.requestedKeys, [
+        "modulation.v6", "lane.v1", "articulations.v4", "bounce.v1",
+        "activePreset", "snapshotSlots", "activeSnapshot",
+    ]);
     assert.deepEqual(connection.requestedKeys.filter(key => key.startsWith("modulation.")), [modulation.MODULATION_STATE_KEY],
         "legacy modulation documents must never be requested");
     assert.deepEqual(connection.storedWrites, []);

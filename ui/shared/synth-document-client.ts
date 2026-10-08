@@ -63,18 +63,18 @@ export function createSynthDocumentClient<Value>(connection: PatchConnectionLike
             if (!scope) return;
             const id = ++nextGesture;
             gesture = id; gestureScope = scope;
-            void lease.client.dispatch({ kind: "begin", key, gesture: id }).then(result => {
+            void lease.client.dispatch({ kind: "begin", keys: [key], gesture: id }).then(result => {
                 if (result.kind !== "accepted" && gesture === id) gesture = undefined;
             });
         },
         end() {
             const active = activeGesture();
             gesture = undefined; gestureScope = undefined;
-            return active === undefined ? undefined : lease.client.dispatch({ kind: "end", key, gesture: active });
+            return active === undefined ? undefined : lease.client.dispatch({ kind: "end", keys: [key], gesture: active });
         },
         stop() {
             const active = activeGesture(); gesture = undefined;
-            if (active !== undefined) void lease.client.dispatch({ kind: "end", key, gesture: active });
+            if (active !== undefined) void lease.client.dispatch({ kind: "end", keys: [key], gesture: active });
             lease.release();
         },
     };

@@ -15,13 +15,11 @@
 import path from "node:path";
 import { pathToFileURL } from "node:url";
 
-import { loadUIModule } from "../helpers/load_ui_module.mjs";
+import { loadUIModule } from "../../kit/tests/helpers/load_ui_module.mjs";
 
 export const DRIVER_SESSION_ID = 7;
 export const DRIVER_SAMPLE_RATE = 48_000;
 export const DRIVER_BLOCK_FRAMES = 128;
-
-const WAVETABLE_MIP_LEVEL_COUNT = 11;
 
 export function packMidi(status, note, velocity) {
     return ((status & 0xff) << 16) | ((note & 0x7f) << 8) | (velocity & 0x7f);
@@ -35,17 +33,13 @@ function endpointMethod(performer, prefix, endpointID) {
     return method.bind(performer);
 }
 
-// Same deterministic band-limited-ish shape the Bounce offline tests install.
-function syntheticMipSamples(mipIndex) {
-    const samplesPerFrame = 2_048;
-    const samples = new Float32Array(samplesPerFrame * 3);
-    const cycleLength = Math.min(2_048, Math.max(256, (1 << mipIndex) * 32));
-    for (let index = 0; index < samplesPerFrame; index += 1) {
-        const phase = (index % cycleLength) / cycleLength;
-        samples[index] = (Math.sin(2 * Math.PI * phase)
-            + (0.18 * Math.sin(4 * Math.PI * phase))) / 1.18;
-    }
-    return samples;
+// One deterministic cycle with a little second harmonic: the synthetic table
+// the driver installs on every oscillator.
+function syntheticWavetableFrame() {
+    return Float32Array.from({ length: 2_048 }, (_, index) => {
+        const phase = index / 2_048;
+        return (Math.sin(2 * Math.PI * phase) + (0.18 * Math.sin(4 * Math.PI * phase))) / 1.18;
+    });
 }
 
 function advanceDiscard(performer, frameCount) {
@@ -71,43 +65,12 @@ export async function loadOfflineEngineClass(enginePath) {
 
 async function uiModules() {
     const repoRoot = path.resolve(import.meta.dirname, "..", "..");
-    const [modulation, program, laneV1, laneV2] = await Promise.all([
+    const [modulation, program, laneV2] = await Promise.all([
         loadUIModule(repoRoot, "ui/shared/modulation.ts"),
         loadUIModule(repoRoot, "ui/shared/modulation-runtime-program.ts"),
-        loadUIModule(repoRoot, "ui/shared/lane-state.ts"),
         loadUIModule(repoRoot, "ui/shared/lane-state-v2.ts"),
     ]);
-    return { modulation, program, laneV1, laneV2 };
-}
-
-function installWavetables(performer) {
-    const loadBegin = endpointMethod(performer, "sendInputEvent", "wavetableLoadBegin");
-    const mipFrame = endpointMethod(performer, "sendInputEvent", "wavetableMipFrame");
-
-    for (let oscillatorIndex = 0; oscillatorIndex < 3; oscillatorIndex += 1) {
-        loadBegin({
-            dspSessionId: DRIVER_SESSION_ID,
-            oscillatorIndex,
-            generation: 1,
-            tableIndex: 0,
-            frameCount: 1,
-        });
-        advanceDiscard(performer, DRIVER_BLOCK_FRAMES);
-        for (let mipIndex = 0; mipIndex < WAVETABLE_MIP_LEVEL_COUNT; mipIndex += 1) {
-            mipFrame({
-                dspSessionId: DRIVER_SESSION_ID,
-                oscillatorIndex,
-                generation: 1,
-                tableIndex: 0,
-                mipIndex,
-                frameIndexBase: 0,
-                frameCount: 1,
-                samples: syntheticMipSamples(mipIndex),
-            });
-            advanceDiscard(performer, DRIVER_BLOCK_FRAMES);
-        }
-        advanceDiscard(performer, DRIVER_BLOCK_FRAMES * 4);
-    }
+    return { modulation, program, laneV2 };
 }
 
 async function installModulation(performer, routes) {
@@ -132,51 +95,84 @@ async function installLaneDocument(performer, laneDocument) {
         return;
     }
     const { laneV2 } = await uiModules();
-    const outcome = laneV2.parseLaneStateV2Compat(laneDocument);
+    const outcome = laneV2.parseLaneStateV2(laneDocument);
     if (outcome._tag !== "ok") {
         throw new Error(`Lane document rejected: ${outcome.message}`);
     }
+    // The lane replay mixes event endpoints with value endpoints (each
+    // device's Output Trim is a host parameter), as the product connection
+    // delivers them.
     for (const event of laneV2.buildLaneRuntimeEventsV2(outcome.value)) {
-        endpointMethod(performer, "sendInputEvent", event.endpointID)(event.value);
+        if (typeof performer[`setInputValue_${event.endpointID}`] === "function") {
+            endpointMethod(performer, "setInputValue", event.endpointID)(event.value, 0);
+        } else {
+            endpointMethod(performer, "sendInputEvent", event.endpointID)(event.value);
+        }
         advanceDiscard(performer, DRIVER_BLOCK_FRAMES);
     }
 }
 
 /**
- * Instantiates and fully installs one performer.
+ * Every host parameter at the value a Cmajor host sets when it loads the
+ * patch (its init annotation). A generated performer starts every value at
+ * zero, which is not the synth a host plays.
+ */
+function hostParameterDefaults(EngineClass) {
+    return Object.fromEntries(EngineClass.prototype.getInputEndpoints()
+        .filter(({ purpose }) => purpose === "parameter")
+        .map(({ endpointID, annotation }) => [endpointID, annotation.init ?? annotation.min]));
+}
+
+/**
+ * Instantiates and fully installs one performer the way a host loads the
+ * synth. Returns the offline runtime: its `performer`, `prepareMseg` for
+ * shared MSEG curves, and `dispose`, which the caller calls to release the
+ * performer's shared engine memory.
  *
  * @param {object} spec
  * @param {Function} spec.EngineClass  Generated offline performer class.
- * @param {Record<string, number>} [spec.parameters]  endpointID -> value. The
- *   three wavetable selectors are forced to table 0, where the synthetic
- *   deterministic table is installed.
+ * @param {Record<string, number>} [spec.parameters]  endpointID -> value over
+ *   the host defaults. The three wavetable selectors are forced to table 0,
+ *   where the synthetic deterministic table is installed.
  * @param {Array<object>} [spec.modulationRoutes]  modulation.v6 route objects.
- * @param {object|string} [spec.laneDocument]  lane v1/v2 document (object or JSON).
+ * @param {object|string} [spec.laneDocument]  lane.v2 document (object or JSON).
+ * @returns {Promise<{ performer: object, prepareMseg: Function, dispose: () => void }>}
  */
 export async function createInstalledPerformer(spec) {
-    const performer = new spec.EngineClass();
-    await performer.initialise(DRIVER_SESSION_ID, DRIVER_SAMPLE_RATE);
+    const runtime = await spec.EngineClass.createOfflinePerformer(DRIVER_SESSION_ID, DRIVER_SAMPLE_RATE);
+    const performer = runtime.performer;
+    try {
+        const parameters = {
+            ...hostParameterDefaults(spec.EngineClass),
+            ...spec.parameters,
+            oscAWavetableSelect: 0,
+            oscBWavetableSelect: 0,
+            oscCWavetableSelect: 0,
+        };
+        for (const [endpointID, value] of Object.entries(parameters)) {
+            endpointMethod(performer, "setInputValue", endpointID)(value, 0);
+        }
+        endpointMethod(performer, "sendInputEvent", "tempo")({ bpm: 120 });
+        advanceDiscard(performer, DRIVER_BLOCK_FRAMES);
 
-    const parameters = {
-        ...spec.parameters,
-        oscAWavetableSelect: 0,
-        oscBWavetableSelect: 0,
-        oscCWavetableSelect: 0,
-    };
-    for (const [endpointID, value] of Object.entries(parameters)) {
-        endpointMethod(performer, "setInputValue", endpointID)(value, 0);
+        await runtime.prepareWavetables([0, 1, 2].map((input) => ({
+            input,
+            generation: 1,
+            tableIndex: 0,
+            frames: [syntheticWavetableFrame()],
+        })));
+        advanceDiscard(performer, DRIVER_BLOCK_FRAMES);
+        await installModulation(performer, spec.modulationRoutes);
+        await installLaneDocument(
+            performer,
+            typeof spec.laneDocument === "string" ? JSON.parse(spec.laneDocument) : spec.laneDocument,
+        );
+        advanceDiscard(performer, DRIVER_BLOCK_FRAMES * 16);
+        return runtime;
+    } catch (error) {
+        runtime.dispose();
+        throw error;
     }
-    endpointMethod(performer, "sendInputEvent", "tempo")({ bpm: 120 });
-    advanceDiscard(performer, DRIVER_BLOCK_FRAMES);
-
-    installWavetables(performer);
-    await installModulation(performer, spec.modulationRoutes);
-    await installLaneDocument(
-        performer,
-        typeof spec.laneDocument === "string" ? JSON.parse(spec.laneDocument) : spec.laneDocument,
-    );
-    advanceDiscard(performer, DRIVER_BLOCK_FRAMES * 16);
-    return performer;
 }
 
 /**

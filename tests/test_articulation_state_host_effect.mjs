@@ -3,11 +3,11 @@ import test from "node:test";
 import path from "node:path";
 import { mkdir, writeFile } from "node:fs/promises";
 import { spawnSync } from "node:child_process";
+import { cmajorSourceDirectory } from "./helpers/cmajor_source.mjs";
 
 const root = path.resolve(import.meta.dirname, "..");
 test("native articulation state handler changes real MIDI selection and rejects unrelated or malformed effects", async () => {
-    const source = process.env.COSIMO_CMAJOR_SOURCE;
-    assert.ok(source, "Set the qualified isolated Cmajor source explicitly");
+    const source = cmajorSourceDirectory();
     const build = path.join(root, "build/native_articulation_state_effect");
     await mkdir(build, { recursive: true });
     const input = path.join(build, "probe.cpp");

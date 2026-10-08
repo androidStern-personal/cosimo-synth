@@ -1,81 +1,101 @@
+import path from "node:path";
+
+import { build } from "esbuild";
+
+import { repoRoot } from "../../kit/fx/build-effect.mjs";
+
 const selectedEffectType = "3";
 
-async function installConnection(page, manifest) {
-    await page.evaluate((runtimeManifest) => {
-        class SeqFxBrowserReviewConnection {
-            constructor() {
-                this.manifest = {
-                    ...runtimeManifest,
-                    view: { ...runtimeManifest.view, devModule: "" },
-                };
-                this.utilities = { ParameterControls: {} };
-                this.statusListeners = new Set();
-                this.storedStateListeners = new Set();
-                this.parameterListeners = new Map();
-                this.endpointListeners = new Map();
-                this.parameterValues = new Map();
-                this.storedState = new Map();
-            }
+// Host values the review starts from: [min, max, step, value].
+const parameterRanges = {
+    enabled: [0, 1, 1, 1], globalMix: [0, 1, 0, 1], patternSelect: [0, 11, 1, 0], clockMode: [0, 2, 1, 0], manualBpm: [20, 300, 0, 120],
+    rate: [0, 2, 1, 1], swing: [0, 0.45, 0, 0], loopStart: [0, 31, 1, 0], loopLength: [1, 32, 1, 32],
+};
 
+async function installConnection(page, manifest) {
+    // The kit's browser state owner stands in for the plugin worker, so the
+    // packaged view runs its real state session against page-local values.
+    const previewState = await build({
+        entryPoints: [path.join(repoRoot, "kit/ui/preview/state.ts")],
+        bundle: true,
+        format: "iife",
+        globalName: "BuilderKitPreviewState",
+        write: false,
+        define: { "process.env.NODE_ENV": '"production"' },
+    });
+    await page.addScriptTag({ content: previewState.outputFiles[0].text });
+    await page.evaluate(({ runtimeManifest, ranges }) => {
+        const parameterValues = new Map(Object.entries(ranges).map(([endpoint, [, , , value]]) => [endpoint, value]));
+        const storedState = new Map();
+        const parameterListeners = new Map();
+        const endpointListeners = new Map();
+        const statusListeners = new Set();
+        const storedStateListeners = new Set();
+        const writeParameter = (endpointID, value) => {
+            parameterValues.set(endpointID, value);
+            for (const listener of parameterListeners.get(endpointID) ?? []) listener(value);
+        };
+        const state = window.BuilderKitPreviewState.createBrowserPreviewState({
+            snapshot: () => ({
+                values: Object.fromEntries(storedState),
+                parameters: Object.entries(ranges).map(([endpoint, [min, max, step, defaultValue]]) => ({
+                    endpoint, value: parameterValues.get(endpoint), min, max, step, defaultValue,
+                })),
+            }),
+            parameter: writeParameter,
+            stored(key, value) {
+                storedState.set(key, value);
+                for (const listener of storedStateListeners) listener({ key, value });
+            },
+            // A silent review page has no host automation recorder.
+            gesture() {},
+        });
+        const subscribe = (listeners, key, listener) => {
+            const subscribers = listeners.get(key) ?? new Set();
+            subscribers.add(listener);
+            listeners.set(key, subscribers);
+        };
+        window.__PLUGIN_VISUAL_REVIEW_CONNECTION__ = {
+            ...state.host,
+            manifest: { ...runtimeManifest, view: { ...runtimeManifest.view, devModule: "" } },
+            utilities: { ParameterControls: {} },
             getResourceAddress(resourcePath) {
                 const relativePath = String(resourcePath).replace(/^\.?\/+/, "");
                 return new URL(`/runtime/${relativePath}`, window.location.origin).toString();
-            }
-
-            addStatusListener(listener) { this.statusListeners.add(listener); }
-            removeStatusListener(listener) { this.statusListeners.delete(listener); }
+            },
+            addStatusListener(listener) { statusListeners.add(listener); },
+            removeStatusListener(listener) { statusListeners.delete(listener); },
             requestStatusUpdate() {
                 queueMicrotask(() => {
-                    for (const listener of this.statusListeners)
-                        listener({ details: { inputs: [] } });
+                    for (const listener of statusListeners) listener({ details: { inputs: [] } });
                 });
-            }
-
-            addStoredStateValueListener(listener) { this.storedStateListeners.add(listener); }
-            removeStoredStateValueListener(listener) { this.storedStateListeners.delete(listener); }
-            requestFullStoredState(callback) { queueMicrotask(() => callback({})); }
+            },
+            addStoredStateValueListener(listener) { storedStateListeners.add(listener); },
+            removeStoredStateValueListener(listener) { storedStateListeners.delete(listener); },
+            requestFullStoredState(callback) { queueMicrotask(() => callback({ values: Object.fromEntries(storedState) })); },
             requestStoredStateValue(key) {
                 queueMicrotask(() => {
-                    for (const listener of this.storedStateListeners)
-                        listener({ key, value: this.storedState.get(key) });
+                    for (const listener of storedStateListeners) listener({ key, value: storedState.get(key) });
                 });
-            }
-            sendStoredStateValue(key, value) {
-                this.storedState.set(key, value);
-                for (const listener of this.storedStateListeners)
-                    listener({ key, value });
-            }
-
-            addParameterListener(endpointID, listener) {
-                const listeners = this.parameterListeners.get(endpointID) ?? new Set();
-                listeners.add(listener);
-                this.parameterListeners.set(endpointID, listeners);
-            }
-            removeParameterListener(endpointID, listener) {
-                this.parameterListeners.get(endpointID)?.delete(listener);
-            }
-            requestParameterValue() {}
+            },
+            addParameterListener(endpointID, listener) { subscribe(parameterListeners, endpointID, listener); },
+            removeParameterListener(endpointID, listener) { parameterListeners.get(endpointID)?.delete(listener); },
+            requestParameterValue(endpointID) {
+                queueMicrotask(() => {
+                    for (const listener of parameterListeners.get(endpointID) ?? []) listener(parameterValues.get(endpointID));
+                });
+            },
             sendEventOrValue(endpointID, value) {
-                this.parameterValues.set(endpointID, value);
-                for (const listener of this.parameterListeners.get(endpointID) ?? [])
-                    listener(value);
-            }
-
-            sendParameterGestureStart() {}
-            sendParameterGestureEnd() {}
-            sendMIDIInputEvent() {}
-            addEndpointListener(endpointID, listener) {
-                const listeners = this.endpointListeners.get(endpointID) ?? new Set();
-                listeners.add(listener);
-                this.endpointListeners.set(endpointID, listeners);
-            }
-            removeEndpointListener(endpointID, listener) {
-                this.endpointListeners.get(endpointID)?.delete(listener);
-            }
-        }
-
-        window.__PLUGIN_VISUAL_REVIEW_CONNECTION__ = new SeqFxBrowserReviewConnection();
-    }, manifest);
+                writeParameter(endpointID, value);
+                if (parameterValues.has(endpointID)) state.observe(endpointID, Number(value));
+            },
+            sendParameterGestureStart() {},
+            sendParameterGestureEnd() {},
+            sendMIDIInputEvent() {},
+            addEndpointListener(endpointID, listener) { subscribe(endpointListeners, endpointID, listener); },
+            removeEndpointListener(endpointID, listener) { endpointListeners.get(endpointID)?.delete(listener); },
+        };
+    }, { runtimeManifest: manifest, ranges: parameterRanges });
 }
 
 async function prepare(page) {

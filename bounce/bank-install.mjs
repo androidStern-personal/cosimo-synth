@@ -108,17 +108,3 @@ export function* bounceBankInstallMessages(bankInput, {
         value: { dspSessionId, generation, deliverySerial },
     };
 }
-
-/** Pump an install into a generated offline class, one acknowledged event at a time. */
-export function installBounceBankInOfflinePerformer(performer, bank, options) {
-    let lastDeliverySerial = 0;
-    for (const message of bounceBankInstallMessages(bank, options)) {
-        const method = performer[`sendInputEvent_${message.endpointID}`];
-        invariant(typeof method === "function",
-            `Offline performer is missing ${message.endpointID}`);
-        method.call(performer, message.value);
-        performer.advance(2);
-        lastDeliverySerial = message.deliverySerial;
-    }
-    return lastDeliverySerial;
-}

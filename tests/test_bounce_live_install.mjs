@@ -7,16 +7,12 @@ import {
     requestBounceEngineStatus,
     stageBounceBankInstall,
 } from "../bounce/live-bank-install.mjs";
-import {
-    applyLiveBouncePatchDocument,
-    captureLiveBouncePatchDocument,
-} from "../bounce/patch-document-adapter.mjs";
+import { captureLiveBouncePatchDocument } from "../bounce/patch-document-adapter.mjs";
 import {
     ARTICULATIONS_STATE_KEY,
     BOUNCE_STATE_KEY,
     LANE_STATE_KEY,
     MODULATION_STATE_KEY,
-    createBouncePatchDocument,
 } from "../bounce/document.mjs";
 
 class FakePatchConnection {
@@ -28,11 +24,6 @@ class FakePatchConnection {
         this.storedWrites = [];
         this.statusListeners = new Set();
         this.parameters = { filterMode: 3, sourceMode: 0, playMode: 2 };
-        this.storedState = {
-            [MODULATION_STATE_KEY]: "mod",
-            [ARTICULATIONS_STATE_KEY]: "art",
-            [LANE_STATE_KEY]: "lane",
-        };
     }
 
     addEndpointListener(id, listener) {
@@ -119,11 +110,7 @@ class FakePatchConnection {
             for (const listener of this.parameterListeners.get(id) ?? []) listener(this.parameters[id]);
         });
     }
-    requestFullStoredState(callback) { queueMicrotask(() => callback(this.storedState)); }
-    sendStoredStateValue(key, value) {
-        this.storedWrites.push({ key, value });
-        this.storedState[key] = value;
-    }
+    sendStoredStateValue(key, value) { this.storedWrites.push({ key, value }); }
 }
 
 function tinyBank() {
@@ -228,23 +215,22 @@ test("missing begin acknowledgement times out and sends only an abort, never a c
     assert.equal(connection.sends.some(({ endpointID }) => endpointID === "bounceBankCommit"), false);
 });
 
-test("live document adapter snapshots every parameter/document and queues Source Mode last", async () => {
+test("live document capture reads every host parameter and keeps the plugin's documents", async () => {
     const connection = new FakePatchConnection();
-    const captured = await captureLiveBouncePatchDocument(connection);
+    const storedState = {
+        [MODULATION_STATE_KEY]: "mod",
+        [ARTICULATIONS_STATE_KEY]: "art",
+        [LANE_STATE_KEY]: "lane",
+        [BOUNCE_STATE_KEY]: null,
+    };
+    const captured = await captureLiveBouncePatchDocument(connection, { storedState });
     assert.deepEqual(captured.parameters, { filterMode: 3, playMode: 2, sourceMode: 0 });
-    assert.equal(captured.storedState[BOUNCE_STATE_KEY], null);
+    assert.deepEqual(captured.storedState, storedState);
+    assert.deepEqual(connection.storedWrites, [], "capture never writes");
 
-    const next = createBouncePatchDocument({
-        parameters: { ...captured.parameters, filterMode: 0, sourceMode: 1 },
-        storedState: captured.storedState,
-    });
-    connection.sends = [];
-    applyLiveBouncePatchDocument(connection, next);
-    assert.equal(connection.sends.at(-1).endpointID, "sourceMode");
-    assert.deepEqual(connection.storedWrites.map(({ key }) => key), [
-        ARTICULATIONS_STATE_KEY,
-        BOUNCE_STATE_KEY,
-        LANE_STATE_KEY,
-        MODULATION_STATE_KEY,
-    ]);
+    const { [LANE_STATE_KEY]: _lane, ...withoutLane } = storedState;
+    await assert.rejects(
+        captureLiveBouncePatchDocument(connection, { storedState: withoutLane }),
+        /The current sound is missing lane\.v1/,
+    );
 });

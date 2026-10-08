@@ -1,5 +1,5 @@
 /**
- * The durable Auto-preview preference (T12): a global setting shared across
+ * The durable Auto-preview preference: a global setting shared across
  * synth sessions, deliberately outside preset/patch state. Stored alongside
  * the Mod rail's dock in localStorage; these helpers own only the codec so the
  * storage call sites stay one line each.

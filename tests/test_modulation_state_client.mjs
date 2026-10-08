@@ -1,34 +1,40 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import path from "node:path";
-import { build } from "esbuild";
+import { loadUIModules } from "./helpers/load_ui_modules.mjs";
 
 const root = path.resolve(import.meta.dirname, "..");
-const bundled = await build({ stdin: { contents: `
-export { createModulationStateClient } from "./ui/shared/modulation-client";
-export { createDefaultModulationState, createDefaultRoute, MODULATION_STATE_KEY } from "./ui/shared/modulation";
-export { modulationStateCodec } from "./ui/shared/synth-modulation-state";
-export { createPluginStateClient } from "./kit/ui/plugin-state-client";
-export { createPluginStateSession } from "./kit/ui/plugin-state-session";
-export { definePluginState, parameter, storedValue } from "./kit/ui/plugin-state-definition";
-export { subscribeToUserEdits, runProgrammaticWrites } from "./kit/ui/user-edit-bus";
-`, resolveDir: root }, bundle: true, format: "esm", platform: "node", target: "es2022", write: false });
-const api = await import(`data:text/javascript;base64,${Buffer.from(bundled.outputFiles[0].text).toString("base64")}`);
-const key = api.MODULATION_STATE_KEY;
+const [
+    { createModulationStateClient },
+    { createDefaultModulationState, createDefaultRoute, MODULATION_STATE_KEY: key },
+    { modulationStateCodec },
+    { createPluginStateClient },
+    { createPluginStateSession },
+    { definePluginState, parameter, storedValue },
+    { subscribeToUserEdits, runProgrammaticWrites },
+] = await loadUIModules(root, [
+    "ui/shared/modulation-client.ts",
+    "ui/shared/modulation.ts",
+    "ui/shared/synth-modulation-state.ts",
+    "kit/ui/plugin-state-client.ts",
+    "kit/ui/plugin-state-session.ts",
+    "kit/ui/plugin-state-definition.ts",
+    "ui/shared/user-edit-bus.ts",
+]);
 
 // The external channel only relays real session/client messages. No fixture
 // accepts edits, groups history, normalizes domain data or supplies edit results.
 async function fixture(routes = []) {
-    const definition = api.definePluginState({ [key]: api.storedValue({ initial: api.createDefaultModulationState(), codec: api.modulationStateCodec }),
-        globalTune: api.parameter("globalTune") });
-    const boot = api.createDefaultModulationState();
+    const definition = definePluginState({ [key]: storedValue({ initial: createDefaultModulationState(), codec: modulationStateCodec }),
+        globalTune: parameter("globalTune") });
+    const boot = createDefaultModulationState();
     boot.routes = routes;
     boot.msegSlots[0].shapeB.points = [{ x: 0, y: 0.2, curvePower: 0 }, { x: 1, y: 0.8, curvePower: 0 }];
     let scope = { owner: "actual-modulation-client", document: 0 };
     const listeners = new Map(), clients = [], jobs = [], publications = [], defects = [];
     let holdEnd = false;
     const heldAddresses = new Set(), heldReplies = [];
-    const session = api.createPluginStateSession(definition, { native: {
+    const session = createPluginStateSession(definition, { native: {
         publish(publication) { publications.push(publication); }, close() {},
         update(state, receipt) {
             const message = { kind: "update", scope, revision: state.revision, state, ...(receipt ? { receipt } : {}) };
@@ -42,7 +48,7 @@ async function fixture(routes = []) {
         parameters: [{ endpoint: "globalTune", value: 2.5, min: -12, max: 12, step: 0.5, defaultValue: 0 }] } });
     const createClient = () => {
         const id = clients.length + 1;
-        const client = api.createPluginStateClient(definition, { channel: {
+        const client = createPluginStateClient(definition, { channel: {
             subscribe(receive) { listeners.set(id, receive); return () => listeners.delete(id); },
             send(message) {
                 if (message.kind === "attach") {
@@ -74,7 +80,7 @@ async function fixture(routes = []) {
 
 test("a facade gesture handle ends only its original interaction after a public side switch", async () => {
     const f = await fixture();
-    const bridge = api.createModulationStateClient(f.client);
+    const bridge = createModulationStateClient(f.client);
     try {
         const first = bridge.startGesture();
         assert.equal((await first.ready).kind, "accepted");
@@ -95,7 +101,7 @@ test("a facade gesture handle ends only its original interaction after a public 
 
 test("MSEG B drafts and grouped edits use the actual client and share Undo with an interleaved Voice scalar", async () => {
     const f = await fixture();
-    const bridge = api.createModulationStateClient(f.client);
+    const bridge = createModulationStateClient(f.client);
     try {
         assert.deepEqual(bridge.getState(), f.boot);
         assert.equal(bridge.isReady(), true);
@@ -133,12 +139,12 @@ test("MSEG B drafts and grouped edits use the actual client and share Undo with 
 
 test("another client's gesture rejects the optimistic B draft and only accepted changed edits reach the edit bus", async () => {
     const f = await fixture();
-    const bridge = api.createModulationStateClient(f.client);
+    const bridge = createModulationStateClient(f.client);
     const other = f.createClient();
     const edits = [];
-    const unsubscribe = api.subscribeToUserEdits({ onParameterEdit: edit => edits.push(edit) });
+    const unsubscribe = subscribeToUserEdits({ onParameterEdit: edit => edits.push(edit) });
     try {
-        assert.equal((await other.dispatch({ kind: "begin", key, gesture: 81 })).kind, "accepted");
+        assert.equal((await other.dispatch({ kind: "begin", keys: [key], gesture: 81 })).kind, "accepted");
         const proposed = { ...f.boot.msegSlots[0].shapeB, points: f.boot.msegSlots[0].shapeB.points.map(point => ({ ...point, y: 0.5 })) };
         const rejected = bridge.setMsegSlotShape(0, 1, proposed);
         assert.deepEqual(bridge.getState().msegSlots[0].shapeB, proposed);
@@ -146,14 +152,14 @@ test("another client's gesture rejects the optimistic B draft and only accepted 
         assert.deepEqual(await rejected, { kind: "rejected", reason: "busy" });
         assert.deepEqual(bridge.getState(), f.boot);
         assert.deepEqual(edits, []);
-        assert.equal((await other.dispatch({ kind: "end", key, gesture: 81 })).kind, "accepted");
+        assert.equal((await other.dispatch({ kind: "end", keys: [key], gesture: 81 })).kind, "accepted");
         const accepted = bridge.setMsegSlotShape(0, 1, proposed);
         assert.deepEqual(edits, []);
         assert.equal((await accepted).changed, true);
         assert.deepEqual(edits, [{ endpointID: "msegShape.0.1", changed: true }]);
         assert.equal((await bridge.setMsegSlotShape(0, 1, structuredClone(proposed))).changed, false);
         assert.equal(edits.length, 1);
-        const muted = api.runProgrammaticWrites(() => bridge.setMsegSlotShape(0, 1, f.boot.msegSlots[0].shapeB));
+        const muted = runProgrammaticWrites(() => bridge.setMsegSlotShape(0, 1, f.boot.msegSlots[0].shapeB));
         assert.equal((await muted).changed, true);
         assert.equal(edits.length, 1, "programmatic suppression is captured at submission, before the asynchronous receipt");
     } finally { unsubscribe(); await bridge.stop(); await f.stop(); }
@@ -161,7 +167,7 @@ test("another client's gesture rejects the optimistic B draft and only accepted 
 
 test("changing the MSEG edit side seals its accepted group before later edits and stopping seals only this facade", async () => {
     const f = await fixture();
-    const bridge = api.createModulationStateClient(f.client);
+    const bridge = createModulationStateClient(f.client);
     try {
         bridge.setMsegSlotEditShapeIndex(0, 1);
         assert.equal((await bridge.beginGesture()).kind, "accepted");
@@ -186,10 +192,10 @@ test("changing the MSEG edit side seals its accepted group before later edits an
 });
 
 test("derived notifications distinguish route amounts, selection and structural changes without duplicating accepted drafts", async () => {
-    const first = api.createDefaultRoute({ id: "route-first", sourceKind: "env", sourceSlot: 1, targetKind: "oscA.pan", amount: 0.25 });
-    const second = api.createDefaultRoute({ id: "route-second", sourceKind: "env", sourceSlot: 2, targetKind: "oscA.pan", amount: -0.5 });
+    const first = createDefaultRoute({ id: "route-first", sourceKind: "env", sourceSlot: 1, targetKind: "oscA.pan", amount: 0.25 });
+    const second = createDefaultRoute({ id: "route-second", sourceKind: "env", sourceSlot: 2, targetKind: "oscA.pan", amount: -0.5 });
     const f = await fixture([first, second]);
-    const bridge = api.createModulationStateClient(f.client);
+    const bridge = createModulationStateClient(f.client);
     const changes = [], firstAmounts = [], secondAmounts = [];
     const listener = (state, kind) => changes.push({ state, kind });
     try {
@@ -229,7 +235,7 @@ test("derived notifications distinguish route amounts, selection and structural 
 
 test("document replacement revokes the local interaction and invalid retained display never becomes editable history", async () => {
     const f = await fixture();
-    const bridge = api.createModulationStateClient(f.client);
+    const bridge = createModulationStateClient(f.client);
     try {
         assert.equal((await bridge.beginGesture()).kind, "accepted");
         const edited = { ...f.boot.msegSlots[0].shapeB, points: f.boot.msegSlots[0].shapeB.points.map(point => ({ ...point, y: 0.4 })) };
@@ -255,7 +261,7 @@ test("document replacement revokes the local interaction and invalid retained di
 
 test("a delayed earlier editor's real end receipt retains its own guarded history reference", { timeout: 5000 }, async () => {
     const f = await fixture();
-    const bridge = api.createModulationStateClient(f.client);
+    const bridge = createModulationStateClient(f.client);
     try {
         await bridge.setMsegSlotEditShapeIndex(0, 1);
         await bridge.beginGesture();
@@ -289,7 +295,7 @@ test("a delayed earlier editor's real end receipt retains its own guarded histor
 
 test("the MSEG controller retains existing point geometry and keeps playback rate out of structured storage", async () => {
     const f = await fixture();
-    const bridge = api.createModulationStateClient(f.client);
+    const bridge = createModulationStateClient(f.client);
     try {
         const controller = bridge.getMsegSlotController(1);
         await controller.setEditShapeIndex(1);
@@ -315,9 +321,9 @@ test("the MSEG controller retains existing point geometry and keeps playback rat
 });
 
 test("only an explicit local route-amount submission emits routeAmount; whole documents and other clients stay general", async () => {
-    const route = api.createDefaultRoute({ id: "origin-route", sourceKind: "env", sourceSlot: 1, targetKind: "oscA.pan", amount: 0.25 });
+    const route = createDefaultRoute({ id: "origin-route", sourceKind: "env", sourceSlot: 1, targetKind: "oscA.pan", amount: 0.25 });
     const f = await fixture([route]);
-    const bridge = api.createModulationStateClient(f.client);
+    const bridge = createModulationStateClient(f.client);
     const other = f.createClient();
     const kinds = [], amounts = [];
     try {
@@ -331,20 +337,20 @@ test("only an explicit local route-amount submission emits routeAmount; whole do
         assert.deepEqual(kinds, ["routeAmount", "general", "general"]);
         assert.equal((await f.client.dispatch({ kind: "undo" })).kind, "accepted");
         assert.deepEqual(kinds, ["routeAmount", "general", "general", "general"]);
-        assert.equal((await other.dispatch({ kind: "begin", key, gesture: 97 })).kind, "accepted");
+        assert.equal((await other.dispatch({ kind: "begin", keys: [key], gesture: 97 })).kind, "accepted");
         assert.deepEqual(await bridge.setRouteAmountById(route.id, -0.4), { kind: "rejected", reason: "busy" });
         assert.deepEqual(kinds, ["routeAmount", "general", "general", "general", "routeAmount", "general"], "only the optimistic local change carries its hint; authoritative rollback cannot inherit it");
         assert.deepEqual(amounts, [0.5, 0.6, 0.7, 0.6, -0.4, 0.6]);
-        assert.equal((await other.dispatch({ kind: "end", key, gesture: 97 })).kind, "accepted");
+        assert.equal((await other.dispatch({ kind: "end", keys: [key], gesture: 97 })).kind, "accepted");
     } finally { await bridge.stop(); await f.stop(); }
 });
 
 test("route additions return identity only after acceptance and duplicate identities or pairs cannot alter state or history", async () => {
-    const first = api.createDefaultRoute({ id: "route-owner", sourceKind: "env", sourceSlot: 1, targetKind: "oscA.pan", amount: 0.25 });
+    const first = createDefaultRoute({ id: "route-owner", sourceKind: "env", sourceSlot: 1, targetKind: "oscA.pan", amount: 0.25 });
     const f = await fixture([first]);
-    const bridge = api.createModulationStateClient(f.client);
+    const bridge = createModulationStateClient(f.client);
     try {
-        const next = api.createDefaultRoute({ id: "route-added", sourceKind: "env", sourceSlot: 2, targetKind: "oscA.pan", amount: 0.5 });
+        const next = createDefaultRoute({ id: "route-added", sourceKind: "env", sourceSlot: 2, targetKind: "oscA.pan", amount: 0.5 });
         const adding = bridge.addRoute(next);
         assert.deepEqual(bridge.getState().routes, [first, next]);
         assert.deepEqual(f.session.getSnapshot().fields[key].value.routes, [first], "returned promise is pending until the actual owner receives the proposal");
@@ -370,23 +376,23 @@ test("route additions return identity only after acceptance and duplicate identi
             assert.equal(f.publications.length, writes);
         }
         const other = f.createClient();
-        assert.equal((await other.dispatch({ kind: "begin", key, gesture: 110 })).kind, "accepted");
-        const blocked = api.createDefaultRoute({ id: "busy-candidate", sourceKind: "env", sourceSlot: 3, targetKind: "oscA.pan", amount: 0.7 });
+        assert.equal((await other.dispatch({ kind: "begin", keys: [key], gesture: 110 })).kind, "accepted");
+        const blocked = createDefaultRoute({ id: "busy-candidate", sourceKind: "env", sourceSlot: 3, targetKind: "oscA.pan", amount: 0.7 });
         const proposal = bridge.addRoute(blocked);
         assert.equal(bridge.getState().routes.at(-1).id, blocked.id);
         assert.deepEqual(await proposal, { kind: "rejected", reason: "busy" });
         assert.deepEqual(bridge.getState().routes, [first, next]);
         assert.equal(f.publications.length, writes);
-        await other.dispatch({ kind: "end", key, gesture: 110 });
+        await other.dispatch({ kind: "end", keys: [key], gesture: 110 });
         assert.equal((await f.client.dispatch({ kind: "undo", expectedEntry: added.historyEntry })).kind, "accepted");
         assert.deepEqual(bridge.getState().routes, [first]);
     } finally { await bridge.stop(); await f.stop(); }
 });
 
 test("generated additions avoid occupied identities, reuse a removed pair, and Undo restores the original route identity", async () => {
-    const existing = api.createDefaultRoute({ id: "mod-route-auto-1", sourceKind: "env", sourceSlot: 1, targetKind: "oscA.pan", amount: 0.2 });
+    const existing = createDefaultRoute({ id: "mod-route-auto-1", sourceKind: "env", sourceSlot: 1, targetKind: "oscA.pan", amount: 0.2 });
     const f = await fixture([existing]);
-    const bridge = api.createModulationStateClient(f.client);
+    const bridge = createModulationStateClient(f.client);
     try {
         const shape = { sourceKind: "env", sourceSlot: 2, targetKind: "oscA.pan", amount: 0.4 };
         const first = await bridge.addGeneratedRoute(shape);
@@ -415,10 +421,10 @@ test("generated additions avoid occupied identities, reuse a removed pair, and U
 });
 
 test("remaining domain mutations preserve route normalization, notification origin and parameter-owned envelope values", async () => {
-    const first = api.createDefaultRoute({ id: "domain-first", sourceKind: "env", sourceSlot: 1, targetKind: "oscA.pan", amount: 0.2 });
-    const second = api.createDefaultRoute({ id: "domain-second", sourceKind: "env", sourceSlot: 2, targetKind: "oscA.pan", amount: 0.4 });
+    const first = createDefaultRoute({ id: "domain-first", sourceKind: "env", sourceSlot: 1, targetKind: "oscA.pan", amount: 0.2 });
+    const second = createDefaultRoute({ id: "domain-second", sourceKind: "env", sourceSlot: 2, targetKind: "oscA.pan", amount: 0.4 });
     const f = await fixture([first, second]);
-    const bridge = api.createModulationStateClient(f.client);
+    const bridge = createModulationStateClient(f.client);
     const kinds = [];
     try {
         bridge.subscribe((_state, kind) => kinds.push(kind));

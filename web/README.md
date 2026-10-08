@@ -59,11 +59,11 @@ uploading. Production updates the existing `cosimo-synth` project; never upload
 the repository root. `web/vercel.json` supplies shared-memory isolation headers.
 The output is `build/vercel-shared-memory/`.
 
-All builds use `kit/cmake/CosimoDependencies.cmake`. To test unpublished Cmajor
+All builds use `kit/cmake/dependencies.cmake`. To test unpublished Cmajor
 changes, set **one** environment variable to an absolute checkout path:
 
 ```sh
-COSIMO_CMAJOR_SOURCE=/absolute/path/to/cmajor npm run web:deploy -- --dry-run
+BUILDER_KIT_CMAJOR_SOURCE=/absolute/path/to/cmajor npm run web:deploy -- --dry-run
 ```
 
 That source is used by the compiler, headers, and browser support files through

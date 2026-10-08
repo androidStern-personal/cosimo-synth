@@ -8,7 +8,7 @@ import test from "node:test";
 import { fileURLToPath } from "node:url";
 import { deflateSync, gunzipSync, inflateSync } from "node:zlib";
 
-import { readCmajorPin } from "../kit/scripts/toolchain.mjs";
+import { readCmajorPin } from "../scripts/export_kit.mjs";
 import {
     adHocVst3SigningArgs,
     attestMatchingVst3Metadata,
@@ -48,6 +48,10 @@ import {
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const currentCmajorCommit = readCmajorPin().commit;
 const scriptPath = path.join(repoRoot, "scripts", "build_seqfx_beta_release.mjs");
+const onMacOS = process.platform === "darwin";
+const plutilGate = onMacOS ? false : "Bundle metadata is read with plutil, a macOS system tool.";
+const toolchainGate = onMacOS ? false : "The release plan resolves the pinned Homebrew toolchain, which exists only on macOS.";
+const cpioGate = spawnSync("cpio", ["--version"]).error ? "The payload is listed with cpio, which macOS ships and this machine lacks." : false;
 
 test("release staging rejects embedded source maps, source content, and TypeScript filenames", async (context) => {
     const fixtureRoot = await mkdtemp(path.join(os.tmpdir(), "seqfx-release-source-leak-"));
@@ -59,12 +63,12 @@ test("release staging rejects embedded source maps, source content, and TypeScri
         "//# sourceMappingURL=app.js.map",
         '\"sourcesContent\":[\"export const leaked = true;\"]',
         "../../../../fx/seqfx/view/SeqFxPatchView.tsx",
-        "../../../../fx/seqfx/worker/seqfx-worker-service.ts",
+        "../../../../fx/seqfx/pattern-upload.ts",
     ].join("\0")));
 
     await assert.rejects(
         assertSeqFxDistributableExecutableIsSourceFree(executablePath),
-        /sourceMappingURL.*sourcesContent.*SeqFxPatchView\.tsx.*seqfx-worker-service\.ts/su,
+        /sourceMappingURL.*sourcesContent.*SeqFxPatchView\.tsx.*pattern-upload\.ts/su,
     );
 
     await writeFile(executablePath, Buffer.from("Mach-O fixture without private UI provenance"));
@@ -315,9 +319,9 @@ async function createNativeDependencyCheckoutFixture(context) {
     await writeFile(cmakeCachePath, [
         `CMAKE_HOME_DIRECTORY:INTERNAL=${cmakeHome}`,
         "CMAKE_COMMAND:INTERNAL=/approved/cmake",
-        `COSIMO_CMAJ_EXECUTABLE:FILEPATH=${path.join(repositoryRoot, "build", "cmajor_command", "bin", "cmaj")}`,
-        `CPM_PACKAGE_cosimo_cmajor_SOURCE_DIR:INTERNAL=${cmajorPath}`,
-        `CPM_PACKAGE_cosimo_juce_SOURCE_DIR:INTERNAL=${jucePath}`,
+        `BUILDER_KIT_CMAJ_EXECUTABLE:FILEPATH=${path.join(repositoryRoot, "build", "cmajor_command", "bin", "cmaj")}`,
+        `CPM_PACKAGE_builder_kit_cmajor_SOURCE_DIR:INTERNAL=${cmajorPath}`,
+        `CPM_PACKAGE_builder_kit_juce_SOURCE_DIR:INTERNAL=${jucePath}`,
         "",
     ].join("\n"), "utf8");
 
@@ -415,10 +419,10 @@ test("release config freezes the existing beta identity and current native outpu
         "build/seqfx_juce/_build/plugin/CosimoSeqFX_artefacts/Release/VST3/CosimoSeqFX.vst3",
     );
     assert.deepEqual(seqFxReleaseConfig.nativeDependencies, {
-        declarationPath: "kit/cmake/CosimoDependencies.cmake",
+        declarationPath: "kit/cmake/dependencies.cmake",
         cmajor: {
-            cpmName: "cosimo_cmajor",
-            sourceDirectoryCacheKey: "CPM_PACKAGE_cosimo_cmajor_SOURCE_DIR",
+            cpmName: "builder_kit_cmajor",
+            sourceDirectoryCacheKey: "CPM_PACKAGE_builder_kit_cmajor_SOURCE_DIR",
             repository: "https://github.com/androidStern-personal/cmajor.git",
             revision: currentCmajorCommit,
         },
@@ -428,8 +432,8 @@ test("release config freezes the existing beta identity and current native outpu
             submodulePath: "include/choc",
         },
         juce: {
-            cpmName: "cosimo_juce",
-            sourceDirectoryCacheKey: "CPM_PACKAGE_cosimo_juce_SOURCE_DIR",
+            cpmName: "builder_kit_juce",
+            sourceDirectoryCacheKey: "CPM_PACKAGE_builder_kit_juce_SOURCE_DIR",
             repository: "https://github.com/juce-framework/JUCE.git",
             revision: "501c07674e1ad693085a7e7c398f205c2677f5da",
         },
@@ -610,7 +614,7 @@ test("release config matches the current patch manifest and effect build registr
     assert.deepEqual(releaseContractErrors(seqFxReleaseConfig, await currentManifest()), []);
 });
 
-test("native metadata validation accepts the exact approved VST3 identity and no microphone permission", async (context) => {
+test("native metadata validation accepts the exact approved VST3 identity and no microphone permission", { skip: plutilGate }, async (context) => {
     const vst3Path = await createVst3MetadataFixture(context);
     const metadata = await verifyVst3Metadata(seqFxReleaseConfig, vst3Path);
 
@@ -643,7 +647,7 @@ test("built VST3 evidence records exact bundle and executable sizes and SHA-256"
     );
 });
 
-test("native metadata validation rejects identity, category, and binary drift together", async (context) => {
+test("native metadata validation rejects identity, category, and binary drift together", { skip: plutilGate }, async (context) => {
     const vst3Path = await createVst3MetadataFixture(context);
     const infoPlistPath = path.join(vst3Path, "Contents", "Info.plist");
     const moduleInfoPath = path.join(vst3Path, "Contents", "Resources", "moduleinfo.json");
@@ -669,7 +673,7 @@ test("native metadata validation rejects identity, category, and binary drift to
     );
 });
 
-test("native metadata validation rejects microphone permission keys and usage text", async (context) => {
+test("native metadata validation rejects microphone permission keys and usage text", { skip: plutilGate }, async (context) => {
     const vst3Path = await createVst3MetadataFixture(context);
     const infoPlistPath = path.join(vst3Path, "Contents", "Info.plist");
     execFileSync("plutil", [
@@ -686,7 +690,7 @@ test("native metadata validation rejects microphone permission keys and usage te
     );
 });
 
-test("release metadata attestation independently validates matching built and staged bundles", async (context) => {
+test("release metadata attestation independently validates matching built and staged bundles", { skip: plutilGate }, async (context) => {
     const builtVst3 = await createVst3MetadataFixture(context);
     const stagedVst3 = await createVst3MetadataFixture(context);
 
@@ -700,7 +704,7 @@ test("release metadata attestation independently validates matching built and st
     );
 });
 
-test("release metadata attestation rejects staged metadata drift", async (context) => {
+test("release metadata attestation rejects staged metadata drift", { skip: plutilGate }, async (context) => {
     const builtVst3 = await createVst3MetadataFixture(context);
     const stagedVst3 = await createVst3MetadataFixture(context);
     const stagedInfoPlist = path.join(stagedVst3, "Contents", "Info.plist");
@@ -897,7 +901,7 @@ test("read-only plan names exact side effects, current paths, and release blocke
     assert.ok(plan.explicitlyNeverPerformed.includes("Patreon upload"));
 });
 
-test("plan CLI is dry-run safe and returns machine-readable output", () => {
+test("plan CLI is dry-run safe and returns machine-readable output", { skip: toolchainGate }, () => {
     const statusBefore = execFileSync("git", ["status", "--porcelain"], {
         cwd: repoRoot,
         encoding: "utf8",
@@ -966,7 +970,7 @@ test("canonical payload fingerprint ignores timestamps but detects bytes and mod
     assert.notEqual(changedMode.digest, first.digest);
 });
 
-test("unsigned cpio payload bytes do not depend on filesystem inode or timestamp", async (context) => {
+test("unsigned cpio payload bytes do not depend on filesystem inode or timestamp", { skip: cpioGate }, async (context) => {
     const firstRoot = await mkdtemp(path.join(os.tmpdir(), "seqfx-release-cpio-a-"));
     const secondRoot = await mkdtemp(path.join(os.tmpdir(), "seqfx-release-cpio-b-"));
     context.after(() => Promise.all([

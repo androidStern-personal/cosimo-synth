@@ -73,6 +73,8 @@ export type BounceCapturePlan = {
     readonly silenceWindowFrames: number;
     readonly tailPaddingFrames: number;
     readonly blockFrames: number;
+    /** Frames the synth's output path delays a sound; a capture skips them. */
+    readonly outputLatencyFrames: number;
     readonly jobs: ReadonlyArray<BounceCaptureJob>;
 };
 
@@ -146,6 +148,8 @@ export const BOUNCE_SILENCE_WINDOW_SECONDS: 0.05;
 export const BOUNCE_TAIL_PADDING_SECONDS: 0.1;
 /** Maximum offline render block size. */
 export const BOUNCE_OFFLINE_BLOCK_FRAMES: 128;
+/** Frames the synth's fixed output path delays a sound; a capture skips them. */
+export const BOUNCE_OUTPUT_LATENCY_FRAMES: 156;
 
 /** Clone and normalize a press-time capture recipe. */
 export function createBounceCaptureSnapshot(options: {

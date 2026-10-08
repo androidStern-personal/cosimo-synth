@@ -7,12 +7,14 @@ import path from "node:path";
 
 const root = path.resolve(import.meta.dirname, "../..");
 
-test("normal component result and history types are public and do not expose native identity fields", async () => {
+test("component result, history and custom delivery types are public, while native identity fields and engine internals are not", async () => {
     const directory = await mkdtemp(path.join(os.tmpdir(), "kit-public-state-types-"));
     try {
         await symlink(path.join(root, "node_modules"), path.join(directory, "node_modules"));
         await writeFile(path.join(directory, "fixture.ts"), `
 import { usePluginState, usePluginHistory, definePluginState, parameter, storedValue, preparedState, sharedData, Native, type PluginStateControl,
+    type PluginStateDelivery, type PluginStateDeliveryContext, type PluginStateDocumentContext, type PluginStateEffect,
+    type PluginStateSubmission, type PluginStateDeliveryOutcome,
     type PluginStateChanges, type PluginStateEditor,
     type PluginStateControlState, type PluginStateHistory, type PluginStateHistoryEntry,
     type PluginStateEditResult, type PluginStateRejectionReason } from ${JSON.stringify(path.join(root, "kit/index"))};
@@ -75,6 +77,23 @@ preparedState({ codec: Native.number(), initial: 1, engine: sharedData({ type: "
 preparedState({ codec: Native.number(), initial: 1, engine: sharedData({ type: "float32" }), prepare: async () => ({ length: 4, write: async () => {} }) });
 // @ts-expect-error Internal application types are not exported for component authors.
 import type { PluginStateApplicationState } from ${JSON.stringify(path.join(root, "kit/index"))};
+// A custom delivery seam is written entirely from public types.
+const tempoDelivery: PluginStateDelivery<number> = {
+    eventEndpoints: ["tempo"],
+    outputEndpoints: ["tempoAck"],
+    create(document: PluginStateDocumentContext) {
+        const stopListening = document.listen("tempoAck", () => {});
+        return {
+            async apply(bpm: number, context: PluginStateDeliveryContext): Promise<PluginStateDeliveryOutcome> {
+                const effect: PluginStateEffect = { kind: "event", endpoint: "tempo", value: bpm };
+                const submitted: PluginStateSubmission = context.send(effect);
+                return submitted.kind === "submitted" ? await submitted.completion : submitted;
+            },
+            stop: stopListening,
+        };
+    },
+};
+preparedState({ codec: Native.number(), initial: 120, engine: tempoDelivery, prepare: value => value });
 // @ts-expect-error History tokens cannot be fabricated from public data.
 const fake: PluginStateHistoryEntry = {};
 if (history.undoEntry) {
@@ -100,10 +119,14 @@ async function edit() {
 `);
         await writeFile(path.join(directory, "tsconfig.json"), JSON.stringify({
             extends: path.join(root, "tsconfig.json"),
-            files: [path.join(directory, "fixture.ts"), path.join(root, "kit/tests/helpers/plugin_state_public_react.tsx")], include: [],
+            // The fixture declares values only to check their types, so it never reads them.
+            compilerOptions: { noUnusedLocals: false, noUnusedParameters: false },
+            // Replacing include drops the project's style module declarations; name them again.
+            files: [path.join(directory, "fixture.ts"), path.join(root, "kit/tests/helpers/plugin_state_public_react.tsx"),
+                path.join(root, "kit/ui/style-modules.d.ts")], include: [],
         }));
         const result = spawnSync(process.execPath, [path.join(root, "node_modules/typescript/bin/tsc"), "--project", path.join(directory, "tsconfig.json")], {
-            cwd: root, encoding: "utf8", timeout: 30000,
+            cwd: root, encoding: "utf8", timeout: 120000,
         });
         assert.equal(result.status, 0, result.error?.message ?? result.stdout + result.stderr);
     } finally { await rm(directory, { recursive: true, force: true }); }

@@ -57,7 +57,7 @@ namespace wt
     // Runtime order matches ui/shared/modulation-targets.ts: ten local targets
     // for each oscillator, the two established shared filter targets, the
     // continuous MSEG/envelope controls, append-only Filter Mix and Global
-    // Tune, the complete Amp Envelope controls, then T62's three append-only
+    // Tune, the complete Amp Envelope controls, then the three append-only
     // per-voice Enhancer destinations.
     let modulationOscillatorTargetCount = 10;
     let modulationVoiceTargetCount = (oscillatorCount * modulationOscillatorTargetCount) + 29;
@@ -1279,7 +1279,7 @@ namespace wt
 
     // Per-note loudness ADSR. Its attack and release equations deliberately
     // match RetriggerableASR: at A=10 ms, D=1 ms, S=1 the gain stream is
-    // sample-identical to every pre-T38 sound, including velocity response.
+    // sample-identical to RetriggerableASR's, including velocity response.
     //
     // The attack starts from zero. That is click-free because the engine
     // never retriggers this envelope while it is audible: a hard retrigger
@@ -1752,6 +1752,13 @@ namespace wt
         int32[voiceCount] voiceBounceRootIndex;
         int32[voiceCount] voiceBounceBankSlot;
         bool[voiceCount] voiceBouncePlaying;
+        // A bounced recording already carries the envelope it was played
+        // with, so no live envelope shapes it. A key released before the
+        // recording reaches its own note-off stops it with this short fixed
+        // fade instead; a key held that long lets the recorded tail play out.
+        let bounceReleaseFadeFrames = int32 (std::intrinsics::max (1.0f, 0.005f * float32 (processor.frequency)));
+        let inverseBounceReleaseFadeFrames = 1.0f / float32 (bounceReleaseFadeFrames);
+        int32[voiceCount] voiceBounceReleaseFadeRemaining;
         float32[voiceCount] voicePitchGlideStep;
         int32[voiceCount] voiceGlideSamplesRemaining;
         int32[voiceCount] voiceActive;
@@ -4012,6 +4019,38 @@ namespace wt
             voiceBouncePosition.at (voice) = 0.0;
             voiceBounceRootIndex.at (voice) = 0;
             voiceBounceBankSlot.at (voice) = -1;
+            voiceBounceReleaseFadeRemaining.at (voice) = 0;
+        }
+
+        void releaseBounceSampleForVoice (int32 voiceIndex)
+        {
+            let voice = wrap<voiceCount> (voiceIndex);
+            if (! voiceBouncePlaying.at (voice) || voiceBounceReleaseFadeRemaining.at (voice) > 0)
+                return;
+
+            // A root without a recorded note-off is held content to its end.
+            let recordedNoteOff = bounceSlotRootNoteOffFrameOffsets.at (
+                bounceRootMetadataIndex (voiceBounceBankSlot.at (voice), voiceBounceRootIndex.at (voice)));
+            if (recordedNoteOff <= 0 || voiceBouncePosition.at (voice) < float64 (recordedNoteOff))
+                voiceBounceReleaseFadeRemaining.at (voice) = bounceReleaseFadeFrames;
+        }
+
+        /** The level of a voice's bounced recording: its live velocity against the capture velocity, and the release fade. */
+        float32 advanceBounceGainForVoice (int32 voiceIndex)
+        {
+            let voice = wrap<voiceCount> (voiceIndex);
+            var gain = voiceVelocity.at (voice) / bounceCaptureVelocityGain;
+
+            if (voiceBounceReleaseFadeRemaining.at (voice) > 0)
+            {
+                voiceBounceReleaseFadeRemaining.at (voice) -= 1;
+                gain *= float32 (voiceBounceReleaseFadeRemaining.at (voice)) * inverseBounceReleaseFadeFrames;
+
+                if (voiceBounceReleaseFadeRemaining.at (voice) == 0)
+                    stopBounceSampleForVoice (voiceIndex);
+            }
+
+            return gain;
         }
 
         void startBounceSampleForVoice (int32 voiceIndex, float32 pitch)
@@ -4083,17 +4122,15 @@ namespace wt
             if (voiceBouncePosition.at (voice) >= float64 (frameCount))
                 voiceBouncePlaying.at (voice) = false;
 
-            // The bank is captured at fixed velocity 100. Calibrate that
-            // source once, then let the same live per-note Amp Envelope own
-            // all oscillator and Bounce loudness.
-            return sample * (bouncePlaybackMakeupGain / bounceCaptureVelocityGain);
+            return sample * bouncePlaybackMakeupGain;
         }
 
         bool voiceIsSoundingForRackModulation (int32 voiceIndex)
         {
             let voice = wrap<voiceCount> (voiceIndex);
             return voiceActive.at (voice) != 0
-                || ampEnvelopes[voice].gainOut > 0.0f;
+                || ampEnvelopes[voice].gainOut > 0.0f
+                || voiceBouncePlaying.at (voice);
         }
 
         void requestSourceModeTransition (int32 requestedMode)
@@ -4437,9 +4474,7 @@ namespace wt
 
             for (wrap<voiceCount> voice)
             {
-                let isVisible = voiceActive.at (voice) != 0 || ampEnvelopes[voice].gainOut > 0.0f;
-
-                if (isVisible && voiceGeneration.at (voice) >= newestGeneration)
+                if (voiceIsSoundingForRackModulation (int32 (voice)) && voiceGeneration.at (voice) >= newestGeneration)
                 {
                     newestGeneration = voiceGeneration.at (voice);
                     newestVoiceIndex = int32 (voice);
@@ -4934,6 +4969,7 @@ namespace wt
                 off.pitch = note.pitch;
                 off.velocity = voicePendingNoteOffVelocity.at (voice);
                 ampEnvelopes[voice].eventIn <- off;
+                releaseBounceSampleForVoice (index);
                 noteOffVoiceModulators (index, off);
             }
         }
@@ -5000,6 +5036,7 @@ namespace wt
 
             voiceActive.at (voice) = 0;
             ampEnvelopes[voice].eventIn <- note;
+            releaseBounceSampleForVoice (index);
             noteOffVoiceModulators (index, note);
         }
 
@@ -6236,8 +6273,7 @@ namespace wt
                     // would otherwise stall.
                     if (voicePendingStart[voice]
                         && (voiceStealFadeRemaining.at (voice) <= 0
-                            || (voiceActive.at (voice) == 0
-                                && ampEnvelopes[voice].gainOut <= 0.0f)))
+                            || ! voiceIsSoundingForRackModulation (voiceIndex)))
                         applyPendingVoiceStart (voiceIndex);
 
                     // A voice that was not sounding after its previous frame
@@ -6251,8 +6287,7 @@ namespace wt
                     // stationary at exactly zero. A voice mid steal-fade is
                     // sounding by definition; the pending guard only covers
                     // the corner where its envelope idles at exactly zero.
-                    if (voiceActive.at (voice) == 0
-                        && ampEnvelopes[voice].gainOut <= 0.0f
+                    if (! voiceIsSoundingForRackModulation (voiceIndex)
                         && ! voicePendingStart[voice])
                     {
                         if (voiceWasSounding[voice])
@@ -6544,12 +6579,14 @@ namespace wt
 
                     float32 noteLeft = 0.0f;
                     float32 noteRight = 0.0f;
+                    var gain = ampEnvelopes[voice].gainOut;
 
                     if (isBounceSource)
                     {
                         let bounceSample = readBounceSampleForVoice (int32 (voice));
                         noteLeft = bounceSample[0];
                         noteRight = bounceSample[1];
+                        gain = advanceBounceGainForVoice (int32 (voice));
                     }
                     else if (rendererSucceeded != 0)
                     {
@@ -6614,8 +6651,9 @@ namespace wt
                     // Oscillators A/B/C are already combined by the renderer,
                     // and Bounce is the alternative combined source. The
                     // Voice Filter above feeds this note-owned Enhancer; the
-                    // shared per-note Amp Envelope then scales both dry and
-                    // residue before voices are summed.
+                    // note's gain (the Amp Envelope, or a bounced recording's
+                    // own level) then scales both dry and residue before
+                    // voices are summed.
                     if (voiceEnhancerVisualizationEnabled)
                     {
                         voiceEnhancerInputLeftMix += noteLeft;
@@ -6626,7 +6664,6 @@ namespace wt
                         voiceEffectiveEnhancerFrequencyHz.at (voice),
                         voiceEffectiveEnhancerQ.at (voice),
                         voiceEffectiveEnhancerAmount.at (voice));
-                    var gain = ampEnvelopes[voice].gainOut;
 
                     // Steal fade: ramp the dying content linearly to exactly
                     // zero; the final faded sample multiplies by 0, so the

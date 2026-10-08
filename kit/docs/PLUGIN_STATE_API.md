@@ -2,6 +2,70 @@
 
 Use the [plugin state guide](PLUGIN_STATE.md) to choose and connect a declaration. This reference describes the current return values; it does not introduce a different API. Import public functions and types from `kit/index`, using the relative path from your plugin.
 
+## Exported names
+
+Every state, preset and snapshot name `kit/index.ts` exports. Anything not listed here is internal.
+
+| Name | Kind | What it is |
+|---|---|---|
+| `definePluginState(fields, options?)` | function | Declares the plugin's fields; every hook, view and the build read the returned definition. |
+| `parameter(endpoint, options?)` | function | A field backed by an automatable Cmajor parameter endpoint; the host stores its value. |
+| `storedValue(options)` | function | A field saved through its codec with the project, the instance or the user's files; not host-automatable. |
+| `preparedState(options)` | function | A stored field whose `prepare` turns each accepted value into data the DSP reads, usually in shared memory. |
+| `eventValue(endpoint, prepare, options?)` | function | An `engine` for `storedValue` that sends each accepted value to a DSP event endpoint. |
+| `preparationFailure(message)` | function | Returned from `prepare` for an expected, retryable failure such as a missing file. |
+| `sharedData({ type, length? })` | function | The shared-memory input a `preparedState` field writes into: `"float32"` or `"bytes"`, fixed or sized per value. |
+| `nativeValue({ codec, initial })` | function | Small typed settings that the build also exposes to native C++ as a generated struct. |
+| `Native` | namespace | The `nativeValue` codecs: `number`, `boolean`, `choice` and `record`. |
+| `Mseg` | namespace | The MSEG curve, its editor and `Mseg.state()` declaration; see [MSEG API](MSEG_API.md). |
+| `createStatefulPatchView({ definition, View, css? })` | function | Turns your React view into the Cmajor view entry, with state, presets and history connected. |
+| `usePluginState(field)` | hook | Returns one field's `PluginStateControl`. |
+| `usePluginState(definition)` | hook | Returns the `PluginStateEditor` that edits several fields as one Undo entry. |
+| `usePluginHistory()` | hook | Returns the plugin's shared Undo and Redo as `PluginStateHistory`. |
+| `UndoHistory` | class | The immutable, bounded Undo/Redo bookkeeping the state service uses; usable on its own. |
+| `PluginStateFields` | type | Any state definition, as `definePluginState` returns it; the type of `definition` in `PresetBar`, `usePresets` and your own helpers that wrap them. |
+| `PluginStateCodec<Value>` | type | `parse`, `encode` and `equals` for a stored value. |
+| `PluginStateJson` | type | A JSON value; what `encode` returns and `parse` reads. |
+| `PluginStateValueResult<Value>` | type | What `parse` returns: `{ kind: "ok", value }` or `{ kind: "error", message }`. |
+| `PluginStateLifetime` | type | Where a stored value lives: `"project"`, `"instance"` or `"user"`. |
+| `PluginStateOptions` | type | The `definePluginState` options: `historyLimit` and `memoryBudgetBytes`. |
+| `PluginStatePrepareContext` | type | The second argument of `prepare`: `resources`, captured `parameters`, the change `reason` (`load`, `recall`, `history` or `edit`) and a cancellation `signal`. |
+| `PluginStateSharedPlan` | type | What `prepare` returns for variable-length shared data: a `length` and a synchronous `write`. |
+| `PluginStatePreparationFailure` | type | The value `preparationFailure` returns. |
+| `PluginStateDelivery<Payload>` | type | A custom `engine` for `preparedState`: its declared endpoints and keys, and `create(document)`; see [Custom delivery](#custom-delivery). |
+| `PluginStateDocumentContext` | type | What `create` receives: sending, listening, saved-state reads and shared-data writes that last until the project closes. |
+| `PluginStateDeliveryContext` | type | What each `apply` receives: `send`, `listen` and a cancellation `signal` that last for that one application. |
+| `PluginStateEffect` | type | One message a delivery sends: a declared event, or a declared host effect. |
+| `PluginStateSubmission` | type | What `send` returns: submitted with a `completion`, failed, or cancelled. |
+| `PluginStateDeliveryOutcome` | type | What `apply` resolves to: sent, acknowledged by the engine, unconfirmed, failed or cancelled. |
+| `PluginStateControl<Value>` | type | One field's state, error, retry and edit actions; described below. |
+| `PluginStateControlState<Value>` | type | `control.state`, discriminated by `status`. |
+| `PluginStateControlError` | type | `control.error`: one displayable `message`. |
+| `PluginStateEditor<Fields>` | type | The whole-definition editor: `edit(changes, options?)`, and `beginGesture(keys)` / `endGesture()` for a drag across several fields. |
+| `PluginStateChanges<Fields>` | type | The changes object `edit` accepts, keyed by declared field. |
+| `PluginStateEditResult` | type | What every edit and history action resolves to. |
+| `PluginStateRejectionReason` | type | Why an edit was rejected; see the table below. |
+| `PluginStateHistory` | type | `usePluginHistory()`'s result. |
+| `PluginStateHistoryEntry` | type | An opaque token for guarded Undo and Redo. |
+| `presets({ factory?, initial? })` | function | Adds `presetLibrary` and `activePreset` to a definition; `initial` names the factory preset a new project starts on. |
+| `usePresets(definition)` | hook | Returns `Presets`: the preset lists, state and actions `PresetBar` is built on. |
+| `snapshots({ slots? })` | function | Adds `snapshotSlots` and `activeSnapshot` to a definition. |
+| `useSnapshots(definition)` | hook | Returns `Snapshots`: everything `SnapshotBar` shows and does. |
+| `PresetBar` | component | The ready-made preset selector and menu. |
+| `SnapshotBar` | component | The ready-made row of snapshot slots. |
+| `Presets` | type | `usePresets()`'s result. |
+| `Snapshots` | type | `useSnapshots()`'s result. |
+| `Preset` | type | One saved user preset: `id`, `name` and `values`. |
+| `PresetLibrary` | type | The user's saved presets, shared by every project. |
+| `FactoryPreset` | type | A preset shipped with the plugin, with values in the form `editor.edit` accepts. |
+| `PresetSummary` | type | The `id` and `name` a preset list shows. |
+| `PresetFile` | type | The JSON written by Copy JSON and read by Paste JSON. |
+| `PresetActionResult` | type | What every preset and snapshot action resolves to. |
+| `SoundValues` | type | Values keyed by sound field, in each field's saved form. |
+| `SnapshotSlots` | type | Each snapshot slot's captured sound, or `null`. |
+| `PresetBarProps` | type | `PresetBar`'s props: `definition` and an optional `className`. |
+| `SnapshotBarProps` | type | `SnapshotBar`'s props: `definition` and an optional `className`. |
+
 ## One declared field
 
 ```tsx
@@ -130,7 +194,17 @@ type PluginStateRejectionReason =
 
 ## Whole-definition overload and shared history
 
-`usePluginState(definition)` returns a different object with one method: `edit(changes): Promise<PluginStateEditResult>`. It applies the supplied declared fields together as one accepted change and one Undo entry; it is not a map of controls and has no `state` property.
+`usePluginState(definition)` returns a different object; it is not a map of controls and has no `state` property:
+
+```ts
+interface PluginStateEditor<Fields> {
+    edit(changes: PluginStateChanges<Fields>, options?: { readonly history?: boolean; readonly recall?: boolean }): Promise<PluginStateEditResult>;
+    beginGesture(keys: readonly (keyof Fields)[]): Promise<PluginStateEditResult>;
+    endGesture(): Promise<PluginStateEditResult> | undefined;
+}
+```
+
+`edit` applies the supplied declared fields together as one accepted change and one Undo entry. `edit(changes, { history: false })` applies the change without an Undo entry and leaves Redo intact. `edit(changes, { recall: true })` marks a preset or snapshot replacing the sound, so preparation sees `reason: "recall"` ([details](PLUGIN_STATE.md#why-a-value-is-being-prepared)); it cannot write into a gesture. `beginGesture(keys)` opens one gesture over several fields; until `endGesture`, `edit` and those fields' `setValue` write into it, and `endGesture` records one Undo entry listing every field that moved. `beginGesture` rejects with `busy` while any of those fields is in another gesture or this editor already has one open; `endGesture` returns `undefined` when this editor has none.
 
 Undo/Redo are obtained separately through `usePluginHistory()`. They are not methods on `envelope`:
 
@@ -146,3 +220,89 @@ interface PluginStateHistory {
     redo(entry?: PluginStateHistoryEntry): Promise<PluginStateEditResult>;
 }
 ```
+
+## Declaration options
+
+| Option | On | Meaning |
+|---|---|---|
+| `preset: false` | `parameter(endpoint, options)`, `storedValue(options)` | The field is not part of the sound: presets and snapshots neither save nor recall it. |
+| `lifetime: "user"` | `storedValue(options)` | One value shared by every instance and project of the plugin, kept in the user's files (in memory where the Cmajor user-files API is absent). Never part of Undo; `history: true` is an error. |
+
+## Custom delivery
+
+A component with its own transfer protocol passes a `PluginStateDelivery` as the `engine` of `preparedState`. The generated worker calls `create` once per project document and `apply` with each prepared value; the [guide](PLUGIN_STATE.md#custom-delivery) describes the lifetimes and walks through an example.
+
+```ts
+interface PluginStateDelivery<Payload> {
+    readonly eventEndpoints: readonly string[];      // Events `send` may target.
+    readonly outputEndpoints?: readonly string[];    // Outputs `listen` may observe.
+    readonly storedKeys?: readonly string[];         // Saved-state keys `readStored` and `subscribeStored` may read.
+    readonly hostEffects?: readonly string[];        // Host effects `send` may target; each needs a native handler.
+    readonly dataInputs?: readonly number[];         // Shared-data inputs `prepareData` may fill.
+    readonly replacement?: "supersede" | "finish";   // "finish" lets the current application end before the newest value.
+    create(document: PluginStateDocumentContext): {
+        apply(payload: Payload, context: PluginStateDeliveryContext): Promise<PluginStateDeliveryOutcome>;
+        stop(): void | Promise<void>;
+    };
+}
+
+type PluginStateEffect =
+    | { readonly kind: "event"; readonly endpoint: string; readonly value: unknown }
+    | { readonly kind: "host-effect"; readonly name: string; readonly value: unknown };
+
+type PluginStateSubmission =
+    | { readonly kind: "submitted"; readonly completion: Promise<   // Settles once native code has processed the message.
+        | { readonly kind: "sent"; readonly proof: "native-publication-processed" }
+        | { readonly kind: "failed"; readonly error: { readonly kind: string; readonly message: string } }
+        | { readonly kind: "cancelled" }> }
+    | { readonly kind: "failed"; readonly error: { readonly kind: string; readonly message: string } }
+    | { readonly kind: "cancelled" };
+```
+
+`PluginStateDocumentContext` has `signal`, `send`, `listen`, `readStored`, `subscribeStored`, `prepareData(input, byteLength, writer, signal?)`, `report(status)` and `fail(error)`. `PluginStateDeliveryContext` has `signal`, `send` and `listen`; its listeners are removed when that application ends. `apply` resolves to `{ kind: "sent" }` or `{ kind: "acknowledged" }` when the engine has the value, `{ kind: "unconfirmed" }` when it cannot know, or `{ kind: "failed", error }` or `{ kind: "cancelled" }`. A submission's `completion` is itself a valid outcome, so an `apply` that sends one message can return it.
+
+## Presets and snapshots
+
+`presets({ factory?, initial? })` returns `{ presetLibrary, activePreset }` to spread into `definePluginState`. Each factory preset is `{ id, name, values }`, with `values` keyed by sound field in the form `editor.edit` accepts. `initial` is a factory preset `id`: a new project starts with it as the active preset, and `definePluginState` throws if no factory preset has that id. Without `initial`, `active` is `null` until the first recall. `snapshots({ slots? })` returns `{ snapshotSlots, activeSnapshot }`; `slots` defaults to `["A", "B", "C", "D", "E", "F", "G"]`.
+
+`usePresets(definition)` returns:
+
+```ts
+interface Presets {
+    readonly status: "loading" | "ready" | "unavailable";
+    readonly error: string | null;            // Last failed action, or why presets are unavailable.
+    readonly factory: readonly { id: string; name: string }[];
+    readonly user: readonly { id: string; name: string }[];
+    readonly active: { id: string; name: string } | null;   // May name a deleted user preset.
+    readonly dirty: boolean;                  // The sound differs from the active preset.
+    recall(id: string): Promise<PresetActionResult>;        // One Undo entry.
+    revert(): Promise<PresetActionResult>;                  // Recall the active preset; one Undo entry.
+    save(name: string): Promise<PresetActionResult>;        // New user preset from the sound; becomes active.
+    update(): Promise<PresetActionResult>;                  // Overwrite the active user preset.
+    rename(id: string, name: string): Promise<PresetActionResult>;
+    remove(id: string): Promise<PresetActionResult>;        // Deleting the active preset clears it.
+    duplicate(id: string): Promise<PresetActionResult>;
+    exportJson(id?: string): { kind: "done"; text: string } | { kind: "failed"; message: string };   // No id: the current sound.
+    importJson(text: string): Promise<PresetActionResult>;  // Adds to the library; does not load it.
+    loadJson(text: string): Promise<PresetActionResult>;    // Loads the sound; one Undo entry; no preset is active afterwards.
+}
+
+type PresetActionResult = { readonly kind: "done" } | { readonly kind: "failed"; readonly message: string };
+```
+
+`useSnapshots(definition)` returns:
+
+```ts
+interface Snapshots {
+    readonly status: "loading" | "ready" | "unavailable";
+    readonly error: string | null;
+    readonly slots: readonly { id: string; filled: boolean }[];
+    readonly active: string | null;
+    select(slot: string): Promise<PresetActionResult>;  // One Undo entry; see the guide for capture rules.
+    clear(slot: string): Promise<PresetActionResult>;   // No Undo entry; clearing the active slot deselects it.
+}
+```
+
+Only `recall`, `revert`, `loadJson` and `select` create Undo entries. `importJson` and `loadJson` refuse a file written for another plugin ID or one that sets a field that is not a sound field. A failed action's `message` is written for the user and says what to do next; the hook also keeps it in `error` until the next action succeeds.
+
+`<PresetBar definition={definition} className? />` shows a labelled preset selector with factory and user groups, a "Modified" indicator, Save, Save as new, Revert, and a More menu with Rename, Duplicate, Delete, Copy JSON and Paste JSON. Paste JSON opens a field with Load (`loadJson`, also on Enter), Add to library (`importJson`) and Cancel. `<SnapshotBar definition={definition} className? />` shows one toggle button per slot (`aria-pressed` marks the active slot; a dot marks a filled slot) and Clear for the active slot. Both install their default styles into the document or shadow root they render in, and take their colors from the shared `--editor-accent-start` and `--editor-surface-bg` custom properties (see [Knobs](KNOBS_API.md#styling)).

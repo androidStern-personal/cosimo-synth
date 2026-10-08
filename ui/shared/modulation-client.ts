@@ -35,8 +35,9 @@ export function createModulationStateClient(client: StateClient) {
     const getState = (): ModulationState | null => {
         const current = field();
         if (current && "value" in current) return current.value;
-        // Preserve the existing cold-invalid display without inventing an
-        // accepted value. Readiness and all edit eligibility still use the client.
+        // Malformed saved data shows the default bank, and the next edit
+        // recovers the field through the client. Any other field without a
+        // value is loading, and the view shows no bank until it has one.
         return current?.readiness.kind === "failed" && current.readiness.reason === "invalid-state"
             ? createDefaultModulationState() : null;
     };
@@ -166,7 +167,7 @@ export function createModulationStateClient(client: StateClient) {
         };
         const active = ++nextGesture;
         gesture = active;
-        const ready = client.dispatch({ kind: "begin", key: MODULATION_STATE_KEY, gesture: active }).then(result => {
+        const ready = client.dispatch({ kind: "begin", keys: [MODULATION_STATE_KEY], gesture: active }).then(result => {
             if (result.kind !== "accepted" && gesture === active) gesture = undefined;
             return result;
         });
@@ -176,7 +177,7 @@ export function createModulationStateClient(client: StateClient) {
                 if (gesture !== active) ended = Promise.resolve(undefined);
                 else {
                     gesture = undefined;
-                    ended = client.dispatch({ kind: "end", key: MODULATION_STATE_KEY, gesture: active });
+                    ended = client.dispatch({ kind: "end", keys: [MODULATION_STATE_KEY], gesture: active });
                 }
             }
             return ended;
@@ -187,7 +188,7 @@ export function createModulationStateClient(client: StateClient) {
         const active = gesture;
         gesture = undefined;
         return active === undefined ? Promise.resolve(undefined)
-            : client.dispatch({ kind: "end", key: MODULATION_STATE_KEY, gesture: active });
+            : client.dispatch({ kind: "end", keys: [MODULATION_STATE_KEY], gesture: active });
     };
     const setMsegSlotEditShapeIndex = (index: number, shapeIndex: number): Promise<PluginStateClientResult | undefined> => {
         const normalizedIndex = slotIndex(index);

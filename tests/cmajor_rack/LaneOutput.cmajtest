@@ -1,4 +1,4 @@
-// Whole Effects Lane output contract (T63). Mix and Bypass wrap every editable
+// Whole Effects Lane output contract. Mix and Bypass wrap every editable
 // topology while the fixed output/Polish path remains downstream. The rack keeps
 // advancing internally under outer bypass. ADR-008 keeps every legal creative-rack
 // layout zero-latency, so the outer Mix combines the current dry and wet frames.

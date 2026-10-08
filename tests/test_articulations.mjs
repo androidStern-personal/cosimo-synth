@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import path from "node:path";
 
-import { loadUIModule } from "./helpers/load_ui_module.mjs";
+import { loadUIModule } from "../kit/tests/helpers/load_ui_module.mjs";
 
 const repoRoot = path.resolve(import.meta.dirname, "..");
 const [runtime, worker, modulation, program, installChannel] = await Promise.all([
@@ -112,8 +112,7 @@ class ArticulationWorkerTestConnection {
 
     requestStoredStateValue(key) {
         this.requestedKeys.push(key);
-        const values = this.fullStoredState?.values ?? this.fullStoredState;
-        queueMicrotask(() => this.emitStoredState(key, values?.[key]));
+        queueMicrotask(() => this.emitStoredState(key, this.fullStoredState.values?.[key]));
     }
 
     addEndpointListener(endpointID, listener) {
@@ -1255,7 +1254,7 @@ test("live writes to the retired v3 key are ignored", async () => {
         slots: [{ id: "legacy-slot", runtimeSlot: 3 }],
     });
     const connection = new ArticulationWorkerTestConnection({
-        "modulation.v6": JSON.stringify(createCurrentModulationState()),
+        values: { "modulation.v6": JSON.stringify(createCurrentModulationState()) },
     });
     connection.requestFullStoredState = undefined;
     const service = createModulationArticulationWorkerService(connection);

@@ -1,10 +1,10 @@
 import { useState } from "react";
-import { EditorTickSlider, formatFrequencyDisplay } from "../../index";
+import { Slider, formatFrequencyDisplay } from "../../index";
 import "./examples.css";
 
 export function FrequencyExample() {
     const [value, setValue] = useState(1200);
-    return <EditorTickSlider className="slider-example" label="Cutoff" value={value}
-        onChange={setValue} min={20} max={20000} step={1} scale="log"
+    return <Slider className="slider-example" label="Cutoff" value={value}
+        onValueChange={setValue} min={20} max={20000} scale="log"
         formatValue={formatFrequencyDisplay} />;
 }

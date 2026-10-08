@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import path from "node:path";
 
-import { loadUIModule } from "./helpers/load_ui_module.mjs";
+import { loadUIModule } from "../kit/tests/helpers/load_ui_module.mjs";
 
 const repoRoot = path.resolve(import.meta.dirname, "..");
 
@@ -34,12 +34,12 @@ test("lane kind grammar accepts real device params and rejects everything else",
 
 test("whole-lane output controls never enter the modulation destination inventory", async () => {
     const [laneState, modulation, descriptors] = await Promise.all([
-        loadUIModule(repoRoot, "ui/shared/lane-state.ts"),
+        loadUIModule(repoRoot, "ui/shared/lane-state-v2.ts"),
         loadUIModule(repoRoot, "ui/shared/modulation.ts"),
         loadUIModule(repoRoot, "ui/shared/target-descriptor.ts"),
     ]);
     const options = modulation.buildPatchModulationTargetOptions(
-        laneState.listLaneDeviceInstances(laneState.createDefaultLaneState()),
+        laneState.listLaneDeviceInstancesV2(laneState.createFullDefaultLaneStateV2()),
     );
 
     assert.equal(options.some(({ value }) => [
@@ -98,7 +98,7 @@ test("every device type's every pool endpoint parses, mirrors a real rack target
         globalFilter: ["globalFilterCutoff", "globalFilterResonance", "globalFilterDrive"],
         distortion: ["distortionDriveDb", "distortionKnee", "distortionWet", "distortionWetHPHz", "distortionWetLPHz"],
         ott: ["ottMix", "ottAmount", "ottTimePercent", "ottBandDrive", "ottEnvelopeMatch"],
-        chorus: ["chorusMix", "chorusTone", "chorusFeedback", "chorusRingAmount", "chorusRingFineSemitones"],
+        chorus: ["chorusMix", "chorusTone", "chorusFeedback", "chorusRingAmount", "chorusRingFrequencyHz"],
         flanger: ["flangerRate", "flangerDepth", "flangerFeedback", "flangerMix", "flangerBaseDelayMs"],
         phaser: ["phaserRate", "phaserDepth", "phaserFrequency", "phaserFeedback", "phaserPhase", "phaserMix"],
         delay: ["delayTime", "delayFeedback", "delayFilter", "delayMix"],
@@ -308,7 +308,7 @@ test("no lane route carries a per-note articulation cell — pool routes include
 
 test("every pool instance's base resolves the type's editing contract", async () => {
     const resolver = await loadUIModule(repoRoot, "ui/shared/modulation-target-base.ts");
-    // T6: the lane.v2 document has a real slot for every instance, so the
+    // The lane.v2 document has a real slot for every instance, so the
     // base contract (endpoint, spec, labels) is the TYPE's; WHICH document
     // slot a binding edits comes from the deviceId its caller threads.
     const second = resolver.resolveModulationTargetBase("lane.delay#2.delayMix");
@@ -321,13 +321,13 @@ test("every pool instance's base resolves the type's editing contract", async ()
 });
 
 test("the per-patch target domain is the static core plus one entry per live lane device parameter", async () => {
-    const laneState = await loadUIModule(repoRoot, "ui/shared/lane-state.ts");
+    const laneState = await loadUIModule(repoRoot, "ui/shared/lane-state-v2.ts");
     const modulation = await loadUIModule(repoRoot, "ui/shared/modulation.ts");
 
     // The resident device set: one instance-#1 device per type, in the stable
     // identity order (never the chain order — reordering the chain must not
     // reshuffle pickers).
-    const resident = laneState.listLaneDeviceInstances(laneState.createDefaultLaneState());
+    const resident = laneState.listLaneDeviceInstancesV2(laneState.createFullDefaultLaneStateV2());
     assert.deepEqual(resident, [
         { instanceId: "globalFilter#1", deviceType: "globalFilter" },
         { instanceId: "distortion#1", deviceType: "distortion" },

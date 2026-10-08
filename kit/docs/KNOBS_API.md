@@ -2,7 +2,7 @@
 
 A controlled numeric input with reusable pointer/keyboard behavior and composable artwork. Import from `kit/index`; the scoped default styles are included.
 
-Run `npm run ui:knobs:dev` for the interactive reference page. Every example has a Preview/Code view. The Code tab contains the complete TSX file (including imports and helpers) and `examples.css`. Copy both files together; adjust the public kit import path for your application. The examples run from those exact source files, and a browser test copies the displayed code into a separate page without the documentation application. It covers the default control, linear/log/custom scales, discrete values, exact entry, live modulation, two-axis editing, context menus, custom artwork, styling, disabled/read-only state and gesture grouping.
+Run `npm run ui:docs:dev` and choose **Knob** for the interactive reference page. Every example has a Preview/Code view. The Code tab contains the complete TSX file (including imports and helpers) and `examples.css`. Copy both files together; adjust the public kit import path for your application. The examples run from those exact source files, and a browser test copies the displayed code into a separate page without the documentation application. It covers the default control, linear/log/custom scales, discrete values, exact entry, live modulation, two-axis editing, context menus, custom artwork, styling, disabled/read-only state and gesture grouping.
 
 ## Start with a complete control
 
@@ -42,7 +42,7 @@ import { Knob } from "../../kit/index";
 | `KnobInput` | Text entry, validation, commit on Enter/blur and draft cancellation on Escape. |
 | `useKnob()` | `value`, normalized `position`, `toPosition(value)`, `isDragging`, `activeAxis` for custom child presentation. |
 
-Every visual part forwards its normal DOM props and ref. Use classes, styles, ARIA and data attributes normally. Scoped default CSS uses `--knob-size`, `--knob-color`, `--knob-range-color`, `--knob-indicator` and `--knob-ink`. State styling can target `data-disabled`, `data-readonly`, `data-dragging`, and `data-axis`.
+Every visual part forwards its normal DOM props and ref. Use classes, styles, ARIA and data attributes normally. `--knob-size` sets the default dial's size; colors come from the shared theme properties below. State styling can target `data-disabled`, `data-readonly`, `data-dragging`, and `data-axis`.
 
 `Knob` includes the default round control appearance. When composing the parts, add `className="bk-knob-default-control"` to opt into that same size, round shape and keyboard-focus outline. Omit that class for custom artwork and style your control with ordinary CSS, including a visible `:focus-visible` indicator. This choice works with or without `asChild`; `asChild` only chooses the DOM element. You do not need CSS resets to cancel a forced circle. `KnobRoot` retains its documented layout, label/readout styles and theme variables; customize it with `className` or `style` as usual.
 
@@ -80,7 +80,7 @@ The source supplies the effective value in the knob's units. Its owner resolves 
 
 `KnobControl` defaults to vertical drag. Set `drag="horizontal"` for horizontal movement. `sensitivity` is CSS pixels per full travel, default 220. A secondary quantity in a two-axis mapping can supply its own `sensitivity`; otherwise it inherits the control’s sensitivity. Shift-drag uses one tenth of normal travel.
 
-Arrow keys move by one `step`, or 1% of normalized travel when continuous. Shift-arrow uses 0.1% for a continuous range. `keyboardStep` optionally replaces that increment with a canonical-unit amount. Page Up/Down move ten increments; Home/End reach the endpoints. Holding a key groups repeats until release. Read-only blocks edits but remains focusable; disabled also leaves the tab order. Both still reflect external value updates.
+Keyboard editing is the same on every kit control. Arrow keys move one step: Right and Up increase, Left and Down decrease. Shift makes a step ten times finer, Page Up/Down ten times coarser, and Home/End jump to the ends of the range. Holding a key is one gesture, from the first keydown to keyup. A step is one `step`, or 1% of normalized travel when the value is continuous; `keyboardStep` replaces it with an amount in the value's units. Shift has no effect on a stepped value, because a finer step would snap back. Escape cancels the open gesture. Read-only blocks edits but remains focusable; disabled also leaves the tab order. Both still reflect external value updates.
 
 `onGestureStart` fires before the first changed value. `onGestureEnd(cancelled)` finishes the bracket once on release, cancellation, loss of capture/focus, relevant reconfiguration or unmount. Cancellation ends input; it keeps changes already accepted by the owner. A click with no edit creates no bracket. Key the root when switching to a different parameter with the same range so transient input cannot remain bound to the old parameter.
 
@@ -97,6 +97,23 @@ Arrow keys move by one `step`, or 1% of normalized travel when continuous. Shift
 ```
 
 Two-axis input classifies the dominant direction and can switch as the pointer changes direction. A switching sample is consumed instead of jumping the other value. Each quantity has its own edit bracket. `null` makes an axis inert. Give the secondary quantity a labelled keyboard-accessible control as well; the main slider's keyboard semantics describe its main value.
+
+## Accessibility
+
+`KnobControl` is an ARIA slider. It is named by `aria-label`, by `aria-labelledby`, or by a rendered `KnobLabel`; without any of them it has no name, so give icon-only knobs an `aria-label`. `aria-orientation` follows `drag="horizontal"` or `"vertical"`. `formatValue` supplies `aria-valuetext`.
+
+## Styling
+
+Every kit control reads the same color properties, so one rule on your plugin's root themes knobs, sliders, MSEGs and filters together. Set them on any ancestor, or on a single control to theme it alone. A property you leave unset falls back to that control's own default palette.
+
+| Property | Knob | Slider | MSEG | Filter |
+|---|---|---|---|---|
+| `--editor-accent-start` | Value arc, focus ring | Current cell, value thumb, focus ring | Curve, fill and points | Range start, modulation, focus ring |
+| `--editor-accent-end` | `KnobRange` | Modulation end | – | Range end |
+| `--editor-surface-ink` | Handle and marker | Text and filled cells | – | Labels and grips |
+| `--editor-surface-ink-muted` | – | Label | – | Axis labels, readout captions |
+| `--editor-surface-bg` | Handle outline | Background | – | Plot background |
+| `--editor-label-font` | – | Label and readout | – | Labels, chips and readout |
 
 ## State, menus and application overlays
 

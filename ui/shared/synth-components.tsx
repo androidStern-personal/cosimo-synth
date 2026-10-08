@@ -1,6 +1,5 @@
 import {
     type ReactNode,
-    useCallback,
     useEffect,
     useId,
     useLayoutEffect,
@@ -11,36 +10,37 @@ import {
     type RefObject,
 } from "react";
 
-import { Mseg, FilterEditor, responseModeToFilterRangeMode } from "../../kit/index";
+import { Mseg, FilterEditor, type FilterSpectrumFrame, type FilterSpectrumRenderMode } from "../../kit/index";
+import { responseModeToFilterMode } from "../../kit/ui/filter-editor";
 import { buildMsegSurfacePaths } from "../../kit/ui/mseg-editor-geometry";
 
 import type { PatchControlBinding } from "./patch-controls";
 import { useSliderDrag } from "./use-slider-drag";
 import { clampDisplayPosition } from "./runtime-table-state";
 import {
-    MSEG_EDITOR_HORIZONTAL_PADDING_PX,
-    MSEG_EDITOR_VERTICAL_PADDING_PX,
     MSEG_RATE_MAX_SECONDS,
     MSEG_RATE_MIN_SECONDS,
     clampMsegRateSeconds,
+    sampleRenderedMsegBuffer,
+    type MsegState,
+} from "./mseg";
+import {
+    MSEG_EDITOR_HORIZONTAL_PADDING_PX,
+    MSEG_EDITOR_VERTICAL_PADDING_PX,
     createMsegEditorMetrics,
     pointToMsegEditorCoordinates,
     renderMsegShape,
     resolveMsegSurfaceOrientation,
-    sampleRenderedMsegBuffer,
     type MsegSurfaceOrientation,
-    type MsegState,
     type MsegTimeAxisScale,
-} from "./mseg";
+} from "../../kit/ui/mseg";
 import { CanvasWavetableDisplay, type WavetableModulationRangeOverlay } from "./wavetable-display";
 import type { SynthFocusBindings } from "./synth-input-router";
-import { filterQToNormalized, normalizedToFilterQ } from "./filter-response";
-import type { FilterSpectrumFrame, FilterSpectrumRenderMode } from "./filter-spectrum";
+import { filterQToNormalized, normalizedToFilterQ } from "../../kit/ui/filter-response";
 import { uiMediaTimeNow } from "./ui-media-clock";
 import {
     composeModulationAmount,
     formatModulationAmountReadout,
-    getModulationAmountDepth,
     getModulationAmountPercentLabel,
     getModulationAmountSliderPosition,
     getModulationTargetClampHint,
@@ -186,11 +186,11 @@ export type FilterEndpointState = {
 };
 
 /**
- * T04A: the armed source's modulation travel — the filter at source = 0
+ * The armed source's modulation travel — the filter at source = 0
  * (start) and at full deflection (end) — drawn as the two response curves
  * with the swept region shaded in the source color. Renders only while the
- * armed source has at least one filter mapping (T07: color never implies a
- * mapping that does not exist). The start of a fully unipolar travel is the
+ * armed source has at least one filter mapping, so color never implies a
+ * mapping that does not exist. The start of a fully unipolar travel is the
  * base handle itself; only bipolar travel gets its own start handle.
  */
 export type FilterModulationTravel = {
@@ -448,7 +448,6 @@ export function MsegPreview({
     morphShapeAPoints = null,
     morphShapeBPoints = null,
     morphValue = null,
-    showMorphCurve = false,
     editShapeIndex = 0,
     orientation = "horizontal",
     className,
@@ -459,7 +458,6 @@ export function MsegPreview({
     morphShapeAPoints?: Array<{ x: number; y: number; curvePower: number }> | null;
     morphShapeBPoints?: Array<{ x: number; y: number; curvePower: number }> | null;
     morphValue?: number | null;
-    showMorphCurve?: boolean;
     /** Shape identity controls color only; selection never swaps A/B colors. */
     editShapeIndex?: 0 | 1;
     orientation?: MsegSurfaceOrientation;
@@ -735,7 +733,7 @@ export function WavetableCanvas({
     /** ADR-024 compact seams; defaults preserve the established drawing. */
     paintBackground?: boolean;
     showSliceCaption?: boolean;
-    /** T02C: the selected source's Index travel, shaded onto the graphic. */
+    /** The selected source's Index travel, shaded onto the graphic. */
     modulationRange?: WavetableModulationRangeOverlay | null;
 }) {
     const canvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -855,9 +853,9 @@ export function EditableMsegSurface({
             aria-label="MSEG curve">
             <Mseg.Grid className="cosimo-grid-line" opacity={1}/>
             {reference && <><Mseg.Fill value={reference} data-role="mseg-reference-fill" data-shape-identity={other} className={`cosimo-reference-curve-fill cosimo-mseg-shape-${other}-fill`} fillOpacity={1}/>
-                <Mseg.Curve value={reference} data-role="mseg-reference-curve" data-shape-identity={other} className={`cosimo-reference-curve-line cosimo-mseg-shape-${other}-curve-line`}/></>}
+                <Mseg.Line value={reference} data-role="mseg-reference-curve" data-shape-identity={other} className={`cosimo-reference-curve-line cosimo-mseg-shape-${other}-curve-line`}/></>}
             <Mseg.Fill data-role="mseg-base-fill" data-shape-identity={shape} className={`cosimo-curve-fill cosimo-mseg-shape-${shape}-fill`} fillOpacity={1}/>
-            <Mseg.Curve data-role="mseg-base-curve" data-shape-identity={shape} className={`cosimo-curve-line cosimo-mseg-shape-${shape}-curve-line`}/>
+            <Mseg.Line data-role="mseg-base-curve" data-shape-identity={shape} className={`cosimo-curve-line cosimo-mseg-shape-${shape}-curve-line`}/>
             {morph && <Mseg.Plot samples={morph} data-role="mseg-effective-curve" className={joinClasses("cosimo-mseg-effective-curve-line", realizedMorphEmphasis === "active" && "is-active")}/>}
             <Mseg.SegmentHighlight data-role="mseg-highlight-segment" className={`cosimo-curve-line cosimo-curve-line-highlight cosimo-mseg-shape-${shape}-curve-line`}/>
             <Mseg.Points data-role="mseg-edit-points" data-shape-identity={shape} renderPoint={({index, state, position, handleProps}) => <g {...handleProps} transform={undefined}>
@@ -922,7 +920,6 @@ export function ModulationAmountField({
     polarityAriaLabel,
     className,
 }: ModulationAmountFieldProps) {
-    const depth = getModulationAmountDepth(targetKind, amount);
     const knobPosition = getModulationAmountSliderPosition(targetKind, amount);
     const depthLabel = getModulationAmountPercentLabel(targetKind, amount);
     const unitReadout = formatModulationAmountReadout(targetKind, amount, polarity);
@@ -1039,14 +1036,23 @@ export function ModulationAmountField({
 
 export function FilterResponseGraph(props: FilterResponseGraphProps) {
     const { modulationTravel: travel } = props;
+    const base = { mode: props.baseMode, cutoffHz: props.baseCutoffHz, q: props.baseQ };
+    // The desktop harness reads the base and live filter state the graph was given.
+    const graphState = {
+        base,
+        live: props.liveHasActive
+            ? { hasActive: true, mode: props.liveMode, cutoffHz: props.liveCutoffHz, q: props.liveQ }
+            : { hasActive: false, ...base },
+    };
     return <div className={joinClasses("cosimo-filter-editor relative h-full w-full", props.className)}
         data-role="cosimo-filter-editor"
+        data-filter-graph={JSON.stringify(graphState)}
         data-resonance-curve={JSON.stringify(props.resonanceCurveDebugState ?? { familyId: "linear", coefficients: {} })}
         data-cutoff-route-storage={travel?.cutoffRouteStorageAmount}>
         <FilterEditor
             className="cosimo-filter-editor__control"
-            value={{ mode: responseModeToFilterRangeMode(props.baseMode), cutoffHz: props.baseCutoffHz, q: props.baseQ }}
-            preview={props.liveHasActive ? { mode: responseModeToFilterRangeMode(props.liveMode), cutoffHz: props.liveCutoffHz, q: props.liveQ } : null}
+            value={{ mode: responseModeToFilterMode(props.baseMode), cutoffHz: props.baseCutoffHz, q: props.baseQ }}
+            preview={props.liveHasActive ? { mode: responseModeToFilterMode(props.liveMode), cutoffHz: props.liveCutoffHz, q: props.liveQ } : null}
             plotPadding={{ horizontal: 18, top: 16, bottom: 16 }}
             qScale={{ qToSurface: props.resonanceNormalizedFromQ ?? filterQToNormalized,
                 surfaceToQ: props.resonanceQFromSurface ?? normalizedToFilterQ }}
@@ -1061,11 +1067,11 @@ export function FilterResponseGraph(props: FilterResponseGraphProps) {
                 if (target === "center") props.onTravelTranslate?.(next.start, next.end);
                 else props.onTravelEndpointSet?.(target, target === "end" ? next.end : next.start);
             } : undefined}
-            onEditStart={(target) => {
+            onGestureStart={(target) => {
                 if (target === "value") props.onGestureStart?.();
                 else if (target.startsWith("modulation-")) props.onTravelGestureStart?.(target.slice(11) as FilterTravelGestureSide);
             }}
-            onEditEnd={(target) => {
+            onGestureEnd={(_cancelled, target) => {
                 if (target === "value") props.onGestureEnd?.();
                 else if (target.startsWith("modulation-")) props.onTravelGestureEnd?.();
             }}

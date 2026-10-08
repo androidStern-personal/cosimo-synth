@@ -11,7 +11,7 @@ import {
     waitForHarnessReady,
 } from "./helpers/desktop_harness_browser.mjs";
 import { createFullDefaultLaneStateV2, serializeLaneStateV2 } from "../patch_gui/lane-state-v2.js";
-import { loadUIModule } from "./helpers/load_ui_module.mjs";
+import { loadUIModule } from "../kit/tests/helpers/load_ui_module.mjs";
 
 const repoRoot = path.resolve(import.meta.dirname, "..");
 const rackCatalogPromise = loadUIModule(repoRoot, "ui/shared/rack-parameter-descriptors.ts");
@@ -25,6 +25,15 @@ const XY_EFFECTS = [
     { effectId: "delay", xEndpointID: "delayTime", yEndpointID: "delayFeedback", xScale: "log", yScale: "linear" },
     { effectId: "reverb", xEndpointID: "reverbSize", yEndpointID: "reverbDecay", xScale: "linear", yScale: "linear" },
 ];
+
+/** The harness snapshot once the lane has sent `count` slot uploads since the log was cleared. */
+async function waitForLaneUploads(page, count) {
+    await page.waitForFunction((expectedCount) => (
+        window.__COSIMO_DESKTOP_HARNESS__.getSnapshot().sentMessages
+            .filter(({ endpointID }) => endpointID.startsWith("laneSlotParam")).length >= expectedCount
+    ), count);
+    return getHarnessSnapshot(page);
+}
 
 function expectedValueFromNormalized(descriptor, normalized) {
     return descriptor.scale === "log"
@@ -110,7 +119,7 @@ test("pointer and keyboard X/Y gestures reach each tabled pair through the host 
 
     try {
         // The XY sweep spans all eight device types; the fresh default is
-        // the starter trio (T7), so seed the legacy resident-eight document.
+        // the starter trio, so seed a document with all eight resident.
         await page.addInitScript((value) => {
             window.__COSIMO_DESKTOP_HARNESS_INITIAL__ = {
                 storedState: { "lane.v1": value },
@@ -142,12 +151,14 @@ test("pointer and keyboard X/Y gestures reach each tabled pair through the host 
                 bounds.y + (bounds.height * 0.25),
             );
 
-            let snapshot = await getHarnessSnapshot(page);
-            assert.deepEqual(snapshot.gestureStarts, [expected.xEndpointID, expected.yEndpointID]);
-            assert.deepEqual(snapshot.gestureEnds, [expected.xEndpointID, expected.yEndpointID]);
+            // Lane fields are saved state, not host parameters: no host
+            // gesture, and both axes change together in one slot record.
+            let snapshot = await waitForLaneUploads(page, 1);
+            assert.deepEqual(snapshot.gestureStarts, []);
+            assert.deepEqual(snapshot.gestureEnds, []);
             assert.deepEqual(
                 snapshot.sentMessages.map(({ endpointID }) => endpointID),
-                ["laneSlotParamValue", "laneSlotParamValue"],
+                ["laneSlotParams"],
             );
             assertApproximatelyEqual(
                 snapshot.laneParams[expected.xEndpointID],
@@ -174,9 +185,10 @@ test("pointer and keyboard X/Y gestures reach each tabled pair through the host 
             await visual.focus();
             await page.keyboard.press("ArrowRight");
             await page.keyboard.press("ArrowUp");
-            snapshot = await getHarnessSnapshot(page);
-            assert.deepEqual(snapshot.gestureStarts, [expected.xEndpointID, expected.yEndpointID]);
-            assert.deepEqual(snapshot.gestureEnds, [expected.xEndpointID, expected.yEndpointID]);
+            // Each arrow key moves one axis, so each sends one field.
+            snapshot = await waitForLaneUploads(page, 2);
+            assert.deepEqual(snapshot.gestureStarts, []);
+            assert.deepEqual(snapshot.gestureEnds, []);
             assert.deepEqual(
                 snapshot.sentMessages.map(({ endpointID }) => endpointID),
                 ["laneSlotParamValue", "laneSlotParamValue"],

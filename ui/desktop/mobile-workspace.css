@@ -71,7 +71,7 @@
         min-height: var(--cosimo-module-lg);
     }
 
-    /* T05: the Voice page's main content splits 50/50 between the wavetable
+    /* The Voice page's main content splits 50/50 between the wavetable
        editor and the filter, each keeping its attached control row. */
     .mobile-workspace-panel .mobile-voice-grid {
         height: 100%;
@@ -106,7 +106,7 @@
         background: var(--cosimo-card-bg);
     }
 
-    /* T62's phone controls occupy a header inside the existing tone-card
+    /* The phone controls occupy a header inside the existing tone-card
        footprint, leaving the response graph's handle and drag plane clear. */
     .voice-tone-stage-content {
         box-sizing: border-box;

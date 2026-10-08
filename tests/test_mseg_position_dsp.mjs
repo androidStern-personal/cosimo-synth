@@ -5,13 +5,12 @@ import { readFile, writeFile, mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { pathToFileURL } from 'node:url'
-import { loadUIModule } from './helpers/load_ui_module.mjs'
+import { loadUIModule } from '../kit/tests/helpers/load_ui_module.mjs'
+import { cmajorExternalCodegen, cmajorSourceDirectory } from './helpers/cmajor_source.mjs'
 const root = path.resolve(import.meta.dirname, '..')
 const temp = await mkdtemp(path.join(tmpdir(), 'mseg-position-dsp-'))
 try {
-    const cache = await readFile(path.join(root, 'build/cmajor_external_codegen-host/CMakeCache.txt'), 'utf8')
-    const source = cache.match(/^CPM_PACKAGE_cosimo_cmajor_toolchain_SOURCE_DIR:INTERNAL=(.+)$/m)?.[1]
-    assert.ok(source, 'Configure the worktree-local pinned Cmajor generator first.')
+    const source = cmajorSourceDirectory()
     await writeFile(path.join(temp, 'mseg.cmajor'), await readFile(path.join(root, 'kit/cmajor/mseg.cmajor')))
     await writeFile(
         path.join(temp, 'Probe.cmajor'),
@@ -36,7 +35,7 @@ graph MsegProbe [[ main ]] {
         }),
     )
     const generated = path.join(temp, 'Probe.mjs')
-    execFileSync(path.join(root, 'build/cmajor_external_codegen-host/cosimo_cmajor_external_codegen'), [
+    execFileSync(cmajorExternalCodegen(), [
         path.join(temp, 'Probe.cmajorpatch'),
         generated,
         'MsegProbe',

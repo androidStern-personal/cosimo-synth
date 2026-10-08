@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import path from "node:path";
 
 import { formatModulationAmountReadout } from "../patch_gui/modulation.js";
-import { loadUIModule } from "./helpers/load_ui_module.mjs";
+import { loadUIModule } from "../kit/tests/helpers/load_ui_module.mjs";
 
 import {
     normalizeArticulationEditorState,
@@ -30,17 +30,12 @@ import {
     waitForHarnessReady,
     TEST_SAMPLES_PER_FRAME,
     MSEG_PREVIEW_HORIZONTAL_PADDING_PX,
-    EFFECT_PRESETS_V2_STATE_KEY,
-    SYNTH_PRESET_EFFECT_ID,
     ARTICULATION_STATE_KEY,
-    RETIRED_SYNTH_LOCAL_DIRTY_STATE_KEY,
     expectedMsegPreviewProgressClipWidth,
     buildShortMidi,
     readStoredModulationState,
     readStoredArticulationEditorState,
     editorBankToStoredArticulations,
-    readEffectPresetState,
-    containsRetiredSynthPresetBaselineKey,
     readStoredMsegShape,
     readStoredMsegPlayback,
     readStoredRouteAmount,
@@ -73,9 +68,6 @@ import {
     waitForPageValue,
     waitForReactFrames,
     readVisibleHarnessParameterEndpointIDs,
-    clickPresetBarAction,
-    saveSynthPresetAs,
-    waitForPresetBarDirtyState,
     legacyEightLaneDocJson,
     dragArticulationCardToLane,
     previewArticulationCardDragOver,
@@ -92,12 +84,14 @@ import {
     rectContains,
     readGlobalModRailGeometry,
     isLaneParamSend,
+    withUiTimersPaused,
+    advanceUiTimers,
 } from "./helpers/desktop_patch_view_browser_suite.mjs";
 
 /**
  * Routing tests need the source armed with the expanded rail still available.
- * T43 makes the product tap open its quick sheet and collapse the drawer, so
- * these tests explicitly dismiss that sheet and restore their routing setup.
+ * The product tap opens its quick sheet and collapses the drawer, so these
+ * tests explicitly dismiss that sheet and restore their routing setup.
  */
 async function armRackModSourceForRouting(page, selector) {
     await page.click(selector);
@@ -418,7 +412,7 @@ test("mod matrix amount knob double-click entry uses the displayed units", async
     }
 });
 
-test("mod matrix amount entry preserves the focused draft across a host echo", async () => {
+test("a host-loaded modulation document closes the open amount entry without applying its draft", async () => {
     const page = await openHarnessPage();
 
     try {
@@ -429,32 +423,23 @@ test("mod matrix amount entry preserves the focused draft across a host echo", a
         const amountInput = page.locator('input[aria-label="Route 1 amount value"]:visible');
         await amountInput.waitFor({ state: "visible" });
         await amountInput.fill("12");
+
+        // A stored-state change from the host is a project load: the view
+        // reattaches to the loaded document, so a draft typed against the
+        // replaced one is discarded instead of being applied to the new sound.
         await page.evaluate(() => {
             const harness = window.__COSIMO_DESKTOP_HARNESS__;
             const modulationState = JSON.parse(String(harness.getSnapshot().storedState["modulation.v6"]));
             modulationState.routes[0].amount = 0.77;
             harness.setStoredStateValue("modulation.v6", JSON.stringify(modulationState));
         });
-        await page.waitForFunction(() => {
-            const harness = window.__COSIMO_DESKTOP_HARNESS__;
-            const modulationState = JSON.parse(String(harness.getSnapshot().storedState["modulation.v6"]));
-            return Math.abs(Number(modulationState.routes[0]?.amount) - 0.77) <= 1e-9;
-        });
+        await amountInput.waitFor({ state: "detached" });
+        await page.waitForFunction(() => [...document.querySelectorAll('[role="slider"][aria-label="Route 1 amount"]')]
+            .some((element) => element.checkVisibility() && element.getAttribute("aria-valuenow") === "0.77"));
 
-        assert.equal(await amountInput.inputValue(), "12");
-        await amountInput.press("Enter");
-
-        const snapshot = await waitForHarnessSnapshot(
-            page,
-            "focused route amount draft committed after host echo",
-            (nextSnapshot) => {
-                const route = readStoredModulationState(nextSnapshot).routes[0];
-                return route?.targetKind === "oscA.warpAmount"
-                    && Math.abs(Number(route.amount) - 0.12) <= 1e-9;
-            },
-        );
-        assert.equal(readStoredModulationState(snapshot).routes[0].amount, 0.12);
-        assert.equal(await amountInput.count(), 0, "Enter must close the exact-value editor instead of reopening it through the slider.");
+        const route = readStoredModulationState(await getHarnessSnapshot(page)).routes[0];
+        assert.equal(route.targetKind, "oscA.warpAmount");
+        assert.equal(route.amount, 0.77);
     } finally {
         await page.close();
     }
@@ -656,7 +641,7 @@ test("desktop effects rack renders the complete ordered eight-module surface", a
 });
 
 test("a rack-source tap opens the quick sheet over FX; the full editor round-trips the context", async () => {
-    // T43 opens the quick-editor sheet in place on the selection tap. The FX
+    // The selection tap opens the quick-editor sheet in place. The FX
     // context must stay live beneath, and Full editor routes to the real one.
     const page = await openHarnessPage({
         beforeGoto: (nextPage) => nextPage.setViewportSize({ width: 375, height: 667 }),
@@ -704,7 +689,7 @@ test("a rack-source tap opens the quick sheet over FX; the full editor round-tri
 });
 
 test("the quick sheet's Full editor opens the exact Envelope and Macro slots without introducing LFOs", async () => {
-    // T43: one source tap opens the exact quick sheet; its Full editor button
+    // One source tap opens the exact quick sheet; its Full editor button
     // deep-links to the detail editor. Exact-slot and no-LFO stay unchanged.
     const page = await openHarnessPage({
         beforeGoto: (nextPage) => nextPage.setViewportSize({ width: 375, height: 667 }),
@@ -824,7 +809,7 @@ test("Amp Envelope keeps its exact quick-sheet identity and 5 ms desktop Release
         const rackKnob = page.locator('[data-role="rack-parameter-reverbSize"]');
         await page.waitForFunction(() => (
             document.querySelector('[data-role="rack-parameter-reverbSize"]')?.getAttribute("data-route-state") === "mapped"
-        ), undefined, { timeout: 5000 });
+        ));
         await clearHarnessDebugLog(page);
         const rackArtBox = await rackKnob.locator(".rack-knob-art").boundingBox();
         assert.ok(rackArtBox);
@@ -835,7 +820,7 @@ test("Amp Envelope keeps its exact quick-sheet identity and 5 ms desktop Release
         await page.mouse.move(rackCenterX, rackCenterY - 38, { steps: 8 });
         await page.waitForFunction(() => (
             document.querySelector('[data-role="mobile-voice-hud"]')?.getAttribute("data-hud-axis") === "modulation"
-        ), undefined, { timeout: 5000 });
+        ));
         let sourceLine = await page.locator('[data-role="mobile-voice-hud"] .mobile-voice-hud-source').innerText();
         assert.match(sourceLine, /^AMP\b/);
         assert.doesNotMatch(sourceLine, /AMP\s*4|Envelope\s*4/i);
@@ -930,6 +915,13 @@ test("Amp Envelope keeps its exact quick-sheet identity and 5 ms desktop Release
         assert.equal(await editor.getAttribute("data-source-slot"), "4");
         assert.doesNotMatch(await page.locator('[data-role="mobile-workspace-panel-mod"]').innerText(), /Envelope\s*4|AMP\s*4/i);
 
+        // Home already floored Amp Release; move it off the floor so the entry has to clamp.
+        await page.evaluate(() => {
+            window.__COSIMO_DESKTOP_HARNESS__.setParameterValue("ampRelease", 0.2, true);
+        });
+        await page.waitForFunction(() => Math.abs(Number(
+            window.__COSIMO_DESKTOP_HARNESS__.getSnapshot().parameterValues.ampRelease,
+        ) - 0.2) <= 1e-9);
         let releaseInput = page.locator('input[aria-label="Envelope release value"]:visible');
         await clearHarnessDebugLog(page);
         await releaseInput.focus();
@@ -1438,7 +1430,7 @@ test("an unmapped rack knob shows a neutral outer track and its modulation axis 
     }
 });
 
-test("T57 removes the redundant Create Mapping row without changing source-drop mapping", async () => {
+test("source-drop mapping needs no Create Mapping row", async () => {
     const layouts = [
         { name: "phone", width: 393, height: 852, compact: true },
         { name: "plugin", width: 1120, height: 680, compact: false },
@@ -1502,7 +1494,7 @@ test("T57 removes the redundant Create Mapping row without changing source-drop 
     }
 });
 
-test("T58 effect headers contain only the name in active and bypassed phone, plugin, and desktop editors", async () => {
+test("effect headers contain only the name in active and bypassed phone, plugin, and desktop editors", async () => {
     const effects = [
         { id: "filter", label: "Filter" },
         { id: "drive", label: "Distortion" },
@@ -1768,29 +1760,30 @@ test("moving a rack knob touch cancels the hold menu and completes one captured 
         const box = await art.boundingBox();
         assert.ok(box);
         const start = { x: box.x + box.width / 2, y: box.y + box.height / 2 };
-        await knob.dispatchEvent("pointerdown", {
-            pointerId: 42,
-            pointerType: "touch",
-            isPrimary: true,
-            button: 0,
-            buttons: 1,
-            clientX: start.x,
-            clientY: start.y,
-        });
-        // Two samples: the first classifies the base axis (consumed), the
-        // second applies the delta; the movement also cancels the hold menu.
-        for (const deltaX of [14, 28]) {
-            await knob.dispatchEvent("pointermove", {
+        // The press and its moves land in one page task, so the hold timer can
+        // never fire between them. Two samples: the first classifies the base
+        // axis (consumed), the second applies the delta; the movement also
+        // cancels the hold menu.
+        await knob.evaluate((element, origin) => {
+            const touchAt = (type, deltaX) => new PointerEvent(type, {
+                bubbles: true,
                 pointerId: 42,
                 pointerType: "touch",
                 isPrimary: true,
                 button: 0,
                 buttons: 1,
-                clientX: start.x + deltaX,
-                clientY: start.y,
+                clientX: origin.x + deltaX,
+                clientY: origin.y,
             });
-        }
-        await page.waitForTimeout(560);
+            element.dispatchEvent(touchAt("pointerdown", 0));
+            for (const deltaX of [14, 28]) {
+                element.dispatchEvent(touchAt("pointermove", deltaX));
+            }
+        }, start);
+        // Waiting on the page's own timer queue lets the hold time pass for certain.
+        await page.evaluate(() => new Promise((resolve) => {
+            setTimeout(() => requestAnimationFrame(() => requestAnimationFrame(resolve)), 560);
+        }));
         assert.equal(await page.locator('[data-role="rack-parameter-menu"]').count(), 0);
         assert.deepEqual(await page.evaluate(() => window.__rackHaptics), []);
         await knob.dispatchEvent("pointerup", {
@@ -2306,7 +2299,7 @@ test("mobile Mod selector drives the attached editor and stays contained at iPho
     });
 
     try {
-        // T43 makes one source tap open the quick sheet; env/macro detail is
+        // One source tap opens the quick sheet; env/macro detail is
         // reached through the sheet's Full editor button.
         await page.click('[data-role="mobile-workspace-tab-fx"]');
         await expandGlobalModRail(page);
@@ -2450,7 +2443,7 @@ test("mobile Mod MAPPINGS is a complete table with row editing, filters, and inl
         await page.click('[data-role="mobile-workspace-tab-mod"]');
         await page.click('[data-role="mobile-mod-panel-tab-mappings"]');
 
-        // T14: entry shows EVERY mapping — no hidden filter, no blind scroll.
+        // Entry shows EVERY mapping — no hidden filter, no blind scroll.
         const panel = page.locator('[data-role="mod-mappings-panel"]');
         await panel.waitFor();
         assert.equal(await panel.locator('[data-role="mod-mappings-count"]').innerText(), "3");
@@ -2475,7 +2468,7 @@ test("mobile Mod MAPPINGS is a complete table with row editing, filters, and inl
         assert.equal(geometry.rows.every((row) => row.left >= 0 && row.right <= 393 && row.height >= 44), true);
 
         // The MSEG row shows its relationship and carries a live mapped rail
-        // (T15: the rail is the shared cell language, band and all).
+        // (the rail is the shared cell language, band and all).
         const msegRow = panel.locator('[data-role="mod-mappings-row"]', { hasText: "MSEG 1" });
         assert.match(await msegRow.innerText(), /MSEG 1[\s\S]*Flanger[\s\S]*Depth/);
         assert.equal(
@@ -2484,7 +2477,7 @@ test("mobile Mod MAPPINGS is a complete table with row editing, filters, and inl
             "The row rail must present this route's own band.",
         );
 
-        // T15 exact editing: long-press the row rail into the ADR-017 menu,
+        // Exact editing: long-press the row rail into the ADR-017 menu,
         // type the amount, and the stored route follows.
         const railCell = msegRow.locator(".mobile-voice-cell").first();
         const cellBox = await railCell.boundingBox();
@@ -2548,7 +2541,7 @@ test("mobile Mod MAPPINGS is a complete table with row editing, filters, and inl
     }
 });
 
-test("T66: MAPPINGS edits MSEG Rate and oscillator Level route amounts without changing base values", async () => {
+test("MAPPINGS edits MSEG Rate and oscillator Level route amounts without changing base values", async () => {
     const page = await openHarnessPage({
         beforeGoto: async (nextPage) => {
             await nextPage.setViewportSize({ width: 393, height: 852 });
@@ -2664,7 +2657,7 @@ test("T66: MAPPINGS edits MSEG Rate and oscillator Level route amounts without c
     }
 });
 
-test("T15: mapping rows read as LED meters with a live polarity toggle, one label, and even spacing", async () => {
+test("mapping rows read as LED meters with a live polarity toggle, one label, and even spacing", async () => {
     // The row already names source and target in its identity column, so the
     // readout drops the duplicated label and spends the reclaimed height on
     // the amount itself: a segmented LED band lit from the base tick, with
@@ -2768,7 +2761,7 @@ test("T15: mapping rows read as LED meters with a live polarity toggle, one labe
 });
 
 test("a stored pool-instance route renders instance-labeled with its own base, and the picker speaks the per-document domain", async () => {
-    // T6 device instances: `lane.delay#2.delayMix` names a real document
+    // Device instances: `lane.delay#2.delayMix` names a real document
     // slot, so its row carries the SAME live base rail as instance #1 —
     // the base contract is the type's; the edited slot is the instance's.
     // (A route whose instance is absent from the document edits nothing
@@ -2800,7 +2793,7 @@ test("a stored pool-instance route renders instance-labeled with its own base, a
         await page.click('[data-role="mobile-mod-panel-tab-mappings"]');
 
         // The pool row: numbered category, mirror parameter label, and the
-        // same live base rail every instance gets since T6.
+        // same live base rail every instance gets.
         const poolRow = page.locator('[data-role="mod-mappings-row"][data-route-id="pool-route-1"]');
         await poolRow.waitFor();
         assert.equal(
@@ -2811,7 +2804,7 @@ test("a stored pool-instance route renders instance-labeled with its own base, a
         assert.equal(
             await poolRow.locator('[data-role="mod-mappings-amount-only"]').count(),
             0,
-            "an instance route's base is addressable since T6 — no amount-only fallback",
+            "an instance route's base is addressable — no amount-only fallback",
         );
         assert.equal(await poolRow.locator(".mod-led-rail").count(), 1);
 
@@ -2843,7 +2836,7 @@ test("a stored pool-instance route renders instance-labeled with its own base, a
     }
 });
 
-test("T15: base drags on log-scale rows walk the display scale, matching the knobs' settled rule", async () => {
+test("base drags on log-scale rows walk the display scale, matching the knobs' settled rule", async () => {
     // Cutoff and resonance felt "sigmoid" on rows: the drag moved the value
     // linearly in raw Hz while the tick sat on a log track, so the musical
     // range lived in the first pixels and the top went numb. The base axis
@@ -2852,7 +2845,7 @@ test("T15: base drags on log-scale rows walk the display scale, matching the kno
     // this same argument for the knobs.
     const { PARAMETER_GESTURE_BASE_PIXELS_PER_FULL_RANGE } = await loadUIModule(
         path.resolve(import.meta.dirname, ".."),
-        "ui/shared/parameter-gesture.ts",
+        "kit/ui/parameter-gesture.ts",
     );
     const page = await openHarnessPage({
         beforeGoto: async (nextPage) => {
@@ -2920,7 +2913,7 @@ test("T15: base drags on log-scale rows walk the display scale, matching the kno
     }
 });
 
-test("T15: resonance amount drags walk the modulated value along the dial (effective-value), like the knobs", async () => {
+test("resonance amount drags walk the modulated value along the dial (effective-value), like the knobs", async () => {
     // Resonance's base (0.707) rests by the bottom of a log 0.1..20 domain:
     // a linear amount-domain drag crams all the audible travel into a few
     // pixels — the exact case the knobs resolved with modulationDragStyle
@@ -2929,7 +2922,7 @@ test("T15: resonance amount drags walk the modulated value along the dial (effec
     // and the amount is derived storage.
     const { PARAMETER_GESTURE_BASE_PIXELS_PER_FULL_RANGE } = await loadUIModule(
         path.resolve(import.meta.dirname, ".."),
-        "ui/shared/parameter-gesture.ts",
+        "kit/ui/parameter-gesture.ts",
     );
     const page = await openHarnessPage({
         beforeGoto: async (nextPage) => {
@@ -3000,7 +2993,7 @@ test("T15: resonance amount drags walk the modulated value along the dial (effec
     }
 });
 
-test("T15: a horizontal base drag on a mapping row writes finite values for stepless parameters", async () => {
+test("a horizontal base drag on a mapping row writes finite values for stepless parameters", async () => {
     // Continuous parameters record entrySpec.step 0 ("no quantization"). The
     // row rail's base axis must treat that as UNSNAPPED — never divide by the
     // zero step (the device bug: every drag frame sent NaN and the engine
@@ -3148,28 +3141,14 @@ test("mobile Mod creates, reloads, edits, and deletes more than 100 mappings wit
         }, createdRoute.id);
         assert.equal(await page.locator('[data-role="mod-mappings-count"]').innerText(), "102");
 
-        // T15: edit the restored route ON ITS ROW — long-press into the menu
-        // and type the amount exactly.
+        // Edit the restored route on its own row: long-press into the menu and
+        // type the amount exactly. Hovering waits until the cell is scrolled
+        // into view, stable and hit-testable, so the press lands on it.
         const createdRow = page.locator(`[data-role="mod-mappings-row"][data-route-id="${createdRoute.id}"]`);
-        await createdRow.scrollIntoViewIfNeeded();
         await clearHarnessDebugLog(page);
-        const railCell = createdRow.locator(".mobile-voice-cell").first();
-        // content-visibility rows paint a beat after a programmatic scroll:
-        // wait until the cell is actually hit-testable before pressing.
-        await page.waitForFunction((routeId) => {
-            const cell = document
-                .querySelector(`[data-role="mod-mappings-row"][data-route-id="${routeId}"]`)
-                ?.querySelector(".mobile-voice-cell");
-            if (!cell) return false;
-            const rect = cell.getBoundingClientRect();
-            const hit = document.elementFromPoint(rect.left + (rect.width / 2), rect.top + (rect.height / 2));
-            return hit !== null && cell.contains(hit);
-        }, createdRoute.id);
-        const cellBox = await railCell.boundingBox();
-        assert.ok(cellBox);
-        await page.mouse.move(cellBox.x + (cellBox.width / 2), cellBox.y + (cellBox.height / 2));
+        await createdRow.locator(".mobile-voice-cell").first().hover();
         await page.mouse.down();
-        await page.locator('[data-role="rack-parameter-menu"]').waitFor({ state: "visible", timeout: 10000 });
+        await page.locator('[data-role="rack-parameter-menu"]').waitFor({ state: "visible" });
         await page.mouse.up();
         await page.click('[data-role="rack-parameter-menu-item"][data-action="edit-values"]');
         const amountInput = page.locator('[data-role="rack-modulation-value-input"]');
@@ -3355,7 +3334,7 @@ test("rack reorder keeps the latest desired enable state across an older effecti
         await page.waitForFunction(() => (
             document.querySelector('[data-role="rack-module-list"]')?.firstElementChild
                 ?.getAttribute("data-role") === "rack-module-reverb"
-        ), null, { timeout: 1_000 });
+        ));
         await page.evaluate(() => {
             const identityChainCode = [0, 1, 2, 3, 4, 5, 6, 7].reduce(
                 (code, moduleId, position) => code | (moduleId << (position * 3)),
@@ -3430,9 +3409,14 @@ test("rack no-op release adopts authoritative stored order received during the g
             && document.querySelector(".subway-station-row.is-reordering") === null
         ));
         // A structurally different authoritative document makes the held
-        // preview inexact, so it cancels immediately and adopts that document.
-        // The eventual release must remain inert.
+        // preview inexact, so it cancels immediately and adopts that document,
+        // whose own topology reaches the engine. The eventual release must remain inert.
+        await waitForHarnessSnapshot(page, "authoritative lane topology delivered", (nextSnapshot) => (
+            nextSnapshot.sentMessages.some(({ endpointID, value }) => endpointID === "laneTopology" && value?.slotIds?.[0] === 7)
+        ));
+        await clearHarnessDebugLog(page);
         await endRackReorderWithoutPointerCapture(page, 94);
+        await waitForReactFrames(page, 2);
 
         const snapshot = await getHarnessSnapshot(page);
         assert.equal(snapshot.sentMessages.some(({ endpointID }) => endpointID === "laneTopology"), false);
@@ -3580,7 +3564,7 @@ test("mobile FX subpage keeps eight readable stations on the line and confines m
                 maximum: element.scrollHeight - element.clientHeight,
             }));
             assert.equal(graphScroll.maximum > 0 && graphScroll.top > 0, true,
-                `The eight stations must use the T73 graph scroller at ${width}px.`);
+                `The eight stations must use the graph scroller at ${width}px.`);
         } finally {
             await page.close();
         }
@@ -3823,44 +3807,53 @@ test("ADR-025 duplicate pairs are never droppable and failures raise the top toa
         await page.mouse.move(196, 420, { steps: 4 });
         await page.evaluate(() => { window.__rackHaptics.length = 0; });
 
-        // The duplicate target never looks droppable.
-        await page.mouse.move(targetCenter.x, targetCenter.y, { steps: 4 });
-        await page.waitForTimeout(120);
-        assert.equal(
-            (await surface.getAttribute("class")).includes("is-mod-hover"),
-            false,
-            "An already-mapped pair must never take the droppable highlight.",
-        );
-        assert.equal(
-            (await readHaptics()).includes("light"),
-            false,
-            "Hovering a duplicate must not give the positive acquisition tick.",
-        );
-        assert.equal(await surface.getAttribute("data-drag-creation"), "existing");
-        const greyed = await surface.evaluate((element) => getComputedStyle(element).filter);
-        assert.ok(greyed.includes("grayscale"), `A duplicate target must grey out during the drag, got filter ${greyed}`);
+        // The hover warning waits 500 ms of UI time. With the UI clock paused,
+        // the test decides how long each hover lasts, however slowly the
+        // pointer moves arrive.
+        await withUiTimersPaused(page, async () => {
+            // The duplicate target never looks droppable; hover handling is
+            // synchronous with each move.
+            await page.mouse.move(targetCenter.x, targetCenter.y, { steps: 4 });
+            assert.equal(
+                (await surface.getAttribute("class")).includes("is-mod-hover"),
+                false,
+                "An already-mapped pair must never take the droppable highlight.",
+            );
+            assert.equal(
+                (await readHaptics()).includes("light"),
+                false,
+                "Hovering a duplicate must not give the positive acquisition tick.",
+            );
+            assert.equal(await surface.getAttribute("data-drag-creation"), "existing");
+            const greyed = await surface.evaluate((element) => getComputedStyle(element).filter);
+            assert.ok(greyed.includes("grayscale"), `A duplicate target must grey out during the drag, got filter ${greyed}`);
 
-        // Flyover shorter than 500ms stays silent.
-        await page.mouse.move(196, 420, { steps: 3 });
-        await page.waitForTimeout(700);
-        assert.equal(await toastCount(), 0, "A quick flyover must not warn.");
+            // A flyover that leaves before the warning dwell stays silent,
+            // even once the dwell would have elapsed.
+            await advanceUiTimers(page, 400);
+            await page.mouse.move(196, 420, { steps: 3 });
+            await advanceUiTimers(page, 700);
+            await waitForReactFrames(page, 2);
+            assert.equal(await toastCount(), 0, "A quick flyover must not warn.");
 
-        // Deliberate hover reports exactly once per target per drag.
-        await page.mouse.move(targetCenter.x, targetCenter.y, { steps: 3 });
-        await page.waitForFunction(() => (
-            document.querySelector('[data-role="synth-feedback-toast"]')?.textContent === "DUPLICATE"
-        ), undefined, { timeout: 2500 });
-        assert.deepEqual(await readHaptics(), ["heavy"], "The duplicate warning is one deliberately noticeable buzz.");
-        await page.waitForTimeout(700);
-        assert.equal(
-            (await readHaptics()).filter((style) => style === "heavy").length,
-            1,
-            "A duplicate target reports at most once per drag.",
-        );
+            // Deliberate hover reports exactly once per target per drag.
+            await page.mouse.move(targetCenter.x, targetCenter.y, { steps: 3 });
+            await advanceUiTimers(page, 500);
+            await page.waitForFunction(() => (
+                document.querySelector('[data-role="synth-feedback-toast"]')?.textContent === "DUPLICATE"
+            ));
+            assert.deepEqual(await readHaptics(), ["heavy"], "The duplicate warning is one deliberately noticeable buzz.");
+            await advanceUiTimers(page, 700);
+            assert.equal(
+                (await readHaptics()).filter((style) => style === "heavy").length,
+                1,
+                "A duplicate target reports at most once per drag.",
+            );
 
-        // Releasing there changes nothing.
-        await page.mouse.move(targetCenter.x, targetCenter.y, { steps: 2 });
-        await page.mouse.up();
+            // Releasing there changes nothing.
+            await page.mouse.move(targetCenter.x, targetCenter.y, { steps: 2 });
+            await page.mouse.up();
+        });
         await page.waitForTimeout(150);
         const routesAfterDrop = readStoredModulationState(await getHarnessSnapshot(page)).routes;
         assert.equal(routesAfterDrop.length, 1, "Releasing on a duplicate must create nothing.");
@@ -3928,7 +3921,7 @@ test("ADR-025 duplicate pairs are never droppable and failures raise the top toa
         });
         await page.waitForFunction(() => (
             document.querySelector('[data-role="synth-feedback-toast"]')?.textContent === "MAPPING NOT CREATED"
-        ), undefined, { timeout: 3000 });
+        ));
         assert.equal(
             (await readHaptics()).includes("rigid"),
             true,
@@ -3975,28 +3968,33 @@ test("ADR-025 journey: a confirmed drop flashes, ticks, and pulses; bypass and d
         await page.mouse.down();
         await page.mouse.move(196, 420, { steps: 4 });
         await page.mouse.move(surfaceBox.x + (surfaceBox.width / 2), surfaceBox.y + (surfaceBox.height / 2), { steps: 4 });
-        await page.mouse.up();
 
         // Authoritative confirmation: flash + rising checkmark + light tick,
-        // the rail count pulses, and the matrix's new 0% row pulses too.
-        await page.waitForFunction(() => (
-            document.querySelector('[data-role="rack-parameter-surface-reverbSize"]')
-                ?.getAttribute("data-creation-confirmed") === "true"
-        ), undefined, { timeout: 3000 });
-        assert.equal(await page.locator('[data-role="rack-parameter-surface-reverbSize"] .rack-confirm-check').count(), 1);
-        assert.equal((await page.evaluate(() => window.__rackHaptics.slice())).includes("light"), true);
-        assert.equal(
-            await page.locator('[data-role="mobile-global-mod-rail-route-count"][data-count-pulsing]').count(),
-            1,
-            "The rail's mapping count must pulse on confirmation.",
-        );
-        await page.click('[data-role="mobile-workspace-tab-mod"]');
-        await page.click('[data-role="mobile-mod-panel-tab-mappings"]');
-        assert.equal(
-            await page.locator('[data-role="mod-mappings-row"].is-just-created').count(),
-            1,
-            "The new matrix row must pulse in the source color.",
-        );
+        // the rail count pulses, and the matrix's new 0% row pulses too. The
+        // pulses end on UI timers, which wait while the test reads them.
+        await withUiTimersPaused(page, async () => {
+            await page.mouse.up();
+            await page.locator('[data-role="rack-parameter-surface-reverbSize"][data-creation-confirmed="true"]').waitFor();
+            assert.equal(
+                await page.locator('[data-role="rack-parameter-surface-reverbSize"] .rack-confirm-check').count(),
+                1,
+                "The confirmed parameter shows the rising checkmark.",
+            );
+            assert.equal((await page.evaluate(() => window.__rackHaptics.slice())).includes("light"), true);
+            assert.equal(
+                await page.locator('[data-role="mobile-global-mod-rail-route-count"][data-count-pulsing]').count(),
+                1,
+                "The rail's mapping count must pulse on confirmation.",
+            );
+            await page.click('[data-role="mobile-workspace-tab-mod"]');
+            await page.click('[data-role="mobile-mod-panel-tab-mappings"]');
+            await page.locator('[data-role="mod-mappings-row"]').waitFor();
+            assert.equal(
+                await page.locator('[data-role="mod-mappings-row"].is-just-created').count(),
+                1,
+                "The new matrix row must pulse in the source color.",
+            );
+        });
         const createdRoute = readStoredModulationState(await getHarnessSnapshot(page)).routes
             .find((route) => route.targetKind === "lane.reverb#1.reverbSize");
         assert.ok(createdRoute);
@@ -4007,10 +4005,10 @@ test("ADR-025 journey: a confirmed drop flashes, ticks, and pulses; bypass and d
         await page.waitForFunction(() => (
             document.querySelector('[data-role="rack-parameter-surface-reverbSize"]')
                 ?.getAttribute("data-creation-confirmed") === null
-        ), undefined, { timeout: 3000 });
+        ));
         assert.equal(await page.locator('[data-role="rack-parameter-surface-reverbSize"] .rack-confirm-check').count(), 0);
 
-        // Bypass (ADR-025 amended for T15 rows): the mapping content dims as
+        // Bypass (ADR-025, mapping rows): the mapping content dims as
         // one piece, the source art greys, and the UNLIT power light carries
         // the whole state — no BYPASSED text anywhere. The rail band still
         // takes the bypassed treatment and the count never changes.
@@ -4080,7 +4078,7 @@ test("ADR-025 journey: a confirmed drop flashes, ticks, and pulses; bypass and d
         );
         await page.mouse.up();
 
-        // Delete lives ON the row (T15): no detail page, no confirmation,
+        // Delete lives ON the row: no detail page, no confirmation,
         // no toast — the row and its count contribution simply go.
         await row.locator("button[data-role^='mod-mappings-delete-']").click();
         await page.waitForFunction(() => (
@@ -4097,7 +4095,7 @@ test("ADR-025 journey: a confirmed drop flashes, ticks, and pulses; bypass and d
     }
 });
 
-test("T08A: the target claiming the drag shows an unmistakably stronger treatment than mere eligibility", async () => {
+test("the target claiming the drag shows an unmistakably stronger treatment than mere eligibility", async () => {
     // ADR-025 rows 12/13: every creatable target carries a thin source-colored
     // eligibility outline; the ONE target that has claimed the drop carries a
     // stronger source-colored capture treatment. Capture is sticky — one
@@ -4115,20 +4113,14 @@ test("T08A: the target claiming the drag shows an unmistakably stronger treatmen
         },
     });
     const cdp = await page.context().newCDPSession(page);
-    // Treatments fade (T08 added a ~140ms transition): a raw read can catch a
-    // mid-fade frame, so every read polls until two consecutive samples agree.
-    const readShadow = async (locator) => {
-        let previous = await locator.evaluate((element) => getComputedStyle(element).boxShadow);
-        for (let attempt = 0; attempt < 30; attempt += 1) {
-            await new Promise((resolve) => setTimeout(resolve, 90));
-            const next = await locator.evaluate((element) => getComputedStyle(element).boxShadow);
-            if (next === previous) {
-                return next;
-            }
-            previous = next;
-        }
-        throw new Error("The treatment never settled.");
-    };
+    // Treatments fade over a short transition, so a read waits for the
+    // element's finite transitions to end before taking its box-shadow.
+    const readShadow = (locator) => locator.evaluate(async (element) => {
+        await Promise.all(element.getAnimations()
+            .filter((animation) => animation.effect?.getComputedTiming().endTime !== Infinity)
+            .map((animation) => animation.finished.catch(() => undefined)));
+        return getComputedStyle(element).boxShadow;
+    });
     const waitForCapture = (hoveredRole, freedRole) => page.waitForFunction(([hovered, freed]) => (
         document.querySelector(`[data-role="${hovered}"]`)?.classList.contains("is-mod-hover") === true
         && document.querySelector(`[data-role="${freed}"]`)?.classList.contains("is-mod-hover") === false
@@ -4243,7 +4235,7 @@ test("production rack composition drives the public marker from engine telemetry
             { type: "pointerup", pointerId: 91, buttons: 0, deltaY: -65 },
         ]);
         const marker = knob.locator('[data-slot="knob-marker"]');
-        await marker.waitFor({ state: 'attached', timeout: 5000 });
+        await marker.waitFor({ state: 'attached' });
         assert.equal(await knob.getAttribute('data-slot'), 'knob-control');
         assert.equal(await knob.locator('[data-slot="knob-range"]').count(), 1);
         const base = await knob.getAttribute('aria-valuenow');

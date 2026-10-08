@@ -1,6 +1,7 @@
-import { definePluginState, parameter } from "../../kit/index";
+import { definePluginState, parameter, presets, snapshots } from "../../kit/index";
+import { factoryPresets } from "./view/factory-presets";
 
-/** The eight automatable sound controls share one persistent edit and Undo owner. */
+/** The eight automatable sound controls share one persistent edit and Undo owner, with presets and A-G snapshots. */
 export default definePluginState({
     frequency: parameter("freqHzIn"),
     q: parameter("qIn"),
@@ -10,4 +11,6 @@ export default definePluginState({
     character: parameter("curveIn"),
     intensity: parameter("saturationModeIn"),
     shape: parameter("shapeIn"),
+    ...presets({ factory: factoryPresets }),
+    ...snapshots(),
 });

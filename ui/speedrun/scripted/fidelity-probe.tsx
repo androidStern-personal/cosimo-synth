@@ -1,5 +1,5 @@
 import { renderStillOnWeb } from "@remotion/web-renderer";
-import React, { useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { useDelayRender } from "remotion";
 
 import { DesktopPatchView } from "../../desktop/DesktopPatchView";
@@ -9,7 +9,6 @@ import {
     serializeLaneStateV2,
 } from "../../shared/lane-state-v2";
 import type { MockPatchConnection } from "../../shared/patch-connection-mock";
-import { createDesktopResourceClient } from "../../shared/resource-client";
 import {
     MODULATION_STATE_KEY,
     normalizeModulationState,
@@ -94,12 +93,17 @@ function center(element: Element) {
     return { x: rect.left + (rect.width / 2), y: rect.top + (rect.height / 2) };
 }
 
-function requiredElement(root: ParentNode, selector: string) {
-    const element = root.querySelector<HTMLElement>(selector);
-    if (!element) {
-        throw new Error(`Fidelity scenario target is missing: ${selector}`);
+/** The view renders progressively as its state loads, so a scenario target may appear a few frames after mount. */
+async function requiredElement(root: ParentNode, selector: string) {
+    const deadline = performance.now() + 5_000;
+    for (;;) {
+        const element = root.querySelector<HTMLElement>(selector);
+        if (element) return element;
+        if (performance.now() > deadline) {
+            throw new Error(`Fidelity scenario target is missing: ${selector}`);
+        }
+        await waitForFrames(1);
     }
-    return element;
 }
 
 function waitForFrames(count = 2) {
@@ -116,7 +120,7 @@ function waitForFrames(count = 2) {
 }
 
 async function selectWorkspace(root: ParentNode, workspace: "voice" | "fx" | "mod") {
-    const tab = requiredElement(root, `[data-role="mobile-workspace-tab-${workspace}"]`);
+    const tab = await requiredElement(root, `[data-role="mobile-workspace-tab-${workspace}"]`);
     if (tab.getAttribute("aria-selected") !== "true") {
         tab.click();
         await waitForFrames(3);
@@ -126,38 +130,38 @@ async function selectWorkspace(root: ParentNode, workspace: "voice" | "fx" | "mo
 async function applyScenario(root: HTMLElement, scenario: FidelityScenario) {
     if (scenario === "voice-hud") {
         await selectWorkspace(root, "voice");
-        const control = requiredElement(root, '[data-role="mobile-voice-cell-framePosition"]');
+        const control = await requiredElement(root, '[data-role="mobile-voice-cell-framePosition"]');
         const start = center(control);
         control.dispatchEvent(pointerEvent("pointerdown", start, 1));
         window.dispatchEvent(pointerEvent("pointermove", { x: start.x + 14, y: start.y }, 1));
         window.dispatchEvent(pointerEvent("pointermove", { x: start.x + 36, y: start.y }, 1));
         await waitForFrames(3);
-        requiredElement(root, '[data-role="mobile-voice-hud"].is-visible');
+        await requiredElement(root, '[data-role="mobile-voice-hud"].is-visible');
         return;
     }
 
     if (scenario === "fx-filter") {
         await selectWorkspace(root, "fx");
-        const filterStation = requiredElement(root, '[data-role="rack-station-filter"]');
+        const filterStation = await requiredElement(root, '[data-role="rack-station-filter"]');
         filterStation.click();
         await waitForFrames(4);
-        requiredElement(root, '[data-role="filter-range-editor-surface"]');
+        await requiredElement(root, '[data-role="filter-range-editor-surface"]');
         return;
     }
 
     await selectWorkspace(root, "mod");
-    const mappingsTab = requiredElement(root, '[data-role="mobile-mod-panel-tab-mappings"]');
+    const mappingsTab = await requiredElement(root, '[data-role="mobile-mod-panel-tab-mappings"]');
     if (mappingsTab.getAttribute("aria-selected") !== "true") {
         mappingsTab.click();
         await new Promise<void>((resolve) => window.setTimeout(resolve, 220));
         await waitForFrames(2);
     }
-    const source = requiredElement(root, '[data-role="mobile-global-mod-rail-selected"]');
+    const source = await requiredElement(root, '[data-role="mobile-global-mod-rail-selected"]');
     const start = center(source);
     source.dispatchEvent(pointerEvent("pointerdown", start, 1));
     source.dispatchEvent(pointerEvent("pointermove", { x: start.x - 24, y: start.y - 8 }, 1));
     await waitForFrames(4);
-    requiredElement(root, '[data-role="mobile-global-mod-source-ghost"]');
+    await requiredElement(root, '[data-role="mobile-global-mod-source-ghost"]');
 }
 
 function rectFor(root: ParentNode, selector: string) {
@@ -167,14 +171,11 @@ function rectFor(root: ParentNode, selector: string) {
 }
 
 function inspect(root: HTMLElement, scenario: FidelityScenario): ProbeInspection {
-    const presetHost = root.querySelector<HTMLElement>('[data-role="synth-preset-bar-host"]');
-    const presetTitle = presetHost?.querySelector<HTMLElement>('[data-el="preset-name"]')
-        ?? presetHost?.firstElementChild?.shadowRoot?.querySelector<HTMLElement>('[data-el="preset-name"]')
-        ?? null;
     const selectors = {
+        title: '[data-role="synth-preset-bar-host"] [data-role="preset-name"]',
         keyboard: ".keyboard",
         rail: '[data-role="mobile-global-mod-rail"]',
-        knob: '[data-role="parameter-knob-artwork"]',
+        knob: '[data-role="voice-filter-knob-track-filterCutoff"]',
         filter: scenario === "fx-filter"
             ? '[data-role="rack-editor-filter"] [data-role="filter-range-editor-surface"]'
             : '[data-role="mobile-workspace-panel-voice"] [data-role="filter-range-editor-surface"]',
@@ -190,13 +191,10 @@ function inspect(root: HTMLElement, scenario: FidelityScenario): ProbeInspection
             || 0,
         svgCount: root.querySelectorAll("svg").length,
         imageCount: root.querySelectorAll("img").length,
-        landmarks: Object.fromEntries([
-            ...(presetTitle ? [["title", presetTitle.getBoundingClientRect().toJSON()] as const] : []),
-            ...Object.entries(selectors).flatMap(([key, selector]) => {
+        landmarks: Object.fromEntries(Object.entries(selectors).flatMap(([key, selector]) => {
             const rect = rectFor(root, selector);
             return rect ? [[key, rect]] : [];
-            }),
-        ]),
+        })),
     };
 }
 
@@ -228,7 +226,7 @@ function ProbeReady({
     readonly scenario: FidelityScenario;
 }) {
     const { delayRender, continueRender, cancelRender } = useDelayRender();
-    const [handle] = useState(() => delayRender(`M0 fidelity ${scenario}`));
+    const [handle] = useState(() => delayRender(`Fidelity ${scenario}`));
 
     useEffect(() => {
         let cancelled = false;
@@ -237,9 +235,8 @@ function ProbeReady({
             if (!root) {
                 throw new Error(`Fidelity capture root did not mount for ${scenario}.`);
             }
-            seedTelemetry(patchConnection);
-            await waitForFrames(3);
             await applyScenario(root, scenario);
+            seedTelemetry(patchConnection);
             await settleModSourceLights();
             await settleCaptureSubtree(root, {
                 animationTimeMilliseconds: FIDELITY_ANIMATION_TIME_MILLISECONDS,
@@ -280,7 +277,6 @@ function ProbeReady({
         >
             <DesktopPatchView
                 patchConnection={patchConnection}
-                resourceClient={createDesktopResourceClient(patchConnection)}
                 keyboardInputMode="standalone-preview"
             />
         </div>
@@ -324,8 +320,8 @@ export function installFidelityProbe(
 ) {
     window.__COSIMO_VIDEO_BOUNCE_FIDELITY__ = {
         async prepareLiveScenario(scenario) {
-            seedTelemetry(patchConnection);
             await applyScenario(liveRoot, scenario);
+            seedTelemetry(patchConnection);
             await settleModSourceLights();
             // The live tree is the reference: settle fonts, images, and
             // animation time, but never apply capture-only SVG workarounds.

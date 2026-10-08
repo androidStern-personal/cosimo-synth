@@ -85,9 +85,11 @@ export function useOptionalSynthPluginParameterBinding(key: string, options: Syn
     const initialValue = valueState !== null
         ? options.coerce(valueState.metadata?.defaultValue ?? options.initialValue)
         : options.initialValue;
-    const endpointID = key;
-    const presentation = useRef({ isReady, coerce: options.coerce });
-    presentation.current = { isReady, coerce: options.coerce };
+    // The state control's setValue closes over the rendered field version and is
+    // new on every render. Reading it here keeps this binding's identity until its
+    // own value changes, so memoized controls skip renders for unrelated edits.
+    const presentation = useRef({ isReady, coerce: options.coerce, setValue: parameter?.setValue });
+    presentation.current = { isReady, coerce: options.coerce, setValue: parameter?.setValue };
     const reportingGesture = useRef<{ readonly reporter: UserEditReporter; started: boolean } | null>(null);
     const notifications = useRef<Promise<void> | null>(null);
     const deferredValue = useDeferredValue(hostValue);
@@ -112,15 +114,15 @@ export function useOptionalSynthPluginParameterBinding(key: string, options: Syn
         if (!current.isReady) return;
         const coercedValue = current.coerce(nextValue);
         const reporter = captureUserEditReporter();
-        reportAfter(parameter?.setValue(coercedValue), result => {
+        reportAfter(current.setValue?.(coercedValue), result => {
             if (result?.kind !== "accepted") return;
             if (typeof result.changed !== "boolean") {
                 reportStateDefect(new Error("An accepted Voice edit did not report whether its value changed."));
                 return;
             }
-            reporter.parameterEdit({ endpointID, changed: result.changed });
+            reporter.parameterEdit({ endpointID: key, changed: result.changed });
         });
-    }, [endpointID, parameter?.setValue, reportAfter]);
+    }, [key, reportAfter]);
 
     const beginGesture = useCallback(() => {
         if (!presentation.current.isReady || reportingGesture.current) return;
@@ -155,7 +157,7 @@ export function useOptionalSynthPluginParameterBinding(key: string, options: Syn
     }, [beginGesture, endGesture, setValue]);
 
     const binding = useMemo(() => ({
-        endpointID,
+        endpointID: key,
         value,
         initialValue,
         isReady,
@@ -166,6 +168,6 @@ export function useOptionalSynthPluginParameterBinding(key: string, options: Syn
         commitValue,
         beginGesture,
         endGesture,
-    }), [beginGesture, commitValue, endGesture, endpointID, initialValue, isReady, key, setValue, value]);
+    }), [beginGesture, commitValue, endGesture, initialValue, isReady, key, setValue, value]);
     return parameter ? binding : null;
 }

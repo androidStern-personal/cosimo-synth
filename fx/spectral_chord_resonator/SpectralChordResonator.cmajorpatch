@@ -10,7 +10,7 @@
   "source": "SpectralChordResonator.cmajor",
   "view": {
     "src": "view/index.js",
-    "devModule": "/fx/spectral_chord_resonator/view/source.js",
+    "devModule": "/fx/spectral_chord_resonator/view/source.tsx",
     "width": 980,
     "height": 740,
     "resizable": true

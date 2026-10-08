@@ -3,7 +3,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import test from "node:test";
 
-import { loadUIModule } from "./helpers/load_ui_module.mjs";
+import { loadUIModule } from "../kit/tests/helpers/load_ui_module.mjs";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const railModulePromise = loadUIModule(repoRoot, "ui/shared/mobile-voice-rail-projection.ts");
@@ -203,7 +203,7 @@ test("an amp route in dB units can lift any base to the +6 dB rail", async () =>
     );
 });
 
-test("T02C: only a live mapped route shades the wavetable graphic, using the rail band's clamped travel", async () => {
+test("only a live mapped route shades the wavetable graphic, using the rail band's clamped travel", async () => {
     const { projectMobileVoiceRailBand, wavetableModulationShadingRange } = await railModulePromise;
     const domain = { min: 0, max: 1 };
 

@@ -50,8 +50,8 @@ The same test decodes the downloadable video at the beginning, midpoint, and
 end. It asserts 1080×1920 metadata, three distinct pixel hashes, richly
 nonblank/colorful synth frames at the first two samples, the intentionally
 sparse but nonblank end card, and visible change between samples. The threshold
-is expressed in decoded-pixel space and works for both high-quality MP4 and
-low-quality WebM; it is not tied to one codec's quantization noise.
+is expressed in decoded-pixel space and works for both MP4 and
+WebM; it is not tied to one codec's quantization noise.
 
 ## Acceptance MP4
 
@@ -101,7 +101,7 @@ React/product bundle was added to startup.
 - `VITE_COSIMO_VIDEO_BOUNCE_REPLICA=1` fallback production build: pass.
 - Integrated current-patch WebM flow with sampled real-UI and decoded-frame
   assertions: pass.
-- Integrated current-patch high-quality MP4 flow, saved acceptance artifact,
+- Integrated current-patch MP4 flow, saved acceptance artifact,
   internal container/codec/duration/audio verification, and independent
   `ffprobe`/`ffmpeg` inspection: pass.
 - M0–M3 product, pipeline, determinism, gesture, and Bounce Audio evidence

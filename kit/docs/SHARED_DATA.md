@@ -48,7 +48,7 @@ preparedState({
 
 `resources` is the existing kit resource client (`readText`, `readBytes`, `readAudio`). Loading may be asynchronous; the final writer is synchronous. The loaded source belongs to this operation's closure, not an author-managed shared cache. The framework measures the plan, reserves final storage, calls its writer and publishes only when complete. A superseded load cannot write or publish after finishing late. Return `preparationFailure(...)` for a recoverable loading error; an unexpected throw becomes a non-retryable field error.
 
-The old `sharedData({input})` completed-buffer overload and `replaceData` upload helper were removed. New declarations have one direct-memory behavior. A specialized component can still select an explicit `PluginStateDelivery`; the older `engineData` protocol remains explicit for DSP components that actually use it.
+A component with its own transfer protocol can declare an explicit delivery instead; see [Plugin state](PLUGIN_STATE.md).
 
 ## Size and DSP access
 
@@ -96,4 +96,4 @@ The generated native helper uses the framework audio read scope. A specialized b
 
 Acceptance means the editable value/history changed. `control.state.status` is `updating` while tracked work remains and `idle` when it finishes. Both states keep the value editable; saving or delivery errors do not discard the accepted edit. Display `error.message` and offer the nullable `retry` action when present. Retries cannot reinstate an obsolete target. See the [React API reference](PLUGIN_STATE_API.md) for loading and recovery behavior.
 
-This requires the patched Cmajor shared-data runtime, including direct writable reservations and audio-adoption receipts. Browser hosts need cross-origin isolation and shared WebAssembly memory. An unsupported host fails visibly; this implementation does not silently fall back to the older packet path. Native and browser storage differ internally; author preparation and state APIs stay the same.
+This requires the patched Cmajor shared-data runtime, including direct writable reservations and audio-adoption receipts. Browser hosts need cross-origin isolation and shared WebAssembly memory. A host without these capabilities fails visibly instead of running with a different transport. Native and browser storage differ internally; author preparation and state APIs stay the same.

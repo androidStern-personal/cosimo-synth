@@ -9,21 +9,17 @@ import {
     useState,
     type CSSProperties,
 } from "react";
-import { maybeLaneBaseKindForRackEndpoint } from "../shared/modulation-targets";
+import { maybeLaneBaseKindForRackEndpoint, type ModulationTargetKind } from "../shared/modulation-targets";
 import { createPortal } from "react-dom";
 
 import {
     formatModulationAmountReadout,
     getModulationAmountBounds,
-    getModulationAmountSliderPosition,
     type ModulationRoute,
     type RackModulationTargetKind,
 } from "../shared/modulation";
-import type { ModulationTargetKind } from "../shared/modulation-targets";
-import {
-    PARAMETER_GESTURE_BASE_PIXELS_PER_FULL_RANGE,
-    PARAMETER_GESTURE_MODULATION_PIXELS_PER_FULL_SPAN,
-} from "../shared/parameter-gesture";
+import { PARAMETER_GESTURE_MODULATION_PIXELS_PER_FULL_SPAN } from "../shared/parameter-gesture";
+import { PARAMETER_GESTURE_BASE_PIXELS_PER_FULL_RANGE } from "../../kit/ui/parameter-gesture";
 import {
     ParameterHudLayerContext,
     ParameterPrecisionHud,
@@ -51,7 +47,7 @@ import {
     type RackRouteEffectiveness,
 } from "../shared/rack-route-presentation";
 import { useModSourceValue } from "../shared/mod-source-live";
-import { KnobRoot, KnobControl, KnobRange, KnobMarker, useKnob, type KnobScale } from "../../kit/index";
+import { KnobRoot, KnobControl, KnobRange, KnobMarker, useKnob, type ValueScale } from "../../kit/index";
 import { clearUiTimeout, uiTimeout } from "../shared/ui-timers";
 import {
     effectOutputTrimNormalizedValue,
@@ -89,7 +85,7 @@ export type BaseParameterKnobProps = {
     /** Production-backed replacement for the ordinary HUD knob. */
     readonly presentHudVisualization?: (value: number) => ParameterHudVisualization;
     /** Exact-entry spec: with a shell menu present, long-press opens the
-        ADR-017 parameter menu built from this spec (T20: every control). */
+        ADR-017 parameter menu built from this spec, as on every control. */
     readonly entrySpec?: ParameterEntrySpec;
 };
 
@@ -309,7 +305,7 @@ function ParameterKnobSurface({
     bindingRef.current = binding;
     const gestureBase = useRef(binding.value);
     const pointerType = useRef("mouse");
-    const scale = useMemo<KnobScale>(() => descriptor.valueKind === "effect-output-trim-db"
+    const scale = useMemo<ValueScale>(() => descriptor.valueKind === "effect-output-trim-db"
         ? { toPosition: effectOutputTrimNormalizedValue, fromPosition: effectOutputTrimValueFromNormalized }
         : descriptor.scale === "log" ? "log" : "linear", [descriptor.valueKind, descriptor.scale]);
     const patternStem = useId().replaceAll(":", "");
@@ -595,8 +591,8 @@ function ParameterKnobSurface({
 }
 
 function ignoreSelection() {}
-function ignoreModulationAmountChange(_amount: number) {}
-function ignoreContextMenu(_clientX: number, _clientY: number) {}
+function ignoreModulationAmountChange() {}
+function ignoreContextMenu() {}
 
 /** Dual-ring control inside a target tile. The caller's tile owns drop hit testing and feedback; modulationTargetKind identifies the edited quantity. */
 export function RackParameterKnob(props: RackParameterKnobProps) {

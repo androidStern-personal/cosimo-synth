@@ -11,10 +11,10 @@ import { computeResponsivePatchLayout } from "../patch_gui/responsive-layout.mjs
 import {
     desktopHarnessNpmCommand,
     desktopHarnessSpawnSpec,
-    pathStaysWithinRepoRoot,
     startStaticRepoServer,
 } from "./helpers/desktop_harness_browser.mjs";
-import { loadUIModule } from "./helpers/load_ui_module.mjs";
+import { pathStaysWithinRepoRoot } from "../kit/tests/helpers/static_web_server.mjs";
+import { loadUIModule } from "../kit/tests/helpers/load_ui_module.mjs";
 
 const repoRoot = path.resolve(import.meta.dirname, "..");
 
@@ -212,7 +212,7 @@ test("checked-in UI source maps keep dependency provenance inside the checkout",
     }
 });
 
-test("generated desktop and iPhone UI artifacts carry the exact T74/T75 source contracts", async () => {
+test("generated desktop and iPhone UI artifacts carry the compact and full-page Polish source contracts", async () => {
     const sharedEndpointTokens = [
         "polishSafeBassAmount",
         "polishSafeBassBypass",
@@ -243,7 +243,7 @@ test("generated desktop and iPhone UI artifacts carry the exact T74/T75 source c
                 "ui/desktop/effects-rack-workspace.tsx",
                 "ui/desktop/DesktopPatchView.tsx",
                 "ui/desktop/polish-fullscreen-editor.tsx",
-                "kit/ui/cmajor-react.ts",
+                "ui/shared/cmajor-react.ts",
                 "ui/shared/enhancer-spectrum.ts",
                 "ui/shared/enhancer-spectrum-graph.tsx",
                 "ui/shared/polish-telemetry.ts",
@@ -262,7 +262,7 @@ test("generated desktop and iPhone UI artifacts carry the exact T74/T75 source c
                 "sampleRateHz",
             ],
             sourcePaths: [
-                "kit/ui/cmajor-react.ts",
+                "ui/shared/cmajor-react.ts",
                 "ui/shared/enhancer-spectrum.ts",
                 "ui/shared/polish-telemetry.ts",
                 "ui/shared/synth-hooks.ts",
@@ -446,6 +446,7 @@ test("iOS patch manifest keeps the synth graph but switches to the mobile editor
         "cmajor/EffectsRack.cmajor",
         "cmajor/Enhancer.cmajor",
         "cmajor/Polish.cmajor",
+        "cmajor/EnhancerLiteSpectrumAnalyzer.cmajor",
         "cmajor/FilterSpectrumCommon.cmajor",
         "cmajor/FilterSpectrumAnalyzer.cmajor",
         "cmajor/Mseg.cmajor",
@@ -746,80 +747,6 @@ test("the Voice Enhancer reuses the Filter footprint with explicit stages and th
     );
 });
 
-test("legacy synth presets resolve an omitted Filter Mix to fully wet through an exact-contract migration", async () => {
-    const [{ buildCanonicalPluginStateContract }, { applyEffectPresetV2 }] = await Promise.all([
-        loadUIModule(repoRoot, "ui/shared/effects/effect-state-contract.ts"),
-        loadUIModule(repoRoot, "ui/shared/effects/effect-preset-v2.ts"),
-    ]);
-    const legacyParameters = [
-        { endpointID: "filterMode", type: "number", min: 0, max: 5, defaultValue: 0 },
-        { endpointID: "filterCutoff", type: "number", min: 20, max: 20_000, defaultValue: 1_000 },
-        { endpointID: "filterQ", type: "number", min: 0.1, max: 20, defaultValue: 0.707107 },
-    ];
-    const legacyContract = buildCanonicalPluginStateContract({
-        effectID: "wavetable-synth",
-        parameters: legacyParameters,
-    });
-    const currentContract = buildCanonicalPluginStateContract({
-        effectID: "wavetable-synth",
-        parameters: [
-            ...legacyParameters,
-            { endpointID: "filterMix", type: "number", min: 0, max: 1, defaultValue: 1 },
-        ],
-    });
-    const legacyPreset = {
-        kind: "cosimo.effectPreset",
-        version: 2,
-        effectID: "wavetable-synth",
-        presetID: "user.legacy-filter",
-        label: "Legacy Filter",
-        contract: legacyContract,
-        parameters: {
-            filterMode: 1,
-            filterCutoff: 2_400,
-            filterQ: 4,
-        },
-        storedState: {},
-    };
-    const writes = [];
-    const patchConnection = {
-        sendEventOrValue(endpointID, value) {
-            writes.push({ endpointID, value });
-        },
-    };
-
-    assert.throws(() => applyEffectPresetV2({
-        preset: legacyPreset,
-        currentContract,
-        patchConnection,
-    }), /no migration/i, "effect-preset v2 must not silently accept a missing current parameter");
-    assert.deepEqual(writes, []);
-
-    const normalized = applyEffectPresetV2({
-        preset: legacyPreset,
-        currentContract,
-        patchConnection,
-        migrations: [{
-            effectID: "wavetable-synth",
-            fromHash: legacyContract.hash,
-            toHash: currentContract.hash,
-            migrate(preset) {
-                return {
-                    ...preset,
-                    contract: currentContract,
-                    parameters: { ...preset.parameters, filterMix: 1 },
-                };
-            },
-        }],
-    });
-
-    assert.equal(normalized.parameters.filterMix, 1);
-    assert.deepEqual(
-        writes.filter(({ endpointID }) => endpointID === "filterMix"),
-        [{ endpointID: "filterMix", value: 1 }],
-    );
-});
-
 test("all continuous MSEG and envelope controls are public host parameters", async () => {
     const synthSource = await fs.readFile(path.join(repoRoot, "cmajor", "WavetableSynth.cmajor"), "utf8");
     const values = new Map(parseGraphInputValues(synthSource, "WavetableSynth").map((value) => [value.identifier, value]));
@@ -846,7 +773,7 @@ test("all continuous MSEG and envelope controls are public host parameters", asy
 
 test("desktop and iPhone React UI tooling are wired for Vite dev and build loops", async () => {
     const packageJson = JSON.parse(await fs.readFile(path.join(repoRoot, "package.json"), "utf8"));
-    const sharedViteHelpers = await fs.readFile(path.join(repoRoot, "kit", "fx", "vite.shared.mjs"), "utf8");
+    const sharedViteHelpers = await fs.readFile(path.join(repoRoot, "ui", "vite.shared.mjs"), "utf8");
     const viteConfig = await fs.readFile(path.join(repoRoot, "ui", "vite.desktop.config.mjs"), "utf8");
     const iosViteConfig = await fs.readFile(path.join(repoRoot, "ios_auv3", "vite.config.mjs"), "utf8");
     const workerViteConfig = await fs.readFile(path.join(repoRoot, "ui", "vite.worker.config.mjs"), "utf8");
@@ -993,11 +920,11 @@ test("desktop and shared effect dev entries load React Grab only in interactive 
         "utf8",
     );
     const effectDevTools = await fs.readFile(
-        path.join(repoRoot, "kit", "ui", "effects", "effect-dev-tools.js"),
+        path.join(repoRoot, "kit", "ui", "dev-inspector.js"),
         "utf8",
     );
     const effectViewLoader = await fs.readFile(
-        path.join(repoRoot, "kit", "ui", "effects", "effect-view-loader.js"),
+        path.join(repoRoot, "kit", "ui", "view-loader.js"),
         "utf8",
     );
 
@@ -1009,8 +936,8 @@ test("desktop and shared effect dev entries load React Grab only in interactive 
     assert.match(effectDevTools, /if \(import\.meta\.env\.DEV && navigator\.webdriver !== true\) \{/);
     assert.match(effectDevTools, /await import\("react-grab"\);/);
     assert.match(effectDevTools, /await import\("@react-grab\/mcp\/client"\);/);
-    assert.match(effectViewLoader, /EFFECT_DEV_TOOLS_MODULE_PATH = "\/kit\/ui\/effects\/effect-dev-tools\.js"/);
-    assert.match(effectViewLoader, /await loadEffectDevTools\(devOrigin\);/);
+    assert.match(effectViewLoader, /DEV_INSPECTOR_MODULE_PATH = "\/kit\/ui\/dev-inspector\.js"/);
+    assert.match(effectViewLoader, /await loadDevInspector\(devOrigin\);/);
 });
 
 test("desktop standalone loader is emitted from source and stays host-configurable after repeated builds", async () => {
@@ -1201,7 +1128,7 @@ test("desktop dev plug-in build enables the webview dev server and regenerates t
     assert.match(buildScript, /CosimoDesktopNative_artefacts\/Release\/VST3\/CosimoDesktopNative\.vst3/);
     assert.match(buildScript, /CosimoDesktopNative_artefacts\/Release\/Standalone\/CosimoDesktopNative\.app/);
     assert.match(buildScript, /rm -rf "\$vst3_bundle"\s+cp -R "\$vst3_built" "\$vst3_bundle"/s);
-    assert.match(buildScript, /kit\/tools\/cmajor_runtime_build/);
+    assert.match(buildScript, /"\$repo_root\/tools\/cmajor_runtime_build"/);
     assert.match(buildScript, /--target CmajPerformer/);
     assert.match(buildScript, /cp "\$runtime_dylib" "\$vst3_bundle\/Contents\/Resources\/libCmajPerformer\.dylib"/);
     assert.doesNotMatch(buildScript, /cmajor\.dmg/);
@@ -1287,7 +1214,7 @@ test("build_assets.py regenerates the runtime wavetable catalog without touching
     }
 });
 
-test("legacy patch shell resource client is emitted from the TypeScript source instead of being maintained as a second implementation", async () => {
+test("the iPhone shell's resource client is emitted from the kit's TypeScript source", async () => {
     const generatedResourceClientPath = path.join(repoRoot, "patch_gui", "resource-client.js");
     const originalGeneratedResourceClient = await fs.readFile(generatedResourceClientPath, "utf8");
     const sentinel = "\n// TEST SENTINEL: build must remove this line.\n";
@@ -1322,9 +1249,9 @@ test("legacy patch shell resource client is emitted from the TypeScript source i
     );
     assert.match(
         generatedResourceClient,
-        /Generated from ui\/shared\/resource-client\.ts by node ui\/build\.mjs\. Do not edit this file directly\./,
+        /Generated from kit\/ui\/resource-client\.ts by node ui\/build\.mjs\. Do not edit this file directly\./,
     );
-    assert.match(generatedResourceClient, /export function createIOSResourceClient/);
+    assert.match(generatedResourceClient, /export function createPatchConnectionResourceClient/);
     assert.doesNotMatch(generatedResourceClient, /^\s*export type /m);
 });
 
@@ -1338,7 +1265,7 @@ test("the iPhone host shell and runtime are emitted from ui/ios sources instead 
         builtHostRuntime,
         /Generated from ui\/ios\/runtime-host\.js by node ui\/build\.mjs\. Do not edit this file directly\./,
     );
-    assert.match(builtHostRuntime, /import \{ createIOSResourceClient \} from "\.\/resource-client\.js";/);
+    assert.match(builtHostRuntime, /import \{ createPatchConnectionResourceClient \} from "\.\/resource-client\.js";/);
     assert.match(builtHostRuntime, /globalThis\.__cosimoInspectHostPage/);
 });
 

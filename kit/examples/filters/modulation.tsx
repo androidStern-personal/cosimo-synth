@@ -21,7 +21,7 @@ export function ModulationExample() {
                 // A plug-in can instead translate endpoints into its own route amounts here.
                 if (unipolar && (target === 'base' || target === 'center')) setValue(v => ({ ...v, ...next.start }))
             }}
-            onEditStart={target => record('start', target)} onEditEnd={target => record('end', target)} />
+            onGestureStart={target => record("start", target)} onGestureEnd={(_cancelled, target) => record("end", target)} />
         <div className="filter-toolbar">
             <label>Editable axes <select value={axes} onChange={e => setAxes(e.target.value as FilterModulation['axes'])}>
                 <option value="both">Cutoff and resonance</option><option value="cutoff">Cutoff only</option><option value="q">Resonance only</option>

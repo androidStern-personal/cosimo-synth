@@ -1,4 +1,5 @@
 import { articulationStateCodec } from "./synth-document-state";
+import { fullStoredStateValues } from "./full-stored-state";
 import { effectOutputTrimHostEndpointID, effectOutputTrimLaneEndpointID } from "./effect-output-trim";
 import {
     ArticulationSlotsExhausted,
@@ -38,7 +39,6 @@ import { acquireSynthViewState } from "./synth-state-client";
 import {
     clampNormalizedValue,
     makeMappingId,
-    parseNormalizedValue,
     splitMappingId,
     type ArticulationId,
     type MappingId,
@@ -158,19 +158,6 @@ function parseJsonDocument(input: unknown, label: string): ParseOutcome<unknown>
         const detail = cause instanceof Error ? cause.message : "unknown JSON parse failure";
         return parseError(`${label} is not valid JSON: ${detail}`);
     }
-}
-
-function readFullStoredStateValue(storedState: unknown, key: string): unknown {
-    if (!isRecord(storedState)) {
-        return undefined;
-    }
-
-    const nestedValues = isRecord(storedState.values) ? storedState.values : null;
-    if (nestedValues !== null && Object.hasOwn(nestedValues, key)) {
-        return nestedValues[key];
-    }
-
-    return Object.hasOwn(storedState, key) ? storedState[key] : undefined;
 }
 
 function createSourceDefinitions(): ReadonlyArray<SourceDefinition> {
@@ -656,8 +643,8 @@ class CosimoBridgeAdapter implements CosimoAdapterPort {
             if (articulationId !== "Default") {
                 this.requireArticulation(articulationId);
             }
-            // TODO(COSIMO_ADAPTER_COMMAND_MAP): audition selector forcing is an
-            // open engine path; retain the requested articulation locally only.
+            // The engine has no input that forces the audition articulation,
+            // so the requested articulation is kept locally.
             this.audition = { ...this.audition, articulation: articulationId };
             this.markSnapshotDirty();
         }),
@@ -795,8 +782,9 @@ class CosimoBridgeAdapter implements CosimoAdapterPort {
             return;
         }
 
-        const rawArticulations = readFullStoredStateValue(storedState, ARTICULATIONS_V4_STATE_KEY);
-        const rawRackState = readFullStoredStateValue(storedState, LANE_STATE_KEY);
+        const storedValues = fullStoredStateValues(storedState);
+        const rawArticulations = storedValues[ARTICULATIONS_V4_STATE_KEY];
+        const rawRackState = storedValues[LANE_STATE_KEY];
         if (rawArticulations !== undefined) {
             const parsed = articulationStateCodec.parse(rawArticulations);
             if (parsed.kind === "error") { this.detach(parsed.message); return; }
@@ -1771,8 +1759,8 @@ class CosimoBridgeAdapter implements CosimoAdapterPort {
     private restoreEffectOrder(effectOrder: ReadonlyArray<EffectModuleId>): void {
         const order = effectOrder.map((effectId) => requireEffectId(effectId));
         // A full-order restore is a serial statement over the DOCUMENT'S own
-        // devices (the starter default is a trio, so eight is no longer the
-        // universal count): the restored list must restate exactly the
+        // devices (the starter default is a trio, so eight is not a universal
+        // count): the restored list must restate exactly the
         // devices this document places, in any order.
         const current = this.projectEffectOrder();
         if (order.length !== current.length

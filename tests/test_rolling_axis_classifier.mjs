@@ -3,10 +3,10 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import test from "node:test";
 
-import { loadUIModule } from "./helpers/load_ui_module.mjs";
+import { loadUIModule } from "../kit/tests/helpers/load_ui_module.mjs";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-const classifierModulePromise = loadUIModule(repoRoot, "ui/shared/rolling-axis-classifier.ts");
+const classifierModulePromise = loadUIModule(repoRoot, "kit/ui/rolling-axis-classifier.ts");
 
 function drag(module, samples, pointerType = "touch") {
     const { createRollingAxisState, applyRollingAxisSample } = module;

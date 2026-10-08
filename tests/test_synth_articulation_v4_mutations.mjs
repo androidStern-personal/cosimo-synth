@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import path from "node:path";
 import { readFile } from "node:fs/promises";
 
-import { loadUIModule } from "./helpers/load_ui_module.mjs";
+import { loadUIModule } from "../kit/tests/helpers/load_ui_module.mjs";
 
 const repoRoot = path.resolve(import.meta.dirname, "..");
 const modulesPromise = Promise.all([
@@ -150,7 +150,7 @@ test("the selected oscillator projects every local articulation value to its own
     assert.equal(layer.routeAmounts["zero-route"], 0);
 });
 
-test("preset transaction rotates the sparse comparison base with parameters and modulation", async () => {
+test("a recalled sound rotates the sparse comparison base with its parameters and modulation", async () => {
     const [image, , modulation, synthHooks] = await modulesPromise;
     const route = modulation.createDefaultRoute({
         id: "oscA.pan::env-1",
@@ -163,13 +163,10 @@ test("preset transaction rotates the sparse comparison base with parameters and 
         ...modulation.createDefaultModulationState(),
         routes: [route],
     };
-    const nextBase = synthHooks.buildPresetArticulationBaseSnapshot({
-        parameters: {
-            oscAPan: 0.75,
-            filterQ: 2,
-            mseg1Morph: 0.4,
-        },
-        storedState: {},
+    const nextBase = synthHooks.buildArticulationBaseSnapshot({
+        oscAPan: 0.75,
+        filterQ: 2,
+        mseg1Morph: 0.4,
     }, modulationState, "A");
     const slot = makeSlot({
         "oscA.pan": 0.5,
@@ -187,10 +184,7 @@ test("preset transaction rotates the sparse comparison base with parameters and 
     assert.equal(nextBase.parameters.filterQ, 2);
     assert.equal(nextBase.parameters.msegMorphs[0], 0.4);
     assert.equal(nextBase.modRouteAmounts[0].amount, 0.25);
-    const oscillatorBDefaults = synthHooks.buildPresetArticulationBaseSnapshot({
-        parameters: {},
-        storedState: {},
-    }, modulationState, "B");
+    const oscillatorBDefaults = synthHooks.buildArticulationBaseSnapshot({}, modulationState, "B");
     assert.equal(oscillatorBDefaults.parameters.volumeDb, 0);
     assert.equal(oscillatorBDefaults.parameters.mute, 1);
 
@@ -257,12 +251,7 @@ test("production synth hook uses modulation.v6 with direct articulation-v4 trans
     assert.match(source, /setAndPersistState/);
     assert.match(source, /collapseArticulationSegmentV4\(previousState, mode, segment\)/);
     assert.match(source, /collapseAllArticulationSegmentsV4\(previousState, mode\)/);
-    assert.match(source, /setArticulationPatchBase\([\s\S]*?buildPresetArticulationBaseSnapshot/);
-    assert.match(source, /setAndPersistState\(parseStrictArticulationPresetState\(value, routeIds\), routeIds, true\)/);
-    assert.match(
-        source,
-        /const modulationAdapter:[\s\S]*?schemaVersion: MODULATION_STATE_VERSION,[\s\S]*?getContract\(\)[\s\S]*?schemaVersion: MODULATION_STATE_VERSION,/,
-    );
+    assert.match(source, /const resetArticulationPatchBases = useCallback\([\s\S]*?setArticulationPatchBase\(oscillator\.id, buildArticulationBaseSnapshot\(/);
     assert.doesNotMatch(source, /compileEditorBankToCurrentArticulations/);
     assert.doesNotMatch(source, /setAndPersistBank/);
 });

@@ -1,6 +1,6 @@
 /**
- * The persistent Voice/FX/Mod workspace shell's navigation model (ADR-026,
- * T03B) — pure state, no React.
+ * The persistent Voice/FX/Mod workspace shell's navigation model (ADR-026)
+ * — pure state, no React.
  *
  * Each workspace keeps its own detail page and Back origin; switching tabs
  * never destroys either. Tapping the active tab returns a detailed workspace

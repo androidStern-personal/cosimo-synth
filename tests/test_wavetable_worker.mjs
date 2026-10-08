@@ -3,17 +3,14 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
-import { stageCmajorWebRuntime } from "../kit/fx/vite.shared.mjs";
+import { cmajorWebApiDirectory } from "./helpers/cmajor_source.mjs";
 
-const stateRuntime = process.env.COSIMO_CMAJOR_SOURCE
-    ? path.join(process.env.COSIMO_CMAJOR_SOURCE, "javascript/cmaj_api")
-    : stageCmajorWebRuntime(path.resolve(import.meta.dirname, ".."), {
-    buildDirectory: path.resolve(import.meta.dirname, "../build/cmajor_web_runtime-worker-state-tests"),
-});
+const stateRuntime = cmajorWebApiDirectory();
 const { PluginStateChannel } = await import(pathToFileURL(path.join(stateRuntime, "cmaj-plugin-state-channel.js")));
 const { createSharedDataMemory, createSharedDataPreparation, createSharedDataReader } = await import(
     pathToFileURL(path.join(stateRuntime, "cmaj-shared-data.js")));
 
+import { createSynthParameterFixture } from "./helpers/synth_parameter_fixture.mjs";
 import runWavetableWorker, {
     WAVETABLE_RUNTIME_STATE_SYNC_SERIAL,
     createWavetableWorkerController,
@@ -578,12 +575,10 @@ class FakePatchConnection {
 class FakeWorkerPatchConnection {
     constructor(storedState = {}) {
         // Real state channel and shared-memory producer/reader. Only the native
-        // parameter store and DSP's domain ACK/frontier are modeled here.
-        this.parameters = [
-            { endpoint: "playMode", value: 0, min: 0, max: 2, step: 1, defaultValue: 0 },
-            { endpoint: "glideTime", value: 0.15, min: 0, max: 2, step: 0, defaultValue: 0.15 },
-            { endpoint: "globalTune", value: 0, min: -24, max: 24, step: 0, defaultValue: 0 },
-        ];
+        // parameter store and DSP's domain ACK/frontier are modeled here. The
+        // store answers for every parameter the synth declares, as the patch does.
+        const { readParameter } = createSynthParameterFixture();
+        let declaredParameters = [];
         this.stateListeners = new Set();
         this.dataListeners = new Set();
         this.preparedCurves = [];
@@ -600,10 +595,13 @@ class FakeWorkerPatchConnection {
         this.channel = new PluginStateChannel(this, async request => {
             if (request.kind === "open" || request.kind === "restore") {
                 this.scope = request.scope;
-                if (request.kind === "restore") this.preparation.revoke();
-                return { parameters: this.parameters };
+                if (request.kind === "open") declaredParameters = request.parameters;
+                else this.preparation.revoke();
+                return { parameters: declaredParameters.map(readParameter) };
             }
-            if (request.kind === "read") return { value: this.parameters.find(parameter => parameter.endpoint === request.endpoint)?.value };
+            // Nothing in this fixture writes host parameters, so every read
+            // reports the patch's own value with no owner write behind it.
+            if (request.kind === "read") return { value: readParameter(request.endpoint).value, intent: 0, origin: "external", observation: 0 };
             if (request.kind === "effect") {
                 assert.equal(request.operation.kind, "event");
                 this.sendEventOrValue(request.operation.endpoint, request.operation.value, undefined, 0);

@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import path from "node:path";
 
-import { loadUIModule } from "./helpers/load_ui_module.mjs";
+import { loadUIModule } from "../kit/tests/helpers/load_ui_module.mjs";
 
 const repoRoot = path.resolve(import.meta.dirname, "..");
 const laneSoloPromise = loadUIModule(repoRoot, "ui/shared/lane-solo-state.ts");
@@ -59,6 +59,10 @@ test("sequential groups keep independent Solo choices in one runtime upload", as
                 enabled: true,
                 xoverLowHz: 800,
                 xoverHighHz: 2500,
+                xoverLowKeyTrackEnabled: false,
+                xoverLowKeyTrackOffsetSemitones: 0,
+                xoverHighKeyTrackEnabled: false,
+                xoverHighKeyTrackOffsetSemitones: 0,
                 branches: [[], []],
             },
         ],
@@ -102,7 +106,7 @@ test("every supported Split and Parallel fan-out compiles its last branch exactl
             groupId,
             enabled: true,
             branches: new Array(branchCount).fill(null).map(() => []),
-            ...(kind === "split" ? { xoverLowHz: 800, xoverHighHz: 2500 } : {}),
+            ...(kind === "split" ? { xoverLowHz: 800, xoverHighHz: 2500, xoverLowKeyTrackEnabled: false, xoverLowKeyTrackOffsetSemitones: 0, xoverHighKeyTrackEnabled: false, xoverHighKeyTrackOffsetSemitones: 0 } : {}),
         };
         const state = { ...laneState, chain: [group] };
         const selected = solo.toggleLaneBranchSolo(
@@ -130,6 +134,10 @@ test("deleting a soloed group clears only that group's Solo", async () => {
                 enabled: true,
                 xoverLowHz: 800,
                 xoverHighHz: 2500,
+                xoverLowKeyTrackEnabled: false,
+                xoverLowKeyTrackOffsetSemitones: 0,
+                xoverHighKeyTrackEnabled: false,
+                xoverHighKeyTrackOffsetSemitones: 0,
                 branches: [[], []],
             },
         ],
@@ -159,6 +167,10 @@ test("deleting a soloed split band clears only that group's Solo", async () => {
                 enabled: true,
                 xoverLowHz: 800,
                 xoverHighHz: 2500,
+                xoverLowKeyTrackEnabled: false,
+                xoverLowKeyTrackOffsetSemitones: 0,
+                xoverHighKeyTrackEnabled: false,
+                xoverHighKeyTrackOffsetSemitones: 0,
                 branches: [[], [], []],
             },
         ],
@@ -194,6 +206,10 @@ test("deleting a soloed Parallel branch clears only that group's Solo", async ()
                 enabled: true,
                 xoverLowHz: 800,
                 xoverHighHz: 2500,
+                xoverLowKeyTrackEnabled: false,
+                xoverLowKeyTrackOffsetSemitones: 0,
+                xoverHighKeyTrackEnabled: false,
+                xoverHighKeyTrackOffsetSemitones: 0,
                 branches: [[], []],
             },
         ],

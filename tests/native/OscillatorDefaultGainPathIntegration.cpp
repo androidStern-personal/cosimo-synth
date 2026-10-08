@@ -338,7 +338,7 @@ int main()
     }
 
     std::cout << std::fixed << std::setprecision (6)
-              << "PASS T53 production oscillator->filter->trim(0.18)->rack->output path"
+              << "PASS production oscillator->filter->trim(0.18)->rack->output path"
               << " defaultRms=" << defaultA.rms
               << " defaultRmsDbFS=" << dbfs (defaultA.rms)
               << " defaultPeak=" << defaultA.peak

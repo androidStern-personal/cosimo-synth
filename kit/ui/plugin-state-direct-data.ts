@@ -2,7 +2,22 @@ import type { CmajorStateConnection } from "./plugin-state-cmajor";
 import type { EngineCancellation, EngineOutcome, EngineTarget } from "./plugin-state-engine";
 import { isPreparationFailure, type PluginStatePreparationFailure } from "./plugin-state-definition";
 import { isRecord } from "./plugin-state-protocol";
-import type { SharedDataDestination } from "./prepared-shared-data";
+
+/** Framework-owned writable storage. Only the preparation callback may mutate it. */
+export interface SharedDataDestination {
+    readonly buffer: ArrayBufferLike;
+    readonly byteOffset: number;
+    readonly byteLength: number;
+}
+
+/** Runtime capability supplied by the native or browser patch host. */
+export interface SharedDataConnection {
+    readonly sharedData?: {
+        reserve(input: number, byteLength: number): SharedDataDestination & { readonly id: number };
+        commit(id: number): unknown;
+        cancel(id: number): void;
+    };
+}
 
 type Request = { readonly input: number; readonly byteLength: number };
 type Writer = (destination: SharedDataDestination) => void | PluginStatePreparationFailure | Extract<EngineOutcome, { readonly kind: "failed" }>;

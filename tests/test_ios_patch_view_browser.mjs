@@ -5,17 +5,14 @@ import path from "node:path";
 
 import { chromium } from "playwright";
 import {
-    MSEG_EDITOR_HORIZONTAL_PADDING_PX,
-    MSEG_EDITOR_VERTICAL_PADDING_PX,
-    MSEG_POINT_RADIUS_PX,
-} from "../patch_gui/mseg.js";
-import {
     MODULATION_STATE_KEY,
     createDefaultRoute,
     createDefaultModulationState,
     deserializeModulationState,
     serializeModulationState,
 } from "../patch_gui/modulation.js";
+import { LANE_STATE_KEY } from "../patch_gui/lane-state.js";
+import { deserializeLaneStateV2 } from "../patch_gui/lane-state-v2.js";
 
 import {
     clearIOSHarnessFailingResources,
@@ -29,7 +26,7 @@ import {
     getIOSSourceHarnessSnapshot,
     openIOSHarnessPage,
     openIOSSourceHarnessPage,
-    releaseIOSHarnessParameterResponse,
+    releaseIOSHarnessParameterRead,
     setIOSHarnessFailingResource,
     setIOSHarnessParameterValue,
     setIOSHarnessRuntimeState,
@@ -39,9 +36,15 @@ import {
     waitForIOSHarnessReady,
     waitForIOSSourceHarnessReady,
 } from "./helpers/ios_harness_browser.mjs";
+import { loadUIModule } from "../kit/tests/helpers/load_ui_module.mjs";
 import { decodePng } from "./helpers/png_pixels.mjs";
 
 const repoRoot = path.resolve(import.meta.dirname, "..");
+const {
+    MSEG_EDITOR_HORIZONTAL_PADDING_PX,
+    MSEG_EDITOR_VERTICAL_PADDING_PX,
+    MSEG_POINT_RADIUS_PX,
+} = await loadUIModule(repoRoot, "kit/ui/mseg.ts");
 
 let server;
 let browser;
@@ -705,6 +708,30 @@ test("mounted iPhone host page boots through patch_gui/index.ios.html and loads 
     }
 });
 
+test("mounted iPhone host page replaces the view with the native host's error status as plain text", async () => {
+    const page = await openIOSHarnessPage(browser, server.baseUrl, {
+        viewportSize: { width: 390, height: 844 },
+    });
+
+    try {
+        await waitForIOSHarnessReady(page);
+        await page.evaluate(() => globalThis.setStatusMessage("Loading patch"));
+        let renderedState = await getIOSHarnessRenderedState(page);
+        assert.equal(renderedState.errorText, null);
+        assert.equal(renderedState.hostPageViewActive, true);
+
+        const message = "Error: <b>WavetableSynth.cmajor</b> failed to compile";
+        await page.evaluate((statusMessage) => globalThis.setStatusMessage(statusMessage), message);
+        renderedState = await getIOSHarnessRenderedState(page);
+        assert.equal(renderedState.errorText, message);
+        assert.equal(renderedState.hostPageViewActive, false);
+        assert.equal(await page.locator("#cmaj-error-text b").count(), 0);
+        assert.equal(await page.locator("cosimo-synth-view").count(), 0);
+    } finally {
+        await closeIOSHarnessPage(page);
+    }
+});
+
 test("mounted iPhone oscillator tabs route table and control edits only to the selected oscillator", async () => {
     const page = await openIOSHarnessPage(browser, server.baseUrl, {
         viewportSize: { width: 390, height: 844 },
@@ -1052,11 +1079,11 @@ test("mounted iPhone callback controls stay visibly pending and re-enable after 
     ];
     const page = await openIOSHarnessPage(browser, server.baseUrl, {
         viewportSize: { width: 390, height: 844 },
-        deferredParameterResponses: deferredEndpoints,
+        deferredParameterReads: deferredEndpoints,
     });
 
     try {
-        await waitForIOSHarnessReady(page);
+        await waitForIOSHarnessReady(page, { controls: "loading" });
         const selectors = [
             'select[aria-label="Select wavetable"]',
             ".play-mode-select",
@@ -1106,7 +1133,7 @@ test("mounted iPhone callback controls stay visibly pending and re-enable after 
         );
 
         for (const endpointID of deferredEndpoints) {
-            await releaseIOSHarnessParameterResponse(page, endpointID);
+            await releaseIOSHarnessParameterRead(page, endpointID);
         }
         await page.waitForFunction(() => {
             const root = document.querySelector("cosimo-synth-view")?.shadowRoot;
@@ -2017,44 +2044,6 @@ test("mounted iPhone MSEG modal treats segment tap as add, immediate drag as cur
     }
 });
 
-test("mounted iPhone no longer exposes the legacy MSEG depth control because routing lives in the matrix", async () => {
-    const page = await openIOSHarnessPage(browser, server.baseUrl, {
-        viewportSize: { width: 390, height: 844 },
-    });
-
-    try {
-        await waitForIOSHarnessReady(page);
-        const modulationState = createDefaultModulationState();
-        modulationState.routes = [createDefaultRoute({
-            enabled: true,
-            sourceKind: "mseg",
-            sourceSlot: 1,
-            polarity: "bipolar",
-            targetKind: "oscA.wavetablePosition",
-            amount: 0.25,
-        })];
-        await setIOSStoredModulationState(page, modulationState);
-        const renderedState = await waitForRenderedState(
-            page,
-            "legacy MSEG depth control removed from the mounted iPhone launcher",
-            (nextState) => nextState.msegDepthReadout === null,
-        );
-        assert.equal(renderedState.msegDepthReadout, null);
-
-        const snapshot = await getIOSHarnessSnapshot(page);
-        assert.deepEqual(routeSummary(readStoredModulationState(snapshot).routes[0]), {
-            enabled: true,
-            sourceKind: "mseg",
-            sourceSlot: 1,
-            polarity: "bipolar",
-            targetKind: "oscA.wavetablePosition",
-            amount: 0.25,
-        });
-    } finally {
-        await closeIOSHarnessPage(page);
-    }
-});
-
 test("mounted iPhone route amounts present the canonical value before the full document projection", async () => {
     const page = await openIOSHarnessPage(browser, server.baseUrl, {
         viewportSize: { width: 390, height: 844 },
@@ -2190,7 +2179,7 @@ test("mounted iPhone graph keeps overlay taps inert, edits warp horizontally, an
         assert.equal(
             snapshot.sentMessages.some((message) => message.endpointID === "oscAWavetableSelect"),
             false,
-            "Graph X edits Warp Amount; it never switches tables in this cutover.",
+            "Graph X edits Warp Amount; it never switches tables.",
         );
         assert.equal(snapshot.sentMessages.some((message) => message.endpointID === "oscAWavetablePosition"), false);
         assert.equal(snapshot.gestureStarts.includes("oscAWarpAmount"), true);
@@ -2414,7 +2403,7 @@ test("mounted iPhone octave controls update the footer keyboard root note and cl
     }
 });
 
-test("mounted iPhone distortion controls send parameter updates through the patch connection", async () => {
+test("mounted iPhone distortion controls edit the Effects Lane document and leave DSP delivery to the worker", async () => {
     const page = await openIOSHarnessPage(browser, server.baseUrl, {
         viewportSize: { width: 390, height: 844 },
     });
@@ -2423,41 +2412,35 @@ test("mounted iPhone distortion controls send parameter updates through the patc
         await waitForIOSHarnessReady(page);
         await clearIOSHarnessDebugLog(page);
 
-        await page.evaluate(() => {
-            const shadowRoot = document.querySelector("cosimo-synth-view")?.shadowRoot;
-            const modeButton = shadowRoot?.querySelector("[data-role='distortion-mode-option-1']");
-            const typeButton = shadowRoot?.querySelector("[data-role='distortion-type-option-2']");
-
-            if (modeButton instanceof HTMLButtonElement) modeButton.click();
-            if (typeButton instanceof HTMLButtonElement) typeButton.click();
-        });
+        await clickShadowButton(page, "[data-role='distortion-mode-option-1']");
+        await clickShadowButton(page, "[data-role='distortion-type-option-2']");
         await dispatchShadowInputValueChange(page, "[data-role='distortion-drive-slider']", "16.500");
         await dispatchShadowInputValueChange(page, "[data-role='distortion-mix-slider']", "0.580");
 
-        // Distortion params ride the lane field upload since the parameter
-        // cut: slot 1 (distortion, ordinal 0), positional param indexes from
-        // the engine's laneDistortionParam* constants.
-        const laneParamSend = (message, paramIndex, expectedValue) => (
-            message.endpointID === "laneSlotParamValue"
-            && Number(message.value?.slotId) === 1
-            && Number(message.value?.paramIndex) === paramIndex
-            && Math.abs(Number(message.value?.value) - expectedValue) <= 1e-6
+        const expectedParams = {
+            distortionMode: 1,
+            distortionType: 2,
+            distortionDriveDb: 16.5,
+            distortionWet: 0.58,
+        };
+        const readDistortionParams = (snapshot) => (
+            deserializeLaneStateV2(snapshot.storedState[LANE_STATE_KEY])?.devices["distortion#1"]?.params ?? {}
         );
         const snapshot = await waitForSnapshot(
             page,
-            "iPhone distortion parameter updates",
-            (nextSnapshot) => nextSnapshot.sentMessages.some((message) => laneParamSend(message, 0, 1))
-                && nextSnapshot.sentMessages.some((message) => laneParamSend(message, 1, 16.5))
-                && nextSnapshot.sentMessages.some((message) => laneParamSend(message, 3, 0.58))
-                && nextSnapshot.sentMessages.some((message) => laneParamSend(message, 6, 2)),
+            "iPhone distortion edits in the saved Effects Lane document",
+            (nextSnapshot) => {
+                const params = readDistortionParams(nextSnapshot);
+                return Object.entries(expectedParams).every(([key, value]) => Math.abs(params[key] - value) <= 1e-6);
+            },
         );
 
-        assert.equal(snapshot.gestureStarts.includes("distortionMode"), true);
-        assert.equal(snapshot.gestureStarts.includes("distortionType"), true);
-        assert.equal(snapshot.gestureEnds.includes("distortionWet"), true);
-        const distortionParams = JSON.parse(snapshot.storedState["lane.v1"]).devices["distortion#1"].params;
-        assert.equal(distortionParams.distortionWet, 0.58);
-        assert.equal(distortionParams.distortionType, 2);
+        assert.ok(snapshot.storedStateWrites.some(({ key }) => key === LANE_STATE_KEY));
+        assert.deepEqual(
+            snapshot.sentMessages.filter(({ endpointID }) => endpointID.startsWith("lane")),
+            [],
+            "the view saves the lane; the patch worker uploads it to the DSP",
+        );
     } finally {
         await closeIOSHarnessPage(page);
     }

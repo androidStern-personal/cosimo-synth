@@ -1,5 +1,5 @@
 /**
- * T14 MAPPINGS panel + T15 row editing: the polished responsive mappings
+ * The MAPPINGS panel and its row editing: the polished responsive mappings
  * table. One logical data model (Source, Target, Base, Mod Amount,
  * Direction, State, Actions); a compact disciplined toolbar (count, find,
  * Filter, Sort, Add Mapping); removable criteria chips with Clear All; an
@@ -62,7 +62,7 @@ import {
     usePatchModulationTargetOptions,
 } from "../shared/lane-param-bindings";
 import { formatParameterEntry } from "../shared/parameter-value-entry";
-import { useParameterGesture } from "../shared/parameter-gesture";
+import { useParameterGesture } from "../../kit/ui/parameter-gesture";
 import { useReadoutCells, type ReadoutCellSpec } from "../shared/parameter-readout-strip";
 import {
     useLongPressParameterMenu,
@@ -558,7 +558,7 @@ function MappingRow({
 /* ------------------------------------------------------------------ */
 
 /**
- * T15 mapping readout: the identity column already names the mapping, so
+ * The mapping readout: the identity column already names the mapping, so
  * this cell spends its height on the amount itself — a segmented meter lit
  * from the base tick, the canonical amount readout riding the lit end, and
  * the base value in a small corner. No duplicated label. Same brain as

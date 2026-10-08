@@ -1,8 +1,7 @@
 namespace wt
 {
-    // Fixed end-of-chain two-band Enhancer. T28 will compose this processor into
-    // the Polish chain; T26 deliberately leaves it out of WavetableSynth and the
-    // Effects Lane. The ten band settings, two per-band routing modes, global
+    // Fixed end-of-chain two-band Enhancer. It lives in the Polish chain, not in
+    // the Effects Lane, so it is never a rack device. The ten band settings, two per-band routing modes, global
     // saturation mode, and de-emphasis control are non-automatable value
     // endpoints: saved voicing controls, never modulation destinations.
 

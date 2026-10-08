@@ -65,7 +65,7 @@ test("unrelated accepted changes do not render an untouched field, but ABA versi
         const after = await page.evaluate(() => ({ ...window.fixture.renders }));
         assert.equal(after.gain, before.gain, "eleven unrelated updates must not render the gain consumer");
         assert.ok(after.other > before.other, "the edited field still renders");
-        assert.equal(after.history, before.history, "unchanged history must not render its consumer or synth ancestor");
+        assert.equal(after.history, before.history, "unchanged history must not render its consumer");
         await page.evaluate(() => { window.oldEdit = window.fixture.controls.gain.setValue; });
         await update(page, state(field(2, 2), field(2, 12), 13));
         assert.ok((await page.evaluate(() => window.fixture.renders.gain)) > after.gain, "equal values with a newer accepted version refresh edit closures");

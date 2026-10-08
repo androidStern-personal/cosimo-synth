@@ -2,7 +2,8 @@ import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import path from "node:path";
 
-import { effectPlugins, repoRoot } from "../../kit/fx/build-effect.mjs";
+import { getEffectPlugin, repoRoot } from "../../kit/fx/build-effect.mjs";
+import { buildSourceCmaj, withSourceCmaj } from "../../scripts/source_cmaj.mjs";
 
 const cases = [
     { pluginName: "enhancer", expectedLatency: 60 },
@@ -13,6 +14,7 @@ const cases = [
 function run(command, args, { capture = false } = {}) {
     const result = spawnSync(command, args, {
         cwd: repoRoot,
+        env: withSourceCmaj(),
         encoding: "utf8",
         stdio: capture ? ["ignore", "pipe", "pipe"] : "inherit",
     });
@@ -25,16 +27,18 @@ function run(command, args, { capture = false } = {}) {
     return result.stdout?.trim() ?? "";
 }
 
+buildSourceCmaj();
+
 for (const { pluginName, expectedLatency } of cases) {
-    const plugin = effectPlugins[pluginName];
+    const plugin = getEffectPlugin(pluginName);
     const cmakeBuildDirectory = path.join(repoRoot, plugin.juceOut, "_build");
-    const probe = path.join(cmakeBuildDirectory, "latency_probe", "cosimo_generated_latency_probe");
+    const probe = path.join(cmakeBuildDirectory, "latency_probe", "builder_kit_generated_latency_probe");
 
     run(process.execPath, [path.join(repoRoot, "kit/fx/prod-effect.mjs"), "build", pluginName, "--clean"]);
     run("cmake", [
         "--build", cmakeBuildDirectory,
         "--config", "Release",
-        "--target", "cosimo_generated_latency_probe",
+        "--target", "builder_kit_generated_latency_probe",
     ]);
 
     const output = run(probe, [String(expectedLatency)], { capture: true });

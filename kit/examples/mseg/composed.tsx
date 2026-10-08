@@ -70,9 +70,9 @@ export function ComposedExample() {
                 <ContextMenu.Trigger asChild>
                     <Mseg.Surface className="envelope" aria-label="Custom envelope" style={{ height: 230 }}>
                         <Mseg.Grid />
-                        <Mseg.Curve value={reference} stroke="#b398da" strokeDasharray="5 5" />
+                        <Mseg.Line value={reference} stroke="#b398da" strokeDasharray="5 5" />
                         <Mseg.Fill />
-                        <Mseg.Curve />
+                        <Mseg.Line />
                         <Mseg.SegmentHighlight />
                         <Mseg.Points
                             renderPoint={({ selected, handleProps }) => (

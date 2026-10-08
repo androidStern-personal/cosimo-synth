@@ -1,5 +1,5 @@
 import { createCmajorPluginStateService, type CmajorStateConnection } from "../../kit/ui/plugin-state-cmajor";
-import type { SharedDataDestination } from "../../kit/ui/prepared-shared-data";
+import type { SharedDataDestination } from "../../kit/ui/plugin-state-direct-data";
 import type { PluginStateNativeParameter, PluginStateScope } from "../../kit/ui/plugin-state-session";
 import { synthPluginState } from "./synth-plugin-state";
 
@@ -29,6 +29,10 @@ export interface MockPluginStateChannelModule {
     ) => Channel;
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+    return typeof value === "object" && value !== null;
+}
+
 /** Simulate only native storage and transport; the real service owns all edit policy. */
 export function createMockPluginStateHost(options: {
     readonly readParameter: (endpoint: string, signal: AbortSignal) => Promise<PluginStateNativeParameter>;
@@ -55,6 +59,34 @@ export function createMockPluginStateHost(options: {
     let stopping: Promise<void> | undefined;
     const pending: Envelope[] = [];
     const gestures = new Set<string>();
+    // The browser channel has no DAW gesture callback, so this host replays
+    // each publication's gesture requests in order around the parameter
+    // writes the channel makes for it, as a native host's channel does.
+    type GestureStep = { readonly kind: "gesture-start" | "gesture-end" | "parameter"; readonly endpoint: string };
+    const publications: { readonly request: number; readonly steps: GestureStep[] }[] = [];
+    const advanceGestures = (steps: GestureStep[]) => {
+        for (let step = steps[0]; step !== undefined && step.kind !== "parameter"; step = steps[0]) {
+            steps.shift();
+            if (step.kind === "gesture-start") { gestures.add(step.endpoint); options.beginGesture(step.endpoint); }
+            else { gestures.delete(step.endpoint); options.endGesture(step.endpoint); }
+        }
+    };
+    const completePublication = (request: number) => {
+        const index = publications.findIndex(publication => publication.request === request);
+        if (index < 0) return;
+        const [publication] = publications.splice(index, 1);
+        advanceGestures(publication!.steps.filter(step => step.kind !== "parameter"));
+        if (publications[0]) advanceGestures(publications[0].steps);
+    };
+    const writeParameterStep = (endpoint: string, write: () => void) => {
+        const steps = publications[0]?.steps;
+        if (steps) {
+            advanceGestures(steps);
+            if (steps[0]?.kind === "parameter" && steps[0].endpoint === endpoint) steps.shift();
+        }
+        write();
+        if (steps) advanceGestures(steps);
+    };
     type Observation = { readonly intent: number; readonly origin: "owner" | "external"; readonly observation: number };
     const observations = new Map<string, Observation>();
     let writingParameter: string | undefined;
@@ -69,6 +101,7 @@ export function createMockPluginStateHost(options: {
     let parameterEndpoints: readonly string[] = [];
     const reads = new AbortController();
     const finishGestures = () => {
+        publications.length = 0;
         for (const endpoint of gestures) { gestures.delete(endpoint); options.endGesture(endpoint); }
     };
     const send = (port: Port, envelope: Envelope) => {
@@ -82,28 +115,27 @@ export function createMockPluginStateHost(options: {
         const port: Port = {
             addEventListener(_type, listener) { listeners.add(listener); },
             removeEventListener(_type, listener) { listeners.delete(listener); },
-            deliverMessageFromServer(envelope) { for (const listener of [...listeners]) listener(envelope.message); },
+            deliverMessageFromServer(envelope) {
+                const body = envelope.message;
+                if (worker && isRecord(body) && body.kind === "published" && typeof body.request === "number") completePublication(body.request);
+                for (const listener of [...listeners]) listener(body);
+            },
             sendMessageToServer(envelope) {
                 if (envelope.type !== "kit_state") throw new Error("The development mock host does not support shared audio data.");
                 if (!worker && stopped) throw new Error("Mock state host is stopped.");
                 const stateEnvelope: Envelope = { type: "kit_state", message: envelope.message };
                 if (!worker && !initialized) { pending.push(structuredClone(stateEnvelope)); return; }
-                send(port, stateEnvelope);
-                // The browser channel has no DAW gesture callback. This external
-                // host records the real service's requests, without accepting edits.
+                // This external host records the real service's gesture
+                // requests, without accepting edits.
                 const body = envelope.message;
-                if (worker && typeof body === "object" && body !== null && "kind" in body && body.kind === "publish"
-                    && "operations" in body && Array.isArray(body.operations)) {
-                    for (const operation of body.operations) {
-                        if (operation.kind === "gesture-start") {
-                            gestures.add(operation.endpoint);
-                            options.beginGesture(operation.endpoint);
-                        } else if (operation.kind === "gesture-end") {
-                            gestures.delete(operation.endpoint);
-                            options.endGesture(operation.endpoint);
-                        }
-                    }
+                if (worker && isRecord(body) && body.kind === "publish" && typeof body.request === "number" && Array.isArray(body.operations)) {
+                    const steps = body.operations.filter((operation: unknown): operation is GestureStep => isRecord(operation)
+                        && (operation.kind === "gesture-start" || operation.kind === "gesture-end" || operation.kind === "parameter")
+                        && typeof operation.endpoint === "string");
+                    publications.push({ request: body.request, steps: steps.map(({ kind, endpoint }) => ({ kind, endpoint })) });
+                    if (publications.length === 1) advanceGestures(publications[0]!.steps);
                 }
+                send(port, stateEnvelope);
             },
         };
         return port;
@@ -186,8 +218,10 @@ export function createMockPluginStateHost(options: {
                     }
                     observe(request.operation.endpoint, request.operation.intent);
                     writingParameter = request.operation.endpoint;
-                    try { options.writeParameter(request.operation.endpoint, request.operation.value); }
-                    finally { writingParameter = undefined; }
+                    try {
+                        const { endpoint, value } = request.operation;
+                        writeParameterStep(endpoint, () => options.writeParameter(endpoint, value));
+                    } finally { writingParameter = undefined; }
                     channel?.observeParameter(request.scope, request.operation.endpoint);
                     return {};
                 case "close": finishGestures(); return {};

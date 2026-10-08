@@ -4,12 +4,12 @@ import { createHash } from "node:crypto";
 import { chmod, lstat, mkdir, readFile, realpath, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { effectPlugins, repoRoot } from "../kit/fx/build-effect.mjs";
-import { inspectVST3Bundle } from "../kit/scripts/install_vst3.mjs";
+import { getEffectPlugin, repoRoot } from "../kit/fx/build-effect.mjs";
 import { hashInstalledPayload } from "../kit/scripts/toolchain.mjs";
 import { findChocMarkerViolations } from "../kit/scripts/check_choc_markers.mjs";
 import { enhanceThatNativeDependencies } from "./enhance-that-release-config.mjs";
 import { renderEnhanceThatPreinstall } from "./enhance-that-installer.mjs";
+import { buildSourceCmaj, withSourceCmaj } from "./source_cmaj.mjs";
 import {
     adHocVst3SigningArgs, assertArchiveTreeContainsOnlyFilesAndDirectories,
     assertPayloadModes, assertSeqFxDistributableExecutableIsSourceFree,
@@ -76,8 +76,6 @@ export function enhanceThatSourceErrors(plugin, patch) {
     if (patch?.manufacturer !== identity.manufacturer) errors.push("Patch manufacturer must remain Cosimo.");
     if (plugin?.productName !== identity.bundleName || plugin?.cmakeTarget !== identity.bundleName)
         errors.push("Native target and bundle basename must be EnhanceThat.");
-    if (plugin?.previousProductName !== "CosimoEnhancerLite")
-        errors.push("Compose the reviewed previousProductName migration field first.");
     if (typeof patch?.version !== "string" || !/^\d+\.\d+\.\d+$/u.test(patch.version))
         errors.push("The plugin version must be a three-part numeric version.");
     return errors;
@@ -144,11 +142,11 @@ async function staticDspEvidence(config, cmakeExecutable, output) {
     const nativeRoot = path.join(repoRoot, config.nativeRoot);
     const cache = await readFile(path.join(repoRoot, config.paths.nativeBuildCmakeCache), "utf8");
     assert.equal(await realpath(cacheValue(cache, "CMAKE_COMMAND")), await realpath(cmakeExecutable));
-    const cmaj = cacheValue(cache, "COSIMO_CMAJ_EXECUTABLE");
+    const cmaj = cacheValue(cache, "BUILDER_KIT_CMAJ_EXECUTABLE");
     const cpp = await readFile(path.join(nativeRoot, "cmajor_plugin.cpp"), "utf8");
-    assert.ok(cpp.includes("using Plugin = cmaj::plugin::GeneratedPlugin<::CosimoEnhancerLite>;"));
-    assert.ok(cpp.includes("struct CosimoEnhancerLite"));
-    const cmajorRoot = cacheValue(cache, "CPM_PACKAGE_cosimo_cmajor_SOURCE_DIR");
+    assert.ok(cpp.includes("using Plugin = cmaj::plugin::GeneratedPlugin<::EnhanceThat>;"));
+    assert.ok(cpp.includes("struct EnhanceThat"));
+    const cmajorRoot = cacheValue(cache, "CPM_PACKAGE_builder_kit_cmajor_SOURCE_DIR");
     const header = await readFile(path.join(cmajorRoot, "include/cmajor/helpers/cmaj_JUCEPlugin.h"), "utf8");
     assert.ok(header.includes("cmaj::createEngineForGeneratedCppProgram<typename GeneratedPlugin::PerformerClass>()"));
     const shared = path.join(nativeRoot, "_build/plugin/EnhanceThat_artefacts/Release/libEnhanceThat_SharedCode.a");
@@ -198,11 +196,13 @@ async function verifyBundle(config, bundle, format = "VST3") {
             type: "aufx", subtype: identity.pluginCode, manufacturer: identity.manufacturerCode },
         digest: await hashInstalledPayload(bundle) };
     } else {
-        inspection = await inspectVST3Bundle(bundle, { identityProbe: config.identityProbe });
-        if (inspection.status !== "verified") throw new Error(JSON.stringify(inspection));
-        assert.deepEqual(inspection.identity, { bundleIdentifier: identity.patchId,
-            processorClassId: identity.processorClassId, displayName: identity.publicName });
+        run("/usr/bin/codesign", ["--verify", "--deep", "--strict", bundle]);
+        const markers = findChocMarkerViolations(await readFile(path.join(bundle, "Contents/MacOS/EnhanceThat")));
+        assert.equal(markers.missing.length + markers.forbidden.length, 0, "VST3 WebView marker mismatch");
         const moduleInfo = parseJsonWithTrailingCommas(await readFile(path.join(bundle, "Contents/Resources/moduleinfo.json"), "utf8"), "moduleinfo.json");
+        assert.equal(info.CFBundleIdentifier, identity.patchId);
+        inspection = { identity: { bundleIdentifier: info.CFBundleIdentifier, processorClassId: identity.processorClassId, displayName: moduleInfo.Name },
+            digest: await hashInstalledPayload(bundle) };
         assert.equal(moduleInfo.Name, identity.publicName);
         assert.equal(moduleInfo.Version, config.identity.pluginVersion);
         assert.deepEqual(moduleInfo.Classes.map(item => ({ cid: item.CID, name: item.Name, category: item.Category })), [
@@ -323,7 +323,7 @@ async function assemble({ config, output, source, epoch, options, signing, prove
 
 export async function main(args = process.argv.slice(2)) {
     const options = parseEnhanceThatArgs(args);
-    const plugin = effectPlugins["enhancer-lite"];
+    const plugin = getEffectPlugin("enhancer-lite");
     const patch = JSON.parse(await readFile(path.join(repoRoot, plugin.patch), "utf8"));
     const kit = JSON.parse(await readFile(path.join(repoRoot, "kit/kit.json"), "utf8"));
     if (!/^\d+\.\d+\.\d+$/u.test(kit.version)) throw new Error("Invalid kit release version.");
@@ -332,7 +332,6 @@ export async function main(args = process.argv.slice(2)) {
         nativeRoot: plugin.juceOut, nativeDependencies: enhanceThatNativeDependencies,
         paths: { nativeBuildCmakeCache: `${plugin.juceOut}/_build/CMakeCache.txt` },
         builtVst3: path.join(repoRoot, plugin.juceOut, "_build/plugin/EnhanceThat_artefacts/Release/VST3/EnhanceThat.vst3"),
-        identityProbe: path.join(repoRoot, plugin.juceOut, "_build/identity_probe/kit_vst3_identity_probe"),
         notices: path.join(repoRoot, "legal/enhance-that/THIRD_PARTY_NOTICES.txt"),
     };
     config.payloadBundles = [
@@ -360,8 +359,8 @@ export async function main(args = process.argv.slice(2)) {
     if (errors.length) throw new Error(errors.join("\n"));
     if (source.worktreeStatus) throw new Error("Release packaging requires a clean worktree including untracked files.");
     await readDeclaredNativeDependencyProvenance(config);
-    if (!/^[1-9][0-9]*$/u.test(process.env.COSIMO_CMAKE_JOBS ?? ""))
-        throw new Error("Set COSIMO_CMAKE_JOBS to the native job budget allocated for this run.");
+    if (!/^[1-9][0-9]*$/u.test(process.env.BUILDER_KIT_CMAKE_JOBS ?? ""))
+        throw new Error("Set BUILDER_KIT_CMAKE_JOBS to the native job budget allocated for this run.");
     if (!options.includeAU && !options.auDeferred?.trim())
         throw new Error("Select --include-au after AU qualification, or record an explicit --au-deferred decision.");
     run("/usr/bin/git", ["ls-files", "--error-unmatch", "legal/enhance-that/THIRD_PARTY_NOTICES.txt"]);
@@ -371,12 +370,13 @@ export async function main(args = process.argv.slice(2)) {
     const epoch = Number(run("/usr/bin/git", ["show", "-s", "--format=%ct", "HEAD"]));
     const cmake = await realpath(run("/usr/bin/which", ["cmake"]));
     await claimEnhanceThatOutput(output);
+    buildSourceCmaj({ cmake });
     run(process.execPath, ["kit/fx/prod-effect.mjs", "build", "enhancer-lite", "--clean"], {
-        capture: false, env: { ...process.env, FX_DISTRIBUTABLE_RUNTIME: "1", COSIMO_RELEASE_NODE: process.execPath, COSIMO_RELEASE_CMAKE: cmake },
+        capture: false, env: { ...withSourceCmaj(), FX_DISTRIBUTABLE_RUNTIME: "1", BUILDER_KIT_CMAKE: cmake },
     });
     if (options.includeAU)
         run(cmake, ["--build", path.join(repoRoot, plugin.juceOut, "_build"), "--config", "Release",
-            "--target", "EnhanceThat_AU", "--parallel", process.env.COSIMO_CMAKE_JOBS], { capture: false });
+            "--target", "EnhanceThat_AU", "--parallel", process.env.BUILDER_KIT_CMAKE_JOBS], { capture: false });
     assertSourceStateUnchanged(source, getReleaseGitState());
     const provenance = await captureActualNativeDependencyProvenance(config);
     const native = await staticDspEvidence(config, cmake, output);

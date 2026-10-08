@@ -45,7 +45,7 @@ export interface PluginStateDocumentContext {
     subscribeStored(key: string, listener: (value: unknown) => void): () => void;
     /** Fill the actual DSP allocation; completion proves audio adoption. */
     prepareData(input: number, byteLength: number,
-        writer: (destination: import("./prepared-shared-data").SharedDataDestination) => void | PluginStatePreparationFailure,
+        writer: (destination: import("./plugin-state-direct-data").SharedDataDestination) => void | PluginStatePreparationFailure,
         signal?: EngineCancellation): Promise<PluginStateDeliveryOutcome>;
     report(status: EngineApplication): void;
     /** Retain an unexpected programming failure and close the owning service. */
@@ -65,6 +65,11 @@ export interface PluginStateDelivery<Payload> {
         apply(payload: Payload, context: PluginStateDeliveryContext): Promise<PluginStateDeliveryOutcome>;
         stop(): void | Promise<void>;
     };
+}
+
+/** The defect message for an author codec that throws while handling one edit, which is then rejected. */
+export function codecThrewMessage(key: string): string {
+    return `The codec for "${key}" threw instead of returning { kind: "error" }; the edit was rejected.`;
 }
 
 /** A value representable by the native JSON state channel. */
@@ -94,12 +99,22 @@ export interface PluginStateParameter {
     readonly kind: "parameter";
     readonly endpoint: string;
     readonly history?: boolean;
+    /** `false` keeps the field out of presets and snapshots. */
+    readonly preset?: false;
 }
+
+/**
+ * Why a value is being prepared: `load` when the plugin opens or the host loads a project,
+ * `recall` when a preset or snapshot replaces the sound, `history` for Undo and Redo,
+ * and `edit` for every other change, including host automation of a dependency.
+ */
+export type PluginStateChangeReason = "load" | "recall" | "history" | "edit";
 
 /** Captured scalar inputs and portable cancellation for pure event preparation. */
 export interface PluginStatePrepareContext {
     readonly resources: import("./resource-client").ResourceClient;
     readonly parameters: Readonly<Record<string, number>>;
+    readonly reason: PluginStateChangeReason;
     readonly signal: EngineCancellation;
 }
 
@@ -142,24 +157,43 @@ export function eventValue<Value>(endpoint: string, prepare: PluginStateEventVal
     return Object.freeze({ kind: "event-value", endpoint, prepare, dependencies: Object.freeze([...(options.dependencies ?? [])]) });
 }
 
+/**
+ * Where a stored value lives: `project` is saved with the host project, `instance`
+ * survives GUI closure but is never saved, and `user` is shared by every instance
+ * of the plugin through the user's files.
+ */
+export type PluginStateLifetime = "project" | "instance" | "user";
+
+/** Lets a kit-provided field reject a definition it cannot work in. */
+export const definitionCheck: unique symbol = Symbol.for("builder-kit.plugin-state.definition-check");
+/**
+ * Lets a kit-provided field derive its initial value from the whole definition, after every
+ * check has passed. The definition then holds a copy of the field with that initial value.
+ */
+export const definitionInitial: unique symbol = Symbol.for("builder-kit.plugin-state.definition-initial");
+
 /** Immutable configuration for a codec-owned stored field. */
 export interface PluginStateStored<Value, Payload = unknown> {
     readonly kind: "stored";
     readonly initial: PluginStateValueResult<Value>;
     readonly codec: PluginStateCodec<Value>;
     readonly engine?: PluginStateEventValue<Value> | PluginStatePreparedValue<Value, Payload> | PluginStateSharedValue<Value>;
-    readonly lifetime?: "project" | "instance";
+    readonly lifetime?: PluginStateLifetime;
     readonly history?: boolean;
+    /** `false` keeps the field out of presets and snapshots. */
+    readonly preset?: false;
+    readonly [definitionCheck]?: (fields: PluginStateFields) => void;
+    readonly [definitionInitial]?: (fields: PluginStateFields) => PluginStateValueResult<Value>;
 }
 
-/** The finite field declarations accepted by a state session. */
+/** A plugin's field declarations: what `definePluginState` returns, and what `PresetBar`, `usePresets` and the other whole-definition helpers take. */
 export type PluginStateFields = Readonly<Record<string, PluginStateParameter | PluginStateStored<unknown>>>;
 
 /** Infer the domain value of one author declaration. */
 export type PluginStateFieldValue<Field> = Field extends PluginStateStored<infer Value> ? Value : number;
 
 /** Declare an existing host parameter without supplying a parallel default. */
-export function parameter(endpoint: string, options: { readonly history?: boolean } = {}): PluginStateParameter {
+export function parameter(endpoint: string, options: { readonly history?: boolean; readonly preset?: false } = {}): PluginStateParameter {
     return Object.freeze({ kind: "parameter", endpoint, ...options });
 }
 
@@ -168,13 +202,19 @@ export function storedValue<Value>(options: {
     readonly initial: Value;
     readonly codec: PluginStateCodec<Value>;
     readonly engine?: PluginStateEventValue<Value>;
-    readonly lifetime?: "project" | "instance";
+    readonly lifetime?: PluginStateLifetime;
     readonly history?: boolean;
+    readonly preset?: false;
 }): PluginStateStored<Value> {
+    // Undoing a value shared by every project would silently change other projects.
+    if (options.lifetime === "user" && options.history === true)
+        throw new Error("A user-lifetime value is shared across projects and cannot take part in Undo. Remove history: true.");
     const codec = Object.freeze({ ...options.codec });
+    const history = options.lifetime === "user" ? false : options.history;
     return Object.freeze({ kind: "stored", initial: codec.parse(options.initial), codec,
         ...(options.lifetime ? { lifetime: options.lifetime } : {}),
-        ...(options.history !== undefined ? { history: options.history } : {}),
+        ...(history !== undefined ? { history } : {}),
+        ...(options.preset === false ? { preset: false as const } : {}),
         ...(options.engine ? { engine: options.engine } : {}) });
 }
 
@@ -184,6 +224,7 @@ interface PreparedStateOptions<Value> {
     readonly dependencies?: readonly string[];
     readonly lifetime?: "project" | "instance";
     readonly history?: boolean;
+    readonly preset?: false;
 }
 
 /** Write the final shared allocation; the framework supplies named DSP wiring. */
@@ -206,7 +247,7 @@ export function preparedState<Value, Payload>(options: PreparedStateOptions<Valu
     readonly prepare: ((value: Value, context: PluginStatePrepareContext) => Payload | PluginStateSharedPlan | PluginStatePreparationFailure | Promise<Payload | PluginStateSharedPlan | PluginStatePreparationFailure>)
         | ((value: Value, destination: Float32Array | Uint8Array, context: PluginStatePrepareContext) => void | PluginStatePreparationFailure);
 }): PluginStateStored<Value, Payload> {
-    const stored = storedValue({ codec: options.codec, initial: options.initial, lifetime: options.lifetime, history: options.history });
+    const stored = storedValue({ codec: options.codec, initial: options.initial, lifetime: options.lifetime, history: options.history, preset: options.preset });
     const dependencies = Object.freeze([...(options.dependencies ?? [])]);
     if ("kind" in options.engine && options.engine.kind === "shared-data") {
         const declaration = options.engine;
@@ -248,6 +289,16 @@ export function sharedStateResources(fields: PluginStateFields) {
         .sort().map((key, input) => ({ key, input }));
 }
 
+/** Whether a field's accepted value is written into the host project. */
+export function savedInProject(field: PluginStateParameter | PluginStateStored<unknown>): boolean {
+    return field.kind === "stored" && (field.lifetime ?? "project") === "project";
+}
+
+/** The fields a preset or snapshot captures and recalls, in declaration order. */
+export function soundFieldKeys(fields: PluginStateFields): readonly string[] {
+    return Object.keys(fields).filter(key => fields[key]?.preset !== false);
+}
+
 /** Declare the finite plugin state surface while preserving each field's value type. */
 export function definePluginState<const Fields extends PluginStateFields>(fields: Fields, options: PluginStateOptions = {}): Readonly<Fields> {
     if (options.historyLimit !== undefined && (!Number.isSafeInteger(options.historyLimit) || options.historyLimit < 0))
@@ -257,5 +308,20 @@ export function definePluginState<const Fields extends PluginStateFields>(fields
         throw new Error("Shared state requires an explicit positive memoryBudgetBytes.");
     if (resources.some(({ key }) => !isNativeIdentifier(key) || key === "Data"))
         throw new Error("Shared state names must be valid Cmajor identifiers.");
-    return Object.freeze(Object.defineProperty({ ...fields }, optionsKey, { value: Object.freeze({ ...options }) }));
+    const endpoints = new Map<string, string>();
+    for (const [key, field] of Object.entries(fields)) {
+        if (field.kind !== "parameter") continue;
+        const claimed = endpoints.get(field.endpoint);
+        if (claimed !== undefined)
+            throw new Error(`Fields "${claimed}" and "${key}" both declare parameter "${field.endpoint}". Declare each host parameter once.`);
+        endpoints.set(field.endpoint, key);
+    }
+    for (const field of Object.values(fields)) if (field.kind === "stored") field[definitionCheck]?.(fields);
+    const resolved: Record<string, PluginStateParameter | PluginStateStored<unknown>> = { ...fields };
+    for (const [key, field] of Object.entries(fields)) {
+        const initial = field.kind === "stored" ? field[definitionInitial] : undefined;
+        if (initial) resolved[key] = Object.freeze({ ...field, initial: initial(fields) });
+    }
+    // SAFETY: each derived field differs from its declaration only in its initial value.
+    return Object.freeze(Object.defineProperty(resolved, optionsKey, { value: Object.freeze({ ...options }) })) as Readonly<Fields>;
 }

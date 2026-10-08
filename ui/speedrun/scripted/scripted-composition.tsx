@@ -1,8 +1,7 @@
 /**
- * DEPRECATED (frame-stepped composition): superseded by the live-performance render path in
- * ui/speedrun/live/ (see VIDEO_BOUNCE_LIVE_RENDER_PLAN.md). Kept only as the
- * VITE_COSIMO_VIDEO_BOUNCE_SCRIPTED=1 escape hatch until the live render is
- * accepted; scheduled for deletion with its suites afterwards.
+ * The frame-stepped composition of the scripted video render, which a build with
+ * VITE_COSIMO_VIDEO_BOUNCE_SCRIPTED=1 selects. The default render is the live
+ * performance in ui/speedrun/live/.
  */
 import { Audio } from "@remotion/media";
 import React, {
@@ -73,6 +72,8 @@ export type ScriptedFrameInspection = {
      * can never again stand in for "the pixels are on screen".
      */
     readonly rects: Readonly<Record<string, ScriptedInspectionRect | null>>;
+    /** The mod rail has retreated past the phone's edge for a source drag. */
+    readonly railMappingActive: boolean;
     readonly adsrActiveHandle: string | null;
     readonly macroValues: Readonly<Record<string, number>>;
     readonly framePositionText: string | null;
@@ -179,6 +180,8 @@ function inspectFrame(
             filterCurve: inspectionRect(root.querySelector('[data-role="filter-range-editor-surface"] path')),
             keyboard: inspectionRect(root.querySelector(".keyboard")),
         },
+        railMappingActive: root.querySelector('[data-role="mobile-global-mod-rail"]')
+            ?.getAttribute("data-mapping-active") === "true",
         adsrActiveHandle: root.querySelector('[data-role="adsr-editor-surface"]')
             ?.getAttribute("data-active-handle") ?? null,
         macroValues,

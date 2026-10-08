@@ -77,9 +77,12 @@ async function readGitValue(directory, arguments_) {
     }
 }
 
+/** A package's GIT_TAG, resolved through the `set(NAME "commit")` pin it names. */
 function readPinnedGitTag(source, packageName) {
-    const packageBlock = new RegExp(`NAME\\s+${packageName}\\b[\\s\\S]*?GIT_TAG\\s+"([^"]+)"`, "u").exec(source);
-    return packageBlock?.[1] ?? null;
+    const tag = new RegExp(`NAME\\s+${packageName}\\b[\\s\\S]*?GIT_TAG\\s+"([^"]+)"`, "u").exec(source)?.[1];
+    const variable = tag === undefined ? null : /^\$\{(\w+)\}$/u.exec(tag)?.[1];
+    if (!variable) return tag ?? null;
+    return new RegExp(`set\\(${variable}\\s+"([^"]+)"\\)`, "u").exec(source)?.[1] ?? null;
 }
 
 async function readSourceProvenance(engineRealPath) {
@@ -102,7 +105,7 @@ async function readSourceProvenance(engineRealPath) {
     ]);
     let dependencySource = "";
     try {
-        dependencySource = await readFile(path.join(gitRoot, "kit", "cmake", "CosimoDependencies.cmake"), "utf8");
+        dependencySource = await readFile(path.join(gitRoot, "kit", "cmake", "dependencies.cmake"), "utf8");
     } catch {
         // A comparator can inspect an artifact from outside a Cosimo checkout.
     }
@@ -113,8 +116,8 @@ async function readSourceProvenance(engineRealPath) {
         branch,
         dirty: status !== null && status.length > 0,
         toolchain: {
-            cmajorGitTag: readPinnedGitTag(dependencySource, "cosimo_cmajor"),
-            juceGitTag: readPinnedGitTag(dependencySource, "cosimo_juce"),
+            cmajorGitTag: readPinnedGitTag(dependencySource, "builder_kit_cmajor"),
+            juceGitTag: readPinnedGitTag(dependencySource, "builder_kit_juce"),
         },
     };
 }
@@ -154,6 +157,15 @@ function reportProvenance(report) {
         runtime: report.runtime,
         engines: report.engines,
     }, null, 2));
+}
+
+async function renderScenario(EngineClass, scenario) {
+    const runtime = await createInstalledPerformer({ EngineClass, ...scenario.spec });
+    try {
+        return renderScore(runtime.performer, scenario.score, scenario.totalFrames);
+    } finally {
+        runtime.dispose();
+    }
 }
 
 async function main() {
@@ -208,10 +220,8 @@ async function main() {
         let failed = false;
 
         for (const scenario of scenarios) {
-            const performerA = await createInstalledPerformer({ EngineClass: EngineA, ...scenario.spec });
-            const renderedA = renderScore(performerA, scenario.score, scenario.totalFrames);
-            const performerB = await createInstalledPerformer({ EngineClass: EngineB, ...scenario.spec });
-            const renderedB = renderScore(performerB, scenario.score, scenario.totalFrames);
+            const renderedA = await renderScenario(EngineA, scenario);
+            const renderedB = await renderScenario(EngineB, scenario);
             const difference = firstSampleDifference(renderedA.samples, renderedB.samples);
             const peak = peakAbsolute(renderedA.samples);
             const renderedSilence = scenario.expectSound && peak <= 1e-6;

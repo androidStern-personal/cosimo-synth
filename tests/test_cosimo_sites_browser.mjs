@@ -5,7 +5,8 @@ import { chromium } from "playwright";
 const baseUrl = process.env.COSIMO_SITES_BASE_URL;
 
 test("hosted Cosimo keeps isolation through navigation and starts the real audio engine", {
-    skip: !baseUrl,
+    skip: baseUrl ? false
+        : "Set COSIMO_SITES_BASE_URL to a deployed Sites build: this checks the host's own redirects and isolation headers, which no local server reproduces.",
     timeout: 90000,
 }, async () => {
     const browser = await chromium.launch({ args: ["--autoplay-policy=no-user-gesture-required"] });

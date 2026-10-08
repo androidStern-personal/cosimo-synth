@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """Capture and infer Wavesfactory Spectre Low/High Shelf behaviour.
 
-This is an offline black-box research harness.  It extends the existing T26
-Spectre corpus infrastructure rather than embedding any Spectre code or audio.
+This is an offline black-box research harness.  It extends the Spectre
+corpus infrastructure in measure_spectre_reference.py rather than embedding any Spectre code or audio.
 Raw input/output audio, reports, and listening files stay below ignored build/;
 only this deterministic procedure and a compact derived lock-in fixture belong
 in source control.

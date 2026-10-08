@@ -1,21 +1,33 @@
-import test from 'node:test';
-import assert from 'node:assert/strict';
-import { build } from 'esbuild';
-import { mkdtemp, rm } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
-import path from 'node:path';
-import { pathToFileURL } from 'node:url';
-const root=path.resolve(import.meta.dirname,'../..');
-const temporary=await mkdtemp(path.join(tmpdir(),'kit-mseg-'));
-const bundle=async (name,source)=>{const outfile=path.join(temporary,name+'.mjs');await build({entryPoints:[path.join(root,source)],outfile,bundle:true,format:'esm',platform:'node',logLevel:'silent'});return import(pathToFileURL(outfile));};
-const kit=await bundle('kit','kit/ui/mseg.ts');
-test.after(()=>rm(temporary,{recursive:true,force:true}));
-const {msegCurveCodec}=await bundle('codec','kit/ui/mseg-state.ts');
-test('curve codec rejects poisoned coordinates, owns its points, and reports ordering failure',()=>{
- const input=kit.addMsegPoint(kit.createDefaultMsegShape(),.4,.7),result=msegCurveCodec.parse(input);
- assert.equal(result.kind,'ok');assert.ok(Object.isFrozen(result.value));assert.ok(Object.isFrozen(result.value.points[1]));
- input.points[1].y=.1;assert.equal(result.value.points[1].y,.7);
- assert.equal(msegCurveCodec.parse({...input,points:[input.points[0],{x:.4,y:Infinity,curvePower:0},input.points[2]]}).kind,'error');
- const reversed={...input,points:[input.points[0],{x:.8,y:.3,curvePower:0},{x:.2,y:.5,curvePower:0},input.points[2]]};
- assert.deepEqual(msegCurveCodec.parse(reversed),{kind:'error',message:'MSEG shape points must stay in non-decreasing x order'});
+import assert from "node:assert/strict";
+import path from "node:path";
+import test from "node:test";
+
+import { loadUIModule } from "./helpers/load_ui_module.mjs";
+
+const repoRoot = path.resolve(import.meta.dirname, "../..");
+const { addMsegPoint, createDefaultMsegShape } = await loadUIModule(repoRoot, "kit/ui/mseg.ts");
+const { msegCurveCodec } = await loadUIModule(repoRoot, "kit/ui/mseg-state.ts");
+
+test("curve codec rejects poisoned coordinates and out-of-order points, and owns its points", () => {
+    // The default shape's two end points with one point added between them.
+    const input = addMsegPoint(createDefaultMsegShape(), 0.4, 0.7);
+    const [start, , end] = input.points;
+
+    const result = msegCurveCodec.parse(input);
+    assert.equal(result.kind, "ok");
+    assert.ok(Object.isFrozen(result.value));
+    assert.ok(Object.isFrozen(result.value.points[1]));
+
+    // The parsed curve is a copy: editing the input afterwards does not reach it.
+    input.points[1].y = 0.1;
+    assert.equal(result.value.points[1].y, 0.7);
+
+    const poisoned = { ...input, points: [start, { x: 0.4, y: Infinity, curvePower: 0 }, end] };
+    assert.equal(msegCurveCodec.parse(poisoned).kind, "error");
+
+    const reversed = {
+        ...input,
+        points: [start, { x: 0.8, y: 0.3, curvePower: 0 }, { x: 0.2, y: 0.5, curvePower: 0 }, end],
+    };
+    assert.equal(msegCurveCodec.parse(reversed).kind, "error");
 });

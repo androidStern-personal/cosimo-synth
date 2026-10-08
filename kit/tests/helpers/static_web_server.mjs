@@ -59,14 +59,12 @@ export async function resolveRepoServedPath(rootPath, candidatePath) {
 /**
  * The one static server shared by the browser suites.
  *
- * Serves `webRoot`, then each of `fallbackRoots` in order (live-review pages
- * use build/web with the repo root as the fallback). `mounts` maps URL
- * prefixes to a directory outside the roots — or to a function returning one,
- * resolved lazily on the first request so suites that never touch the mount
- * skip its cost (the staged Cmajor runtime under /cmaj_api). With
- * `bundleTypeScript`, requests for .ts/.tsx/.mts files answer with an
- * esbuild-bundled module at the file's own URL, standing in for the Vite dev
- * server the module-shell tests used to spawn.
+ * Serves `webRoot`, then each of `fallbackRoots` in order. `mounts` maps URL
+ * prefixes to a directory outside the roots, or to a function returning one,
+ * resolved on the first request so suites that never touch the mount skip
+ * its cost. With `bundleTypeScript`, requests for .ts/.tsx/.mts files answer
+ * with an esbuild-bundled module at the file's own URL, so a browser test can
+ * import a plugin's TypeScript view without a Vite dev server.
  */
 export async function startStaticWebServer(webRoot, {
     fallbackRoots = [],
@@ -198,13 +196,9 @@ export async function startStaticWebServer(webRoot, {
     };
 }
 
-const kitRepoRoot = path.resolve(import.meta.dirname, "../../..");
+const projectRoot = path.resolve(import.meta.dirname, "../../..");
 
-/**
- * Repo-root static server for plugin browser tests. Unlike the synth
- * harness wrapper it declares no /cmaj_api mount, so it stays runnable in
- * an exported Builder Kit with no Cmajor web-runtime staging.
- */
+/** Static server rooted at the project folder, for plugin browser tests. */
 export async function startStaticRepoServer(options = {}) {
-    return startStaticWebServer(kitRepoRoot, options);
+    return startStaticWebServer(projectRoot, options);
 }

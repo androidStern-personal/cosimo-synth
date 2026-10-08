@@ -1,6 +1,7 @@
 #define CMAJOR_DLL 1
 #include "cmajor/helpers/cmaj_Patch.h"
 #include "NativeMessageLoop.h"
+#include "PluginStateUpdates.h"
 #include "cmajor/helpers/cmaj_PatchWorker_QuickJS.h"
 #include "choc/gui/choc_MessageLoop.h"
 #if defined(COSIMO_SHARED_STATE_AOT)
@@ -64,10 +65,11 @@ struct ObservingView final : cmaj::PatchView
     }
     Value state() const
     {
-        for (auto item = messages.rbegin(); item != messages.rend(); ++item)
-            if ((*item)["kind"].toString() == "attached" || (*item)["kind"].toString() == "update")
-                return Value ((*item)["state"]);
-        return {};
+        Value state;
+        for (const auto& item : messages)
+            if (item["kind"].toString() == "attached" || item["kind"].toString() == "update")
+                state = native_test::foldPluginState (state, item);
+        return state;
     }
     Value receipt (int64_t sequence) const
     {

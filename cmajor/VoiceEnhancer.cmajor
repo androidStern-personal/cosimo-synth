@@ -1,7 +1,8 @@
 namespace wt
 {
-    // T62's shared surface values. The DSP implementation grows behind the
-    // SharedVoiceEngine seam so the host/UI do not own per-note instances.
+    // The per-voice Enhancer's shared surface values. Each voice owns its DSP
+    // instance inside SharedVoiceEngine, so the host and UI never own per-note
+    // instances.
     let voiceEnhancerFrequencyMinHz = 20.0f;
     let voiceEnhancerFrequencyMaxHz = 20000.0f;
     let voiceEnhancerFrequencyDefaultHz = 130.0f;
@@ -50,7 +51,8 @@ namespace wt
             value, voiceEnhancerAmountMin, voiceEnhancerAmountMax);
     }
 
-    /** T50-compatible frequency resolver with the Enhancer's locked ratio span.
+    /** Resolves frequency like the voice filter's Key Track, within the
+        Enhancer's locked ratio span.
         Routes remain in the voice runtime's octave storage. */
     float32 resolveVoiceEnhancerFrequencyHz (float32 enabled,
                                               float32 ordinaryHz,

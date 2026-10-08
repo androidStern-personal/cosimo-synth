@@ -264,16 +264,28 @@ test("compiled 320px Voice keeps the Mod rail above fixed-edge controls while it
             return {
                 drawerHeight: element.getBoundingClientRect().height,
                 sourcePageHeight: activePage?.getBoundingClientRect().height ?? 0,
+                scrollable: getComputedStyle(element).overflowY === "auto" && element.scrollHeight > element.clientHeight,
             };
         });
         assert.equal(await sources.count(), 3, "The compiled drawer must retain all three sources.");
+        // A 320px phone keeps the rail where the user left it, so the drawer may
+        // be shorter than a page there; it must then scroll to every source.
         assert.equal(
-            drawerGeometry.drawerHeight >= drawerGeometry.sourcePageHeight - 0.5,
+            drawerGeometry.drawerHeight >= drawerGeometry.sourcePageHeight - 0.5 || drawerGeometry.scrollable,
             true,
-            `The compiled drawer must expose one complete source page: ${JSON.stringify(drawerGeometry)}`,
+            `The compiled drawer must show one complete source page or scroll to it: ${JSON.stringify(drawerGeometry)}`,
         );
         for (let index = 0; index < 3; index += 1) {
-            await sources.nth(index).click({ trial: true });
+            const source = sources.nth(index);
+            await source.scrollIntoViewIfNeeded();
+            const [sourceBounds, drawerBounds] = await Promise.all([source.boundingBox(), drawer.boundingBox()]);
+            assert.ok(sourceBounds && drawerBounds);
+            assert.equal(
+                sourceBounds.y >= drawerBounds.y - 0.5 && sourceBounds.y + sourceBounds.height <= drawerBounds.y + drawerBounds.height + 0.5,
+                true,
+                `Source ${index + 1} must scroll fully into the drawer.`,
+            );
+            await source.click({ trial: true });
         }
         const autoToggle = drawer.locator('[data-role="mobile-global-mod-rail-auto-toggle"]');
         const beforePressed = await autoToggle.getAttribute("aria-pressed");

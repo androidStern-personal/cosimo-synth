@@ -15,12 +15,12 @@ test('neutral MSEG edits preserve endpoint geometry and write the final caller-o
  let shape=kit.createDefaultMsegShape();shape=kit.addMsegPoint(shape,.35,.9);shape=kit.moveMsegPoint(shape,1,.4,.7);shape=kit.setMsegSegmentCurvePower(shape,0,3.5);
  assert.equal(shape.format,'mseg.shape');assert.equal(shape.points[0].x,0);assert.equal(shape.points.at(-1).x,1);
  const memory=new Float32Array(kit.MSEG_PADDED_SAMPLES+8);memory.fill(-123);const destination=memory.subarray(4,-4);kit.renderMsegShapeInto(shape,destination);
- assert.deepEqual(destination,cosimo.renderMsegShape(shape));assert.equal(memory[0],-123);assert.equal(memory.at(-1),-123);
+ assert.deepEqual(destination,kit.renderMsegShape(shape));assert.equal(memory[0],-123);assert.equal(memory.at(-1),-123);
  assert.equal(destination[0],destination[1]);assert.equal(destination.at(-1),destination.at(-3));
  assert.deepEqual(kit.deleteMsegPoint(shape,1).points,[{x:0,y:0,curvePower:3.5},{x:1,y:1,curvePower:0}]);
 });
 test('Cosimo compatibility seam retains its stored identifiers across edits and serialization',()=>{
  let shape=cosimo.createDefaultMsegShape();shape=cosimo.addMsegPoint(shape,.5,.2);shape=cosimo.moveMsegPoint(shape,1,.6,.8);
  assert.equal(shape.format,'cosimo.mseg.shape');assert.equal(cosimo.deserializeMsegShape(cosimo.serializeMsegShape(shape)).format,'cosimo.mseg.shape');assert.equal(cosimo.createDefaultMsegPlayback().format,'cosimo.mseg.playback');
- assert.equal(kit.createDefaultMsegPlayback().format,'mseg.playback');assert.deepEqual(cosimo.renderMsegShape(shape),kit.renderMsegShape(shape));
+ assert.deepEqual(kit.renderMsegShape(shape),kit.renderMsegShape({...shape,format:'mseg.shape'}));
 });

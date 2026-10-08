@@ -4,7 +4,7 @@ import { createServer } from "node:http";
 import path from "node:path";
 import test, { after, before } from "node:test";
 
-import { chromium } from "playwright";
+import { launchChromium, missingH264Encoder } from "./helpers/h264_encoder.mjs";
 
 const repoRoot = path.resolve(import.meta.dirname, "..");
 const webRoot = path.join(repoRoot, "build", "experiments", "remotion-web-renderer-spike");
@@ -24,6 +24,11 @@ function contentType(filePath) {
 async function serve(request, response) {
     try {
         const requestUrl = new URL(request.url ?? "/", baseUrl);
+        // Google Chrome asks every page for an icon; the harness page has none.
+        if (requestUrl.pathname === "/favicon.ico") {
+            response.writeHead(204).end();
+            return;
+        }
         const relative = decodeURIComponent(requestUrl.pathname === "/" ? "index.html" : requestUrl.pathname.slice(1));
         const filePath = path.resolve(webRoot, relative);
         if (filePath !== webRoot && !filePath.startsWith(`${webRoot}${path.sep}`)) {
@@ -46,7 +51,7 @@ before(async () => {
     });
     const address = server.address();
     baseUrl = `http://127.0.0.1:${address.port}/`;
-    browser = await chromium.launch({ headless: true });
+    browser = await launchChromium();
 });
 
 after(async () => {
@@ -56,7 +61,7 @@ after(async () => {
 
 test("renderMediaOnWeb emits a verified 10-second MP4 with visual primitives and blob-URL audio", {
     timeout: 240_000,
-}, async () => {
+}, async (t) => {
     const page = await browser.newPage();
     const failures = [];
     page.on("pageerror", (error) => failures.push(error.stack ?? error.message));
@@ -64,6 +69,12 @@ test("renderMediaOnWeb emits a verified 10-second MP4 with visual primitives and
         if (message.type() === "error") failures.push(`console: ${message.text()}`);
     });
     await page.goto(baseUrl, { waitUntil: "networkidle" });
+    const missingEncoder = await missingH264Encoder(page);
+    if (missingEncoder) {
+        t.skip(missingEncoder);
+        await page.close();
+        return;
+    }
     await page.waitForFunction(() => typeof globalThis.__COSIMO_REMOTION_SPIKE__?.run === "function");
     const report = await page.evaluate(() => globalThis.__COSIMO_REMOTION_SPIKE__.run());
 

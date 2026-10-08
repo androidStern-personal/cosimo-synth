@@ -3,15 +3,13 @@ import test from "node:test";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
 import { loadUIModule } from "../kit/tests/helpers/load_ui_module.mjs";
-import { stageCmajorWebRuntime } from "../ui/vite.shared.mjs";
+import { cmajorWebApiDirectory } from "./helpers/cmajor_source.mjs";
 import { createSynthParameterFixture } from "./helpers/synth_parameter_fixture.mjs";
 
 const root = path.resolve(import.meta.dirname, "..");
 const { acquireSynthViewState } = await loadUIModule(root, "ui/shared/synth-state-client.ts");
 const { createMockPluginStateHost } = await loadUIModule(root, "ui/shared/mock-plugin-state-host.ts");
-const runtime = process.env.COSIMO_CMAJOR_SOURCE
-    ? path.join(process.env.COSIMO_CMAJOR_SOURCE, "javascript/cmaj_api")
-    : stageCmajorWebRuntime(root, { buildDirectory: path.join(root, "build/cmajor_web_runtime-state-lease-tests"), instanceId: String(process.pid) });
+const runtime = cmajorWebApiDirectory();
 
 async function until(predicate) {
     const deadline = Date.now() + 2000;
@@ -47,7 +45,7 @@ test("independent synth view leases share one live client; only the last release
         await f.connection.ready;
         await until(() => a.client.getSnapshot().kind === "ready");
         const scope = a.client.getSnapshot().state.scope;
-        assert.equal((await a.client.dispatch({ kind: "begin", key: "globalTune", gesture: 1 })).kind, "accepted");
+        assert.equal((await a.client.dispatch({ kind: "begin", keys: ["globalTune"], gesture: 1 })).kind, "accepted");
         assert.equal((await a.client.dispatch({ kind: "edit", key: "globalTune", value: 5, gesture: 1 })).kind, "accepted");
         await until(() => f.values.get("globalTune") === 5);
         a.release(); a.release();

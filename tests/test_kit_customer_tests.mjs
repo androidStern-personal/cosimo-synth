@@ -4,7 +4,7 @@ import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
-import { exportKit } from "../kit/scripts/export_kit.mjs";
+import { exportKit } from "../scripts/export_kit.mjs";
 
 const repoRoot = path.resolve(import.meta.dirname, "..");
 
@@ -14,7 +14,8 @@ async function verifyScaffoldedUnitTestDiscovery(pluginName) {
     try {
         await exportKit(root);
         // Exercise current script/template changes before their export commit.
-        await fs.cp(path.join(repoRoot, "kit/scripts"), path.join(root, "kit/scripts"), { recursive: true });
+        for (const directory of ["kit/scripts", "kit/fx"])
+            await fs.cp(path.join(repoRoot, directory), path.join(root, directory), { recursive: true, force: true });
         const pkg = JSON.parse(await fs.readFile(path.join(root, "package.json"), "utf8"));
         pkg.scripts = JSON.parse(await fs.readFile(path.join(repoRoot, "kit/template/root/package.json.template"), "utf8")).scripts;
         await fs.writeFile(path.join(root, "package.json"), JSON.stringify(pkg));
@@ -22,6 +23,10 @@ async function verifyScaffoldedUnitTestDiscovery(pluginName) {
         const env = { ...process.env };
         delete env.NODE_TEST_CONTEXT; // Customer npm test is a new runner, not a nested node:test child.
         const run = (...args) => spawnSync("npm", args, { cwd: root, encoding: "utf8", env });
+        // A customer edits the template owner before kit:new will scaffold.
+        await fs.writeFile(path.join(root, "product-owner.json"), JSON.stringify({
+            manufacturer: "Customer Audio", manufacturerCode: "Cust", bundleIdentifierPrefix: "org.customer-audio",
+        }));
         const sharedBefore = await fs.readFile(path.join(root, "package.json"), "utf8");
         const scaffold = run("run", "kit:new", "--", pluginName);
         assert.equal(scaffold.status, 0, scaffold.stderr);

@@ -2,16 +2,29 @@ import type { PluginStateNativeParameter } from "../../kit/ui/plugin-state-sessi
 import { usePluginState } from "../../kit/ui/plugin-state-react";
 import { synthPluginState } from "../../ui/shared/synth-plugin-state";
 import { Mseg } from "../../kit/index";
-import { normalizeMsegShape } from "../../ui/shared/mseg";
-import { createDefaultMsegShape as defaultKitCurve, addMsegPoint as addKitPoint } from "../../kit/ui/mseg";
-import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
+import {
+    normalizeMsegShape,
+    addMsegPoint,
+    createDefaultMsegPlayback,
+    createDefaultMsegShape,
+    deleteMsegPoint,
+    moveMsegPoint,
+    setMsegSegmentCurvePower,
+    type MsegState,
+} from "../../ui/shared/mseg";
+import {
+    createDefaultMsegShape as defaultKitCurve,
+    addMsegPoint as addKitPoint,
+    pointToMsegEditorCoordinates,
+} from "../../kit/ui/mseg";
+import { Component, useEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
 import { createModulationEditorFixture, createModulationProjectionHost } from "./modulation_editor_state";
 import { createRoot, type Root } from "react-dom/client";
 
 import desktopCssText from "../../ui/desktop/styles.css?inline";
-import editorTokensCssText from "../../kit/ui/editor-tokens.css?inline";
-import editorCurveSurfaceCssText from "../../kit/ui/editor-curve-surface.css?inline";
-import filterRangeEditorCssText from "../../kit/ui/filter-range-editor.css?inline";
+import editorTokensCssText from "../../ui/shared/editor-tokens.css?inline";
+import editorCurveSurfaceCssText from "../../ui/shared/editor-curve-surface.css?inline";
+import filterRangeEditorCssText from "../../kit/ui/filter-editor.css?inline";
 import {
     PatchConnectionProvider,
     usePatchEndpoint,
@@ -19,7 +32,7 @@ import {
     usePatchVisualEndpoint,
     type PatchConnectionLike,
 } from "../../ui/shared/cmajor-react";
-import { acquireAnalyzerActivity } from "../../kit/ui/analyzer-activity";
+import { acquireAnalyzerActivity } from "../../ui/shared/analyzer-activity";
 import {
     advancePolishTelemetryDisplay,
     createPolishTelemetryDisplay,
@@ -34,7 +47,8 @@ import {
 } from "../../ui/shared/parameter-value-entry";
 import { KeyboardDock, ensureKeyboardElement, type PianoKeyboardElement } from "../../ui/desktop/desktop-keyboard-adapter";
 import { PrecisionNumberField } from "../../ui/desktop/desktop-precision-number-field";
-import { NexusNumberField, setNexusNumberConstructorForTests, type NexusNumberWidgetLike } from "../../ui/desktop/desktop-nexus-number-field";
+import Nexus from "nexusui";
+import { NexusNumberField } from "../../ui/desktop/desktop-nexus-number-field";
 import { ArticulationControlSurface, type ArticulationCardView } from "../../ui/desktop/articulation-ui";
 import {
     EditableMsegSurface,
@@ -46,17 +60,19 @@ import {
     WavetableStageSection,
 } from "../../ui/shared/synth-components";
 import {
-    FilterRangeEditor,
-    type FilterRangeEndpoints,
-    type FilterRangeMode,
+    FilterEditor,
+    type FilterRange,
+    type FilterMode,
     type FilterRangePolarity,
-    type FilterRangeValue,
+    type FilterValue,
     cutoffRangeOctaves,
+    geometricCenterCutoffHz,
+} from "../../kit/ui/filter-editor";
+import {
     cutoffsFromBaseModulationOctaves,
     cutoffsFromCenterRangeOctaves,
-    geometricCenterCutoffHz,
     modulationOctavesFromCutoffRange,
-} from "../../kit/ui/filter-range-editor";
+} from "../../ui/shared/filter-modulation-range";
 import {
     useFactoryBankCatalog,
     useFactoryTableFrames,
@@ -81,17 +97,6 @@ import { ParameterMenuContext } from "../../ui/shared/parameter-context-menu";
 import { useParameterMenuShell } from "../../ui/shared/parameter-menu-shell";
 import { MobileModMappingsPanel } from "../../ui/desktop/mobile-mod-mappings-panel";
 import type { SynthKeyboardInputMode } from "../../ui/shared/synth-input-router";
-import { subscribeToUserEdits } from "../../ui/shared/user-edit-bus";
-import {
-    addMsegPoint,
-    createDefaultMsegPlayback,
-    createDefaultMsegShape,
-    deleteMsegPoint,
-    moveMsegPoint,
-    pointToMsegEditorCoordinates,
-    setMsegSegmentCurvePower,
-    type MsegState,
-} from "../../ui/shared/mseg";
 import {
     MODULATION_STATE_KEY,
     createDefaultRoute,
@@ -99,23 +104,6 @@ import {
     serializeModulationState,
     type ModulationRouteUpdate,
 } from "../../ui/shared/modulation";
-import { useStandaloneEffectPresets } from "../../kit/ui/effects/use-standalone-effect-presets";
-import {
-    buildCanonicalPluginStateContract,
-    buildPluginStateContract,
-} from "../../ui/shared/effects/effect-state-contract";
-import {
-    EFFECT_PRESET_V2_KIND,
-    EFFECT_PRESET_V2_SCHEMA_VERSION,
-    type EffectPresetMigration,
-    type EffectPresetV2,
-    type EffectStoredStateAdapter,
-} from "../../ui/shared/effects/effect-preset-v2";
-import type {
-    EffectPreset,
-    EffectPresetDescriptorRegistry,
-    EffectPresetValue,
-} from "../../ui/shared/effects/effect-preset-shared";
 
 type Deferred<TValue> = {
     promise: Promise<TValue>;
@@ -237,256 +225,6 @@ function cloneValue<TValue>(value: TValue): TValue {
     }
 
     return JSON.parse(JSON.stringify(value)) as TValue;
-}
-
-function createStandalonePresetDescriptorRegistry(): EffectPresetDescriptorRegistry {
-    return {
-        ott: {
-            effectID: "ott",
-            label: "OTT",
-            params: {
-                ottMix: { type: "number", min: 0, max: 100, defaultValue: 100 },
-                ottAmount: { type: "number", min: 0, max: 100, defaultValue: 100 },
-                ottTimePercent: { type: "number", min: 10, max: 1000, defaultValue: 100, clamp: true },
-                ottBandDrive: { type: "number", min: 0, max: 100, defaultValue: 0 },
-                ottEnvelopeMatch: { type: "number", min: 0, max: 100, defaultValue: 0 },
-                envelopeBoostClampDb: { type: "number", min: 0, max: 24, defaultValue: 6 },
-            },
-        },
-    };
-}
-
-function createStandaloneFactoryPresets(): Record<string, EffectPreset[]> {
-    return {
-        ott: [{
-            kind: "cosimo.effectPreset",
-            version: 1,
-            effectID: "ott",
-            presetID: "ott.default-smash",
-            label: "Default Smash",
-            values: {
-                ottMix: 100,
-                ottAmount: 100,
-                ottTimePercent: 100,
-                ottBandDrive: 0,
-                ottEnvelopeMatch: 0,
-                envelopeBoostClampDb: 6,
-            },
-        }, {
-            kind: "cosimo.effectPreset",
-            version: 1,
-            effectID: "ott",
-            presetID: "ott.envelope-tamed",
-            label: "Envelope Tamed",
-            values: {
-                ottMix: 86,
-                ottAmount: 92,
-                ottTimePercent: 100,
-                ottBandDrive: 12,
-                ottEnvelopeMatch: 38,
-                envelopeBoostClampDb: 6,
-            },
-        }],
-    };
-}
-
-class StandalonePresetHookPatchConnection implements PatchConnectionLike {
-    storedState: Record<string, unknown> = {};
-    parameterValues: Record<string, EffectPresetValue> = {
-        ottMix: 11,
-        ottAmount: 22,
-        ottTimePercent: 100,
-        ottBandDrive: 0,
-        ottEnvelopeMatch: 0,
-        envelopeBoostClampDb: 6,
-    };
-    events: Array<{ endpointID: string; value: unknown }> = [];
-    storedWrites: Array<{ key: string; value: unknown }> = [];
-    requestedParameters: string[] = [];
-    private storedStateListeners = new Set<(message: unknown) => void>();
-    private parameterListeners = new Map<string, Set<(value: unknown) => void>>();
-    private statusListeners = new Set<(status: unknown) => void>();
-
-    addStatusListener(listener: (status: unknown) => void) {
-        this.statusListeners.add(listener);
-    }
-
-    removeStatusListener(listener: (status: unknown) => void) {
-        this.statusListeners.delete(listener);
-    }
-
-    requestStatusUpdate() {
-        const status = {
-            details: {
-                inputs: [
-                    { endpointID: "hostSlot0Guard", purpose: "parameter", annotation: { hidden: true, init: 0, min: 0, max: 1 } },
-                    { endpointID: "ottMix", purpose: "parameter", annotation: { init: 100, min: 0, max: 100 } },
-                    { endpointID: "ottAmount", purpose: "parameter", annotation: { init: 100, min: 0, max: 100 } },
-                    { endpointID: "ottTimePercent", purpose: "parameter", annotation: { init: 100, min: 10, max: 1000 } },
-                    { endpointID: "ottBandDrive", purpose: "parameter", annotation: { init: 0, min: 0, max: 100 } },
-                    { endpointID: "ottEnvelopeMatch", purpose: "parameter", annotation: { init: 0, min: 0, max: 100 } },
-                    { endpointID: "envelopeBoostClampDb", purpose: "parameter", annotation: { init: 6, min: 0, max: 24 } },
-                ],
-            },
-        };
-
-        for (const listener of this.statusListeners) {
-            listener(status);
-        }
-    }
-
-    addStoredStateValueListener(listener: (message: unknown) => void) {
-        this.storedStateListeners.add(listener);
-    }
-
-    removeStoredStateValueListener(listener: (message: unknown) => void) {
-        this.storedStateListeners.delete(listener);
-    }
-
-    requestFullStoredState(callback: (state: Record<string, unknown>) => void) {
-        callback({ ...this.storedState });
-    }
-
-    sendStoredStateValue(key: string, value: unknown) {
-        this.storedState[key] = value;
-        this.storedWrites.push({ key, value });
-
-        for (const listener of this.storedStateListeners) {
-            listener({ key, value });
-        }
-    }
-
-    addParameterListener(endpointID: string, listener: (value: unknown) => void) {
-        if (!this.parameterListeners.has(endpointID)) {
-            this.parameterListeners.set(endpointID, new Set());
-        }
-
-        this.parameterListeners.get(endpointID)?.add(listener);
-    }
-
-    removeParameterListener(endpointID: string, listener: (value: unknown) => void) {
-        this.parameterListeners.get(endpointID)?.delete(listener);
-    }
-
-    requestParameterValue(endpointID: string) {
-        this.requestedParameters.push(endpointID);
-
-        if (Object.prototype.hasOwnProperty.call(this.parameterValues, endpointID)) {
-            this.emitParameterValue(endpointID, this.parameterValues[endpointID]);
-        }
-    }
-
-    sendEventOrValue(endpointID: string, value: unknown) {
-        this.events.push({ endpointID, value });
-        this.emitParameterValue(endpointID, value as EffectPresetValue);
-    }
-
-    emitParameterValue(endpointID: string, value: EffectPresetValue) {
-        this.parameterValues[endpointID] = value;
-
-        for (const listener of this.parameterListeners.get(endpointID) ?? []) {
-            listener(value);
-        }
-    }
-
-    getListenerCounts() {
-        return {
-            storedState: this.storedStateListeners.size,
-            parameters: Object.fromEntries(Array.from(this.parameterListeners.entries()).map(([endpointID, listeners]) => [
-                endpointID,
-                listeners.size,
-            ])),
-        };
-    }
-}
-
-const statefulHookStatus = {
-    details: {
-        inputs: [
-            { endpointID: "amount", purpose: "parameter", annotation: { init: 0.5, min: 0, max: 1 } },
-        ],
-    },
-};
-
-class StatefulPresetHookPatchConnection implements PatchConnectionLike {
-    storedState: Record<string, unknown> = {};
-    parameterValues: Record<string, EffectPresetValue> = {
-        amount: 0.25,
-    };
-    events: Array<{ endpointID: string; value: unknown }> = [];
-    storedWrites: Array<{ key: string; value: unknown }> = [];
-    requestedParameters: string[] = [];
-    private storedStateListeners = new Set<(message: unknown) => void>();
-    private parameterListeners = new Map<string, Set<(value: unknown) => void>>();
-    private statusListeners = new Set<(status: unknown) => void>();
-
-    addStatusListener(listener: (status: unknown) => void) {
-        this.statusListeners.add(listener);
-    }
-
-    removeStatusListener(listener: (status: unknown) => void) {
-        this.statusListeners.delete(listener);
-    }
-
-    requestStatusUpdate() {
-        for (const listener of this.statusListeners) {
-            listener(statefulHookStatus);
-        }
-    }
-
-    addStoredStateValueListener(listener: (message: unknown) => void) {
-        this.storedStateListeners.add(listener);
-    }
-
-    removeStoredStateValueListener(listener: (message: unknown) => void) {
-        this.storedStateListeners.delete(listener);
-    }
-
-    requestFullStoredState(callback: (state: Record<string, unknown>) => void) {
-        callback({ ...this.storedState });
-    }
-
-    sendStoredStateValue(key: string, value: unknown) {
-        this.storedState[key] = value;
-        this.storedWrites.push({ key, value });
-
-        for (const listener of this.storedStateListeners) {
-            listener({ key, value });
-        }
-    }
-
-    addParameterListener(endpointID: string, listener: (value: unknown) => void) {
-        if (!this.parameterListeners.has(endpointID)) {
-            this.parameterListeners.set(endpointID, new Set());
-        }
-
-        this.parameterListeners.get(endpointID)?.add(listener);
-    }
-
-    removeParameterListener(endpointID: string, listener: (value: unknown) => void) {
-        this.parameterListeners.get(endpointID)?.delete(listener);
-    }
-
-    requestParameterValue(endpointID: string) {
-        this.requestedParameters.push(endpointID);
-
-        if (Object.prototype.hasOwnProperty.call(this.parameterValues, endpointID)) {
-            this.emitParameterValue(endpointID, this.parameterValues[endpointID]);
-        }
-    }
-
-    sendEventOrValue(endpointID: string, value: unknown) {
-        this.events.push({ endpointID, value });
-        this.emitParameterValue(endpointID, value as EffectPresetValue);
-    }
-
-    emitParameterValue(endpointID: string, value: EffectPresetValue) {
-        this.parameterValues[endpointID] = value;
-
-        for (const listener of this.parameterListeners.get(endpointID) ?? []) {
-            listener(value);
-        }
-    }
 }
 
 function mountHarness(target: HTMLElement, render: (root: Root) => void) {
@@ -717,7 +455,7 @@ export async function installNexusNumberFieldHarness(target: HTMLElement) {
     const setValueCalls: number[] = [];
     let externalValueSetter: ((nextValue: number) => void) | null = null;
 
-    class FakeNexusNumber implements NexusNumberWidgetLike {
+    class FakeNexusNumber {
         value: number;
         decimalPlaces = 0;
         colors = {
@@ -784,16 +522,10 @@ export async function installNexusNumberFieldHarness(target: HTMLElement) {
         }
     }
 
-    setNexusNumberConstructorForTests(FakeNexusNumber as unknown as new (
-        host: HTMLDivElement,
-        options: {
-            size: [number, number];
-            value: number;
-            min: number;
-            max: number;
-            step: number;
-        },
-    ) => NexusNumberWidgetLike);
+    // The field creates its widget from the Nexus library; a recording widget
+    // stands in for Nexus.Number until the harness unmounts.
+    const libraryNumber = Nexus.Number;
+    Nexus.Number = FakeNexusNumber as unknown as typeof Nexus.Number;
 
     const mounted = mountHarness(target, (root) => {
         function Harness() {
@@ -883,7 +615,7 @@ export async function installNexusNumberFieldHarness(target: HTMLElement) {
         },
         async unmount() {
             mounted.unmount();
-            setNexusNumberConstructorForTests(null);
+            Nexus.Number = libraryNumber;
             await waitForMicrotask();
         },
     };
@@ -1659,47 +1391,29 @@ export async function installMobileModMappingsAmountOnlyHarness(target: HTMLElem
 }
 
 export async function installPatchParameterRebindingHarness(target: HTMLElement) {
-    const parameterListeners = new Map<string, Set<(value: unknown) => void>>();
-    const requestedParameters: string[] = [];
-    const renderLog: Array<{ endpointID: string; value: number }> = [];
+    const connection = new MockPatchConnection(await loadHarnessManifest());
+    connection.setParameterValue("filterCutoff", 6_000);
+    connection.setParameterValue("filterQ", 2.5);
+    const renderLog: Array<{ endpointID: string; value: number; isReady: boolean }> = [];
     let selectEndpoint: ((endpointID: string) => void) | null = null;
 
-    const patchConnection: PatchConnectionLike = {
-        addParameterListener(endpointID, listener) {
-            const listeners = parameterListeners.get(endpointID) ?? new Set<(value: unknown) => void>();
-            listeners.add(listener);
-            parameterListeners.set(endpointID, listeners);
-        },
-        removeParameterListener(endpointID, listener) {
-            parameterListeners.get(endpointID)?.delete(listener);
-        },
-        requestParameterValue(endpointID) {
-            requestedParameters.push(endpointID);
-        },
-    };
     const mounted = mountHarness(target, (root) => {
         function Reader({ endpointID }: { endpointID: string }) {
-            const initialValue = endpointID === "parameterA" ? 0.1 : 0.25;
-            const binding = usePatchParameterBinding<number>({
-                endpointID,
-                initialValue,
-                coerce: Number,
-            });
-
+            const binding = usePatchParameterBinding<number>({ endpointID, initialValue: 0, coerce: Number });
             useEffect(() => {
-                renderLog.push({ endpointID: binding.endpointID, value: binding.value });
-            }, [binding.endpointID, binding.value]);
-
+                renderLog.push({ endpointID: binding.endpointID, value: binding.value, isReady: binding.isReady });
+            }, [binding.endpointID, binding.value, binding.isReady]);
             return null;
         }
 
         function Harness() {
-            const [endpointID, setEndpointID] = useState("parameterA");
+            const [endpointID, setEndpointID] = useState("filterCutoff");
             selectEndpoint = setEndpointID;
-
             return (
-                <PatchConnectionProvider patchConnection={patchConnection}>
-                    <Reader endpointID={endpointID} />
+                <PatchConnectionProvider patchConnection={connection}>
+                    <SynthStateProvider patchConnection={connection}>
+                        <Reader endpointID={endpointID} />
+                    </SynthStateProvider>
                 </PatchConnectionProvider>
             );
         }
@@ -1708,23 +1422,12 @@ export async function installPatchParameterRebindingHarness(target: HTMLElement)
     });
 
     window.__COSIMO_DESKTOP_MODULE_HARNESS__ = {
-        async emitParameter(endpointID: string, value: number) {
-            parameterListeners.get(endpointID)?.forEach((listener) => listener(value));
-            await waitForMicrotask();
-        },
         async selectEndpoint(endpointID: string) {
             selectEndpoint?.(endpointID);
             await waitForMicrotask();
         },
         getSnapshot() {
-            return {
-                listenerCounts: Object.fromEntries(Array.from(parameterListeners.entries()).map(([endpointID, listeners]) => (
-                    [endpointID, listeners.size]
-                ))),
-                requestedParameters: [...requestedParameters],
-                renderLog: cloneValue(renderLog),
-                lastRender: cloneValue(renderLog.at(-1) ?? null),
-            };
+            return { renderLog: cloneValue(renderLog), lastRender: cloneValue(renderLog.at(-1) ?? null) };
         },
         async unmount() {
             mounted.unmount();
@@ -1735,190 +1438,61 @@ export async function installPatchParameterRebindingHarness(target: HTMLElement)
     await waitForMicrotask();
 }
 
-export async function installPatchParameterHostBaselineHarness(target: HTMLElement) {
-    type HarnessConnection = PatchConnectionLike & {
-        readonly id: "first" | "second" | "fallback" | "untrusted";
-        readonly listeners: Map<string, Set<(value: unknown) => void>>;
-        readonly requests: string[];
-        readonly writes: Array<{ endpointID: string; value: number }>;
-        readonly gestures: string[];
-        emitResponse: (endpointID: string, value: number) => void;
+/** Renders each binding the synth must refuse, under its own error boundary, beside an inactive placeholder. */
+export async function installPatchParameterBindingRequirementsHarness(target: HTMLElement) {
+    const writes: string[] = [];
+    const patchConnection: PatchConnectionLike = {
+        sendEventOrValue(endpointID) { writes.push(endpointID); },
+        sendParameterGestureStart(endpointID) { writes.push(`start:${endpointID}`); },
+        sendParameterGestureEnd(endpointID) { writes.push(`end:${endpointID}`); },
     };
+    const errors: Record<string, string> = {};
+    let placeholder: PatchControlBinding<number> | null = null;
 
-    const createConnection = (
-        id: HarnessConnection["id"],
-        protocol: "listener" | "authoritative-initial" | "none" = "listener",
-    ): HarnessConnection => {
-        const listeners = new Map<string, Set<(value: unknown) => void>>();
-        const requests: string[] = [];
-        const writes: Array<{ endpointID: string; value: number }> = [];
-        const gestures: string[] = [];
-        const connection: HarnessConnection = {
-            id,
-            listeners,
-            requests,
-            writes,
-            gestures,
-            sendEventOrValue(endpointID, value) {
-                writes.push({ endpointID, value: Number(value) });
-                listeners.get(endpointID)?.forEach((listener) => listener(value));
-            },
-            sendParameterGestureStart(endpointID) {
-                gestures.push(`start:${endpointID}`);
-            },
-            sendParameterGestureEnd(endpointID) {
-                gestures.push(`end:${endpointID}`);
-            },
-            emitResponse(endpointID, value) {
-                listeners.get(endpointID)?.forEach((listener) => listener(value));
-            },
-        };
-        if (protocol === "listener") {
-            connection.addParameterListener = (endpointID, listener) => {
-                const endpointListeners = listeners.get(endpointID) ?? new Set();
-                endpointListeners.add(listener);
-                listeners.set(endpointID, endpointListeners);
-            };
-            connection.removeParameterListener = (endpointID, listener) => {
-                listeners.get(endpointID)?.delete(listener);
-            };
-            connection.requestParameterValue = (endpointID) => {
-                requests.push(endpointID);
-            };
-        } else if (protocol === "authoritative-initial") {
-            connection.parameterInitialValuesAreAuthoritative = true;
-        }
-        return connection;
-    };
-    const connections = {
-        first: createConnection("first"),
-        second: createConnection("second"),
-        fallback: createConnection("fallback", "authoritative-initial"),
-        untrusted: createConnection("untrusted", "none"),
-    } as const;
-    let binding: PatchControlBinding<number> | null = null;
-    let staleEndGesture: (() => void) | null = null;
-    let selectConnection: ((id: HarnessConnection["id"]) => void) | null = null;
-    let selectEndpoint: ((endpointID: string) => void) | null = null;
-    const userGestureCounts = { starts: 0, ends: 0 };
-    const unsubscribeFromUserEdits = subscribeToUserEdits({
-        onGestureStart: () => {
-            userGestureCounts.starts += 1;
-        },
-        onGestureEnd: () => {
-            userGestureCounts.ends += 1;
-        },
-    });
+    class Refusal extends Component<{ name: string; children: ReactNode }, { refused: boolean }> {
+        state = { refused: false };
+        static getDerivedStateFromError() { return { refused: true }; }
+        componentDidCatch(error: Error) { errors[this.props.name] = error.message; }
+        render() { return this.state.refused ? null : this.props.children; }
+    }
+
+    function Binding({ endpointID, active = true }: { endpointID: string; active?: boolean }) {
+        const binding = usePatchParameterBinding<number>({ endpointID, initialValue: 0.25, coerce: Number, active });
+        if (!active) placeholder = binding;
+        return null;
+    }
 
     const mounted = mountHarness(target, (root) => {
-        function Reader({ endpointID }: { endpointID: string }) {
-            binding = usePatchParameterBinding<number>({
-                endpointID,
-                initialValue: 0.1,
-                coerce: Number,
-            });
-            return (
-                <button
-                    type="button"
-                    data-role="host-baseline-control"
-                    disabled={binding.hostBaseline?._tag !== "host-confirmed"}
-                    onClick={() => binding?.commitValue(0.6)}
-                >
-                    Parameter
-                </button>
-            );
-        }
-
-        function Harness() {
-            const [connectionID, setConnectionID] = useState<HarnessConnection["id"]>("first");
-            const [endpointID, setEndpointID] = useState("parameterA");
-            selectConnection = setConnectionID;
-            selectEndpoint = setEndpointID;
-            return (
-                <PatchConnectionProvider patchConnection={connections[connectionID]}>
-                    <Reader endpointID={endpointID} />
-                </PatchConnectionProvider>
-            );
-        }
-
-        root.render(<Harness />);
+        root.render(
+            <PatchConnectionProvider patchConnection={patchConnection}>
+                <Refusal name="undeclared"><Binding endpointID="parameterA" /></Refusal>
+                <Refusal name="withoutProvider"><Binding endpointID="filterCutoff" /></Refusal>
+                <Refusal name="placeholder"><Binding endpointID="parameterA" active={false} /></Refusal>
+            </PatchConnectionProvider>,
+        );
     });
 
-    const requireBinding = () => {
-        if (binding === null) {
-            throw new Error("Patch parameter baseline harness is not ready.");
-        }
-        return binding;
-    };
-
     window.__COSIMO_DESKTOP_MODULE_HARNESS__ = {
-        async emitResponse(connectionID: HarnessConnection["id"], endpointID: string, value: number) {
-            connections[connectionID].emitResponse(endpointID, value);
-            await waitForMicrotask();
-        },
-        async writeValue(value: number) {
-            requireBinding().setValue(value);
-            await waitForMicrotask();
-        },
-        async commitValue(value: number) {
-            requireBinding().commitValue(value);
-            await waitForMicrotask();
-        },
-        async selectConnection(connectionID: HarnessConnection["id"]) {
-            selectConnection?.(connectionID);
-            await waitForMicrotask();
-            await waitForMicrotask();
-        },
-        async selectEndpoint(endpointID: string) {
-            staleEndGesture = requireBinding().endGesture;
-            selectEndpoint?.(endpointID);
-            await waitForMicrotask();
-            await waitForMicrotask();
-        },
-        async beginGesture() {
-            requireBinding().beginGesture();
-            await waitForMicrotask();
-        },
-        async endGesture() {
-            requireBinding().endGesture();
-            await waitForMicrotask();
-        },
-        async endStaleGesture() {
-            staleEndGesture?.();
-            await waitForMicrotask();
+        editPlaceholder(value: number) {
+            placeholder?.beginGesture();
+            placeholder?.setValue(value);
+            placeholder?.commitValue(value);
+            placeholder?.endGesture();
         },
         getSnapshot() {
-            const currentBinding = requireBinding();
             return {
-                value: currentBinding.value,
-                hostBaseline: cloneValue(currentBinding.hostBaseline),
-                controlDisabled: (target.querySelector('[data-role="host-baseline-control"]') as HTMLButtonElement | null)?.disabled ?? null,
-                first: {
-                    requests: [...connections.first.requests],
-                    writes: cloneValue(connections.first.writes),
-                    gestures: [...connections.first.gestures],
-                    listenerCounts: Object.fromEntries([...connections.first.listeners].map(([endpointID, listeners]) => [endpointID, listeners.size])),
+                errors: { ...errors },
+                placeholder: placeholder === null ? null : {
+                    endpointID: placeholder.endpointID,
+                    value: placeholder.value,
+                    isReady: placeholder.isReady,
+                    hostBaseline: cloneValue(placeholder.hostBaseline),
                 },
-                second: {
-                    requests: [...connections.second.requests],
-                    writes: cloneValue(connections.second.writes),
-                    gestures: [...connections.second.gestures],
-                    listenerCounts: Object.fromEntries([...connections.second.listeners].map(([endpointID, listeners]) => [endpointID, listeners.size])),
-                },
-                fallback: {
-                    requests: [...connections.fallback.requests],
-                    writes: cloneValue(connections.fallback.writes),
-                },
-                untrusted: {
-                    requests: [...connections.untrusted.requests],
-                    writes: cloneValue(connections.untrusted.writes),
-                },
-                userGestureCounts: { ...userGestureCounts },
+                writes: [...writes],
             };
         },
         async unmount() {
             mounted.unmount();
-            unsubscribeFromUserEdits();
             await waitForMicrotask();
         },
     };
@@ -1984,11 +1558,9 @@ export async function installArticulationReconnectHydrationHarness(target: HTMLE
     const mounted = mountHarness(target, (root) => {
         function Reader() {
             const stageRef = useRef<HTMLDivElement | null>(null);
-            const msegEditorSurfaceRef = useRef<SVGSVGElement | null>(null);
             const keyboardRef = useRef(null);
             synthView = useSynthPatchViewModel({
                 stageRef,
-                msegEditorSurfaceRef,
                 keyboardRef,
                 voiceModeCount: 3,
                 observeFilterSpectrum: false,
@@ -2020,7 +1592,6 @@ export async function installArticulationReconnectHydrationHarness(target: HTMLE
             return (
                 <div>
                     <div ref={stageRef} />
-                    <svg ref={msegEditorSurfaceRef} />
                     <button
                         type="button"
                         data-role="reconnect-articulation-capture"
@@ -2180,11 +1751,9 @@ export async function installArticulationOwnerHydrationHarness(target: HTMLEleme
             articulationReadiness = articulation.state;
             repairArticulations = () => articulation.setValue(createEmptyArticulationsState());
             const stageRef = useRef<HTMLDivElement | null>(null);
-            const msegEditorSurfaceRef = useRef<SVGSVGElement | null>(null);
             const keyboardRef = useRef(null);
             synthView = useSynthPatchViewModel({
                 stageRef,
-                msegEditorSurfaceRef,
                 keyboardRef,
                 voiceModeCount: 3,
                 observeFilterSpectrum: false,
@@ -2621,7 +2190,7 @@ export async function installMsegEditorInteractionsHookHarness(target: HTMLEleme
         async newEditorSession() { (document.getElementById("new-editor-session") as HTMLButtonElement).click(); await owner.drain(); },
         async holdFacadeGesture() { return owner.modulation.beginGesture(); },
         async endFacadeGesture() { return owner.modulation.endGesture(); },
-        async peerGesture(begin: boolean) { return owner.other.dispatch({ kind: begin ? "begin" : "end", key: "modulation.v6", gesture: 90 }); },
+        async peerGesture(begin: boolean) { return owner.other.dispatch({ kind: begin ? "begin" : "end", keys: ["modulation.v6"], gesture: 90 }); },
         async peerRenameShape(name: string) {
             const bank = owner.modulation.getState();
             if (!bank) throw new Error("Modulation owner is not ready.");
@@ -2942,11 +2511,9 @@ export async function installAutoPreviewSynthHookHarness(target: HTMLElement) {
     const mounted = mountHarness(target, (root) => {
         function Harness() {
             const stageRef = useRef<HTMLDivElement | null>(null);
-            const msegEditorSurfaceRef = useRef<SVGSVGElement | null>(null);
             const keyboardRef = useRef(null);
             synthView = useSynthPatchViewModel({
                 stageRef,
-                msegEditorSurfaceRef,
                 keyboardRef,
                 voiceModeCount: 3,
                 observeFilterSpectrum: false,
@@ -2966,7 +2533,6 @@ export async function installAutoPreviewSynthHookHarness(target: HTMLElement) {
             return (
                 <div>
                     <div ref={stageRef} />
-                    <svg ref={msegEditorSurfaceRef} />
                 </div>
             );
         }
@@ -3224,26 +2790,33 @@ export async function installSharedMsegOverviewHarness(target: HTMLElement) {
 }
 
 export async function installSharedEditableMsegSurfaceHarness(target: HTMLElement) {
-    const pointerLog: string[] = [];
-    const selectedPointIndex = 1;
-    const points = [
-        { x: 0, y: 0, curvePower: 0 },
-        { x: 0.5, y: 1, curvePower: 0 },
-        { x: 1, y: 0, curvePower: 0 },
-    ];
+    const editLog: string[] = [];
+    const value = {
+        ...createDefaultMsegShape(),
+        points: [
+            { x: 0, y: 0, curvePower: 0 },
+            { x: 0.5, y: 1, curvePower: 0 },
+            { x: 1, y: 0, curvePower: 0 },
+        ],
+    };
 
     const mounted = mountHarness(target, (root) => {
         function Harness() {
             const surfaceRef = useRef<SVGSVGElement | null>(null);
+            const [shape, setShape] = useState(value);
 
             return (
                 <EditableMsegSurface
                     surfaceRef={surfaceRef}
-                    points={points}
-                    selectedPointIndex={selectedPointIndex}
-                    onPointerDown={() => pointerLog.push("down")}
-                    onPointerMove={() => pointerLog.push("move")}
-                    onPointerUp={() => pointerLog.push("up")}
+                    value={shape}
+                    composition={{
+                        editorKey: 0,
+                        onValueChange: (next) => {
+                            editLog.push("change");
+                            setShape({ ...shape, points: next.points });
+                        },
+                        onGestureEnd: (cancelled) => editLog.push(cancelled ? "cancel" : "end"),
+                    }}
                     className="h-[180px]"
                 />
             );
@@ -3257,7 +2830,7 @@ export async function installSharedEditableMsegSurfaceHarness(target: HTMLElemen
             const circles = Array.from(document.querySelectorAll("circle"));
 
             return {
-                pointerLog: cloneValue(pointerLog),
+                editLog: cloneValue(editLog),
                 circleCount: circles.length,
                 radii: circles.map((circle) => circle.getAttribute("r")),
                 surfaceClassName: document.querySelector("svg")?.className.baseVal ?? null,
@@ -3299,11 +2872,8 @@ export async function installSharedMsegOrientationHarness(target: HTMLElement) {
                     <EditableMsegSurface
                         surfaceRef={surfaceRef}
                         orientation={orientation}
-                        points={points}
-                        selectedPointIndex={1}
-                        onPointerDown={() => {}}
-                        onPointerMove={() => {}}
-                        onPointerUp={() => {}}
+                        value={{ ...createDefaultMsegShape(), points }}
+                        composition={{ editorKey: 0, onValueChange: () => {} }}
                         className="h-[180px]"
                         dataRole="shared-mseg-orientation-surface"
                     />
@@ -3511,7 +3081,7 @@ export async function installSharedFilterRangeEditorHarness(target: HTMLElement)
 
     const state = {
         value: {
-            mode: "lowpass" as FilterRangeMode,
+            mode: "lowpass" as FilterMode,
             cutoffHz: geometricCenterCutoffHz(200, 3200),
             q: 4,
         },
@@ -3519,20 +3089,20 @@ export async function installSharedFilterRangeEditorHarness(target: HTMLElement)
             startCutoffHz: 200,
             endCutoffHz: 3200,
         },
-        valueLog: [] as FilterRangeValue[],
-        rangeLog: [] as FilterRangeEndpoints[],
+        valueLog: [] as FilterValue[],
+        rangeLog: [] as FilterRange[],
         editLog: [] as string[],
         rangePolarity: "bipolar" as FilterRangePolarity,
         previewActive: true,
     };
     let setHarnessRangePolarity: ((nextPolarity: FilterRangePolarity) => void) | null = null;
     let setHarnessPreviewActive: ((nextPreviewActive: boolean) => void) | null = null;
-    let setHarnessValue: ((nextValue: Partial<FilterRangeValue>) => void) | null = null;
+    let setHarnessValue: ((nextValue: Partial<FilterValue>) => void) | null = null;
 
     const mounted = mountHarness(target, (root) => {
         function Harness() {
-            const [value, setValue] = useState<FilterRangeValue>(state.value);
-            const [range, setRange] = useState<FilterRangeEndpoints>(state.range);
+            const [value, setValue] = useState<FilterValue>(state.value);
+            const [range, setRange] = useState<FilterRange>(state.range);
             const [rangePolarity, setRangePolarity] = useState<FilterRangePolarity>(state.rangePolarity);
             const [previewActive, setPreviewActive] = useState(state.previewActive);
             const preview = useMemo(() => ({
@@ -3580,7 +3150,7 @@ export async function installSharedFilterRangeEditorHarness(target: HTMLElement)
                 };
             }, [value.cutoffHz]);
 
-            const updateValue = (nextValue: FilterRangeValue) => {
+            const updateValue = (nextValue: FilterValue) => {
                 const modulationAmount = modulationOctavesFromCutoffRange({
                     baseCutoffHz: value.cutoffHz,
                     range,
@@ -3602,13 +3172,13 @@ export async function installSharedFilterRangeEditorHarness(target: HTMLElement)
                 setRange(nextRange);
             };
 
-            const updateRange = (nextRange: FilterRangeEndpoints) => {
+            const updateRange = (nextRange: FilterRange) => {
                 state.rangeLog.push(cloneValue(nextRange));
                 setRange(nextRange);
             };
 
             return (
-                <FilterRangeEditor
+                <FilterEditor
                     className="filter-range-editor-test"
                     value={value}
                     range={range}
@@ -3619,8 +3189,8 @@ export async function installSharedFilterRangeEditorHarness(target: HTMLElement)
                     showReadout
                     onValueChange={updateValue}
                     onRangeChange={updateRange}
-                    onEditStart={(targetName) => state.editLog.push(`start:${targetName}`)}
-                    onEditEnd={(targetName) => state.editLog.push(`end:${targetName}`)}
+                    onGestureStart={(targetName) => state.editLog.push(`start:${targetName}`)}
+                    onGestureEnd={(_cancelled, targetName) => state.editLog.push(`end:${targetName}`)}
                 />
             );
         }
@@ -3725,234 +3295,8 @@ export async function installSharedFilterRangeEditorHarness(target: HTMLElement)
         setPreviewActive(nextPreviewActive: boolean) {
             setHarnessPreviewActive?.(nextPreviewActive);
         },
-        setValue(nextValue: Partial<FilterRangeValue>) {
+        setValue(nextValue: Partial<FilterValue>) {
             setHarnessValue?.(nextValue);
-        },
-        async unmount() {
-            mounted.unmount();
-            await waitForMicrotask();
-        },
-    };
-
-    await waitForMicrotask();
-}
-
-export async function installStandaloneEffectPresetHookHarness(target: HTMLElement) {
-    const patchConnection = new StandalonePresetHookPatchConnection();
-    const descriptorRegistry = createStandalonePresetDescriptorRegistry();
-    const factoryPresets = createStandaloneFactoryPresets();
-    let latestSnapshot: Record<string, unknown> | null = null;
-    let latestMutations: ReturnType<typeof useStandaloneEffectPresets>["mutations"] | null = null;
-    let firstMutations: ReturnType<typeof useStandaloneEffectPresets>["mutations"] | null = null;
-    let mutationsStable = true;
-
-    const mounted = mountHarness(target, (root) => {
-        function Harness() {
-            const { state, mutations } = useStandaloneEffectPresets("ott", {
-                descriptorRegistry,
-                factoryPresets,
-                initialFilter: { query: "env" },
-            });
-
-            if (!firstMutations) {
-                firstMutations = mutations;
-            } else if (firstMutations !== mutations) {
-                mutationsStable = false;
-            }
-
-            latestMutations = mutations;
-
-            useEffect(() => {
-                latestSnapshot = {
-                    ready: state.ready,
-                    filter: state.filter,
-                    visibleLabels: state.visiblePresets.map((preset) => preset.label),
-                    presetKeys: state.presets.map((preset) => preset.presetKey),
-                    activePreset: state.activePreset,
-                    currentValues: state.currentValues,
-                    missingCurrentValueEndpointIDs: state.missingCurrentValueEndpointIDs,
-                    mutationKeys: Object.keys(mutations).sort(),
-                    mutationsStable,
-                };
-            });
-
-            return null;
-        }
-
-        root.render(
-            <PatchConnectionProvider patchConnection={patchConnection}>
-                <Harness />
-            </PatchConnectionProvider>,
-        );
-    });
-
-    window.__COSIMO_DESKTOP_MODULE_HARNESS__ = {
-        async applyEnvelopeTamed() {
-            if (!latestMutations) {
-                throw new Error("Standalone preset mutations are not available.");
-            }
-
-            const result = latestMutations.applyPreset("factory:ott.envelope-tamed");
-            await waitForMicrotask();
-            return result;
-        },
-        getSnapshot() {
-            return {
-                latest: cloneValue(latestSnapshot),
-                events: cloneValue(patchConnection.events),
-                storedWrites: cloneValue(patchConnection.storedWrites),
-                requestedParameters: cloneValue(patchConnection.requestedParameters),
-                listenerCounts: patchConnection.getListenerCounts(),
-            };
-        },
-        async unmount() {
-            mounted.unmount();
-            await waitForMicrotask();
-        },
-    };
-
-    await waitForMicrotask();
-}
-
-export async function installStandaloneEffectPresetHookOptionsHarness(target: HTMLElement) {
-    const effectID = "hook-stateful";
-    const patchConnection = new StatefulPresetHookPatchConnection();
-    const adapterApplies: unknown[] = [];
-    const storedStateAdapters: Array<EffectStoredStateAdapter<{ pattern: string }>> = [{
-        key: "hook.matrix.v1",
-        schemaVersion: 1,
-        getContract() {
-            return {
-                key: "hook.matrix.v1",
-                schemaVersion: 1,
-                required: true,
-            };
-        },
-        capture() {
-            return { pattern: "captured" };
-        },
-        normalizeForPreset(value) {
-            if (!value || typeof value !== "object" || Array.isArray(value) || (value as { pattern?: unknown }).pattern !== "ok") {
-                throw new Error("hook matrix state must contain pattern ok.");
-            }
-
-            return { pattern: "ok" };
-        },
-        serializeForPreset(value) {
-            return { pattern: value.pattern };
-        },
-        apply(value) {
-            adapterApplies.push({ pattern: value.pattern });
-        },
-    }];
-    const oldContract = buildCanonicalPluginStateContract({
-        effectID,
-        parameters: [{
-            endpointID: "mix",
-            type: "number",
-            min: 0,
-            max: 1,
-            defaultValue: 0.5,
-        }],
-    });
-    const currentContract = buildPluginStateContract({
-        effectID,
-        status: statefulHookStatus,
-        storedState: storedStateAdapters,
-    });
-    const factoryPreset: EffectPresetV2 = {
-        kind: EFFECT_PRESET_V2_KIND,
-        version: EFFECT_PRESET_V2_SCHEMA_VERSION,
-        effectID,
-        presetID: "hook.old-mix",
-        label: "Old Mix",
-        contract: oldContract,
-        parameters: {
-            mix: 0.75,
-        },
-        storedState: {},
-    };
-    const factoryPresets = {
-        [effectID]: [factoryPreset],
-    };
-    let migrationCallCount = 0;
-    const presetMigrations: EffectPresetMigration[] = [{
-        effectID,
-        fromHash: oldContract.hash,
-        toHash: currentContract.hash,
-        migrate(preset) {
-            migrationCallCount += 1;
-
-            return {
-                ...preset,
-                contract: currentContract,
-                parameters: {
-                    amount: preset.parameters.mix,
-                },
-                storedState: {
-                    "hook.matrix.v1": { pattern: "ok" },
-                },
-            };
-        },
-    }];
-    let latestSnapshot: Record<string, unknown> | null = null;
-    let latestMutations: ReturnType<typeof useStandaloneEffectPresets>["mutations"] | null = null;
-
-    const mounted = mountHarness(target, (root) => {
-        function Harness() {
-            const { state, mutations } = useStandaloneEffectPresets(effectID, {
-                factoryPresets,
-                storedStateAdapters,
-                presetMigrations,
-            });
-
-            latestMutations = mutations;
-
-            useEffect(() => {
-                latestSnapshot = {
-                    ready: state.ready,
-                    lastError: state.lastError,
-                    currentContractHash: state.currentContract?.hash ?? null,
-                    currentContractStoredStateKeys: state.currentContract?.storedState.map((entry) => entry.key) ?? [],
-                    presets: state.presets.map((preset) => ({
-                        presetKey: preset.presetKey,
-                        canApply: preset.canApply,
-                        parameters: preset.preset.parameters,
-                        storedState: preset.preset.storedState,
-                        contractHash: preset.preset.contract.hash,
-                    })),
-                };
-            });
-
-            return null;
-        }
-
-        root.render(
-            <PatchConnectionProvider patchConnection={patchConnection}>
-                <Harness />
-            </PatchConnectionProvider>,
-        );
-    });
-
-    window.__COSIMO_DESKTOP_MODULE_HARNESS__ = {
-        async applyMigratedFactory() {
-            if (!latestMutations) {
-                throw new Error("Standalone preset mutations are not available.");
-            }
-
-            const result = latestMutations.applyPreset("factory:hook.old-mix");
-            await waitForMicrotask();
-            return result;
-        },
-        getSnapshot() {
-            return {
-                latest: cloneValue(latestSnapshot),
-                events: cloneValue(patchConnection.events),
-                storedWrites: cloneValue(patchConnection.storedWrites),
-                requestedParameters: cloneValue(patchConnection.requestedParameters),
-                adapterApplies: cloneValue(adapterApplies),
-                migrationCallCount,
-            };
         },
         async unmount() {
             mounted.unmount();

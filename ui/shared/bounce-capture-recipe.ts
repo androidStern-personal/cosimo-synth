@@ -6,22 +6,17 @@ import {
 import {
     readBounceDocumentFromPatch,
 } from "../../bounce/document.mjs";
-import type { ResourceClient } from "./resource-client";
+import type { ResourceClient } from "../../kit/ui/resource-client";
 import {
     loadFactoryBankCatalog,
 } from "./wavetable-bank";
-import {
-    DEFAULT_SAMPLES_PER_FRAME,
-    extractSourceFramesFromSamples,
-} from "./wavetable-mip";
+import { extractSourceFramesFromSamples } from "./wavetable-mip";
 import {
     buildModulationRuntimeEvents,
     parseModulationState,
 } from "./modulation";
-import {
-    buildLaneRuntimeEvents,
-    parseLaneState,
-} from "./lane-state";
+import { LANE_OUTPUT_CONTROL_ENDPOINT_ID, LANE_SLOT_PARAMS_ENDPOINT_ID, LANE_TOPOLOGY_ENDPOINT_ID } from "./lane-state";
+import { buildLaneRuntimeEventsV2, parseLaneStateV2 } from "./lane-state-v2";
 import {
     ARTICULATION_SNAPSHOT_ENDPOINT_ID,
 } from "./articulations";
@@ -33,8 +28,6 @@ import {
 import { getModulationArticulationCellIndex } from "./modulation-runtime-program";
 
 const ARTICULATION_NOTE_META_ENDPOINT_ID = "articulationNoteMeta";
-const WAVETABLE_MIP_FRAME_BATCH_SIZE = 3;
-const WAVETABLE_BATCH_SAMPLE_COUNT = WAVETABLE_MIP_FRAME_BATCH_SIZE * DEFAULT_SAMPLES_PER_FRAME;
 const OSCILLATOR_TABLE_ENDPOINTS = [
     "oscAWavetableSelect",
     "oscBWavetableSelect",
@@ -210,7 +203,7 @@ function structuredRuntimeSetupEvents(document: PatchDocumentLike) {
     if (articulationsResult._tag === "err") throw articulationsResult.error;
     const articulations = articulationsResult.value;
 
-    const laneResult = parseLaneState(document.storedState["lane.v1"]);
+    const laneResult = parseLaneStateV2(document.storedState["lane.v1"]);
     if (laneResult._tag === "err") throw new Error(laneResult.message);
 
     let modulationSerial = 0;
@@ -245,7 +238,12 @@ function structuredRuntimeSetupEvents(document: PatchDocumentLike) {
             deliverySerial: articulationSerial -= 1,
         },
     }));
-    const laneEvents: SetupEvent[] = buildLaneRuntimeEvents(laneResult.value).map((event) => ({
+    // Output Trim reaches the engine as host parameters, already in the snapshot;
+    // the remaining lane events are the ones the live rack delivery sends.
+    const laneEventEndpoints: ReadonlyArray<string> = [LANE_OUTPUT_CONTROL_ENDPOINT_ID, LANE_SLOT_PARAMS_ENDPOINT_ID, LANE_TOPOLOGY_ENDPOINT_ID];
+    const laneEvents: SetupEvent[] = buildLaneRuntimeEventsV2(laneResult.value).filter((event) => (
+        laneEventEndpoints.includes(event.endpointID)
+    )).map((event) => ({
         endpointID: event.endpointID,
         value: event.value,
         // Let the topology commit and its resident devices settle before the
@@ -352,10 +350,7 @@ export async function createProductBounceCaptureSnapshot({
 }
 
 export const bounceCaptureRecipeInternals = Object.freeze({
-    OSCILLATOR_TABLE_ENDPOINTS,
-    WAVETABLE_BATCH_SAMPLE_COUNT,
     articulationRootSetupEvents,
-    assertRecursiveBankMatchesDocument,
     recursiveBankSetupEvents,
     structuredRuntimeSetupEvents,
 });

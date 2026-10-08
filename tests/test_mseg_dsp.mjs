@@ -5,9 +5,9 @@ import { mkdtemp, readFile, writeFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
-const source=process.env.COSIMO_CMAJOR_SOURCE;
-const generator=process.env.CMAJOR_SHARED_GENERATOR;
-assert.ok(source&&generator,'Set COSIMO_CMAJOR_SOURCE and CMAJOR_SHARED_GENERATOR to the authored compiler/runtime.');
+import { cmajorExternalCodegen, cmajorSourceDirectory } from './helpers/cmajor_source.mjs';
+const source=cmajorSourceDirectory();
+const generator=cmajorExternalCodegen();
 const directory=await mkdtemp(path.join(tmpdir(),'kit-mseg-dsp-'));
 try {
     const module=await readFile(path.resolve(import.meta.dirname,'../kit/cmajor/mseg.cmajor'),'utf8');
@@ -19,7 +19,10 @@ try {
         connection trigger->reader.trigger; connection noteOff->reader.noteOff;
         connection playback->reader.playback; connection duration->reader.durationSeconds; connection reader.out->out;
     }`);
-    execFileSync(generator,[filename,generated,JSON.stringify({SIMD:'simd-only',sharedMemory:{maximumPages:256}})],{stdio:'pipe'});
+    const manifest=path.join(directory,'Probe.cmajorpatch');
+    await writeFile(manifest,JSON.stringify({CmajorVersion:1,ID:'dev.builderkit.mseg.dsp-probe',version:'1',name:'MSEG DSP Probe',source:['Probe.cmajor']}));
+    execFileSync(generator,[manifest,generated,'Probe','--target','javascript','--max-frames-per-block','128','--shared-memory-maximum-pages','256'],{stdio:'pipe'});
+    await writeFile(generated,(await readFile(generated,'utf8'))+'\nexport default Probe;\n');
     const {default:Program}=await import(pathToFileURL(generated));
     const {compileSharedDataReader}=await import(pathToFileURL(path.join(source,'javascript/cmaj_api/cmaj-shared-data-reader.js')));
     const performer=new Program(),requirements=performer.getMemoryRequirements();

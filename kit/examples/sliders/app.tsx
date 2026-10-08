@@ -28,13 +28,14 @@ const examples: DocsExample[] = [
 const root = document.getElementById("root");
 if (!root) throw new Error("Missing component reference root.");
 createRoot(root).render(<ReferencePage title="Slider" description="A segmented numeric slider with optional modulation endpoints."
-    usage={'import { useState } from "react";\nimport { EditorTickSlider } from "../../kit/index";\n\nexport function Example() {\n    const [value, setValue] = useState(0.5);\n    return <EditorTickSlider label="Gain" value={value} onChange={setValue} />;\n}'}
+    usage={'import { useState } from "react";\nimport { Slider } from "../../kit/index";\n\nexport function Example() {\n    const [value, setValue] = useState(0.5);\n    return <Slider label="Gain" value={value} onValueChange={setValue} />;\n}'}
     examples={examples} api={[
-        { name: "value / onChange", description: "Controlled value. Defaults to a 0–1 range." },
-        { name: "min / max / step / tickCount", description: "Range, increments and number of cells." },
-        { name: "scale / discrete", description: "Linear or logarithmic travel; partial or complete cell filling." },
+        { name: "value / onValueChange", description: "Controlled value. Defaults to a 0–1 range." },
+        { name: "label / aria-label", description: "Visible label; aria-label replaces it as the accessible name." },
+        { name: "min / max / step / tickCount", description: "Range, snapping step and number of cells." },
+        { name: "scale / discrete", description: "Linear, logarithmic or custom travel; partial or whole-cell filling." },
         { name: "modulation", description: "Optional end value, onEndChange and up/down/both direction." },
         { name: "entrySpec / formatValue", description: "Unit-aware exact entry and display formatting." },
         { name: "className / style / ref", description: "Standard root styling, attributes and element ref." },
-        { name: "onGestureStart / onGestureEnd", description: "Group edits; cleanup also closes an active gesture." },
+        { name: "onGestureStart / onGestureEnd(cancelled)", description: "Bracket each drag, held key or exact entry as one edit." },
     ]} />);

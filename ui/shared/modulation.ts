@@ -6,23 +6,20 @@ import {
 } from "./lane-modulation-targets";
 import {
     allRackParameterDescriptors,
-    rackModulationIdentityEndpointID,
     type RackParameterDescriptor,
 } from "./rack-parameter-descriptors";
 import {
     MSEG_RATE_MAX_SECONDS,
-    clamp01,
-    clampMsegRateSeconds,
     createDefaultMsegPlayback,
     createDefaultMsegShape,
     msegShapesEqual,
     normalizeMsegPlayback,
     normalizeMsegShape,
-    renderMsegShape,
     type MsegPlayback,
     type MsegShape,
     type MsegState,
 } from "./mseg";
+import { clamp01, renderMsegShape } from "../../kit/ui/mseg";
 import {
     MODULATION_SOURCE_IDENTITIES,
     MODULATION_TARGET_IDENTITIES,
@@ -156,7 +153,7 @@ const RACK_MODULATION_PARAMETERS = allRackParameterDescriptors()
     .filter((parameter) => parameter.modulationTargetIndex !== null);
 const RACK_MODULATION_PARAMETER_BY_KIND = new Map<RackModulationTargetKind, RackParameterDescriptor>(
     RACK_MODULATION_PARAMETERS.map((parameter) => [
-        laneBaseKindForRackEndpoint(rackModulationIdentityEndpointID(parameter)),
+        laneBaseKindForRackEndpoint(parameter.endpointID),
         parameter,
     ]),
 );
@@ -231,8 +228,6 @@ export type ModulationState = {
 };
 
 export type ModulationStateChangeKind = "general" | "routeAmount";
-
-type ModulationRouteAmountListener = (amount: number | null) => void;
 
 /** Expected boundary failure for a non-current modulation document. */
 export class ModulationStateParseError extends Error {
@@ -322,34 +317,10 @@ export function buildPatchModulationTargetOptions(
     ];
 }
 
-type StoredStateMessage = {
-    key?: unknown;
-    value?: unknown;
-};
-
 let generatedRouteIdCounter = 1;
 
 function hasOwnValue(record: Record<string, unknown>, key: string) {
     return Object.prototype.hasOwnProperty.call(record, key);
-}
-
-function readFullStoredStateValue(storedState: unknown, key: string) {
-    const fullState = storedState && typeof storedState === "object"
-        ? storedState as Record<string, unknown>
-        : {};
-    const values = fullState.values && typeof fullState.values === "object"
-        ? fullState.values as Record<string, unknown>
-        : {};
-
-    if (hasOwnValue(values, key)) {
-        return values[key];
-    }
-
-    if (hasOwnValue(fullState, key)) {
-        return fullState[key];
-    }
-
-    return undefined;
 }
 
 export type MsegEditorControllerLike = {
@@ -1026,21 +997,6 @@ export function deserializeModulationState(value: unknown): ModulationState {
         throw parsedState.error;
     }
     return parsedState.value;
-}
-
-function modulationStatesEqual(left: ModulationState, right: ModulationState) {
-    return serializeModulationState(left) === serializeModulationState(right);
-}
-
-function toStoredStateEchoToken(value: unknown) {
-    if (typeof value === "string") {
-        return value;
-    }
-    try {
-        return `${typeof value}:${JSON.stringify(value)}`;
-    } catch {
-        return `${typeof value}:${String(value)}`;
-    }
 }
 
 function toMsegPlaybackUpload(slotIndex: number, playback: Omit<MsegPlayback, "rate">): ModulationMsegPlaybackUpload {

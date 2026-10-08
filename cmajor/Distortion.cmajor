@@ -269,8 +269,8 @@ namespace wt
         input value float32 wetHPHzIn [[ init: 40.0f ]];
         input value float32 wetLPHzIn [[ init: 18000.0f ]];
 
-        // The one verification seam authorised by T25. EffectsRack never forwards it;
-        // only the deterministic offline production-path probe bypasses matching.
+        // The one verification seam: EffectsRack never forwards it, so only the
+        // deterministic offline production-path probe bypasses level matching.
         input value float32 calibrationBypassIn [[ init: 0.0f ]];
 
         // Effects Lane pool lifecycle only: a pool slot entering a committed

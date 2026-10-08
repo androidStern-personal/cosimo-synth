@@ -1,5 +1,5 @@
 /**
- * T14: the compact Mod workspace's two top-level panels — SOURCE and
+ * The compact Mod workspace's two top-level panels — SOURCE and
  * MAPPINGS — on the ONE segmented selector + directional slide the Voice
  * A/B/C bar uses. First visit in an instance opens SOURCE; later visits
  * restore the instance's last panel (sessionStorage, the same scope as the
@@ -35,7 +35,7 @@ export function MobileModWorkspacePager({
     sourcePanel: ReactNode;
     mappingsPanel: ReactNode;
     /** Bumps when the floating bar selects a source while Mod is open: the
-        pager switches to SOURCE (T14) without a slide (programmatic). */
+        pager switches to SOURCE without a slide (programmatic). */
     focusSourceSerial?: number;
     onPanelChange?: (panel: MobileModPanelId) => void;
 }) {

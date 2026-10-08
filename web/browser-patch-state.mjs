@@ -1,14 +1,8 @@
 export const BROWSER_PATCH_STATE_KEY = "cosimo.web.patch-state.v2";
 
 const BROWSER_PATCH_STATE_FORMAT = "cosimo.browserPatchState";
-// T74 completes the Polish sound contract. Earlier snapshots are discarded whole.
+// A saved state of any other version is discarded whole.
 const BROWSER_PATCH_STATE_VERSION = 5;
-const REQUIRED_SOUND_STORED_STATE_KEYS = Object.freeze([
-    "modulation.v6",
-    "articulations.v4",
-    "bounce.v1",
-    "lane.v1",
-]);
 
 function resolveStorage(storage) {
     if (storage !== undefined) return storage;
@@ -32,7 +26,6 @@ function emptyBrowserPatchState() {
             parameters: {},
             storedState: {},
         },
-        auxiliary: {},
     };
 }
 
@@ -42,8 +35,7 @@ function parseBrowserPatchState(value) {
         || value.version !== BROWSER_PATCH_STATE_VERSION
         || !isRecord(value.sound)
         || !isRecord(value.sound.parameters)
-        || !isRecord(value.sound.storedState)
-        || !isRecord(value.auxiliary)) {
+        || !isRecord(value.sound.storedState)) {
         return null;
     }
 
@@ -61,23 +53,20 @@ function parseBrowserPatchState(value) {
             parameters,
             storedState: { ...value.sound.storedState },
         },
-        auxiliary: { ...value.auxiliary },
     };
 }
 
-function isCompleteSoundSnapshot(state, parameterEndpointIDs, requiredStoredStateKeys) {
+/**
+ * A sound is complete when it holds every visible parameter. Its stored state needs no
+ * particular key: the synth stores a field only once it is edited, so a missing key is
+ * a field still at its default.
+ */
+function isCompleteSoundSnapshot(state, parameterEndpointIDs) {
     if (state === null || parameterEndpointIDs.size === 0) return false;
 
     const savedParameterEndpointIDs = Object.keys(state.sound.parameters);
-    if (savedParameterEndpointIDs.length !== parameterEndpointIDs.size
-        || savedParameterEndpointIDs.some((endpointID) => !parameterEndpointIDs.has(endpointID))) {
-        return false;
-    }
-
-    return requiredStoredStateKeys.every((key) => (
-        Object.prototype.hasOwnProperty.call(state.sound.storedState, key)
-        && state.sound.storedState[key] !== undefined
-    ));
+    return savedParameterEndpointIDs.length === parameterEndpointIDs.size
+        && savedParameterEndpointIDs.every((endpointID) => parameterEndpointIDs.has(endpointID));
 }
 
 /** Decode v5 storage; the installer validates live completeness before use. */
@@ -95,15 +84,15 @@ export function readBrowserPatchState({
 }
 
 /**
- * Restores public parameters first, then structured state, and keeps the same
- * two public ports durable. The previous flat v1 sound bag is intentionally
- * ignored: this is the hard-cut state contract.
+ * Restores the saved sound, parameters first and then stored state, and saves
+ * every later parameter and stored-state write once the engine has reported every
+ * parameter and its whole stored state. A saved parameter that deferParameterRestore
+ * holds back reaches the engine only through applyDeferredParameter.
  */
 export function installBrowserPatchStatePersistence(connection, {
     storage,
     storageKey = BROWSER_PATCH_STATE_KEY,
     deferParameterRestore = () => false,
-    requiredStoredStateKeys = REQUIRED_SOUND_STORED_STATE_KEYS,
 } = {}) {
     const activeStorage = resolveStorage(storage);
     const parameterEndpointIDs = new Set((connection.inputEndpoints ?? []).flatMap((endpoint) => (
@@ -113,30 +102,18 @@ export function installBrowserPatchStatePersistence(connection, {
             : []
     )));
     const savedBrowserState = readBrowserPatchState({ storage: activeStorage, storageKey });
-    const hasAcceptedSavedSound = isCompleteSoundSnapshot(
-        savedBrowserState,
-        parameterEndpointIDs,
-        requiredStoredStateKeys,
-    );
+    const hasAcceptedSavedSound = isCompleteSoundSnapshot(savedBrowserState, parameterEndpointIDs);
     let browserState = hasAcceptedSavedSound ? savedBrowserState : emptyBrowserPatchState();
     let acceptedBrowserState = browserState;
     let lastAttemptedSerializedState = hasAcceptedSavedSound
         ? JSON.stringify(browserState)
         : null;
     let hasCapturedFullStoredState = hasAcceptedSavedSound;
-    const deferredParameters = {};
-    const deferredParameterEndpointIDs = new Set();
-    const runtimeOnlyParameterEchoes = new Map();
+    const deferredParameters = new Map();
 
     const persistState = (nextState) => {
         browserState = nextState;
-        if (!isCompleteSoundSnapshot(
-            browserState,
-            parameterEndpointIDs,
-            requiredStoredStateKeys,
-        ) || !hasCapturedFullStoredState) {
-            return;
-        }
+        if (!hasCapturedFullStoredState || !isCompleteSoundSnapshot(browserState, parameterEndpointIDs)) return;
 
         let serializedState;
         try {
@@ -157,20 +134,11 @@ export function installBrowserPatchStatePersistence(connection, {
     };
 
     const persistParameter = (endpointID, value, { explicitWrite = false } = {}) => {
-        const suppressed = runtimeOnlyParameterEchoes.get(endpointID) ?? [];
-        const now = Date.now();
-        const matchIndex = suppressed.findIndex((entry) => entry.value === value && entry.expiresAt >= now);
-        if (matchIndex !== -1) {
-            suppressed.splice(matchIndex, 1);
-            if (suppressed.length === 0) runtimeOnlyParameterEchoes.delete(endpointID);
-            return;
-        }
-        const liveSuppressed = suppressed.filter((entry) => entry.expiresAt >= now);
-        if (liveSuppressed.length > 0) runtimeOnlyParameterEchoes.set(endpointID, liveSuppressed);
-        else runtimeOnlyParameterEchoes.delete(endpointID);
-        if (deferredParameterEndpointIDs.has(endpointID)) {
+        if (deferredParameters.has(endpointID)) {
+            // While a saved value is held back, the engine reports its default, which is
+            // not the saved sound. Only a deliberate write replaces the held value.
             if (!explicitWrite) return;
-            deferredParameterEndpointIDs.delete(endpointID);
+            deferredParameters.delete(endpointID);
         }
         if (!parameterEndpointIDs.has(endpointID)
             || typeof value !== "number"
@@ -189,14 +157,6 @@ export function installBrowserPatchStatePersistence(connection, {
     };
 
     const persistStoredValue = (key, value) => {
-        if (key === "effects.presets.v2") {
-            const auxiliary = { ...browserState.auxiliary };
-            if (value === undefined) delete auxiliary[key];
-            else auxiliary[key] = value;
-            persistState({ ...browserState, auxiliary });
-            return;
-        }
-
         const storedState = { ...browserState.sound.storedState };
         if (value === undefined) delete storedState[key];
         else storedState[key] = value;
@@ -214,8 +174,7 @@ export function installBrowserPatchStatePersistence(connection, {
         if (Object.prototype.hasOwnProperty.call(browserState.sound.parameters, endpoint.endpointID)) {
             const value = browserState.sound.parameters[endpoint.endpointID];
             if (deferParameterRestore(endpoint.endpointID, value, browserState)) {
-                deferredParameters[endpoint.endpointID] = value;
-                deferredParameterEndpointIDs.add(endpoint.endpointID);
+                deferredParameters.set(endpoint.endpointID, value);
             } else {
                 sendEventOrValue?.(endpoint.endpointID, value);
             }
@@ -224,9 +183,6 @@ export function installBrowserPatchStatePersistence(connection, {
     for (const [key, value] of Object.entries(
         hasAcceptedSavedSound ? browserState.sound.storedState : {},
     )) {
-        sendStoredStateValue(key, value);
-    }
-    for (const [key, value] of Object.entries(hasAcceptedSavedSound ? browserState.auxiliary : {})) {
         sendStoredStateValue(key, value);
     }
 
@@ -244,39 +200,29 @@ export function installBrowserPatchStatePersistence(connection, {
     };
 
     connection.addStoredStateValueListener?.((message) => {
-        const storedStateMessage = message?.event ?? message;
-        if (typeof storedStateMessage?.key === "string") {
-            persistStoredValue(storedStateMessage.key, storedStateMessage.value);
-        }
+        if (typeof message?.key === "string") persistStoredValue(message.key, message.value);
     });
 
-    connection.requestFullStoredState?.((fullStoredState) => {
-        if (!isRecord(fullStoredState)) return;
+    // Cmajor replies with { parameters: [...], values: {...} }; the stored state is
+    // in values, and the parameters are captured through their own listeners below.
+    connection.requestFullStoredState?.((fullState) => {
+        if (!isRecord(fullState?.values)) return;
 
         const storedState = {};
-        const auxiliary = { ...browserState.auxiliary };
-        for (const [key, value] of Object.entries(fullStoredState)) {
-            if (key === "effects.presets.v2") {
-                if (value === undefined) delete auxiliary[key];
-                else auxiliary[key] = value;
-                continue;
-            }
+        for (const [key, value] of Object.entries(fullState.values)) {
             if (value !== undefined) storedState[key] = value;
         }
         hasCapturedFullStoredState = true;
         persistState({
             ...browserState,
             sound: { ...browserState.sound, storedState },
-            auxiliary,
         });
     });
 
     for (const endpointID of parameterEndpointIDs) {
         connection.addParameterListener?.(endpointID, (value) => persistParameter(endpointID, value));
-        // A deferred sampled source intentionally leaves the engine at its
-        // safe oscillator default until OPFS restore commits. Reading that
-        // temporary default must not overwrite the durable sampled intent.
-        if (!Object.hasOwn(deferredParameters, endpointID)) {
+        // A held-back endpoint is not read: the engine would answer with its default.
+        if (!deferredParameters.has(endpointID)) {
             connection.requestParameterValue?.(endpointID);
         }
     }
@@ -285,14 +231,12 @@ export function installBrowserPatchStatePersistence(connection, {
         get browserState() {
             return acceptedBrowserState;
         },
-        deferredParameters: Object.freeze({ ...deferredParameters }),
-        sendRuntimeEventOrValue(endpointID, value, ...rest) {
-            if (parameterEndpointIDs.has(endpointID)) {
-                const queue = runtimeOnlyParameterEchoes.get(endpointID) ?? [];
-                queue.push({ value, expiresAt: Date.now() + 5_000 });
-                runtimeOnlyParameterEchoes.set(endpointID, queue);
-            }
-            return sendEventOrValue?.(endpointID, value, ...rest);
+        /** Sends the saved value held back for this endpoint, once; does nothing when none is held. */
+        applyDeferredParameter(endpointID) {
+            if (!deferredParameters.has(endpointID)) return;
+            const value = deferredParameters.get(endpointID);
+            deferredParameters.delete(endpointID);
+            sendEventOrValue?.(endpointID, value);
         },
     });
 }

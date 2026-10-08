@@ -19,7 +19,7 @@ import {
   paintFilterCarvedMountain,
   paintFilterTable,
 } from "../../../ui/shared/filter-depth-concepts.ts";
-import { FILTER_SPECTRUM_RENDER_MODE_OPTIONS } from "../../../ui/shared/filter-spectrum.ts";
+import { FILTER_SPECTRUM_RENDER_MODE_OPTIONS } from "../../../kit/ui/filter-spectrum.ts";
 import {
   createDefaultDistortionEnergyParams,
   paintDistortionEnergyField,
@@ -30,7 +30,7 @@ import {
   createFilterSpectrumDisplayFrame,
   advanceFilterSpectrumDisplayState,
   buildFilterSpectrumRenderGeometry,
-} from "../../../ui/shared/filter-spectrum.ts";
+} from "../../../kit/ui/filter-spectrum.ts";
 import {
   makeDistortionHistoryFrame,
   makeDistortionScopeFrame,

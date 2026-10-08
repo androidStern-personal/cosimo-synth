@@ -24,7 +24,7 @@ import {
     type PolishMeterFrame,
 } from "../shared/polish";
 
-/** The only editable values the accepted T75 surface is allowed to explain. */
+/** The only editable values the full-page Polish editor explains. */
 export type PolishFullScreenValues = {
     readonly safeBassAmount: number;
     readonly enhancerAmount: number;
@@ -33,8 +33,9 @@ export type PolishFullScreenValues = {
 };
 
 /**
- * Control slots keep the full page owned by T75 while T74 remains the sole
- * owner of compact controls, bypass state, and their eventual bindings.
+ * Control slots keep the full page owned by this editor while the rack's
+ * compact Polish module remains the sole owner of its controls, bypass state,
+ * and their bindings.
  */
 export type PolishFullScreenControls = {
     readonly safeBass: ReactNode;
@@ -43,7 +44,7 @@ export type PolishFullScreenControls = {
     readonly outputTrim: ReactNode;
 };
 
-/** Approved module activity is supplied by T74 instead of duplicated here. */
+/** Module activity is supplied by the compact Polish module instead of duplicated here. */
 export type PolishFullScreenModuleActivity = {
     readonly safeBass: boolean;
     readonly enhancer: boolean;
@@ -51,7 +52,7 @@ export type PolishFullScreenModuleActivity = {
     readonly outputTrim: boolean;
 };
 
-/** Optional T74-owned bypass actions mirrored beside their full-page stages. */
+/** Optional bypass actions, owned by the compact Polish module, mirrored beside their full-page stages. */
 export type PolishFullScreenModuleActions = Partial<Readonly<Record<
     keyof PolishFullScreenModuleActivity,
     ReactNode
@@ -285,7 +286,7 @@ function OutputMeter({
     );
 }
 
-/** Render T75's dedicated, controlled full-page Polish surface. */
+/** Render the dedicated, controlled full-page Polish surface. */
 export function PolishFullScreenEditor({
     open,
     onClose,

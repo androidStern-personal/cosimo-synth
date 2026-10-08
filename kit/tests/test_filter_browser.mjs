@@ -9,18 +9,20 @@ import { chromium } from 'playwright'
 const root = path.resolve(import.meta.dirname, '../..')
 let server, browser, base
 before(async () => {
-    server = await createServer({ configFile: path.join(root, 'kit/examples/filters/vite.config.mjs'), server: { host: '127.0.0.1', port: 0 }, logLevel: 'error' })
+    server = await createServer({ configFile: path.join(root, 'kit/examples/vite.config.mjs'), server: { host: '127.0.0.1', port: 0 }, logLevel: 'error' })
     await server.listen()
-    base = `http://127.0.0.1:${server.httpServer.address().port}`
+    base = `http://127.0.0.1:${server.httpServer.address().port}/filters/`
     browser = await chromium.launch({ headless: true })
 })
 after(async () => { await browser?.close(); await server?.close() })
-async function withPage(run, options = {}) {
+async function withPage(run, { prepare, ...options } = {}) {
     const page = await browser.newPage(options)
+    // Interactions get 5 s. Loading the page may first wait for Vite to pre-bundle dependencies on a cold cache.
     page.setDefaultTimeout(5000)
+    const load = { timeout: 60000 }
     const errors = []
     page.on('pageerror', e => errors.push(e.message))
-    try { await page.goto(base); await page.locator('#default [data-slot=filter-editor]').waitFor(); await run(page); assert.deepEqual(errors, []) }
+    try { await prepare?.(page); await page.goto(base, load); await page.locator('#default [data-slot=filter-editor]').waitFor(load); await run(page); assert.deepEqual(errors, []) }
     finally { await page.close() }
 }
 async function drag(page, handle, dx, dy) {
@@ -33,20 +35,31 @@ async function drag(page, handle, dx, dy) {
 const valueHandle = section => section.locator('[data-role=filter-range-value-hit-target]')
 const endpoint = (section, side) => section.locator(`[data-role=filter-travel-hit-target-${side}]`)
 const endpointState = section => section.locator('[data-role=endpoint-values]').textContent().then(JSON.parse)
-const debug = section => section.locator('[data-role=filter-graph-debug]').textContent().then(JSON.parse)
+// The value grip is a slider: aria-valuenow is the rounded cutoff and aria-valuetext ends in the Q.
+const valueState = async section => {
+    const handle = valueHandle(section)
+    return { cutoffHz: Number(await handle.getAttribute('aria-valuenow')),
+        q: Number((await handle.getAttribute('aria-valuetext')).match(/Q ([\d.]+)$/)[1]) }
+}
+const editorMode = section => section.locator('[data-role=filter-range-editor]').getAttribute('data-filter-mode')
+const canvasHasPixels = selector => {
+    const canvas = document.querySelector(selector)
+    return Array.from(canvas.getContext('2d').getImageData(0, 0, canvas.width, canvas.height).data).some(v => v !== 0)
+}
 test('the simple filter supports pointer, keyboard, mode and externally driven rendering', () => withPage(async page => {
     const s=page.locator('#default'), h=valueHandle(s)
-    const before=await debug(s)
+    const before=await valueState(s)
     await drag(page,h,45,-25)
-    const after=await debug(s)
-    assert.ok(after.base.cutoffHz>before.base.cutoffHz); assert.ok(after.base.q>before.base.q)
+    const after=await valueState(s)
+    assert.ok(after.cutoffHz>before.cutoffHz); assert.ok(after.q>before.q)
     const original=await h.getAttribute('aria-valuetext'); await h.press('ArrowUp'); assert.notEqual(await h.getAttribute('aria-valuetext'),original)
-    await s.getByRole('button',{name:/Cycle filter mode/}).click(); assert.equal((await debug(s)).base.mode,2)
+    assert.equal(await editorMode(s),'lowpass')
+    await s.getByRole('button',{name:/Cycle filter mode/}).click(); assert.equal(await editorMode(s),'highpass')
 }))
 test('the cutoff band keeps the base independent and anchors unipolar start',()=>withPage(async page=>{
-    const s=page.locator('#band');const baseBefore=(await debug(s)).base.cutoffHz
+    const s=page.locator('#band');const baseBefore=(await valueState(s)).cutoffHz
     const start=s.locator('[data-role=filter-range-start-hit-target]'), original=await start.getAttribute('aria-valuenow')
-    await drag(page,start,40,0);assert.notEqual(await start.getAttribute('aria-valuenow'),original);assert.equal((await debug(s)).base.cutoffHz,baseBefore)
+    await drag(page,start,40,0);assert.notEqual(await start.getAttribute('aria-valuenow'),original);assert.equal((await valueState(s)).cutoffHz,baseBefore)
     await s.getByRole('checkbox').check();assert.equal(await start.count(),0)
     const guide=s.locator('[data-role=filter-range-start-guide]'), handle=s.locator('[data-role=filter-range-value-handle]')
     assert.equal(await guide.getAttribute('x1'),await handle.getAttribute('cx'))
@@ -69,20 +82,28 @@ test('axis constraints, unipolar start and endpoint keyboard editing remain inde
     const fixedEnd=state.end;await drag(page,valueHandle(s),0,20);assert.deepEqual((await endpointState(s)).end,fixedEnd)
 }))
 test('analyzer modes, live preview and removing a frame change the actual canvas',()=>withPage(async page=>{
-    const s=page.locator('#analyzer');await s.scrollIntoViewIfNeeded()
-    await page.waitForFunction(()=>JSON.parse(document.querySelector('#analyzer [data-role=filter-graph-debug]').textContent).spectrum.hasSpectrum)
-    let d=await debug(s);assert.equal(d.spectrum.renderGeometry.kind,'graph');assert.ok(d.live.hasActive)
-    const canvas=s.locator('canvas'), graphImage=await canvas.evaluate(c=>c.toDataURL())
-    await s.getByRole('combobox').selectOption('round-bars');await page.waitForFunction(()=>JSON.parse(document.querySelector('#analyzer [data-role=filter-graph-debug]').textContent).spectrum.renderGeometry?.rounded)
-    // The DOM describes the next geometry before its requestAnimationFrame paints it.
-    // Verify the actual pixels, rather than assuming the state update already painted.
-    await page.waitForFunction(image=>document.querySelector('#analyzer canvas').toDataURL()!==image,graphImage)
-    await s.getByRole('checkbox').uncheck();await page.waitForFunction(()=>!JSON.parse(document.querySelector('#analyzer [data-role=filter-graph-debug]').textContent).spectrum.hasSpectrum)
-    await page.waitForFunction(()=>{
-        const c=document.querySelector('#analyzer canvas')
-        return !Array.from(c.getContext('2d').getImageData(0,0,c.width,c.height).data).some(v=>v!==0)
-    })
-}))
+    // The page loads on a paused fake clock, so the demo signal's 50 ms timer
+    // ticks only when the test advances time. One tick delivers a frame; each
+    // 16 ms step then paints one animation frame, and all of it fits before the
+    // next tick, so canvas differences come from the render mode alone.
+    const s=page.locator('#analyzer'),canvas=s.locator('canvas');await s.scrollIntoViewIfNeeded()
+    const image=()=>canvas.evaluate(c=>c.toDataURL())
+    const paint=()=>page.clock.runFor(16)
+    await page.clock.runFor(50);await paint()
+    assert.ok(await page.evaluate(canvasHasPixels,'#analyzer canvas'))
+    assert.equal(await s.locator('[data-role=filter-range-preview-response]').count(),1)
+    const graphImage=await image()
+    await s.getByRole('combobox').selectOption('round-bars');await paint()
+    assert.notEqual(await image(),graphImage)
+    await s.getByRole('combobox').selectOption('graph');await paint()
+    assert.equal(await image(),graphImage)
+    // The example drops its frame in an effect. React renders that change on a
+    // real-time task the fake clock does not drive, so keep painting animation
+    // frames (at most ten) until the render has landed.
+    await s.getByRole('checkbox').uncheck()
+    for(let frame=0;frame<10&&await page.evaluate(canvasHasPixels,'#analyzer canvas');frame++)await paint()
+    assert.equal(await page.evaluate(canvasHasPixels,'#analyzer canvas'),false)
+},{prepare:async page=>{await page.clock.install({time:0});await page.clock.pauseAt(1000)}}))
 test('custom styles do not change interaction and read-only/disabled prevent writes',()=>withPage(async page=>{
     const s=page.locator('#states'), h=valueHandle(s)
     assert.equal(await s.locator('[data-role=filter-range-value-response]').evaluate(n=>getComputedStyle(n).stroke),'rgb(235, 166, 118)')
@@ -102,9 +123,9 @@ test('custom styles do not change interaction and read-only/disabled prevent wri
         return (Math.max(ink,background)+0.05)/(Math.min(ink,background)+0.05)
     })
     assert.ok(contrast>=4.5,`dark mode icon must remain legible, contrast was ${contrast}`)
-    await drag(page,h,20,-30);assert.ok((await debug(s)).base.cutoffHz>400)
+    await drag(page,h,20,-30);assert.ok((await valueState(s)).cutoffHz>400)
     await s.getByRole('checkbox',{name:'Read only'}).check();let original=await h.getAttribute('aria-valuetext');await h.press('ArrowRight');await drag(page,h,20,20);assert.equal(await h.getAttribute('aria-valuetext'),original)
-    await s.getByRole('button',{name:'External reset'}).click();assert.equal((await debug(s)).base.cutoffHz,3000)
+    await s.getByRole('button',{name:'External reset'}).click();assert.equal((await valueState(s)).cutoffHz,3000)
     await s.getByRole('checkbox',{name:'Read only'}).uncheck();await s.getByRole('checkbox',{name:'Disabled'}).check();original=await h.getAttribute('aria-valuetext');await h.press('ArrowLeft');assert.equal(await h.getAttribute('aria-valuetext'),original);assert.equal(await s.getByRole('button',{name:/Cycle filter mode/}).isDisabled(),true)
 }))
 test('examples and their copyable code remain readable on a phone',()=>withPage(async page=>{
@@ -121,7 +142,13 @@ test('copied examples typecheck using only the public kit boundary',async()=>{
     const options=ts.parseJsonConfigFileContent(config,ts.sys,root).options
     const program=ts.createProgram([...files,path.join(root,'kit/ui/style-modules.d.ts')],{...options,types:['vite/client'],noEmit:true})
     assert.deepEqual(ts.getPreEmitDiagnostics(program).map(d=>ts.flattenDiagnosticMessageText(d.messageText,'\n')),[])
-    for(const file of files){const source=await readFile(file,'utf8');assert.ok(!source.includes('/ui/filter-'));assert.ok(!source.includes('ui/shared'))}
+    // Relative imports may reach the kit only through kit/index; sibling example files are fine.
+    const publicEntry=path.join(root,'kit/index'), examples=path.join(root,'kit/examples')+path.sep
+    for(const file of files){
+        const imports=ts.preProcessFile(await readFile(file,'utf8')).importedFiles.map(i=>i.fileName).filter(name=>name.startsWith('.'))
+        const targets=imports.map(name=>path.resolve(path.dirname(file),name))
+        assert.deepEqual(targets.filter(target=>target!==publicEntry&&!target.startsWith(examples)),[],file)
+    }
 })
 
 async function fixture(page) {
@@ -133,7 +160,7 @@ async function fixture(page) {
 }
 test('shadow-root defaults share one sheet and release it with the last control',()=>withPage(async page=>{
     const host=await fixture(page)
-    const sheet=()=>page.evaluate(()=>document.querySelector('#fixture').shadowRoot.querySelectorAll('style[data-builder-kit-filter]').length)
+    const sheet=()=>page.evaluate(()=>document.querySelector('#fixture').shadowRoot.querySelectorAll('style[data-builder-kit-styles=filter]').length)
     assert.equal(await sheet(),1)
     assert.equal(await host.locator('[data-role=filter-range-value-response]').evaluate(n=>getComputedStyle(n).stroke),'rgb(28, 28, 28)')
     await page.evaluate(()=>window.filterFixture.configure({second:false}));await page.waitForFunction(()=>document.querySelector('#fixture').shadowRoot.querySelectorAll('[data-slot=filter-editor]').length===1)
@@ -153,9 +180,22 @@ test('blur, cancellation, disabling and unmount close each gesture once and stop
         else await page.evaluate(which=>window.filterFixture.configure({[which]:true}),action)
         await page.waitForFunction(()=>window.filterFixture.events.length===2)
         await page.mouse.move(sx+45,sy-30);await page.mouse.up()
-        assert.deepEqual(await page.evaluate(()=>window.filterFixture.events),['start:0:value','end:0:value']);assert.equal(await page.evaluate(()=>window.filterFixture.writes()),writes)
+        assert.deepEqual(await page.evaluate(()=>window.filterFixture.events),['start:0:value','cancel:0:value']);assert.equal(await page.evaluate(()=>window.filterFixture.writes()),writes)
         await page.evaluate(()=>{window.filterFixture.unmount();document.getElementById('fixture').remove()})
     }
+}))
+test('a held key is one gesture and Shift makes the keyboard step finer',()=>withPage(async page=>{
+    const host=await fixture(page), h=valueHandle(host)
+    await h.focus();const start=(await valueState(host)).cutoffHz
+    await page.keyboard.down('ArrowRight');await page.keyboard.down('ArrowRight');await page.keyboard.up('ArrowRight')
+    const coarse=(await valueState(host)).cutoffHz
+    assert.deepEqual(await page.evaluate(()=>window.filterFixture.events),['start:0:value','end:0:value'])
+    await h.press('Shift+ArrowRight');const fine=(await valueState(host)).cutoffHz
+    assert.ok(coarse>start&&fine>coarse);assert.ok(fine-coarse<(coarse-start)/10)
+    await h.press('Home');assert.equal((await valueState(host)).cutoffHz,20)
+    await page.evaluate(()=>window.filterFixture.configure({readOnly:true}))
+    assert.equal(await h.getAttribute('tabindex'),'0');assert.equal(await h.getAttribute('aria-readonly'),'true')
+    await page.evaluate(()=>window.filterFixture.unmount())
 }))
 test('modulation captures its anchor on press and uses current callbacks when released',()=>withPage(async page=>{
     const host=await fixture(page), h=endpoint(host,'end');await h.scrollIntoViewIfNeeded();const b=await h.boundingBox(),x=b.x+b.width/2,y=b.y+b.height/2
@@ -179,13 +219,13 @@ test('the displayed TSX and CSS run when copied into a standalone customer page'
     const page=await browser.newPage(),errors=[];page.on('pageerror',e=>errors.push(e.message))
     try{
         await page.route('**/copy-proof',route=>route.fulfill({contentType:'text/html',body:'<!doctype html><div id="root"></div>'}))
-        await page.goto(base+'/copy-proof')
+        await page.goto(base+'copy-proof')
         await page.addStyleTag({content:bundle.outputFiles.find(f=>f.path.endsWith('.css')).text})
         await page.addScriptTag({type:'module',content:bundle.outputFiles.find(f=>f.path.endsWith('.js')).text})
         await page.locator('#default [data-slot=filter-editor]').waitFor()
-        await drag(page,valueHandle(page.locator('#default')),40,-20);assert.ok((await debug(page.locator('#default'))).base.cutoffHz>1200)
+        await drag(page,valueHandle(page.locator('#default')),40,-20);assert.ok((await valueState(page.locator('#default'))).cutoffHz>1200)
         await drag(page,endpoint(page.locator('#modulation'),'end'),-20,-20);assert.ok((await endpointState(page.locator('#modulation'))).end.cutoffHz<4800)
-        await page.waitForFunction(()=>JSON.parse(document.querySelector('#analyzer [data-role=filter-graph-debug]').textContent).spectrum.hasSpectrum)
+        await page.waitForFunction(canvasHasPixels,'#analyzer canvas')
         assert.deepEqual(errors,[])
     }finally{await page.close()}
 })

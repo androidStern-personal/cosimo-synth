@@ -1,5 +1,5 @@
 /**
- * The Auto-preview loop-sync quantizer (T12B) — pure strike-time math.
+ * The Auto-preview loop-sync quantizer — pure strike-time math.
  *
  * When a retrigger is due and an eligible looping MSEG is sounding, the strike
  * defers to the loop's grid instead of firing mid-cycle. MSEGs run per voice
@@ -47,7 +47,7 @@ export type StrikeQuantizerConfig = {
     readonly slowLoopPolicy: "opportunistic" | "subdivision";
 };
 
-/** T12B starting numbers; tuned on the phone alongside the T12 cadence. */
+/** Starting numbers, tuned on the phone together with the Auto-preview cadence. */
 export const AUTO_PREVIEW_SYNC_CONFIG: StrikeQuantizerConfig = {
     minSyncPeriodMs: 120,
     waitBudgetLeadingMs: 150,

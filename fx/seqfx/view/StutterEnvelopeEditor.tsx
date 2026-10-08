@@ -6,32 +6,28 @@ import {
 } from "react";
 
 import {
-    EDITOR_CURVE_STROKE_WIDTH,
     EDITOR_HIT_RADIUS_PX,
     EDITOR_PLOT_BOTTOM_PADDING_PX,
     EDITOR_PLOT_TOP_PADDING_PX,
     EDITOR_VALUE_HANDLE_HALO_RADIUS_PX,
     EDITOR_VALUE_HANDLE_RADIUS_PX,
-    useEditorSurfaceSize,
-} from "../../../kit/index";
-import {
-    adaptiveSampleEditorCurve,
     createEditorCurvePlotRect,
-    editorCurveFillPathToBaseline,
     polylineToSvgPath,
     type EditorCurvePlotRect,
-} from "../../../kit/index";
+} from "../../../kit/ui/editor-curve-geometry";
+import { useElementSize } from "../../../kit/ui/use-element-size";
+import { adaptiveSampleEditorCurve, editorCurveFillPathToBaseline } from "../../../ui/shared/editor-curve-geometry";
+import { EditorCurveFill } from "../../../ui/shared/editor-curve-surface";
 import {
     EditorCurveAxis,
-    EditorCurveFill,
     EditorCurveHandle,
     EditorCurveHandleHalo,
     EditorCurveHitTarget,
     EditorCurvePath,
     EditorCurvePlotArea,
     EditorCurveSurface,
-} from "../../../kit/index";
-import { EditorTickSlider, ModBadge, type ModulationDirection } from "../../../kit/index";
+} from "../../../kit/ui/editor-curve-surface";
+import { EditorTickSlider, ModBadge, type ModulationDirection } from "./editor-tick-slider";
 import {
     STUTTER_DEFAULT_GATE,
     STUTTER_DEFAULT_SHAPE,
@@ -246,7 +242,7 @@ export function StutterEnvelopeEditor({
     const gateDragTargetRef = useRef<"start" | "end">("start");
     const morphPointerIdRef = useRef<number | null>(null);
     const morphDragTargetRef = useRef<"start" | "end">("start");
-    const size = useEditorSurfaceSize(viewportRef);
+    const size = useElementSize(viewportRef);
     const effectiveWidth = size.width;
     const effectiveHeight = size.height;
     const plot = useMemo(
@@ -541,10 +537,10 @@ export function StutterEnvelopeEditor({
                     <EditorCurveSurface
                         ref={surfaceRef}
                         className="seqfx-stutter-editor__surface"
-                        dataRole="seqfx-stutter-graph"
+                        data-role="seqfx-stutter-graph"
                         heightPx={effectiveHeight}
                         widthPx={effectiveWidth}
-                        ariaLabel="Cut envelope"
+                        aria-label="Cut envelope"
                         onPointerDown={handleGatePointerDown}
                         onPointerMove={handleGatePointerMove}
                         onPointerUp={endGateDrag}
@@ -604,7 +600,6 @@ export function StutterEnvelopeEditor({
                             className="seqfx-stutter-editor__env-path"
                             data-role="seqfx-stutter-env-path"
                             d={paths.line}
-                            strokeWidth={EDITOR_CURVE_STROKE_WIDTH}
                         />
                         {isGateModulated ? (
                             <>

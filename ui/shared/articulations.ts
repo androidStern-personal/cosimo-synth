@@ -106,7 +106,7 @@ export type ArticulationRangeAssignment = {
 export type ArticulationRangeEditEdge = "min" | "max";
 export type ArticulationInsertPreserveSide = "lower" | "upper";
 
-/** Transient desktop editing view retained until the v4 presentation migration. */
+/** The desktop articulation editor's working view of the articulation document. */
 export type ArticulationEditorState = {
     selectedSlotId: string | null;
     activeTriggerMode: ArticulationTriggerMode;

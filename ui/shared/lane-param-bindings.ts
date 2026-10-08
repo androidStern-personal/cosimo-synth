@@ -30,19 +30,7 @@ import {
     type LaneSplitGroupV2,
     type LaneStateV2,
 } from "./lane-state-v2";
-import {
-    LANE_SPLIT_PARAM_XOVER_HIGH_HZ,
-    LANE_SPLIT_PARAM_XOVER_HIGH_KEY_TRACK_ENABLED,
-    LANE_SPLIT_PARAM_XOVER_HIGH_KEY_TRACK_OFFSET_SEMITONES,
-    LANE_SPLIT_PARAM_XOVER_LOW_HZ,
-    LANE_SPLIT_PARAM_XOVER_LOW_KEY_TRACK_ENABLED,
-    LANE_SPLIT_PARAM_XOVER_LOW_KEY_TRACK_OFFSET_SEMITONES,
-} from "./lane-state";
-import {
-    getLaneSlotParamIndex,
-    laneDeviceParamEndpoints,
-} from "./lane-slot-params";
-import type { EffectModuleId } from "./target-descriptor";
+import { getLaneSlotParamIndex } from "./lane-slot-params";
 import {
     buildPatchModulationTargetOptions,
     type ModulationTargetOption,
@@ -261,7 +249,7 @@ export function useLaneParameterBinding(
     }, [clampValue, descriptor.initial]);
 
     // Hooks stay unconditional: ordinary Effects Lane parameters keep their
-    // record-only path, while T78 Output Trim activates the matching
+    // record-only path, while Output Trim activates the matching
     // type+instance host endpoint as the audio/automation authority.
     const hostBinding = usePatchParameterBinding<number>({
         endpointID: hostEndpointID,
@@ -276,7 +264,7 @@ export function useLaneParameterBinding(
     const valueRef = { current: value };
     valueRef.current = value;
 
-    // Every write through this binding is a direct user edit (T12 seam A),
+    // Every write through this binding is a direct user edit, reported on the user-edit bus,
     // and gestures ride the connection's gesture channel under the logical
     // parameter id so drag lifecycle stays observable end to end.
     const setValue = useCallback((nextValue: number) => {

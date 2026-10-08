@@ -3,13 +3,13 @@ cmake_minimum_required(VERSION 3.22)
 project(CosimoCmajorExternalCodegen LANGUAGES C CXX)
 
 get_filename_component(COSIMO_REPO_ROOT "${CMAKE_CURRENT_LIST_DIR}/../.." ABSOLUTE)
-include("${COSIMO_REPO_ROOT}/kit/cmake/CosimoDependencies.cmake")
-cosimo_add_cmajor_toolchain_dependencies()
+include("${COSIMO_REPO_ROOT}/kit/cmake/dependencies.cmake")
+builder_kit_toolchain_dependencies()
 
 set(CMAJ_VERSION "1.0.3066")
 set(CMAJ_TARGET_COMPILER cxx_std_17)
 
-add_subdirectory("${COSIMO_CMAJOR_SOURCE_DIR}/modules" cmajor_modules)
+add_subdirectory("${BUILDER_KIT_CMAJOR_SOURCE_DIR}/modules" cmajor_modules)
 
 MAKE_CMAJ_LIBRARY(
     LIBRARY_NAME cosimo_cmaj_codegen_lib

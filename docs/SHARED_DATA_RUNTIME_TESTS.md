@@ -54,11 +54,11 @@ also shown to make its regression fail.
 
 ## Run
 
-Set `COSIMO_CMAJOR_SOURCE` to the authored/pinned Cmajor source.
+The tests use the Cmajor checkout named by `BUILDER_KIT_CMAJOR_SOURCE`, or the kit's
+pinned checkout when it is unset, and build the code generators they need from it.
 The customer MSEG browser proof uses the actual `cmaj generate --target=webaudio-html`
 export and serves only that output. It defaults to `build/cmajor_command/bin/cmaj`;
-set `COSIMO_CMAJ_EXECUTABLE` to select another built customer command. The lower-level
-worklet lifecycle test still selects its isolated compiler with `CMAJOR_SHARED_GENERATOR`.
+set `BUILDER_KIT_CMAJ_EXECUTABLE` to select another built customer command.
 
 ```sh
 npm run test:plugin-state
@@ -69,15 +69,15 @@ COSIMO_CMAJOR_RUNTIME_LIBRARY="$CMAJOR_RUNTIME_LIBRARY" npm run test:plugin-stat
 npm run typecheck
 # After building the normal web/worker assets:
 npm run test:synth:history:browser
-bash tests/native/run_choc_timer_cancellation.sh "$COSIMO_CMAJOR_SOURCE"
-bash tests/native/run_cosimo_state_history_probe.sh "$COSIMO_CMAJOR_SOURCE" "$CMAJOR_RUNTIME_LIBRARY" build/cosimo-state-history-proof jit
-bash tests/native/run_cosimo_state_history_probe.sh "$COSIMO_CMAJOR_SOURCE" "$CMAJOR_RUNTIME_LIBRARY" build/cosimo-state-history-proof aot "$COSIMO_CMAJOR_EXTERNAL_CODEGEN"
+bash tests/native/run_choc_timer_cancellation.sh "$BUILDER_KIT_CMAJOR_SOURCE"
+bash tests/native/run_cosimo_state_history_probe.sh "$BUILDER_KIT_CMAJOR_SOURCE" "$CMAJOR_RUNTIME_LIBRARY" build/cosimo-state-history-proof jit
+bash tests/native/run_cosimo_state_history_probe.sh "$BUILDER_KIT_CMAJOR_SOURCE" "$CMAJOR_RUNTIME_LIBRARY" build/cosimo-state-history-proof aot "$COSIMO_CMAJOR_EXTERNAL_CODEGEN"
 node tests/helpers/build_shared_mseg_fixture.mjs
 # Use the generated manifest printed by the build; this is the real author build.
-tests/native/run_plugin_state_shared_data_probe.sh "$COSIMO_CMAJOR_SOURCE" "$CMAJOR_RUNTIME_LIBRARY" "$GENERATED_MANIFEST"
+tests/native/run_plugin_state_shared_data_probe.sh "$BUILDER_KIT_CMAJOR_SOURCE" "$CMAJOR_RUNTIME_LIBRARY" "$GENERATED_MANIFEST"
 AOT_DIRECTORY="$(mktemp -d)"
 scripts/generate_cmajor_cpp_with_externals.sh "$GENERATED_MANIFEST" "$AOT_DIRECTORY/SharedStateDSP.h" SharedStateDSP
-tests/native/run_plugin_state_shared_data_probe.sh "$COSIMO_CMAJOR_SOURCE" "$CMAJOR_RUNTIME_LIBRARY" "$GENERATED_MANIFEST" aot "$AOT_DIRECTORY"
+tests/native/run_plugin_state_shared_data_probe.sh "$BUILDER_KIT_CMAJOR_SOURCE" "$CMAJOR_RUNTIME_LIBRARY" "$GENERATED_MANIFEST" aot "$AOT_DIRECTORY"
 ```
 
 The direct-memory platform test lives in

@@ -5,8 +5,7 @@ import path from "node:path";
 import { loadUIModule } from "./helpers/load_ui_module.mjs";
 
 const root = path.resolve(import.meta.dirname, "../..");
-const { createBrowserPreviewConnection } = await loadUIModule(root, "kit/ui/effects/browser-preview-connection.ts");
-const { buildPluginStateContract } = await loadUIModule(root, "kit/ui/effects/effect-state-contract.ts");
+const { createBrowserPreviewConnection } = await loadUIModule(root, "kit/ui/preview/connection.ts");
 const parameters = [{ endpointID: "gainDb", type: "number", min: -24, max: 24, defaultValue: 0 }];
 
 function connect(ID) {
@@ -24,7 +23,7 @@ test("preview reports the real manifest and parameter contract through normal bi
         connection.requestStatusUpdate();
     });
     assert.equal(status.manifest.ID, "test.preview.gain");
-    assert.deepEqual(buildPluginStateContract({ effectID: "gain", status }).parameters, parameters);
+    assert.deepEqual(status.details.inputs, parameters.map((parameter) => ({ ...parameter, purpose: "parameter" })));
 
     const observed = [];
     const listener = (value) => observed.push(value);
@@ -61,10 +60,15 @@ test("preview stored state is per connection and reload never persists native pr
     }
 });
 
-test("preview refuses missing identity, missing metadata, and duplicate parameter definitions", () => {
+test("preview refuses missing identity, missing metadata, and malformed parameter definitions", () => {
+    const refusal = (manifest, input) => createBrowserPreviewConnection(manifest, input).message;
     assert.equal(createBrowserPreviewConnection({}, parameters)._tag, "err");
-    assert.match(createBrowserPreviewConnection({ ID: "test.preview" }, undefined).message, /browserPreviewParameters/u);
-    assert.match(createBrowserPreviewConnection({ ID: "test.preview" }, [...parameters, ...parameters]).message, /Duplicate/u);
+    assert.match(refusal({ ID: "test.preview" }, undefined), /browserPreviewParameters/u);
+    assert.match(refusal({ ID: "test.preview" }, [...parameters, ...parameters]), /Duplicate browserPreviewParameters endpointID "gainDb"/u);
+    assert.match(refusal({ ID: "test.preview" }, [{ ...parameters[0], endpointID: "gain db" }]), /valid Cmajor endpointID/u);
+    assert.match(refusal({ ID: "test.preview" }, [{ ...parameters[0], type: "float" }]), /needs type "number", "integer" or "boolean"/u);
+    assert.match(refusal({ ID: "test.preview" }, [{ ...parameters[0], defaultValue: true }]), /defaultValue of its declared type/u);
+    assert.match(refusal({ ID: "test.preview" }, [{ ...parameters[0], max: Infinity }]), /not a finite number/u);
 });
 
 test("stateful preview retains valid display and diagnoses malformed external stored input", async () => {

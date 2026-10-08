@@ -1,9 +1,5 @@
 .bk-knob {
     --knob-size: 120px;
-    --knob-color: #d2fa6a;
-    --knob-range-color: #67bcda;
-    --knob-indicator: #f6f7f5;
-    --knob-ink: #181a1c;
     display: inline-flex; flex-direction: column; align-items: center; gap: 10px;
     color: inherit; font: inherit;
 }
@@ -19,7 +15,7 @@
     display: block; width: var(--knob-size); height: var(--knob-size); padding: 0; border: 0;
     background: none; color: inherit; border-radius: 50%; cursor: ns-resize;
 }
-.bk-knob-default-control:focus-visible { outline: 2px solid var(--knob-color); outline-offset: 6px; }
+.bk-knob-default-control:focus-visible { outline: 2px solid var(--editor-accent-start, #d2fa6a); outline-offset: 6px; }
 .bk-knob-control [data-slot="knob-dial"] { display: block; width: 100%; height: 100%; overflow: visible; }
 .bk-knob-default-control[data-readonly] { cursor: default; }
 .bk-knob[data-disabled] { opacity: .35; }
@@ -27,5 +23,5 @@
 .bk-knob-entry { display: flex; flex-direction: column; align-items: center; gap: 6px; }
 .bk-knob-input { font: inherit; font-size: .8em; color: inherit; width: 100px; border: 1px solid #52545a;
     border-radius: 6px; padding: 8px 10px; background: transparent; text-align: center; }
-.bk-knob-input:focus-visible { outline: 2px solid var(--knob-color); outline-offset: 2px; }
+.bk-knob-input:focus-visible { outline: 2px solid var(--editor-accent-start, #d2fa6a); outline-offset: 2px; }
 .bk-knob-error { color: #fa9b91; max-width: 220px; font-size: 12px; }

@@ -1,1 +1,0 @@
-namespace Fixture { let wordCapacity = 257; let chunkCapacity = 32; }

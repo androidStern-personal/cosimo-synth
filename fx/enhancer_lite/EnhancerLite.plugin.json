@@ -3,7 +3,6 @@
   "alias": "enhancer-lite",
   "cmakeTarget": "EnhanceThat",
   "productName": "EnhanceThat",
-  "previousProductName": "CosimoEnhancerLite",
   "product": {
     "productName": "Enhance That",
     "manufacturerName": "Cosimo",
@@ -14,6 +13,5 @@
   },
   "stateSource": "fx/enhancer_lite/state.ts",
   "runtimeOut": "build/fx/enhancer_lite_runtime",
-  "juceOut": "build/enhancer_lite_juce",
-  "jitInstallRuntime": true
+  "juceOut": "build/enhancer_lite_juce"
 }

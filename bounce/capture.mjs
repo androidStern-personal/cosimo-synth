@@ -7,8 +7,6 @@ import { createBounceCapturePlan } from "./capture-plan.mjs";
 import { digestBounceBank } from "./digest.mjs";
 import { renderBouncePlanInWorkers } from "./worker-pool.mjs";
 
-export { digestBounceBank } from "./digest.mjs";
-
 /** Snapshot -> plan -> fresh worker renders -> bank -> content digest. */
 export async function captureBounceBank({
     snapshot,

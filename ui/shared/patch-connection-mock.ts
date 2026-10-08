@@ -321,11 +321,11 @@ class MockPianoKeyboard extends HTMLElement {
         this.debug.allNotesOffCount += 1;
     }
 
-    attachToPatchConnection(_patchConnection: PatchConnectionLike, endpointID: string) {
-        this.attachedPatchConnection = _patchConnection;
+    attachToPatchConnection(patchConnection: PatchConnectionLike, endpointID: string) {
+        this.attachedPatchConnection = patchConnection;
         this.attachedEndpointID = endpointID;
         this.debug.attachCalls.push({ endpointID });
-        (_patchConnection as { recordKeyboardAttach?: (endpointID: string) => void }).recordKeyboardAttach?.(endpointID);
+        (patchConnection as { recordKeyboardAttach?: (endpointID: string) => void }).recordKeyboardAttach?.(endpointID);
     }
 
     detachPatchConnection() {
@@ -1251,7 +1251,10 @@ export class MockPatchConnection implements PatchConnectionLike {
     }
 
     requestFullStoredState(callback: (state: Record<string, unknown>) => void) {
-        queueMicrotask(() => callback(Object.fromEntries(this.storedState.entries())));
+        queueMicrotask(() => callback({
+            parameters: [...this.parameterValues].map(([name, value]) => ({ name, value })),
+            values: Object.fromEntries(this.storedState.entries()),
+        }));
     }
 
     requestStoredStateValue(key: string) {

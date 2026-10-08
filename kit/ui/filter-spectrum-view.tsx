@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { advanceFilterSpectrumDisplayState, buildFilterSpectrumBands, buildFilterSpectrumDbTicks,
-    buildFilterSpectrumFrequencyTicks, buildFilterSpectrumGraphPoints, buildFilterSpectrumRenderGeometry,
+import { advanceFilterSpectrumDisplayState, buildFilterSpectrumBands, buildFilterSpectrumGraphPoints, buildFilterSpectrumRenderGeometry,
     createFilterSpectrumDisplayFrame, type FilterSpectrumRenderGeometry, type FilterSpectrumRenderMode,
     type FilterSpectrumDisplayState, type FilterSpectrumFrame } from "./filter-spectrum";
 
@@ -40,7 +39,7 @@ function drawFilterSpectrumOverlay({
         .map((component) => Number.parseInt(component, 10));
     const [accentR, accentG, accentB] = accentRgb.length === 3 && accentRgb.every(Number.isFinite)
         ? accentRgb
-        : [169, 140, 255];
+        : [0, 180, 216];
     const accentColor = (alpha: number) => `rgba(${accentR}, ${accentG}, ${accentB}, ${alpha})`;
     const gradient = context.createLinearGradient(0, geometry.plotTop, 0, geometry.plotBottom);
     gradient.addColorStop(0, accentColor(0.14));
@@ -147,8 +146,6 @@ export function useFilterSpectrum(spectrum: FilterSpectrum | null, size: { width
     const timestampMs = spectrum?.timestampMs;
     const spectrumBands = useMemo(() => buildFilterSpectrumBands(), []);
     const spectrumGraphPoints = useMemo(() => buildFilterSpectrumGraphPoints(), []);
-    const spectrumFrequencyTicks = useMemo(() => buildFilterSpectrumFrequencyTicks(), []);
-    const spectrumDbTicks = useMemo(() => buildFilterSpectrumDbTicks(), []);
     const [spectrumDisplay, setSpectrumDisplay] = useState<FilterSpectrumDisplayState | null>(null);
 
     useEffect(() => {
@@ -210,6 +207,5 @@ export function useFilterSpectrum(spectrum: FilterSpectrum | null, size: { width
         };
     }, [size.height, size.width, spectrumGeometry]);
 
-    return { spectrumCanvasRef, spectrumDisplay, spectrumGeometry, spectrumBands,
-        spectrumGraphPoints, spectrumFrequencyTicks, spectrumDbTicks, spectrumRenderMode };
+    return { spectrumCanvasRef };
 }

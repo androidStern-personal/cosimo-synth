@@ -1,6 +1,6 @@
 import { atom, createStore } from "jotai/vanilla";
 import { isBoundedStateJson, parseHistoryEntry } from "./plugin-state-protocol";
-import type { PluginStateFields } from "./plugin-state-definition";
+import { codecThrewMessage, type PluginStateFields } from "./plugin-state-definition";
 import type {
     PluginStateCommand, PluginStateResult, PluginStateScope, PluginStateSnapshot,
     PluginStateFieldSnapshot, PluginStateReceipt,
@@ -10,6 +10,8 @@ import type {
 export type PluginStateClientEvent<Fields extends PluginStateFields> =
     | { readonly kind: "attached"; readonly request: number; readonly scope: PluginStateScope; readonly client: number; readonly revision: number; readonly state: PluginStateSnapshot<Fields> }
     | { readonly kind: "update"; readonly scope: PluginStateScope; readonly revision: number; readonly state: PluginStateSnapshot<Fields>; readonly receipt?: PluginStateReceipt }
+    /** An update built on a state this GUI does not hold; the GUI attaches again for the whole state. */
+    | { readonly kind: "resync"; readonly scope: PluginStateScope; readonly receipt?: PluginStateReceipt }
     | { readonly kind: "receipt"; readonly address: PluginStateReceipt["address"]; readonly result: PluginStateResult }
     | { readonly kind: "reset" | "owner-changed"; readonly scope: PluginStateScope }
     | { readonly kind: "closed"; readonly reason: string }
@@ -79,9 +81,24 @@ export function createPluginStateClient<const Fields extends PluginStateFields>(
                 ? before.value : "value" in next ? next.value : undefined;
             fields[key] = Object.freeze("value" in next ? { ...next, value } : next);
         }
+        // The same change keeps its object across updates, so a view detects a new change by identity.
+        const lastChange = previous?.lastChange && previous.lastChange.revision === incoming.lastChange?.revision ? previous.lastChange : incoming.lastChange;
         // SAFETY: keys are the definition's keys; parsed adapter values retain
         // their field type and may only be replaced by an equal prior field value.
-        return Object.freeze({ ...incoming, fields: Object.freeze(fields) }) as PluginStateSnapshot<Fields>;
+        return Object.freeze({ ...incoming, fields: Object.freeze(fields), ...(lastChange ? { lastChange } : {}) }) as PluginStateSnapshot<Fields>;
+    };
+    /** Parse and encode one outgoing edit value. A throwing author codec rejects only this edit. */
+    const parseOutbound = (key: string, value: unknown): { readonly kind: "ok"; readonly value: unknown; readonly encoded: unknown } | { readonly kind: "error" } => {
+        const field = definition[key];
+        if (field?.kind !== "stored")
+            return typeof value === "number" && Number.isFinite(value) ? { kind: "ok", value, encoded: value } : { kind: "error" };
+        try {
+            const parsed = field.codec.parse(value);
+            return parsed.kind === "ok" ? { kind: "ok", value: parsed.value, encoded: field.codec.encode(parsed.value) } : { kind: "error" };
+        } catch (error) {
+            ports.onDefect(new Error(codecThrewMessage(key), { cause: error }));
+            return { kind: "error" };
+        }
     };
     const redraw = () => {
         if (!base) return;
@@ -140,6 +157,14 @@ export function createPluginStateClient<const Fields extends PluginStateFields>(
             ? { kind: "interrupted", reason, acceptance: "unknown" }
             : { kind: "rejected", reason: reason === "reset" ? "stale-scope" : "service-closed" });
     };
+    /** Give up this attachment and its unanswered commands, then attach for the whole current state. */
+    const attachAgain = () => {
+        interrupt("reset");
+        nextSequence = 0;
+        attachRequest++;
+        store.set(projection, Object.freeze({ kind: "connecting" }));
+        ports.channel.send({ kind: "attach", request: attachRequest });
+    };
     const close = (knownReceipt?: PluginStateReceipt) => {
         if (stopped) return;
         stopped = true;
@@ -197,23 +222,23 @@ export function createPluginStateClient<const Fields extends PluginStateFields>(
             if (message.request !== attachRequest || current.kind !== "connecting") return;
             duringAttach.clear();
             store.set(projection, Object.freeze({ kind: "failed", reason: message.reason }));
+        } else if (message.kind === "resync") {
+            if (!base || !sameScope(base.state.scope, message.scope)) return;
+            if (message.receipt) settle(message.receipt);
+            attachAgain();
         } else {
             if (expectedScope && (message.kind === "reset"
                 ? message.scope.owner !== expectedScope.owner || message.scope.document <= expectedScope.document
                 : sameScope(expectedScope, message.scope))) return;
             expectedScope = message.scope;
-            interrupt("reset");
-            nextSequence = 0;
-            attachRequest++;
-            store.set(projection, Object.freeze({ kind: "connecting" }));
-            ports.channel.send({ kind: "attach", request: attachRequest });
+            attachAgain();
         }
     };
     const receiveSafely = (message: PluginStateClientEvent<Fields>) => {
         try { receive(message); }
         catch (error) {
             ports.onDefect(error);
-            close(message.kind === "update" ? message.receipt : message.kind === "receipt" ? message : undefined);
+            close(message.kind === "update" || message.kind === "resync" ? message.receipt : message.kind === "receipt" ? message : undefined);
         }
     };
     try {
@@ -253,15 +278,15 @@ export function createPluginStateClient<const Fields extends PluginStateFields>(
                         if (!Object.hasOwn(definition, edit.key) || !field || keys.has(edit.key)) return Promise.resolve({ kind: "rejected", reason: "invalid-command" });
                         keys.add(edit.key);
                         if (!current || current.readiness.kind !== "ready" || !("value" in current)) return Promise.resolve({ kind: "rejected", reason: "not-ready" });
-                        const parsed = field.kind === "stored" ? field.codec.parse(edit.value)
-                            : typeof edit.value === "number" && Number.isFinite(edit.value)
-                                ? { kind: "ok" as const, value: edit.value } : { kind: "error" as const };
+                        const parsed = parseOutbound(edit.key, edit.value);
                         if (parsed.kind === "error") return Promise.resolve({ kind: "rejected", reason: "invalid-value" });
-                        edits.push({ ...edit, value: field.kind === "stored" ? field.codec.encode(parsed.value) : parsed.value });
+                        edits.push({ ...edit, value: parsed.encoded });
                     }
                     // A compound action waits for the owner's one coherent
                     // accepted projection; it never paints partial local drafts.
-                    outbound = { kind: "edit-many", edits };
+                    outbound = { kind: "edit-many", edits, ...(command.history === false ? { history: false as const } : {}),
+                        ...(command.recall === true ? { recall: true as const } : {}),
+                        ...(command.gesture === undefined ? {} : { gesture: command.gesture }) };
                 }
                 if (command.kind === "edit" || command.kind === "recover") {
                     const field = definition[command.key];
@@ -273,12 +298,10 @@ export function createPluginStateClient<const Fields extends PluginStateFields>(
                         if ("version" in current && current.version !== 0) return Promise.resolve({ kind: "rejected", reason: "stale-version" });
                         if (current.readiness.kind !== "failed" || current.readiness.reason !== "invalid-state") return Promise.resolve({ kind: "rejected", reason: "not-ready" });
                     } else if (!current || current.readiness.kind !== "ready" || !("value" in current)) return Promise.resolve({ kind: "rejected", reason: "not-ready" });
-                    const parsed = field.kind === "stored" ? field.codec.parse(command.value)
-                        : typeof command.value === "number" && Number.isFinite(command.value)
-                            ? { kind: "ok" as const, value: command.value } : { kind: "error" as const };
+                    const parsed = parseOutbound(command.key, command.value);
                     if (parsed.kind === "error") return Promise.resolve({ kind: "rejected", reason: "invalid-value" });
                     draft = { key: command.key, value: parsed.value };
-                    outbound = { ...command, value: field.kind === "stored" ? field.codec.encode(parsed.value) : parsed.value };
+                    outbound = { ...command, value: parsed.encoded };
                 }
                 if (!isBoundedStateJson({ kind: "command", scope, client, sequence: nextSequence + 1, command: outbound }))
                     return Promise.resolve({ kind: "rejected", reason: command.kind === "edit" || command.kind === "recover" ? "invalid-value" : "invalid-command" });

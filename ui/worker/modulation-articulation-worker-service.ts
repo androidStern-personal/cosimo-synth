@@ -1,4 +1,5 @@
 import type { PatchConnectionLike } from "../shared/cmajor-react";
+import { fullStoredStateValues } from "../shared/full-stored-state";
 import type { CmajorStatePublicationOutcome } from "../../kit/ui/plugin-state-cmajor";
 import type { EngineApplication } from "../../kit/ui/plugin-state-engine";
 import {
@@ -50,23 +51,6 @@ export type FrameworkModulationInput = {
 
 type StoredStateMessage = { key?: unknown; value?: unknown };
 type BootStoredState = Record<string, unknown>;
-
-function hasOwnValue(record: Record<string, unknown>, key: string) {
-    return Object.prototype.hasOwnProperty.call(record, key);
-}
-
-function getFullStoredStateValue(storedState: unknown, key: string) {
-    const fullState = storedState && typeof storedState === "object"
-        ? storedState as Record<string, unknown>
-        : {};
-    const values = fullState.values && typeof fullState.values === "object"
-        ? fullState.values as Record<string, unknown>
-        : {};
-
-    if (hasOwnValue(values, key)) return values[key];
-    if (hasOwnValue(fullState, key)) return fullState[key];
-    return undefined;
-}
 
 function parseStoredArticulations(
     value: unknown,
@@ -200,7 +184,7 @@ export class ModulationArticulationWorkerService {
         if (typeof this.connection.requestFullStoredState === "function") {
             this.connection.requestFullStoredState((storedState) => {
                 if (!this.started || epoch !== this.lifecycleEpoch) return;
-                this.applyBootState(storedState);
+                this.applyBootState(fullStoredStateValues(storedState));
                 this.finishBoot();
             });
             return;
@@ -224,8 +208,8 @@ export class ModulationArticulationWorkerService {
         this.applyRuntimeStateIfReady();
     }
 
-    private applyBootState(storedState: unknown) {
-        const rawModulation = getFullStoredStateValue(storedState, MODULATION_STATE_KEY);
+    private applyBootState(storedValues: BootStoredState) {
+        const rawModulation = storedValues[MODULATION_STATE_KEY];
         const parsedModulation = this.frameworkInput
             ? { _tag: "ok", value: this.modulationState } as const
             : rawModulation === undefined
@@ -233,7 +217,7 @@ export class ModulationArticulationWorkerService {
             : parseModulationState(rawModulation);
         if (parsedModulation._tag === "err") {
             console.error(`[runtime-state-worker] ${MODULATION_STATE_KEY} is invalid; boot state was not installed.`);
-            const rawArticulations = getFullStoredStateValue(storedState, ARTICULATIONS_V4_STATE_KEY);
+            const rawArticulations = storedValues[ARTICULATIONS_V4_STATE_KEY];
             const independentArticulations = parseStoredArticulations(rawArticulations, new Set());
             if (independentArticulations !== null) {
                 this.articulationBank = independentArticulations;
@@ -243,7 +227,7 @@ export class ModulationArticulationWorkerService {
         }
         this.modulationState = parsedModulation.value;
         this.hasModulationState = true;
-        const rawArticulations = getFullStoredStateValue(storedState, ARTICULATIONS_V4_STATE_KEY);
+        const rawArticulations = storedValues[ARTICULATIONS_V4_STATE_KEY];
         const parsedArticulations = parseStoredArticulations(
             rawArticulations,
             articulationRouteIds(parsedModulation.value),

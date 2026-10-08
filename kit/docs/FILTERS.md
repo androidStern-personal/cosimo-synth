@@ -31,6 +31,6 @@ Drag horizontally to change cutoff and vertically to change resonance. Focus the
 
 ## Styling and integration
 
-Set `className`, `style` or the scoped `--editor-*` CSS tokens. Use `onEditStart` and `onEditEnd` to connect gestures to your state/history. The plugin owns routing and supplies live response and spectrum data.
+Set `className`, `style` or the shared `--editor-*` theme properties. Use `onGestureStart` and `onGestureEnd` to connect gestures to your state/history. The plugin owns routing and supplies live response and spectrum data.
 
 See the [API reference](FILTERS_API.md) for supported modes, modulation handles, scales and spectrum inputs. For saving and shared Undo, use [plugin state](PLUGIN_STATE.md).

@@ -2,8 +2,8 @@ import assert from "node:assert/strict";
 import test, { before, after } from "node:test";
 import path from "node:path";
 import { chromium } from "playwright";
-import { startStaticWebServer } from "./helpers/static_web_server.mjs";
-import { stageCmajorWebRuntime } from "../ui/vite.shared.mjs";
+import { startStaticWebServer } from "../kit/tests/helpers/static_web_server.mjs";
+import { cmajorWebApiDirectory } from "./helpers/cmajor_source.mjs";
 
 const root = path.resolve(import.meta.dirname, "..");
 let browser;
@@ -11,9 +11,7 @@ let server;
 before(async () => {
     server = await startStaticWebServer(root, {
         bundleTypeScript: true,
-        mounts: { "/cmaj_api": () => process.env.COSIMO_CMAJOR_SOURCE
-            ? path.join(process.env.COSIMO_CMAJOR_SOURCE, "javascript/cmaj_api")
-            : stageCmajorWebRuntime(root, { buildDirectory: path.join(root, "build/cmajor_web_runtime-synth-state-tests"), instanceId: String(process.pid) }) },
+        mounts: { "/cmaj_api": () => cmajorWebApiDirectory() },
     });
     browser = await chromium.launch({ headless: true });
 });
@@ -139,7 +137,7 @@ test("a Voice drag publishes one gesture bracket and two values, and shared Undo
         assert.equal((await binding(page, "globalTune")).value, 7);
         await page.getByText("End tune", { exact: true }).click();
         await page.getByText("End tune", { exact: true }).click();
-        assert.deepEqual(await page.evaluate(() => window.fixture.publications().flatMap(message => message.operations)), [
+        assert.deepEqual(await page.evaluate(() => window.fixture.voiceOperations()), [
             { kind: "gesture-start", endpoint: "globalTune" },
             { kind: "parameter", endpoint: "globalTune", value: 5 },
             { kind: "parameter", endpoint: "globalTune", value: 7 },
@@ -164,7 +162,7 @@ test("one-shot Voice edits across three fields share ordered Undo and Redo inste
             await page.getByText(button, { exact: true }).click();
             assert.equal((await binding(page, key)).value, value);
         }
-        assert.deepEqual(await page.evaluate(() => window.fixture.publications().flatMap(message => message.operations)), [
+        assert.deepEqual(await page.evaluate(() => window.fixture.voiceOperations()), [
             { kind: "gesture-start", endpoint: "globalTune" }, { kind: "parameter", endpoint: "globalTune", value: 5 }, { kind: "gesture-end", endpoint: "globalTune" },
             { kind: "gesture-start", endpoint: "playMode" }, { kind: "parameter", endpoint: "playMode", value: 2 }, { kind: "gesture-end", endpoint: "playMode" },
             { kind: "gesture-start", endpoint: "glideTime" }, { kind: "parameter", endpoint: "glideTime", value: 0.5 }, { kind: "gesture-end", endpoint: "glideTime" },
@@ -200,7 +198,7 @@ test("Voice edit-bus notifications balance duplicate gesture boundaries and pres
             { kind: "edit", endpointID: "globalTune", changed: false }, { kind: "end" },
         ];
         assert.deepEqual(await page.evaluate(() => window.fixture.edits()), expected);
-        assert.deepEqual(await page.evaluate(() => window.fixture.publications().flatMap(message => message.operations)), [
+        assert.deepEqual(await page.evaluate(() => window.fixture.voiceOperations()), [
             { kind: "gesture-start", endpoint: "globalTune" },
             { kind: "parameter", endpoint: "globalTune", value: 7 },
             { kind: "gesture-end", endpoint: "globalTune" },
@@ -224,7 +222,7 @@ test("host automation during a Voice gesture has no echo or history, and the nex
         await page.evaluate(() => window.fixture.automate("globalTune", 3));
         await page.waitForFunction(() => JSON.parse(document.querySelector('[data-testid="globalTune"]').textContent).value === 3);
         assert.deepEqual((await binding(page, "globalTune")).hostBaseline, { _tag: "host-confirmed", value: -7.5 }, "the existing first-host readiness baseline remains stable");
-        assert.deepEqual(await page.evaluate(() => window.fixture.publications().flatMap(message => message.operations)), [
+        assert.deepEqual(await page.evaluate(() => window.fixture.voiceOperations()), [
             { kind: "gesture-start", endpoint: "globalTune" },
         ]);
         assert.deepEqual(await page.evaluate(() => window.fixture.edits()), [{ kind: "begin" }]);
@@ -258,7 +256,7 @@ test("unmounting the Voice provider seals its drag while the native view survive
         assert.deepEqual(after.state.scope, before.state.scope);
         assert.equal(after.state.fields.globalTune.gesture, undefined);
         assert.equal(after.state.fields.globalTune.value, 7);
-        assert.deepEqual(await page.evaluate(() => window.fixture.publications().flatMap(message => message.operations)), [
+        assert.deepEqual(await page.evaluate(() => window.fixture.voiceOperations()), [
             { kind: "gesture-start", endpoint: "globalTune" },
             { kind: "parameter", endpoint: "globalTune", value: 7 },
             { kind: "gesture-end", endpoint: "globalTune" },
@@ -284,7 +282,7 @@ test("a Voice edit rejected by another client's lock rolls back its draft withou
         await releaseBoot(page);
         const begin = await page.evaluate(async () => {
             window.fixture.openObserver();
-            return window.fixture.observerCommand({ kind: "begin", key: "globalTune", gesture: 21 });
+            return window.fixture.observerCommand({ kind: "begin", keys: ["globalTune"], gesture: 21 });
         });
         assert.equal(begin.kind, "accepted");
         await page.getByText("Drag seven", { exact: true }).click();
@@ -295,10 +293,10 @@ test("a Voice edit rejected by another client's lock rolls back its draft withou
         assert.equal((await binding(page, "globalTune")).value, -7.5);
         assert.equal(await page.evaluate(() => window.fixture.parameter("globalTune")), -7.5);
         assert.deepEqual(await page.evaluate(() => window.fixture.edits()), [], "a rejected draft must not trigger auto-preview as an accepted parameter change");
-        assert.deepEqual(await page.evaluate(() => window.fixture.publications().flatMap(message => message.operations)), [
+        assert.deepEqual(await page.evaluate(() => window.fixture.voiceOperations()), [
             { kind: "gesture-start", endpoint: "globalTune" },
         ]);
-        const end = await page.evaluate(() => window.fixture.observerCommand({ kind: "end", key: "globalTune", gesture: 21 }));
+        const end = await page.evaluate(() => window.fixture.observerCommand({ kind: "end", keys: ["globalTune"], gesture: 21 }));
         assert.equal(end.kind, "accepted");
         await page.getByText("Drag five", { exact: true }).click();
         await page.waitForFunction(() => window.fixture.parameter("globalTune") === 5);
@@ -319,7 +317,7 @@ test("accepted edit receipts distinguish host-step no-ops from actual changes th
         assert.equal(unchanged.changed, false, "native step1 rounds1.4 to the current1; requested inequality is not canonical change");
         assert.equal(unchanged.version, 0);
         assert.equal(await page.evaluate(() => window.fixture.parameter("playMode")), 1);
-        assert.deepEqual(await page.evaluate(() => window.fixture.publications()), []);
+        assert.deepEqual(await page.evaluate(() => window.fixture.voiceOperations()), [], "an unchanged value publishes no parameter write");
         const changed = await page.evaluate(() => window.fixture.observerCommand({ kind: "edit", key: "playMode", value: 2 }));
         assert.equal(changed.kind, "accepted");
         assert.equal(changed.changed, true);
@@ -348,12 +346,14 @@ test("deferred accepted replies retain programmatic suppression and report a com
         await page.getByText("Complete tune", { exact: true }).click();
         await page.waitForFunction(() => window.fixture.parameter("globalTune") === 7 && window.fixture.queuedReplies() > 0);
         assert.deepEqual(await page.evaluate(() => window.fixture.edits()), [], "unacknowledged commands do not emit accepted-edit notifications");
-        await page.evaluate(() => window.fixture.releaseReplies(true));
+        // Receipts ride on state updates, which are deltas against the previous update, so the
+        // channel delivers them in order; the bus must still wait for every acceptance.
+        await page.evaluate(() => window.fixture.releaseReplies());
         await page.waitForFunction(() => window.fixture.edits().length === 3);
         const sequences = await page.evaluate(before => window.fixture.messages().slice(before)
             .map(message => (message.kind === "receipt" ? message : message.receipt)?.address.sequence)
             .filter(sequence => sequence !== undefined), beforeReplies);
-        assert.deepEqual(sequences, [6, 5, 4], "actual service receipts are delivered end/edit/begin at the controlled external transport");
+        assert.deepEqual(sequences, [4, 5, 6], "the held begin, edit and end receipts arrive together after release");
         assert.deepEqual(await page.evaluate(() => window.fixture.edits()), [
             { kind: "begin" }, { kind: "edit", endpointID: "globalTune", changed: true }, { kind: "end" },
         ]);

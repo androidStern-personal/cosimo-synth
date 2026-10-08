@@ -2,7 +2,7 @@ import { execFileSync } from "node:child_process";
 import { cp, mkdir, mkdtemp, readFile, rm } from "node:fs/promises";
 import path from "node:path";
 import os from "node:os";
-import { exportKit } from "../../kit/scripts/export_kit.mjs";
+import { exportKit } from "../../scripts/export_kit.mjs";
 
 const repo = path.resolve(import.meta.dirname, "../..");
 

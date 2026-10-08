@@ -3,8 +3,7 @@
   "alias": "spectral",
   "cmakeTarget": "SpectralChordResonator",
   "productName": "SpectralChordResonator",
+  "stateSource": "fx/spectral_chord_resonator/state.ts",
   "runtimeOut": "build/fx/spectral_chord_resonator_runtime",
-  "juceOut": "build/spectral_chord_resonator_juce",
-  "workerSource": "fx/spectral_chord_resonator/worker/source.ts",
-  "workerOut": "worker.js"
+  "juceOut": "build/spectral_chord_resonator_juce"
 }

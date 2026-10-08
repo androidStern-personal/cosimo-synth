@@ -22,7 +22,7 @@ The next Builder Kit update gives Cmajor plugins `usePluginState()`: one editing
 
 Declare your values and how to prepare your audio data. The framework coordinates the rest, including preparation directly into shared memory.
 
-And the UI follows a familiar idea too: shadcn-style components with editable source. An MSEG editor, filter controls, sliders, and preset/snapshot controls you can make your own.
+And the UI follows a familiar idea too: components whose source ships in the kit and updates with it. An MSEG editor, filter controls, sliders, and preset/snapshot controls you can make your own.
 
 Included for existing Builder Kit owners. Built for Cmajor + React.
 
@@ -36,7 +36,7 @@ Demonstrate that promise with the same state hook for a simple parameter and a c
 
 The direct [TanStack Query comparison](https://tanstack.com/query/latest/docs/framework/react/reference/functions/useQuery) is about approachable hooks over difficult state coordination. `usePluginState` also exposes editing and shared Undo; this is our audio-plugin API, not TanStack Query integration.
 
-The [shadcn comparison](https://ui.shadcn.com/docs) is about editable source and composition. The exported kit contains the MSEG editor/surface, shared filter editor with cutoff bands, two-axis modulation handles and an optional spectrum, sliders, parameter entry and preset/snapshot controls. Composable knobs and MSEG layers ship through the public kit entry. The kit examples exercise ordinary Radix menu composition; private routing menus, the Cosimo HUD and the ADSR editor are not bundled.
+The [shadcn comparison](https://ui.shadcn.com/docs) is about readable source and composition; the components ship in the kit and update with it, rather than being copied into each plugin. The exported kit contains the MSEG editor/surface, shared filter editor with cutoff bands, two-axis modulation handles and an optional spectrum, sliders, parameter entry and preset/snapshot controls. Composable knobs and MSEG layers ship through the public kit entry. The kit examples exercise ordinary Radix menu composition; private routing menus, the Cosimo HUD and the ADSR editor are not bundled.
 
 ## Two-image code carousel
 

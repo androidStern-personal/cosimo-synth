@@ -1,4 +1,5 @@
 import { createSynthDocumentClient } from "./synth-document-client";
+import { fullStoredStateValues } from "./full-stored-state";
 import {
     useCallback,
     useEffect,
@@ -15,7 +16,7 @@ import type { PluginStateClientResult } from "../../kit/ui/plugin-state-client";
 import { acquireSynthViewState } from "./synth-state-client";
 import type { createModulationStateClient } from "./modulation-client";
 import { useMsegEditorHistory, type MsegStateOwner } from "./mseg-editor-history";
-import { usePluginHistory } from "../../kit/ui/plugin-state-react";
+import { usePluginHistory, type FilterSpectrumFrame } from "../../kit/index";
 import { useSynthPluginParameterBinding } from "./synth-plugin-state-react";
 
 import {
@@ -43,14 +44,9 @@ import {
     type AutoPreviewStrikeKind,
     type LoopSyncSource,
 } from "./auto-preview-sync";
-import {
-    clampMsegRateSeconds,
-    type MsegSurfaceOrientation,
-    type MsegState,
-} from "./mseg";
+import { clampMsegRateSeconds, type MsegState } from "./mseg";
 import {
     MODULATION_STATE_KEY,
-    MODULATION_STATE_VERSION,
     MODULATION_TARGET_OPTIONS,
     buildDisplayedMsegState,
     clampModulationRouteAmount,
@@ -59,9 +55,7 @@ import {
     createAvailableGeneratedRouteId,
     createDefaultEnvelope,
     createFirstAvailableModulationRoute,
-    normalizeModulationState,
     parseModulationState,
-    serializeModulationState,
     type ModulationEnvelope,
     type GeneratedModulationRouteInput,
     type ModulationRoute,
@@ -84,10 +78,7 @@ import {
     VOICE_ENHANCER_Q_ENDPOINT_ID,
 } from "./voice-enhancer";
 import { getModulationArticulationCellIndex } from "./modulation-runtime-program";
-import type {
-    EffectStoredStateAdapter,
-    EffectStoredStateContext,
-} from "./effects/effect-preset-v2";
+import { articulationStateCodec } from "./synth-document-state";
 import {
     ARTICULATIONS_V4_STATE_KEY,
     createEmptyArticulationsState,
@@ -98,7 +89,6 @@ import {
     type ArticulationVoiceParameterId,
     type OscillatorArticulationParameterId,
 } from "./articulation-image";
-import { createBouncePresetStoredStateAdapter } from "./bounce-preset-state";
 import {
     articulationEditorStatesEqual,
     articulationSnapshotsEqual,
@@ -148,10 +138,7 @@ import {
     type EffectiveWarpState,
     type RuntimeTablePresentation,
 } from "./runtime-table-state";
-import {
-    normalizeFilterSpectrumMessage,
-    type FilterSpectrumFrame,
-} from "./filter-spectrum";
+import { normalizeFilterSpectrumMessage } from "../../kit/ui/filter-spectrum";
 import {
     DISTORTION_HISTORY_ENDPOINT_ID,
     DISTORTION_SCOPE_ENDPOINT_ID,
@@ -250,7 +237,6 @@ export const EFFECTIVE_UNISON_STATE_ENDPOINT_ID = "effectiveUnisonState";
 export const EFFECTIVE_FILTER_STATE_ENDPOINT_ID = "effectiveFilterState";
 export const FILTER_SPECTRUM_ENDPOINT_ID = "filterSpectrum";
 export const DISPLAY_SWIPE_THRESHOLD_PX = 2;
-export { MSEG_DRAG_THRESHOLD_PX } from "../../kit/ui/mseg-gestures";
 const FILTER_MODE_ENDPOINT_ID = "filterMode";
 const FILTER_CUTOFF_ENDPOINT_ID = "filterCutoff";
 const FILTER_CUTOFF_KEY_TRACK_ENABLED_ENDPOINT_ID = "filterCutoffKeyTrackEnabled";
@@ -279,25 +265,13 @@ const AMP_ATTACK_ENDPOINT_ID = "ampAttack";
 const AMP_DECAY_ENDPOINT_ID = "ampDecay";
 const AMP_SUSTAIN_ENDPOINT_ID = "ampSustain";
 const AMP_RELEASE_ENDPOINT_ID = "ampRelease";
-const DISTORTION_MODE_ENDPOINT_ID = "distortionMode";
-const DISTORTION_DRIVE_DB_ENDPOINT_ID = "distortionDriveDb";
-const DISTORTION_KNEE_ENDPOINT_ID = "distortionKnee";
-const DISTORTION_WET_ENDPOINT_ID = "distortionWet";
-const DISTORTION_WET_HP_HZ_ENDPOINT_ID = "distortionWetHPHz";
-const DISTORTION_WET_LP_HZ_ENDPOINT_ID = "distortionWetLPHz";
 const DISTORTION_TYPE_ENDPOINT_ID = "distortionType";
-const CHORUS_MIX_ENDPOINT_ID = "chorusMix";
-const CHORUS_MOTION_MODE_ENDPOINT_ID = "chorusMotionMode";
-const CHORUS_BLOOM_MODE_ENDPOINT_ID = "chorusBloomMode";
-const CHORUS_TONE_ENDPOINT_ID = "chorusTone";
-const CHORUS_FEEDBACK_ENDPOINT_ID = "chorusFeedback";
-const CHORUS_RING_AMOUNT_ENDPOINT_ID = "chorusRingAmount";
 const RUNTIME_SYNC_REQUEST_ENDPOINT_ID = "runtimeSyncRequest";
 const RUNTIME_STATE_ENDPOINT_ID = "runtimeState";
 const RETRY_DESIRED_TABLE_REQUEST_ENDPOINT_ID = "retryDesiredTableRequest";
 const WAVETABLE_PREWARM_REQUEST_ENDPOINT_ID = "wavetablePrewarmRequest";
 const MIDI_INPUT_ENDPOINT_ID = "midiIn";
-/** T12 locked starting cadence; tune on a real phone before shipping. */
+/** Auto-preview starting cadence, tuned on a real phone. */
 const AUTO_PREVIEW_SCHEDULER_CONFIG = {
     minRetriggerIntervalMs: 250,
     movementStoppedMs: 150,
@@ -307,7 +281,6 @@ const AUTO_PREVIEW_SCHEDULER_CONFIG = {
 const AUTO_PREVIEW_MIN_NOTE_MS = 250;
 const VOICE_ARTICULATION_START_ENDPOINT_ID = "voiceArticulationStart";
 const ARTICULATION_AUDITION_FALLBACK_NOTE = 60;
-export { SYNTH_PRESET_EFFECT_ID } from "./effects/synth-preset-identity";
 export const GLIDE_TIME_MIN_SECONDS = 0;
 export const GLIDE_TIME_MAX_SECONDS = 2;
 export const GLIDE_TIME_STEP_SECONDS = 0.001;
@@ -519,7 +492,8 @@ export type SynthPatchViewModel = {
     articulationSlots: ArticulationSlot[];
     selectedArticulationSlot: ArticulationSlot | null;
     selectedArticulationIsDirty: boolean;
-    presetStoredStateAdapters: EffectStoredStateAdapter[];
+    /** Re-anchor every oscillator's articulation base to a sound that replaced the current one. */
+    resetArticulationPatchBases: (parameters: Readonly<Record<string, number>>) => void;
     articulationHeldInput: ArticulationHeldInput;
     discardedArticulationEdit: {
         slotId: string;
@@ -543,8 +517,7 @@ export type SynthPatchViewModel = {
     handleAddRouteWithOverrides: (overrides: GeneratedModulationRouteInput) => boolean;
     handleRemoveRoute: (routeIndex: number) => void;
     handleRouteChange: (routeIndex: number, update: ModulationRouteUpdate) => void;
-    handleAddArticulationSlot: () => void;
-    handleCaptureArticulationSlot: (options?: { autoAssign?: boolean }) => void;
+    handleCaptureArticulationSlot: () => void;
     handleSelectArticulationSlot: (slotId: string) => void;
     handleUpdateSelectedArticulationSlot: () => void;
     handleRevertSelectedArticulationSlot: () => void;
@@ -1024,25 +997,6 @@ function buildShortMidi(status: number, noteNumber: number, velocity = 0) {
     return ((status & 0xff) << 16) | ((noteNumber & 0x7f) << 8) | (velocity & 0x7f);
 }
 
-function readFullStoredStateValue(storedState: unknown, key: string) {
-    const fullState = storedState && typeof storedState === "object"
-        ? storedState as Record<string, unknown>
-        : {};
-    const values = fullState.values && typeof fullState.values === "object"
-        ? fullState.values as Record<string, unknown>
-        : {};
-
-    if (Object.prototype.hasOwnProperty.call(values, key)) {
-        return values[key];
-    }
-
-    if (Object.prototype.hasOwnProperty.call(fullState, key)) {
-        return fullState[key];
-    }
-
-    return undefined;
-}
-
 function currentArticulationRouteIds(routes: ReadonlyArray<ModulationRoute>): ReadonlySet<string> {
     return new Set(routes.flatMap((route) => (
         getModulationArticulationCellIndex(route) === null ? [] : [route.id]
@@ -1068,14 +1022,14 @@ export function parseArticulationStateFromFullStoredState(
     storedState: unknown,
     fallbackRoutes: ReadonlyArray<ModulationRoute>,
 ) {
-    const rawModulation = readFullStoredStateValue(storedState, MODULATION_STATE_KEY);
+    const rawModulation = fullStoredStateValues(storedState)[MODULATION_STATE_KEY];
     const parsedModulation = rawModulation === undefined
         ? null
         : parseModulationState(decodeArticulationDocument(rawModulation));
     const acceptedRouteIds = parsedModulation?._tag === "ok"
         ? currentArticulationRouteIds(parsedModulation.value.routes)
         : currentArticulationRouteIds(fallbackRoutes);
-    const rawArticulations = readFullStoredStateValue(storedState, ARTICULATIONS_V4_STATE_KEY);
+    const rawArticulations = fullStoredStateValues(storedState)[ARTICULATIONS_V4_STATE_KEY];
 
     return {
         acceptedRouteIds,
@@ -1365,7 +1319,7 @@ export function replaceVisibleArticulationSnapshotV4(
 }
 
 function articulationStatesEqual(left: ArticulationsState, right: ArticulationsState): boolean {
-    return JSON.stringify(serializeArticulationsV4(left)) === JSON.stringify(serializeArticulationsV4(right));
+    return articulationStateCodec.equals(left, right);
 }
 
 function useStoredArticulationEditorState(
@@ -1403,10 +1357,11 @@ function useStoredArticulationEditorState(
         const client = createSynthDocumentClient<ArticulationsState>(patchConnection, ARTICULATIONS_V4_STATE_KEY);
         clientRef.current = client;
         setHasHydrated(false);
+        // Every state update notifies this client; only a new articulation document needs projecting.
         const read = () => {
             const current = client.read();
             setHasHydrated(current !== undefined);
-            if (!current) return;
+            if (!current || current === stateRef.current) return;
             applyCurrentState(current);
         };
         const unsubscribe = client.subscribe(read);
@@ -1434,158 +1389,88 @@ function useStoredArticulationEditorState(
         [state, bank, hasHydrated, refreshProjection, setAndPersistState]);
 }
 
-function parsePresetStoredStateValue(rawValue: unknown, label: string) {
-    if (typeof rawValue !== "string") {
-        return rawValue;
-    }
-
-    try {
-        return JSON.parse(rawValue);
-    } catch (error) {
-        throw new Error(`${label} must be valid JSON.`);
-    }
-}
-
-function parseStrictArticulationPresetState(
-    rawValue: unknown,
-    acceptedRouteIds: ReadonlySet<string>,
-): ArticulationsState {
-    const parsedValue = parsePresetStoredStateValue(rawValue, "Articulation preset state");
-    const parsedState = parseArticulationsV4(parsedValue, acceptedRouteIds);
-    if (parsedState._tag === "err") {
-        throw parsedState.error;
-    }
-
-    return parsedState.value;
-}
-
-function parseStrictModulationPresetState(rawValue: unknown): ModulationState {
-    const parsedValue = parsePresetStoredStateValue(rawValue, "Modulation preset state");
-    const parsedState = parseModulationState(parsedValue);
-    if (parsedState._tag === "err") {
-        throw parsedState.error;
-    }
-
-    return parsedState.value;
-}
-
-function presetParameterNumber(
-    context: EffectStoredStateContext,
-    endpointID: string,
-    fallback: number,
-) {
-    const value = context.parameters[endpointID];
-    return typeof value === "number" && Number.isFinite(value) ? value : fallback;
-}
-
-/** Build one oscillator's stable local/shared patch base from the preset transaction itself. */
-export function buildPresetArticulationBaseSnapshot(
-    context: EffectStoredStateContext,
+/** Build one oscillator's stable local/shared articulation base from a recalled sound's parameters. */
+export function buildArticulationBaseSnapshot(
+    soundParameters: Readonly<Record<string, number>>,
     modulationState: ModulationState,
     oscillatorID: OscillatorID,
 ): ArticulationSnapshot {
+    const parameterOr = (endpointID: string, fallback: number) => {
+        const value = soundParameters[endpointID];
+        return typeof value === "number" && Number.isFinite(value) ? value : fallback;
+    };
     const defaults = createDefaultArticulationSnapshot();
     const parameters = defaults.parameters;
     return normalizeArticulationSnapshot({
         parameters: {
-            wavetablePosition: presetParameterNumber(
-                context,
-                getOscillatorControlAddress(oscillatorID, "framePosition").endpointID,
+            wavetablePosition: parameterOr(getOscillatorControlAddress(oscillatorID, "framePosition").endpointID,
                 parameters.wavetablePosition,
             ),
-            pan: presetParameterNumber(context, getOscillatorControlAddress(oscillatorID, "pan").endpointID, parameters.pan),
-            octave: presetParameterNumber(context, getOscillatorControlAddress(oscillatorID, "octave").endpointID, parameters.octave),
-            semitone: presetParameterNumber(context, getOscillatorControlAddress(oscillatorID, "semitone").endpointID, parameters.semitone),
-            fineCents: presetParameterNumber(context, getOscillatorControlAddress(oscillatorID, "fineCents").endpointID, parameters.fineCents),
-            volumeDb: presetParameterNumber(context, getOscillatorControlAddress(oscillatorID, "volumeDb").endpointID, parameters.volumeDb),
-            mute: presetParameterNumber(
-                context,
-                getOscillatorControlAddress(oscillatorID, "mute").endpointID,
+            pan: parameterOr(getOscillatorControlAddress(oscillatorID, "pan").endpointID, parameters.pan),
+            octave: parameterOr(getOscillatorControlAddress(oscillatorID, "octave").endpointID, parameters.octave),
+            semitone: parameterOr(getOscillatorControlAddress(oscillatorID, "semitone").endpointID, parameters.semitone),
+            fineCents: parameterOr(getOscillatorControlAddress(oscillatorID, "fineCents").endpointID, parameters.fineCents),
+            volumeDb: parameterOr(getOscillatorControlAddress(oscillatorID, "volumeDb").endpointID, parameters.volumeDb),
+            mute: parameterOr(getOscillatorControlAddress(oscillatorID, "mute").endpointID,
                 getOscillatorDefaultMute(oscillatorID),
             ),
-            solo: presetParameterNumber(context, getOscillatorControlAddress(oscillatorID, "solo").endpointID, parameters.solo),
-            warpMode: presetParameterNumber(
-                context,
-                getOscillatorControlAddress(oscillatorID, "warpMode").endpointID,
+            solo: parameterOr(getOscillatorControlAddress(oscillatorID, "solo").endpointID, parameters.solo),
+            warpMode: parameterOr(getOscillatorControlAddress(oscillatorID, "warpMode").endpointID,
                 parameters.warpMode,
             ),
-            warpAmount: presetParameterNumber(
-                context,
-                getOscillatorControlAddress(oscillatorID, "warpAmount").endpointID,
+            warpAmount: parameterOr(getOscillatorControlAddress(oscillatorID, "warpAmount").endpointID,
                 parameters.warpAmount,
             ),
-            filterMode: presetParameterNumber(context, FILTER_MODE_ENDPOINT_ID, parameters.filterMode),
-            filterCutoff: presetParameterNumber(context, FILTER_CUTOFF_ENDPOINT_ID, parameters.filterCutoff),
-            filterQ: presetParameterNumber(context, FILTER_Q_ENDPOINT_ID, parameters.filterQ),
-            unisonVoices: presetParameterNumber(
-                context,
-                getOscillatorControlAddress(oscillatorID, "unisonVoices").endpointID,
+            filterMode: parameterOr(FILTER_MODE_ENDPOINT_ID, parameters.filterMode),
+            filterCutoff: parameterOr(FILTER_CUTOFF_ENDPOINT_ID, parameters.filterCutoff),
+            filterQ: parameterOr(FILTER_Q_ENDPOINT_ID, parameters.filterQ),
+            unisonVoices: parameterOr(getOscillatorControlAddress(oscillatorID, "unisonVoices").endpointID,
                 parameters.unisonVoices,
             ),
-            unisonDetune: presetParameterNumber(
-                context,
-                getOscillatorControlAddress(oscillatorID, "unisonDetune").endpointID,
+            unisonDetune: parameterOr(getOscillatorControlAddress(oscillatorID, "unisonDetune").endpointID,
                 parameters.unisonDetune,
             ),
-            unisonBlend: presetParameterNumber(
-                context,
-                getOscillatorControlAddress(oscillatorID, "unisonBlend").endpointID,
+            unisonBlend: parameterOr(getOscillatorControlAddress(oscillatorID, "unisonBlend").endpointID,
                 parameters.unisonBlend,
             ),
-            unisonWidth: presetParameterNumber(
-                context,
-                getOscillatorControlAddress(oscillatorID, "unisonWidth").endpointID,
+            unisonWidth: parameterOr(getOscillatorControlAddress(oscillatorID, "unisonWidth").endpointID,
                 parameters.unisonWidth,
             ),
-            unisonPhase: presetParameterNumber(
-                context,
-                getOscillatorControlAddress(oscillatorID, "phase").endpointID,
+            unisonPhase: parameterOr(getOscillatorControlAddress(oscillatorID, "phase").endpointID,
                 parameters.unisonPhase,
             ),
-            unisonRandom: presetParameterNumber(
-                context,
-                getOscillatorControlAddress(oscillatorID, "phaseRandom").endpointID,
+            unisonRandom: parameterOr(getOscillatorControlAddress(oscillatorID, "phaseRandom").endpointID,
                 parameters.unisonRandom,
             ),
-            unisonPhaseMode: presetParameterNumber(
-                context,
-                getOscillatorControlAddress(oscillatorID, "retrigger").endpointID,
+            unisonPhaseMode: parameterOr(getOscillatorControlAddress(oscillatorID, "retrigger").endpointID,
                 parameters.unisonPhaseMode,
             ),
-            unisonDetuneMode: presetParameterNumber(
-                context,
-                getOscillatorControlAddress(oscillatorID, "unisonDetuneMode").endpointID,
+            unisonDetuneMode: parameterOr(getOscillatorControlAddress(oscillatorID, "unisonDetuneMode").endpointID,
                 parameters.unisonDetuneMode,
             ),
-            unisonStackMode: presetParameterNumber(
-                context,
-                getOscillatorControlAddress(oscillatorID, "unisonStackMode").endpointID,
+            unisonStackMode: parameterOr(getOscillatorControlAddress(oscillatorID, "unisonStackMode").endpointID,
                 parameters.unisonStackMode,
             ),
-            unisonWavetablePositionSpread: presetParameterNumber(
-                context,
-                getOscillatorControlAddress(oscillatorID, "unisonWavetablePositionSpread").endpointID,
+            unisonWavetablePositionSpread: parameterOr(getOscillatorControlAddress(oscillatorID, "unisonWavetablePositionSpread").endpointID,
                 parameters.unisonWavetablePositionSpread,
             ),
-            unisonWarpSpread: presetParameterNumber(
-                context,
-                getOscillatorControlAddress(oscillatorID, "unisonWarpSpread").endpointID,
+            unisonWarpSpread: parameterOr(getOscillatorControlAddress(oscillatorID, "unisonWarpSpread").endpointID,
                 parameters.unisonWarpSpread,
             ),
             msegMorphs: [
-                presetParameterNumber(context, MSEG_1_MORPH_ENDPOINT_ID, parameters.msegMorphs[0]),
-                presetParameterNumber(context, MSEG_2_MORPH_ENDPOINT_ID, parameters.msegMorphs[1]),
-                presetParameterNumber(context, MSEG_3_MORPH_ENDPOINT_ID, parameters.msegMorphs[2]),
+                parameterOr(MSEG_1_MORPH_ENDPOINT_ID, parameters.msegMorphs[0]),
+                parameterOr(MSEG_2_MORPH_ENDPOINT_ID, parameters.msegMorphs[1]),
+                parameterOr(MSEG_3_MORPH_ENDPOINT_ID, parameters.msegMorphs[2]),
             ],
         },
             envelopes: modulationState.envelopeSlots.map((envelope, slotIndex) => {
                 const endpointPrefix = `env${slotIndex + 1}`;
                 return {
                     name: envelope.name,
-                    attackSeconds: presetParameterNumber(context, `${endpointPrefix}Attack`, 0.01),
-                    decaySeconds: presetParameterNumber(context, `${endpointPrefix}Decay`, 0.25),
-                    sustain: presetParameterNumber(context, `${endpointPrefix}Sustain`, 0.5),
-                    releaseSeconds: presetParameterNumber(context, `${endpointPrefix}Release`, 0.2),
+                    attackSeconds: parameterOr(`${endpointPrefix}Attack`, 0.01),
+                    decaySeconds: parameterOr(`${endpointPrefix}Decay`, 0.25),
+                    sustain: parameterOr(`${endpointPrefix}Sustain`, 0.5),
+                    releaseSeconds: parameterOr(`${endpointPrefix}Release`, 0.2),
                 };
             }),
         modRouteAmounts: modulationState.routes.flatMap((route) => (
@@ -1594,132 +1479,6 @@ export function buildPresetArticulationBaseSnapshot(
                 : [{ routeId: route.id, amount: route.amount }]
         )),
     });
-}
-
-function useSynthPresetStoredStateAdapters({
-    articulationBankState,
-    modulationBridge,
-    modulationState,
-    setArticulationPatchBase,
-}: {
-    articulationBankState: ReturnType<typeof useStoredArticulationEditorState>;
-    modulationBridge: ReturnType<typeof useModulationState>["bridge"];
-    modulationState: ModulationState | null;
-    setArticulationPatchBase: (oscillatorID: OscillatorID, snapshot: ArticulationSnapshot) => void;
-}) {
-    const patchConnection = usePatchConnection();
-    const { stateRef, setAndPersistState } = articulationBankState;
-    const latestModulationStateRef = useRef<ModulationState | null>(null);
-
-    useEffect(() => {
-        latestModulationStateRef.current = modulationState;
-    }, [modulationState]);
-
-    return useMemo<EffectStoredStateAdapter[]>(() => {
-        const subscribeToStoredStateKey = (stateKey: string, listener: () => void) => {
-            const handleStoredStateValue = (message: unknown) => {
-                if (!message || typeof message !== "object") {
-                    return;
-                }
-
-                if ((message as { key?: unknown }).key === stateKey) {
-                    listener();
-                }
-            };
-
-            patchConnection.addStoredStateValueListener?.(handleStoredStateValue);
-
-            return () => {
-                patchConnection.removeStoredStateValueListener?.(handleStoredStateValue);
-            };
-        };
-
-        const presetModulationState = (context?: EffectStoredStateContext) => {
-            if (!context || !(MODULATION_STATE_KEY in context.storedState)) {
-                throw new Error("Synth preset modulation state is required before articulation validation.");
-            }
-
-            return parseStrictModulationPresetState(context.storedState[MODULATION_STATE_KEY]);
-        };
-
-        const modulationAdapter: EffectStoredStateAdapter = {
-            key: MODULATION_STATE_KEY,
-            schemaVersion: MODULATION_STATE_VERSION,
-            getContract() {
-                return {
-                    key: MODULATION_STATE_KEY,
-                    schemaVersion: MODULATION_STATE_VERSION,
-                    required: true,
-                };
-            },
-            capture() {
-                return modulationBridge.current?.getState()
-                    ?? latestModulationStateRef.current
-                    ?? createDefaultModulationState();
-            },
-            normalizeForPreset(value: unknown) {
-                return parseStrictModulationPresetState(value);
-            },
-            serializeForPreset(value) {
-                return serializeModulationState(parseStrictModulationPresetState(value));
-            },
-            apply(value) {
-                const nextState = parseStrictModulationPresetState(value);
-
-                if (modulationBridge.current) {
-                    submitModulationEdit(modulationBridge.current.setState(nextState));
-                    return;
-                }
-
-                throw new Error("Modulation state is not ready for a preset edit.");
-            },
-            subscribe(listener: () => void) {
-                return subscribeToStoredStateKey(MODULATION_STATE_KEY, listener);
-            },
-        };
-        const articulationAdapter: EffectStoredStateAdapter = {
-            key: ARTICULATIONS_V4_STATE_KEY,
-            schemaVersion: 4,
-            getContract() {
-                return {
-                    key: ARTICULATIONS_V4_STATE_KEY,
-                    schemaVersion: 4,
-                    required: true,
-                };
-            },
-            capture() {
-                return stateRef.current;
-            },
-            normalizeForPreset(value: unknown, context?: EffectStoredStateContext) {
-                const routeIds = currentArticulationRouteIds(presetModulationState(context).routes);
-                return parseStrictArticulationPresetState(value, routeIds);
-            },
-            serializeForPreset(value, context) {
-                const routeIds = currentArticulationRouteIds(presetModulationState(context).routes);
-                return serializeArticulationsV4(parseStrictArticulationPresetState(value, routeIds));
-            },
-            apply(value, context) {
-                const nextModulationState = presetModulationState(context);
-                const routeIds = currentArticulationRouteIds(nextModulationState.routes);
-                if (!context) {
-                    throw new Error("Synth preset context is required before articulation application.");
-                }
-                for (const oscillator of OSCILLATOR_BINDING_CONTRACTS) {
-                    setArticulationPatchBase(
-                        oscillator.id,
-                        buildPresetArticulationBaseSnapshot(context, nextModulationState, oscillator.id),
-                    );
-                }
-                setAndPersistState(parseStrictArticulationPresetState(value, routeIds), routeIds, true);
-            },
-            subscribe(listener: () => void) {
-                return subscribeToStoredStateKey(ARTICULATIONS_V4_STATE_KEY, listener);
-            },
-        };
-
-        const bounceAdapter = createBouncePresetStoredStateAdapter(patchConnection);
-        return [modulationAdapter, articulationAdapter, bounceAdapter];
-    }, [modulationBridge, patchConnection, setAndPersistState, setArticulationPatchBase, stateRef]);
 }
 
 export function useMsegState() {
@@ -2015,10 +1774,8 @@ export function useSynthKeyboardRouting({
 export function useSynthPatchViewModel({
     oscillatorID = DEFAULT_SELECTED_OSCILLATOR_ID,
     stageRef,
-    msegEditorSurfaceRef,
     keyboardRef,
     voiceModeCount,
-    msegSurfaceOrientation = "horizontal",
     msegCurveEditActivationMode = "immediate",
     onMsegCurveEditHoldActivated = null,
     onKeyboardOctaveDown,
@@ -2032,10 +1789,8 @@ export function useSynthPatchViewModel({
 }: {
     oscillatorID?: OscillatorID;
     stageRef: RefObject<HTMLDivElement | null>;
-    msegEditorSurfaceRef: RefObject<SVGSVGElement | null>;
     keyboardRef: RefObject<SynthKeyboardLike | null>;
     voiceModeCount: number;
-    msegSurfaceOrientation?: MsegSurfaceOrientation;
     msegCurveEditActivationMode?: "immediate" | "hold-or-drag";
     onMsegCurveEditHoldActivated?: (() => void) | null;
     onKeyboardOctaveDown?: () => boolean;
@@ -2155,8 +1910,7 @@ export function useSynthPatchViewModel({
         initialValue: 0.707107,
         coerce: (value) => clamp(Number(value) || 0, 0.1, 20),
     });
-    // T05: linear dry/wet blend, 1.0 = fully filtered (preserves every
-    // existing patch; the appended engine endpoint defaults to 1).
+    // Linear dry/wet blend, 1.0 = fully filtered.
     const filterMix = usePatchParameterBinding<number>({
         endpointID: FILTER_MIX_ENDPOINT_ID,
         initialValue: 1,
@@ -2549,12 +2303,13 @@ export function useSynthPatchViewModel({
     useEffect(() => {
         setDiscardedArticulationEdit(null);
     }, [patchConnection]);
-    const presetStoredStateAdapters = useSynthPresetStoredStateAdapters({
-        articulationBankState,
-        modulationBridge,
-        modulationState,
-        setArticulationPatchBase,
-    });
+    const resetArticulationPatchBases = useCallback((parameters: Readonly<Record<string, number>>) => {
+        const currentModulation = modulationBridge.current?.getState() ?? modulationState ?? createDefaultModulationState();
+        for (const oscillator of OSCILLATOR_BINDING_CONTRACTS) {
+            setArticulationPatchBase(oscillator.id, buildArticulationBaseSnapshot(parameters, currentModulation, oscillator.id));
+        }
+        articulationBankState.refreshProjection();
+    }, [articulationBankState, modulationBridge, modulationState, setArticulationPatchBase]);
     const activeAuditionRef = useRef<{ slotId: string; note: number } | null>(null);
     const lastPlayedNoteRef = useRef(ARTICULATION_AUDITION_FALLBACK_NOTE);
     const [lastPlayedNote, setLastPlayedNote] = useState(ARTICULATION_AUDITION_FALLBACK_NOTE);
@@ -2564,7 +2319,7 @@ export function useSynthPatchViewModel({
     previewNoteMemoryRef.current = previewNoteMemory;
     const heldMidiNotesRef = useRef(new Map<number, HeldMidiNote>());
     const heldMidiOrderRef = useRef(0);
-    /** When the newest voice started (any note-on we emitted or tracked) — the T12B loop-phase anchor. */
+    /** When the newest voice started (any note-on we emitted or tracked) — the loop-sync phase anchor. */
     const lastNoteOnAtRef = useRef<number | null>(null);
     const [articulationHeldInput, setArticulationHeldInput] = useState<ArticulationHeldInput>({
         note: null,
@@ -2630,10 +2385,12 @@ export function useSynthPatchViewModel({
             slotIndex: selectedMsegSlot,
         });
     }, [msegState?.playback, observedMsegState, selectedMsegSlot]);
+    // ADSR values are host parameters with their own readiness; only the
+    // display name comes from the modulation document, which may still be opening.
     const selectedEnvelope = useMemo(() => {
         const name = modulationState?.envelopeSlots[selectedEnvelopeSlot]?.name;
         const bindings = envelopeEditorBindings[selectedEnvelopeSlot];
-        if (!modulationState || !bindings) return null;
+        if (!bindings) return null;
         return {
             name: selectedEnvelopeSlot === 3
                 ? "Amp Envelope"
@@ -2828,7 +2585,7 @@ export function useSynthPatchViewModel({
         if (!bridge?.isReady() || !bank) return false;
         const route = createDefaultRoute({ ...overrides, id: createAvailableGeneratedRouteId(bank.routes) });
         if (parseModulationState({ ...bank, routes: [...bank.routes, route] })._tag === "err") return false;
-        // This legacy boolean means validated submission; acceptance belongs to the owner.
+        // True means the edit passed validation and was submitted; the owner decides acceptance.
         submitModulationEdit(bridge.addRoute(route));
         return true;
     }, [modulationBridge, oscillatorTargetsActive]);
@@ -3114,7 +2871,7 @@ export function useSynthPatchViewModel({
         const parameters = snapshot.parameters;
 
         // Applying a snapshot writes through the scalar bindings but is not a
-        // direct user edit: suppress the T12 user-edit seam for the batch.
+        // direct user edit: keep the batch off the user-edit bus.
         runProgrammaticWrites(() => {
             wavetablePosition.setValue(parameters.wavetablePosition);
             pan.setValue(parameters.pan);
@@ -3220,7 +2977,7 @@ export function useSynthPatchViewModel({
         wavetablePosition,
     ]);
 
-    const handleCaptureArticulationSlot = useCallback((_options: { autoAssign?: boolean } = {}) => {
+    const handleCaptureArticulationSlot = useCallback(() => {
         const baseSnapshot = currentArticulationPatchBase();
         if (baseSnapshot === null) {
             return;
@@ -3241,10 +2998,6 @@ export function useSynthPatchViewModel({
         currentArticulationPatchBase,
         oscillatorID,
     ]);
-
-    const handleAddArticulationSlot = useCallback(() => {
-        handleCaptureArticulationSlot({ autoAssign: true });
-    }, [handleCaptureArticulationSlot]);
 
     const selectArticulationSlot = useCallback((slotId: string, options: { recordDirtyDiscard?: boolean } = {}) => {
         const state = articulationBankState.stateRef.current;
@@ -3688,8 +3441,8 @@ export function useSynthPatchViewModel({
         const heldCountBefore = heldMidiNotesRef.current.size;
 
         if (isNoteOn) {
-            // The newest note-on anchors every per-voice MSEG loop's phase
-            // (T12B): loop-sync boundaries are computed from this moment.
+            // The newest note-on anchors every per-voice MSEG loop's phase:
+            // loop-sync boundaries are computed from this moment.
             lastNoteOnAtRef.current = performance.now();
             if (intentional) {
                 lastPlayedNoteRef.current = safeNote;
@@ -3753,7 +3506,7 @@ export function useSynthPatchViewModel({
         sendMidiInputEvent(0x90, note, 100);
     }, [handleStopArticulationAudition, isArticulationBaseReady, selectArticulationSlot, sendMidiInputEvent]);
 
-    // The Mod rail's Note key (T10B): one piano key fixed to the most recently
+    // The Mod rail's Note key: one piano key fixed to the most recently
     // played intentional pitch. It goes through sendMidiInputEvent so it joins
     // the held set without replacing chord memory, and it remembers its own
     // started pitch so a keyboard note played mid-press cannot orphan the
@@ -3779,7 +3532,7 @@ export function useSynthPatchViewModel({
         sendMidiInputEvent(0x90, note, 100);
     }, [handleStopNoteKeyAudition, sendMidiInputEvent]);
 
-    // ── Auto-preview (T12/T12C): when no manual notes are held, retrigger the
+    // ── Auto-preview: when no manual notes are held, retrigger the
     // most recent completed intentional group after a real changed edit.
     // Engine-owned strikes take the raw connection so they never disturb the
     // held-note, chord-memory, or last-played bookkeeping.
@@ -3788,7 +3541,7 @@ export function useSynthPatchViewModel({
     const autoPreviewEngineRef = useRef<AutoPreviewEngine | null>(null);
     const autoPreviewOwnedGroupRef = useRef<AutoPreviewOwnedGroup | null>(null);
     const autoPreviewOffTimerRef = useRef<number | null>(null);
-    // T12B loop-sync state: the strike currently deferred to a loop boundary,
+    // Loop-sync state: the strike currently deferred to a loop boundary,
     // a reach-in to clear it from outside the mount closure, and live MSEG
     // rates mirrored for the resolver.
     const autoPreviewPendingStrikeRef = useRef<{ timer: number; capMs: number | null } | null>(null);
@@ -3842,7 +3595,7 @@ export function useSynthPatchViewModel({
             }
         };
         autoPreviewClearPendingRef.current = clearPendingStrike;
-        // T12B: the slowest looping MSEG that modulates anything is the
+        // The slowest looping MSEG that modulates anything is the
         // audible rhythm; its cycle grid (anchored at the newest note-on,
         // which restarts every per-voice MSEG) is what strikes align to.
         // Unmapped MSEGs are ignored entirely.
@@ -3952,7 +3705,7 @@ export function useSynthPatchViewModel({
                 releaseOwnedGroup();
             },
         });
-        // The dev tuning page's alternative feels (T12 follow-up): same engine
+        // The dev tuning page's alternative feels: same engine
         // surface, different retrigger policy. Strategy strikes are held notes
         // choked by the next strike; release comes from the strategy itself.
         const createStrategyEngine = () => createPreviewStrategyEngine({
@@ -4280,7 +4033,7 @@ export function useSynthPatchViewModel({
         articulationSlots,
         selectedArticulationSlot,
         selectedArticulationIsDirty,
-        presetStoredStateAdapters,
+        resetArticulationPatchBases,
         articulationHeldInput,
         discardedArticulationEdit: discardedArticulationEdit?.patchConnection === patchConnection
             ? {
@@ -4305,7 +4058,6 @@ export function useSynthPatchViewModel({
         handleAddRouteWithOverrides,
         handleRemoveRoute,
         handleRouteChange,
-        handleAddArticulationSlot,
         handleCaptureArticulationSlot,
         handleSelectArticulationSlot,
         handleUpdateSelectedArticulationSlot,

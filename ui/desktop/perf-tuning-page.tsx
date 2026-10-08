@@ -1,6 +1,6 @@
 /**
  * The developer settings page (preset bar → shell menu → Developer settings).
- * Performance experiments remain developer-only; T60's Mod-bar preferences
+ * Performance experiments remain developer-only; the Mod-bar preferences
  * persist through their application-level store and affect every UI build.
  */
 
@@ -48,7 +48,7 @@ const ALGORITHM_ROWS: ReadonlyArray<{
     {
         id: "shipped",
         label: "Shipped",
-        summary: "The T12 engine as released: rate-windowed restrikes, stillness ends the preview.",
+        summary: "The shipped engine: rate-windowed restrikes, stillness ends the preview.",
     },
     {
         id: "morph",

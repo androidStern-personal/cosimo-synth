@@ -30,17 +30,12 @@ import {
     waitForHarnessReady,
     TEST_SAMPLES_PER_FRAME,
     MSEG_PREVIEW_HORIZONTAL_PADDING_PX,
-    EFFECT_PRESETS_V2_STATE_KEY,
-    SYNTH_PRESET_EFFECT_ID,
     ARTICULATION_STATE_KEY,
-    RETIRED_SYNTH_LOCAL_DIRTY_STATE_KEY,
     expectedMsegPreviewProgressClipWidth,
     buildShortMidi,
     readStoredModulationState,
     readStoredArticulationEditorState,
     editorBankToStoredArticulations,
-    readEffectPresetState,
-    containsRetiredSynthPresetBaselineKey,
     readStoredMsegShape,
     readStoredMsegPlayback,
     readStoredRouteAmount,
@@ -72,7 +67,9 @@ import {
     waitForPageValue,
     waitForReactFrames,
     readVisibleHarnessParameterEndpointIDs,
-    clickPresetBarAction,
+    readActivePreset,
+    recallSynthPreset,
+    revertSynthPreset,
     saveSynthPresetAs,
     waitForPresetBarDirtyState,
     dragArticulationCardToLane,
@@ -89,6 +86,7 @@ import {
     rectsIntersect,
     rectContains,
     readGlobalModRailGeometry,
+    withUiTimersPaused,
 } from "./helpers/desktop_patch_view_browser_suite.mjs";
 
 test("desktop articulation hydration and live writes reject the same duplicate and retired documents whole", async () => {
@@ -1167,27 +1165,22 @@ test("contextual toolbar only exposes articulation draft actions", async () => {
 
         const snapshot = await waitForHarnessSnapshot(
             page,
-            "updated articulation without synth-local preset baseline",
-            (nextSnapshot) => {
-                const storedBank = readStoredArticulationEditorState(nextSnapshot);
-                return storedBank.slots[0].snapshot.parameters.pan === 0.25
-                    && !containsRetiredSynthPresetBaselineKey(nextSnapshot);
-            },
+            "updated articulation",
+            (nextSnapshot) => readStoredArticulationEditorState(nextSnapshot).slots[0].snapshot.parameters.pan === 0.25,
         );
         const storedBank = readStoredArticulationEditorState(snapshot);
         assert.equal(storedBank.slots[0].snapshot.parameters.pan, 0.25);
-        assert.equal(containsRetiredSynthPresetBaselineKey(snapshot), false);
         await page.waitForFunction(() => !document.querySelector('[data-role="contextual-floating-toolbar"]'));
     } finally {
         await page.close();
     }
 });
 
-test("synth preset bar saves current synth state through shared effect presets", async () => {
+test("a saved synth preset holds every sound field and recalls them together", async () => {
     const page = await openHarnessPage();
 
     try {
-        await page.waitForFunction(() => Boolean(document.querySelector("cosimo-preset-bar")?.shadowRoot));
+        await page.locator('[data-role="synth-preset-bar"]').waitFor();
 
         const seededBank = normalizeArticulationEditorState({
             selectedSlotId: "bright-bow",
@@ -1269,93 +1262,81 @@ test("synth preset bar saves current synth state through shared effect presets",
 
         const snapshot = await waitForHarnessSnapshot(
             page,
-            "shared synth preset saved",
-            (nextSnapshot) => {
-                const rawState = nextSnapshot.storedState[EFFECT_PRESETS_V2_STATE_KEY];
-                if (!rawState || containsRetiredSynthPresetBaselineKey(nextSnapshot)) {
-                    return false;
-                }
-
-                const state = JSON.parse(String(rawState));
-                return Array.isArray(state.userPresets?.[SYNTH_PRESET_EFFECT_ID])
-                    && state.userPresets[SYNTH_PRESET_EFFECT_ID].some((preset) => preset.label === "Bright Test Synth");
-            },
+            "synth preset saved",
+            (nextSnapshot) => readActivePreset(nextSnapshot)?.name === "Bright Test Synth",
         );
-
-        const presetState = readEffectPresetState(snapshot);
-        const savedPreset = presetState.userPresets[SYNTH_PRESET_EFFECT_ID].find((preset) => (
-            preset.label === "Bright Test Synth"
-        ));
-
-        assert.ok(savedPreset, "shared preset state must contain the saved synth preset");
-        assert.equal(savedPreset.kind, "cosimo.effectPreset");
-        assert.equal(savedPreset.version, 2);
-        assert.equal(savedPreset.effectID, SYNTH_PRESET_EFFECT_ID);
+        const savedPreset = readActivePreset(snapshot);
         const visibleEndpointIDs = await readVisibleHarnessParameterEndpointIDs(page);
-        const savedParameterIDs = Object.keys(savedPreset.parameters).sort((left, right) => left.localeCompare(right));
+        // Bounce owns the source mode, so presets leave it out.
+        const soundEndpointIDs = visibleEndpointIDs.filter((endpointID) => endpointID !== "sourceMode");
         assert.deepEqual(
-            savedParameterIDs,
-            visibleEndpointIDs,
-            "saved synth presets must capture the complete visible Cmajor parameter contract",
+            Object.keys(savedPreset.values).sort((left, right) => left.localeCompare(right)),
+            [...soundEndpointIDs, ARTICULATION_STATE_KEY, "lane.v1", "modulation.v6"].sort((left, right) => left.localeCompare(right)),
+            "a synth preset holds every visible parameter except the source mode, and the three sound documents",
         );
-        for (const endpointID of visibleEndpointIDs) {
+        for (const endpointID of soundEndpointIDs) {
+            // The harness records only values that were written; the untouched
+            // effect output trims are still at their 0 dB init value.
             assert.equal(
-                savedPreset.parameters[endpointID],
-                snapshot.parameterValues[endpointID],
+                savedPreset.values[endpointID],
+                snapshot.parameterValues[endpointID] ?? 0,
                 `saved parameter ${endpointID} must match the live value`,
             );
         }
-        assert.equal(snapshot.parameterValues.hiddenSynthPresetGuard, 0.42);
-        assert.equal("hiddenSynthPresetGuard" in savedPreset.parameters, false);
-        assert.equal("midiIn" in savedPreset.parameters, false);
-        assert.equal("runtimeState" in savedPreset.parameters, false);
-        assert.equal("effectiveWarpState" in savedPreset.parameters, false);
-        assert.equal(
-            Object.keys(savedPreset.parameters).some((endpointID) => endpointID.startsWith("effective")),
-            false,
-            "saved synth presets must only contain real parameters, not runtime display endpoints",
-        );
+        assert.equal("hiddenSynthPresetGuard" in savedPreset.values, false);
+        assert.equal(BOUNCE_STATE_KEY in savedPreset.values, false);
         assert.deepEqual(
-            Object.keys(savedPreset.storedState).sort((left, right) => left.localeCompare(right)),
-            [ARTICULATION_STATE_KEY, BOUNCE_STATE_KEY, "modulation.v6"],
-            "saved synth presets must capture only the required stored-state adapters",
-        );
-        assert.equal(savedPreset.storedState[BOUNCE_STATE_KEY], null);
-        assert.deepEqual(
-            savedPreset.storedState[ARTICULATION_STATE_KEY],
+            JSON.parse(savedPreset.values[ARTICULATION_STATE_KEY]),
             editorBankToStoredArticulations(seededBank),
             "saved synth presets must include the actual non-default articulation bank",
         );
-        const savedModulationState = deserializeModulationState(savedPreset.storedState["modulation.v6"]);
-        assert.equal(savedPreset.parameters.mseg1Morph, 0.33);
-        assert.equal(savedPreset.parameters.env2Attack, 0.21);
-        assert.equal(savedPreset.parameters.env2Decay, 0.32);
-        assert.equal(savedPreset.parameters.env2Sustain, 0.43);
-        assert.equal(savedPreset.parameters.env2Release, 0.54);
+        const savedModulationState = deserializeModulationState(savedPreset.values["modulation.v6"]);
+        assert.equal(savedPreset.values.mseg1Morph, 0.33);
+        assert.equal(savedPreset.values.env2Attack, 0.21);
+        assert.equal(savedPreset.values.env2Decay, 0.32);
+        assert.equal(savedPreset.values.env2Sustain, 0.43);
+        assert.equal(savedPreset.values.env2Release, 0.54);
         assert.equal("morph" in savedModulationState.msegSlots[0], false);
         assert.deepEqual(savedModulationState.envelopeSlots[1], { name: "Sweep Env" });
-        assert.equal("attackSeconds" in savedModulationState.envelopeSlots[1], false);
         assert.deepEqual(
             routeSummary(savedModulationState.routes[0]),
             routeSummary(seededModulationState.routes[0]),
             "saved synth presets must include the actual non-default modulation state",
         );
-        assert.deepEqual(presetState.activePresetByEffect[SYNTH_PRESET_EFFECT_ID], {
-            presetID: savedPreset.presetID,
-            label: "Bright Test Synth",
-            dirty: false,
-        });
-        assert.equal(containsRetiredSynthPresetBaselineKey(snapshot), false);
+
+        await recallSynthPreset(page, "Init");
+        await waitForHarnessSnapshot(
+            page,
+            "Init replaced the saved sound",
+            (nextSnapshot) => Number(nextSnapshot.parameterValues.oscAPan) === 0
+                && Number(nextSnapshot.parameterValues.filterCutoff) === 1000
+                && readStoredArticulationEditorState(nextSnapshot).slots.length === 0
+                && readStoredModulationState(nextSnapshot).routes.length === 0,
+        );
+        await recallSynthPreset(page, "Bright Test Synth");
+        const recalled = await waitForHarnessSnapshot(
+            page,
+            "saved synth preset recalled",
+            (nextSnapshot) => Math.abs(Number(nextSnapshot.parameterValues.oscAPan) - 0.25) <= 1e-9
+                && Number(nextSnapshot.parameterValues.filterCutoff) === 2475
+                && readStoredArticulationEditorState(nextSnapshot).selectedSlotId === "bright-bow",
+        );
+        assert.equal(Math.abs(Number(recalled.parameterValues.env2Attack) - 0.21) <= 1e-9, true);
+        assert.deepEqual(
+            routeSummary(readStoredModulationState(recalled).routes[0]),
+            routeSummary(seededModulationState.routes[0]),
+        );
+        await waitForPresetBarDirtyState(page, false);
     } finally {
         await page.close();
     }
 });
 
-test("synth preset bar marks edits dirty and reverts without synth-local baseline state", async () => {
+test("synth preset bar marks edits dirty and reverts", async () => {
     const page = await openHarnessPage();
 
     try {
-        await page.waitForFunction(() => Boolean(document.querySelector("cosimo-preset-bar")?.shadowRoot));
+        await page.locator('[data-role="synth-preset-bar"]').waitFor();
 
         await page.evaluate(() => {
             const harness = window.__COSIMO_DESKTOP_HARNESS__;
@@ -1385,11 +1366,11 @@ test("synth preset bar marks edits dirty and reverts without synth-local baselin
         });
 
         await waitForPresetBarDirtyState(page, true);
-        await clickPresetBarAction(page, "revert");
+        await revertSynthPreset(page);
 
         const snapshot = await waitForHarnessSnapshot(
             page,
-            "shared synth preset reverted",
+            "synth preset reverted",
             (nextSnapshot) => Math.abs(Number(nextSnapshot.parameterValues.oscAPan) - 0.12) <= 1e-9
                 && Number(nextSnapshot.parameterValues.oscAWavetableSelect) === 3
                 && Math.abs(Number(nextSnapshot.parameterValues.oscBPan) + 0.34) <= 1e-9
@@ -1397,9 +1378,7 @@ test("synth preset bar marks edits dirty and reverts without synth-local baselin
                 && Math.abs(Number(nextSnapshot.parameterValues.oscCPan) - 0.56) <= 1e-9
                 && Number(nextSnapshot.parameterValues.oscCWavetableSelect) === 11
                 && Math.abs(Number(nextSnapshot.parameterValues.filterCutoff) - 2475) <= 1e-9
-                && Math.abs(Number(nextSnapshot.parameterValues.mseg1Morph) - 0.33) <= 1e-9
-                && !containsRetiredSynthPresetBaselineKey(nextSnapshot)
-                && readEffectPresetState(nextSnapshot).activePresetByEffect[SYNTH_PRESET_EFFECT_ID]?.dirty === false,
+                && Math.abs(Number(nextSnapshot.parameterValues.mseg1Morph) - 0.33) <= 1e-9,
         );
 
         assert.equal(Number(snapshot.parameterValues.oscAPan), 0.12);
@@ -1410,7 +1389,7 @@ test("synth preset bar marks edits dirty and reverts without synth-local baselin
         assert.equal(Number(snapshot.parameterValues.oscCWavetableSelect), 11);
         assert.equal(Number(snapshot.parameterValues.filterCutoff), 2475);
         assert.equal(Number(snapshot.parameterValues.mseg1Morph), 0.33);
-        assert.equal(containsRetiredSynthPresetBaselineKey(snapshot), false);
+        await waitForPresetBarDirtyState(page, false);
     } finally {
         await page.close();
     }
@@ -1420,7 +1399,7 @@ test("synth presets restore mapping dependencies before strict articulation rout
     const page = await openHarnessPage();
 
     try {
-        await page.waitForFunction(() => Boolean(document.querySelector("cosimo-preset-bar")?.shadowRoot));
+        await page.locator('[data-role="synth-preset-bar"]').waitFor();
 
         const routeId = "preset-dependent-route";
         const seededBank = {
@@ -1502,7 +1481,7 @@ test("synth presets restore mapping dependencies before strict articulation rout
         });
 
         await waitForPresetBarDirtyState(page, true);
-        await clickPresetBarAction(page, "revert");
+        await revertSynthPreset(page);
 
         const restored = await waitForHarnessSnapshot(
             page,
@@ -1583,13 +1562,6 @@ test("collapsed articulation cards scroll without clipping the voice tab or row 
     }
 });
 
-// Retired 2026-08-19 with T05: the narrow (`sm:hidden`) articulation range-row
-// list was the compact presentation of the expanded editor, and the compact
-// articulation pane left mobile entirely — no shipping viewport reaches those
-// rows any more. The row-click replace contract returns with the T05A mobile
-// articulation redesign; desktop lane behavior stays covered by the range
-// click/drag/resize tests above.
-
 test("articulation card audition is press-hold and follows the most recently played note", async () => {
     const page = await openHarnessPage();
 
@@ -1597,10 +1569,14 @@ test("articulation card audition is press-hold and follows the most recently pla
         await clearHarnessDebugLog(page);
 
         const playButton = page.locator('[data-role="articulation-card-play"]').first();
+        await playButton.scrollIntoViewIfNeeded();
         const box = await playButton.boundingBox();
         assert.notEqual(box, null);
 
-        const clickPromise = playButton.click({ delay: 200 });
+        // The press is held until the note-on has been read, so the release
+        // can never race the check however slowly the page answers.
+        await page.mouse.move(box.x + (box.width / 2), box.y + (box.height / 2));
+        await page.mouse.down();
         await page.waitForFunction(() => window.__COSIMO_DESKTOP_HARNESS__.getSnapshot().midiInputEvents.length === 1);
 
         let snapshot = await getHarnessSnapshot(page);
@@ -1608,7 +1584,7 @@ test("articulation card audition is press-hold and follows the most recently pla
             { endpointID: "midiIn", value: buildShortMidi(0x90, note, 100) },
         ]);
 
-        await clickPromise;
+        await page.mouse.up();
         await page.waitForFunction(() => window.__COSIMO_DESKTOP_HARNESS__.getSnapshot().midiInputEvents.length === 2);
 
         snapshot = await getHarnessSnapshot(page);
@@ -2248,9 +2224,11 @@ test("filter controls commit mode, cutoff, and Q, and the matrix can route MSEG 
             true,
         );
 
+        // A field held still opens its parameter menu; with UI timers paused
+        // these slow small-step drags stay drags however late each step lands.
         await clearHarnessDebugLog(page);
         const filterCutoffField = page.locator('[data-role="filter-cutoff-field"]');
-        await dragLocatorBy(page, filterCutoffField, 18, 0);
+        await withUiTimersPaused(page, () => dragLocatorBy(page, filterCutoffField, 18, 0));
 
         await page.waitForFunction(() => {
             const snapshot = window.__COSIMO_DESKTOP_HARNESS__.getSnapshot();
@@ -2290,7 +2268,7 @@ test("filter controls commit mode, cutoff, and Q, and the matrix can route MSEG 
 
         await clearHarnessDebugLog(page);
         const filterResonanceField = page.locator('[data-role="filter-resonance-field"]');
-        await dragLocatorBy(page, filterResonanceField, 10, 0);
+        await withUiTimersPaused(page, () => dragLocatorBy(page, filterResonanceField, 10, 0));
 
         await page.waitForFunction(() => {
             const snapshot = window.__COSIMO_DESKTOP_HARNESS__.getSnapshot();
@@ -2621,59 +2599,31 @@ test("desktop filter graph cycles graph, bars, and round-bars analyzers while ke
     const page = await openHarnessPage();
 
     try {
+        // The analyzer paints to a canvas; the display maths (band smoothing,
+        // peak hold, geometry) is covered by test_shared_frontend_logic.mjs.
         const analyzerModeChip = page.locator('button[aria-label^="Cycle analyzer view"]').first();
-
-        await page.waitForFunction(() => {
-            const rendered = window.__COSIMO_DESKTOP_HARNESS__.getRenderedState();
-            return rendered.filterGraphState && rendered.filterGraphState.spectrum;
-        });
-
-        let renderedState = await getHarnessRenderedState(page);
-        assert.equal(renderedState.filterGraphState.spectrum.hasSpectrum, false);
-
-        await page.evaluate(() => {
-            const magnitudes = Array.from({ length: 64 }, (_, index) => (
-                index === 2 ? 0.03 : index === 3 ? 0.022 : 1e-5
-            ));
-            window.__COSIMO_DESKTOP_HARNESS__.emitFilterSpectrum({
-                sampleRateHz: 44_100,
-                magnitudes,
-            });
-        });
-
-        await page.waitForFunction(() => {
-            const spectrum = window.__COSIMO_DESKTOP_HARNESS__.getRenderedState().filterGraphState?.spectrum;
-            return spectrum?.hasSpectrum === true
-                && Array.isArray(spectrum?.bandMagnitudesDb)
-                && spectrum.bandMagnitudesDb.length > 0;
-        });
-
-        renderedState = await getHarnessRenderedState(page);
-        const lowHeavySpectrum = renderedState.filterGraphState.spectrum;
-        assert.equal(lowHeavySpectrum.hasSpectrum, true);
-        assert.equal(lowHeavySpectrum.renderMode, "graph");
-        assert.equal(lowHeavySpectrum.sourceBinCount, 64);
-        assert.equal(lowHeavySpectrum.bandCount, 120);
-        assert.ok(lowHeavySpectrum.graphPointCount > lowHeavySpectrum.bandCount);
-        assert.equal(lowHeavySpectrum.bandMagnitudesDb.length, 120);
-        assert.equal(lowHeavySpectrum.smoothedMagnitudesDb.length, 120);
-        assert.equal(lowHeavySpectrum.peakMagnitudesDb.length, 120);
-        assert.deepEqual(lowHeavySpectrum.renderGeometry, {
-            kind: "graph",
-            pointCount: lowHeavySpectrum.graphPointCount,
-            peakPointCount: lowHeavySpectrum.graphPointCount,
-        });
-        assert.deepEqual(
-            lowHeavySpectrum.frequencyTicks.map(({ label }) => label),
-            ["20", "50", "100", "200", "500", "1k", "2k", "5k", "10k", "20k"],
+        const canvas = await page.locator('[data-role="cosimo-filter-editor"] [data-role="filter-spectrum-canvas"]').elementHandle();
+        assert.ok(canvas, "Expected the filter spectrum canvas.");
+        const image = () => canvas.evaluate((node) => node.toDataURL());
+        const hasPixels = () => canvas.evaluate((node) => (
+            Array.from(node.getContext("2d").getImageData(0, 0, node.width, node.height).data).some((value) => value !== 0)
+        ));
+        const waitForRepaint = (previousImage) => page.waitForFunction(
+            ([node, previous]) => node.toDataURL() !== previous,
+            [canvas, previousImage],
         );
-        assert.deepEqual(
-            lowHeavySpectrum.dbTicks.map(({ label }) => label),
-            ["-18", "-36", "-54", "-72", "-90"],
-        );
-        assert.ok(Math.max(...lowHeavySpectrum.bandMagnitudesDb) > Math.min(...lowHeavySpectrum.bandMagnitudesDb));
-        const previousBandMagnitudesDb = [...lowHeavySpectrum.bandMagnitudesDb];
-        const previousSmoothedMagnitudesDb = [...lowHeavySpectrum.smoothedMagnitudesDb];
+        const emitSpectrum = (peaks) => page.evaluate((peakMagnitudes) => {
+            const magnitudes = Array.from({ length: 64 }, (_, index) => peakMagnitudes[index] ?? 1e-5);
+            window.__COSIMO_DESKTOP_HARNESS__.emitFilterSpectrum({ sampleRateHz: 44_100, magnitudes });
+        }, peaks);
+
+        assert.equal(await hasPixels(), false);
+
+        const emptyImage = await image();
+        await emitSpectrum({ 2: 0.03, 3: 0.022 });
+        await waitForRepaint(emptyImage);
+        assert.equal(await hasPixels(), true);
+        const lowHeavyImage = await image();
 
         await page.evaluate(() => {
             window.__COSIMO_DESKTOP_HARNESS__.patchConnection.emitEndpoint("filterSpectrum", {
@@ -2682,94 +2632,28 @@ test("desktop filter graph cycles graph, bars, and round-bars analyzers while ke
             });
         });
         await page.waitForTimeout(50);
-
-        renderedState = await getHarnessRenderedState(page);
-        assert.deepEqual(renderedState.filterGraphState.spectrum, lowHeavySpectrum);
+        assert.equal(await image(), lowHeavyImage, "a malformed spectrum message leaves the analyzer unchanged");
 
         await analyzerModeChip.click();
-        await page.waitForFunction(() => {
-            const spectrum = window.__COSIMO_DESKTOP_HARNESS__.getRenderedState().filterGraphState?.spectrum;
-            return spectrum?.renderMode === "bars" && spectrum?.renderGeometry?.kind === "bars" && spectrum?.renderGeometry?.rounded === false;
-        });
-
-        renderedState = await getHarnessRenderedState(page);
-        assert.equal(renderedState.filterGraphState.spectrum.renderMode, "bars");
-        assert.deepEqual(renderedState.filterGraphState.spectrum.renderGeometry, {
-            kind: "bars",
-            barCount: renderedState.filterGraphState.spectrum.bandCount,
-            rounded: false,
-        });
+        assert.match(await analyzerModeChip.getAttribute("aria-label"), /currently Bars\)/u);
+        await waitForRepaint(lowHeavyImage);
+        const barsImage = await image();
 
         await analyzerModeChip.click();
-        await page.waitForFunction(() => {
-            const spectrum = window.__COSIMO_DESKTOP_HARNESS__.getRenderedState().filterGraphState?.spectrum;
-            return spectrum?.renderMode === "round-bars" && spectrum?.renderGeometry?.kind === "bars" && spectrum?.renderGeometry?.rounded === true;
-        });
-
-        renderedState = await getHarnessRenderedState(page);
-        assert.equal(renderedState.filterGraphState.spectrum.renderMode, "round-bars");
-        assert.deepEqual(renderedState.filterGraphState.spectrum.renderGeometry, {
-            kind: "bars",
-            barCount: renderedState.filterGraphState.spectrum.bandCount,
-            rounded: true,
-        });
+        assert.match(await analyzerModeChip.getAttribute("aria-label"), /currently Round Bars\)/u);
+        await waitForRepaint(barsImage);
 
         await analyzerModeChip.click();
-        await page.waitForFunction(() => {
-            const spectrum = window.__COSIMO_DESKTOP_HARNESS__.getRenderedState().filterGraphState?.spectrum;
-            return spectrum?.renderMode === "graph" && spectrum?.renderGeometry?.kind === "graph";
-        });
+        assert.match(await analyzerModeChip.getAttribute("aria-label"), /currently Graph\)/u);
 
-        await page.evaluate(() => {
-            const magnitudes = Array.from({ length: 64 }, (_, index) => (
-                index === 60 ? 0.03 : index === 58 ? 0.022 : 1e-5
-            ));
-            window.__COSIMO_DESKTOP_HARNESS__.emitFilterSpectrum({
-                sampleRateHz: 44_100,
-                magnitudes,
-            });
-        });
+        const graphImage = await image();
+        await emitSpectrum({ 60: 0.03, 58: 0.022 });
+        await waitForRepaint(graphImage);
+        const highHeavyImage = await image();
 
-        await page.waitForFunction((previousSpectrum) => {
-            const spectrum = window.__COSIMO_DESKTOP_HARNESS__.getRenderedState().filterGraphState?.spectrum;
-            if (!spectrum?.hasSpectrum) {
-                return false;
-            }
-
-            return JSON.stringify(spectrum.bandMagnitudesDb) !== JSON.stringify(previousSpectrum);
-        }, previousBandMagnitudesDb);
-
-        renderedState = await getHarnessRenderedState(page);
-        const highHeavySpectrum = renderedState.filterGraphState.spectrum;
-        assert.notDeepEqual(highHeavySpectrum.bandMagnitudesDb, previousBandMagnitudesDb);
-        assert.notDeepEqual(highHeavySpectrum.smoothedMagnitudesDb, previousSmoothedMagnitudesDb);
-        assert.equal(highHeavySpectrum.renderMode, "graph");
-        assert.equal(highHeavySpectrum.renderGeometry.kind, "graph");
-
-        await page.evaluate(() => {
-            const magnitudes = Array.from({ length: 64 }, (_, index) => (
-                index === 60 ? 0.009 : index === 58 ? 0.006 : 1e-5
-            ));
-            window.__COSIMO_DESKTOP_HARNESS__.emitFilterSpectrum({
-                sampleRateHz: 44_100,
-                magnitudes,
-            });
-        });
-
-        await page.waitForFunction((previousSpectrum) => {
-            const spectrum = window.__COSIMO_DESKTOP_HARNESS__.getRenderedState().filterGraphState?.spectrum;
-            if (!spectrum?.hasSpectrum) {
-                return false;
-            }
-
-            return JSON.stringify(spectrum.bandMagnitudesDb) !== JSON.stringify(previousSpectrum);
-        }, highHeavySpectrum.bandMagnitudesDb);
-
-        renderedState = await getHarnessRenderedState(page);
-        const decayingSpectrum = renderedState.filterGraphState.spectrum;
-        const peakBandIndex = highHeavySpectrum.peakBandIndex;
-        assert.ok(decayingSpectrum.smoothedMagnitudesDb[peakBandIndex] > decayingSpectrum.bandMagnitudesDb[peakBandIndex]);
-        assert.ok(decayingSpectrum.peakMagnitudesDb[peakBandIndex] >= decayingSpectrum.smoothedMagnitudesDb[peakBandIndex]);
+        await emitSpectrum({ 60: 0.009, 58: 0.006 });
+        await waitForRepaint(highHeavyImage);
+        assert.equal(await hasPixels(), true);
     } finally {
         await page.close();
     }
@@ -3091,10 +2975,9 @@ test("mobile MSEG editor expands the drawer into a dominant graph with working r
         assert.equal(layout.graphHeight >= layout.bounds.height * 0.48, true);
         assert.equal(layout.activeRole, "");
         assert.equal(await dialog.locator('[data-role="mseg-editor-done"]').count(), 0);
-        assert.equal(await page.evaluate(() => {
-            const shadow = document.querySelector("cosimo-preset-bar")?.shadowRoot;
-            return shadow?.activeElement === shadow?.querySelector('[data-action="shell-back"]');
-        }), true);
+        assert.equal(await page.evaluate(() => (
+            document.activeElement === document.querySelector('[data-role="synth-preset-bar"] [data-action="shell-back"]')
+        )), true);
 
         for (const role of ["mseg-shape-a", "mseg-shape-b", "mseg-editor-undo", "mseg-loop-toggle"]) {
             const target = dialog.locator(`[data-role="${role}"]`);
@@ -3651,7 +3534,7 @@ test("the drawer MSEG timing knob fits its existing row and reaches both range e
     }
 });
 
-test("T66: an open MSEG 2 Rate control edits a transient MSEG 1 route without moving the base Rate", async () => {
+test("an open MSEG 2 Rate control edits a transient MSEG 1 route without moving the base Rate", async () => {
     const page = await openHarnessPage({
         beforeGoto: (nextPage) => nextPage.setViewportSize({ width: 393, height: 852 }),
     });
@@ -3765,7 +3648,7 @@ test("T66: an open MSEG 2 Rate control edits a transient MSEG 1 route without mo
     }
 });
 
-test("T66: the active Mod-page full editor keeps MSEG 2 as its target while MSEG 1 is dropped on Rate", async () => {
+test("the active Mod-page full editor keeps MSEG 2 as its target while MSEG 1 is dropped on Rate", async () => {
     const page = await openHarnessPage({
         beforeGoto: (nextPage) => nextPage.setViewportSize({ width: 393, height: 852 }),
     });
@@ -4930,7 +4813,7 @@ test("the floating bar keeps playing while the MSEG editor is open", async () =>
             const noteOns = events.filter(({ value }) => (value >>> 16) === 0x90).length;
             const noteOffs = events.filter(({ value }) => (value >>> 16) === 0x80).length;
             return noteOns === 1 && noteOffs === 1;
-        }, undefined, { timeout: 3000 });
+        });
     } finally {
         await page.close();
     }

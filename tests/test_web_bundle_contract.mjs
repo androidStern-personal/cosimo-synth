@@ -12,40 +12,20 @@ import {
     findPublicAssetPolicyViolations,
 } from "../web/public-asset-policy.mjs";
 import {
-    adaptCosimoAudioWorkletModuleLoading,
-    fixCosimoAudioWorkletListenerRemoval,
-    instrumentCosimoAudioWorkletSource,
-    poolCosimoAudioWorkletEventDelivery,
-} from "../web/audio-worklet-instrumentation.mjs";
-import {
     installBrowserPatchStatePersistence,
     readBrowserPatchState,
 } from "../web/browser-patch-state.mjs";
 import { copyWebHostAssets } from "../web/web-host-assets.mjs";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-const desktopBundleBudgetBytes = 3_200_000;
-// The worker owns stored-state parsing, sparse compilation, and acknowledged
-// delivery. Keep measured raw-parse and transfer ceilings on that complete
-// production unit instead of budgeting only the old 12-slot publisher.
-// The 2026-08-15 generator-control cut adds 18 strict target identities and
-// their range validation to the worker's accepted modulation domain.
-// The 2026-08-19 Voice filter Mix append (T05) adds one shared voice target
-// plus its catalog descriptor and amount policy; re-measured at 142,969 raw
-// and 34,341 gzipped.
-// Raised 2026-08-21 for the T22 batched mip-upload protocol (+700 raw /
-// +103 gzip): batch assembly and per-batch ack matching are deliberate
-// features, not drift. Keep the headroom tight.
-// Re-measured 2026-08-23 after the effects-lane dynamic-target grammar landed
-// (be5309e..367922d): 149,732 raw and 36,209 gzipped with Node's level-9
-// encoder. The added descriptor/instance vocabulary is the intended product
-// contract; these ceilings retain less than 1.5% headroom.
-// Re-measured 2026-08-24 after merging the lane.v2 topology compiler at
-// 90e9a28: 157,762 raw and 38,295 gzipped. The worker must deserialize and
-// replay that current lane contract while no editor is open; keep the renewed
-// ceilings at roughly 1.5% headroom so future accidental growth still fails.
-const wavetableWorkerBudgetBytes = 160_000;
-const wavetableWorkerGzipBudgetBytes = 38_800;
+// Measured ceilings, so any growth fails here and has to be explained. React,
+// react-dom and NexusUI are about a sixth of the desktop entry.
+const desktopBundleBudgetBytes = 3_503_115;
+// The worker owns stored-state parsing, sparse compilation and acknowledged
+// delivery for the whole synth state, presets, snapshots and the bounce
+// document included, and it must carry no React.
+const wavetableWorkerBudgetBytes = 284_695;
+const wavetableWorkerGzipBudgetBytes = 71_694;
 
 test("compiled desktop production entry stays within its browser parse budget", async () => {
     const bundlePath = path.join(repoRoot, "patch_gui", "desktop", "app.js");
@@ -68,6 +48,8 @@ test("compiled wavetable worker stays within its startup parse budget", async ()
         bundle.size <= wavetableWorkerBudgetBytes,
         `Expected ${bundlePath} to be at most ${wavetableWorkerBudgetBytes} bytes, received ${bundle.size}.`,
     );
+    assert.doesNotMatch(source.toString("utf8"), /react\.production|__SECRET_INTERNALS|useSyncExternalStore/,
+        "the worker bundle must not carry React");
     const compressedSize = gzipSync(source, { level: 9 }).byteLength;
     assert.ok(
         compressedSize <= wavetableWorkerGzipBudgetBytes,
@@ -243,153 +225,6 @@ test("public asset policy removes build-only artifacts without touching runtime 
     ]);
 });
 
-test("audio-worklet instrumentation measures render load without allocating a bound clock per block", () => {
-    const source = `class TestProcessor {
-                    receive (msg)
-                    {
-                    switch (msg.type)
-                    {
-                        case "req_status":
-                            break;
-                        case "send_value":
-                        {
-                            const endpointID = msg.id;
-                            const inputEndpoint = {};
-                            if (inputEndpoint)
-                            {
-                                inputEndpoint.update (msg.value);
-                            }
-                            break;
-                        }
-                    }
-                    }
-
-        process (inputs, outputs)
-        {
-            const input = inputs[0];
-            const output = outputs[0];
-
-            this.processImpl?.(input, output);
-            this.consumeOutputEvents?.();
-
-            return true;
-        }
-}`;
-
-    const instrumented = instrumentCosimoAudioWorkletSource(source);
-
-    assert.match(instrumented, /cosimo-perf-config/);
-    assert.match(instrumented, /cosimo-perf-gap-probe/);
-    assert.match(instrumented, /cosimo-perf-process-multiplier/);
-    assert.match(instrumented, /endpointID === "modulationProgram"/);
-    assert.match(instrumented, /eventAdjacentGapLoadSum/);
-    assert.match(instrumented, /frameDiscontinuityBlocks/);
-    assert.match(instrumented, /quantizedAverageLoad/);
-    assert.match(instrumented, /clockSource/);
-    assert.doesNotMatch(instrumented, /timerResolutionMilliseconds/);
-    assert.match(instrumented, /if \(! this\.cosimoPerfEnabled\)/);
-    assert.match(instrumented, /const startedAt = globalThis\.performance \? globalThis\.performance\.now\(\) : Date\.now\(\);/);
-    assert.match(instrumented, /type: "cosimo-perf"/);
-    assert.doesNotMatch(instrumented, /\.bind\s*\(/);
-    assert.throws(
-        () => instrumentCosimoAudioWorkletSource("class TestProcessor {}"),
-        /Could not instrument the generated Cmajor AudioWorklet process block/,
-    );
-});
-
-test("audio-worklet modules use a same-origin blob URL that WebKit accepts", () => {
-    const source = `async function serialiseWorkletProcessorFactoryToDataURI (CmajorClass, workletName, hostDescription)
-{
-    const serialisedInvocation = \`(\${registerWorkletProcessor.toString()}) ("\${workletName}", \${CmajorClass.toString()}, "\${hostDescription}");\`
-
-    let reader = new FileReader();
-    reader.readAsDataURL (new Blob ([serialisedInvocation], { type: "text/javascript" }));
-
-    return await new Promise (res => { reader.onloadend = () => res (reader.result); });
-}
-
-        const dataURI = await serialiseWorkletProcessorFactoryToDataURI (CmajorClass, workletName, hostDescription);
-        await audioContext.audioWorklet.addModule (dataURI);`;
-
-    const adapted = adaptCosimoAudioWorkletModuleLoading(source);
-    assert.match(adapted, /URL\.createObjectURL/);
-    assert.match(adapted, /URL\.revokeObjectURL/);
-    assert.doesNotMatch(adapted, /FileReader/);
-    assert.throws(
-        () => adaptCosimoAudioWorkletModuleLoading("unrecognised helper"),
-        /Could not adapt the generated Cmajor AudioWorklet module loader/,
-    );
-});
-
-test("audio-worklet endpoint listener removal matches the stored listener object", () => {
-    const generated = "                                const index = listeners.indexOf (msg?.replyType);";
-    const fixed = fixCosimoAudioWorkletListenerRemoval(generated);
-
-    assert.match(fixed, /findIndex \(\(listener\) => listener\.replyType === msg\?\.replyType\)/);
-    assert.doesNotMatch(fixed, /listeners\.indexOf/);
-});
-
-test("audio-worklet event delivery skips unlistened unpacks and coalesces one port message per block", () => {
-    const generated = `    function makeConsumeOutputEvents ({ wrapper, eventOutputs, dispatchOutputEvent })
-    {
-        const outputEventHandlers = eventOutputs.map (({ endpointID }) =>
-        {
-            const readCount = wrapper[\`getOutputEventCount_\${endpointID}\`]?.bind (wrapper);
-            const reset = wrapper[\`resetOutputEventCount_\${endpointID}\`]?.bind (wrapper);
-            const readEventAtIndex = wrapper[\`getOutputEvent_\${endpointID}\`]?.bind (wrapper);
-
-            return () =>
-            {
-                const count = readCount();
-
-                for (let i = 0; i < count; ++i)
-                    dispatchOutputEvent (endpointID, readEventAtIndex (i));
-
-                reset();
-            };
-        });
-
-        return () => outputEventHandlers.forEach ((consume) => consume() );
-    }
-
-                this.consumeOutputEvents = makeConsumeOutputEvents ({
-                    eventOutputs,
-                    wrapper,
-                    dispatchOutputEvent: (endpointID, event) =>
-                    {
-                        for (const { replyType } of outputEventListeners[endpointID] ?? [])
-                        {
-                            this.sendPatchMessage ({
-                                type: replyType,
-                                message: event.event, // N.B. chucking away frame and typeIndex info for now
-                            });
-                        }
-                    },
-                });
-
-                const msg = e.data.payload;
-
-                if (msg?.type === "status")
-                    msg.message = { manifest: this.manifest, ...msg.message };
-
-                this.deliverMessageFromServer (msg)`;
-
-    const pooled = poolCosimoAudioWorkletEventDelivery(generated);
-
-    assert.match(pooled, /hasEndpointListeners \(endpointID\)/);
-    assert.match(pooled, /flushDispatchedEvents\(\);/);
-    assert.match(pooled, /type: "cosimo-event-batch", messages: pending/);
-    assert.match(pooled, /for \(const batched of msg\.messages\)/);
-    assert.match(pooled, /cosimoPendingEventMessages\.push/);
-    // The render thread must no longer post per event: the only
-    // sendPatchMessage calls left inside the consume path are the flush's.
-    assert.doesNotMatch(pooled, /this\.sendPatchMessage \(\{\n {32}type: replyType/);
-    assert.throws(
-        () => poolCosimoAudioWorkletEventDelivery("unrecognised helper"),
-        /Could not pool the generated Cmajor AudioWorklet event delivery/,
-    );
-});
-
 test("browser patch persistence never blocks a runtime state write when storage fails", () => {
     const runtimeWrites = [];
     const connection = {
@@ -441,7 +276,6 @@ test("browser patch state distinguishes no saved sound from a complete current d
                 "lane.v1": "current-lane",
             },
         },
-        auxiliary: {},
     };
     const currentStorage = { getItem: () => JSON.stringify(currentDocument) };
 
@@ -491,15 +325,11 @@ test("a zero-parameter inventory cannot qualify lane-only v5 state as a saved so
                     parameters: {},
                     storedState: { "lane.v1": "partial" },
                 },
-                auxiliary: {},
             });
         },
     };
 
-    installBrowserPatchStatePersistence(connection, {
-        storage,
-        requiredStoredStateKeys: ["lane.v1"],
-    });
+    installBrowserPatchStatePersistence(connection, { storage });
 
     assert.deepEqual(runtimeWrites, []);
 });
@@ -529,7 +359,6 @@ test("browser patch persistence restores once and coalesces echoed storage write
                     parameters: { filterCutoff: 2_400 },
                     storedState: { "lane.v1": "restored" },
                 },
-                auxiliary: {},
             });
         },
         setItem(key, value) {
@@ -537,18 +366,14 @@ test("browser patch persistence restores once and coalesces echoed storage write
         },
     };
 
-    installBrowserPatchStatePersistence(connection, {
-        storage,
-        storageKey: "test.patch-state",
-        requiredStoredStateKeys: ["lane.v1"],
-    });
+    installBrowserPatchStatePersistence(connection, { storage, storageKey: "test.patch-state" });
 
     assert.deepEqual(runtimeWrites, [
         ["filterCutoff", 2_400],
         ["lane.v1", "restored"],
     ]);
     connection.sendStoredStateValue("lane.v1", "updated");
-    storedStateListener({ event: { key: "lane.v1", value: "updated" } });
+    storedStateListener({ key: "lane.v1", value: "updated" });
 
     assert.deepEqual(runtimeWrites, [
         ["filterCutoff", 2_400],
@@ -564,12 +389,11 @@ test("browser patch persistence restores once and coalesces echoed storage write
                 parameters: { filterCutoff: 2_400 },
                 storedState: { "lane.v1": "updated" },
             },
-            auxiliary: {},
         }),
     ]]);
 });
 
-test("the T74 complete-sound cut discards a version-4 browser snapshot as one unit", () => {
+test("a browser snapshot of another version is discarded as one unit", () => {
     const runtimeWrites = [];
     const connection = {
         inputEndpoints: [{ endpointID: "polishEnhancerAmount", purpose: "parameter" }],
@@ -589,7 +413,6 @@ test("the T74 complete-sound cut discards a version-4 browser snapshot as one un
                     parameters: { polishEnhancerAmount: 0.91 },
                     storedState: { "lane.v1": "pre-polish-lane" },
                 },
-                auxiliary: { "effects.presets.v2": "pre-polish-library" },
             });
         },
         setItem() {
@@ -604,11 +427,10 @@ test("the T74 complete-sound cut discards a version-4 browser snapshot as one un
         format: "cosimo.browserPatchState",
         version: 5,
         sound: { parameters: {}, storedState: {} },
-        auxiliary: {},
     });
 });
 
-test("a version-5 browser snapshot missing every T62 and T74 Polish value emits no runtime writes", () => {
+test("a version-5 browser snapshot missing the Voice Enhancer and Polish values emits no runtime writes", () => {
     const runtimeWrites = [];
     const currentParameterEndpointIDs = [
         "filterCutoff",
@@ -652,7 +474,6 @@ test("a version-5 browser snapshot missing every T62 and T74 Polish value emits 
                         "lane.v1": "partial-rack",
                     },
                 },
-                auxiliary: {},
             });
         },
         setItem() {
@@ -713,10 +534,7 @@ test("browser persistence writes v5 only after the complete live sound image is 
         },
     };
 
-    const persistence = installBrowserPatchStatePersistence(connection, {
-        storage,
-        requiredStoredStateKeys: ["modulation.v6", "lane.v1"],
-    });
+    const persistence = installBrowserPatchStatePersistence(connection, { storage });
 
     assert.equal(parameterListeners.has("hostSlot0Guard"), false);
     parameterListeners.get("voiceEnhancerAmount")(0.35);
@@ -733,8 +551,14 @@ test("browser persistence writes v5 only after the complete live sound image is 
     assert.equal(typeof fullStoredStateCallback, "function");
 
     fullStoredStateCallback({
-        "modulation.v6": "current-modulation",
-        "lane.v1": "current-lane",
+        parameters: [
+            { name: "voiceEnhancerAmount", value: 0.35 },
+            { name: "polishEnhancerAmount", value: 0.6 },
+        ],
+        values: {
+            "modulation.v6": "current-modulation",
+            "lane.v1": "current-lane",
+        },
     });
 
     assert.deepEqual(storageWrites, [{
@@ -750,9 +574,73 @@ test("browser persistence writes v5 only after the complete live sound image is 
                 "lane.v1": "current-lane",
             },
         },
-        auxiliary: {},
     }]);
     assert.deepEqual(persistence.browserState, storageWrites[0]);
+});
+
+test("browser persistence saves the stored values the engine already holds, read from Cmajor's full-state reply", () => {
+    const parameterListeners = new Map();
+    const storageWrites = [];
+    const connection = {
+        inputEndpoints: [{ endpointID: "filterCutoff", purpose: "parameter" }],
+        addParameterListener(endpointID, listener) {
+            parameterListeners.set(endpointID, listener);
+        },
+        requestParameterValue(endpointID) {
+            parameterListeners.get(endpointID)(2_400);
+        },
+        // The patch worker wrote the sound before the page installed persistence,
+        // so it arrives only through this reply, in Cmajor's own shape.
+        requestFullStoredState(callback) {
+            callback({
+                parameters: [{ name: "filterCutoff", value: 2_400 }],
+                values: { "modulation.v6": "current-modulation", "lane.v1": "current-lane" },
+            });
+        },
+        sendEventOrValue() {},
+        sendStoredStateValue() {},
+    };
+    const storage = {
+        getItem() { return null; },
+        setItem(_key, value) { storageWrites.push(JSON.parse(value)); },
+    };
+
+    const persistence = installBrowserPatchStatePersistence(connection, { storage });
+
+    assert.deepEqual(storageWrites, [{
+        format: "cosimo.browserPatchState",
+        version: 5,
+        sound: {
+            parameters: { filterCutoff: 2_400 },
+            storedState: { "modulation.v6": "current-modulation", "lane.v1": "current-lane" },
+        },
+    }]);
+    assert.deepEqual(persistence.browserState, storageWrites[0]);
+});
+
+test("a fresh synth's sound, with no stored field edited yet, is saved once the engine has reported it", () => {
+    const storageWrites = [];
+    let reportCutoff;
+    const connection = {
+        inputEndpoints: [{ endpointID: "filterCutoff", purpose: "parameter" }],
+        addParameterListener(_endpointID, listener) { reportCutoff = listener; },
+        requestParameterValue() { reportCutoff(2_400); },
+        requestFullStoredState(callback) { callback({ parameters: [{ name: "filterCutoff", value: 2_400 }], values: {} }); },
+        sendEventOrValue() {},
+        sendStoredStateValue() {},
+    };
+    const storage = {
+        getItem() { return null; },
+        setItem(_key, value) { storageWrites.push(JSON.parse(value)); },
+    };
+
+    installBrowserPatchStatePersistence(connection, { storage });
+
+    assert.deepEqual(storageWrites, [{
+        format: "cosimo.browserPatchState",
+        version: 5,
+        sound: { parameters: { filterCutoff: 2_400 }, storedState: {} },
+    }]);
 });
 
 test("a complete current browser snapshot restores every parameter before structured state", () => {
@@ -806,7 +694,6 @@ test("a complete current browser snapshot restores every parameter before struct
                     parameters: parameterValues,
                     storedState,
                 },
-                auxiliary: {},
             });
         },
         setItem(key, value) {
@@ -831,21 +718,21 @@ test("a complete current browser snapshot restores every parameter before struct
             parameters: { ...parameterValues, oscBPan: -0.6 },
             storedState,
         },
-        auxiliary: {},
     });
 });
 
-test("deferred sampled mode ignores safety echoes until an explicit user write", () => {
+function installHeldBackSampledMode() {
     const storageWrites = [];
     const parameterListeners = new Map();
     const runtimeWrites = [];
+    const requested = [];
     const connection = {
         inputEndpoints: [{ endpointID: "sourceMode", purpose: "parameter" }],
         addParameterListener(endpointID, listener) {
             parameterListeners.set(endpointID, listener);
         },
         requestParameterValue(endpointID) {
-            parameterListeners.get(endpointID)?.(0);
+            requested.push(endpointID);
         },
         sendEventOrValue(endpointID, value) {
             runtimeWrites.push([endpointID, value]);
@@ -853,35 +740,55 @@ test("deferred sampled mode ignores safety echoes until an explicit user write",
         },
         sendStoredStateValue() {},
     };
-    const initial = {
+    const saved = {
         format: "cosimo.browserPatchState",
         version: 5,
         sound: {
             parameters: { sourceMode: 1 },
             storedState: { "bounce.v1": "reference" },
         },
-        auxiliary: {},
     };
     const storage = {
-        getItem() { return JSON.stringify(initial); },
+        getItem() { return JSON.stringify(saved); },
         setItem(_key, value) { storageWrites.push(JSON.parse(value)); },
     };
-
     const persistence = installBrowserPatchStatePersistence(connection, {
         storage,
         deferParameterRestore: (endpointID) => endpointID === "sourceMode",
-        requiredStoredStateKeys: ["bounce.v1"],
     });
-    // Another host observer may request the temporary engine default. It is
-    // runtime state, not a durable edit.
+    return { connection, parameterListeners, persistence, requested, runtimeWrites, storageWrites };
+}
+
+test("a held-back saved parameter reaches the engine once, through applyDeferredParameter", () => {
+    const { connection, parameterListeners, persistence, requested, runtimeWrites, storageWrites } = installHeldBackSampledMode();
+    assert.deepEqual(runtimeWrites, [], "the held-back value is not restored with the rest of the sound");
+    assert.deepEqual(requested, [], "the engine's default is not read back");
+
+    // Another observer may read the engine's default meanwhile. It is not the saved sound.
     parameterListeners.get("sourceMode")(0);
-    persistence.sendRuntimeEventOrValue("sourceMode", 0);
     assert.deepEqual(storageWrites, []);
-    assert.deepEqual(runtimeWrites, [["sourceMode", 0]]);
+
+    persistence.applyDeferredParameter("sourceMode");
+    persistence.applyDeferredParameter("sourceMode");
+    persistence.applyDeferredParameter("filterCutoff");
+    assert.deepEqual(runtimeWrites, [["sourceMode", 1]]);
+    assert.deepEqual(storageWrites, [], "applying the saved value is not an edit");
+    assert.equal(persistence.browserState.sound.parameters.sourceMode, 1);
 
     connection.sendEventOrValue("sourceMode", 0);
     assert.equal(storageWrites.length, 1);
     assert.equal(storageWrites[0].sound.parameters.sourceMode, 0);
+});
+
+test("a deliberate write replaces a held-back saved parameter, which is then never applied", () => {
+    const { connection, persistence, runtimeWrites, storageWrites } = installHeldBackSampledMode();
+
+    connection.sendEventOrValue("sourceMode", 0);
+    assert.equal(storageWrites.length, 1);
+    assert.equal(storageWrites[0].sound.parameters.sourceMode, 0);
+
+    persistence.applyDeferredParameter("sourceMode");
+    assert.deepEqual(runtimeWrites, [["sourceMode", 0]]);
 });
 
 test("web host packaging includes every runtime-owned module", async (context) => {

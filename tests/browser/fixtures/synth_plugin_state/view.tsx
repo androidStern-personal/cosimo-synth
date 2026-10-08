@@ -2,6 +2,7 @@ import { createRoot } from "react-dom/client";
 import { flushSync } from "react-dom";
 import { SynthStateProvider, useSynthPluginParameterBinding } from "../../../../ui/shared/synth-plugin-state-react";
 import { synthPluginState } from "../../../../ui/shared/synth-plugin-state";
+import { synthFactoryPresets } from "../../../../ui/shared/synth-factory-presets";
 import { createCmajorPluginStateClient, createCmajorPluginStateService } from "../../../../kit/ui/plugin-state-cmajor";
 import type { PluginStateCommand } from "../../../../kit/ui/plugin-state-session";
 import { usePluginHistory } from "../../../../kit/index";
@@ -56,11 +57,18 @@ export async function mountMock(element: HTMLElement) {
 
 // The constructor is supplied from the actual pinned Cmajor browser module.
 export async function mount(element: HTMLElement, Channel: unknown) {
-    const platform = createPluginStateTestPlatform(Channel, { holdOpen: true, parameters: [
+    const exercised = [
         { endpoint: "playMode", value: 1, min: 0, max: 2, step: 1, defaultValue: 0 },
         { endpoint: "glideTime", value: 0.15, min: 0, max: 2, step: 0, defaultValue: 0 },
         { endpoint: "globalTune", value: -7.5, min: -24, max: 24, step: 0.01, defaultValue: 0 },
-    ] });
+    ];
+    // Every other declared synth parameter holds its Init value on a fixed range.
+    const initValues = synthFactoryPresets[0]!.values;
+    const untouched = Object.values(synthPluginState).flatMap(field => field.kind === "parameter"
+        && !exercised.some(parameter => parameter.endpoint === field.endpoint)
+        ? [{ endpoint: field.endpoint, value: Number(initValues[field.endpoint] ?? 0), min: -1_000, max: 20_000, step: 0, defaultValue: Number(initValues[field.endpoint] ?? 0) }]
+        : []);
+    const platform = createPluginStateTestPlatform(Channel, { holdOpen: true, parameters: [...exercised, ...untouched] });
     const defects: string[] = [];
     const edits: unknown[] = [];
     const stopEdits = subscribeToUserEdits({
@@ -82,6 +90,15 @@ export async function mount(element: HTMLElement, Channel: unknown) {
     return {
         async releaseBoot() { platform.releaseOpen(); await starting; },
         publications: platform.publications,
+        /**
+         * Published host-parameter and gesture operations. The engine deliveries' load events are
+         * left out, and so is each write's `intent`: the publication request number, which also
+         * counts those deliveries.
+         */
+        voiceOperations: () => platform.publications()
+            .flatMap((message: { readonly operations: readonly Record<string, unknown>[] }) => message.operations)
+            .filter(operation => operation.kind !== "event")
+            .map(({ intent: _publicationRequest, ...operation }) => operation),
         messages: view.messages,
         holdReplies: view.holdIncoming,
         releaseReplies: view.releaseIncoming,

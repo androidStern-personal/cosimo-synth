@@ -16,13 +16,11 @@ import {
     buildMipFrameFromSpectrum,
     extractSourceFramesFromSamples,
 } from "../shared/wavetable-mip";
-import {
-    asResourceClient,
-    type ResourceClient,
-    type ResourceClientInput,
-} from "../shared/resource-client";
+import { createPatchConnectionResourceClient, type ResourceClient } from "../../kit/ui/resource-client";
+import { synthPatchRoot } from "../shared/patch-root";
 import { startPatchWorkerServices } from "../shared/patch-worker-services";
-import { prepareSharedData, type SharedDataConnection } from "../../kit/ui/prepared-shared-data";
+import { prepareSharedData } from "../shared/prepared-shared-data";
+import type { SharedDataConnection } from "../../kit/ui/plugin-state-direct-data";
 import { PACKED_WAVETABLE_BYTES, preparePackedWavetable } from "../shared/packed-wavetable";
 
 const runtimeSyncRequestEndpointID = "runtimeSyncRequest";
@@ -78,7 +76,7 @@ export type WavetableWorkerOptions = {
     mipLevelCount?: number;
     cacheBudgetBytes?: number;
     serviceLoadTimeoutMs?: number;
-    resourceClient?: ResourceClientInput;
+    resourceClient?: ResourceClient;
     setTimeoutFn?: ((callback: () => void, delay: number) => TimerHandle) | null;
     clearTimeoutFn?: ((handle: TimerHandle) => void) | null;
 };
@@ -275,45 +273,6 @@ function clamp(value: number, min: number, max: number) {
     return Math.min(Math.max(value, min), max);
 }
 
-function decodeTextPayload(payload: unknown) {
-    if (typeof payload === "string") {
-        return Promise.resolve(payload);
-    }
-
-    if (payload && typeof (payload as { text?: () => Promise<string> }).text === "function") {
-        return (payload as { text: () => Promise<string> }).text();
-    }
-
-    if (payload instanceof ArrayBuffer) {
-        if (typeof TextDecoder === "function") {
-            return Promise.resolve(new TextDecoder().decode(new Uint8Array(payload)));
-        }
-
-        return Promise.resolve(String.fromCharCode(...new Uint8Array(payload)));
-    }
-
-    if (ArrayBuffer.isView(payload)) {
-        const bytes = new Uint8Array(payload.buffer, payload.byteOffset, payload.byteLength);
-
-        if (typeof TextDecoder === "function") {
-            return Promise.resolve(new TextDecoder().decode(bytes));
-        }
-
-        return Promise.resolve(String.fromCharCode(...bytes));
-    }
-
-    if (Array.isArray(payload)) {
-        const bytes = Uint8Array.from(payload);
-        if (typeof TextDecoder === "function") {
-            return Promise.resolve(new TextDecoder().decode(bytes));
-        }
-
-        return Promise.resolve(String.fromCharCode(...bytes));
-    }
-
-    throw new Error("Unsupported text resource payload");
-}
-
 async function readCatalogFromResourceClient(resourceClient: ResourceClient, catalogPath: string) {
     return getFactoryBankCatalogValue(await resourceClient.readJSON<FactoryBankCatalog>(catalogPath));
 }
@@ -438,7 +397,7 @@ export class WavetableWorkerController {
     constructor(connection: PatchConnectionLike, options: WavetableWorkerOptions = {}) {
         this.connection = connection;
         this.delivery = options.delivery ?? "events";
-        this.resourceClient = asResourceClient(options.resourceClient ?? connection);
+        this.resourceClient = options.resourceClient ?? createPatchConnectionResourceClient(connection, { patchRoot: synthPatchRoot() });
         this.catalogPath = options.catalogPath ?? defaultCatalogPath;
         this.maxBatchesInFlight = resolvePositiveIntegerOption(
             options.maxFramesInFlight,

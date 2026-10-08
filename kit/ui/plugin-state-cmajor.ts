@@ -1,11 +1,11 @@
 import { createPatchConnectionResourceClient, type PatchConnectionResourceSource } from "./resource-client";
-import { createEngineBinding, type EngineApplication, type EngineFailure, type EngineOutcome, type EngineTarget } from "./plugin-state-engine";
+import { createEngineBinding, type EngineFailure, type EngineOutcome, type EngineTarget } from "./plugin-state-engine";
 import { createPluginStateClient } from "./plugin-state-client";
 import { createStateLifetime } from "./plugin-state-lifetime";
-import { getDefinitionOptions, isPreparationFailure, sharedStateResources, type PluginStateDocumentContext, type PluginStateFields, type PluginStateJson, type PluginStatePreparedValue } from "./plugin-state-definition";
-import type { SharedDataConnection } from "./prepared-shared-data";
+import { getDefinitionOptions, isPreparationFailure, savedInProject, sharedStateResources, type PluginStateDocumentContext, type PluginStateFields, type PluginStateJson, type PluginStatePreparedValue } from "./plugin-state-definition";
+import type { SharedDataConnection } from "./plugin-state-direct-data";
 import { createDirectDataPort } from "./plugin-state-direct-data";
-import { createPluginStateSession, type PluginStateScope, type PluginStateEnginePort, type PluginStateEngineInput, type PluginStateSession } from "./plugin-state-session";
+import { createPluginStateSession, type PluginStateScope, type PluginStateEnginePort, type PluginStateEngineInput, type PluginStateSession, type PluginStateSnapshot } from "./plugin-state-session";
 import { encodeEventPayload, encodeStateSnapshot, isBoundedStateJson, isRecord, parseClientMessage, parseClientReceipt, parseServiceMessage } from "./plugin-state-protocol";
 
 /** Existing Cmajor message transport, supplied by a native or browser connection. */
@@ -42,6 +42,16 @@ export type CmajorStateEffect =
     | { readonly kind: "host-effect"; readonly name: string; readonly value: unknown };
 
 const handshakeDeadlineMs = 5000;
+
+/** Report each unknown message kind once, then ignore it. */
+function unknownMessageReporter(onDefect: (error: unknown) => void) {
+    const reported = new Set<string>();
+    return (messageKind: string) => {
+        if (reported.has(messageKind)) return;
+        reported.add(messageKind);
+        onDefect(new Error(`Ignoring "${messageKind}" state-channel messages, which this kit version does not understand.`));
+    };
+}
 
 function sameScope(left: PluginStateScope | null, right: PluginStateScope): boolean {
     return left !== null && left.owner === right.owner && left.document === right.document;
@@ -95,6 +105,8 @@ export function createCmajorPluginStateService<const Fields extends PluginStateF
     let finishStart = () => {};
     let failStart: (reason: unknown) => void = () => {};
     const publications = new Map<number, { readonly request: number; readonly scope: PluginStateScope }>();
+    // The state every attached GUI last received; an update carries only the fields that changed since.
+    let broadcast: PluginStateSnapshot<Fields> | undefined;
     const send = (body: unknown) => {
         if (!isBoundedStateJson(body)) throw new Error("State-channel message exceeds the native JSON contract.");
         connection.sendMessageToServer({ type: "kit_state", message: body });
@@ -124,7 +136,7 @@ export function createCmajorPluginStateService<const Fields extends PluginStateF
             readonly plan: import("./plugin-state-definition").PluginStateSharedPlan; readonly target: EngineTarget;
         }>({
             async prepare(input, signal) {
-                const prepared = await authorPreparation(() => declaration.prepare(input.value, { resources, parameters: input.parameters, signal }));
+                const prepared = await authorPreparation(() => declaration.prepare(input.value, { resources, parameters: input.parameters, reason: input.reason, signal }));
                 if (prepared.kind === "error") return prepared;
                 const plan = prepared.value;
                 if (isPreparationFailure(plan)) return { kind: "error", error: plan.error };
@@ -162,7 +174,7 @@ export function createCmajorPluginStateService<const Fields extends PluginStateF
         const declaration = field.engine;
         const binding = createEngineBinding<PluginStateEngineInput & { readonly target: EngineTarget }, { readonly target: EngineTarget; readonly value: PluginStateJson }>({
             async prepare(input, signal) {
-                const prepared = await authorPreparation(() => declaration.prepare(input.value, { resources, parameters: input.parameters, signal }));
+                const prepared = await authorPreparation(() => declaration.prepare(input.value, { resources, parameters: input.parameters, reason: input.reason, signal }));
                 if (prepared.kind === "error") return prepared;
                 const payload = prepared.value;
                 if (isPreparationFailure(payload)) return { kind: "error", error: payload.error };
@@ -220,9 +232,11 @@ export function createCmajorPluginStateService<const Fields extends PluginStateF
                     operation.kind === "parameter" ? { ...operation, intent: publication.request } : operation) });
             },
             update(snapshot, receipt) {
-                if (snapshot.scope) send({ kind: "update", scope: snapshot.scope, revision: snapshot.revision,
-                    state: encodeStateSnapshot(definition, snapshot), ...(receipt ? { receipt } : {}),
+                if (!snapshot.scope) return;
+                send({ kind: "update", scope: snapshot.scope, revision: snapshot.revision,
+                    state: encodeStateSnapshot(definition, snapshot, broadcast), ...(receipt ? { receipt } : {}),
                 });
+                broadcast = snapshot;
             },
             close(reason) {
                 stopped = true;
@@ -237,9 +251,11 @@ export function createCmajorPluginStateService<const Fields extends PluginStateF
             },
         },
     });
+    const reportUnknown = unknownMessageReporter(options.onDefect);
     const process = (body: unknown) => {
         if (stopped) return;
         const parsed = parseServiceMessage(body);
+        if (parsed.kind === "unknown") { reportUnknown(parsed.messageKind); return; }
         if (parsed.kind === "invalid") {
             const problem = new Error(parsed.message);
             options.onDefect(problem);
@@ -263,10 +279,13 @@ export function createCmajorPluginStateService<const Fields extends PluginStateF
             });
         } else if (message.kind === "attached-client") {
             const snapshot = session.getSnapshot();
-            if (sameScope(snapshot.scope, message.scope)) send({ kind: "snapshot", scope: message.scope,
+            if (!sameScope(snapshot.scope, message.scope)) return;
+            send({ kind: "snapshot", scope: message.scope,
                 to: message.client, attachRequest: message.request, revision: snapshot.revision,
                 state: encodeStateSnapshot(definition, snapshot),
             });
+            // The new GUI's base is this snapshot, which other GUIs may not have seen; send the next update in full.
+            broadcast = undefined;
         } else if (message.kind === "detach") {
             void session.dispatch({ kind: "detached", scope: message.scope, client: message.client });
         } else if (message.kind === "parameter") {
@@ -391,8 +410,7 @@ export function createCmajorPluginStateService<const Fields extends PluginStateF
                         const remove = signal.onAbort(() => resolve(undefined));
                         connection.requestFullStoredState?.(state => {
                             remove();
-                            const values = isRecord(state) && isRecord(state.values) ? state.values : state;
-                            resolve(!signal.aborted && isRecord(values) ? values[name] : undefined);
+                            resolve(!signal.aborted && isRecord(state) && isRecord(state.values) ? state.values[name] : undefined);
                         });
                     });
                 },
@@ -428,7 +446,7 @@ export function createCmajorPluginStateService<const Fields extends PluginStateF
             const binding = createEngineBinding<PluginStateEngineInput & { readonly target: EngineTarget }, { readonly value: unknown; readonly target: EngineTarget }>({
                 replacement: delivery.replacement,
                 async prepare(input, cancellation) {
-                    const prepared = await authorPreparation(() => declaration.prepare(input.value, { resources: preparationResources, parameters: input.parameters, signal: cancellation }));
+                    const prepared = await authorPreparation(() => declaration.prepare(input.value, { resources: preparationResources, parameters: input.parameters, reason: input.reason, signal: cancellation }));
                     if (prepared.kind === "error") return prepared;
                     const value = prepared.value;
                     return isPreparationFailure(value) ? { kind: "error", error: value.error } : { kind: "ok", value: { value, target: input.target } };
@@ -455,6 +473,7 @@ export function createCmajorPluginStateService<const Fields extends PluginStateF
             replace(input, target) {
                 if (closed) return;
                 if (!document || !sameScope(document.scope, target.scope)) { closeDocument(); document = openDocument(target); }
+                // Opening runs the delivery's create(), which can fail the document and stop this port before it returns.
                 if (closed) { closeDocument(); return; }
                 document.binding.replace({ ...input, target }, target);
             },
@@ -477,7 +496,6 @@ export function createCmajorPluginStateService<const Fields extends PluginStateF
                 failStart = reason => { clearTimeout(openDeadline); reject(reason); };
             });
             try {
-                if ("bindings" in options) throw new Error("Declare engine delivery with preparedState instead of service bindings.");
                 const fields = preparedFields(definition);
                 if (fields.some(({ declaration }) => declaration.delivery.outputEndpoints?.length)
                     && (typeof connection.addEndpointListener !== "function" || typeof connection.removeEndpointListener !== "function"))
@@ -496,7 +514,7 @@ export function createCmajorPluginStateService<const Fields extends PluginStateF
                 }, handshakeDeadlineMs);
                 send({ kind: "open", request: openRequest,
                     parameters: Object.values(definition).filter(field => field.kind === "parameter").map(field => field.endpoint),
-                    storedKeys: Object.keys(definition).filter(key => definition[key]?.kind === "stored" && definition[key].lifetime !== "instance"),
+                    storedKeys: Object.entries(definition).filter(([, field]) => savedInProject(field)).map(([key]) => key),
                     eventEndpoints: [...new Set([
                         ...Object.values(definition).flatMap(field => field.kind === "stored" && field.engine?.kind === "event-value" ? [field.engine.endpoint] : []),
                         ...fields.flatMap(field => field.declaration.delivery.eventEndpoints),
@@ -535,16 +553,23 @@ export function createCmajorPluginStateClient<const Fields extends PluginStateFi
         requests.clear();
     };
     let timeout: (request: number) => void = () => {};
+    const reportUnknown = unknownMessageReporter(options.onDefect);
     return createPluginStateClient(definition, { onDefect: options.onDefect,
         channel: {
             subscribe(listener) {
                 let active = true;
                 let attachment: { readonly scope: PluginStateScope; readonly client: number } | undefined;
+                // The last state this GUI parsed; an update fills the fields it leaves out from it.
+                let received: PluginStateSnapshot<Fields> | undefined;
                 const process = (body: unknown) => {
                     // Reject old mount correlations before codec work or projection.
                     if (isRecord(body) && (body.kind === "attached" || body.kind === "attach-failed")
                         && (typeof body.request !== "number" || !requests.has(body.request))) return;
-                    const parsed = parseClientMessage(definition, body);
+                    // The channel is ordered, so an update that arrives before this GUI's
+                    // attach reply is older than the snapshot the reply will carry.
+                    if (isRecord(body) && body.kind === "update" && !attachment) return;
+                    const parsed = parseClientMessage(definition, body, received);
+                    if (parsed.kind === "unknown") { reportUnknown(parsed.messageKind); return; }
                     if (parsed.kind === "invalid") throw new Error(parsed.message);
                     const message = parsed.value;
                     if (message.kind === "attached" || message.kind === "attach-failed") {
@@ -552,13 +577,21 @@ export function createCmajorPluginStateClient<const Fields extends PluginStateFi
                         if (request === undefined) return;
                         requests.delete(message.request);
                         clearTimeout(request.deadline);
-                        if (message.kind === "attached") attachment = { scope: message.scope, client: message.client };
+                        if (message.kind === "attached") {
+                            attachment = { scope: message.scope, client: message.client };
+                            received = message.state;
+                        }
                         listener({ ...message, request: request.local });
                     } else {
+                        if (message.kind === "update" && attachment && sameScope(attachment.scope, message.scope)) received = message.state;
                         if (message.kind === "closed"
+                            || (message.kind === "resync" && attachment && sameScope(attachment.scope, message.scope))
                             || (message.kind === "reset" && attachment && message.scope.owner === attachment.scope.owner
                                 && message.scope.document > attachment.scope.document)
-                            || (message.kind === "owner-changed" && attachment && !sameScope(attachment.scope, message.scope))) attachment = undefined;
+                            || (message.kind === "owner-changed" && attachment && !sameScope(attachment.scope, message.scope))) {
+                            attachment = undefined;
+                            received = undefined;
+                        }
                         listener(message);
                     }
                 };
@@ -578,6 +611,7 @@ export function createCmajorPluginStateClient<const Fields extends PluginStateFi
                     clearRequests();
                     const owned = attachment;
                     attachment = undefined;
+                    received = undefined;
                     try {
                         if (owned) connection.sendMessageToServer({ type: "kit_state", message: { kind: "detach", ...owned } });
                     } catch (error) { options.onDefect(error); }

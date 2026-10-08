@@ -2,13 +2,13 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import path from "node:path";
 import { setImmediate } from "node:timers/promises";
-import { loadUIModule } from "./helpers/load_ui_module.mjs";
+import { loadUIModule } from "../kit/tests/helpers/load_ui_module.mjs";
 
 const root = path.resolve(import.meta.dirname, "..");
 const { createEngineBinding } = await loadUIModule(root, "kit/ui/plugin-state-engine.ts");
 // Use the authored renderer rather than a stub that manufactures expected data.
 const { renderMsegShape, MSEG_BODY_SAMPLES, MSEG_PADDED_SAMPLES } =
-    await loadUIModule(root, "ui/shared/mseg.ts");
+    await loadUIModule(root, "kit/ui/mseg.ts");
 
 const ramp = Object.freeze({ points: Object.freeze([
     Object.freeze({ x: 0, y: 0, curvePower: 0 }),

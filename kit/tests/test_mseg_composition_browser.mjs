@@ -10,12 +10,12 @@ const root = path.resolve(import.meta.dirname, '../..')
 let server, browser, base
 before(async () => {
     server = await createServer({
-        configFile: path.join(root, 'kit/examples/mseg/vite.config.mjs'),
+        configFile: path.join(root, 'kit/examples/vite.config.mjs'),
         server: { host: '127.0.0.1', port: 0 },
         logLevel: 'error',
     })
     await server.listen()
-    base = `http://127.0.0.1:${server.httpServer.address().port}`
+    base = `http://127.0.0.1:${server.httpServer.address().port}/mseg/`
     browser = await chromium.launch({ headless: true })
 })
 after(async () => {
@@ -35,7 +35,7 @@ async function withPage(run, options = {}) {
         await page.close()
     }
 }
-const handles = (page) => page.locator('[data-slot=mseg-points] [role=button]')
+const handles = (page) => page.locator('[data-slot=mseg-points] [role=slider]')
 async function drag(page, locator, dx, dy) {
     await locator.scrollIntoViewIfNeeded()
     const b = await locator.boundingBox()
@@ -54,11 +54,11 @@ test('default and customized handles share insertion, pointer and keyboard editi
         await page.mouse.click(box.x + box.width * 0.5, box.y + box.height * 0.7)
         assert.equal(await handles(section).count(), 3)
         const point = handles(section).nth(1)
-        const before = await point.getAttribute('aria-label')
+        const before = await point.getAttribute('aria-valuetext')
         await point.press('ArrowUp')
-        assert.notEqual(await point.getAttribute('aria-label'), before)
+        assert.notEqual(await point.getAttribute('aria-valuetext'), before)
         await drag(page, point, 35, -30)
-        assert.notEqual(await point.getAttribute('aria-label'), before)
+        assert.notEqual(await point.getAttribute('aria-valuetext'), before)
         await point.press('Delete')
         assert.equal(await handles(section).count(), 2)
         const custom = page.locator('#composed')
@@ -70,7 +70,7 @@ test('default and customized handles share insertion, pointer and keyboard editi
         const input = custom.getByRole('spinbutton', { name: 'Selected point value' })
         await input.fill('.4')
         await input.press('Tab')
-        assert.match(await square.getAttribute('aria-label'), /value 0.40/)
+        assert.match(await square.getAttribute('aria-valuetext'), /value 0.40/)
         await custom.getByRole('button', { name: 'Delete selected' }).click()
         assert.equal(await handles(custom).count(), 3)
     }))
@@ -78,7 +78,7 @@ test('segment keyboard editing and reference layers remain independent', () =>
     withPage(async (page) => {
         const section = page.locator('#composed'),
             svg = section.locator('[data-slot=mseg-surface]')
-        const curves = section.locator('[data-slot=mseg-curve]')
+        const curves = section.locator('[data-slot=mseg-line]')
         const reference = await curves.first().getAttribute('d')
         const original = await curves.last().getAttribute('d')
         await svg.focus()
@@ -111,14 +111,14 @@ test('vertical mapping, read-only and external replacement work on a phone', () 
         async (page) => {
             const section = page.locator('#states')
             const point = handles(section).nth(1)
-            const original = await point.getAttribute('aria-label')
+            const original = await point.getAttribute('aria-valuetext')
             await drag(page, point, 20, 30)
-            assert.notEqual(await point.getAttribute('aria-label'), original)
+            assert.notEqual(await point.getAttribute('aria-valuetext'), original)
             await section.getByRole('checkbox').check()
-            const locked = await point.getAttribute('aria-label')
+            const locked = await point.getAttribute('aria-valuetext')
             await point.press('ArrowUp')
             await drag(page, point, 20, -30)
-            assert.equal(await point.getAttribute('aria-label'), locked)
+            assert.equal(await point.getAttribute('aria-valuetext'), locked)
             await section.getByRole('button', { name: 'External reset' }).click()
             assert.equal(await handles(section).count(), 2)
             assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true)
@@ -226,9 +226,9 @@ test('the real compiled Reader drives the public playhead through trigger, loop,
             (x) => Number(document.querySelector('#playback [data-slot=mseg-playhead]').getAttribute('x1')) < x + 25,
             first,
         )
-        const shape = await section.locator('[data-slot=mseg-curve]').getAttribute('d')
+        const shape = await section.locator('[data-slot=mseg-line]').getAttribute('d')
         await handles(section).nth(1).press('ArrowDown')
-        assert.notEqual(await section.locator('[data-slot=mseg-curve]').getAttribute('d'), shape)
+        assert.notEqual(await section.locator('[data-slot=mseg-line]').getAttribute('d'), shape)
         await section.getByRole('button', { name: 'Release', exact: true }).click()
         await page.waitForFunction(
             () => document.querySelector('#playback [data-slot=mseg-playhead]')?.dataset.active === 'false',
@@ -244,6 +244,25 @@ test('keyboard gesture ends once when the page loses focus', () =>
         await page.evaluate(() => window.dispatchEvent(new Event('blur')))
         await page.keyboard.up('ArrowUp')
         assert.deepEqual(await page.evaluate(() => window.fixture.gestures), ['start', 'cancel'])
+    }))
+test('point keys follow the shared keyboard policy and Escape cancels a held key', () =>
+    withPage(async (page) => {
+        const host = await fixture(page)
+        const point = handles(host).nth(1)
+        const y = () => page.evaluate(() => window.fixture.value().points[1].y)
+        assert.equal(await point.getAttribute('aria-roledescription'), 'envelope point')
+        await point.focus()
+        await page.keyboard.press('PageDown')
+        assert.ok(Math.abs((await y()) - 0.6) < 1e-9)
+        await page.keyboard.press('Shift+ArrowUp')
+        assert.ok(Math.abs((await y()) - 0.601) < 1e-9)
+        await page.keyboard.press('Home')
+        assert.equal(await page.evaluate(() => window.fixture.value().points[1].x), 0)
+        assert.deepEqual(await page.evaluate(() => window.fixture.gestures), ['start', 'end', 'start', 'end', 'start', 'end'])
+        await page.keyboard.down('ArrowUp')
+        await page.keyboard.press('Escape')
+        await page.keyboard.up('ArrowUp')
+        assert.deepEqual((await page.evaluate(() => window.fixture.gestures)).slice(-2), ['start', 'cancel'])
     }))
 test('displayed sources typecheck and run independently of the documentation app', () =>
     withPage(async (page) => {
@@ -359,7 +378,7 @@ test('displayed sources typecheck and run independently of the documentation app
                     body: '<!doctype html><div id="root"></div>',
                 }),
             )
-            await standalone.goto(base + '/copy-proof')
+            await standalone.goto(base + 'copy-proof')
             await standalone.addStyleTag({ content: bundle.outputFiles.find((f) => f.path.endsWith('.css')).text })
             await standalone.addScriptTag({
                 type: 'module',
@@ -367,7 +386,7 @@ test('displayed sources typecheck and run independently of the documentation app
             })
             const editor = standalone.locator('#default')
             await handles(editor).first().press('ArrowUp')
-            assert.match(await handles(editor).first().getAttribute('aria-label'), /value 0.01/)
+            assert.match(await handles(editor).first().getAttribute('aria-valuetext'), /value 0.01/)
             const custom = standalone.locator('#composed')
             await custom.getByRole('button', { name: 'Add midpoint' }).click()
             assert.equal(await handles(custom).count(), 4)

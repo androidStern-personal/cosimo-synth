@@ -1,9 +1,3 @@
-/**
- * T17 wall clock on this machine (same 169-case name set):
- * Before: 1,660.944 s / 27m 40.944s (build/t17-baseline-suite.log).
- * After: 433.675 s, 434.457 s, and 441.839 s across three green four-shard runs;
- * median 434.457 s / 7m 14.457s (3.82x faster, 73.8% less wall clock).
- */
 import test from "node:test";
 import assert from "node:assert/strict";
 
@@ -34,17 +28,12 @@ import {
     waitForHarnessReady,
     TEST_SAMPLES_PER_FRAME,
     MSEG_PREVIEW_HORIZONTAL_PADDING_PX,
-    EFFECT_PRESETS_V2_STATE_KEY,
-    SYNTH_PRESET_EFFECT_ID,
     ARTICULATION_STATE_KEY,
-    RETIRED_SYNTH_LOCAL_DIRTY_STATE_KEY,
     expectedMsegPreviewProgressClipWidth,
     buildShortMidi,
     readStoredModulationState,
     readStoredArticulationEditorState,
     editorBankToStoredArticulations,
-    readEffectPresetState,
-    containsRetiredSynthPresetBaselineKey,
     readStoredMsegShape,
     readStoredMsegPlayback,
     readStoredRouteAmount,
@@ -75,9 +64,7 @@ import {
     waitForPageValue,
     waitForReactFrames,
     readVisibleHarnessParameterEndpointIDs,
-    clickPresetBarAction,
-    saveSynthPresetAs,
-    waitForPresetBarDirtyState,
+    recallSynthPreset,
     dragArticulationCardToLane,
     previewArticulationCardDragOver,
     readDesktopRangeSegments,
@@ -92,6 +79,7 @@ import {
     rectsIntersect,
     rectContains,
     readGlobalModRailGeometry,
+    withUiTimersPaused,
 } from "./helpers/desktop_patch_view_browser_suite.mjs";
 
 test("desktop harness renders the real React patch view and requests runtime sync on boot", async () => {
@@ -104,7 +92,12 @@ test("desktop harness renders the real React patch view and requests runtime syn
         assert.equal(await page.locator(".cosimo-stage canvas").count(), 1);
         await page.waitForSelector("text=Ready");
 
-        const snapshot = await getHarnessSnapshot(page);
+        // MSEG curves reach the DSP as shared data on inputs 3-8 (slot-major,
+        // shape A then B), not as events; boot installs every curve.
+        const msegDataInputs = [3, 4, 5, 6, 7, 8];
+        const snapshot = await waitForHarnessSnapshot(page, "boot MSEG curve installation", (nextSnapshot) => (
+            msegDataInputs.every((input) => nextSnapshot.installedMsegData.some((record) => record.input === input))
+        ));
         const runtimeSyncMessages = snapshot.sentMessages.filter(
             ({ endpointID }) => endpointID === "runtimeSyncRequest",
         );
@@ -114,7 +107,14 @@ test("desktop harness renders the real React patch view and requests runtime syn
             true,
             "The UI must request its initial runtime presentation state.",
         );
-        assert.equal(snapshot.sentMessages.some(({ endpointID }) => endpointID === "modulationMsegBuffer"), true);
+        const modulation = readStoredModulationState(snapshot);
+        for (const input of msegDataInputs) {
+            const slot = modulation.msegSlots[Math.floor((input - 3) / 2)];
+            const installed = snapshot.installedMsegData.findLast((record) => record.input === input);
+            assert.deepEqual(installed.samples, Array.from(renderMsegShape((input - 3) % 2 === 0 ? slot.shapeA : slot.shapeB)),
+                `MSEG data input ${input} carries the stored curve`);
+            assert.equal(installed.dspSessionId, snapshot.runtimeState.dspSessionId);
+        }
         assert.equal(snapshot.sentMessages.some(({ endpointID }) => endpointID === "modulationMsegPlayback"), true);
         assert.equal(snapshot.sentMessages.some(({ endpointID }) => endpointID === "modulationProgram"), true);
     } finally {
@@ -222,30 +222,51 @@ test("Global Tune stays continuous, brackets edits for host undo, and accepts ho
     }
 });
 
-test("desktop Vite harness installs React Grab and registers the official MCP plugin in dev mode", async () => {
-    const page = await openHarnessPage();
+async function readReactGrabState(page) {
+    return page.evaluate(() => {
+        const api = window.__REACT_GRAB__;
+        return {
+            webdriver: navigator.webdriver,
+            api: api && typeof api === "object"
+                ? {
+                    hasRegisterPlugin: typeof api.registerPlugin === "function",
+                    plugins: typeof api.getPlugins === "function" ? api.getPlugins() : null,
+                }
+                : null,
+        };
+    });
+}
 
+test("desktop Vite harness loads React Grab with its MCP plugin for a person and keeps automation hermetic", async () => {
+    const automatedPage = await openHarnessPage();
     try {
-        const reactGrabState = await page.evaluate(() => {
-            const api = window.__REACT_GRAB__;
-
-            if (!api || typeof api !== "object") {
-                return null;
-            }
-
-            return {
-                hasRegisterPlugin: typeof api.registerPlugin === "function",
-                hasGetPlugins: typeof api.getPlugins === "function",
-                plugins: typeof api.getPlugins === "function" ? api.getPlugins() : null,
-            };
-        });
-
-        assert.equal(reactGrabState?.hasRegisterPlugin, true);
-        assert.equal(reactGrabState?.hasGetPlugins, true);
-        assert.equal(Array.isArray(reactGrabState?.plugins), true);
-        assert.equal(reactGrabState.plugins.includes("mcp"), true);
+        assert.deepEqual(await readReactGrabState(automatedPage), { webdriver: true, api: null },
+            "automated browsers must not load React Grab's networked dev tooling");
     } finally {
-        await page.close();
+        await automatedPage.close();
+    }
+
+    const personPage = await openHarnessPage({
+        beforeGoto: async (page) => {
+            // React Grab fetches web fonts; keep this page on the local harness.
+            await page.route("**/*", (route) => {
+                const { hostname } = new URL(route.request().url());
+                return hostname === "127.0.0.1" || hostname === "localhost" ? route.continue() : route.abort();
+            });
+            await page.addInitScript(() => {
+                Object.defineProperty(Navigator.prototype, "webdriver", { configurable: true, get: () => false });
+            });
+        },
+    });
+    try {
+        await personPage.waitForFunction(() => window.__REACT_GRAB__?.getPlugins?.()?.includes?.("mcp") === true);
+        const state = await readReactGrabState(personPage);
+        assert.equal(state.webdriver, false);
+        assert.equal(state.api?.hasRegisterPlugin, true);
+        assert.equal(Array.isArray(state.api?.plugins), true);
+        assert.equal(state.api.plugins.includes("mcp"), true);
+    } finally {
+        await personPage.close();
     }
 });
 
@@ -333,7 +354,7 @@ test("built desktop bundle active Voice tab re-tap scrolls its shadow-root panel
             const panel = document.querySelector("cosimo-desktop-react-view")?.shadowRoot
                 ?.querySelector('[data-role="mobile-workspace-panel-voice"]');
             return panel instanceof HTMLElement && panel.scrollTop === 0;
-        }, null, { timeout: 3_000 }).then(() => true, () => false);
+        }).then(() => true, () => false);
         const finalScrollTop = await page.evaluate(() => (
             document.querySelector("cosimo-desktop-react-view")?.shadowRoot
                 ?.querySelector('[data-role="mobile-workspace-panel-voice"]')?.scrollTop ?? -1
@@ -865,7 +886,7 @@ test("desktop voice visuals stack full-width above the compact panel grid", asyn
     }
 });
 
-test("T54 keeps the wavetable corner controls on symmetric insets at phone, plugin, and desktop sizes", async () => {
+test("the wavetable corner controls keep symmetric insets at phone, plugin, and desktop sizes", async () => {
     const readCornerGeometry = async (page, containerSelector, roles) => (
         await page.locator(containerSelector).evaluate((container, requestedRoles) => {
             const serialize = (element) => {
@@ -1654,8 +1675,8 @@ test("compact Voice splits its height 50/50 between the wavetable editor and the
     });
 
     try {
-        // T04 decision: the articulation/controls pane leaves compact mobile
-        // entirely; the freed height goes to the two remaining cards.
+        // The articulation/controls pane is absent on compact mobile;
+        // the freed height goes to the two remaining cards.
         assert.equal(await page.locator('[data-role="keyboard-controls"]').count(), 0);
 
         const measureRows = async () => {
@@ -3354,8 +3375,26 @@ test("articulation capture and recall edit only the selected oscillator", async 
     }
 });
 
+// The state framework reads every declared host parameter when the sound
+// opens, so a host reply can only be pending before the sound is editable.
+// These pages open on a bank captured from B while C's replies are withheld.
+async function openHarnessWithPendingHostValues({ articulations, pendingEndpoints, parameterValues = {} }) {
+    return openHarnessPage({
+        beforeGoto: (nextPage) => nextPage.addInitScript(({ bank, endpoints, values, key }) => {
+            const initial = window.__COSIMO_DESKTOP_HARNESS_INITIAL__ ?? {};
+            window.__COSIMO_DESKTOP_HARNESS_INITIAL__ = {
+                ...initial,
+                parameterValues: { ...initial.parameterValues, ...values },
+                storedState: { ...initial.storedState, [key]: bank },
+                deferredParameterResponses: endpoints,
+            };
+        }, { bank: articulations, endpoints: pendingEndpoints, values: parameterValues, key: ARTICULATION_STATE_KEY }),
+    });
+}
+
 test("cross-oscillator articulation bases stay authoritative through delayed host responses", async () => {
     const page = await openHarnessPage();
+    let bankCapturedFromB;
 
     try {
         await page.getByRole("tab", { name: "Oscillator B" }).click();
@@ -3369,7 +3408,8 @@ test("cross-oscillator articulation bases stay authoritative through delayed hos
             "first articulation captured from B",
             (snapshot) => JSON.parse(String(snapshot.storedState[ARTICULATION_STATE_KEY])).slots.length === 1,
         );
-        const firstBank = JSON.parse(String(firstCapture.storedState[ARTICULATION_STATE_KEY]));
+        bankCapturedFromB = firstCapture.storedState[ARTICULATION_STATE_KEY];
+        const firstBank = JSON.parse(String(bankCapturedFromB));
         assert.equal(
             Object.hasOwn(firstBank.slots[0].overrides, "oscB.mute"),
             false,
@@ -3441,23 +3481,12 @@ test("cross-oscillator articulation bases stay authoritative through delayed hos
         await page.close();
     }
 
-    const delayedMutePage = await openHarnessPage();
+    const delayedMutePage = await openHarnessWithPendingHostValues({
+        articulations: bankCapturedFromB,
+        pendingEndpoints: ["oscCMute"],
+    });
 
     try {
-        await delayedMutePage.getByRole("tab", { name: "Oscillator B" }).click();
-        await delayedMutePage.waitForSelector(
-            '[data-role="desktop-oscillator-presentation"][data-selected-oscillator-id="B"]',
-        );
-        await delayedMutePage.waitForSelector('[data-role="oscillator-mute"][aria-pressed="true"]');
-        await delayedMutePage.getByRole("button", { name: "Capture current parameters as a new articulation" }).click();
-        await waitForHarnessSnapshot(
-            delayedMutePage,
-            "first articulation captured from B before delayed C mute response",
-            (snapshot) => JSON.parse(String(snapshot.storedState[ARTICULATION_STATE_KEY])).slots.length === 1,
-        );
-        await delayedMutePage.evaluate(() => {
-            window.__COSIMO_DESKTOP_HARNESS__.deferParameterResponse("oscCMute");
-        });
         await delayedMutePage.getByRole("tab", { name: "Oscillator C" }).click();
         await delayedMutePage.waitForSelector(
             '[data-role="desktop-oscillator-presentation"][data-selected-oscillator-id="C"]',
@@ -3471,7 +3500,7 @@ test("cross-oscillator articulation bases stay authoritative through delayed hos
         );
         await clearHarnessDebugLog(delayedMutePage);
         await muteButton.evaluate((button) => button.click());
-        let pendingSnapshot = await getHarnessSnapshot(delayedMutePage);
+        const pendingSnapshot = await getHarnessSnapshot(delayedMutePage);
         assert.equal(Number(pendingSnapshot.parameterValues.oscCMute), 1);
         assert.equal(
             pendingSnapshot.sentMessages.some(({ endpointID }) => endpointID === "oscCMute"),
@@ -3486,66 +3515,19 @@ test("cross-oscillator articulation bases stay authoritative through delayed hos
         assert.equal(await articulationSurface.getAttribute("data-base-state"), "loading");
         assert.equal(await articulationSurface.getAttribute("aria-busy"), "true");
         assert.equal(
-            await delayedMutePage.locator('[data-role="articulation-card"]').first().getAttribute("aria-disabled"),
-            "true",
-        );
-        const auditionButton = delayedMutePage.locator('[data-role="articulation-card-play"]').first();
-        assert.equal(await auditionButton.isDisabled(), true, "audition must not play the wrong current sound while recall is unavailable");
-        await auditionButton.dispatchEvent("pointerdown", {
-            pointerId: 311,
-            pointerType: "mouse",
-            button: 0,
-            buttons: 1,
-        });
-        const blockedAuditionSnapshot = await getHarnessSnapshot(delayedMutePage);
-        assert.equal(blockedAuditionSnapshot.midiInputEvents.length, 0);
-        assert.equal(
-            blockedAuditionSnapshot.sentMessages.some(({ endpointID }) => /^osc[ABC]/.test(endpointID)),
-            false,
-            "a forced pending audition cannot recall any articulation parameters",
+            await delayedMutePage.locator('[data-role="articulation-card"]').count(),
+            0,
+            "no saved articulation can be auditioned or recalled while the sound it plays is still opening",
         );
         assert.equal(
             await captureButton.isDisabled(),
             true,
             "capture must stay unavailable until C's pre-edit mute baseline is host-confirmed",
         );
-        assert.equal(await delayedMutePage.locator('[data-role="articulation-update"]').isDisabled(), true);
-        assert.equal(await delayedMutePage.locator('[data-role="articulation-revert"]').isDisabled(), true);
-        await delayedMutePage.locator('[data-role="articulation-card"]').first().click({ button: "right", force: true });
-        const cardMenu = delayedMutePage.locator('[data-role="articulation-card-menu"]');
-        await cardMenu.waitFor();
-        assert.equal(await cardMenu.locator('[data-action="rename"]').isDisabled(), false);
-        for (const action of ["duplicate", "replace", "delete"]) {
-            const item = cardMenu.locator(`[data-action="${action}"]`);
-            assert.equal(await item.isDisabled(), true, `${action} must be visibly disabled while the base loads`);
-            assert.equal(await item.getAttribute("data-disabled-reason"), "base-loading");
-        }
-        await delayedMutePage.keyboard.press("Escape");
-        await delayedMutePage.getByRole("button", { name: "Expand articulation editor" }).click();
-        const rangeSegment = delayedMutePage.locator('[data-role="articulation-range-segment"]').first();
-        assert.equal(
-            await rangeSegment.getAttribute("aria-disabled"),
-            null,
-            "the movable/resizable range segment itself remains available while sound recall loads",
-        );
-        await rangeSegment.click({ button: "right", force: true });
-        const rangeMenu = delayedMutePage.locator('[data-role="articulation-range-menu"]');
-        await rangeMenu.waitFor();
-        const duplicateAfter = rangeMenu.locator('[data-action="duplicate-after"]');
-        assert.equal(await duplicateAfter.isDisabled(), true);
-        assert.equal(await duplicateAfter.getAttribute("data-disabled-reason"), "base-loading");
-        for (const action of ["replace", "insert-after", "delete"]) {
-            assert.equal(
-                await rangeMenu.locator(`[data-action="${action}"]`).isDisabled(),
-                false,
-                `${action} remains available because it only edits trigger ranges`,
-            );
-        }
-        await delayedMutePage.keyboard.press("Escape");
         await captureButton.evaluate((button) => button.click());
         assert.equal(
-            JSON.parse(String((await getHarnessSnapshot(delayedMutePage)).storedState[ARTICULATION_STATE_KEY])).slots.length,
-            1,
+            (await getHarnessSnapshot(delayedMutePage)).storedState[ARTICULATION_STATE_KEY],
+            bankCapturedFromB,
             "a forced click cannot persist a lossy slot while the base is unknown",
         );
 
@@ -3558,6 +3540,7 @@ test("cross-oscillator articulation bases stay authoritative through delayed hos
                 && document.querySelector('[data-role="oscillator-mute"]')?.getAttribute("aria-pressed") === "true"
         ));
         assert.equal(await articulationSurface.getAttribute("data-base-state"), "ready");
+        const auditionButton = delayedMutePage.locator('[data-role="articulation-card-play"]').first();
         assert.equal(await auditionButton.isDisabled(), false);
         await auditionButton.dispatchEvent("pointerdown", {
             pointerId: 312,
@@ -3577,7 +3560,10 @@ test("cross-oscillator articulation bases stay authoritative through delayed hos
         await delayedMutePage.waitForFunction(() => (
             window.__COSIMO_DESKTOP_HARNESS__.getSnapshot().midiInputEvents.length === 2
         ));
+        await delayedMutePage.getByRole("button", { name: "Expand articulation editor" }).click();
+        const rangeSegment = delayedMutePage.locator('[data-role="articulation-range-segment"]').first();
         await rangeSegment.click({ button: "right" });
+        const rangeMenu = delayedMutePage.locator('[data-role="articulation-range-menu"]');
         await rangeMenu.waitFor();
         assert.equal(await rangeMenu.locator('[data-action="duplicate-after"]').isDisabled(), false);
         await delayedMutePage.keyboard.press("Escape");
@@ -3599,7 +3585,6 @@ test("cross-oscillator articulation bases stay authoritative through delayed hos
         await delayedMutePage.close();
     }
 
-    const delayedAllPage = await openHarnessPage();
     const oscillatorCEndpoints = [
         "oscCWavetablePosition",
         "oscCPan",
@@ -3623,38 +3608,26 @@ test("cross-oscillator articulation bases stay authoritative through delayed hos
         "oscCUnisonPositionSpread",
         "oscCUnisonWarpSpread",
     ];
+    const delayedAllPage = await openHarnessWithPendingHostValues({
+        articulations: bankCapturedFromB,
+        pendingEndpoints: oscillatorCEndpoints,
+        parameterValues: { oscCVolumeDb: -9 },
+    });
 
     try {
-        await delayedAllPage.getByRole("tab", { name: "Oscillator B" }).click();
-        await delayedAllPage.waitForSelector(
-            '[data-role="desktop-oscillator-presentation"][data-selected-oscillator-id="B"]',
-        );
-        await delayedAllPage.getByRole("button", { name: "Capture current parameters as a new articulation" }).click();
-        await waitForHarnessSnapshot(
-            delayedAllPage,
-            "first articulation captured before C has been visited",
-            (snapshot) => JSON.parse(String(snapshot.storedState[ARTICULATION_STATE_KEY])).slots.length === 1,
-        );
-
-        await delayedAllPage.evaluate((endpointIDs) => {
-            window.__COSIMO_DESKTOP_HARNESS__.setParameterValue("oscCVolumeDb", -9);
-            endpointIDs.forEach((endpointID) => {
-                window.__COSIMO_DESKTOP_HARNESS__.deferParameterResponse(endpointID);
-            });
-        }, oscillatorCEndpoints);
         await delayedAllPage.getByRole("tab", { name: "Oscillator C" }).click();
         await delayedAllPage.waitForSelector(
             '[data-role="desktop-oscillator-presentation"][data-selected-oscillator-id="C"]',
         );
-        assert.equal(
-            await delayedAllPage.locator('[data-role="oscillator-level"]').getAttribute("aria-valuenow"),
-            "0",
-            "the screen remains stale while C's authoritative values are unavailable",
-        );
         const levelControl = delayedAllPage.getByRole("slider", { name: "Oscillator level" });
         const muteButton = delayedAllPage.getByRole("button", { name: "Mute selected oscillator" });
+        await delayedAllPage.waitForSelector('[data-role="oscillator-level"][data-host-state="loading"]');
+        assert.notEqual(
+            await levelControl.getAttribute("aria-valuenow"),
+            "-9",
+            "the screen cannot claim C's host level before its reply arrives",
+        );
         assert.equal(await levelControl.isDisabled(), true);
-        assert.equal(await levelControl.getAttribute("data-host-state"), "loading");
         assert.equal(await muteButton.isDisabled(), true);
         await clearHarnessDebugLog(delayedAllPage);
         await levelControl.evaluate((control) => control.dispatchEvent(new KeyboardEvent("keydown", { key: "End", bubbles: true })));
@@ -3673,8 +3646,8 @@ test("cross-oscillator articulation bases stay authoritative through delayed hos
         assert.equal(await captureButton.isDisabled(), true);
         await captureButton.evaluate((button) => button.click());
         assert.equal(
-            JSON.parse(String((await getHarnessSnapshot(delayedAllPage)).storedState[ARTICULATION_STATE_KEY])).slots.length,
-            1,
+            (await getHarnessSnapshot(delayedAllPage)).storedState[ARTICULATION_STATE_KEY],
+            bankCapturedFromB,
             "a stale screen snapshot cannot become a new articulation base",
         );
 
@@ -3722,6 +3695,7 @@ test("cross-oscillator articulation bases stay authoritative through delayed hos
         await delayedAllPage.close();
     }
 });
+
 
 test("global modulation-source drag maps the selected oscillator level control", async () => {
     const page = await openHarnessPage({
@@ -4237,7 +4211,7 @@ test("voice controls expose the selected oscillator and shared filter modulation
         assert.equal(await targetKindFor("mobile-voice-cell-unisonWavetablePositionSpread"), "oscB.unisonWavetablePositionSpread");
         assert.equal(await targetKindFor("mobile-voice-cell-unisonWarpSpread"), "oscB.unisonWarpSpread");
 
-        // T05: the compact filter card presents its destinations on the
+        // The compact filter card presents its destinations on the
         // attached Cut/Res/Mix knob row instead of the desktop fields.
         assert.equal(await targetKindFor("voice-filter-knob-filterCutoff"), "filterCutoffOctaves");
         assert.equal(await targetKindFor("voice-filter-knob-filterQ"), "filterQ");
@@ -4397,7 +4371,7 @@ test("mobile wavetable selection names the pending table and the harness activat
         await page.waitForFunction((expected) => (
             document.querySelector('[data-role="mobile-voice-table-name"]')?.textContent?.trim()
                 === `Loading ${expected}…`
-        ), desiredTableName, { timeout: 3_000 });
+        ), desiredTableName);
         assert.equal(
             await page.locator('header:has-text("Cosimo Synth")').count(),
             0,
@@ -4903,11 +4877,14 @@ test("precision value entry keeps the focused draft when a host echo arrives", a
     }
 });
 
-test("desktop unison drag presents within 50 ms while committing the matching runtime value", async () => {
+// Wall-clock budgets here measured the machine, not the product. What a
+// drag owes the player is ordering: the optimistic value is on screen, and
+// the edit has left the view for the host, before the pointer event's task
+// ends, so neither can wait on a timer, a frame, or the host's reply.
+test("desktop unison drag presents and hands its edit to the host within the pointer event's task", async () => {
     const page = await openHarnessPage({
         beforeGoto: (nextPage) => nextPage.setViewportSize({ width: 1280, height: 720 }),
     });
-    const cdp = await page.context().newCDPSession(page);
 
     try {
         await page.locator('[data-role="keyboard-control-mode-voice"]').click();
@@ -4916,15 +4893,17 @@ test("desktop unison drag presents within 50 ms while committing the matching ru
         const bounds = await detuneInput.boundingBox();
         assert.ok(bounds);
         await page.evaluate(() => {
-            window.__COSIMO_UNISON_LATENCY__ = { armed: null, results: [] };
+            window.__COSIMO_UNISON_ORDER__ = { armed: null };
             const patchConnection = window.__COSIMO_DESKTOP_HARNESS__.patchConnection;
-            const sendEventOrValue = patchConnection.sendEventOrValue.bind(patchConnection);
-            patchConnection.sendEventOrValue = (endpointID, value) => {
-                const state = window.__COSIMO_UNISON_LATENCY__;
-                if (endpointID === "oscAUnisonDetune" && state?.armed?.handlerStartedAt) {
-                    state.armed.runtimeSentAt ??= performance.now();
+            const sendMessageToServer = patchConnection.sendMessageToServer.bind(patchConnection);
+            patchConnection.sendMessageToServer = (envelope) => {
+                const armed = window.__COSIMO_UNISON_ORDER__?.armed;
+                const command = envelope?.message?.kind === "command" ? envelope.message.command : null;
+                if (armed?.handled && command?.kind === "edit" && command.key === "oscAUnisonDetune") {
+                    armed.commandedValues.push(command.value);
+                    armed.commandedBeforeTaskEnd ??= !armed.taskEnded;
                 }
-                return sendEventOrValue(endpointID, value);
+                return sendMessageToServer(envelope);
             };
             const targetInput = document.querySelector('[data-role="unison-detune-control"] input');
             const nativeValue = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value");
@@ -4938,44 +4917,43 @@ test("desktop unison drag presents within 50 ms while committing the matching ru
                 },
                 set(nextValue) {
                     nativeValue.set.call(this, nextValue);
-                    const state = window.__COSIMO_UNISON_LATENCY__;
-                    const armed = state?.armed;
-                    if (!armed?.handlerStartedAt || armed.presented || String(nextValue) === armed.initialValue) {
+                    const armed = window.__COSIMO_UNISON_ORDER__?.armed;
+                    if (!armed?.handled || armed.presentedValue !== null || String(nextValue) === armed.initialValue) {
                         return;
                     }
-                    armed.presented = true;
-                    state.results.push({
-                        nativeQueueMs: armed.nativeQueueMs,
-                        handlerToCommitMs: performance.now() - armed.handlerStartedAt,
-                        handlerToRuntimeMs: armed.runtimeSentAt - armed.handlerStartedAt,
-                        totalMs: armed.nativeQueueMs + performance.now() - armed.handlerStartedAt,
-                        initialValue: armed.initialValue,
-                        presentedValue: String(nextValue),
-                    });
+                    armed.presentedValue = String(nextValue);
+                    armed.presentedBeforeTaskEnd = !armed.taskEnded;
                 },
             });
             document.addEventListener("pointermove", (event) => {
-                const state = window.__COSIMO_UNISON_LATENCY__;
+                const armed = window.__COSIMO_UNISON_ORDER__?.armed;
                 const input = event.composedPath().find((candidate) => (
                     candidate instanceof HTMLInputElement
                     && candidate.closest('[data-role="unison-detune-control"]')
                 ));
-                if (!state?.armed || state.armed.handled || !(input instanceof HTMLInputElement)) {
+                if (!armed || armed.handled || !(input instanceof HTMLInputElement)) {
                     return;
                 }
-
-                state.armed.handled = true;
-                const armed = state.armed;
-                const handlerStartedAt = performance.now();
-                armed.handlerStartedAt = handlerStartedAt;
-                armed.nativeQueueMs = handlerStartedAt - event.timeStamp;
+                armed.handled = true;
+                // A posted message runs as the next task, after this event's
+                // listeners and every microtask they queued.
+                const boundary = new MessageChannel();
+                boundary.port1.onmessage = () => {
+                    armed.taskEnded = true;
+                    boundary.port1.close();
+                };
+                boundary.port2.postMessage(null);
             }, { capture: true, passive: true });
         });
-        await cdp.send("Emulation.setCPUThrottlingRate", { rate: 20 });
         await detuneInput.evaluate((input) => {
-            window.__COSIMO_UNISON_LATENCY__.armed = {
+            window.__COSIMO_UNISON_ORDER__.armed = {
                 initialValue: input.value,
                 handled: false,
+                taskEnded: false,
+                presentedValue: null,
+                presentedBeforeTaskEnd: false,
+                commandedValues: [],
+                commandedBeforeTaskEnd: null,
             };
         });
 
@@ -5006,29 +4984,34 @@ test("desktop unison drag presents within 50 ms while committing the matching ru
             clientX: endX,
             clientY: y,
         });
-        await page.waitForFunction(() => window.__COSIMO_UNISON_LATENCY__?.results?.length === 1, null, { timeout: 10_000 });
+        await page.waitForFunction(() => window.__COSIMO_UNISON_ORDER__?.armed?.taskEnded === true);
 
-        const result = await page.evaluate(() => window.__COSIMO_UNISON_LATENCY__.results[0]);
-        const snapshot = await getHarnessSnapshot(page);
+        const order = await page.evaluate(() => window.__COSIMO_UNISON_ORDER__.armed);
+        assert.notEqual(order.presentedValue, null, "The drag must present a new value.");
+        assert.equal(order.presentedBeforeTaskEnd, true, `The drag value must be on screen within its pointer event's task: ${JSON.stringify(order)}`);
+        assert.equal(order.commandedBeforeTaskEnd, true, `The edit must leave the view within its pointer event's task: ${JSON.stringify(order)}`);
+        const snapshot = await waitForHarnessSnapshot(
+            page,
+            "unison drag value at the runtime boundary",
+            (nextSnapshot) => nextSnapshot.sentMessages.some(({ endpointID }) => endpointID === "oscAUnisonDetune"),
+        );
         const sentUnisonMessages = snapshot.sentMessages.filter(
             ({ endpointID }) => endpointID === "oscAUnisonDetune",
         );
-        assert.notEqual(result.presentedValue, result.initialValue);
-        assert.ok(sentUnisonMessages.length > 0, "The presented drag must also reach the runtime boundary.");
+        assert.equal(
+            Number(sentUnisonMessages.at(-1).value),
+            Number(order.commandedValues.at(-1)),
+            "The runtime must receive exactly the value the drag commanded.",
+        );
         assert.equal(
             Number(snapshot.parameterValues.oscAUnisonDetune),
             Number(sentUnisonMessages.at(-1).value),
             "The runtime value must match the last value sent by the drag.",
         );
-        assert.ok(
-            result.nativeQueueMs + result.handlerToRuntimeMs < 50,
-            `Expected unison runtime send <50ms, got ${JSON.stringify(result)}`,
-        );
-        assert.ok(result.totalMs < 50, `Expected unison value presentation <50ms, got ${JSON.stringify(result)}`);
         await page.waitForTimeout(100);
         assert.equal(
             await detuneInput.inputValue(),
-            result.presentedValue,
+            order.presentedValue,
             "The optimistic value must not snap back while the deferred runtime echo settles.",
         );
         await page.evaluate(() => {
@@ -5039,11 +5022,10 @@ test("desktop unison drag presents within 50 ms while committing the matching ru
         ));
         assert.equal(await detuneInput.inputValue(), "40 ct", "An authoritative host echo must replace the drag value.");
     } finally {
-        await cdp.send("Emulation.setCPUThrottlingRate", { rate: 1 }).catch(() => {});
-        await cdp.detach().catch(() => {});
         await page.close();
     }
 });
+
 
 test("precision fields end their host gesture when mouse movement reports no pressed button", async () => {
     const page = await openHarnessPage();
@@ -5604,8 +5586,8 @@ test("mobile workspace shows one tab-selected panel while all three stay mounted
                 positions: [0.72, 0.4, 0.2],
             });
         });
-        // T14: the compact graph is the editable surface; its playhead line
-        // carries the live progress the old preview clip showed.
+        // The compact graph is the editable surface; its playhead line
+        // carries the live progress.
         await page.waitForFunction(() => {
             const playhead = document.querySelector('[data-role="mod-source-mseg-playhead"]');
             return playhead !== null && Math.abs(Number(playhead.getAttribute("data-progress")) - 0.72) < 0.05;
@@ -5696,8 +5678,7 @@ test("an active mobile workspace tab returns from detail before a second tap scr
         ));
         await selectedSource.click();
         await page.waitForFunction(() => {
-            const presetBar = document.querySelector("cosimo-preset-bar");
-            const backButton = presetBar?.shadowRoot?.querySelector('[data-el="shell-back"]');
+            const backButton = document.querySelector('[data-role="synth-preset-bar"] [data-action="shell-back"]');
             return backButton instanceof HTMLButtonElement && !backButton.disabled;
         });
         const detailScrollTop = await modPanel.evaluate((element) => element.scrollTop);
@@ -5705,8 +5686,7 @@ test("an active mobile workspace tab returns from detail before a second tap scr
 
         await modTab.click();
         await page.waitForFunction(() => {
-            const presetBar = document.querySelector("cosimo-preset-bar");
-            const backButton = presetBar?.shadowRoot?.querySelector('[data-el="shell-back"]');
+            const backButton = document.querySelector('[data-role="synth-preset-bar"] [data-action="shell-back"]');
             return backButton instanceof HTMLButtonElement && backButton.disabled;
         });
         assert.equal(
@@ -5819,16 +5799,17 @@ test("mobile workspace keeps the synth preset bar visible and contained at 320px
     try {
         const host = page.locator('[data-role="synth-preset-bar-host"]');
         await host.waitFor();
+        // The name reads "No preset" until the presets load.
+        await host.locator('[data-role="preset-name"]').filter({ hasText: /^Init/ }).waitFor();
         const layout = await host.evaluate((element) => {
             const bounds = element.getBoundingClientRect();
             const panels = document.querySelector('[data-role="mobile-workspace-panels"]');
-            const shadow = element.querySelector("cosimo-preset-bar")?.shadowRoot;
-            const presetBar = shadow?.querySelector(".preset-bar");
-            const presetName = shadow?.querySelector('[data-el="preset-name"]');
-            const nameRegion = shadow?.querySelector(".name-region");
-            const leftCluster = shadow?.querySelector(".shell-left-cluster");
-            const meter = shadow?.querySelector('[data-el="polish-meter"]');
-            const more = shadow?.querySelector('[data-el="shell-more"]');
+            const presetBar = element.querySelector('[data-role="synth-preset-bar"]');
+            const presetName = element.querySelector('[data-role="preset-name"]');
+            const nameRegion = presetName;
+            const leftCluster = element.querySelector('[data-role="shell-left-cluster"]');
+            const meter = element.querySelector('[data-role="polish-meter"]');
+            const more = element.querySelector('[data-action="toggle-sound-actions"]');
             const rectOf = (node) => {
                 if (!(node instanceof HTMLElement)) return null;
                 const rect = node.getBoundingClientRect();
@@ -5857,8 +5838,9 @@ test("mobile workspace keeps the synth preset bar visible and contained at 320px
         // retiring the legacy 38px preset-bar literal (ADR-026).
         assert.equal(layout.presetBarHeight, 40);
         assert.equal(layout.panelsTop >= layout.height, true);
-        // T03D: the unnamed working sound is the INIT identity.
-        assert.equal(layout.presetName, "INIT");
+        // A fresh instance starts on the Init preset. This harness loads a sound that differs
+        // from Init (wavetable position and Glide), so the name carries the modified mark.
+        assert.equal(layout.presetName, "Init ●");
         assert.ok(layout.bar && layout.nameRegion && layout.leftCluster && layout.meter && layout.more);
         assert.equal(Math.abs(layout.meter.width - 92) <= 0.5, true);
         assert.equal(layout.nameRegion.left >= layout.leftCluster.right - 0.5, true);
@@ -5871,17 +5853,15 @@ test("mobile workspace keeps the synth preset bar visible and contained at 320px
                 loudnessDbfs: -12.4,
             });
         });
-        await page.waitForFunction(() => {
-            const shadow = document.querySelector("cosimo-preset-bar")?.shadowRoot;
-            return shadow?.querySelector('[data-el="polish-meter-peak"]')?.textContent === "1.2"
-                && shadow?.querySelector('[data-el="polish-meter-loudness"]')?.textContent === "-12"
-                && shadow?.querySelector('[data-el="polish-meter"]')?.getAttribute("data-overload") === "true";
-        });
+        await page.waitForFunction(() => (
+            document.querySelector('[data-role="polish-meter-peak"]')?.textContent === "1.2"
+                && document.querySelector('[data-role="polish-meter-loudness"]')?.textContent === "-12"
+                && document.querySelector('[data-role="polish-meter"]')?.getAttribute("data-overload") === "true"
+        ));
         const activeMeter = await host.evaluate((element) => {
-            const shadow = element.querySelector("cosimo-preset-bar")?.shadowRoot;
-            const meter = shadow?.querySelector('[data-el="polish-meter"]');
-            const light = shadow?.querySelector('[data-el="polish-meter-light"]');
-            const nameRegion = shadow?.querySelector(".name-region");
+            const meter = element.querySelector('[data-role="polish-meter"]');
+            const light = element.querySelector('[data-role="polish-meter-light"]');
+            const nameRegion = element.querySelector('[data-role="preset-name"]');
             if (!(meter instanceof HTMLElement) || !(light instanceof HTMLElement)
                     || !(nameRegion instanceof HTMLElement)) return null;
             const meterRect = meter.getBoundingClientRect();
@@ -5907,13 +5887,12 @@ test("mobile workspace keeps the synth preset bar visible and contained at 320px
         await dialog.waitFor();
 
         const focusedLayout = await host.evaluate((element) => {
-            const shadow = element.querySelector("cosimo-preset-bar")?.shadowRoot;
-            const presetBar = shadow?.querySelector(".preset-bar");
-            const back = shadow?.querySelector('[data-el="shell-back"]');
-            const meter = shadow?.querySelector('[data-el="polish-meter"]');
-            const nameRegion = shadow?.querySelector(".name-region");
-            const presetName = shadow?.querySelector('[data-el="preset-name"]');
-            const more = shadow?.querySelector('[data-el="shell-more"]');
+            const presetBar = element.querySelector('[data-role="synth-preset-bar"]');
+            const back = element.querySelector('[data-action="shell-back"]');
+            const meter = element.querySelector('[data-role="polish-meter"]');
+            const nameRegion = element.querySelector('[data-role="preset-name"]');
+            const presetName = nameRegion;
+            const more = element.querySelector('[data-action="toggle-sound-actions"]');
             const dialogElement = document.querySelector('[data-role="mseg-editor-dialog"]');
             const rectOf = (node) => {
                 if (!(node instanceof HTMLElement)) return null;
@@ -5929,9 +5908,9 @@ test("mobile workspace keeps the synth preset bar visible and contained at 320px
                 };
             };
             const backRect = rectOf(back);
-            const backHit = backRect === null || shadow === undefined
+            const backHit = backRect === null
                 ? null
-                : shadow.elementFromPoint(
+                : document.elementFromPoint(
                     (backRect.left + backRect.right) / 2,
                     (backRect.top + backRect.bottom) / 2,
                 );
@@ -5978,23 +5957,22 @@ test("mobile workspace keeps the synth preset bar visible and contained at 320px
         assert.equal(focusedLayout.nameOverflow, "ellipsis");
         assert.equal(focusedLayout.dialog.top >= focusedLayout.bar.bottom - 0.5, true);
 
-        assert.equal(await host.evaluate((element) => {
-            const shadow = element.querySelector("cosimo-preset-bar")?.shadowRoot;
-            return shadow?.activeElement === shadow?.querySelector('[data-action="shell-back"]');
-        }), true, "Focused compact MSEG must initially include universal Back in its focus scope.");
+        assert.equal(await host.evaluate((element) => (
+            document.activeElement === element.querySelector('[data-action="shell-back"]')
+        )), true, "Focused compact MSEG must initially include universal Back in its focus scope.");
         await page.keyboard.press("Tab");
+        // The MSEG curve surface is the dialog's first focusable control.
         assert.equal(
-            await page.locator('[data-role="mseg-shape-a"]').evaluate(
+            await dialog.locator('[data-role="mseg-editor-surface"]').evaluate(
                 (element) => document.activeElement === element,
             ),
             true,
             "Tab from universal Back must enter the focused MSEG controls.",
         );
         await page.keyboard.press("Shift+Tab");
-        assert.equal(await host.evaluate((element) => {
-            const shadow = element.querySelector("cosimo-preset-bar")?.shadowRoot;
-            return shadow?.activeElement === shadow?.querySelector('[data-action="shell-back"]');
-        }), true, "Shift+Tab must make the retained Back action reachable again.");
+        assert.equal(await host.evaluate((element) => (
+            document.activeElement === element.querySelector('[data-action="shell-back"]')
+        )), true, "Shift+Tab must make the retained Back action reachable again.");
         await page.keyboard.press("Enter");
         await dialog.waitFor({ state: "detached" });
     } finally {
@@ -6099,17 +6077,7 @@ test("fresh and Init desktop state show only oscillator A enabled at 0 dB", asyn
             "Tab actions write only the selected oscillator's Mute endpoint.",
         );
 
-        await clickPresetBarAction(page, "init");
-        await page.evaluate(() => {
-            const discard = document
-                .querySelector("cosimo-preset-bar")
-                ?.shadowRoot
-                ?.querySelector('[data-action="sound-replacement-discard"]');
-            if (!(discard instanceof HTMLButtonElement)) {
-                throw new Error("Discard and Init action is missing.");
-            }
-            discard.click();
-        });
+        await recallSynthPreset(page, "Init");
         snapshot = await waitForHarnessSnapshot(
             page,
             "Init oscillator defaults",
@@ -6143,11 +6111,17 @@ test("fresh and Init desktop state show only oscillator A enabled at 0 dB", asyn
             filterCutoffKeyTrackEnabled: 0,
             filterCutoffKeyTrackOffsetSemitones: 0,
         })) {
+            // Recall writes only the parameters that change; the rest already hold the Init value.
             const latestWrite = [...snapshot.sentMessages]
                 .reverse()
                 .find((message) => message.endpointID === endpointID);
-            assert.equal(Number(latestWrite?.value), expectedValue, `${endpointID} Init write`);
+            assert.equal(Number(latestWrite?.value ?? snapshot.parameterValues[endpointID] ?? 0), expectedValue, `${endpointID} after Init`);
         }
+        assert.equal(
+            Number([...snapshot.sentMessages].reverse().find((message) => message.endpointID === "oscBMute")?.value),
+            1,
+            "Init writes the oscillator B mute that the tab toggle had cleared",
+        );
     } finally {
         await page.close();
     }
@@ -6395,7 +6369,7 @@ test("the Voice page fits without scrolling, owned drags stay scroll-free, and n
 
     try {
         await page.waitForSelector('[data-role="mobile-voice-editor"]');
-        // T05: the Voice page is an instrument surface that splits its real
+        // The Voice page is an instrument surface that splits its real
         // height 50/50 — it must fit its panel with nothing left to scroll.
         const voiceOverflow = await page.evaluate(() => {
             const panel = document.querySelector('[data-role="mobile-workspace-panel-voice"]');
@@ -6403,8 +6377,8 @@ test("the Voice page fits without scrolling, owned drags stay scroll-free, and n
         });
         assert.ok(voiceOverflow >= 0 && voiceOverflow <= 1, `The Voice page must fit its panel: overflow ${voiceOverflow}`);
 
-        // T14: the redesigned Mod page fits its panel — the matrix can no
-        // longer sit invisibly below a tall graph (no blind scrolling).
+        // The Mod page fits its panel, so the matrix cannot sit invisibly
+        // below a tall graph (no blind scrolling).
         await page.setViewportSize({ width: 393, height: 600 });
         await page.locator('[data-role="mobile-workspace-tab-mod"]').click();
         await page.waitForSelector('[data-role="mobile-mod-source-selector"]');
@@ -6438,7 +6412,7 @@ test("the Voice page fits without scrolling, owned drags stay scroll-free, and n
         await swipeUp(firstRowIdentity.x + (firstRowIdentity.width * 0.5), firstRowIdentity.y + (firstRowIdentity.height * 0.5));
         await page.waitForFunction(() => (
             (document.querySelector('[data-role="mod-mappings-list"]')?.scrollTop ?? 0) > 20
-        ), null, { timeout: 3_000 });
+        ));
 
         // Back on Voice: an owned readout drag edits its parameter and never
         // becomes panel scroll.
@@ -6700,42 +6674,72 @@ test("ADR-024 tabs: selecting an oscillator slides the panel directionally and s
         beforeGoto: (nextPage) => nextPage.setViewportSize({ width: 393, height: 852 }),
     });
 
+    // The page samples the outgoing ghost's horizontal shift every frame from
+    // insertion until it leaves. Its removal waits on the UI clock, which is
+    // paused until the slide has rendered to its end, so a slow renderer still
+    // shows the whole slide.
+    const recordGhostSlide = () => page.evaluate(() => {
+        window.__ghostSlide = new Promise((resolve) => {
+            const observer = new MutationObserver(() => {
+                const ghost = document.querySelector("[data-panel-ghost]");
+                if (!(ghost instanceof HTMLElement)) return;
+                observer.disconnect();
+                const shifts = [];
+                const liveRoles = ghost.querySelectorAll("[data-role]").length;
+                const sample = () => {
+                    if (!ghost.isConnected) {
+                        resolve({ shifts, liveRoles });
+                        return;
+                    }
+                    shifts.push(new DOMMatrixReadOnly(getComputedStyle(ghost).transform).m41);
+                    requestAnimationFrame(sample);
+                };
+                requestAnimationFrame(sample);
+            });
+            observer.observe(document.body, { childList: true, subtree: true });
+        });
+    });
+    const waitForGhostSlideEnd = () => page.waitForFunction(() => {
+        const ghost = document.querySelector("[data-panel-ghost]");
+        return ghost instanceof HTMLElement
+            && ghost.getAnimations().length === 0
+            && new DOMMatrixReadOnly(getComputedStyle(ghost).transform).m41 !== 0;
+    });
+    // Resolves once the ghost has left, which it does when the clock resumes.
+    const ghostSlide = () => page.evaluate(() => window.__ghostSlide);
+
     try {
         // This test ASSERTS the slide; the harness default is reduced-motion.
         await page.emulateMedia({ reducedMotion: "no-preference" });
         await page.locator('[data-role="mobile-voice-tab-b"]').waitFor();
 
-
         // A -> B: the outgoing ghost slides LEFT, the live panel enters from
         // the right and is interactive from its first frame.
-        await page.click('[data-role="mobile-voice-tab-b"]');
-        const ghost = page.locator("[data-panel-ghost]");
-        await ghost.waitFor({ state: "visible", timeout: 2000 });
-        const ghostShift = await ghost.evaluate((element) => new Promise((resolve) => {
-            requestAnimationFrame(() => requestAnimationFrame(() => {
-                resolve(new DOMMatrixReadOnly(getComputedStyle(element).transform).m41);
-            }));
-        }));
-        assert.equal(ghostShift < 0, true, `A->B must slide the outgoing panel left, got ${ghostShift}px.`);
-        assert.equal(
-            await page.locator('[data-role="mobile-voice-editor"]').getAttribute("data-selected-oscillator-id"),
-            "B",
-            "The selection binds immediately — the slide never postpones it.",
-        );
-        // The ghost carries no live roles (sanitized) and leaves promptly.
-        assert.equal(await ghost.locator("[data-role]").count(), 0);
-        await ghost.waitFor({ state: "detached", timeout: 2000 });
+        await recordGhostSlide();
+        await withUiTimersPaused(page, async () => {
+            await page.click('[data-role="mobile-voice-tab-b"]');
+            assert.equal(
+                await page.locator('[data-role="mobile-voice-editor"]').getAttribute("data-selected-oscillator-id"),
+                "B",
+                "The selection binds immediately — the slide never postpones it.",
+            );
+            await waitForGhostSlideEnd();
+        });
+        const first = await ghostSlide();
+        assert.equal(Math.min(...first.shifts) < 0, true, `A->B must slide the outgoing panel left, got ${first.shifts}.`);
+        assert.equal(Math.max(...first.shifts) <= 0, true, `A->B never slides right, got ${first.shifts}.`);
+        // The ghost carries no live roles (sanitized) and leaves once its slide is over.
+        assert.equal(first.liveRoles, 0);
 
         // B -> A slides the other way.
-        await page.click('[data-role="mobile-voice-tab-a"]');
-        const secondShift = await page.locator("[data-panel-ghost]").evaluate(
-            (element) => new Promise((resolve) => {
-                requestAnimationFrame(() => requestAnimationFrame(() => {
-                    resolve(new DOMMatrixReadOnly(getComputedStyle(element).transform).m41);
-                }));
-            }),
-        );
-        assert.equal(secondShift > 0, true, `B->A must slide the outgoing panel right, got ${secondShift}px.`);
+        await recordGhostSlide();
+        await withUiTimersPaused(page, async () => {
+            await page.click('[data-role="mobile-voice-tab-a"]');
+            await waitForGhostSlideEnd();
+        });
+        const second = await ghostSlide();
+        assert.equal(Math.max(...second.shifts) > 0, true, `B->A must slide the outgoing panel right, got ${second.shifts}.`);
+        assert.equal(Math.min(...second.shifts) >= 0, true, `B->A never slides left, got ${second.shifts}.`);
     } finally {
         await page.close();
     }

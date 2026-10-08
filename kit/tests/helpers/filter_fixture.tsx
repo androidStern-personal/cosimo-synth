@@ -23,7 +23,7 @@ export function mount(host: HTMLElement) {
             <FilterEditor value={current} modulation={range} disabled={options.disabled} readOnly={options.readOnly}
                 onValueChange={next => { writes++; value=next; setValue(next) }}
                 onModulationChange={next => { writes++; endpoints=next; setEndpoints(next) }}
-                onEditStart={t => record('start', t)} onEditEnd={t => record('end', t)} />
+                onGestureStart={t => record('start', t)} onGestureEnd={(cancelled, t) => record(cancelled ? 'cancel' : 'end', t)} />
             {options.second && <FilterEditor value={current} readOnly />}
         </>
     }

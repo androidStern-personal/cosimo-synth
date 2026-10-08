@@ -6,7 +6,6 @@ import {
     useRef,
     useState,
     type CSSProperties,
-    type PointerEvent as ReactPointerEvent,
     type RefObject,
 } from "react";
 
@@ -14,7 +13,6 @@ import {
     PatchConnectionProvider,
     type PatchConnectionLike,
 } from "../shared/cmajor-react";
-import type { ResourceClient } from "../shared/resource-client";
 import { SynthStateProvider } from "../shared/synth-plugin-state-react";
 import {
     EditableMsegSurface,
@@ -23,12 +21,8 @@ import {
     VOICE_MODE_OPTIONS,
 } from "../shared/synth-components";
 import { DistortionVisualizer } from "../shared/distortion-visualizer";
-import {
-    clampMsegRateSeconds,
-    MSEG_RATE_MAX_SECONDS,
-    MSEG_RATE_MIN_SECONDS,
-    type MsegSurfaceOrientation,
-} from "../shared/mseg";
+import { clampMsegRateSeconds, MSEG_RATE_MAX_SECONDS, MSEG_RATE_MIN_SECONDS } from "../shared/mseg";
+import type { MsegSurfaceOrientation } from "../../kit/ui/mseg";
 import {
     MODULATION_SOURCE_OPTIONS,
     applyModulationSourceOption,
@@ -84,9 +78,6 @@ import {
 import { useParameterMenuShell } from "../shared/parameter-menu-shell";
 import { KeyTrackStatus } from "../shared/key-track-status";
 import {
-    clampDisplayPosition,
-} from "../shared/runtime-table-state";
-import {
     useSynthPatchViewModel,
     useOscillatorSelectionViewModel,
     type SynthCallbackControlReadiness,
@@ -117,8 +108,6 @@ const ENVELOPE_EDITOR_SLOT_COUNT = MODULATION_ENV_SLOT_COUNT + 1;
 const KEYBOARD_ROOT_NOTE_MIN = 12;
 const KEYBOARD_ROOT_NOTE_MAX = 72;
 const DISTORTION_WET_HP_MIN_HZ = 20;
-const DISTORTION_WET_HP_MAX_HZ = 4_000;
-const DISTORTION_WET_LP_MIN_HZ = 20;
 const DISTORTION_WET_LP_MAX_HZ = 20_000;
 function requireIOSRackParameterDescriptor(endpointID: string): RackParameterDescriptor {
     const descriptor = getRackParameterDescriptor(endpointID);
@@ -188,7 +177,6 @@ type IOSResponsiveLayout = {
     keyboardAccidentalWidth: number;
 };
 
-
 type IOSPlayPanelProps = {
     playModeValue: number;
     playModeReady: boolean;
@@ -231,12 +219,6 @@ function frequencyHzToLogNormalized(value: number, minHz: number, maxHz: number)
 
 function normalizedToLogFrequencyHz(normalized: number, minHz: number, maxHz: number) {
     return minHz * Math.pow(maxHz / minHz, clamp(normalized, 0, 1));
-}
-
-function formatFrameReadout(position: number, frameCount: number) {
-    const safeFrameCount = Math.max(1, frameCount);
-    const frameIndex = Math.round(clampDisplayPosition(position) * Math.max(0, safeFrameCount - 1)) + 1;
-    return `${String(frameIndex).padStart(2, "0")}/${String(safeFrameCount).padStart(2, "0")}`;
 }
 
 function formatKeyboardRangeLabel(rootNote: number, noteCount: number) {
@@ -1382,11 +1364,9 @@ function IOSPatchViewBody() {
     const synthView = useSynthPatchViewModel({
         oscillatorID: oscillatorSelection.selectedOscillatorID,
         stageRef,
-        msegEditorSurfaceRef,
         keyboardRef,
         voiceModeCount: VOICE_MODE_OPTIONS.length,
         observeFilterSpectrum: false,
-        msegSurfaceOrientation: msegEditorOrientation,
         msegCurveEditActivationMode: "hold-or-drag",
         onMsegCurveEditHoldActivated: () => {
             triggerIOSHaptic("light");
@@ -1395,7 +1375,7 @@ function IOSPatchViewBody() {
     const distortionWetHPKeyTrack = useLaneKeyTrackControlBinding(DISTORTION_WET_HP_DESCRIPTOR);
     const distortionWetLPKeyTrack = useLaneKeyTrackControlBinding(DISTORTION_WET_LP_DESCRIPTOR);
 
-    /* T20 — the ADR-017 long-press parameter menu (shared shell machine). */
+    /* The ADR-017 long-press parameter menu (shared shell machine). */
     const { openParameterMenu, parameterMenuOverlays } = useParameterMenuShell({
         routes: synthView.routes,
         armedSourceKind: armedSource.sourceKind,
@@ -1408,7 +1388,6 @@ function IOSPatchViewBody() {
         ["--cosimo-keyboard-height" as string]: `${layout.keyboardHeight}px`,
         ["--cosimo-control-height" as string]: `${layout.controlHeight}px`,
     }) satisfies CSSProperties, [layout.controlHeight, layout.keyboardHeight, layout.stageMinHeight]);
-
 
     const handleSelectWavetable = useCallback((nextValue: number) => {
         synthView.handleSelectWavetable(nextValue);
@@ -1666,13 +1645,6 @@ function IOSPatchViewBody() {
                     selectedMsegMorph={synthView.selectedMsegMorph}
                     surfaceRef={msegEditorSurfaceRef}
                     orientation={msegEditorOrientation}
-
-
-
-
-
-
-
                     rateSeconds={synthView.msegState?.playback.rate.seconds ?? 1}
                     rateReady={synthView.callbackControlReadiness.mseg.rate}
                     onSelectShape={synthView.handleSelectMsegShape}
@@ -1699,15 +1671,9 @@ function IOSPatchViewBody() {
     );
 }
 
-export function IOSPatchView({
-    patchConnection,
-    resourceClient,
-}: {
-    patchConnection: PatchConnectionLike;
-    resourceClient: ResourceClient;
-}) {
+export function IOSPatchView({ patchConnection }: { patchConnection: PatchConnectionLike }) {
     return (
-        <PatchConnectionProvider patchConnection={patchConnection} resourceClient={resourceClient}>
+        <PatchConnectionProvider patchConnection={patchConnection}>
             <SynthStateProvider patchConnection={patchConnection}>
                 <IOSPatchViewBody />
             </SynthStateProvider>

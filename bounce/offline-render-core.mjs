@@ -146,8 +146,8 @@ export async function renderBounceRoot(CmajorClass, planInput, jobInput) {
     const runtime = await preparePerformer(CmajorClass, plan, job);
     const performer = runtime.performer;
     try {
-        const totalRenderFrames = plan.holdFrames + plan.tailCapFrames;
-        const rendered = new Float32Array(totalRenderFrames * 2);
+        const totalRenderFrames = plan.outputLatencyFrames + plan.holdFrames + plan.tailCapFrames;
+        const output = new Float32Array(totalRenderFrames * 2);
 
         for (const event of plan.snapshot.rootSetupEvents) {
             const value = {
@@ -161,17 +161,20 @@ export async function renderBounceRoot(CmajorClass, planInput, jobInput) {
         endpointMethod(performer, "sendInputEvent", "midiIn")({
             message: packMidi(0x90, job.rootNote, plan.captureVelocity),
         });
-        renderInto(performer, rendered, 0, plan.holdFrames, plan.blockFrames);
+        renderInto(performer, output, 0, plan.holdFrames, plan.blockFrames);
         endpointMethod(performer, "sendInputEvent", "midiIn")({
             message: packMidi(0x80, job.rootNote, 0),
         });
         renderInto(
             performer,
-            rendered,
+            output,
             plan.holdFrames,
-            plan.tailCapFrames,
+            plan.outputLatencyFrames + plan.tailCapFrames,
             plan.blockFrames,
         );
+        // The note sounds once the output latency has passed; the recording
+        // starts there, which puts its note-off exactly at holdFrames.
+        const rendered = output.subarray(plan.outputLatencyFrames * 2);
 
         const retainedFrameCount = findTailEndFrame(rendered, plan.holdFrames, plan);
         const peak = peakAbsolute(rendered, retainedFrameCount);

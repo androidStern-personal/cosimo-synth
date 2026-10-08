@@ -1,10 +1,26 @@
-import { isPluginStateViewHost, pluginStateViewHost } from "./plugin-state-view-host";
 import type { ComponentType } from "react";
 import { createRoot } from "react-dom/client";
 import type { PluginStateFields } from "./plugin-state-definition";
+import type { createPluginStateClient } from "./plugin-state-client";
 import { createCmajorPluginStateClient, type CmajorStateConnection } from "./plugin-state-cmajor";
 import { PatchConnectionProvider, type PatchConnectionLike } from "./cmajor-react";
 import { PluginStateProvider } from "./plugin-state-react";
+import { pluginManifestId, syncUserLifetimeFields } from "./plugin-state-user-files";
+
+/**
+ * A connection that hosts the state owner itself, such as the silent browser
+ * preview, offers this capability; the view then attaches to that owner
+ * instead of the Cmajor state channel. Not part of the public entry.
+ */
+export const pluginStateViewHost = Symbol.for("builder-kit.plugin-state-view-host");
+
+export interface PluginStateViewHost {
+    [pluginStateViewHost](definition: PluginStateFields, onDefect: (error: unknown) => void): ReturnType<typeof createPluginStateClient<PluginStateFields>>;
+}
+
+function isPluginStateViewHost(connection: object): connection is PluginStateViewHost {
+    return pluginStateViewHost in connection && typeof connection[pluginStateViewHost] === "function";
+}
 
 interface StateViewElement extends HTMLElement {
     configure(mount: (element: HTMLElement) => () => void): void;
@@ -64,6 +80,7 @@ export function createStatefulPatchView<const Fields extends PluginStateFields>(
             const client = isPluginStateViewHost(connection)
                 ? connection[pluginStateViewHost](options.definition, onDefect)
                 : createCmajorPluginStateClient(options.definition, connection, { onDefect });
+            const stopUserFiles = syncUserLifetimeFields(options.definition, client, pluginManifestId(connection.manifest), onDefect);
             const root = createRoot(mount);
             const View = options.View;
             root.render(<PatchConnectionProvider patchConnection={connection}>
@@ -71,7 +88,7 @@ export function createStatefulPatchView<const Fields extends PluginStateFields>(
             </PatchConnectionProvider>);
             return () => {
                 try { root.unmount(); }
-                finally { client.stop(); }
+                finally { stopUserFiles(); client.stop(); }
             };
         });
         return element;

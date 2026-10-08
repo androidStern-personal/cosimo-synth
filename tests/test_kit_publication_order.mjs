@@ -9,7 +9,7 @@ import { createHash } from "node:crypto";
 import { execFile, execFileSync } from "node:child_process";
 import { promisify } from "node:util";
 import { createBareMirror, publishReleaseObjects } from "../scripts/release_builder_kit.mjs";
-import { redact } from "../kit/scripts/redacted.mjs";
+import { redact } from "../scripts/redacted.mjs";
 
 const env = { ...process.env, GIT_AUTHOR_NAME: "Fixture", GIT_AUTHOR_EMAIL: "fixture@example.invalid", GIT_COMMITTER_NAME: "Fixture", GIT_COMMITTER_EMAIL: "fixture@example.invalid", GIT_TERMINAL_PROMPT: "0" };
 const git = (cwd, ...args) => execFileSync("git", args, { cwd, env, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] }).trim();

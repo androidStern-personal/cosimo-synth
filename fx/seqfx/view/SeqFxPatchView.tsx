@@ -1,47 +1,23 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent as ReactKeyboardEvent, type MouseEvent, type PointerEvent, type ReactNode } from "react";
 
-import type { PatchConnectionLike } from "../../../kit/index";
-import { createEffectHeader, EffectSnapshotBankController, createStandaloneEffectPresetController } from "../../../kit/index";
 import {
     FilterEditor,
-    type FilterRangeEndpoints,
-    type FilterRangeMode,
-    type FilterRangeModeOption,
-    type FilterRangeValue,
-    cutoffRangeOctaves,
-    cutoffsFromCenterRangeOctaves,
-    geometricCenterCutoffHz,
-} from "../../../kit/index";
-import { EditorTickSlider, ModBadge, type ModulationDirection } from "../../../kit/index";
-import {
+    PresetBar,
+    SnapshotBar,
+    usePluginState,
+    type FilterRange,
+    type FilterMode,
+    type FilterModeOption,
+    type FilterValue,
     parameterEntrySpecForFrequency,
     parameterEntrySpecForMilliseconds,
     parameterEntrySpecForScalar,
     parameterEntrySpecForSeconds,
     type ParameterEntrySpec,
-} from "../../../ui/shared/parameter-value-entry";
-import {
-    EDITOR_PLOT_BOTTOM_PADDING_PX,
-    EDITOR_PLOT_TOP_PADDING_PX,
-    EDITOR_RANGE_HANDLE_RADIUS_PX,
-    useEditorSurfaceSize,
 } from "../../../kit/index";
-import {
-    adaptiveSampleEditorCurve,
-    createEditorCurvePlotRect,
-    editorCurveFillPathToBaseline,
-    normalizedCurvePointToPlotPoint,
-    polylineToSvgPath,
-    type EditorCurvePlotRect,
-} from "../../../kit/index";
-import {
-    EditorCurveAxis,
-    EditorCurveFill,
-    EditorCurveHandle,
-    EditorCurvePath,
-    EditorCurvePlotArea,
-    EditorCurveSurface,
-} from "../../../kit/index";
+import { cutoffsFromCenterRangeOctaves } from "../../../ui/shared/filter-modulation-range";
+import { cutoffRangeOctaves, geometricCenterCutoffHz } from "../../../kit/ui/filter-editor";
+import { EditorTickSlider, ModBadge, type ModulationDirection } from "./editor-tick-slider";
 import { AuxSource, auxSourceMonitorPoint, buildAuxSourcePreviewPath } from "./AuxSource";
 import { CrusherEditor, type CrusherModulation } from "./CrusherEditor";
 import { SeqFxGlobalControlSurface } from "./SeqFxGlobalControls";
@@ -58,6 +34,7 @@ import {
     SEQFX_LANE_NAMES,
     SEQFX_PATTERN_COUNT,
     SEQFX_STEP_COUNT,
+    createDefaultSeqFxState,
     getSeqFxEffectDefinition,
     getSeqFxBlockAtStep,
     getSeqFxLaneBlocks,
@@ -79,17 +56,17 @@ import {
     resolveTapeStopV2Trajectory,
     sampleTapeStopV2Trajectory,
 } from "./tape-stop-v2-trajectory";
-import { createSeqFxPresetStateAdapter } from "./seqfx-preset-adapter";
-import {
-    createSeqFxPresetMigrations,
-    createSeqFxSnapshotMigrations,
-} from "./seqfx-preset-migrations";
+import definition from "../state";
 import { SEQFX_FACTORY_PATTERNS } from "./seqfx-factory-content";
-import {
-    SEQFX_ENDPOINTS,
-    SeqFxRuntimeBridge,
-    type SeqFxGlobalControls,
-} from "./seqfx-runtime-bridge";
+import type { SeqFxGlobalControls, SeqFxSession } from "./seqfx-session";
+
+// The grid computes its cell size once, as a length, and every row reuses it. That needs a
+// registered property, and browsers ignore @property rules inside the view's shadow root.
+try {
+    CSS.registerProperty({ name: "--seqfx-resolved-cell-size", syntax: "<length>", inherits: true, initialValue: "24px" });
+} catch {
+    // Already registered by an earlier load of this view in the same page.
+}
 
 type SelectedCell = {
     lane: number;
@@ -466,20 +443,6 @@ function modulationDirectionForValues(start: number, end: number): ModulationDir
     }
 
     return "both";
-}
-
-function formatFilterHzChip(value: number) {
-    const cutoff = clampNumber(value, 20, 20_000);
-    const roundedCutoff = Math.round(cutoff);
-    if (roundedCutoff >= 10_000) {
-        return `${(roundedCutoff / 1000).toFixed(1)}k`;
-    }
-
-    if (roundedCutoff >= 1000) {
-        return `${(roundedCutoff / 1000).toFixed(2)}k`;
-    }
-
-    return String(roundedCutoff);
 }
 
 function formatSignedFixed(value: number, decimals: number) {
@@ -2100,26 +2063,26 @@ export function SeqFxBlockGlyph({
     }
 }
 
-const SEQFX_FILTER_MODE_OPTIONS: FilterRangeModeOption[] = [
+const SEQFX_FILTER_MODE_OPTIONS: FilterModeOption[] = [
     { label: "LP", value: "lowpass" },
     { label: "HP", value: "highpass" },
     { label: "BP", value: "bandpass" },
 ];
 
-function seqFxFilterModeToRangeMode(mode: number): FilterRangeMode {
+function seqFxFilterModeToRangeMode(mode: number): FilterMode {
     const roundedMode = Math.round(mode);
     if (roundedMode === 1) return "highpass";
     if (roundedMode === 2) return "bandpass";
     return "lowpass";
 }
 
-function filterRangeModeToSeqFxMode(mode: FilterRangeMode) {
+function filterRangeModeToSeqFxMode(mode: FilterMode) {
     if (mode === "highpass") return 1;
     if (mode === "bandpass") return 2;
     return 0;
 }
 
-function filterRangeValueFromSeqFxStep(step: SeqFxStep): FilterRangeValue {
+function filterRangeValueFromSeqFxStep(step: SeqFxStep): FilterValue {
     const startCutoffHz = step.params[FILTER_PARAM_CUTOFF] ?? 2_000;
     const cutoffTarget = step.aux.targets[FILTER_PARAM_CUTOFF];
     const endCutoffHz = cutoffTarget?.enabled ? cutoffTarget.end : startCutoffHz;
@@ -2131,7 +2094,7 @@ function filterRangeValueFromSeqFxStep(step: SeqFxStep): FilterRangeValue {
     };
 }
 
-function filterRangeEndpointsFromSeqFxStep(step: SeqFxStep): FilterRangeEndpoints {
+function filterRangeEndpointsFromSeqFxStep(step: SeqFxStep): FilterRange {
     const startCutoffHz = step.params[FILTER_PARAM_CUTOFF] ?? 2_000;
     const cutoffTarget = step.aux.targets[FILTER_PARAM_CUTOFF];
     return {
@@ -2207,10 +2170,6 @@ function cellsPerBeatForRateIndex(rateIndex: number) {
 function gridColumnForStep(step: number) {
     const clampedStep = Math.min(SEQFX_STEP_COUNT - 1, Math.max(0, step));
     return ((clampedStep % SEQFX_GRID_STEPS_PER_ROW) * 2) + 1;
-}
-
-function gridRowForStep(step: number) {
-    return 1;
 }
 
 function barIndexForStep(step: number) {
@@ -2615,7 +2574,7 @@ function createGridGeometry(cellsPerBeat: number) {
 
     const cellStyle = (step: number): CSSProperties => ({
         gridColumn: `${gridColumnForStep(step)}`,
-        gridRow: `${gridRowForStep(step)}`,
+        gridRow: "1",
     });
 
     const blockSegments = (startStep: number, length: number) => {
@@ -2650,7 +2609,7 @@ function createGridGeometry(cellsPerBeat: number) {
 
     const stepNumberStyle = (step: number): CSSProperties => ({
         gridColumn: `${gridColumnForStep(step)}`,
-        gridRow: `${gridRowForStep(step)}`,
+        gridRow: "1",
     });
 
     return {
@@ -2660,14 +2619,6 @@ function createGridGeometry(cellsPerBeat: number) {
         stepNumberStyle,
         isAltBar: (step: number) => Math.floor(step / cellsPerBar) % 2 === 1,
     };
-}
-
-function formatValue(value: number) {
-    if (Math.abs(value) >= 100) {
-        return String(Math.round(value));
-    }
-
-    return Number(value.toFixed(3)).toString();
 }
 
 function clampNumber(value: number, min: number, max: number) {
@@ -3073,70 +3024,34 @@ function isEditableClipboardEvent(event: ClipboardEvent) {
     return path.some((target) => target instanceof Element && isEditableElement(target));
 }
 
-function describeEventTarget(event: Event) {
-    const target = event.target;
-    if (!(target instanceof Element)) {
-        return "non-element";
-    }
-
-    const tagName = target.tagName.toLowerCase();
-    const role = target.getAttribute("data-role") ?? target.getAttribute("role") ?? "";
-    const slot = target.getAttribute("data-slot") ?? "";
-    const suffix = [role ? `role=${role}` : "", slot ? `slot=${slot}` : ""].filter(Boolean).join(" ");
-    return suffix ? `${tagName} ${suffix}` : tagName;
+/** Presets, A-G snapshots and any problem saving the patterns or sending them to the DSP. */
+function SeqFxPresetRow() {
+    const patterns = usePluginState(definition.patterns);
+    return (
+        <div className="seqfx-preset-row">
+            <PresetBar definition={definition} />
+            <SnapshotBar definition={definition} />
+            {patterns.error ? (
+                <p role="alert">
+                    {patterns.error.message}
+                    {patterns.retry ? <button type="button" onClick={() => { void patterns.retry?.(); }}>Retry</button> : null}
+                </p>
+            ) : null}
+        </div>
+    );
 }
 
-function SeqFxPresetBarHost({
-    bridge,
-    patchConnection,
-}: {
-    bridge: SeqFxRuntimeBridge;
-    patchConnection: PatchConnectionLike;
-}) {
-    const hostRef = useRef<HTMLDivElement | null>(null);
-    const storedStateAdapter = useMemo(() => createSeqFxPresetStateAdapter({
-        bridge,
-        patchConnection,
-    }), [bridge, patchConnection]);
-    const presetController = useMemo(() => createStandaloneEffectPresetController({
-        effectID: "seqfx",
-        legacyFileStorePluginID: "dev.cosimo.seqfx",
-        patchConnection,
-        storedStateAdapters: [storedStateAdapter],
-        presetMigrations: createSeqFxPresetMigrations,
-    }), [patchConnection, storedStateAdapter]);
-    const snapshotController = useMemo(() => new EffectSnapshotBankController({
-        effectID: "seqfx",
-        patchConnection,
-        storedStateAdapters: [storedStateAdapter],
-        snapshotMigrations: createSeqFxSnapshotMigrations,
-    }), [patchConnection, storedStateAdapter]);
-
-    useEffect(() => {
-        const host = hostRef.current;
-
-        if (!host) {
-            return;
-        }
-
-        const effectHeader = createEffectHeader();
-        effectHeader.presetController = presetController;
-        effectHeader.snapshotController = snapshotController;
-        host.replaceChildren(effectHeader);
-        snapshotController.attach();
-        presetController.attach();
-
-        return () => {
-            presetController.detach();
-            snapshotController.detach();
-            effectHeader.presetController = null;
-            effectHeader.snapshotController = null;
-            effectHeader.remove();
-        };
-    }, [presetController, snapshotController]);
-
-    return <div className="seqfx-preset-row" ref={hostRef} />;
-}
+const PROMO_FALLBACK_STATE = createDefaultSeqFxState();
+const PROMO_FALLBACK_GLOBAL_CONTROLS: SeqFxGlobalControls = {
+    enabled: true,
+    globalMix: 1,
+    clockMode: 0,
+    manualBpm: 120,
+    rateIndex: 1,
+    swing: 0,
+    loopStart: 0,
+    loopLength: SEQFX_STEP_COUNT,
+};
 
 export type SeqFxPromoControls = {
     state?: SeqFxState;
@@ -3153,20 +3068,20 @@ export type SeqFxPromoControls = {
 };
 
 export function SeqFxPatchView({
-    patchConnection,
+    session,
     promoControls,
 }: {
-    patchConnection: PatchConnectionLike;
+    session: SeqFxSession;
     promoControls?: SeqFxPromoControls;
 }) {
-    const bridge = useMemo(() => new SeqFxRuntimeBridge(patchConnection), [patchConnection]);
-    const [runtimeState, setState] = useState<SeqFxState>(() => bridge.getState());
-    const [runtimeSelectedPattern, setSelectedPattern] = useState(() => bridge.getSelectedPatternIndex());
-    const [runtimeRateIndex, setRateIndex] = useState(() => bridge.getRateIndex());
-    const [runtimeGlobalControls, setGlobalControls] = useState(() => bridge.getGlobalControls());
+    const isPromoControlled = Boolean(promoControls);
+    const runtimeState = isPromoControlled ? PROMO_FALLBACK_STATE : session.getState();
+    const runtimeSelectedPattern = isPromoControlled ? 0 : session.getSelectedPatternIndex();
+    const runtimeGlobalControls = isPromoControlled ? PROMO_FALLBACK_GLOBAL_CONTROLS : session.getGlobalControls();
+    const runtimeRateIndex = runtimeGlobalControls.rateIndex;
     const [runtimeInternalRunning, setInternalRunning] = useState(false);
     const internalRunningRef = useRef(runtimeInternalRunning);
-    const [runtimeHasLoopClipboard, setHasLoopClipboard] = useState(() => bridge.canPasteLoop());
+    const [runtimeHasLoopClipboard, setHasLoopClipboard] = useState(false);
     const [runtimeSelectedCell, setSelectedCell] = useState<SelectedCell | null>(null);
     const [runtimeSelection, setSelection] = useState<Selection | null>(null);
     const [runtimePlayheadStep, setPlayheadStep] = useState<number | null>(null);
@@ -3182,7 +3097,6 @@ export function SeqFxPatchView({
     const [patternPreview, setPatternPreview] = useState<PatternPreview | null>(null);
     const [invalidDropTarget, setInvalidDropTarget] = useState<InvalidDropTarget | null>(null);
     const [focusedDurationBlock, setFocusedDurationBlock] = useState<{ lane: number; startStep: number } | null>(null);
-    const isPromoControlled = Boolean(promoControls);
     const state = isPromoControlled ? promoControls?.state ?? runtimeState : runtimeState;
     const selectedPattern = isPromoControlled ? promoControls?.selectedPattern ?? runtimeSelectedPattern : runtimeSelectedPattern;
     const rateIndex = isPromoControlled ? promoControls?.rateIndex ?? runtimeRateIndex : runtimeRateIndex;
@@ -3230,24 +3144,9 @@ export function SeqFxPatchView({
             return;
         }
 
-        bridge.attach();
-        const unsubscribeState = bridge.subscribe((nextState) => {
-            setState(nextState);
-            setSelectedPattern(bridge.getSelectedPatternIndex());
-        });
-        const unsubscribeGlobalControls = bridge.subscribeGlobalControls((nextControls) => {
-            setGlobalControls(nextControls);
-            if (nextControls.clockMode !== 1) {
-                if (internalRunningRef.current) {
-                    internalRunningRef.current = false;
-                    bridge.stopInternal();
-                }
-                setInternalRunning(false);
-            }
-        });
-        const unsubscribeMonitor = bridge.subscribeMonitor((monitor) => {
+        return session.subscribeMonitor((monitor) => {
             setPlayheadStep(monitor.stepIndex);
-            if (bridge.getGlobalControls().clockMode === 1) {
+            if (session.getGlobalControls().clockMode === 1) {
                 setInternalRunning(monitor.transportRunning);
             }
             if (monitor.stepDurationMs !== null && monitor.stepDurationMs > 0) {
@@ -3265,26 +3164,33 @@ export function SeqFxPatchView({
                 });
             }
         });
-        const unsubscribeRate = bridge.subscribeRate((nextRateIndex) => {
-            if (rateIndexRef.current !== nextRateIndex) {
-                gestureRef.current = null;
-                setGestureState(null);
-                setPatternPreview(null);
-                setInvalidDropTarget(null);
-            }
-            rateIndexRef.current = nextRateIndex;
-            setRateIndex(nextRateIndex);
-        });
-        bridge.requestBootState();
+    }, [session, isPromoControlled]);
 
-        return () => {
-            unsubscribeState();
-            unsubscribeGlobalControls();
-            unsubscribeMonitor();
-            unsubscribeRate();
-            bridge.detach();
-        };
-    }, [bridge, isPromoControlled]);
+    useEffect(() => {
+        if (isPromoControlled || runtimeGlobalControls.clockMode === 1) {
+            return;
+        }
+
+        if (internalRunningRef.current) {
+            internalRunningRef.current = false;
+            session.stopInternal();
+        }
+        setInternalRunning(false);
+    }, [session, isPromoControlled, runtimeGlobalControls.clockMode]);
+
+    // A new rate changes the grid geometry, so a drag or preview in progress no longer lines up.
+    const gridRateIndexRef = useRef(runtimeRateIndex);
+    useEffect(() => {
+        if (gridRateIndexRef.current === runtimeRateIndex) {
+            return;
+        }
+
+        gridRateIndexRef.current = runtimeRateIndex;
+        gestureRef.current = null;
+        setGestureState(null);
+        setPatternPreview(null);
+        setInvalidDropTarget(null);
+    }, [runtimeRateIndex]);
 
     useEffect(() => {
         if (isPromoControlled) {
@@ -3355,7 +3261,7 @@ export function SeqFxPatchView({
             }
 
             liveEditPointerIdRef.current = null;
-            bridge.commitLiveEdit();
+            session.commitLiveEdit();
         };
         const commitLiveEditForWindow = () => {
             if (liveEditPointerIdRef.current === null) {
@@ -3363,7 +3269,7 @@ export function SeqFxPatchView({
             }
 
             liveEditPointerIdRef.current = null;
-            bridge.commitLiveEdit();
+            session.commitLiveEdit();
         };
 
         window.addEventListener("pointerup", commitLiveEditForPointer);
@@ -3376,7 +3282,7 @@ export function SeqFxPatchView({
             window.removeEventListener("blur", commitLiveEditForWindow);
             commitLiveEditForWindow();
         };
-    }, [bridge, isPromoControlled]);
+    }, [session, isPromoControlled]);
 
     useEffect(() => {
         if (isPromoControlled) {
@@ -3395,7 +3301,7 @@ export function SeqFxPatchView({
                 ? selectedCell.step
                 : activeSelection.steps[0];
 
-            const copiedValues = bridge.copyStepValues({
+            const copiedValues = session.copyStepValues({
                 patternIndex: selectedPatternRef.current,
                 lane: activeSelection.lane,
                 step: sourceStep,
@@ -3415,7 +3321,7 @@ export function SeqFxPatchView({
                 return false;
             }
 
-            bridge.pasteStepValues({
+            session.pasteStepValues({
                 patternIndex: selectedPatternRef.current,
                 lane: activeSelection.lane,
                 steps: activeSelection.steps,
@@ -3479,7 +3385,7 @@ export function SeqFxPatchView({
             window.removeEventListener("copy", handleCopyEvent);
             window.removeEventListener("paste", handlePasteEvent);
         };
-    }, [bridge, isPromoControlled]);
+    }, [session, isPromoControlled]);
 
     function stepAtClientPointForLane(lane: number, clientX: number, clientY: number) {
         const rects = STEP_NUMBERS
@@ -3666,7 +3572,7 @@ export function SeqFxPatchView({
                 }
 
                 try {
-                    const previewState = bridge.previewBlockResize({
+                    const previewState = session.previewBlockResize({
                         patternIndex: selectedPatternRef.current,
                         lane: gesture.lane,
                         startStep: gesture.startStep,
@@ -3709,7 +3615,7 @@ export function SeqFxPatchView({
                 }
 
                 try {
-                    const result = bridge.previewBlockSelectionMove({
+                    const result = session.previewBlockSelectionMove({
                         patternIndex: selectedPatternRef.current,
                         lane: gesture.lane,
                         blockStartSteps: gesture.blockStartSteps,
@@ -3738,7 +3644,7 @@ export function SeqFxPatchView({
                     gesture.previewMovedStartSteps = null;
                     setPatternPreview(null);
                     selectBlockStartsFromPattern(
-                        bridge.getState().patterns[selectedPatternRef.current],
+                        session.getState().patterns[selectedPatternRef.current],
                         gesture.lane,
                         gesture.blockStartSteps,
                         gesture.anchorStartStep,
@@ -3768,7 +3674,7 @@ export function SeqFxPatchView({
                 }
 
                 try {
-                    const result = bridge.previewBlockSelectionCopy({
+                    const result = session.previewBlockSelectionCopy({
                         patternIndex: selectedPatternRef.current,
                         lane: gesture.lane,
                         blockStartSteps: gesture.blockStartSteps,
@@ -3839,7 +3745,7 @@ export function SeqFxPatchView({
                 }
 
                 try {
-                    const previewState = bridge.previewBlockMove({
+                    const previewState = session.previewBlockMove({
                         patternIndex: selectedPatternRef.current,
                         lane: gesture.lane,
                         startStep: gesture.sourceStartStep,
@@ -3867,7 +3773,7 @@ export function SeqFxPatchView({
             }
 
             try {
-                const preview = bridge.previewBlockCopyPaint({
+                const preview = session.previewBlockCopyPaint({
                     patternIndex: selectedPatternRef.current,
                     lane: gesture.lane,
                     startStep: gesture.sourceStartStep,
@@ -3907,7 +3813,7 @@ export function SeqFxPatchView({
             if (gesture.mode === "resize") {
                 if (gesture.previewLength !== null) {
                     try {
-                        bridge.resizeBlock({
+                        session.resizeBlock({
                             patternIndex: selectedPatternRef.current,
                             lane: gesture.lane,
                             startStep: gesture.startStep,
@@ -3928,7 +3834,7 @@ export function SeqFxPatchView({
                     )
                 ) {
                     try {
-                        bridge.moveBlock({
+                        session.moveBlock({
                             patternIndex: selectedPatternRef.current,
                             lane: gesture.lane,
                             startStep: gesture.sourceStartStep,
@@ -3949,7 +3855,7 @@ export function SeqFxPatchView({
                     && gesture.previewMovedStartSteps !== null
                 ) {
                     try {
-                        const result = bridge.moveBlockSelection({
+                        const result = session.moveBlockSelection({
                             patternIndex: selectedPatternRef.current,
                             lane: gesture.lane,
                             blockStartSteps: gesture.blockStartSteps,
@@ -3968,7 +3874,7 @@ export function SeqFxPatchView({
                     }
                 } else {
                     selectBlockStartsFromPattern(
-                        bridge.getState().patterns[selectedPatternRef.current],
+                        session.getState().patterns[selectedPatternRef.current],
                         gesture.lane,
                         gesture.blockStartSteps,
                         gesture.anchorStartStep,
@@ -3984,7 +3890,7 @@ export function SeqFxPatchView({
                     )
                 ) {
                     try {
-                        const result = bridge.copyBlockPaint({
+                        const result = session.copyBlockPaint({
                             patternIndex: selectedPatternRef.current,
                             lane: gesture.lane,
                             startStep: gesture.sourceStartStep,
@@ -4006,7 +3912,7 @@ export function SeqFxPatchView({
                     && gesture.previewCopiedStartSteps !== null
                 ) {
                     try {
-                        const result = bridge.copyBlockSelection({
+                        const result = session.copyBlockSelection({
                             patternIndex: selectedPatternRef.current,
                             lane: gesture.lane,
                             blockStartSteps: gesture.blockStartSteps,
@@ -4046,14 +3952,14 @@ export function SeqFxPatchView({
                 selectBlockRange(gesture.lane, gesture.sourceStartStep, gesture.length);
             } else if (gesture.mode === "selectionMove") {
                 selectBlockStartsFromPattern(
-                    bridge.getState().patterns[selectedPatternRef.current],
+                    session.getState().patterns[selectedPatternRef.current],
                     gesture.lane,
                     gesture.blockStartSteps,
                     gesture.anchorStartStep,
                 );
             } else if (gesture.mode === "selectionCopy") {
                 selectBlockStartsFromPattern(
-                    bridge.getState().patterns[selectedPatternRef.current],
+                    session.getState().patterns[selectedPatternRef.current],
                     gesture.lane,
                     gesture.blockStartSteps,
                     gesture.anchorStartStep,
@@ -4086,7 +3992,7 @@ export function SeqFxPatchView({
             window.removeEventListener("pointercancel", cancelOwnedGesture);
             window.removeEventListener("blur", cancelGesture);
         };
-    }, [bridge]);
+    }, [session]);
 
     function beginGesture(gesture: BlockGesture) {
         gestureRef.current = gesture;
@@ -4136,7 +4042,7 @@ export function SeqFxPatchView({
 
         const selectedStarts = selection?.lane === lane ? selection.blockStartSteps ?? [] : [];
         if (selectedStarts.includes(block.startStep)) {
-            bridge.deleteBlockSelection({
+            session.deleteBlockSelection({
                 patternIndex: selectedPatternRef.current,
                 lane,
                 blockStartSteps: selectedStarts,
@@ -4150,7 +4056,7 @@ export function SeqFxPatchView({
             return;
         }
 
-        bridge.deleteBlock({
+        session.deleteBlock({
             patternIndex: selectedPatternRef.current,
             lane: block.lane,
             startStep: block.startStep,
@@ -4232,7 +4138,7 @@ export function SeqFxPatchView({
         }
 
         if (activeSelection && selectedBlockGroup) {
-            bridge.setBlockSelectionAuxTargetEnd({
+            session.setBlockSelectionAuxTargetEnd({
                 patternIndex: selectedPattern,
                 lane: activeSelection.lane,
                 blockStartSteps: selectedBlockStartSteps,
@@ -4242,7 +4148,7 @@ export function SeqFxPatchView({
             return;
         }
 
-        bridge.setBlockAuxTargetEnd({
+        session.setBlockAuxTargetEnd({
             patternIndex: selectedPattern,
             lane: inspectedBlock.lane,
             startStep: inspectedBlock.startStep,
@@ -4257,7 +4163,7 @@ export function SeqFxPatchView({
         }
 
         if (activeSelection && selectedBlockGroup) {
-            bridge.setBlockSelectionAuxTargetEnabled({
+            session.setBlockSelectionAuxTargetEnabled({
                 patternIndex: selectedPattern,
                 lane: activeSelection.lane,
                 blockStartSteps: selectedBlockStartSteps,
@@ -4267,7 +4173,7 @@ export function SeqFxPatchView({
             return;
         }
 
-        bridge.setBlockAuxTargetEnabled({
+        session.setBlockAuxTargetEnabled({
             patternIndex: selectedPattern,
             lane: inspectedBlock.lane,
             startStep: inspectedBlock.startStep,
@@ -4298,7 +4204,7 @@ export function SeqFxPatchView({
             return;
         }
 
-        bridge.setBlockAuxTargetEnabled({
+        session.setBlockAuxTargetEnabled({
             patternIndex: selectedPattern,
             lane: inspectedBlock.lane,
             startStep: inspectedBlock.startStep,
@@ -4312,7 +4218,7 @@ export function SeqFxPatchView({
             return;
         }
 
-        bridge.setBlockAuxSource({
+        session.setBlockAuxSource({
             patternIndex: selectedPattern,
             lane: inspectedBlock.lane,
             startStep: inspectedBlock.startStep,
@@ -4361,7 +4267,7 @@ export function SeqFxPatchView({
     }
 
     function selectPattern(patternIndex: number) {
-        bridge.selectPattern(patternIndex);
+        session.selectPattern(patternIndex);
         setPatternPreview(null);
         setInvalidDropTarget(null);
         setSelectedCell(null);
@@ -4377,7 +4283,7 @@ export function SeqFxPatchView({
             return;
         }
 
-        bridge.createBlock({
+        session.createBlock({
             patternIndex: selectedPattern,
             lane,
             startStep: step,
@@ -4584,7 +4490,7 @@ export function SeqFxPatchView({
             return;
         }
 
-        bridge.resizeBlock({
+        session.resizeBlock({
             patternIndex: selectedPatternRef.current,
             lane,
             startStep,
@@ -4605,7 +4511,7 @@ export function SeqFxPatchView({
         }
 
         liveEditPointerIdRef.current = event.pointerId;
-        bridge.beginLiveEdit();
+        session.beginLiveEdit();
     }
 
     function setMix(value: number) {
@@ -4614,21 +4520,21 @@ export function SeqFxPatchView({
         }
 
         if (selectedBlockGroup) {
-            bridge.setBlockSelectionMix({
+            session.setBlockSelectionMix({
                 patternIndex: selectedPattern,
                 lane: activeSelection.lane,
                 blockStartSteps: selectedBlockStartSteps,
                 value,
             });
         } else if (selectedWholeBlock && inspectedBlock) {
-            bridge.setBlockMix({
+            session.setBlockMix({
                 patternIndex: selectedPattern,
                 lane: inspectedBlock.lane,
                 startStep: inspectedBlock.startStep,
                 value,
             });
         } else {
-            bridge.setStepMix({
+            session.setStepMix({
                 patternIndex: selectedPattern,
                 lane: activeSelection.lane,
                 steps: activeSelection.steps,
@@ -4643,7 +4549,7 @@ export function SeqFxPatchView({
         }
 
         if (selectedBlockGroup) {
-            bridge.setBlockSelectionParam({
+            session.setBlockSelectionParam({
                 patternIndex: selectedPattern,
                 lane: activeSelection.lane,
                 blockStartSteps: selectedBlockStartSteps,
@@ -4651,7 +4557,7 @@ export function SeqFxPatchView({
                 value,
             });
         } else if (selectedWholeBlock && inspectedBlock) {
-            bridge.setBlockParam({
+            session.setBlockParam({
                 patternIndex: selectedPattern,
                 lane: inspectedBlock.lane,
                 startStep: inspectedBlock.startStep,
@@ -4659,7 +4565,7 @@ export function SeqFxPatchView({
                 value,
             });
         } else {
-            bridge.setStepParam({
+            session.setStepParam({
                 patternIndex: selectedPattern,
                 lane: activeSelection.lane,
                 steps: activeSelection.steps,
@@ -4700,7 +4606,7 @@ export function SeqFxPatchView({
             return;
         }
 
-        bridge.setBlockEffect({
+        session.setBlockEffect({
             patternIndex: selectedPattern,
             lane: inspectedBlock.lane,
             startStep: inspectedBlock.startStep,
@@ -4718,7 +4624,7 @@ export function SeqFxPatchView({
             return;
         }
 
-        bridge.applyBlockPreset({
+        session.applyBlockPreset({
             patternIndex: selectedPattern,
             lane: inspectedBlock.lane,
             startStep: inspectedBlock.startStep,
@@ -4727,7 +4633,7 @@ export function SeqFxPatchView({
         });
     }
 
-    function setFilterValue(nextValue: FilterRangeValue) {
+    function setFilterValue(nextValue: FilterValue) {
         if (!inspectedCell) {
             return;
         }
@@ -4759,7 +4665,7 @@ export function SeqFxPatchView({
         setFilterRange(nextRange);
     }
 
-    function setFilterRange(nextRange: FilterRangeEndpoints) {
+    function setFilterRange(nextRange: FilterRange) {
         setParam(FILTER_PARAM_CUTOFF, nextRange.startCutoffHz);
 
         if (!inspectedBlock) {
@@ -4780,7 +4686,7 @@ export function SeqFxPatchView({
         }
 
         if (selectedBlockGroup) {
-            bridge.setBlockSelectionParam({
+            session.setBlockSelectionParam({
                 patternIndex: selectedPattern,
                 lane: activeSelection.lane,
                 blockStartSteps: selectedBlockStartSteps,
@@ -4788,7 +4694,7 @@ export function SeqFxPatchView({
                 value,
             });
         } else if (inspectedBlock) {
-            bridge.setBlockParam({
+            session.setBlockParam({
                 patternIndex: selectedPattern,
                 lane: inspectedBlock.lane,
                 startStep: inspectedBlock.startStep,
@@ -4806,14 +4712,14 @@ export function SeqFxPatchView({
         }
 
         if (selectedBlockGroup) {
-            bridge.setBlockSelectionMix({
+            session.setBlockSelectionMix({
                 patternIndex: selectedPattern,
                 lane: activeSelection.lane,
                 blockStartSteps: selectedBlockStartSteps,
                 value,
             });
         } else if (inspectedBlock) {
-            bridge.setBlockMix({
+            session.setBlockMix({
                 patternIndex: selectedPattern,
                 lane: inspectedBlock.lane,
                 startStep: inspectedBlock.startStep,
@@ -4830,13 +4736,13 @@ export function SeqFxPatchView({
         }
 
         if (selectedBlockGroup) {
-            bridge.deleteBlockSelection({
+            session.deleteBlockSelection({
                 patternIndex: selectedPattern,
                 lane: activeSelection.lane,
                 blockStartSteps: selectedBlockStartSteps,
             });
         } else if (inspectedBlock) {
-            bridge.deleteBlock({
+            session.deleteBlock({
                 patternIndex: selectedPattern,
                 lane: inspectedBlock.lane,
                 startStep: inspectedBlock.startStep,
@@ -4851,7 +4757,7 @@ export function SeqFxPatchView({
     return (
         <main className={gestureState ? "seqfx-root is-dragging" : "seqfx-root"} data-role="seqfx-root">
             {promoControls?.hidePresetBar ? null : (
-                <SeqFxPresetBarHost bridge={bridge} patchConnection={patchConnection} />
+                <SeqFxPresetRow />
             )}
 
             <section className="seqfx-topbar" aria-label="SeqFX pattern controls">
@@ -4860,7 +4766,7 @@ export function SeqFxPatchView({
                         enabled={globalControls.enabled}
                         onToggle={() => {
                             if (!isPromoControlled) {
-                                bridge.commitGlobalControl(SEQFX_ENDPOINTS.enabled, globalControls.enabled ? 0 : 1);
+                                session.setGlobalControl("enabled", globalControls.enabled ? 0 : 1);
                             }
                         }}
                     />
@@ -4885,33 +4791,33 @@ export function SeqFxPatchView({
                     canPaste={runtimeHasLoopClipboard}
                     onClearLoop={() => {
                         if (!isPromoControlled) {
-                            bridge.clearLoop();
+                            session.clearLoop();
                         }
                     }}
                     onCopyLoop={() => {
                         if (!isPromoControlled) {
-                            bridge.copyLoop();
-                            setHasLoopClipboard(bridge.canPasteLoop());
+                            session.copyLoop();
+                            setHasLoopClipboard(session.canPasteLoop());
                         }
                     }}
                     onInitPattern={() => {
                         if (!isPromoControlled) {
-                            bridge.initPattern();
+                            session.initPattern();
                         }
                     }}
                     onLoadTemplate={(patternId) => {
                         if (!isPromoControlled) {
-                            bridge.loadFactoryPattern(patternId);
+                            session.loadFactoryPattern(patternId);
                         }
                     }}
                     onPasteLoop={() => {
                         if (!isPromoControlled) {
-                            bridge.pasteLoop();
+                            session.pasteLoop();
                         }
                     }}
                     onVaryLoop={() => {
                         if (!isPromoControlled) {
-                            bridge.varyLoop();
+                            session.varyLoop();
                         }
                     }}
                 />
@@ -4920,31 +4826,36 @@ export function SeqFxPatchView({
             <SeqFxGlobalControlSurface
                 controls={globalControls}
                 internalRunning={internalRunning}
-                canUndo={bridge.canUndo()}
-                canRedo={bridge.canRedo()}
-                onGlobalControl={(endpointID, value) => {
+                canUndo={!isPromoControlled && session.canUndo()}
+                canRedo={!isPromoControlled && session.canRedo()}
+                onGlobalControl={(key, value) => {
                     if (!isPromoControlled) {
-                        bridge.setGlobalControl(endpointID, value);
+                        session.setGlobalControl(key, value);
                     }
                 }}
-                onGlobalControlCommit={(endpointID, value) => {
+                onGlobalGestureStart={(key) => {
                     if (!isPromoControlled) {
-                        bridge.commitGlobalControl(endpointID, value);
+                        session.beginGlobalGesture(key);
                     }
                 }}
-                onGlobalGestureStart={(endpointID) => {
+                onGlobalGestureEnd={(key) => {
                     if (!isPromoControlled) {
-                        bridge.beginGlobalGesture(endpointID);
+                        session.endGlobalGesture(key);
                     }
                 }}
-                onGlobalGestureEnd={(endpointID) => {
+                onLoopRangeGestureStart={() => {
                     if (!isPromoControlled) {
-                        bridge.endGlobalGesture(endpointID);
+                        session.beginLoopRangeGesture();
+                    }
+                }}
+                onLoopRangeGestureEnd={() => {
+                    if (!isPromoControlled) {
+                        session.endLoopRangeGesture();
                     }
                 }}
                 onLoopRangeChange={(startStep, endStepExclusive) => {
                     if (!isPromoControlled) {
-                        bridge.setLoopRange(startStep, endStepExclusive);
+                        session.setLoopRange(startStep, endStepExclusive);
                     }
                 }}
                 onInternalTransport={(running) => {
@@ -4954,24 +4865,24 @@ export function SeqFxPatchView({
                     internalRunningRef.current = running;
                     setInternalRunning(running);
                     if (running) {
-                        bridge.playInternal();
+                        session.playInternal();
                     } else {
-                        bridge.stopInternal();
+                        session.stopInternal();
                     }
                 }}
                 onReset={() => {
                     if (!isPromoControlled) {
-                        bridge.resetInternal();
+                        session.resetInternal();
                     }
                 }}
                 onUndo={() => {
                     if (!isPromoControlled) {
-                        bridge.undo();
+                        session.undo();
                     }
                 }}
                 onRedo={() => {
                     if (!isPromoControlled) {
-                        bridge.redo();
+                        session.redo();
                     }
                 }}
             />
@@ -5330,7 +5241,7 @@ export function SeqFxPatchView({
                                                 </div>
                                             ) : null}
                                             <FilterEditor
-                                                ariaLabel="SeqFX filter range editor"
+                                                aria-label="SeqFX filter range editor"
                                                 modeOptions={SEQFX_FILTER_MODE_OPTIONS}
                                                 range={filterRangeEndpointsFromSeqFxStep(inspectedCell)}
                                                 rangePolarity="bipolar"

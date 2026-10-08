@@ -1,4 +1,10 @@
-import type { ModulationSourceKind } from "./modulation";
+import {
+    AMP_ENVELOPE_SOURCE_SLOT,
+    MODULATION_ENV_SLOT_COUNT,
+    MODULATION_MACRO_SLOT_COUNT,
+    MODULATION_MSEG_SLOT_COUNT,
+    type ModulationSourceKind,
+} from "./modulation";
 
 /** The compact rack intentionally exposes only sources that exist in the synth engine. */
 export type RackModulationSourceKind = Extract<ModulationSourceKind, "mseg" | "env" | "macro">;
@@ -72,45 +78,65 @@ const SOURCE_FAMILIES: ReadonlyArray<SourceFamily> = [
     },
 ];
 
-/** Three animated pages: each page shows MSEG, Envelope, and Macro for one numbered slot. */
-export const RACK_MODULATION_SOURCE_PAGES: ReadonlyArray<ReadonlyArray<RackModulationSource>> = [1, 2, 3].map(
-    (sourceSlot) => SOURCE_FAMILIES.map((family) => ({
+type RackModulationSourceSlot = RackModulationSource["sourceSlot"];
+
+function describeSource(family: SourceFamily, sourceSlot: RackModulationSourceSlot): RackModulationSource {
+    return {
         sourceKind: family.sourceKind,
-        sourceSlot: sourceSlot as 1 | 2 | 3,
+        sourceSlot,
         label: `${family.label} ${sourceSlot}`,
         shortLabel: family.shortLabel,
         iconUrl: family.iconUrl,
         identityIconUrl: family.identityIconUrl,
         accent: family.accent,
-    })),
+    };
+}
+
+/** How many numbered slots each source family has in the synth engine. */
+const NUMBERED_SLOT_COUNTS: Readonly<Record<RackModulationSourceKind, number>> = {
+    mseg: MODULATION_MSEG_SLOT_COUNT,
+    env: MODULATION_ENV_SLOT_COUNT,
+    macro: MODULATION_MACRO_SLOT_COUNT,
+};
+
+function sourceKey(sourceKind: RackModulationSourceKind, sourceSlot: number): string {
+    return `${sourceKind} ${sourceSlot}`;
+}
+
+/**
+ * Every source slot the synth has, built once so callers get the same object for the same
+ * source on every lookup. The Amp Envelope sits one past the numbered envelopes and keeps its
+ * own name.
+ */
+const SOURCES_BY_KEY: ReadonlyMap<string, RackModulationSource> = new Map(
+    SOURCE_FAMILIES.flatMap((family) => {
+        const numbered = Array.from(
+            { length: NUMBERED_SLOT_COUNTS[family.sourceKind] },
+            (_, index) => describeSource(family, (index + 1) as RackModulationSourceSlot),
+        );
+        const ampEnvelope = family.sourceKind === "env"
+            ? [{ ...describeSource(family, AMP_ENVELOPE_SOURCE_SLOT), label: "Amp Envelope", shortLabel: "AMP" }]
+            : [];
+        return [...numbered, ...ampEnvelope];
+    }).map((source) => [sourceKey(source.sourceKind, source.sourceSlot), source]),
 );
 
+/** Describes any source slot the synth has; throws for a slot it does not have. */
 export function findRackModulationSource(
     sourceKind: RackModulationSourceKind,
     sourceSlot: number,
 ): RackModulationSource {
-    const source = RACK_MODULATION_SOURCE_PAGES[sourceSlot - 1]?.find(
-        (candidate) => candidate.sourceKind === sourceKind,
-    );
-
-    if (source !== undefined) {
-        return source;
+    const source = SOURCES_BY_KEY.get(sourceKey(sourceKind, sourceSlot));
+    if (source === undefined) {
+        throw new Error(`Unknown rack modulation source: ${sourceKind} ${sourceSlot}`);
     }
-
-    if (sourceSlot === 4 && sourceKind === "env") {
-        const family = SOURCE_FAMILIES.find((candidate) => candidate.sourceKind === "env");
-        if (family !== undefined) {
-            return {
-                sourceKind,
-                sourceSlot,
-                label: "Amp Envelope",
-                shortLabel: "AMP",
-                iconUrl: family.iconUrl,
-                identityIconUrl: family.identityIconUrl,
-                accent: family.accent,
-            };
-        }
-    }
-
-    throw new Error(`Unknown rack modulation source: ${sourceKind} ${sourceSlot}`);
+    return source;
 }
+
+/**
+ * Three animated pages: each page shows MSEG, Envelope, and Macro for one numbered slot.
+ * Macro 4 and the Amp Envelope have no page; findRackModulationSource still describes them.
+ */
+export const RACK_MODULATION_SOURCE_PAGES: ReadonlyArray<ReadonlyArray<RackModulationSource>> = [1, 2, 3].map(
+    (sourceSlot) => SOURCE_FAMILIES.map((family) => findRackModulationSource(family.sourceKind, sourceSlot)),
+);

@@ -1,58 +1,99 @@
 # Builder Kit changelog
 
-## Unreleased — Plugin state, Global Undo and composable controls
+Each release lists what was added, changed and removed, what is known not to
+work yet, and how to update. [Compatibility](docs/COMPATIBILITY.md) explains
+what a version number promises.
+
+## 0.2.0 — Plugin state, Undo, presets and controls
 
 ### Added
 
-- A declarative state API: `definePluginState`, `parameter`, `storedValue`, and `preparedState`. The build generates the persistent state owner and connects each GUI to it.
-- Shared Undo/Redo across ordinary parameters and editable complex values. A drag of one field forms one history entry; `edit(...)` can change several fields as one action. History has a configurable entry limit.
-- The included Enhance That controls and newly generated plugins use the state framework, with Undo/Redo available in their interfaces. Enhance That retains its sound, parameter identities, and existing preset/snapshot formats.
-- Automatic GUI reconnection, field-version conflict checks, and protection against delayed reports overwriting newer edits. Host automation remains distinct from user Undo history.
-- One per-field UI status: `loading`, `invalid`, `unavailable`, `updating`, or `idle`. Values stay editable during updates and recoverable failures, with one current error and a guarded retry action. Invalid saved values require an explicit replacement. Retrying does not add another Undo entry.
-- Direct preparation into shared audio storage on native JIT, compiled native, and browser WebAssembly. The framework handles allocation within the supplied budget, cancellation, complete-data publication at an audio-block boundary, and releasing replaced data.
-- Fixed-size preparation and a load-once preparation plan for data whose size is discovered after loading. Generated `PluginState.cmajor` references connect declared data to DSP readers.
-- Reusable MSEG curve state, math, rendering, editing interactions, composable surfaces, and a Cmajor reader/player. The editor handles one curve without requiring a drawer or A/B morphing.
-- Composable knobs: complete controls and independent input, dial, label, readout, exact-entry, range and live-marker parts. Linear/log/custom scales, two-axis input, menu composition and custom artwork share the same editing behavior.
-- Composable MSEG Root/Surface/layers, custom point artwork, inspector commands, reference curves, sampled plots, time axes and live playheads. The included Reader reports observed playback with activity and retrigger identity; the public adapter handles subscription, stale reports and cleanup.
-- Shared filter editor with cutoff bands or two-dimensional modulation handles, live response, optional FFT overlays and per-root style installation. `FilterRangeEditor` remains a compatible alias.
-- Focused Preview/Code reference pages for knobs, MSEGs, filters and sliders, including an offline real-DSP MSEG playback example. Agent documentation ships under `kit/docs/` and is linked from the kit guide.
-- Segmented sliders with usable defaults, ordinary root styling and refs, standalone styles, and gesture grouping for value and modulation edits. Disabling or unmounting a control ends its active gesture.
-- Typed native settings through `nativeValue` and `Native` codecs, with matching generated C++ readers.
-- An independently reusable `UndoHistory` module and documented extension points for specialized delivery protocols.
+- **Plugin state.** Declare each control and piece of custom data once in
+  `state.ts` with `definePluginState`, `parameter`, `storedValue` and
+  `preparedState`. The build generates the worker that owns and saves that
+  state, and every open plugin window connects to it. See
+  [Plugin state](docs/PLUGIN_STATE.md).
+- **Undo and Redo.** One history covers parameters and custom data. A drag of
+  one control is one entry, `edit(...)` groups several fields into one entry,
+  and `beginGesture(keys)` makes a drag that moves several fields one entry.
+  `usePluginHistory` drives Undo and Redo buttons.
+- **Presets and snapshots as state.** Spread `presets()` and `snapshots()` into
+  the declaration and render `PresetBar` and `SnapshotBar`. `presets({ initial })`
+  names the preset a new instance starts from. Recalling a preset or selecting a
+  snapshot is one Undo entry, and so is loading a pasted preset file as the
+  sound. Library operations (saving, renaming, deleting a preset; clearing a
+  snapshot slot) are not Undo entries. `usePresets` and `useSnapshots` serve
+  custom interfaces.
+- **Field status.** Each field reports `loading`, `invalid`, `unavailable`,
+  `updating` or `idle`, with one current error and a retry action. Values stay
+  editable while they save.
+- **Shared audio data.** `preparedState` and `sharedData` prepare large data,
+  such as curves or tables, straight into memory the audio engine reads. The
+  build generates matching Cmajor readers. See
+  [Shared audio data](docs/SHARED_DATA.md).
+- **Native settings.** `nativeValue` and the `Native` codecs pass typed values
+  to custom C++ code, with generated readers.
+- **Custom deliveries.** Give `preparedState` a `PluginStateDelivery` as its
+  `engine` to deliver a field to the audio engine your own way. Write one from
+  the public types `PluginStateDelivery`, `PluginStateDeliveryContext`,
+  `PluginStateDocumentContext`, `PluginStateEffect`, `PluginStateSubmission`
+  and `PluginStateDeliveryOutcome`. See
+  [Custom delivery](docs/PLUGIN_STATE.md#custom-delivery), which walks through
+  a step sequencer's pattern upload.
+- **Controls.** `Knob`, `Slider`, `FilterEditor` and the `Mseg` editor, each
+  usable whole or assembled from parts with your own artwork. See
+  [Knobs](docs/KNOBS.md), [Sliders](docs/SLIDERS.md),
+  [Filters](docs/FILTERS.md) and [MSEG](docs/MSEG.md).
+- **Control gallery.** `npm run ui:docs:dev` opens working previews of every
+  control beside its source.
+- **`UndoHistory`**, the history bookkeeping on its own, for code outside the
+  state framework.
+- **Guides.** `kit/AGENTS.md` sends a coding agent to the right guide for each
+  task. Every control has a guide and an API page, and
+  [Compatibility](docs/COMPATIBILITY.md) explains what a version promises.
 
-### Fixed
+### Changed
 
-- Optimistic values no longer display an older value's error. Current save failures stay visible during preparation, and unavailable dependencies do not leave an endless progress indicator.
+- **The public API is the list in `kit/index.ts`.** Import only from
+  `kit/index`. Paths under `kit/ui` are internal and may change in any release.
+- **One plugin config file.** A plugin is configured only by
+  `<PatchName>.plugin.json` beside its patch. `npm run kit:new` writes one.
+- **Environment overrides.** `BUILDER_KIT_CMAJ` names another `cmaj`,
+  `BUILDER_KIT_CMAKE` another `cmake`, and `BUILDER_KIT_PLUGIN_JOBS` and
+  `BUILDER_KIT_CMAKE_JOBS` set build parallelism.
+- **Renamed.** `EditorTickSlider` is now `Slider`, and its prop and type
+  names changed to match; see [Sliders](docs/SLIDERS.md). The browser preview
+  parameter type `EffectParameterContract` is now `BrowserPreviewParameter`,
+  with the same fields. Gesture callbacks are `onGestureStart` and
+  `onGestureEnd` on every control.
+- **Pinned tools.** This release pins new `cmaj` and `CmajPlugin.vst3`
+  downloads. `npm run kit:setup` fetches them when strict doctor reports a
+  mismatch.
+- **`npm run fx:dev` listens on `127.0.0.1` only.**
+- **A state update carries only the fields that changed.** Opening a plugin
+  window still receives the whole state; turning a knob sends that one field.
+- **The project `package.json`** is named `builder-kit-project` and requires
+  Node 22 or newer.
+- **Tools for publishing the kit itself are no longer shipped.** The kit now
+  holds only what a plugin project uses.
 
-- Late scalar-parameter observations could rewind an active drag or replay old values after release. Native and browser delivery now preserve write identity and ordering.
-- Compound edits could incorrectly appear settled while awaiting acceptance.
-- Unrelated controls and history consumers could rerender on every state update. Subscriptions now retain the relevant field/history selection, and duplicate state messages are suppressed.
-- Failed native sends could make an equal-value retry appear successful without reaching DSP. Restore failures now stop before falsely reporting replacement success.
-- Saved-state mirror callbacks could outlive the document they belonged to. Cleanup now continues when another cleanup callback fails.
-- Customer React and React DOM versions are pinned together, and the exported lockfile is checked through a separate dependency installation.
-- Compiler, native headers, and browser support use the same Cmajor dependency selection. Source builds and verified downloaded tools retain explicit, checked identities.
-- Release tool provenance is derived from the committed CMake pin instead of a second hand-maintained revision. New release commits and tags use a neutral product identity.
+### Known issues
 
-### Update instructions — 0.2.0
+- Shared audio data in a browser needs a cross-origin isolated page (COOP and
+  COEP headers). `npm run ui:docs:dev` sends them; `npm run fx:dev` does not.
+- Builder Kit runs on Apple silicon Macs with macOS 15 or newer, and builds
+  VST3 plugins only.
 
-Copyable release prompt:
+### Update instructions
 
-> Update Builder Kit to 0.2.0 using the kit-update skill. Follow this release's Update instructions in the target release's kit/CHANGELOG.md before merging. Preserve my plugin changes and verify that my existing plugins still build. Then summarize how the new state management, Global Undo, and composable controls apply to my project. Keep optional adoption separate from the kit update.
+Copy this prompt into your coding agent:
 
-- **Required:** this release updates the dependency lockfile and pinned tool manifest. Carry those changes through the normal kit merge, run `npm ci` for changed dependencies, and refresh tools through `kit:setup` when strict doctor reports a mismatch. Verify the customer's existing plugins through the skill's normal checks.
-- **Existing plugins:** updating the kit does not require adopting the new state API or replacing custom controls. Preserve DSP behavior, parameter identities and saved preset formats. If an existing API use no longer compiles, explain the concrete repair before changing customer code.
-- **Optional adoption:** use [Plugin state](docs/PLUGIN_STATE.md) for state and shared Undo, [Shared audio data](docs/SHARED_DATA.md) for prepared data, and [Knobs](docs/KNOBS.md), [MSEGs](docs/MSEG.md), or [Filters](docs/FILTERS.md) for composing controls. Propose relevant changes after the existing plugin passes its update checks; adoption is a separate customer decision.
+> Update Builder Kit to 0.2.0 using the kit-update skill. Follow this release's Update instructions in the target release's kit/CHANGELOG.md before merging. Preserve my plugin changes and check that my plugins still build. Then tell me which of the new state, Undo, preset and control features apply to my project.
 
-### Scope and updating
+Take the new lockfile and tool pins through the normal merge, run `npm ci`,
+then run `npm run kit:setup` when strict doctor reports a tool mismatch.
 
-Existing plugins are not automatically rewritten to use the new state API. An agent or plugin author adopts it deliberately. Custom DSP still defines how values affect sound and how custom data is interpreted. Undo does not retain deleted external source files for you, and shared data uses the memory budget you supply.
+## 0.1.0 (2026-10-04) — First release
 
-The supported customer installation target remains Apple silicon on macOS 15 or newer. Browser shared-memory execution needs cross-origin isolation. This release does not promise Windows/Intel qualification, background CPU execution for every preparation callback, or a general-purpose ADSR editor.
-
-See [Plugin state](docs/PLUGIN_STATE.md), [Shared audio data](docs/SHARED_DATA.md), [Knobs](docs/KNOBS.md), [MSEGs](docs/MSEG.md), [Filters](docs/FILTERS.md), and the [kit-update skill](skills/kit-update/SKILL.md).
-
-## 0.1.5 — 2026-09-09
-
-This is the verified released baseline for the new entries above. It included the guided Documents-folder setup, the user's choice of first task, a tracked dependency lockfile, and an update flow that preserves local plugin edits. The state framework and direct shared-data APIs above were added after this release.
-
-Older releases are retained in the customer release history. Their notes have not been reconstructed here from unverified recollection.
+Guided setup into the Documents folder, a first-task choice, a tracked
+dependency lockfile, and an update flow that preserves local plugin edits.

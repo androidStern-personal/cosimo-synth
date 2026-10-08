@@ -56,7 +56,7 @@ Repair verification: 28 focused client/public-type checks, all 20 public-hook br
 | `EXAMPLES.md` and `WRITEUP.md` | Updated guards and lifecycle wording. Both complete author examples were checked against the fresh export. |
 | Current video reference | Updated `SOURCE-EXAMPLE.tsx.txt` and the corresponding note in `BRIEF.md` in the existing `videos/builder-kit-update` preview project. Its complete state/view reference passed strict TypeScript against the export. These local video files are in the separate, preexisting video worktree, not this implementation branch. |
 | Current video on-screen code | Uses `usePluginState`, `state.value`, edit methods, and history methods, with no removed lifecycle fields. It remains a documented excerpt. No timing, artwork, or rendered footage needed changing for this API fix. Older renders are historical versions. |
-| Release `EMAIL.txt`, `EMAIL.html`, and `SOCIAL.md` | Audited; no removed fields or invalidated lifecycle claims. No copy change required. |
+| `SOCIAL.md` | Audited; no removed fields or invalidated lifecycle claims. No copy change required. |
 | Maintained website and customer-email source | Audited local website source and its available `origin/main` ref; no removed public API references. Email delivery's own `status` fields are unrelated. No website deployment or email send performed. |
 
 ## Original worker handoff boundary

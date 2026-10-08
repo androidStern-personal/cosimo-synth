@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import path from "node:path";
-import { loadUIModule } from "./helpers/load_ui_module.mjs";
+import { loadUIModule } from "../kit/tests/helpers/load_ui_module.mjs";
 import { loadChannel } from "./helpers/modulation_state_fixture.mjs";
 import { createSynthParameterFixture } from "./helpers/synth_parameter_fixture.mjs";
 

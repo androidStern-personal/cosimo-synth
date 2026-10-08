@@ -1,10 +1,17 @@
 import { createCmajorPluginStateClient, type CmajorStateConnection } from "../../kit/ui/plugin-state-cmajor";
+import { pluginManifestId, syncUserLifetimeFields } from "../../kit/ui/plugin-state-user-files";
 import { synthPluginState } from "./synth-plugin-state";
 import type { PatchConnectionLike } from "./cmajor-react";
 import { createModulationStateClient } from "./modulation-client";
 
 type SynthStateClient = ReturnType<typeof createCmajorPluginStateClient<typeof synthPluginState>>;
-type Entry = { readonly client: SynthStateClient; readonly modulation: ReturnType<typeof createModulationStateClient>; leases: number };
+type Entry = {
+    readonly client: SynthStateClient;
+    readonly modulation: ReturnType<typeof createModulationStateClient>;
+    /** Keeps the user's preset library in their files, shared by every synth instance. */
+    readonly stopUserFiles: () => void;
+    leases: number;
+};
 const clients = new WeakMap<CmajorStateConnection, Entry>();
 
 function hasChannel(connection: PatchConnectionLike | CmajorStateConnection): connection is CmajorStateConnection {
@@ -17,7 +24,10 @@ function stop(entry: Entry) {
     // Try to queue the final end; authenticated detach still seals the routed
     // edits if end was queued or its reply was lost. Never await that reply.
     try { void entry.modulation.stop().catch(error => console.error("Cosimo state cleanup failed", error)); }
-    finally { entry.client.stop(); }
+    finally {
+        entry.stopUserFiles();
+        entry.client.stop();
+    }
 }
 
 /** One GUI client shared by the synth's view, controls, and imperative adapters. */
@@ -31,10 +41,15 @@ export function acquireSynthViewState(connection: PatchConnectionLike | CmajorSt
     const state = entry?.client.getSnapshot();
     if (!entry || state?.kind === "closed" || state?.kind === "failed") {
         if (entry) stop(entry);
-        const client = createCmajorPluginStateClient(synthPluginState, connection, {
-            onDefect: error => console.error("Cosimo state failed", error),
-        });
-        entry = { client, modulation: createModulationStateClient(client), leases: 0 };
+        const onDefect = (error: unknown) => console.error("Cosimo state failed", error);
+        const client = createCmajorPluginStateClient(synthPluginState, connection, { onDefect });
+        const manifest: unknown = Reflect.get(connection, "manifest");
+        entry = {
+            client,
+            modulation: createModulationStateClient(client),
+            stopUserFiles: syncUserLifetimeFields(synthPluginState, client, pluginManifestId(manifest), onDefect),
+            leases: 0,
+        };
         clients.set(connection, entry);
     }
     const owned = entry;

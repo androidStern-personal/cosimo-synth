@@ -1344,16 +1344,16 @@ graph WavetableSynth [[ main ]]
     // Host parameters are append-only: Global Tune follows every established
     // slot so existing automation numbers remain unchanged.
     input value float32 globalTune [[ name: "Global Tune", min: -24.0f, max: 24.0f, init: 0.0f, unit: "st", rampFrames: 64 ]];
-    // T38 preserves the established ampRelease host slot above. The remaining
-    // Amp Envelope stages are appended after Global Tune.
+    // Amp Release keeps its host slot above; the remaining Amp Envelope stages
+    // are appended after Global Tune.
     input value float32 ampAttack [[ name: "Amp Envelope Attack", min: 0.001f, max: 10.0f, init: 0.01f, unit: "s", rampFrames: 0 ]];
     input value float32 ampDecay [[ name: "Amp Envelope Decay", min: 0.001f, max: 10.0f, init: 0.001f, unit: "s", rampFrames: 0 ]];
     input value float32 ampSustain [[ name: "Amp Envelope Sustain", min: 0.0f, max: 1.0f, init: 1.0f, rampFrames: 0 ]];
-    // T50 follows the moving append-only contract after the T38 stages.
-    // Existing automation slots and parameter IDs remain untouched.
+    // Voice filter Key Track is appended after the Amp Envelope stages, so
+    // existing automation slots and parameter IDs remain untouched.
     input value float32 filterCutoffKeyTrackEnabled [[ name: "Voice Filter Key Track", min: 0.0f, max: 1.0f, init: 0.0f, discrete: true, step: 1.0f, text: "Off|On", rampFrames: 0 ]];
     input value float32 filterCutoffKeyTrackOffsetSemitones [[ name: "Voice Filter Key Track Offset", min: -60.0f, max: 60.0f, init: 0.0f, unit: "st", rampFrames: 0 ]];
-    // T62 appends one shared surface for every voice-owned Enhancer instance.
+    // One shared surface for every voice-owned Enhancer instance, appended.
     // Frequency remains stored while Key Track swaps the first UI value to the
     // independent Ratio offset; no host identity is repurposed.
     input value float32 voiceEnhancerFrequency [[ name: "Voice Enhancer Frequency", min: 20.0f, max: 20000.0f, init: 130.0f, unit: "Hz", rampFrames: 0 ]];
@@ -1361,9 +1361,8 @@ graph WavetableSynth [[ main ]]
     input value float32 voiceEnhancerAmount [[ name: "Voice Enhancer Amount", min: 0.0f, max: 1.0f, init: 0.0f, rampFrames: 64 ]];
     input value float32 voiceEnhancerKeyTrackEnabled [[ name: "Voice Enhancer Key Track", min: 0.0f, max: 1.0f, init: 0.0f, discrete: true, step: 1.0f, text: "Off|On", rampFrames: 0 ]];
     input value float32 voiceEnhancerKeyTrackOffsetSemitones [[ name: "Voice Enhancer Key Track Offset", min: -12.0f, max: 60.0f, init: 0.0f, unit: "st", rampFrames: 0 ]];
-    // T28 follows the moving append-only host contract after T62. T74's
-    // complete eight-slot contract preserves that ordering while adding only
-    // Safe Bass and the four independent bypasses.
+    // Polish's eight host parameters follow, appended: the Enhancer,
+    // Compression / Clip and Safe Bass amounts, Output Trim, and four bypasses.
     // Baked cutoff, curve, ratio, clip, and timing settings remain private.
     input value float32 polishEnhancerAmount [[ name: "Polish Enhancer Amount", min: 0.0f, max: 1.0f, init: 0.0f, rampFrames: 0 ]];
     input value float32 polishCompressionClipAmount [[ name: "Polish Compression / Clip Amount", min: 0.0f, max: 1.0f, init: 0.0f, rampFrames: 0 ]];
@@ -1373,8 +1372,8 @@ graph WavetableSynth [[ main ]]
     input value float32 polishEnhancerBypass [[ name: "Polish Enhancer Bypass", min: 0.0f, max: 1.0f, init: 0.0f, discrete: true, step: 1.0f, text: "Active|Bypassed", rampFrames: 0 ]];
     input value float32 polishCompressionClipBypass [[ name: "Polish Compression / Clip Bypass", min: 0.0f, max: 1.0f, init: 0.0f, discrete: true, step: 1.0f, text: "Active|Bypassed", rampFrames: 0 ]];
     input value float32 polishOutputTrimBypass [[ name: "Polish Output Trim Bypass", min: 0.0f, max: 1.0f, init: 0.0f, discrete: true, step: 1.0f, text: "Active|Bypassed", rampFrames: 0 ]];
-    // T78 appends one real host automation parameter for every resident effect
-    // instance after the complete Polish contract. These are deliberately
+    // One real host automation parameter for every resident effect instance,
+    // appended after Polish. These are deliberately
     // type+ordinal identities, not graph positions, and remain separate from
     // the fixed Polish trim above.
     input rack.laneGlobalFilter1OutputTrimDb;
@@ -1439,7 +1438,7 @@ graph WavetableSynth [[ main ]]
     // Hidden editor lifecycle only. This starts the read-only Polish FFT while
     // its full-screen surface is open; it is not sound, host, or saved state.
     input event int32 polishAnalyzerEnabledIn;
-    // Read-only T76 view lifecycle. One lease wakes both the exact pre-Enhancer
+    // Read-only Voice Enhancer spectrum view lifecycle. One lease wakes both the exact pre-Enhancer
     // input tap and active-voice response telemetry; closed views leave both dormant.
     input event int32 voiceEnhancerSpectrumActivity;
     output event wt::OscillatorWavetableUploadAck wavetableUploadAck;

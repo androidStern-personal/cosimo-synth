@@ -1,11 +1,9 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { gunzipSync } from "node:zlib";
 
-import { loadUIModule } from "./helpers/load_ui_module.mjs";
+import { loadUIModule } from "../kit/tests/helpers/load_ui_module.mjs";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -41,11 +39,10 @@ const {
     applySeqFxParamEdit,
     applySeqFxStepValuePaste,
     assertSeqFxStateValuesInRange,
-    buildSeqPatternUpload,
+    buildSeqPatternContent,
     createDefaultSeqFxState,
     getSeqFxStepValueSnapshot,
-    parseStrictSeqFxStateV5,
-    parseStrictSeqFxStateV7,
+    parseStoredSeqFxState,
     serializeSeqFxState,
     normalizeSeqFxState,
 } = stateModule;
@@ -68,12 +65,10 @@ function assertDefaultAuxMatchesParams(step, laneIndex) {
     });
 }
 
-test("default_seqfx_v7_runtime_projection_contains_four_serial_chains with empty effect steps and aux defaults", () => {
+test("default_seqfx_runtime_projection_contains_four_serial_chains with empty effect steps and aux defaults", () => {
     const state = createDefaultSeqFxState();
 
-    assert.equal(stateModule.SEQFX_STATE_KEY, "seqfx.v7");
-    assert.equal(stateModule.SEQFX_LEGACY_STATE_KEY, "seqfx.v6");
-    assert.equal(state.version, 7);
+    assert.equal(state.version, 8);
     assert.equal(state.patterns.length, SEQFX_PATTERN_COUNT);
 
     for (const pattern of state.patterns) {
@@ -95,17 +90,14 @@ test("default_seqfx_v7_runtime_projection_contains_four_serial_chains with empty
 
     const serialized = serializeSeqFxState(state);
     const stored = JSON.parse(serialized);
-    assert.equal(stored.version, 7);
+    assert.equal(stored.version, 8);
     assert.equal(stored.patterns.length, SEQFX_PATTERN_COUNT);
     assert.equal(stored.patterns[0].chains.length, SEQFX_LANE_COUNT);
     assert.deepEqual(stored.patterns[0].chains[0].blocks, []);
     assert.ok(serialized.length < 16 * 1024);
-    assert.deepEqual(parseStrictSeqFxStateV7(serialized), state);
+    assert.deepEqual(parseStoredSeqFxState(stored), state);
 
-    const upload = buildSeqPatternUpload(state, {
-        patternIndex: 0,
-        authoritative: true,
-    });
+    const upload = buildSeqPatternContent(state, 0);
 
     assert.equal(upload.effectTypes.length, SEQFX_LANE_COUNT);
     assert.equal(upload.effectTypes[0].length, SEQFX_STEP_COUNT);
@@ -124,7 +116,7 @@ test("default_seqfx_v7_runtime_projection_contains_four_serial_chains with empty
 });
 
 test("seqfx normalization is structurally idempotent when optional effect memories are absent", () => {
-    const once = normalizeSeqFxState("");
+    const once = normalizeSeqFxState(createDefaultSeqFxState());
     const twice = normalizeSeqFxState(once);
 
     assert.deepEqual(twice, once);
@@ -146,7 +138,7 @@ test("seqfx canonicalizes negative zero before strict serialization round trips"
     const normalized = normalizeSeqFxState(state);
     const curve = normalized.patterns[0].lanes[SEQFX_LANES.tapeStop].steps[0].params[2];
     assert.equal(Object.is(curve, -0), false);
-    assert.deepEqual(parseStrictSeqFxStateV7(serializeSeqFxState(normalized)), normalized);
+    assert.deepEqual(parseStoredSeqFxState(JSON.parse(serializeSeqFxState(normalized))), normalized);
 });
 
 test("seqfx_block_aux_source_and_target_edits_write_the_whole_block_and_upload_aux_arrays", () => {
@@ -185,10 +177,7 @@ test("seqfx_block_aux_source_and_target_edits_write_the_whole_block_and_upload_a
         value: 13,
     });
 
-    const upload = buildSeqPatternUpload(state, {
-        patternIndex: 0,
-        authoritative: false,
-    });
+    const upload = buildSeqPatternContent(state, 0);
 
     assert.deepEqual(
         upload.auxEnabled[SEQFX_LANES.crusher].slice(4, 7).map((targets) => targets[0]),
@@ -216,10 +205,7 @@ test("seqfx_filter_blocks_store_the_old_sweep_as_a_default_cutoff_aux_target", (
         effectType: SEQFX_EFFECT_TYPES.filter,
     });
 
-    const upload = buildSeqPatternUpload(state, {
-        patternIndex: 0,
-        authoritative: false,
-    });
+    const upload = buildSeqPatternContent(state, 0);
     const step = state.patterns[0].lanes[SEQFX_LANES.filter].steps[3];
 
     assert.deepEqual(step.aux.source, {
@@ -278,10 +264,7 @@ test("seqfx_filter_mode_cannot_be_authored_persisted_or_uploaded_as_an_aux_targe
         /Filter Mode is not eligible for Aux modulation/,
     );
 
-    const upload = buildSeqPatternUpload(malformedDenseState, {
-        patternIndex: 0,
-        authoritative: false,
-    });
+    const upload = buildSeqPatternContent(malformedDenseState, 0);
     assert.equal(upload.auxEnabled[SEQFX_LANES.filter][3][0], false);
     assert.equal(upload.auxEnd[SEQFX_LANES.filter][3][0], 0);
     assert.equal(JSON.stringify(JSON.parse(serializeSeqFxState(malformedDenseState))).includes('"index":0'), false);
@@ -335,31 +318,10 @@ test("seqfx_aux_end_values_clamp_and_round_like_effect_parameters", () => {
         value: 100,
     });
 
-    const upload = buildSeqPatternUpload(state, {
-        patternIndex: 0,
-        authoritative: false,
-    });
+    const upload = buildSeqPatternContent(state, 0);
 
     assert.equal(upload.auxEnd[SEQFX_LANES.crusher][2][0], 16);
     assert.equal(upload.auxEnd[SEQFX_LANES.crusher][2][1], 200);
-});
-
-test("seqfx_strict_v5_parser_rejects_old_aux_curve_payloads_under_the_new_key", () => {
-    const fixtureEnvelope = JSON.parse(gunzipSync(readFileSync(
-        path.join(repoRoot, "tests/fixtures/seqfx/legacy-v5-dense-state.json.gz"),
-    )).toString("utf8"));
-    const oldShaped = JSON.parse(fixtureEnvelope.storedState);
-    oldShaped.patterns[0].lanes[SEQFX_LANES.crusher].steps[0].aux = {
-        curve: "linear",
-        targets: oldShaped.patterns[0].lanes[SEQFX_LANES.crusher].steps[0].aux.targets,
-    };
-
-    assert.throws(() => parseStrictSeqFxStateV5(JSON.stringify(oldShaped)), (error) => {
-        assert.ok(error instanceof SeqFxStateParseError);
-        assert.equal(error.code, "unknown_field");
-        assert.equal(error.path, "$.patterns[0].lanes[1].steps[0].aux.curve");
-        return true;
-    });
 });
 
 test("chain_steps_clamp_parameters_by_selected_effect_type_not_chain_index", () => {
@@ -393,10 +355,7 @@ test("chain_steps_clamp_parameters_by_selected_effect_type_not_chain_index", () 
         value: 4,
     });
 
-    const upload = buildSeqPatternUpload(state, {
-        patternIndex: 0,
-        authoritative: false,
-    });
+    const upload = buildSeqPatternContent(state, 0);
 
     assert.deepEqual(upload.effectTypes[1].slice(4, 6), [
         SEQFX_EFFECT_TYPES.tapeStop,
@@ -433,10 +392,7 @@ test("changing_a_block_effect_updates_the_whole_block_and_remembers_each_effects
         effectType: SEQFX_EFFECT_TYPES.stutter,
     });
 
-    const upload = buildSeqPatternUpload(state, {
-        patternIndex: 0,
-        authoritative: false,
-    });
+    const upload = buildSeqPatternContent(state, 0);
 
     assert.deepEqual(upload.activeSteps[1].slice(3, 6), [true, true, true]);
     assert.deepEqual(upload.triggerSteps[1].slice(3, 6), [true, false, false]);
@@ -457,10 +413,7 @@ test("changing_a_block_effect_updates_the_whole_block_and_remembers_each_effects
         effectType: SEQFX_EFFECT_TYPES.filter,
     });
 
-    const restoredUpload = buildSeqPatternUpload(state, {
-        patternIndex: 0,
-        authoritative: false,
-    });
+    const restoredUpload = buildSeqPatternContent(state, 0);
 
     assert.deepEqual(restoredUpload.activeSteps[1].slice(3, 6), [true, true, true]);
     assert.deepEqual(restoredUpload.triggerSteps[1].slice(3, 6), [true, false, false]);
@@ -613,7 +566,7 @@ test("adjacent_different_effect_steps_are_separate_blocks_even_without_a_second_
 test("default_seqfx_state_contains_twelve_complete_four_lane_patterns", () => {
     const state = createDefaultSeqFxState();
 
-    assert.equal(state.version, 7);
+    assert.equal(state.version, 8);
     assert.equal(state.patterns.length, SEQFX_PATTERN_COUNT);
 
     for (const pattern of state.patterns) {
@@ -632,13 +585,9 @@ test("default_seqfx_state_contains_twelve_complete_four_lane_patterns", () => {
         }
     }
 
-    const upload = buildSeqPatternUpload(state, {
-        patternIndex: 0,
-        authoritative: true,
-    });
+    const upload = buildSeqPatternContent(state, 0);
 
     assert.equal(upload.patternIndex, 0);
-    assert.equal(upload.authoritative, true);
     assert.equal(upload.activeSteps.length, SEQFX_LANE_COUNT);
     assert.equal(upload.activeSteps[0].length, SEQFX_STEP_COUNT);
     assert.equal(upload.params[0][0].length, SEQFX_PARAM_COUNT);
@@ -671,10 +620,7 @@ test("stutter_shape_and_gate_are_continuous_clamped_parameters", () => {
         value: 1.5,
     });
 
-    const upload = buildSeqPatternUpload(state, {
-        patternIndex: 0,
-        authoritative: true,
-    });
+    const upload = buildSeqPatternContent(state, 0);
 
     assert.deepEqual(
         upload.params[SEQFX_LANES.stutter].slice(4, 7).map((params) => params.slice(0, 4)),
@@ -694,7 +640,7 @@ test("stutter_shape_and_gate_are_continuous_clamped_parameters", () => {
     });
 
     assert.equal(
-        buildSeqPatternUpload(state, { patternIndex: 0, authoritative: true }).params[SEQFX_LANES.stutter][4][3],
+        buildSeqPatternContent(state, 0).params[SEQFX_LANES.stutter][4][3],
         0,
     );
 });
@@ -722,11 +668,8 @@ test("serializing_and_normalizing_seqfx_state_preserves_per_step_parameters", ()
         value: 7200,
     });
 
-    const restored = normalizeSeqFxState(JSON.parse(serializeSeqFxState(state)));
-    const upload = buildSeqPatternUpload(restored, {
-        patternIndex: 2,
-        authoritative: true,
-    });
+    const restored = parseStoredSeqFxState(JSON.parse(serializeSeqFxState(state)));
+    const upload = buildSeqPatternContent(restored, 2);
 
     assert.equal(restored.patterns[2].lanes[SEQFX_LANES.filter].steps[5].active, true);
     assert.equal(upload.params[SEQFX_LANES.filter][5][1], 240);
@@ -798,10 +741,7 @@ test("tape_stop_return_start_time_and_character_are_uploaded_to_the_whole_block"
         value: 0.8,
     });
 
-    const upload = buildSeqPatternUpload(state, {
-        patternIndex: 0,
-        authoritative: false,
-    });
+    const upload = buildSeqPatternContent(state, 0);
 
     assert.deepEqual(
         upload.params[SEQFX_LANES.tapeStop].slice(1, 3).map((params) => params[2]),
@@ -869,10 +809,7 @@ test("creating_a_seqfx_block_writes_one_trigger_and_continuation_steps", () => {
         length: 4,
     });
 
-    const upload = buildSeqPatternUpload(state, {
-        patternIndex: 0,
-        authoritative: false,
-    });
+    const upload = buildSeqPatternContent(state, 0);
 
     assert.deepEqual(upload.activeSteps[SEQFX_LANES.tapeStop].slice(0, 8), [
         false,
@@ -917,10 +854,7 @@ test("resizing_a_seqfx_block_preserves_one_trigger_and_clears_old_tail_cells", (
         length: 3,
     });
 
-    const upload = buildSeqPatternUpload(state, {
-        patternIndex: 0,
-        authoritative: false,
-    });
+    const upload = buildSeqPatternContent(state, 0);
 
     assert.deepEqual(upload.activeSteps[SEQFX_LANES.filter].slice(3, 10), [
         false,
@@ -958,10 +892,7 @@ test("block_parameter_edits_copy_settings_across_the_block_without_retriggering_
         value: 3,
     });
 
-    const upload = buildSeqPatternUpload(state, {
-        patternIndex: 0,
-        authoritative: false,
-    });
+    const upload = buildSeqPatternContent(state, 0);
 
     assert.deepEqual(upload.triggerSteps[SEQFX_LANES.tapeStop].slice(10, 13), [true, false, false]);
     assert.deepEqual(
@@ -984,10 +915,7 @@ test("deleting_a_seqfx_block_clears_all_active_and_trigger_steps_in_that_block",
         startStep: 6,
     });
 
-    const upload = buildSeqPatternUpload(state, {
-        patternIndex: 0,
-        authoritative: false,
-    });
+    const upload = buildSeqPatternContent(state, 0);
 
     assert.deepEqual(upload.activeSteps[SEQFX_LANES.filter].slice(6, 10), [false, false, false, false]);
     assert.deepEqual(upload.triggerSteps[SEQFX_LANES.filter].slice(6, 10), [false, false, false, false]);
@@ -1047,10 +975,7 @@ test("moving_a_seqfx_block_preserves_per_step_settings_and_clears_the_source", (
         targetStartStep: 8,
     });
 
-    const upload = buildSeqPatternUpload(state, {
-        patternIndex: 0,
-        authoritative: false,
-    });
+    const upload = buildSeqPatternContent(state, 0);
 
     assert.deepEqual(upload.activeSteps[SEQFX_LANES.filter].slice(2, 5), [false, false, false]);
     assert.deepEqual(upload.activeSteps[SEQFX_LANES.filter].slice(8, 11), [true, true, true]);
@@ -1105,10 +1030,7 @@ test("copying_a_seqfx_block_preserves_source_and_rejects_overlaps", () => {
         targetStartStep: 6,
     });
 
-    const upload = buildSeqPatternUpload(state, {
-        patternIndex: 0,
-        authoritative: false,
-    });
+    const upload = buildSeqPatternContent(state, 0);
 
     assert.deepEqual(upload.activeSteps[SEQFX_LANES.tapeStop].slice(1, 3), [true, true]);
     assert.deepEqual(upload.triggerSteps[SEQFX_LANES.tapeStop].slice(1, 3), [true, false]);
@@ -1277,10 +1199,7 @@ test("moving_a_seqfx_block_between_chains_preserves_effect_and_parameter_memory"
         targetStartStep: 6,
     });
 
-    const upload = buildSeqPatternUpload(state, {
-        patternIndex: 0,
-        authoritative: false,
-    });
+    const upload = buildSeqPatternContent(state, 0);
     const movedStep = state.patterns[0].lanes[2].steps[6];
 
     assert.deepEqual(upload.activeSteps[0].slice(2, 4), [false, false]);
@@ -1340,10 +1259,7 @@ test("copying_a_seqfx_block_between_chains_preserves_source_and_rejects_target_c
         targetStartStep: 10,
     });
 
-    const upload = buildSeqPatternUpload(state, {
-        patternIndex: 0,
-        authoritative: false,
-    });
+    const upload = buildSeqPatternContent(state, 0);
     assert.deepEqual(upload.activeSteps[0].slice(3, 5), [true, true]);
     assert.deepEqual(upload.activeSteps[1].slice(10, 12), [true, true]);
     assert.deepEqual(upload.effectTypes[1].slice(10, 12), [
@@ -1380,10 +1296,7 @@ test("copy_paint_across_chains_copies_once_and_reports_the_target_chain", () => 
 
     assert.equal(copyResult.copiedLane, 3);
     assert.deepEqual(copyResult.copiedStartSteps, [4]);
-    let upload = buildSeqPatternUpload(copyResult.state, {
-        patternIndex: 0,
-        authoritative: false,
-    });
+    let upload = buildSeqPatternContent(copyResult.state, 0);
     assert.equal(upload.activeSteps[1][4], true);
     assert.equal(upload.activeSteps[3][4], true);
     assert.equal(upload.effectTypes[3][4], SEQFX_EFFECT_TYPES.crusher);
@@ -1408,10 +1321,7 @@ test("copy_paint_across_chains_copies_once_and_reports_the_target_chain", () => 
     assert.equal(invalidResult.copiedLane, 3);
     assert.deepEqual(invalidResult.copiedStartSteps, []);
     assert.equal(serializeSeqFxState(invalidResult.state), serializedBeforeInvalidCopy);
-    upload = buildSeqPatternUpload(invalidResult.state, {
-        patternIndex: 0,
-        authoritative: false,
-    });
+    upload = buildSeqPatternContent(invalidResult.state, 0);
     assert.equal(upload.effectTypes[3][8], SEQFX_EFFECT_TYPES.stutter);
 });
 
@@ -1437,10 +1347,7 @@ test("copy_paint_fills_signed_delta_from_source_block_start", () => {
         startStep: 4,
         targetStartStep: 2,
     });
-    const upload = buildSeqPatternUpload(paintResult.state, {
-        patternIndex: 0,
-        authoritative: false,
-    });
+    const upload = buildSeqPatternContent(paintResult.state, 0);
 
     assert.deepEqual(paintResult.copiedStartSteps, [3, 2]);
     assert.deepEqual(upload.activeSteps[SEQFX_LANES.crusher].slice(0, 6), [false, false, true, true, true, false]);
@@ -1502,10 +1409,7 @@ test("cell_value_snapshots_paste_mix_and_params_without_changing_block_shape", (
         values: copiedValues,
     });
 
-    const upload = buildSeqPatternUpload(state, {
-        patternIndex: 0,
-        authoritative: false,
-    });
+    const upload = buildSeqPatternContent(state, 0);
 
     assert.deepEqual(upload.activeSteps[SEQFX_LANES.crusher].slice(0, 10), [
         false, false, true, false, false, true, false, false, true, false,
@@ -1534,10 +1438,7 @@ test("cell_value_snapshots_paste_mix_and_params_without_changing_block_shape", (
         steps: [1],
         values: copiedValues,
     });
-    const crossChainUpload = buildSeqPatternUpload(crossChainPaste, {
-        patternIndex: 0,
-        authoritative: false,
-    });
+    const crossChainUpload = buildSeqPatternContent(crossChainPaste, 0);
     assert.equal(crossChainUpload.effectTypes[SEQFX_LANES.filter][1], SEQFX_EFFECT_TYPES.crusher);
     assert.deepEqual(crossChainUpload.params[SEQFX_LANES.filter][1].slice(0, 3), [5, 7_000, 12]);
 
@@ -1572,10 +1473,7 @@ test("block_selection_edits_deletes_and_moves_active_blocks_only", () => {
         value: 5,
     });
 
-    let upload = buildSeqPatternUpload(state, {
-        patternIndex: 0,
-        authoritative: false,
-    });
+    let upload = buildSeqPatternContent(state, 0);
     assert.deepEqual(
         [1, 3, 6, 10].map((step) => upload.params[SEQFX_LANES.crusher][step][0]),
         [5, 5, 5, 8],
@@ -1591,10 +1489,7 @@ test("block_selection_edits_deletes_and_moves_active_blocks_only", () => {
     state = moveResult.state;
 
     assert.deepEqual(moveResult.movedStartSteps, [3, 5, 8]);
-    upload = buildSeqPatternUpload(state, {
-        patternIndex: 0,
-        authoritative: false,
-    });
+    upload = buildSeqPatternContent(state, 0);
     assert.deepEqual(upload.activeSteps[SEQFX_LANES.crusher].slice(0, 12), [
         false, false, false, true, false, true, false, false, true, false, true, false,
     ]);
@@ -1603,7 +1498,7 @@ test("block_selection_edits_deletes_and_moves_active_blocks_only", () => {
         [5, 5, 5, 8],
     );
 
-    const revisionBeforeNoOpMove = state.patterns[0].revision;
+    const serializedBeforeNoOpMove = serializeSeqFxState(state);
     const noOpMoveResult = applySeqFxBlockSelectionMove(state, {
         patternIndex: 0,
         lane: SEQFX_LANES.crusher,
@@ -1612,7 +1507,7 @@ test("block_selection_edits_deletes_and_moves_active_blocks_only", () => {
         targetAnchorStartStep: 5,
     });
     assert.deepEqual(noOpMoveResult.movedStartSteps, [3, 5, 8]);
-    assert.equal(noOpMoveResult.state.patterns[0].revision, revisionBeforeNoOpMove);
+    assert.equal(serializeSeqFxState(noOpMoveResult.state), serializedBeforeNoOpMove);
 
     assert.throws(
         () => applySeqFxBlockSelectionMove(state, {
@@ -1631,10 +1526,7 @@ test("block_selection_edits_deletes_and_moves_active_blocks_only", () => {
         blockStartSteps: [3, 5, 8],
     });
 
-    upload = buildSeqPatternUpload(state, {
-        patternIndex: 0,
-        authoritative: false,
-    });
+    upload = buildSeqPatternContent(state, 0);
     assert.deepEqual(upload.activeSteps[SEQFX_LANES.crusher].slice(0, 12), [
         false, false, false, false, false, false, false, false, false, false, true, false,
     ]);
@@ -1683,10 +1575,7 @@ test("block_selection_edits_moves_and_deletes_whole_multi_cell_blocks", () => {
         value: 444,
     });
 
-    let upload = buildSeqPatternUpload(state, {
-        patternIndex: 0,
-        authoritative: false,
-    });
+    let upload = buildSeqPatternContent(state, 0);
     assert.deepEqual(
         [1, 2, 5, 6, 7].map((step) => upload.params[SEQFX_LANES.filter][step][1]),
         [2222, 2222, 2222, 2222, 2222],
@@ -1722,10 +1611,7 @@ test("block_selection_edits_moves_and_deletes_whole_multi_cell_blocks", () => {
     state = moveResult.state;
     assert.deepEqual(moveResult.movedStartSteps, [10, 14]);
 
-    upload = buildSeqPatternUpload(state, {
-        patternIndex: 0,
-        authoritative: false,
-    });
+    upload = buildSeqPatternContent(state, 0);
     assert.deepEqual(upload.activeSteps[SEQFX_LANES.filter].slice(1, 8), [
         false, false, false, false, false, false, false,
     ]);
@@ -1749,10 +1635,7 @@ test("block_selection_edits_moves_and_deletes_whole_multi_cell_blocks", () => {
         lane: SEQFX_LANES.filter,
         blockStartSteps: [10, 14],
     });
-    upload = buildSeqPatternUpload(state, {
-        patternIndex: 0,
-        authoritative: false,
-    });
+    upload = buildSeqPatternContent(state, 0);
     assert.deepEqual(upload.activeSteps[SEQFX_LANES.filter].slice(10, 17), [
         false, false, false, false, false, false, false,
     ]);
@@ -1796,10 +1679,7 @@ test("block_selection_move_can_target_another_chain_without_losing_group_shape",
     assert.equal(moveResult.movedLane, 2);
     assert.deepEqual(moveResult.movedStartSteps, [10, 15]);
 
-    const upload = buildSeqPatternUpload(moveResult.state, {
-        patternIndex: 0,
-        authoritative: false,
-    });
+    const upload = buildSeqPatternContent(moveResult.state, 0);
     assert.deepEqual(upload.activeSteps[0].slice(1, 8), [false, false, false, false, false, false, false]);
     assert.deepEqual(upload.activeSteps[2].slice(10, 17), [true, true, false, false, false, true, false]);
     assert.deepEqual(upload.triggerSteps[2].slice(10, 17), [true, false, false, false, false, true, false]);
@@ -1865,10 +1745,7 @@ test("block_selection_copy_can_target_another_chain_and_leaves_invalid_targets_u
     assert.equal(copyResult.copiedLane, 3);
     assert.deepEqual(copyResult.copiedStartSteps, [16, 19]);
 
-    const upload = buildSeqPatternUpload(copyResult.state, {
-        patternIndex: 0,
-        authoritative: false,
-    });
+    const upload = buildSeqPatternContent(copyResult.state, 0);
     assert.deepEqual(upload.activeSteps[1].slice(2, 7), [true, false, false, true, true]);
     assert.deepEqual(upload.activeSteps[3].slice(16, 21), [true, false, false, true, true]);
     assert.equal(upload.effectTypes[3][16], SEQFX_EFFECT_TYPES.crusher);

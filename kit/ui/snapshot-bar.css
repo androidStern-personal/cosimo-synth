@@ -1,0 +1,22 @@
+.bk-snapshot-bar { position: relative; display: flex; align-items: center; gap: 4px; font-size: 11px; color: inherit; }
+.bk-snapshot-bar button {
+    font: inherit; color: inherit; height: 24px; border-radius: 4px; cursor: pointer; background: transparent;
+    border: 1px solid color-mix(in srgb, currentColor 35%, transparent);
+}
+.bk-snapshot-bar button:disabled { opacity: .4; cursor: default; }
+.bk-snapshot-bar button:focus-visible { outline: 2px solid var(--editor-accent-start, #d2fa6a); outline-offset: 1px; }
+.bk-snapshot-slot { position: relative; width: 24px; padding: 0; }
+.bk-snapshot-slot:not([data-filled]) { border-style: dashed; opacity: .6; }
+/* A filled slot carries a dot, so filled and empty differ without relying on color. */
+.bk-snapshot-slot[data-filled]::after {
+    content: ""; position: absolute; left: calc(50% - 2px); bottom: 2px; width: 4px; height: 4px; border-radius: 50%; background: currentColor;
+}
+.bk-snapshot-slot[aria-pressed="true"] {
+    opacity: 1; border-style: solid; border-color: var(--editor-accent-start, #d2fa6a);
+    background: var(--editor-accent-start, #d2fa6a); color: var(--editor-surface-bg, #181a1c);
+}
+.bk-snapshot-clear { padding: 0 8px; }
+.bk-snapshot-bar-error {
+    position: absolute; top: calc(100% + 4px); right: 0; z-index: 10; margin: 0; padding: 4px 8px; max-width: 320px;
+    border-radius: 4px; background: var(--editor-surface-bg, #181a1c); color: #fa9b91;
+}

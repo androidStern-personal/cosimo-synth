@@ -46,9 +46,9 @@ const pinnedSourceBuiltGenerator = Object.freeze({
 
 const fixedChildPath = "/usr/bin:/bin:/usr/sbin:/sbin";
 const inheritedChildEnvironmentNames = Object.freeze([
-    "COSIMO_CMAKE_JOBS",
+    "BUILDER_KIT_CMAKE_JOBS",
+    "BUILDER_KIT_PLUGIN_JOBS",
     "COSIMO_NOTARY_PROFILE",
-    "COSIMO_PLUGIN_JOBS",
     "CPM_SOURCE_CACHE",
     "HOME",
     "SOURCE_DATE_EPOCH",

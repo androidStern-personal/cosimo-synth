@@ -16,16 +16,16 @@ PRODUCTION_CMAKE_CALLERS = (
 )
 # Builds of the Cmajor tools themselves (need the fork's LLVM/boost submodules).
 TOOLCHAIN_CMAKE_CALLERS = (
-    "kit/tools/cmajor_runtime_build/CMakeLists.txt",
-    "kit/tools/cmajplugin_build/CMakeLists.txt",
+    "tools/cmajor_runtime_build/CMakeLists.txt",
+    "tools/cmajplugin_build/CMakeLists.txt",
     "tools/cmajor_external_codegen/CMakeLists.txt",
     "tools/cmajor_command_build/CMakeLists.txt",
 )
 DEPENDENCY_ENTRYPOINTS = (
-    "kit/cmake/CosimoDependencies.cmake",
+    "kit/cmake/dependencies.cmake",
     "kit/cmake/dependency-sources.cmake",
     "kit/fx/prod-effect.mjs",
-    "kit/scripts/build_cmajplugin_vst3.sh",
+    "kit/scripts/cmajplugin.mjs",
     "scripts/build_desktop_native.sh",
     "scripts/generate_cmajor_cpp_with_externals.sh",
     "scripts/generate_ios_auv3_xcode_project.sh",
@@ -46,16 +46,16 @@ def test_production_cmake_builds_use_the_shared_dependency_module() -> None:
     for relative_path in PRODUCTION_CMAKE_CALLERS:
         source = (REPO_ROOT / relative_path).read_text(encoding="utf-8")
 
-        assert "kit/cmake/CosimoDependencies.cmake" in source, relative_path
-        assert "cosimo_add_production_dependencies()" in source, relative_path
-        assert "cosimo_add_cmajor_toolchain_dependencies()" not in source, relative_path
+        assert "kit/cmake/dependencies.cmake" in source, relative_path
+        assert "builder_kit_dependencies()" in source, relative_path
+        assert "builder_kit_toolchain_dependencies()" not in source, relative_path
 
     for relative_path in TOOLCHAIN_CMAKE_CALLERS:
         source = (REPO_ROOT / relative_path).read_text(encoding="utf-8")
 
-        assert "kit/cmake/CosimoDependencies.cmake" in source, relative_path
-        assert "cosimo_add_cmajor_toolchain_dependencies()" in source, relative_path
-        assert "cosimo_add_production_dependencies()" not in source, relative_path
+        assert "kit/cmake/dependencies.cmake" in source, relative_path
+        assert "builder_kit_toolchain_dependencies()" in source, relative_path
+        assert "builder_kit_dependencies()" not in source, relative_path
 
 
 def _cpm_package_block(module: str, name: str) -> str:
@@ -64,9 +64,9 @@ def _cpm_package_block(module: str, name: str) -> str:
 
 
 def test_plugin_builds_fetch_only_the_choc_submodule_and_tool_builds_the_full_fork() -> None:
-    module = (REPO_ROOT / "kit/cmake/CosimoDependencies.cmake").read_text(encoding="utf-8")
-    production = _cpm_package_block(module, "cosimo_cmajor")
-    toolchain = _cpm_package_block(module, "cosimo_cmajor_toolchain")
+    module = (REPO_ROOT / "kit/cmake/dependencies.cmake").read_text(encoding="utf-8")
+    production = _cpm_package_block(module, "builder_kit_cmajor")
+    toolchain = _cpm_package_block(module, "builder_kit_cmajor_toolchain")
 
     # Customers have no GitHub SSH access: the plugin package must never pull
     # the fork's LLVM/boost/clap submodules, only CHOC.
@@ -75,9 +75,9 @@ def test_plugin_builds_fetch_only_the_choc_submodule_and_tool_builds_the_full_fo
     assert "GIT_SUBMODULES_RECURSE TRUE" in production
     assert "GIT_SUBMODULES_RECURSE TRUE" in toolchain
     # One pin for both packages.
-    assert f'set(COSIMO_CMAJOR_PINNED_COMMIT "{PRODUCTION_CMAJOR_COMMIT}")' in module
-    assert 'GIT_TAG "${COSIMO_CMAJOR_PINNED_COMMIT}"' in production
-    assert 'GIT_TAG "${COSIMO_CMAJOR_PINNED_COMMIT}"' in toolchain
+    assert f'set(BUILDER_KIT_CMAJOR_PINNED_COMMIT "{PRODUCTION_CMAJOR_COMMIT}")' in module
+    assert 'GIT_TAG "${BUILDER_KIT_CMAJOR_PINNED_COMMIT}"' in production
+    assert 'GIT_TAG "${BUILDER_KIT_CMAJOR_PINNED_COMMIT}"' in toolchain
 
 
 def test_dependency_entrypoints_have_no_second_source_resolver() -> None:
@@ -91,7 +91,7 @@ def test_dependency_entrypoints_have_no_second_source_resolver() -> None:
 
 
 def test_t26_runner_builds_against_research_juce_7_through_cpm() -> None:
-    module = (REPO_ROOT / "kit/cmake/CosimoDependencies.cmake").read_text(encoding="utf-8")
+    module = (REPO_ROOT / "kit/cmake/dependencies.cmake").read_text(encoding="utf-8")
     prototype_cmake = (
         REPO_ROOT / "tools/enhancer_wrapper_prototype/CMakeLists.txt"
     ).read_text(encoding="utf-8")
@@ -99,17 +99,18 @@ def test_t26_runner_builds_against_research_juce_7_through_cpm() -> None:
         encoding="utf-8"
     )
 
-    assert "cosimo_add_t26_research_juce" in module
-    assert "b08520c2de1771af3dfcbfbc0e0b6b0b5eb083b0" in module
-    assert "kit/cmake/CosimoDependencies.cmake" in prototype_cmake
-    assert "cosimo_add_t26_research_juce()" in prototype_cmake
+    # The research JUCE pin belongs to the prototype, not the shipped module.
+    assert "b08520c2de1771af3dfcbfbc0e0b6b0b5eb083b0" not in module
+    assert "kit/cmake/dependencies.cmake" in prototype_cmake
+    assert "NAME cosimo_t26_juce" in prototype_cmake
+    assert "b08520c2de1771af3dfcbfbc0e0b6b0b5eb083b0" in prototype_cmake
     assert '"cmake"' in runner
     assert '"--build"' in runner
     assert "git clone" not in runner
 
 
-PRODUCTION_CMAJOR_COMMIT = re.search(r'set\(COSIMO_CMAJOR_PINNED_COMMIT "([a-f0-9]+)"', (REPO_ROOT / "kit/cmake/CosimoDependencies.cmake").read_text()).group(1)
-PRODUCTION_CHOC_COMMIT = re.search(r'set\(COSIMO_CHOC_PINNED_COMMIT "([a-f0-9]+)"', (REPO_ROOT / "kit/cmake/CosimoDependencies.cmake").read_text()).group(1)
+PRODUCTION_CMAJOR_COMMIT = re.search(r'set\(BUILDER_KIT_CMAJOR_PINNED_COMMIT "([a-f0-9]+)"', (REPO_ROOT / "kit/cmake/dependencies.cmake").read_text()).group(1)
+PRODUCTION_CHOC_COMMIT = re.search(r'set\(BUILDER_KIT_CHOC_PINNED_COMMIT "([a-f0-9]+)"', (REPO_ROOT / "kit/cmake/dependencies.cmake").read_text()).group(1)
 PRODUCTION_JUCE_COMMIT = "501c07674e1ad693085a7e7c398f205c2677f5da"
 
 
@@ -121,30 +122,30 @@ def test_plain_cpm_module_resolves_the_production_dependency_graph(tmp_path: Pat
         f"""cmake_minimum_required(VERSION 3.16)
 project(CosimoPlainCpmProbe LANGUAGES NONE)
 
-include(\"{REPO_ROOT / 'kit' / 'cmake' / 'CosimoDependencies.cmake'}\")
-cosimo_add_production_dependencies()
+include(\"{REPO_ROOT / 'kit' / 'cmake' / 'dependencies.cmake'}\")
+builder_kit_dependencies()
 
 foreach(required_path
-    \"${{COSIMO_CMAJOR_SOURCE_DIR}}/include/cmajor/helpers/cmaj_Patch.h\"
-    \"${{COSIMO_CHOC_SOURCE_DIR}}/choc/gui/choc_WebView.h\"
-    \"${{COSIMO_JUCE_SOURCE_DIR}}/CMakeLists.txt\")
+    \"${{BUILDER_KIT_CMAJOR_SOURCE_DIR}}/include/cmajor/helpers/cmaj_Patch.h\"
+    \"${{BUILDER_KIT_CHOC_SOURCE_DIR}}/choc/gui/choc_WebView.h\"
+    \"${{BUILDER_KIT_JUCE_SOURCE_DIR}}/CMakeLists.txt\")
     if(NOT EXISTS \"${{required_path}}\")
         message(FATAL_ERROR \"Missing resolved dependency path: ${{required_path}}\")
     endif()
 endforeach()
 
 execute_process(
-    COMMAND git -C \"${{COSIMO_CMAJOR_SOURCE_DIR}}\" rev-parse HEAD
+    COMMAND git -C \"${{BUILDER_KIT_CMAJOR_SOURCE_DIR}}\" rev-parse HEAD
     OUTPUT_VARIABLE actual_cmajor_commit
     OUTPUT_STRIP_TRAILING_WHITESPACE
     COMMAND_ERROR_IS_FATAL ANY)
 execute_process(
-    COMMAND git -C \"${{COSIMO_CHOC_SOURCE_DIR}}\" rev-parse HEAD
+    COMMAND git -C \"${{BUILDER_KIT_CHOC_SOURCE_DIR}}\" rev-parse HEAD
     OUTPUT_VARIABLE actual_choc_commit
     OUTPUT_STRIP_TRAILING_WHITESPACE
     COMMAND_ERROR_IS_FATAL ANY)
 execute_process(
-    COMMAND git -C \"${{COSIMO_JUCE_SOURCE_DIR}}\" rev-parse HEAD
+    COMMAND git -C \"${{BUILDER_KIT_JUCE_SOURCE_DIR}}\" rev-parse HEAD
     OUTPUT_VARIABLE actual_juce_commit
     OUTPUT_STRIP_TRAILING_WHITESPACE
     COMMAND_ERROR_IS_FATAL ANY)

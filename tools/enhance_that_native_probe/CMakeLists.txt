@@ -6,9 +6,9 @@ if(NOT APPLE)
 endif()
 
 get_filename_component(COSIMO_REPO_ROOT "${CMAKE_CURRENT_LIST_DIR}/../.." ABSOLUTE)
-include("${COSIMO_REPO_ROOT}/kit/cmake/CosimoDependencies.cmake")
-cosimo_add_juce_dependency()
-add_subdirectory("${COSIMO_JUCE_SOURCE_DIR}" juce)
+include("${COSIMO_REPO_ROOT}/kit/cmake/dependencies.cmake")
+builder_kit_juce_dependency()
+add_subdirectory("${BUILDER_KIT_JUCE_SOURCE_DIR}" juce)
 
 # Independent host executable. Never link or regenerate the product target.
 add_executable(enhance_that_vst3_probe main.cpp)

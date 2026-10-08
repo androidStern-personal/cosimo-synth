@@ -825,9 +825,9 @@ def test_pinned_cmajor_runtime_splits_audio_inputs_into_host_buses(tmp_path: Pat
     (source_dir / "CMakeLists.txt").write_text(
         f"""cmake_minimum_required(VERSION 3.16)
 project(CosimoSplitInputProbe LANGUAGES NONE)
-include(\"{ROOT / 'kit' / 'cmake' / 'CosimoDependencies.cmake'}\")
-cosimo_add_production_dependencies()
-file(READ \"${{COSIMO_CMAJOR_SOURCE_DIR}}/include/cmajor/helpers/cmaj_JUCEPlugin.h\" header)
+include(\"{ROOT / 'kit' / 'cmake' / 'dependencies.cmake'}\")
+builder_kit_dependencies()
+file(READ \"${{BUILDER_KIT_CMAJOR_SOURCE_DIR}}/include/cmajor/helpers/cmaj_JUCEPlugin.h\" header)
 foreach(marker
     \"COSIMO_CMAJOR_JUCE_PLUGIN_SPLIT_INPUT_BUSES\"
     \"addInputEndpointBuses\"

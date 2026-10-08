@@ -1,5 +1,5 @@
 /**
- * The Auto-preview engine (T12): connects the user-edit stream to the pure
+ * The Auto-preview engine: connects the user-edit stream to the pure
  * retrigger scheduler and drives the preview callbacks.
  *
  * Responsibilities (the behavioral contract, pinned by

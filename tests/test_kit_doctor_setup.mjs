@@ -7,7 +7,7 @@ import { chmod, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises
 import os from "node:os";
 import path from "node:path";
 
-import { exportKit } from "../kit/scripts/export_kit.mjs";
+import { exportKit } from "../scripts/export_kit.mjs";
 import { collectDoctorReport, formatDoctorReport, parseDoctorArguments } from "../kit/scripts/doctor.mjs";
 import {
     downloadVerifiedArtifact,
@@ -55,6 +55,9 @@ async function withFixtureRoot(run, { cmajSha256 = "", cmajPluginSha256 = "", ba
 }
 
 const silentLog = () => {};
+// Setup refuses machines outside toolchain.requirements; installing tests
+// describe a supported Mac so they run on any CI host.
+const supportedMachine = Object.freeze({ os: "macOS", arch: "arm64", macOSVersion: "15.0" });
 
 // Produce real archive receipts for tests starting with an installed tool.
 async function installFixtureTool(root, key) {
@@ -70,7 +73,7 @@ async function installFixtureTool(root, key) {
     const bytes = await readFile(archivePath);
     tool.sha256 = sha256(bytes);
     await writeFile(contractPath, JSON.stringify(toolchain));
-    await installArtifact({ key, artifact: tool.artifact, bytes, pin: tool.sha256, localPath, platform: "linux" });
+    await installArtifact({ key, artifact: tool.artifact, bytes, pin: tool.sha256, localPath });
 }
 
 test("doctor_json_report_has_the_documented_shape_for_this_repo", () => {
@@ -91,7 +94,7 @@ test("doctor_json_report_has_the_documented_shape_for_this_repo", () => {
     assert.equal(report.kit.schemaVersions.plugin, 1);
     assert.equal(report.kit.productOwner.present, true);
     assert.equal(report.kit.productOwner.placeholder, false, "the monorepo owner file is not the template placeholder");
-    assert.ok(report.registry.configs.every((config) => config.kind === "plugin" && config.supported === true), JSON.stringify(report.registry.configs));
+    assert.deepEqual(report.registry.errors, []);
     assert.deepEqual(Object.keys(report.tools).sort(), ["cmake", "compiler", "git", "node", "npm", "xcodeCommandLineTools"]);
     assert.equal(report.tools.node.present, true);
     assert.equal(report.tools.node.required, ">=22");
@@ -103,7 +106,7 @@ test("doctor_json_report_has_the_documented_shape_for_this_repo", () => {
     assert.ok(["missing", "current", "stale", "unpinned"].includes(report.toolchain.cmaj.status));
     assert.equal(report.toolchain.cmaj.relativePath, "build/kit-tools/cmaj");
     assert.equal(report.feed.checked, false, "the monorepo feed is empty, so nothing is probed");
-    assert.equal(report.registry.ok, true, report.registry.error);
+    assert.equal(report.registry.ok, true, report.registry.errors.join("\n"));
     assert.ok(report.registry.targets.some((target) => target.alias === "enhancer-lite"));
     for (const target of report.registry.targets)
         assert.match(target.patch, /^fx\/[^/]+\/[^/]+\.cmajorpatch$/u);
@@ -146,7 +149,7 @@ test("doctor_reports_missing_contracts_and_tools_without_throwing", async () => 
         assert.equal(report.platform.archOk, true);
         assert.equal(report.toolchain.cmaj.status, "missing");
         assert.equal(report.toolchain.cmajPlugin.status, "missing");
-        assert.equal(report.registry.ok, false, "no kit/fx/build-effect.mjs in the fixture");
+        assert.deepEqual(report.registry, { ok: true, errors: [], targets: [] }, "a project without fx/ has no plugins yet");
         assert.ok(report.problems.some((problem) => problem.includes("cmaj at build/kit-tools/cmaj is missing")));
         assert.equal(report.ok, false);
 
@@ -177,7 +180,7 @@ test("doctor rejects system Node/npm/CMake when an installer-owned runtime shoul
     });
 });
 
-test("doctor probes a required feed object, rejects denied access, and redacts diagnostics", async () => {
+test("doctor probes a required feed object, rejects denied access, and keeps the feed URL out of diagnostics", async () => {
     const capability = "SENTINEL-CAPABILITY-DOCTOR-DO-NOT-LOG";
     await withFixtureRoot(async (root) => {
         const calls = [];
@@ -207,10 +210,26 @@ test("doctor probes a required feed object, rejects denied access, and redacts d
             fetchImpl: async () => { throw new Error(`request failed for ${capability}`); },
         });
         assert.equal(down.feed.reachable, false);
-        assert.ok(down.problems.some((problem) => problem.includes("not reachable")));
+        assert.ok(down.problems.some((problem) => problem.includes("not reachable: request failed (network error)")));
         assert.equal(JSON.stringify(down).includes(capability), false);
         assert.equal(formatDoctorReport(down).includes(capability), false);
     }, { baseUrl: `https://feed.example/${capability}/` });
+});
+
+test("with every tool current an unreachable feed is a warning, so strict passes offline", async () => {
+    const cmajBytes = Buffer.from("#!/bin/sh\necho current cmaj\n");
+    await withFixtureRoot(async (root) => {
+        await mkdir(path.join(root, "build/kit-tools/CmajPlugin.vst3"), { recursive: true });
+        await writeFile(path.join(root, "build/kit-tools/cmaj"), cmajBytes);
+        await installFixtureTool(root, "cmaj");
+        await installFixtureTool(root, "cmajPlugin");
+        const offlineError = Object.assign(new Error("fetch failed"), { cause: { code: "ENOTFOUND" } });
+        const report = await collectDoctorReport({ root, platform: "darwin", arch: "arm64", fetchImpl: async () => { throw offlineError; } });
+
+        assert.equal(report.feed.reachable, false);
+        assert.equal(report.problems.some((problem) => problem.includes("feed")), false, report.problems.join("\n"));
+        assert.ok(report.warnings.includes("The kit feed is not reachable: request failed (ENOTFOUND). Check the internet connection; if it persists, contact support."));
+    }, { baseUrl: "https://feed.example/kit" });
 });
 
 test("malformed feed JSON cannot disclose its source text through parser diagnostics", async () => {
@@ -235,7 +254,7 @@ test("setup_refuses_to_download_when_the_hash_pin_is_empty", async () => {
 
         let fetched = false;
         await assert.rejects(
-            runSetup({ root, acceptJuceTerms: true, log: silentLog, fetchImpl: async () => { fetched = true; } }),
+            runSetup({ root, acceptJuceTerms: true, machine: supportedMachine, log: silentLog, fetchImpl: async () => { fetched = true; } }),
             /carries no sha256 for cmaj/u,
         );
         assert.equal(fetched, false, "no network before the refusal");
@@ -254,6 +273,29 @@ test("setup_refuses_to_download_when_the_hash_pin_is_empty", async () => {
     assert.match(setupCliRun.stdout, /juce\.com\/legal\/juce-9-licence/u);
     assert.match(setupCliRun.stdout, /cmaj: REFUSE - kit\/toolchain\.json carries no sha256/u);
     assert.match(setupCliRun.stdout, /Dry run: nothing was written/u);
+});
+
+test("setup refuses a machine outside the toolchain requirements before any download", async () => {
+    await withFixtureRoot(async (root) => {
+        for (const [machine, problem] of [
+            [{ os: "Linux", arch: "x64", macOSVersion: null }, "This machine runs Linux/x64; the kit targets macOS/arm64."],
+            [{ os: "macOS", arch: "x64", macOSVersion: "15.1" }, "This machine is x64; the kit targets arm64."],
+            [{ os: "macOS", arch: "arm64", macOSVersion: "14.6" }, "macOS 14.6 is older than the required 15.0."],
+        ]) {
+            let fetched = false;
+            await assert.rejects(
+                runSetup({ root, acceptJuceTerms: true, machine, log: silentLog, fetchImpl: async () => { fetched = true; } }),
+                { message: `${problem} The pinned cmaj and CmajPlugin.vst3 need macOS 15.0 or newer on arm64; run kit:setup on a machine that meets this. Nothing was downloaded.` },
+            );
+            assert.equal(fetched, false);
+            assert.equal(readJuceAcknowledgment(root), null, "a refused run records nothing");
+        }
+
+        const preview = [];
+        const dry = await runSetup({ root, dryRun: true, machine: { os: "Linux", arch: "x64", macOSVersion: null }, log: (line) => preview.push(line) });
+        assert.equal(dry.dryRun, true, "a dry run previews the refusal instead of failing");
+        assert.match(preview.join("\n"), /^Platform: REFUSE - This machine runs Linux\/x64/mu);
+    }, { cmajSha256: "a".repeat(64), cmajPluginSha256: "b".repeat(64), baseUrl: "https://feed.example/kit" });
 });
 
 test("setup diagnostics never disclose the feed capability", async () => {
@@ -289,6 +331,7 @@ test("setup diagnostics never disclose the feed capability", async () => {
         const success = await runSetup({
             root,
             acceptJuceTerms: true,
+            machine: supportedMachine,
             log: (line) => successLog.push(line),
         });
         assert.equal(successLog.join("\n").includes(capability), false);
@@ -368,7 +411,7 @@ test("setup_skips_a_local_tool_that_already_matches_its_pin", async () => {
         assert.equal(plugin.kind, "directory");
 
         let fetched = false;
-        const result = await runSetup({ root, acceptJuceTerms: true, log: silentLog, fetchImpl: async () => { fetched = true; } });
+        const result = await runSetup({ root, acceptJuceTerms: true, machine: supportedMachine, log: silentLog, fetchImpl: async () => { fetched = true; } });
         assert.equal(fetched, false);
         assert.deepEqual(result.skipped, ["cmaj", "cmajPlugin"]);
         assert.deepEqual(result.installed, []);
@@ -378,8 +421,7 @@ test("setup_skips_a_local_tool_that_already_matches_its_pin", async () => {
         await writeFile(`${pluginPath}.receipt.json`, JSON.stringify({ artifactSha256: "d".repeat(64) }));
         const stalePlan = await planSetup({ root });
         assert.deepEqual(stalePlan.tools.map((step) => step.action), ["skip", "download"]);
-        assert.equal(String(stalePlan.tools[1].request), "[REDACTED]");
-        assert.equal(JSON.stringify(stalePlan).includes("https://feed.example/kit"), false);
+        assert.equal(JSON.stringify(stalePlan).includes("https://feed.example/kit"), false, "the plan names artifacts, never the feed URL");
         const forcedPlan = await planSetup({ root, force: true });
         assert.deepEqual(forcedPlan.tools.map((step) => step.action), ["download", "download"]);
     }, { cmajSha256: sha256(cmajBytes), cmajPluginSha256: pluginArtifactSha256, baseUrl: "https://feed.example/kit/" });
@@ -416,7 +458,7 @@ test("setup_verifies_the_download_hash_and_installs_from_the_archive", async () 
                 root,
                 acceptJuceTerms: true,
                 log: silentLog,
-                platform: "linux",
+                machine: supportedMachine,
                 fetchImpl: async (url) => { requested.push(url); return { ok: true, status: 200, arrayBuffer: async () => archiveBytes }; },
             });
 
@@ -439,14 +481,14 @@ test("setup_verifies_the_download_hash_and_installs_from_the_archive", async () 
             assert.equal(inspection.matchedBy, "archive-and-payload");
 
             // Second run: idempotent, no network.
-            const again = await runSetup({ root, log: silentLog, fetchImpl: async () => { throw new Error("must not fetch"); } });
+            const again = await runSetup({ root, machine: supportedMachine, log: silentLog, fetchImpl: async () => { throw new Error("must not fetch"); } });
             assert.deepEqual(again.installed, []);
             assert.deepEqual(again.skipped, ["cmaj", "cmajPlugin"]);
         }, { cmajSha256: pin, cmajPluginSha256: pluginPin, baseUrl: "https://feed.example/kit" });
 
         // A sole archive entry installs under whatever name localPath uses.
         const renamedTarget = path.join(scratch, "install/other-name");
-        await installArtifact({ key: "cmaj", artifact: "tools/other.tar.gz", bytes: archiveBytes, pin, localPath: renamedTarget, platform: "linux" });
+        await installArtifact({ key: "cmaj", artifact: "tools/other.tar.gz", bytes: archiveBytes, pin, localPath: renamedTarget });
         assert.equal(await readFile(renamedTarget, "utf8"), "#!/bin/sh\necho cmaj from archive\n");
         assert.equal(JSON.parse(await readFile(`${renamedTarget}.receipt.json`, "utf8")).artifactSha256, pin);
     } finally {
@@ -504,7 +546,7 @@ test("fresh exported customers can setup and default-install the prebuilt plugin
             await runSetup({
                 root,
                 acceptJuceTerms: true,
-                platform: "linux",
+                machine: supportedMachine,
                 log: (line) => logs.push(line),
                 fetchImpl: async (url) => {
                     requests.push(url);
@@ -526,8 +568,8 @@ test("fresh exported customers can setup and default-install the prebuilt plugin
         await writeFile(fakeCodesign, "#!/bin/sh\nexit 0\n");
         await chmod(fakeCodesign, 0o755);
         const install = spawnSync(
-            path.join(current.root, "kit/scripts/install_cmajplugin_vst3.sh"),
-            [],
+            process.execPath,
+            [path.join(current.root, "kit/scripts/cmajplugin.mjs"), "install"],
             {
                 cwd: current.root,
                 env: { ...process.env, HOME: installHome, PATH: `${fakeBin}:${process.env.PATH}` },
@@ -535,7 +577,7 @@ test("fresh exported customers can setup and default-install the prebuilt plugin
             },
         );
         assert.equal(install.status, 0, install.stderr);
-        assert.match(install.stdout, /Installed patched CmajPlugin VST3:/u);
+        assert.match(install.stdout, /Installed CmajPlugin\.vst3:/u);
         const installedBinary = path.join(installHome, "Library/Audio/Plug-Ins/VST3/CmajPlugin.vst3/Contents/MacOS/CmajPlugin");
         assert.deepEqual(
             await readFile(installedBinary),
@@ -570,15 +612,18 @@ test("juce_acknowledgment_round_trips_and_gates_setup", async () => {
             "Read the JUCE licensing notice above. If you agree, run this command from your Builder Kit project folder:",
             "npm run kit:setup -- --accept-juce-terms",
         ].join("\n");
-        const planBeforeConsent = await planSetup({ root });
-        assert.equal(formatSetupPlan(planBeforeConsent).split("\n").slice(0, 2).join("\n"), instructions);
-        await assert.rejects(runSetup({ root, log: silentLog }), { message: instructions });
+        const planBeforeConsent = await planSetup({ root, machine: supportedMachine });
+        assert.match(formatSetupPlan(planBeforeConsent), /^JUCE terms: not acknowledged yet$/mu);
+        assert.equal(formatSetupPlan(planBeforeConsent).includes(instructions), false, "the plan leaves the instruction to the refusal");
+        const refusalLog = [];
+        await assert.rejects(runSetup({ root, machine: supportedMachine, log: (line) => refusalLog.push(line) }), { message: instructions });
+        assert.equal(refusalLog.join("\n").includes(instructions), false, "the instruction prints once, as the error");
         assert.equal(readJuceAcknowledgment(root), null);
 
         const preview = [];
-        const dry = await runSetup({ root, dryRun: true, log: (line) => preview.push(line) });
+        const dry = await runSetup({ root, dryRun: true, machine: supportedMachine, log: (line) => preview.push(line) });
         assert.equal(dry.dryRun, true);
-        assert.ok(preview.join("\n").includes(`\n${instructions}\n`), "preview includes the complete standalone copy-paste command");
+        assert.equal(preview.join("\n").split(instructions).length, 2, "preview includes the complete copy-paste command exactly once");
         assert.ok(preview.join("\n").indexOf("JUCE licensing notice") < preview.join("\n").indexOf(instructions));
         assert.equal(readJuceAcknowledgment(root), null, "dry runs never record acknowledgment");
 
@@ -605,6 +650,7 @@ test("juce_acknowledgment_round_trips_and_gates_setup", async () => {
         const accepted = await runSetup({
             root,
             acceptJuceTerms: true,
+            machine: supportedMachine,
             log: silentLog,
             now: () => later,
             fetchImpl: async () => { throw new Error("must not fetch"); },

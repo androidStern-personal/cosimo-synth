@@ -55,15 +55,16 @@ try {
     sitesBuildFailure = cause;
 } finally {
     try {
-        // web:build writes the generated desktop bundle in place. Restore the
-        // checked-in ordinary production artifact after dist has captured the
-        // Sites-specific build, including when the Sites build fails.
-        run("npm", ["run", "ui:desktop:build"], ordinaryBuildEnvironment);
+        // web:build writes the generated desktop bundle in place and fills
+        // build/web. Rebuild both as the ordinary production build after dist
+        // has captured the Sites-specific build, including when the Sites
+        // build fails, so no later proof runs with Developer Settings.
+        run("npm", ["run", "web:build"], ordinaryBuildEnvironment);
     } catch (restoreCause) {
         if (sitesBuildFailure) {
             throw new AggregateError(
                 [sitesBuildFailure, restoreCause],
-                "Sites build and ordinary desktop-bundle restore both failed.",
+                "Sites build and ordinary web-build restore both failed.",
             );
         }
         throw restoreCause;

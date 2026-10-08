@@ -2,14 +2,6 @@ export const MSEG_BODY_SAMPLES = 2048;
 export const MSEG_PADDED_SAMPLES = MSEG_BODY_SAMPLES + 3;
 export const MSEG_CURVE_POWER_LIMIT = 20;
 export const MSEG_DEFAULT_NAME = "MSEG 1";
-export const MSEG_DEFAULT_DEPTH = 1.0;
-export const MSEG_RATE_MIN_SECONDS = 0.0;
-export const MSEG_RATE_MAX_SECONDS = 2.0;
-export const MSEG_RATE_KIND_SECONDS = 0;
-export const MSEG_RATE_KIND_TEMPO = 1;
-export const MSEG_NOTE_OFF_POLICY_FINISH_LOOP = 0;
-export const MSEG_NOTE_OFF_POLICY_IMMEDIATE = 1;
-export const MSEG_NOTE_OFF_POLICY_IGNORE = 2;
 export const MSEG_POINT_HIT_RADIUS_PX = 22;
 export const MSEG_SEGMENT_HIT_RADIUS_PX = 14;
 export const MSEG_POINT_RADIUS_PX = 8;
@@ -85,35 +77,6 @@ export type MsegShape = {
     points: MsegPoint[];
 };
 
-export type MsegPlaybackLoop = {
-    startX: number;
-    endX: number;
-};
-
-export type MsegPlayback = {
-    format: "mseg.playback";
-    version: 1;
-    rate: {
-        kind: "seconds";
-        seconds: number;
-    };
-    loop: MsegPlaybackLoop | null;
-    noteOffPolicy: "finish_loop" | "immediate" | "ignore";
-    legatoRestarts: boolean;
-    holdFinalValue: boolean;
-};
-
-export type MsegPlaybackConfigEvent = {
-    seconds: number;
-    holdFinalValue: boolean;
-    rateKind: number;
-    loopEnabled: boolean;
-    loopStart: number;
-    loopEnd: number;
-    noteOffPolicy: number;
-    legatoRestarts: boolean;
-};
-
 function objectFields(value: unknown): Record<string, unknown> {
     // SAFETY: this refines only property access on an object, never a domain value.
     return value !== null && typeof value === "object" ? value as Record<string, unknown> : {};
@@ -184,34 +147,6 @@ export function createDefaultMsegShape(name = MSEG_DEFAULT_NAME): MsegShape {
             { x: 1.0, y: 1.0, curvePower: 0.0 },
         ],
     };
-}
-
-export function createDefaultMsegPlayback(): MsegPlayback {
-    return {
-        format: "mseg.playback",
-        version: 1,
-        rate: {
-            kind: "seconds",
-            seconds: 1.0,
-        },
-        loop: { startX: 0.0, endX: 1.0 },
-        noteOffPolicy: "finish_loop",
-        legatoRestarts: false,
-        holdFinalValue: true,
-    };
-}
-
-export function clampMsegDepth(value: number) {
-    return clamp(Number.isFinite(value) ? value : 0.0, -1.0, 1.0);
-}
-
-export function clampMsegRateSeconds(value: number) {
-    const numericValue = Number(value);
-    return clamp(
-        Number.isFinite(numericValue) ? numericValue : 1.0,
-        MSEG_RATE_MIN_SECONDS,
-        MSEG_RATE_MAX_SECONDS,
-    );
 }
 
 export function createMsegEditorMetrics(
@@ -301,52 +236,6 @@ export function msegEditorCoordinatesToPoint(
     };
 }
 
-function normalizeMsegLoop(loop: unknown): MsegPlaybackLoop | null {
-    if (!loop || typeof loop !== "object") {
-        return null;
-    }
-
-    const nextLoop = objectFields(loop);
-    const startX = clamp01(Number(nextLoop.startX));
-    const endX = clamp01(Number(nextLoop.endX));
-
-    if (almostEqual(startX, endX)) {
-        return null;
-    }
-
-    if (endX < startX) {
-        return {
-            startX: endX,
-            endX: startX,
-        };
-    }
-
-    return { startX, endX };
-}
-
-export function normalizeMsegPlayback(playback: unknown = createDefaultMsegPlayback()): MsegPlayback {
-    const next = objectFields(playback);
-    const rate = objectFields(next.rate);
-    const seconds = Number(rate.seconds);
-    const noteOffPolicyCandidate = next.noteOffPolicy;
-    const noteOffPolicy = (noteOffPolicyCandidate === "finish_loop" || noteOffPolicyCandidate === "immediate" || noteOffPolicyCandidate === "ignore")
-        ? noteOffPolicyCandidate
-        : "finish_loop";
-
-    return {
-        format: "mseg.playback",
-        version: 1,
-        rate: {
-            kind: "seconds",
-            seconds: clampMsegRateSeconds(Number.isFinite(seconds) ? seconds : 1.0),
-        },
-        loop: normalizeMsegLoop(next.loop),
-        noteOffPolicy,
-        legatoRestarts: Boolean(next.legatoRestarts),
-        holdFinalValue: next.holdFinalValue !== false,
-    };
-}
-
 function normalizePoint(point: unknown, pointIndex: number, pointCount: number): MsegPoint {
     const nextPoint = objectFields(point);
     let x = Number(nextPoint.x);
@@ -393,43 +282,6 @@ export function normalizeMsegShape(shape: unknown = createDefaultMsegShape()): M
         globalSmooth: Boolean(next.globalSmooth),
         points,
     };
-}
-
-export function serializeMsegShape(shape: unknown) {
-    return JSON.stringify(normalizeMsegShape(shape));
-}
-
-export function deserializeMsegShape(value: unknown): MsegShape {
-    if (typeof value !== "string" || !value.trim()) {
-        return createDefaultMsegShape();
-    }
-
-    try {
-        return normalizeMsegShape(JSON.parse(value));
-    } catch {
-        return createDefaultMsegShape();
-    }
-}
-
-export function serializeMsegPlayback(playback: unknown) {
-    return JSON.stringify(normalizeMsegPlayback(playback));
-}
-
-export function deserializeMsegPlayback(value: unknown): MsegPlayback {
-    if (typeof value !== "string" || !value.trim()) {
-        return createDefaultMsegPlayback();
-    }
-
-    try {
-        return normalizeMsegPlayback(JSON.parse(value));
-    } catch {
-        return createDefaultMsegPlayback();
-    }
-}
-
-export function deserializeMsegDepth(value: unknown) {
-    const numericValue = Number(value);
-    return clampMsegDepth(Number.isFinite(numericValue) ? numericValue : MSEG_DEFAULT_DEPTH);
 }
 
 function powerScale(value: number, power: number) {
@@ -635,14 +487,6 @@ export function evaluateMsegShape(shape: unknown, x: number) {
     return evaluateNormalizedMsegShape(normalizeMsegShape(shape).points, x);
 }
 
-function catmullRom(p0: number, p1: number, p2: number, p3: number, t: number) {
-    return p1 + (0.5 * t * (
-        (p2 - p0) + (t * (
-            ((2.0 * p0) - (5.0 * p1) + (4.0 * p2) - p3) + (t * (-p0 + (3.0 * p1) - (3.0 * p2) + p3))
-        ))
-    ));
-}
-
 export function renderMsegShape(shape: unknown) {
     const padded = new Float32Array(MSEG_PADDED_SAMPLES);
     renderMsegShapeInto(shape, padded);
@@ -662,24 +506,6 @@ export function renderMsegShapeInto(shape: unknown, padded: Float32Array): void 
     padded[0] = padded[1];
     padded[MSEG_BODY_SAMPLES + 1] = padded[MSEG_BODY_SAMPLES];
     padded[MSEG_BODY_SAMPLES + 2] = padded[MSEG_BODY_SAMPLES];
-}
-
-export function sampleRenderedMsegBuffer(paddedBuffer: Float32Array, x: number) {
-    if (!(paddedBuffer instanceof Float32Array) || paddedBuffer.length !== MSEG_PADDED_SAMPLES) {
-        throw new Error(`Rendered MSEG buffers must be a Float32Array with ${MSEG_PADDED_SAMPLES} samples`);
-    }
-
-    const clampedX = clamp01(Number(x));
-    const scaled = clampedX * (MSEG_BODY_SAMPLES - 1);
-    const sampleIndex = Math.floor(scaled);
-    const fractional = scaled - sampleIndex;
-    return catmullRom(
-        paddedBuffer[sampleIndex],
-        paddedBuffer[sampleIndex + 1],
-        paddedBuffer[sampleIndex + 2],
-        paddedBuffer[sampleIndex + 3],
-        fractional,
-    );
 }
 
 export function findMsegPointHitIndex(
@@ -828,34 +654,6 @@ export function deriveMsegSegmentCurvePower(
     }
 
     return clampCurvePower((low + high) * 0.5);
-}
-
-export function toMsegPlaybackConfigEvent(playback: unknown): MsegPlaybackConfigEvent {
-    const normalizedPlayback = normalizeMsegPlayback(playback);
-
-    return {
-        seconds: normalizedPlayback.rate.seconds,
-        holdFinalValue: normalizedPlayback.holdFinalValue,
-        rateKind: MSEG_RATE_KIND_SECONDS,
-        loopEnabled: normalizedPlayback.loop !== null,
-        loopStart: normalizedPlayback.loop?.startX ?? 0.0,
-        loopEnd: normalizedPlayback.loop?.endX ?? 0.0,
-        noteOffPolicy:
-            normalizedPlayback.noteOffPolicy === "immediate"
-                ? MSEG_NOTE_OFF_POLICY_IMMEDIATE
-                : normalizedPlayback.noteOffPolicy === "ignore"
-                    ? MSEG_NOTE_OFF_POLICY_IGNORE
-                    : MSEG_NOTE_OFF_POLICY_FINISH_LOOP,
-        legatoRestarts: normalizedPlayback.legatoRestarts,
-    };
-}
-
-export function msegShapesEqual(left: unknown, right: unknown) {
-    return serializeMsegShape(left) === serializeMsegShape(right);
-}
-
-export function msegPlaybacksEqual(left: unknown, right: unknown) {
-    return serializeMsegPlayback(left) === serializeMsegPlayback(right);
 }
 
 export function addMsegPoint(shape: unknown, x: number, y: number) {

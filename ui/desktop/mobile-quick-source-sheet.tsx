@@ -1,5 +1,5 @@
 /**
- * T13: the iOS-style quick-editor sheet for the selected modulation source.
+ * The iOS-style quick-editor sheet for the selected modulation source.
  * It floats over the CURRENT Voice/FX workspace (never a navigation), opens at
  * a compact ~quarter-height detent, snaps to ~half on an upward grab-rail
  * drag, transitions into the existing full-screen editor when dragged all the
@@ -21,11 +21,10 @@ import {
     useRef,
     useState,
     type PointerEvent as ReactPointerEvent,
+    type ReactNode,
 } from "react";
 
-import type { ReactNode } from "react";
-
-import { useParameterGesture } from "../shared/parameter-gesture";
+import { useParameterGesture } from "../../kit/ui/parameter-gesture";
 import {
     ParameterReadoutStrip,
     type ReadoutCellSpec,
@@ -169,7 +168,7 @@ export type MobileQuickSourceSheetProps = {
     readonly resolveScrollLockTargets?: () => ReadonlyArray<HTMLElement>;
     readonly onRequestHaptic?: () => void;
     /** The REAL editable MSEG surface, composed by the shell with the same
-        handlers the full editor uses (T14 direction: the compact graph is
+        handlers the full editor uses (the compact graph is
         directly point-editable; structural precision stays in the full
         editor). null while the slot has no state. */
     readonly msegSurface: ReactNode | null;

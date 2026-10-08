@@ -1,5 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { isDeepStrictEqual } from "node:util";
 
 import {
     normalizeArticulationEditorState,
@@ -19,6 +20,7 @@ import {
     clearHarnessDebugLog,
     getHarnessRenderedState,
     getHarnessSnapshot,
+    openDeveloperSettingsFromPresetBar,
     getKeyboardDebug,
     setHarnessRuntimeState,
     startStaticRepoServer,
@@ -26,17 +28,12 @@ import {
     waitForHarnessReady,
     TEST_SAMPLES_PER_FRAME,
     MSEG_PREVIEW_HORIZONTAL_PADDING_PX,
-    EFFECT_PRESETS_V2_STATE_KEY,
-    SYNTH_PRESET_EFFECT_ID,
     ARTICULATION_STATE_KEY,
-    RETIRED_SYNTH_LOCAL_DIRTY_STATE_KEY,
     expectedMsegPreviewProgressClipWidth,
     buildShortMidi,
     readStoredModulationState,
     readStoredArticulationEditorState,
     editorBankToStoredArticulations,
-    readEffectPresetState,
-    containsRetiredSynthPresetBaselineKey,
     readStoredMsegShape,
     readStoredMsegPlayback,
     readStoredRouteAmount,
@@ -69,9 +66,6 @@ import {
     waitForPageValue,
     waitForReactFrames,
     readVisibleHarnessParameterEndpointIDs,
-    clickPresetBarAction,
-    saveSynthPresetAs,
-    waitForPresetBarDirtyState,
     dragArticulationCardToLane,
     previewArticulationCardDragOver,
     readDesktopRangeSegments,
@@ -87,11 +81,16 @@ import {
     rectContains,
     readGlobalModRailGeometry,
     isLaneParamSend,
+    pressAndLiftStation,
+    waitForOpeningLaneDelivery,
+    waitForAnimationsToFinish,
+    withUiTimersPaused,
+    advanceUiTimers,
 } from "./helpers/desktop_patch_view_browser_suite.mjs";
 
 /**
  * Tests that continue into routing controls need the product tap's selection
- * but not its T43 quick sheet. Dismiss it and restore the formerly-expanded
+ * but not its quick sheet. Dismiss it and restore the formerly-expanded
  * rail so those tests retain their explicit setup without bypassing the tap.
  */
 async function armModSourceForRoutingTest(page, selector) {
@@ -333,7 +332,7 @@ test("global Mod Bar grip movement and source mapping have disjoint touch owners
         );
         assert.equal(await page.locator('[data-role="mobile-global-mod-source-ghost"]').count(), 1);
         assert.equal(await page.locator('[data-role="mobile-global-mod-rail-drawer"]').getAttribute("aria-hidden"), "true");
-        await page.waitForTimeout(180);
+        await waitForAnimationsToFinish(rail);
         const retreatedRailBox = await rail.boundingBox();
         const activeGhostBox = await page.locator('[data-role="mobile-global-mod-source-ghost"]').boundingBox();
         assert.ok(retreatedRailBox && activeGhostBox);
@@ -410,7 +409,7 @@ test("global Mod Bar grip movement and source mapping have disjoint touch owners
         assert.equal(await rail.getAttribute("data-expanded"), "false", "Dragging the collapsed armed source must not expand the drawer.");
         assert.equal(await rail.getAttribute("data-mapping-active"), "true", "The collapsed armed source must begin route mapping.");
         assert.equal(await page.locator('[data-role="mobile-global-mod-source-ghost"]').count(), 1);
-        await page.waitForTimeout(180);
+        await waitForAnimationsToFinish(rail);
         assert.equal(
             ((await rail.boundingBox())?.x ?? 0) >= 393,
             true,
@@ -443,7 +442,7 @@ test("global Mod Bar grip movement and source mapping have disjoint touch owners
         );
         assert.equal(await rail.getAttribute("data-expanded"), "false");
         assert.equal(await rail.getAttribute("data-mapping-active"), "false");
-        await page.waitForTimeout(180);
+        await waitForAnimationsToFinish(rail);
         const restoredCollapsedRailBox = await rail.boundingBox();
         assert.ok(restoredCollapsedRailBox);
         assert.equal(Math.abs(restoredCollapsedRailBox.y - collapsedRailTop) <= 1, true, "Dragging the collapsed source moved the bar.");
@@ -572,7 +571,7 @@ test("the Mod rail docks to either screen edge and remembers its dock across lau
         await restoredPage.close();
     }
 
-    const legacyPage = await openHarnessPage({
+    const edgelessPage = await openHarnessPage({
         beforeGoto: async (nextPage) => {
             await nextPage.setViewportSize({ width: 393, height: 852 });
             await nextPage.addInitScript(() => {
@@ -582,20 +581,20 @@ test("the Mod rail docks to either screen edge and remembers its dock across lau
         },
     });
     try {
-        const rail = legacyPage.locator('[data-role="mobile-global-mod-rail"]');
+        const rail = edgelessPage.locator('[data-role="mobile-global-mod-rail"]');
         await rail.waitFor();
-        await legacyPage.waitForTimeout(240);
+        await edgelessPage.waitForTimeout(240);
         assert.equal(
             await rail.getAttribute("data-edge"),
             "right",
-            "A legacy stored position predates edge docking and must restore on the right edge.",
+            "A stored position without an edge is ignored, so the rail takes its default right dock.",
         );
     } finally {
-        await legacyPage.evaluate(() => {
+        await edgelessPage.evaluate(() => {
             localStorage.removeItem("cosimo.mod-bar.preferences.v1");
             localStorage.removeItem("cosimo.mobile-global-mod-rail.position.v1");
         }).catch(() => {});
-        await legacyPage.close();
+        await edgelessPage.close();
     }
 });
 
@@ -771,7 +770,7 @@ test("the drawer's voice-settings popover owns Play Mode and greys Glide while P
         await page.waitForTimeout(240);
         await expandGlobalModRail(page);
 
-        // T04 decision: the voice-settings toggle lives in the drawer and is
+        // The voice-settings toggle lives in the drawer and is
         // labeled with the active play mode.
         const voiceToggle = rail.locator('[data-role="mobile-global-mod-rail-voice-toggle"]');
         assert.equal((await voiceToggle.textContent())?.trim(), "Poly");
@@ -825,7 +824,7 @@ test("the drawer's voice-settings popover owns Play Mode and greys Glide while P
     }
 });
 
-test("T39A: Voice settings keeps Global Tune open for live source selection, drop, and route editing", async () => {
+test("Voice settings keeps Global Tune open for live source selection, drop, and route editing", async () => {
     const page = await openHarnessPage({
         beforeGoto: (nextPage) => nextPage.setViewportSize({ width: 393, height: 852 }),
     });
@@ -895,7 +894,7 @@ test("T39A: Voice settings keeps Global Tune open for live source selection, dro
             touchPoints: [{ x: sourceStart.x - 18, y: sourceStart.y, radiusX: 5, radiusY: 5, force: 1 }],
         });
         await rail.locator('xpath=self::*[@data-mapping-active="true"]').waitFor();
-        await page.waitForTimeout(180);
+        await waitForAnimationsToFinish(rail);
 
         assert.equal(await popover.isVisible(), true, "The Voice popout must stay visibly open while mapping.");
         const mappingTargetBox = await tuneKnob.boundingBox();
@@ -1041,7 +1040,7 @@ test("the Note key triggers audible output from every mobile editor state", asyn
         await page.click('[data-role="mobile-workspace-tab-mod"]');
         await pressNoteKey("Mod SOURCE panel");
 
-        // T14: the second top-level state is the MAPPINGS panel.
+        // The second top-level state is the MAPPINGS panel.
         await page.click('[data-role="mobile-mod-panel-tab-mappings"]');
         await page.locator('[data-role="mod-mappings-row"]').first().waitFor();
         await pressNoteKey("Mod MAPPINGS panel");
@@ -1068,7 +1067,14 @@ test("Auto-preview retriggers on real parameter drags, stays silent when off, an
     });
     const cdp = await page.context().newCDPSession(page);
 
+    // Every drag must change the value: an unchanged value is not an edit and
+    // previews nothing, so drag away from whichever end Reverb Size is nearer.
+    const dragDirection = () => page.evaluate(() => {
+        const lane = JSON.parse(String(window.__COSIMO_DESKTOP_HARNESS__.getSnapshot().storedState["lane.v1"]));
+        return lane.devices["reverb#1"].params.reverbSize > 0.5 ? -1 : 1;
+    });
     const dragKnobBase = async () => {
+        const direction = await dragDirection();
         const surface = page.locator('[data-role="rack-parameter-surface-reverbSize"]');
         const surfaceBox = await surface.boundingBox();
         assert.ok(surfaceBox);
@@ -1083,13 +1089,14 @@ test("Auto-preview retriggers on real parameter drags, stays silent when off, an
         for (const step of [12, 26, 40]) {
             await cdp.send("Input.dispatchTouchEvent", {
                 type: "touchMove",
-                touchPoints: [{ x: start.x + step, y: start.y, radiusX: 5, radiusY: 5, force: 1 }],
+                touchPoints: [{ x: start.x + (direction * step), y: start.y, radiusX: 5, radiusY: 5, force: 1 }],
             });
             await page.waitForTimeout(40);
         }
         await cdp.send("Input.dispatchTouchEvent", { type: "touchEnd", touchPoints: [] });
     };
     const startHeldKnobPreview = async () => {
+        const direction = await dragDirection();
         await clearHarnessDebugLog(page);
         const surfaceBox = await page.locator('[data-role="rack-parameter-surface-reverbSize"]').boundingBox();
         assert.ok(surfaceBox);
@@ -1104,7 +1111,7 @@ test("Auto-preview retriggers on real parameter drags, stays silent when off, an
         for (const step of [15, 30]) {
             await cdp.send("Input.dispatchTouchEvent", {
                 type: "touchMove",
-                touchPoints: [{ x: start.x + step, y: start.y, radiusX: 5, radiusY: 5, force: 1 }],
+                touchPoints: [{ x: start.x + (direction * step), y: start.y, radiusX: 5, radiusY: 5, force: 1 }],
             });
         }
         await page.waitForFunction(() => (
@@ -1118,7 +1125,7 @@ test("Auto-preview retriggers on real parameter drags, stays silent when off, an
         const noteOns = events.filter(({ value }) => (value >>> 16) === 0x90).length;
         const noteOffs = events.filter(({ value }) => (value >>> 16) === 0x80).length;
         return noteOns >= 1 && noteOns === noteOffs;
-    }, undefined, { timeout: 4000 });
+    });
 
     try {
         await page.locator('[data-role="mobile-global-mod-rail"]').waitFor();
@@ -1151,7 +1158,7 @@ test("Auto-preview retriggers on real parameter drags, stays silent when off, an
             const noteOns = events.filter(({ value }) => (value >>> 16) === 0x90).length;
             const noteOffs = events.filter(({ value }) => (value >>> 16) === 0x80).length;
             return noteOns >= 1 && noteOns === noteOffs;
-        }, undefined, { timeout: 4000 });
+        });
         snapshot = await getHarnessSnapshot(page);
         assert.equal(
             snapshot.midiInputEvents.every(({ value }) => ((value >>> 8) & 0x7f) === 60),
@@ -1290,7 +1297,7 @@ test("Auto-preview with a routed looping MSEG still strikes, settles balanced, a
             const noteOns = events.filter(({ value }) => (value >>> 16) === 0x90).length;
             const noteOffs = events.filter(({ value }) => (value >>> 16) === 0x80).length;
             return noteOns >= 1 && noteOns === noteOffs;
-        }, undefined, { timeout: 5000 });
+        });
         const snapshot = await getHarnessSnapshot(page);
         assert.equal(
             snapshot.midiInputEvents.every(({ value }) => ((value >>> 8) & 0x7f) === 60),
@@ -1426,7 +1433,7 @@ test("the global modulation rail owns one continuous SVG silhouette", async () =
             await nextPage.addInitScript(() => {
                 localStorage.setItem(
                     "cosimo.mobile-global-mod-rail.position.v1",
-                    JSON.stringify({ normalizedY: 0.25 }),
+                    JSON.stringify({ version: 2, edge: "right", normalizedY: 0.25 }),
                 );
             });
         },
@@ -1491,7 +1498,7 @@ test("the global modulation rail owns one continuous SVG silhouette", async () =
     }
 });
 
-test("T60 live preferences park, scale, hide, restore, and float the Mod bar without losing presentation state", async () => {
+test("live preferences park, scale, hide, restore, and float the Mod bar without losing presentation state", async () => {
     const page = await openHarnessPage({
         beforeGoto: async (nextPage) => {
             await nextPage.setViewportSize({ width: 320, height: 568 });
@@ -1508,11 +1515,7 @@ test("T60 live preferences park, scale, hide, restore, and float the Mod bar wit
     });
 
     const openDeveloperSettings = async () => {
-        const presetBar = page.locator("cosimo-preset-bar");
-        await presetBar.waitFor();
-        await presetBar.evaluate((element) => {
-            element.dispatchEvent(new CustomEvent("cosimo-open-perf-tuning"));
-        });
+        await openDeveloperSettingsFromPresetBar(page);
         const settings = page.locator('[data-role="perf-tuning-page"]');
         await settings.waitFor({ state: "visible" });
         return settings;
@@ -1776,15 +1779,15 @@ test("T60 live preferences park, scale, hide, restore, and float the Mod bar wit
     }
 });
 
-test("T79 Developer Settings updates and persists keyboard geometry without remounting or changing sound", async () => {
+test("Developer Settings updates and persists keyboard geometry without remounting or changing sound", async () => {
     const page = await openHarnessPage({
         beforeGoto: async (nextPage) => {
             await nextPage.setViewportSize({ width: 393, height: 852 });
             await nextPage.addInitScript(() => {
-                if (sessionStorage.getItem("cosimo.t79-keyboard-test-initialized") === "true") {
+                if (sessionStorage.getItem("cosimo.keyboard-geometry-test-initialized") === "true") {
                     return;
                 }
-                sessionStorage.setItem("cosimo.t79-keyboard-test-initialized", "true");
+                sessionStorage.setItem("cosimo.keyboard-geometry-test-initialized", "true");
                 localStorage.removeItem("cosimo.keyboard.presentation.preferences.v1");
             });
         },
@@ -1811,22 +1814,20 @@ test("T79 Developer Settings updates and persists keyboard geometry without remo
             rootNote: keyboard?.getAttribute("root-note") ?? null,
             noteCount: keyboard?.getAttribute("note-count") ?? null,
             naturalWidth: keyboard && "naturalWidth" in keyboard ? keyboard.naturalWidth : null,
-            sameElement: globalThis.__cosimoT79Keyboard === keyboard,
+            sameElement: globalThis.__cosimoKeyboardUnderTest === keyboard,
         };
     });
     const openDeveloperSettings = async () => {
-        await page.locator("cosimo-preset-bar").evaluate((element) => {
-            element.dispatchEvent(new CustomEvent("cosimo-open-perf-tuning"));
-        });
+        await openDeveloperSettingsFromPresetBar(page);
         const settings = page.locator('[data-role="perf-tuning-page"]');
         await settings.waitFor({ state: "visible" });
         return settings;
     };
 
     try {
-        const soundBefore = await getHarnessSnapshot(page);
+        const soundBefore = await waitForOpeningLaneDelivery(page);
         await page.evaluate(() => {
-            globalThis.__cosimoT79Keyboard = document.querySelector(
+            globalThis.__cosimoKeyboardUnderTest = document.querySelector(
                 '[data-role="sticky-keyboard"] .keyboard',
             );
         });
@@ -1865,14 +1866,14 @@ test("T79 Developer Settings updates and persists keyboard geometry without remo
                 configurable: true,
                 value: {
                     writeText: async (value) => {
-                        globalThis.__cosimoT79CopiedSettings = value;
+                        globalThis.__cosimoCopiedSettings = value;
                     },
                 },
             });
         });
         await settings.locator('[data-action="copy-perf-tuning-settings"]').click();
         await settings.locator('[data-role="perf-tuning-copy-feedback"][data-state="success"]').waitFor();
-        const copiedSettings = await page.evaluate(() => globalThis.__cosimoT79CopiedSettings ?? "");
+        const copiedSettings = await page.evaluate(() => globalThis.__cosimoCopiedSettings ?? "");
         assert.match(copiedSettings, /\n\[Keyboard\]\n/u);
         assert.match(copiedSettings, /keyboard\.visibleNoteCount: 14/u);
         assert.match(copiedSettings, /keyboard\.heightScale: 1\.25/u);
@@ -1917,15 +1918,15 @@ test("T79 Developer Settings updates and persists keyboard geometry without remo
     } finally {
         await page.evaluate(() => {
             localStorage.removeItem("cosimo.keyboard.presentation.preferences.v1");
-            sessionStorage.removeItem("cosimo.t79-keyboard-test-initialized");
-            delete globalThis.__cosimoT79Keyboard;
-            delete globalThis.__cosimoT79CopiedSettings;
+            sessionStorage.removeItem("cosimo.keyboard-geometry-test-initialized");
+            delete globalThis.__cosimoKeyboardUnderTest;
+            delete globalThis.__cosimoCopiedSettings;
         }).catch(() => {});
         await page.close();
     }
 });
 
-test("T79 the adjustable keybed fits edge-to-edge beside narrower octave paddles across layouts", async () => {
+test("the adjustable keybed fits edge-to-edge beside narrower octave paddles across layouts", async () => {
     const assertKeyboardUsesSurfaceWidth = (geometry, layoutName) => {
         const usableLeft = geometry.surface.left + geometry.surfaceBorderLeft;
         const usableRight = geometry.surface.right - geometry.surfaceBorderRight;
@@ -2101,7 +2102,7 @@ test("T79 the adjustable keybed fits edge-to-edge beside narrower octave paddles
     }
 });
 
-test("T79 height scaling reflows plugin and desktop workspaces around the complete keyboard region", async () => {
+test("height scaling reflows plugin and desktop workspaces around the complete keyboard region", async () => {
     for (const layout of [
         { name: "plugin", width: 1120, height: 680 },
         { name: "desktop", width: 1440, height: 900 },
@@ -2169,7 +2170,7 @@ test("T79 height scaling reflows plugin and desktop workspaces around the comple
     }
 });
 
-test("T79 compact adjacent surfaces reflow around visible, hidden, drawer, and full-editor keyboard states", async () => {
+test("compact adjacent surfaces reflow around visible, hidden, drawer, and full-editor keyboard states", async () => {
     for (const layout of [
         {
             name: "short floating phone",
@@ -2407,7 +2408,7 @@ test("T79 compact adjacent surfaces reflow around visible, hidden, drawer, and f
     }
 });
 
-test("T60 parked 320px source and tool targets grow with scale and own their inset hit area", async () => {
+test("parked 320px source and tool targets grow with scale and own their inset hit area", async () => {
     const scales = [
         { scale: 0.85, sourceWidth: 44.1094, toolWidth: 44.1094 },
         { scale: 1.1, sourceWidth: 46.9844, toolWidth: 46.9844 },
@@ -2508,7 +2509,7 @@ test("T60 parked 320px source and tool targets grow with scale and own their ins
     );
 });
 
-test("T60 parked trigger note stays fixed immediately before the right paddle on every page", async () => {
+test("the parked trigger note stays fixed immediately before the right paddle on every page", async () => {
     for (const viewport of [
         { width: 320, height: 568 },
         { width: 393, height: 852 },
@@ -2591,7 +2592,7 @@ test("T60 parked trigger note stays fixed immediately before the right paddle on
     }
 });
 
-test("T60 preserves the explicitly visible source group in both placement directions", async () => {
+test("placement changes preserve the explicitly visible source group in both directions", async () => {
     const page = await openHarnessPage({
         beforeGoto: async (nextPage) => {
             await nextPage.setViewportSize({ width: 320, height: 568 });
@@ -2603,10 +2604,7 @@ test("T60 preserves the explicitly visible source group in both placement direct
     });
 
     const changePlacement = async (placement) => {
-        const presetBar = page.locator("cosimo-preset-bar");
-        await presetBar.evaluate((element) => {
-            element.dispatchEvent(new CustomEvent("cosimo-open-perf-tuning"));
-        });
+        await openDeveloperSettingsFromPresetBar(page);
         const settings = page.locator('[data-role="perf-tuning-page"]');
         await settings.waitFor({ state: "visible" });
         await settings.locator(`[data-mod-bar-placement="${placement}"]`).click();
@@ -2666,7 +2664,7 @@ test("T60 preserves the explicitly visible source group in both placement direct
     }
 });
 
-test("T60 live placement changes preserve an active source drag through its real drop", async () => {
+test("live placement changes preserve an active source drag through its real drop", async () => {
     const page = await openHarnessPage({
         beforeGoto: async (nextPage) => {
             await nextPage.setViewportSize({ width: 393, height: 852 });
@@ -2695,11 +2693,7 @@ test("T60 live placement changes preserve an active source drag through its real
         await page.mouse.move(sourceCenter.x - 12, sourceCenter.y + 12, { steps: 3 });
         await rail.locator('xpath=self::*[@data-mapping-active="true"]').waitFor();
 
-        await page.evaluate(() => {
-            document.querySelector("cosimo-preset-bar")?.dispatchEvent(
-                new CustomEvent("cosimo-open-perf-tuning"),
-            );
-        });
+        await openDeveloperSettingsFromPresetBar(page);
         const settings = page.locator('[data-role="perf-tuning-page"]');
         await settings.waitFor({ state: "visible" });
         await settings.locator('[data-mod-bar-placement="parked"]').evaluate((button) => {
@@ -2750,7 +2744,7 @@ test("T60 live placement changes preserve an active source drag through its real
     }
 });
 
-test("T60 hide and restore keep quick and full MSEG editors mounted without dead transparent hit areas", async () => {
+test("hide and restore keep quick and full MSEG editors mounted without dead transparent hit areas", async () => {
     const page = await openHarnessPage({
         beforeGoto: async (nextPage) => {
             await nextPage.setViewportSize({ width: 320, height: 568 });
@@ -2938,7 +2932,7 @@ test("T60 hide and restore keep quick and full MSEG editors mounted without dead
     }
 });
 
-test("T70 parked Mod bar follows the open MSEG drawer lip without stealing editor hits", async () => {
+test("the parked Mod bar follows the open MSEG drawer lip without stealing editor hits", async () => {
     const page = await openHarnessPage({
         beforeGoto: async (nextPage) => {
             await nextPage.setViewportSize({ width: 393, height: 852 });
@@ -3032,7 +3026,7 @@ test("T70 parked Mod bar follows the open MSEG drawer lip without stealing edito
     }
 });
 
-test("T70 parked row tracks live MSEG drawer movement and detents across compact phones", async () => {
+test("the parked row tracks live MSEG drawer movement and detents across compact phones", async () => {
     for (const viewport of [
         { name: "portrait phone", width: 393, height: 852 },
         { name: "landscape phone", width: 568, height: 320 },
@@ -3243,7 +3237,7 @@ test("T70 parked row tracks live MSEG drawer movement and detents across compact
     }
 });
 
-test("T70 moving the MSEG drawer preserves a pending parked source drag through its drop", async () => {
+test("moving the MSEG drawer preserves a pending parked source drag through its drop", async () => {
     const page = await openHarnessPage({
         beforeGoto: async (nextPage) => {
             await nextPage.setViewportSize({ width: 393, height: 852 });
@@ -3408,7 +3402,7 @@ test("T70 moving the MSEG drawer preserves a pending parked source drag through 
     }
 });
 
-test("T71 drawer-to-full-screen MSEG gives its controls a row above the parked Mod bar", async () => {
+test("drawer-to-full-screen MSEG gives its controls a row above the parked Mod bar", async () => {
     const page = await openHarnessPage({
         beforeGoto: async (nextPage) => {
             await nextPage.setViewportSize({ width: 393, height: 852 });
@@ -3522,7 +3516,7 @@ test("T71 drawer-to-full-screen MSEG gives its controls a row above the parked M
     }
 });
 
-test("T71 full-screen MSEG and parked Mod bar stay operable across compact phones", async () => {
+test("full-screen MSEG and the parked Mod bar stay operable across compact phones", async () => {
     for (const viewport of [
         { name: "portrait phone", width: 393, height: 852 },
         { name: "landscape phone", width: 568, height: 320 },
@@ -3766,7 +3760,7 @@ test("T71 full-screen MSEG and parked Mod bar stay operable across compact phone
     }
 });
 
-test("T71 switching MSEG drawers starts a clean Undo session before full-screen expansion", async () => {
+test("switching MSEG drawers starts a clean Undo session before full-screen expansion", async () => {
     const page = await openHarnessPage({
         beforeGoto: async (nextPage) => {
             await nextPage.setViewportSize({ width: 393, height: 852 });
@@ -3846,7 +3840,7 @@ test("T71 switching MSEG drawers starts a clean Undo session before full-screen 
     }
 });
 
-test("T71 floating Mod-bar placements retain their full-editor overlay behavior", async () => {
+test("floating Mod-bar placements retain their full-editor overlay behavior", async () => {
     for (const placement of ["floating-left", "floating-right"]) {
         const page = await openHarnessPage({
             beforeGoto: async (nextPage) => {
@@ -3925,7 +3919,7 @@ test("T71 floating Mod-bar placements retain their full-editor overlay behavior"
     }
 });
 
-test("T60 parked row stays fixed, fully hittable, and drag-owned across compact compositions", async () => {
+test("the parked row stays fixed, fully hittable, and drag-owned across compact compositions", async () => {
     const layouts = [
         { name: "short 320px phone", width: 320, height: 568, scale: 0.85 },
         { name: "tall phone", width: 393, height: 852, scale: 1.1 },
@@ -4151,7 +4145,7 @@ test("T60 parked row stays fixed, fully hittable, and drag-owned across compact 
     }
 });
 
-test("T60 application preferences cross plugin and desktop breakpoints without changing sound or placement", async () => {
+test("application preferences cross plugin and desktop breakpoints without changing sound or placement", async () => {
     const layouts = [
         { name: "plugin", width: 1120, height: 680 },
         { name: "desktop", width: 1440, height: 900 },
@@ -4173,12 +4167,12 @@ test("T60 application preferences cross plugin and desktop breakpoints without c
         });
 
         try {
-            const soundBeforeResize = await getHarnessSnapshot(page);
+            // Compare against the sound once the opening document has reached the engine.
+            const soundBeforeResize = await waitForOpeningLaneDelivery(page);
             assert.equal(await page.locator('[data-role="mobile-global-mod-rail"]').count(), 0);
             await page.setViewportSize({ width: 393, height: 852 });
             const rail = page.locator('[data-role="mobile-global-mod-rail"][data-placement="parked"]');
             await rail.waitFor();
-            await page.waitForTimeout(220);
             assert.equal(
                 await rail.evaluate((element) => (
                     getComputedStyle(element).getPropertyValue("--rail-scale").trim()
@@ -4209,7 +4203,7 @@ test("T60 application preferences cross plugin and desktop breakpoints without c
     }
 });
 
-test("T39A: the horizontal Mod bar reaches the same Voice-settings Global Tune at plugin and desktop sizes", async () => {
+test("the horizontal Mod bar reaches the same Voice-settings Global Tune at plugin and desktop sizes", async () => {
     for (const layout of [
         { name: "plugin", width: 1120, height: 680 },
         { name: "desktop", width: 1440, height: 900 },
@@ -4265,7 +4259,7 @@ test("T39A: the horizontal Mod bar reaches the same Voice-settings Global Tune a
     }
 });
 
-test("T42 scales the complete Mod rail geometry and keeps both edges inside real phone chrome", async () => {
+test("the complete Mod rail geometry scales and keeps both edges inside real phone chrome", async () => {
     const SCALE = 1.1;
     const BASE = {
         railWidth: 40,
@@ -4390,7 +4384,7 @@ test("T42 scales the complete Mod rail geometry and keeps both edges inside real
     };
     const assertSafe = (geometry, label) => {
         assert.ok(geometry.rail && geometry.preset && geometry.tabs, `${label} requires rail and shell chrome.`);
-        // T54 keeps Voice corner controls on fixed, mirrored graph insets. This
+        // Voice corner controls sit on fixed, mirrored graph insets. This
         // movable overlay owns its screen/chrome safety, not their placement.
         assert.equal(geometry.documentFits, true, `${label} must not create horizontal overflow.`);
         assert.equal(
@@ -4538,7 +4532,7 @@ test("the global modulation rail keeps a fixed tab and opens its source drawer t
             await nextPage.addInitScript(() => {
                 localStorage.setItem(
                     "cosimo.mobile-global-mod-rail.position.v1",
-                    JSON.stringify({ normalizedY: 0.25 }),
+                    JSON.stringify({ version: 2, edge: "right", normalizedY: 0.25 }),
                 );
             });
         },
@@ -4680,7 +4674,7 @@ test("a bottom-positioned global modulation rail opens its drawer upward", async
             await nextPage.addInitScript(() => {
                 localStorage.setItem(
                     "cosimo.mobile-global-mod-rail.position.v1",
-                    JSON.stringify({ normalizedY: 1 }),
+                    JSON.stringify({ version: 2, edge: "right", normalizedY: 1 }),
                 );
             });
         },
@@ -4721,7 +4715,7 @@ test("the parameter gesture HUD avoids the active control, the global rail, the 
             await nextPage.addInitScript(() => {
                 localStorage.setItem(
                     "cosimo.mobile-global-mod-rail.position.v1",
-                    JSON.stringify({ normalizedY: 0 }),
+                    JSON.stringify({ version: 2, edge: "right", normalizedY: 0 }),
                 );
             });
         },
@@ -4912,7 +4906,7 @@ test("rail flick keeps moving after touch release and faster releases travel far
             await nextPage.addInitScript(() => {
                 localStorage.setItem(
                     "cosimo.mobile-global-mod-rail.position.v1",
-                    JSON.stringify({ normalizedY: 0.5 }),
+                    JSON.stringify({ version: 2, edge: "right", normalizedY: 0.5 }),
                 );
             });
         },
@@ -4929,7 +4923,7 @@ test("rail flick keeps moving after touch release and faster releases travel far
             await page.evaluate(() => {
                 localStorage.setItem(
                     "cosimo.mobile-global-mod-rail.position.v1",
-                    JSON.stringify({ normalizedY: 0.5 }),
+                    JSON.stringify({ version: 2, edge: "right", normalizedY: 0.5 }),
                 );
             });
             await page.reload({ waitUntil: "commit" });
@@ -4946,9 +4940,12 @@ test("rail flick keeps moving after touch release and faster releases travel far
                 y: handleBox.y + (handleBox.height / 2),
             };
 
+            // Explicit event times keep the gesture's velocity independent of renderer load.
+            const startSeconds = Date.now() / 1000;
             await cdp.send("Input.dispatchTouchEvent", {
                 type: "touchStart",
                 touchPoints: [{ ...start, radiusX: 5, radiusY: 5, force: 1 }],
+                timestamp: startSeconds,
             });
             for (let step = 1; step <= 4; step += 1) {
                 await page.waitForTimeout(stepDelayMs);
@@ -4961,30 +4958,43 @@ test("rail flick keeps moving after touch release and faster releases travel far
                         radiusY: 5,
                         force: 1,
                     }],
+                    timestamp: startSeconds + ((step * stepDelayMs) / 1000),
                 });
             }
             await page.waitForTimeout(releasePauseMs);
 
             const held = await rail.boundingBox();
             assert.ok(held);
-            await cdp.send("Input.dispatchTouchEvent", { type: "touchEnd", touchPoints: [] });
+            await cdp.send("Input.dispatchTouchEvent", {
+                type: "touchEnd",
+                touchPoints: [],
+                timestamp: startSeconds + (((4 * stepDelayMs) + releasePauseMs) / 1000),
+            });
             return held;
         };
 
         const measureFlickUp = async (stepDelayMs, releasePauseMs) => {
+            // The page records whether the release starts a coast, however
+            // briefly the coast lasts on this renderer.
+            await page.evaluate(() => {
+                const railElement = document.querySelector('[data-role="mobile-global-mod-rail"]');
+                window.__railCoasted = false;
+                new MutationObserver(() => {
+                    window.__railCoasted ||= railElement.getAttribute("data-decelerating") === "true";
+                }).observe(railElement, { attributes: true, attributeFilter: ["data-decelerating"] });
+            });
             const held = await releaseFlickUp(stepDelayMs, releasePauseMs);
-            await page.waitForTimeout(80);
-            const shortlyAfterRelease = await rail.boundingBox();
-            assert.ok(shortlyAfterRelease);
-            await page.waitForFunction(() => (
-                document.querySelector('[data-role="mobile-global-mod-rail"]')?.getAttribute("data-decelerating") === "false"
-            ));
-            await page.waitForTimeout(220);
+            // The rail rests once its coast has ended and its settling slide has run.
+            await page.waitForFunction(() => {
+                const railElement = document.querySelector('[data-role="mobile-global-mod-rail"]');
+                return railElement?.getAttribute("data-decelerating") === "false"
+                    && railElement.getAnimations().length === 0;
+            });
             const settled = await rail.boundingBox();
             assert.ok(settled);
 
             return {
-                first80Ms: held.y - shortlyAfterRelease.y,
+                coasted: await page.evaluate(() => window.__railCoasted),
                 totalMomentum: held.y - settled.y,
             };
         };
@@ -4997,7 +5007,7 @@ test("rail flick keeps moving after touch release and faster releases travel far
         const slow = await measureFlickUp(70, 120);
 
         assert.equal(
-            fast.first80Ms >= 8,
+            fast.coasted && fast.totalMomentum >= 8,
             true,
             `A quick upward flick must keep traveling after release: ${JSON.stringify({ fast, slow })}`,
         );
@@ -5135,7 +5145,7 @@ test("rack mod bar vertically pages one colored MSEG Envelope and Macro identity
         assert.equal(visualContract.sources.every(Boolean), true);
         assert.deepEqual(visualContract.sources.map((source) => source.number), ["1", "1", "1"]);
         assert.deepEqual(visualContract.sources.map((source) => source.accent), ["#cc59d2", "#b8e236", "#ff6428"]);
-        // T42 scales the complete B2 skeleton: a full-width 44px hit area
+        // The rail scales its complete skeleton: a full-width 44px hit area
         // around a 30.8px source module, on the rail's 11px rhythm.
         assert.equal(visualContract.sources.every((source) => (
             Math.abs(source.buttonWidth - 44) <= 0.1
@@ -5199,7 +5209,7 @@ test("rack mod bar vertically pages one colored MSEG Envelope and Macro identity
                 viewportClipMargin: viewportStyle?.overflowClipMargin ?? "",
             };
         });
-        // B2 selection: the module itself tints — no glow, no scale, no
+        // Selection: the module itself tints — no glow, no scale, no
         // underline. The tinted container is the entire selected treatment.
         assert.equal(selectedVisual.buttonFilter, "none");
         assert.equal(selectedVisual.buttonShadow, "none");
@@ -5208,7 +5218,7 @@ test("rack mod bar vertically pages one colored MSEG Envelope and Macro identity
         assert.notEqual(selectedVisual.artBackground, "rgba(0, 0, 0, 0)");
         assert.equal(selectedVisual.underlineDisplay, "none");
         assert.equal(selectedVisual.viewportOverflow, "clip");
-        // B2 modules carry no glow: the viewport clips hard so the next page
+        // Modules carry no glow: the viewport clips hard so the next page
         // cannot peek through the 10px rhythm gap.
         assert.equal(Number.parseFloat(selectedVisual.viewportClipMargin), 0);
 
@@ -5222,9 +5232,19 @@ test("rack mod bar vertically pages one colored MSEG Envelope and Macro identity
             const startTop = track.getBoundingClientRect().top;
             const travel = viewport.getBoundingClientRect().height;
             next.click();
-            await new Promise((resolve) => window.setTimeout(resolve, 80));
+            // React commits the next page in a microtask; reading the style then
+            // starts the slide, which is inspected at its midpoint and its end
+            // whatever this renderer's frame rate.
+            await Promise.resolve();
+            getComputedStyle(track).transform;
+            const slide = track.getAnimations().find((candidate) => candidate.transitionProperty === "transform");
+            if (slide === undefined) {
+                return null;
+            }
+            slide.pause();
+            slide.currentTime = 140;
             const duringTop = track.getBoundingClientRect().top;
-            await new Promise((resolve) => window.setTimeout(resolve, 260));
+            slide.finish();
             const endTop = track.getBoundingClientRect().top;
             const activePage = document.querySelector('.rack-mod-page[aria-hidden="false"]');
             const selected = activePage?.querySelector('[aria-pressed="true"]');
@@ -5234,6 +5254,7 @@ test("rack mod bar vertically pages one colored MSEG Envelope and Macro identity
                 duringTop,
                 endTop,
                 travel,
+                slideDurationMs: slide.effect?.getTiming().duration,
                 labels: Array.from(activePage?.querySelectorAll("button") ?? [])
                     .map((button) => button.getAttribute("aria-label")),
                 selectedLabel: selected?.getAttribute("aria-label") ?? null,
@@ -5241,7 +5262,8 @@ test("rack mod bar vertically pages one colored MSEG Envelope and Macro identity
             };
         });
 
-        assert.ok(animation);
+        assert.ok(animation, "Paging must slide the source track.");
+        assert.equal(animation.slideDurationMs, 280);
         assert.equal(animation.duringTop < animation.startTop - 1, true, "The vertical source page did not begin moving.");
         assert.equal(
             animation.duringTop > animation.startTop - animation.travel + 1,
@@ -5303,8 +5325,8 @@ test("rack mod bar keeps source and target selection unassigned until source-dro
         ));
         assert.ok(sourceFirstRoute);
 
-        // T09: no separate AMOUNT control — the drive knob's vertical axis
-        // edits the new route's amount with the shared HUD.
+        // No separate AMOUNT control: the drive knob's vertical axis edits the
+        // new route's amount with the shared HUD.
         assert.equal(await sourceFirstPage.locator('[data-role="rack-modulation-amount"]').count(), 0);
         await collapseGlobalModRail(sourceFirstPage);
         const driveKnob = sourceFirstPage.locator('[data-role="distortion-drive-field"]');
@@ -5322,37 +5344,35 @@ test("rack mod bar keeps source and target selection unassigned until source-dro
             /Drive/i,
         );
         // The first write compiles the zero-depth route into the program; the
-        // second must ride the small amount-update path.
+        // second must ride the small amount-update path. Writes made while a
+        // delivery is still in flight are coalesced into one, so the second
+        // write waits until the program has reached the engine.
+        const isVoiceRackMaxProgram = ({ endpointID, value }) => {
+            if (endpointID !== "modulationProgram") return false;
+            const count = Number(value?.voiceRackRouteCount) || 0;
+            const routeIndex = value?.voiceRackRouteCells?.slice(0, count).indexOf(3) ?? -1;
+            return routeIndex >= 0 && Number(value?.voiceRackRouteReducers?.[routeIndex]) === 1;
+        };
+        await waitForHarnessSnapshot(
+            sourceFirstPage,
+            "rack route program with its first amount",
+            (nextSnapshot) => nextSnapshot.sentMessages.some(isVoiceRackMaxProgram),
+        );
         await dispatchRackKnobPointerEvents(driveKnob, [
             { type: "pointermove", pointerId: 61, buttons: 1, deltaY: -150 },
             { type: "pointerup", pointerId: 61, buttons: 0, deltaY: -150 },
         ]);
 
-        snapshot = await waitForHarnessSnapshot(
+        await waitForHarnessSnapshot(
             sourceFirstPage,
-            "rack route amount update",
-            (nextSnapshot) => readStoredModulationState(nextSnapshot).routes.some((route) => (
-                route.sourceKind === "mseg"
-                && route.sourceSlot === 1
-                && route.targetKind === "lane.distortion#1.distortionDriveDb"
-                && route.amount > 1
+            "voice-source rack amount edit on the small update path",
+            (nextSnapshot) => nextSnapshot.sentMessages.some(({ endpointID, value }) => (
+                endpointID === "modulationAmount"
+                && Number(value?.pathKind) === 3
+                && Number(value?.cellIndex) === 3
+                && Number(value?.amount) > 1
             )),
         );
-        const modulationMessages = snapshot.sentMessages.filter(({ endpointID }) => (
-            endpointID === "modulationProgram" || endpointID === "modulationAmount"
-        ));
-        assert.equal(snapshot.sentMessages.some(({ endpointID, value }) => {
-            if (endpointID !== "modulationProgram") return false;
-            const count = Number(value?.voiceRackRouteCount) || 0;
-            const routeIndex = value?.voiceRackRouteCells?.slice(0, count).indexOf(3) ?? -1;
-            return routeIndex >= 0 && Number(value?.voiceRackRouteReducers?.[routeIndex]) === 1;
-        }), true, `Voice-source rack route did not compile with Max reduction: ${JSON.stringify(modulationMessages)}`);
-        assert.equal(snapshot.sentMessages.some(({ endpointID, value }) => (
-            endpointID === "modulationAmount"
-            && Number(value?.pathKind) === 3
-            && Number(value?.cellIndex) === 3
-            && Number(value?.amount) > 1
-        )), true, `Voice-source rack amount edit did not use the small update path: ${JSON.stringify(modulationMessages)}`);
     } finally {
         await sourceFirstPage.close();
     }
@@ -5483,8 +5503,8 @@ test("the FX workspace has no separate route AMOUNT control: the target knob edi
         await armModSourceForRoutingTest(page, '[data-role="rack-mod-source-mseg-1"]');
         await collapseGlobalModRail(page);
 
-        // T09 settled cleanup: the separate AMOUNT slider is gone everywhere;
-        // the target knob, its ring, and the shared HUD own the job.
+        // There is no separate AMOUNT slider anywhere; the target knob, its
+        // ring, and the shared HUD own the job.
         const knob = page.locator('[data-role="rack-parameter-reverbSize"]');
         await knob.waitFor();
         assert.equal(
@@ -5509,7 +5529,7 @@ test("the FX workspace has no separate route AMOUNT control: the target knob edi
         ]);
         await page.waitForFunction((previousText) => (
             (document.querySelector('[data-role="mobile-voice-hud"]')?.textContent ?? "") !== previousText
-        ), midDragFirst, { timeout: 3000 });
+        ), midDragFirst);
         await dispatchRackKnobPointerEvents(knob, [
             { type: "pointerup", pointerId: 41, buttons: 0, deltaY: -90 },
         ]);
@@ -5746,13 +5766,18 @@ test("a source drag dwell-navigates tabs and rack effects while the gesture surv
         await page.mouse.move(196, 300, { steps: 3 });
 
         // Transit: crossing the FX tab without stopping must not switch, and
-        // leaving before the dwell cancels the pending navigation.
+        // leaving before the dwell cancels the pending navigation. With UI
+        // time paused the crossing takes no dwell time however slowly its
+        // moves arrive; then more than a dwell passes with the pointer away.
         const fxBox = await fxTab.boundingBox();
         assert.ok(fxBox);
         const fxCenter = { x: fxBox.x + (fxBox.width / 2), y: fxBox.y + (fxBox.height / 2) };
-        await page.mouse.move(fxCenter.x, fxCenter.y, { steps: 3 });
-        await page.mouse.move(196, 300, { steps: 3 });
-        await page.waitForTimeout(750);
+        await withUiTimersPaused(page, async () => {
+            await page.mouse.move(fxCenter.x, fxCenter.y, { steps: 3 });
+            await page.mouse.move(196, 300, { steps: 3 });
+            await advanceUiTimers(page, 750);
+        });
+        await waitForReactFrames(page, 2);
         assert.equal(await voiceTab.getAttribute("aria-selected"), "true", "transit must not switch tabs");
 
         // A deliberate dwell on the FX tab switches while the drag stays alive.
@@ -6052,6 +6077,9 @@ test("subway stations select on tap, reorder on drag, and never touch sound para
         await page.waitForSelector('[data-role="effects-rack-card"]');
         await clearHarnessDebugLog(page);
         const station = page.locator('[data-role="rack-station-reverb"]');
+        // Keep the whole map and the drag target on screen, so the drag never
+        // depends on edge auto-scroll.
+        await page.locator('[data-role="rack-module-list"]').scrollIntoViewIfNeeded();
         await station.scrollIntoViewIfNeeded();
         const stationBox = await station.boundingBox();
         assert.ok(stationBox);
@@ -6078,12 +6106,13 @@ test("subway stations select on tap, reorder on drag, and never touch sound para
 
         // A drag along the line is a reorder: exactly one topology commit,
         // no parameter traffic, and the release detaches cleanly.
-        const target = page.locator('[data-role="rack-module-filter"]');
+        const target = page.locator('[data-role="rack-module-chorus"]');
         const targetBox = await target.boundingBox();
         assert.ok(targetBox);
-        await page.mouse.move(stationBox.x + (stationBox.width / 2), stationBox.y + (stationBox.height / 2));
-        await page.mouse.down();
-        await page.waitForTimeout(210);
+        await pressAndLiftStation(page, {
+            x: stationBox.x + (stationBox.width / 2),
+            y: stationBox.y + (stationBox.height / 2),
+        });
         await page.mouse.move(targetBox.x + (targetBox.width / 2), targetBox.y + (targetBox.height / 2), { steps: 12 });
         await page.mouse.up();
         snapshot = await waitForHarnessSnapshot(
@@ -6092,7 +6121,7 @@ test("subway stations select on tap, reorder on drag, and never touch sound para
             (nextSnapshot) => nextSnapshot.sentMessages.some(({ endpointID, value }) => (
                 endpointID === "laneTopology"
                 && Array.isArray(value?.slotIds)
-                && Number(value.slotIds[0]) === 7
+                && Number(value.slotIds[3]) === 7
             )),
         );
         assert.equal(snapshot.sentMessages.filter(({ endpointID }) => endpointID === "laneTopology").length, 1);
@@ -6162,14 +6191,18 @@ test("every rack editor binds live controls and one drop commits one complete DS
 
         await clearHarnessDebugLog(page);
         const reorderHandle = page.locator('[data-role="rack-station-reverb"]');
-        const reorderTarget = page.locator('[data-role="rack-module-filter"]');
+        const reorderTarget = page.locator('[data-role="rack-module-chorus"]');
+        // Keep the whole map and the drop target on screen, so the drag never
+        // depends on edge auto-scroll.
+        await page.locator('[data-role="rack-module-list"]').scrollIntoViewIfNeeded();
         await reorderHandle.scrollIntoViewIfNeeded();
         const handleBox = await reorderHandle.boundingBox();
         const targetBox = await reorderTarget.boundingBox();
         assert.ok(handleBox && targetBox, "Rack pointer-reorder endpoints are missing");
-        await page.mouse.move(handleBox.x + handleBox.width / 2, handleBox.y + handleBox.height / 2);
-        await page.mouse.down();
-        await page.waitForTimeout(210);
+        await pressAndLiftStation(page, {
+            x: handleBox.x + handleBox.width / 2,
+            y: handleBox.y + handleBox.height / 2,
+        });
         await page.mouse.move(targetBox.x + targetBox.width / 2, targetBox.y + targetBox.height / 2, { steps: 12 });
         await page.mouse.up();
         snapshot = await waitForHarnessSnapshot(
@@ -6178,14 +6211,12 @@ test("every rack editor binds live controls and one drop commits one complete DS
             (nextSnapshot) => nextSnapshot.sentMessages.some(({ endpointID, value }) => (
                 endpointID === "laneTopology"
                 && Array.isArray(value?.slotIds)
-                && Number(value.slotIds[0]) === 7
+                && Number(value.slotIds[3]) === 7
             )),
         );
-        const orderMessages = snapshot.sentMessages.filter(({ endpointID, value }) => (
-            endpointID === "laneTopology" && Number(value?.slotIds?.[0]) === 7
-        ));
+        const orderMessages = snapshot.sentMessages.filter(({ endpointID }) => endpointID === "laneTopology");
         assert.equal(orderMessages.length, 1, "drag previews must not write DSP structure");
-        assert.deepEqual(orderMessages[0].value.slotIds.slice(0, 8), [7, 0, 1, 2, 3, 4, 5, 6]);
+        assert.deepEqual(orderMessages[0].value.slotIds.slice(0, 8), [0, 1, 2, 7, 3, 4, 5, 6]);
     } finally {
         await page.close();
     }
@@ -6631,7 +6662,7 @@ test("desktop distortion wet low-pass knob renders the full 20 Hz floor", async 
     }
 });
 
-test("T25A: the composed Drive graph keeps its transfer curve aligned with contrasting live clipping", async () => {
+test("the composed Drive graph keeps its transfer curve aligned with contrasting live clipping", async () => {
     const page = await openHarnessPage();
 
     try {
@@ -6780,7 +6811,7 @@ test("T25A: the composed Drive graph keeps its transfer curve aligned with contr
         assert.equal(renderedState.history.removedPeak > 0.1, true);
         assert.equal(overlayState.effectEnabled, "true", "the composed Drive path must be enabled during proof");
         assert.equal(overlayState.curveCount, 1, "live telemetry must not hide the transfer function");
-        assert.equal(overlayState.viewBox, "0 0 600 340", "the compact pre-T25 canvas geometry must stay restored");
+        assert.equal(overlayState.viewBox, "0 0 600 340", "the Drive graph keeps its compact canvas geometry");
         assert.equal(Math.abs(overlayState.curveLeft - 12) <= 0.5, true);
         assert.equal(Math.abs(overlayState.curveRight - 588) <= 0.5, true);
         assert.equal(overlayState.curveWidthFraction >= 0.9, true, "transfer function must span the restored plot");
@@ -6898,7 +6929,7 @@ test("T25A: the composed Drive graph keeps its transfer curve aligned with contr
     }
 });
 
-test("T02C: the wavetable graphic shades only the armed source's live Index route on the focused oscillator", async () => {
+test("the wavetable graphic shades only the armed source's live Index route on the focused oscillator", async () => {
     const page = await openHarnessPage({
         beforeGoto: (nextPage) => nextPage.setViewportSize({ width: 393, height: 852 }),
     });
@@ -6979,7 +7010,7 @@ test("T02C: the wavetable graphic shades only the armed source's live Index rout
         }, state);
         await waitForHarnessSnapshot(
             page,
-            "seeded the T02C Index shading route",
+            "seeded the Index shading route",
             (snapshot) => {
                 const route = readStoredModulationState(snapshot).routes[0];
                 return route?.amount === amount && route?.enabled === enabled;
@@ -7084,7 +7115,7 @@ test("the instrument is never text-selectable; only real text entry opts back in
             "Double-tapping the collapsed bar must select no text.",
         );
 
-        // T43 gives the double-tap a deterministic open-then-close outcome;
+        // A double-tap has a deterministic open-then-close outcome;
         // no sheet may remain to cover subsequent navigation.
         assert.equal(await page.locator('[data-role="quick-source-sheet"]').count(), 0);
 
@@ -7111,7 +7142,7 @@ test("the instrument is never text-selectable; only real text entry opts back in
     }
 });
 
-test("T13: the quick sheet opens from the bar over Voice/FX, resizes, dismisses, and hands off to the full editor", async () => {
+test("the quick sheet opens from the bar over Voice/FX, resizes, dismisses, and hands off to the full editor", async () => {
     const page = await openHarnessPage({
         beforeGoto: (nextPage) => nextPage.setViewportSize({ width: 393, height: 852 }),
     });
@@ -7204,7 +7235,7 @@ test("T13: the quick sheet opens from the bar over Voice/FX, resizes, dismisses,
     }
 });
 
-test("T43: source taps toggle and switch the Voice/FX quick sheet without stealing drags or Mod behavior", async () => {
+test("source taps toggle and switch the Voice/FX quick sheet without stealing drags or Mod behavior", async () => {
     const page = await openHarnessPage({
         beforeGoto: (nextPage) => nextPage.setViewportSize({ width: 393, height: 852 }),
     });
@@ -7309,7 +7340,7 @@ test("T43: source taps toggle and switch the Voice/FX quick sheet without steali
         );
         const dragSnapshot = await waitForHarnessSnapshot(
             page,
-            "T43 Envelope drag",
+            "Envelope drag",
             (nextSnapshot) => readStoredModulationState(nextSnapshot).routes.length === routesBeforeDrag.length + 2,
         );
         const createdRoutes = readStoredModulationState(dragSnapshot).routes.filter((route) => !existingRouteIds.has(route.id));
@@ -7381,9 +7412,7 @@ test("T43: source taps toggle and switch the Voice/FX quick sheet without steali
         assert.equal(await sheet.count(), 0, "The quick sheet belongs to Voice/FX only.");
         await tapChip('[data-role="rack-mod-source-mseg-1"]');
         await page.waitForFunction(() => (
-            document.querySelector("cosimo-preset-bar")
-                ?.shadowRoot
-                ?.querySelector('[data-action="shell-back"]')
+            document.querySelector('[data-role="synth-preset-bar"] [data-action="shell-back"]')
                 ?.hasAttribute("disabled") === false
         ));
         assert.equal(await sheet.count(), 0, "The Mod source panel must never be replaced by a quick sheet.");
@@ -7392,7 +7421,7 @@ test("T43: source taps toggle and switch the Voice/FX quick sheet without steali
         await page.close();
     }
 });
-test("T20: long-press opens the ADR-017 parameter menu on Voice cells and quick-sheet cells", async () => {
+test("long-press opens the ADR-017 parameter menu on Voice cells and quick-sheet cells", async () => {
     const page = await openHarnessPage({
         beforeGoto: (nextPage) => nextPage.setViewportSize({ width: 393, height: 852 }),
     });
@@ -7411,16 +7440,34 @@ test("T20: long-press opens the ADR-017 parameter menu on Voice cells and quick-
         const cell = page.locator('[data-role="mobile-voice-cell-framePosition"]');
         await cell.waitFor();
 
-        // Movement past slop must NEVER open the menu (it is a drag).
-        {
-            const box = await cell.boundingBox();
-            await page.mouse.move(box.x + (box.width / 2), box.y + (box.height / 2));
-            await page.mouse.down();
-            await page.mouse.move(box.x + (box.width / 2) + 18, box.y + (box.height / 2), { steps: 3 });
-            await page.waitForTimeout(700);
-            assert.equal(await menu.count(), 0, "Movement must cancel the long press.");
-            await page.mouse.up();
-        }
+        // Movement past slop must NEVER open the menu (it is a drag). The press
+        // and its moves land in one page task, so the long-press timer cannot
+        // fire between them; waiting on the page's own timer queue then lets
+        // the long-press time pass for certain.
+        await cell.evaluate((element) => {
+            const bounds = element.getBoundingClientRect();
+            const mouseAt = (type, deltaX, buttons) => new PointerEvent(type, {
+                bubbles: true,
+                cancelable: true,
+                isPrimary: true,
+                pointerId: 1,
+                pointerType: "mouse",
+                button: 0,
+                buttons,
+                clientX: bounds.left + (bounds.width / 2) + deltaX,
+                clientY: bounds.top + (bounds.height / 2),
+            });
+            element.dispatchEvent(mouseAt("pointerdown", 0, 1));
+            for (const deltaX of [6, 12, 18]) {
+                element.dispatchEvent(mouseAt("pointermove", deltaX, 1));
+            }
+            window.__releaseSlopDrag = () => element.dispatchEvent(mouseAt("pointerup", 18, 0));
+        });
+        await page.evaluate(() => new Promise((resolve) => {
+            setTimeout(() => requestAnimationFrame(() => requestAnimationFrame(resolve)), 700);
+        }));
+        assert.equal(await menu.count(), 0, "Movement must cancel the long press.");
+        await page.evaluate(() => window.__releaseSlopDrag());
 
         // A stationary long press opens the menu for the pressed cell.
         await longPress(cell);
@@ -7487,7 +7534,7 @@ test("T20: long-press opens the ADR-017 parameter menu on Voice cells and quick-
         await page.click('[data-role="quick-source-sheet-full-editor"]');
         await page.locator('[data-role="mseg-editor-dialog"]').waitFor();
         // The floating Mod rail deliberately stays live ABOVE the editor
-        // (T11) and its persisted dock can cover parts of the controls row:
+        // and its persisted dock can cover parts of the controls row:
         // press a point of the Time knob the rail does not intercept.
         const timePress = await page.evaluate(() => {
             const knob = document.querySelector('[data-role="mseg-editor-cell-rate"]');
@@ -7517,7 +7564,7 @@ test("T20: long-press opens the ADR-017 parameter menu on Voice cells and quick-
     }
 });
 
-test("T20: desktop knobs and number fields long-press into the parameter menu", async () => {
+test("desktop knobs and number fields long-press into the parameter menu", async () => {
     const page = await openHarnessPage({
         beforeGoto: (nextPage) => nextPage.setViewportSize({ width: 1280, height: 900 }),
     });
@@ -7563,7 +7610,7 @@ test("T20: desktop knobs and number fields long-press into the parameter menu", 
     }
 });
 
-test("T13v2: the quick sheet's graphic is the REAL editor — MSEG points drag, the macro bar writes", async () => {
+test("the quick sheet's graphic is the REAL editor — MSEG points drag, the macro bar writes", async () => {
     const page = await openHarnessPage({
         beforeGoto: (nextPage) => nextPage.setViewportSize({ width: 393, height: 852 }),
     });
@@ -7590,13 +7637,11 @@ test("T13v2: the quick sheet's graphic is the REAL editor — MSEG points drag, 
         await page.mouse.down();
         await page.mouse.move(start.x, start.y + 40, { steps: 4 });
         await page.mouse.up();
-        await page.waitForFunction((previous) => {
-            const snapshot = window.__COSIMO_DESKTOP_HARNESS__.getSnapshot();
-            const raw = snapshot.storedStateValues?.["modulation.v6"] ?? snapshot.storedState?.["modulation.v6"];
-            return typeof raw === "string" && raw !== previous;
-        }, JSON.stringify(before) === "null" ? "" : undefined, { timeout: 5000 }).catch(() => null);
-        const after = readStoredMsegShape(await getHarnessSnapshot(page), 0);
-        assert.notDeepEqual(after, before, "Dragging a sheet point must edit the stored MSEG shape.");
+        await waitForHarnessSnapshot(
+            page,
+            "a sheet point drag edits the stored MSEG shape",
+            (snapshot) => !isDeepStrictEqual(readStoredMsegShape(snapshot, 0), before),
+        );
         await page.locator('[data-role="quick-source-sheet-close"]').click();
 
         // Envelope sheet: the graphic is the REAL draggable ADSR editor.
@@ -7629,7 +7674,7 @@ test("T13v2: the quick sheet's graphic is the REAL editor — MSEG points drag, 
     }
 });
 
-test("T21: a drag that dwell-navigates FX to Voice keeps eligibility and capture painting", async () => {
+test("a drag that dwell-navigates FX to Voice keeps eligibility and capture painting", async () => {
     // The drag machinery already captures cross-page targets; this pins the
     // PAINT: the mapping flag on the surface must survive React re-rendering
     // the surface's own attributes on the page switch.
@@ -7680,7 +7725,7 @@ test("T21: a drag that dwell-navigates FX to Voice keeps eligibility and capture
     }
 });
 
-test("T14: the Mod panels ARE the Voice selector component, restore per instance, and follow the bar", async () => {
+test("the Mod panels ARE the Voice selector component, restore per instance, and follow the bar", async () => {
     const page = await openHarnessPage({
         beforeGoto: (nextPage) => nextPage.setViewportSize({ width: 393, height: 852 }),
     });
@@ -7691,7 +7736,7 @@ test("T14: the Mod panels ARE the Voice selector component, restore per instance
         await tabs.waitFor();
 
         // Not an approximation: the SAME component and classes as the Voice
-        // A/B/C selector (T14's one-selector rule).
+        // A/B/C selector (one selector everywhere).
         assert.equal(await tabs.getAttribute("class"), "cosimo-tabs");
         assert.equal(await tabs.getAttribute("role"), "tablist");
         assert.deepEqual(
@@ -7735,7 +7780,7 @@ test("T14: the Mod panels ARE the Voice selector component, restore per instance
     }
 });
 
-test("T14: the SOURCE graph edits points directly with Expand explicit; the 320px toolbar stays composed", async () => {
+test("the SOURCE graph edits points directly with Expand explicit; the 320px toolbar stays composed", async () => {
     const page = await openHarnessPage({
         beforeGoto: (nextPage) => nextPage.setViewportSize({ width: 393, height: 852 }),
     });
@@ -7756,12 +7801,11 @@ test("T14: the SOURCE graph edits points directly with Expand explicit; the 320p
         await page.mouse.down();
         await page.mouse.move(start.x, start.y + 30, { steps: 4 });
         await page.mouse.up();
-        await page.waitForFunction((previousShape) => {
-            const raw = window.__COSIMO_DESKTOP_HARNESS__.getSnapshot().storedState["modulation.v6"];
-            return typeof raw === "string" && raw !== previousShape;
-        }, JSON.stringify(before), { timeout: 5000 }).catch(() => null);
-        const after = readStoredMsegShape(await getHarnessSnapshot(page), 0);
-        assert.notDeepEqual(after, before, "Dragging a SOURCE-panel point must edit the stored shape.");
+        await waitForHarnessSnapshot(
+            page,
+            "a SOURCE-panel point drag edits the stored MSEG shape",
+            (snapshot) => !isDeepStrictEqual(readStoredMsegShape(snapshot, 0), before),
+        );
 
         // The explicit Expand control opens the real full-screen editor.
         await page.click('[data-role="mod-source-mseg-expand"]');

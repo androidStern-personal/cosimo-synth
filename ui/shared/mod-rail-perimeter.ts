@@ -1,5 +1,5 @@
 /**
- * Pure geometry for the perimeter-docked mobile Mod rail (T10B).
+ * Pure geometry for the perimeter-docked mobile Mod rail.
  *
  * The rail docks flush against the left or right screen edge, travels
  * vertically inside a keep-out band (safe areas plus fixed chrome), snaps to
@@ -8,7 +8,7 @@
  * Everything here is side-effect free so the interaction layer stays thin.
  */
 
-/** T42's one proportional scale for the complete floating Mod rail. */
+/** The one proportional scale for the complete floating Mod rail. */
 export const MOBILE_MOD_RAIL_SCALE = 1.1;
 
 /** Measurable rail geometry in CSS pixels before or after proportional scaling. */
@@ -43,7 +43,7 @@ export type MobileModRailGeometry = {
     readonly ghostArt: number;
 };
 
-/** The measured pre-T42 geometry retained as the before side of the scale contract. */
+/** The measured unscaled geometry the scale applies to. */
 export const MOBILE_MOD_RAIL_BASE_GEOMETRY: MobileModRailGeometry = {
     safeGap: 8,
     dragThreshold: 7,
@@ -112,7 +112,7 @@ export function scaleMobileModRailGeometry(
     };
 }
 
-/** Shipping T42 geometry, derived once from the measured baseline. */
+/** The rail geometry, derived once from the measured baseline. */
 export const MOBILE_MOD_RAIL_GEOMETRY = scaleMobileModRailGeometry(
     MOBILE_MOD_RAIL_BASE_GEOMETRY,
     MOBILE_MOD_RAIL_SCALE,
@@ -304,10 +304,12 @@ function isRailEdge(value: unknown): value is RailEdge {
     return value === "left" || value === "right";
 }
 
+/** Where the floating rail stores its dock. */
+export const MOD_RAIL_DOCK_STORAGE_KEY = "cosimo.mobile-global-mod-rail.position.v1";
+
 /**
- * Parse a stored dock. Legacy formats (a bare number, or `{normalizedY}`)
- * predate edge docking and always meant the right edge. Stored state is
- * external input: anything unreadable yields null and the caller applies the
+ * Parse a stored dock. Stored state is external input: anything unreadable,
+ * including a dock without an edge, yields null and the caller applies the
  * default dock.
  */
 export function parseStoredRailDock(raw: string | null): RailDock | null {
@@ -322,30 +324,16 @@ export function parseStoredRailDock(raw: string | null): RailDock | null {
         return null;
     }
 
-    if (typeof parsed === "number") {
-        return Number.isFinite(parsed)
-            ? { edge: "right", normalizedY: clamp(parsed, 0, 1) }
-            : null;
-    }
-
     if (typeof parsed !== "object" || parsed === null) {
         return null;
     }
 
     const candidate = parsed as { edge?: unknown; normalizedY?: unknown };
     const normalizedY = Number(candidate.normalizedY);
-    if (!Number.isFinite(normalizedY)) {
+    if (!Number.isFinite(normalizedY) || !isRailEdge(candidate.edge)) {
         return null;
     }
-
-    if ("edge" in candidate) {
-        if (!isRailEdge(candidate.edge)) {
-            return null;
-        }
-        return { edge: candidate.edge, normalizedY: clamp(normalizedY, 0, 1) };
-    }
-
-    return { edge: "right", normalizedY: clamp(normalizedY, 0, 1) };
+    return { edge: candidate.edge, normalizedY: clamp(normalizedY, 0, 1) };
 }
 
 /**

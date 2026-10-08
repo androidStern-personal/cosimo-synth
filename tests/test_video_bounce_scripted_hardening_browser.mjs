@@ -6,7 +6,8 @@ import test, { after, before } from "node:test";
 import { chromium } from "playwright";
 
 import { routeHermeticPage } from "./helpers/hermetic_page.mjs";
-import { startStaticWebServer } from "./helpers/static_web_server.mjs";
+import { railRetreated } from "./helpers/scripted_rail.mjs";
+import { startStaticWebServer } from "../kit/tests/helpers/static_web_server.mjs";
 
 const repoRoot = path.resolve(import.meta.dirname, "..");
 const webRoot = path.join(repoRoot, "build", "web");
@@ -24,8 +25,10 @@ after(async () => {
     await server?.stop();
 });
 
-test("M3 full scripted renders are deterministic and paint the overlays", {
-    timeout: 1_800_000,
+test("full scripted renders are deterministic and paint the overlays", {
+    // Two renders of 1,206 1080x1920 frames, rasterized from the live page on
+    // the CPU; a four-core machine without a GPU draws under one a second.
+    timeout: 7_200_000,
 }, async () => {
     const page = await browser.newPage({ viewport: { width: 900, height: 700 } });
     const failures = [];
@@ -57,9 +60,9 @@ test("M3 full scripted renders are deterministic and paint the overlays", {
         assert.equal(render.inspectedFrames, report.durationInFrames);
         assert.deepEqual(render.digests.map(({ frame }) => frame), report.digestFrames);
 
-        // Absorbed from the retired scripted-state suite: the capture realm is
-        // a real 393x852 phone viewport, hit-testable, with the real keyboard
-        // and canvases mounted, and the performance MIDI lights a real key.
+        // The capture realm is a real 393x852 phone viewport, hit-testable,
+        // with the real keyboard and canvases mounted, and the performance
+        // MIDI lights a real key.
         for (const inspection of render.inspections) {
             assert.deepEqual(inspection.viewport, { width: 393, height: 852 });
             assert.equal(inspection.scaffoldHitTestable, true);
@@ -76,17 +79,19 @@ test("M3 full scripted renders are deterministic and paint the overlays", {
         assert.deepEqual(render.missedOps, []);
 
         // Paint-level gate: the mod rail must be visible pixels — not merely a
-        // DOM node — on every probed frame of the shipped composition.
+        // DOM node — on every probed frame it is on the phone and the end card
+        // does not cover it.
         assert.equal(render.pixelProbes.length, report.digestFrames.length);
         for (const probe of render.pixelProbes) {
+            const phone = probe.regions.phone;
+            assert.ok(phone && phone.lumaRange > 40, `frame ${probe.frame} phone region is blank`);
+            if (probe.frame >= report.endCardStartFrame || railRetreated(render.inspections, probe.frame)) continue;
             const rail = probe.regions.rail;
             assert.ok(rail, `frame ${probe.frame} probed no rail region`);
             assert.ok(
                 rail.lumaRange > 24,
                 `frame ${probe.frame} rail paints flat (lumaRange ${rail.lumaRange})`,
             );
-            const phone = probe.regions.phone;
-            assert.ok(phone && phone.lumaRange > 40, `frame ${probe.frame} phone region is blank`);
         }
     }
     assert.deepEqual(report.second.digests, report.first.digests);
@@ -106,7 +111,7 @@ test("M3 full scripted renders are deterministic and paint the overlays", {
 
     assert.deepEqual(failures, []);
     console.log(`# ${JSON.stringify({
-        videoBounceM3Hardening: {
+        videoBounceHardening: {
             durationInFrames: report.durationInFrames,
             digestFrames: report.digestFrames.length,
             firstElapsedMilliseconds: report.first.elapsedMilliseconds,

@@ -2,10 +2,11 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import path from "node:path";
 
-import { loadUIModule } from "./helpers/load_ui_module.mjs";
+import { loadUIModule } from "../kit/tests/helpers/load_ui_module.mjs";
 
 const repoRoot = path.resolve(import.meta.dirname, "..");
-const { createDefaultMsegShape, renderMsegShape } = await loadUIModule(repoRoot, "ui/shared/mseg.ts");
+const { createDefaultMsegShape } = await loadUIModule(repoRoot, "ui/shared/mseg.ts");
+const { renderMsegShape } = await loadUIModule(repoRoot, "kit/ui/mseg.ts");
 import { createModulationFixture, waitForModulation } from "./helpers/modulation_state_fixture.mjs";
 const {
     MODULATION_MSEG_BUFFER_ENDPOINT_ID,

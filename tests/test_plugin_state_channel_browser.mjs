@@ -6,19 +6,20 @@ import path from "node:path";
 import test, { after, before } from "node:test";
 import { fileURLToPath } from "node:url";
 import { chromium } from "playwright";
+import { cmajorExternalCodegen, cmajorSourceDirectory } from "./helpers/cmajor_source.mjs";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-const source = process.env.COSIMO_CMAJOR_SOURCE;
+const source = cmajorSourceDirectory();
 const build = path.join(root, "build/browser_plugin_state");
 const fixture = path.join(root, "tests/browser/fixtures/plugin_state_channel");
 let browser, page, server;
 const errors = [];
 
 before(async () => {
-    assert.ok(source, "Set COSIMO_CMAJOR_SOURCE to the isolated Cmajor worktree");
+    const codegen = cmajorExternalCodegen();
     await fs.mkdir(build, { recursive: true });
     const generated = path.join(build, "generated.js");
-    const result = spawnSync(path.join(root, "build/browser_plugin_state_generator/cosimo_cmajor_external_codegen"), [
+    const result = spawnSync(codegen, [
         path.join(root, "tests/native/fixtures/plugin_state_channel/PluginStateChannel.cmajorpatch"), generated,
         "PluginStateChannel", "--target", "javascript", "--max-frames-per-block", "128",
     ], { encoding: "utf8", timeout: 60_000 });
@@ -26,7 +27,7 @@ before(async () => {
     assert.equal(result.status, 0, result.stderr);
     await fs.appendFile(generated, "\nexport default PluginStateChannel;\n");
     const sparseGenerated = path.join(build, "sparse.js");
-    const sparseResult = spawnSync(path.join(root, "build/browser_plugin_state_generator/cosimo_cmajor_external_codegen"), [
+    const sparseResult = spawnSync(codegen, [
         path.join(fixture, "Sparse.cmajorpatch"), sparseGenerated, "Sparse", "--target", "javascript", "--max-frames-per-block", "128",
     ], { encoding: "utf8", timeout: 60_000 });
     if (sparseResult.error) throw sparseResult.error;
@@ -179,7 +180,7 @@ test("same browser connection reattach replaces binding identity after its old r
         const { a, first } = window.fixture.clients;
         const old = first.find(body => body.kind === "attached");
         const command = (client, sequence, kind) => a.sendMessageToServer({ type: "kit_state", message: {
-            kind: "command", scope: old.scope, client, sequence, command: { kind, key: "gain", gesture: 1, value: 3.5 }
+            kind: "command", scope: old.scope, client, sequence, command: kind === "begin" ? { kind, keys: ["gain"], gesture: 1 } : { kind, key: "gain", gesture: 1, value: 3.5 }
         }});
         command(old.client, 4, "begin");
         command(old.client, 5, "edit");

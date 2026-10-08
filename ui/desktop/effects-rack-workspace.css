@@ -263,7 +263,7 @@
     text-align: right;
 }
 
-/* T28: the lane terminates at one visible, immutable boundary. This is a
+/* The lane terminates at one visible, immutable boundary. This is a
    selector only—there are deliberately no drag, menu, power, or add affordances. */
 .rack-polish-boundary {
     position: relative;
@@ -1584,8 +1584,8 @@
 }
 
 /* ADR-025 row 13 (capture treatment) lives in styles.css: the one rule with
-   the specificity to beat the eligibility outline. A weaker duplicate here
-   never won and was deleted with the T08A fix. */
+   the specificity to beat the eligibility outline, so this sheet must not
+   restate it. */
 
 .rack-editor-control.is-suspended {
     background-image: repeating-linear-gradient(

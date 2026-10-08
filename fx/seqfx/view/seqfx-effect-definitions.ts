@@ -182,14 +182,13 @@ const definitions = [
         parameters: [
             parameter("mode", "Mode", 0, 2, 0, 1, { latch: "trigger", auxEligible: false, integer: true, options: ["Low Pass", "High Pass", "Band Pass"] }),
             parameter("cutoff", "Cutoff", 20, 20_000, 2_000, 1, { unit: "Hz", scale: "log", hint: "Start frequency for the authored filter move." }),
-            parameter("legacyEndCutoff", "End Cutoff", 20, 20_000, 500, 1, { unit: "Hz", scale: "log", auxEligible: false, section: "advanced", hint: "Stored end point edited by the filter range surface." }),
+            parameter("endCutoff", "End Cutoff", 20, 20_000, 500, 1, { unit: "Hz", scale: "log", auxEligible: false, section: "advanced", hint: "Stored end point edited by the filter range surface." }),
             parameter("resonance", "Resonance", 0.1, 20, 0.707, 0.001, { unit: "Q", scale: "log" }),
-            parameter("durationScale", "Duration", 0.25, 4, 1, 0.01, { unit: "x", auxEligible: false, section: "advanced", hint: "Legacy timing scale retained for state compatibility." }),
         ],
         factoryPresets: [
-            { id: "warm-low-pass", name: "Warm Low Pass", description: "Softly removes the top without hollowing the source.", mix: 0.72, params: [0, 1_250, 1_250, 0.82, 1] },
-            { id: "telephone-band", name: "Telephone Band", description: "Focused mid-band for vocal and drum punctuation.", mix: 0.82, params: [2, 1_350, 1_350, 2.4, 1] },
-            { id: "air-cut", name: "Air Cut", description: "High-pass utility move with restrained resonance.", mix: 0.68, params: [1, 5_800, 5_800, 0.9, 1] },
+            { id: "warm-low-pass", name: "Warm Low Pass", description: "Softly removes the top without hollowing the source.", mix: 0.72, params: [0, 1_250, 1_250, 0.82] },
+            { id: "telephone-band", name: "Telephone Band", description: "Focused mid-band for vocal and drum punctuation.", mix: 0.82, params: [2, 1_350, 1_350, 2.4] },
+            { id: "air-cut", name: "Air Cut", description: "High-pass utility move with restrained resonance.", mix: 0.68, params: [1, 5_800, 5_800, 0.9] },
         ],
     },
     {
