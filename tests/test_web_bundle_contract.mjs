@@ -800,6 +800,7 @@ test("web host packaging includes every runtime-owned module", async (context) =
         "index.html",
         "favicon.svg",
         "phone-shell.js",
+        "og-image.png",
         "cosimo-midi.mjs",
         "cosimo-web-host.js",
         "browser-audio-lifecycle.mjs",

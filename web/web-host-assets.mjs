@@ -9,6 +9,7 @@ export const WEB_HOST_ASSET_ENTRIES = Object.freeze([
     { source: "index.html", target: "synth.html" },
     { source: "phone-shell.js", target: "phone-shell.js" },
     { source: "favicon.svg", target: "favicon.svg" },
+    { source: "og-image.png", target: "og-image.png" },
     { source: "cosimo-web-host.js", target: "cosimo-web-host.js" },
     { source: "cosimo-midi.mjs", target: "cosimo-midi.mjs" },
     { source: "browser-audio-lifecycle.mjs", target: "browser-audio-lifecycle.mjs" },
