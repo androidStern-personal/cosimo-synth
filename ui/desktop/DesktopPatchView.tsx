@@ -6133,6 +6133,14 @@ function DesktopPatchViewBody({
             ));
             return;
         }
+        if (isCompactViewport && synthView.msegEditor.isOpen) {
+            // The full MSEG editor is up, so the tab closes it. Stacking the
+            // quick sheet on top would mount a second MSEG surface that fights
+            // the editor over the shared orientation state (React #185).
+            synthView.msegEditor.closeEditor();
+            setQuickEditorSource(null);
+            return;
+        }
         const closesCurrentQuickEditor = quickEditorSource?.sourceKind === source.sourceKind
             && quickEditorSource.sourceSlot === source.sourceSlot;
         // Keep the selected editor binding in the same React batch as the
@@ -6153,6 +6161,9 @@ function DesktopPatchViewBody({
         synthView.handleSelectEnvelopeSlot,
         synthView.handleSelectMsegSlot,
         synthView.msegEditor.beginEditorSession,
+        isCompactViewport,
+        synthView.msegEditor.closeEditor,
+        synthView.msegEditor.isOpen,
     ]);
     const handleGlobalModSourceDrop = useCallback((source: GlobalModRailState["selectedSource"]) => {
         if (mobileWorkspaceSection === "mod" && synthView.msegEditor.isOpen) {
@@ -6799,6 +6810,7 @@ function DesktopPatchViewBody({
 
             {!polishEditorExpanded
                 && isCompactViewport
+                && !synthView.msegEditor.isOpen
                 && quickEditorSource !== null
                 && mobileWorkspaceSection !== "mod" ? (
                 <MobileQuickSourceSheet
