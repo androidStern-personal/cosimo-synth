@@ -1,5 +1,5 @@
 // Enhance That's editor. Edit it live with `npm run fx:dev`; `npm run fx:build -- enhancer-lite` bundles it.
-import { useId } from "react";
+import { useEffect, useId, useRef } from "react";
 import { createStatefulPatchView, usePluginHistory, PresetBar, SnapshotBar,
     type BrowserPreviewParameter, type PluginStateControl } from "../../../kit/index";
 import definition from "../state";
@@ -8,6 +8,7 @@ import * as band from "./quantities";
 import { Readout } from "./readout";
 import { ResponseGraph } from "./response-graph";
 import { useSound } from "./sound";
+import { createTrialReminder } from "./trial";
 
 /** The DSP's eight sound parameters, for the silent browser preview. */
 export const browserPreviewParameters = [
@@ -35,6 +36,18 @@ function Choice({ label, options, control, value }: {
     </div>;
 }
 
+/** Trial builds show the purchase reminder each time the editor opens; it never touches audio or state. */
+function TrialReminder() {
+    const host = useRef<HTMLDivElement>(null);
+    useEffect(() => {
+        const dialog = createTrialReminder();
+        host.current?.append(dialog);
+        dialog.showModal();
+        return () => { dialog.close(); dialog.remove(); };
+    }, []);
+    return <div ref={host} />;
+}
+
 function View() {
     const history = usePluginHistory();
     const { controls, sound } = useSound();
@@ -42,6 +55,7 @@ function View() {
     const unavailable = Object.values(controls).some(control => control.state.status === "invalid" || control.state.status === "unavailable");
     const midSide = sound !== null && sound.routing >= 0.5;
     return <div className="enhance-that">
+        {typeof import.meta.env !== "undefined" && import.meta.env.VITE_ENHANCE_THAT_TRIAL === "1" && <TrialReminder />}
         <header className="plugin-header">
             <PresetBar definition={definition} />
             <SnapshotBar definition={definition} />

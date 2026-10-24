@@ -1391,12 +1391,14 @@ export async function assertSeqFxDistributableExecutableIsSourceFree(executableP
         }
     }
 
-    const sourceMapFilenames = executableText.match(/[A-Za-z0-9_@+./?-]+\.(?:css|js)\.map/gu) ?? [];
+    // Start once per filename token. Retrying the greedy prefix at every byte
+    // makes a large embedded base64 image take quadratic time to reject.
+    const sourceMapFilenames = executableText.match(/(?<![A-Za-z0-9_@+./?-])[A-Za-z0-9_@+./?-]+\.(?:css|js)\.map/gu) ?? [];
     for (const filename of new Set(sourceMapFilenames)) {
         findings.push(`source map filename ${filename}`);
     }
 
-    const typeScriptFilenames = executableText.match(/[A-Za-z0-9_@+./?-]+\.(?:cts|mts|ts|tsx)(?=[^A-Za-z0-9_]|$)/gu) ?? [];
+    const typeScriptFilenames = executableText.match(/(?<![A-Za-z0-9_@+./?-])[A-Za-z0-9_@+./?-]+\.(?:cts|mts|ts|tsx)(?=[^A-Za-z0-9_]|$)/gu) ?? [];
     for (const filename of new Set(typeScriptFilenames)) {
         findings.push(`TypeScript filename ${filename}`);
     }
@@ -1790,7 +1792,7 @@ export async function deterministicCpioPayload(rootPath, sourceDateEpoch) {
     });
 }
 
-export function renderPackageInfo(config, payloadEntries, { preinstall = false, packageVersion = config.identity.pluginVersion } = {}) {
+export function renderPackageInfo(config, payloadEntries, { preinstall = false, postinstall = false, packageVersion = config.identity.pluginVersion } = {}) {
     const installKBytes = Math.ceil(payloadEntries.reduce((sum, entry) => sum + entry.size, 0) / 1024);
     const numberOfFiles = payloadEntries.length + 1;
     const bundles = declaredPayloadBundles(config);
@@ -1799,7 +1801,7 @@ export function renderPackageInfo(config, payloadEntries, { preinstall = false, 
         '<?xml version="1.0" encoding="utf-8"?>',
         `<pkg-info overwrite-permissions="true" relocatable="false" identifier="${xmlEscape(config.identity.installerIdentifier)}" postinstall-action="none" version="${xmlEscape(packageVersion)}" format-version="2" generator-version="cosimo-release-builder-v2" install-location="/" auth="root">`,
         `    <payload numberOfFiles="${numberOfFiles}" installKBytes="${installKBytes}"/>`,
-        ...(preinstall ? ['    <scripts><preinstall file="./preinstall"/></scripts>'] : []),
+        ...(preinstall || postinstall ? [`    <scripts>${preinstall ? '<preinstall file="./preinstall"/>' : ''}${postinstall ? '<postinstall file="./postinstall"/>' : ''}</scripts>`] : []),
         ...bundles.map(bundle => `    <bundle path="${xmlEscape(`./${bundle.relativePath}`)}" id="${xmlEscape(config.identity.patchId)}" CFBundleShortVersionString="${xmlEscape(config.identity.pluginVersion)}" CFBundleVersion="${xmlEscape(config.identity.pluginVersion)}"/>`),
         "    <bundle-version>",
         `        <bundle id="${xmlEscape(config.identity.patchId)}"/>`,
@@ -1825,14 +1827,17 @@ export async function buildUnsignedFlatPackage(config, stagingRoot, packagePath,
 
     await rm(packageRoot, { recursive: true, force: true });
     await mkdir(packageRoot, { recursive: true });
-    await writeFile(packageInfoPath, renderPackageInfo(config, payloadEntries, { preinstall: scriptsRoot !== null, packageVersion }), "utf8");
+    const scriptEntries = scriptsRoot === null ? [] : await readdir(scriptsRoot);
+    for (const name of scriptEntries) {
+        if (!["preinstall", "postinstall"].includes(name) || !(await lstat(path.join(scriptsRoot, name))).isFile())
+            throw new Error("Package scripts must be regular preinstall or postinstall files.");
+    }
+    await writeFile(packageInfoPath, renderPackageInfo(config, payloadEntries, {
+        preinstall: scriptEntries.includes("preinstall"), postinstall: scriptEntries.includes("postinstall"), packageVersion,
+    }), "utf8");
     await normalizeTreeTimestamps(stagingRoot, sourceDateEpoch);
     await writeFile(payloadPath, await deterministicCpioPayload(stagingRoot, sourceDateEpoch));
     if (scriptsRoot !== null) {
-        const scriptEntries = await readdir(scriptsRoot);
-        if (scriptEntries.length !== 1 || scriptEntries[0] !== "preinstall"
-            || !(await lstat(path.join(scriptsRoot, "preinstall"))).isFile())
-            throw new Error("Package scripts must contain only the regular preinstall file.");
         await normalizeTreeTimestamps(scriptsRoot, sourceDateEpoch);
         await writeFile(path.join(packageRoot, "Scripts"), await deterministicCpioPayload(scriptsRoot, sourceDateEpoch));
     }

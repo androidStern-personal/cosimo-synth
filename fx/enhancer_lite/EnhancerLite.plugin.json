@@ -9,7 +9,7 @@
     "bundleIdentifier": "dev.cosimo.enhancer-lite",
     "pluginCode": "CsEL",
     "manufacturerCode": "Cosi",
-    "version": "0.1.0"
+    "version": "0.1.8"
   },
   "stateSource": "fx/enhancer_lite/state.ts",
   "runtimeOut": "build/fx/enhancer_lite_runtime",

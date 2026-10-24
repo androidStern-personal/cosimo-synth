@@ -73,6 +73,20 @@ if(NOT TARGET "${BUILDER_KIT_EFFECT_PLUGIN_TARGET}")
     message(FATAL_ERROR "Generated JUCE target not found: ${BUILDER_KIT_EFFECT_PLUGIN_TARGET}")
 endif()
 
+# An explicitly selected, authored product wrapper may include the unchanged
+# generated translation unit. Ordinary customer builds keep the generated factory.
+if(DEFINED ENV{KIT_NATIVE_WRAPPER_SOURCE} AND NOT "$ENV{KIT_NATIVE_WRAPPER_SOURCE}" STREQUAL "")
+    file(REAL_PATH "$ENV{KIT_NATIVE_WRAPPER_SOURCE}" _kit_wrapper)
+    if(NOT EXISTS "${_kit_wrapper}")
+        message(FATAL_ERROR "Authored native wrapper does not exist")
+    endif()
+    get_target_property(_kit_sources "${BUILDER_KIT_EFFECT_PLUGIN_TARGET}" SOURCES)
+    list(FILTER _kit_sources EXCLUDE REGEX "(^|/)cmajor_plugin\\.cpp$")
+    set_property(TARGET "${BUILDER_KIT_EFFECT_PLUGIN_TARGET}" PROPERTY SOURCES "${_kit_sources}")
+    target_sources("${BUILDER_KIT_EFFECT_PLUGIN_TARGET}" PRIVATE "${_kit_wrapper}")
+    target_include_directories("${BUILDER_KIT_EFFECT_PLUGIN_TARGET}" PRIVATE "${BUILDER_KIT_EFFECT_OUTPUT_DIR}")
+endif()
+
 include("${CMAKE_CURRENT_LIST_DIR}/read_generated_plugin_info_class.cmake")
 builder_kit_read_generated_plugin_info_class(
     _builder_kit_generated_plugin_info_class
