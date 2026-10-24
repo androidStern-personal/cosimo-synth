@@ -77,6 +77,27 @@ what a version number promises.
 - **Tools for publishing the kit itself are no longer shipped.** The kit now
   holds only what a plugin project uses.
 
+### Removed
+
+- **Old preset, snapshot and header code.** `kit/ui/effects/` is gone: the
+  preset and snapshot stores, preset bar, snapshot bar, effect header, toast,
+  browser-preview helpers and `effect-view-loader.js`. Presets and snapshots
+  are now plugin state (see Added), and the view loader is
+  `kit/ui/view-loader.js`.
+- **Shared editor tokens.** `kit/ui/editor-tokens.css` and `editor-tokens.ts`
+  are gone. Each control carries its own stylesheet (`knob.css`, `slider.css`,
+  `filter-editor.css`, `mseg.css`, `preset-bar.css`, `snapshot-bar.css`); style
+  your plugin in its own CSS.
+- **Replaced controls.** `editor-tick-slider` (now `Slider`) and
+  `filter-range-editor` (now `FilterEditor`), plus internal helpers
+  (`curve-lab`, `analyzer-activity`, `enhancer-spectrum`, `user-edit-bus`,
+  `patch-worker-services`, `stored-state-runtime-mirror`).
+- **`effectPlugins` from `kit/fx/build-effect.mjs`.** Call `getEffectPlugins()`
+  instead; discovery now runs when you ask for it.
+- **Kit publishing tools** (`export_kit.mjs`, the `cosimo-make-plugin` skill,
+  CmajPlugin build and install scripts, `CosimoDependencies.cmake`) and the
+  kit's own tests for the removed code.
+
 ### Known issues
 
 - Shared audio data in a browser needs a cross-origin isolated page (COOP and
@@ -92,6 +113,23 @@ Copy this prompt into your coding agent:
 
 Take the new lockfile and tool pins through the normal merge, run `npm ci`,
 then run `npm run kit:setup` when strict doctor reports a tool mismatch.
+
+Then fix each plugin you made with `npm run kit:new` on 0.1.x:
+
+1. Re-point its view loader:
+   `ln -sfn ../../../kit/ui/view-loader.js fx/<plugin>/view/index.js`.
+2. In its view, import `BrowserPreviewParameter` instead of
+   `EffectParameterContract` (same fields).
+3. In its starter test `tests/test_<plugin>_state.mjs`, replace
+   `const { effectPlugins } = await loadDiscovery();` with
+   `const effectPlugins = (await loadDiscovery()).getEffectPlugins();`, and
+   compare `view/index.js` with `kit/ui/view-loader.js` instead of
+   `kit/ui/effects/effect-view-loader.js`.
+4. If you edited `kit/ui/editor-tokens.css`, the merge stops on it because
+   0.2.0 deletes that file. Copy your values into your plugin's own CSS, then
+   accept the deletion with `git rm kit/ui/editor-tokens.css`.
+
+Finish with `npm run typecheck` and `npm test`; both must pass.
 
 ## 0.1.5 (2026-09-09) — First release
 
