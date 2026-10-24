@@ -55,7 +55,7 @@ function View() {
     const unavailable = Object.values(controls).some(control => control.state.status === "invalid" || control.state.status === "unavailable");
     const midSide = sound !== null && sound.routing >= 0.5;
     return <div className="enhance-that">
-        {import.meta.env.VITE_ENHANCE_THAT_TRIAL === "1" && <TrialReminder />}
+        {typeof import.meta.env !== "undefined" && import.meta.env.VITE_ENHANCE_THAT_TRIAL === "1" && <TrialReminder />}
         <header className="plugin-header">
             <PresetBar definition={definition} />
             <SnapshotBar definition={definition} />
