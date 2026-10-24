@@ -1,10 +1,13 @@
 # Builder Kit 0.2.0 release plan
 
-**Prepared and qualified; not published.** Current checklist below; [qualification evidence](FINAL-PREPARATION-2026-10-04.md) stays separate.
+**Prepared and qualified; not published.** Status as of 2026-10-24. Current checklist below; [qualification evidence](FINAL-PREPARATION-2026-10-04.md) stays separate.
 
 ## Source and scope
 
-- Kit: `codex/builder-kit-020-candidate`; qualified code **9b852923**. The 0.2.0 review cleanup (`claude/builder-kit-020-review-fixes`) changes the customer kit after that qualification, so the qualification gates run again on the cleaned-up source.
+- Kit: `codex/builder-kit-020-candidate`; qualified code **9b852923**. The 0.2.0 review cleanup (`claude/builder-kit-020-review-fixes`, tip `0511fc18`) changes the customer kit after that qualification, so the qualification gates ran again on the cleaned-up source (see the checklist).
+- `claude/builder-kit-020-review-fixes-checkpoints` needs no merge: its tip `e60b2e73` has the same tree as `9bc4a877`, the squashed cleanup commit on review-fixes. Keep it only as history.
+- Release source now: review-fixes plus the MSEG close-crash fix and link-preview tags (PR #5 into master), plus the Enhance That 0.1.8 trial/full variants from `codex/enhance-that-trial-release` (merged on `claude/project-thread-zx4o50`). The trial merge touches customer files under `fx/enhancer_lite` and `kit/tools/effect_plugin_build`; the reminder is compiled out unless the release builder asks for the trial variant.
+- Customer ancestry: paying owners have **0.1.5** (tag `v0.1.5`, branch `codex/private-preview-v0.1.5` in `builder-kit-releases`), not the 0.1.2 on that repo's `master`. Run the real release with `--lineage` checked out on a branch whose tip is `v0.1.5`.
 - Website/email: `codex/builder-kit-release-email-318e`; qualified code **dbab0d5** in [song-machines-website](https://github.com/androidStern-personal/song-machines-website/tree/dbab0d5542166b3a451d5973de17999846f8c2e6). Later evidence commits leave runtime/assets unchanged.
 
 | Workstream | Status and source of truth |
@@ -23,10 +26,11 @@
 
 **Done when:** the release tag is in the lineage, the feed manifest and release page are live, the owner email batch is delivered, the evidence is archived, master is integrated, and the next release is open.
 
-- [ ] Requalify the cleaned-up source: export proof, customer install, 0.1.0 update with a customized plugin, browser/audio, native build and pluginval. Update the qualification date in `kit/docs/COMPATIBILITY.md` if it changes.
+- [x] Requalify the cleaned-up source. Oct 8 release-gate rerun on the Mac: typecheck, `npm test`, `test:dsp` 148/148, Enhance That and synth native builds ([evidence](../../../evidence/2026-10-08-builder-kit-020-release-gate/README.md)). Oct 17: the same suite green on Linux (1240 tests, DSP 148/148) and both native builds installed on the Mac.
+- [ ] Recheck after the trial merge: on Linux, `npm test` (1240), the Enhance That view tests (59), `test:enhance-that:release`, and the release wrapper compile pass, and a `kit:release --dry-run` export proof (typecheck/test, Enhance That build, update-flow merge) passes. Still to run on the Mac: customer install, the 0.1.5 update with a customized plug-in, pluginval, and both Enhance That variants (`node scripts/build_enhance_that_release.mjs --release --include-au --version 0.1.8 --variant trial|full`). Update the qualification date in `kit/docs/COMPATIBILITY.md` if it changes.
 - [ ] Hear the customer-built plug-in in a DAW; edit, Undo/Redo, save and reopen. Record listening acceptance.
-- [ ] Review/integrate both source branches through the coordinator. Confirm protected production configuration, exact release source, archive hashes and preserved customer ancestry. The release helper stamps the changelog date from the source commit.
-- [ ] Publish through the existing kit/feed release helper; deploy the website and sender. Verify production download/install/update, notes/video, access recovery and checkout compatibility. Retain the previous release for recovery.
+- [ ] Review/integrate both source branches through the coordinator. Kit: merge PR #5, then the trial-merge PR. Website: `codex/builder-kit-release-email-318e` and `codex/store-analytics` (live in production, not on `main`). Confirm protected production configuration, exact release source, archive hashes and preserved customer ancestry. The release helper stamps the changelog date from the source commit.
+- [ ] Publish through the existing kit/feed release helper; deploy the website and sender. A Linux `--dry-run` on 2026-10-24 completed every local step (export of 259 files and proof, lineage commit and `v0.2.0` tag on a throwaway clone, `kit.git`/`cmajor.git`/`choc.git` mirrors with the relative CHOC URL, manifest) and skipped the tool builds, push and feed copy as designed; the publication-order tests cover the additive copy. The real run needs the Mac (tool builds, Keychain cohort) and the R2 destination. Verify production download/install/update, notes/video, access recovery and checkout compatibility. Retain the previous release for recovery.
 - [ ] Canary: update the owner's second Mac and one friendly owner from 0.1.0, using the published feed and the email's update prompt. Wait 48–72 hours. Continue only if both updates pass strict doctor, `npm test`, a build and a DAW project reopen, and no new support issue is open. A failure means a 0.2.1 fix, never an edit to the published release.
 - [ ] Configure the deployed store's Resend callback/signing secret. Review rendered email and recipient count; verify an explicitly authorized operator delivery and its callback/inbox result.
 - [ ] Send the approved owner notice using the published version/links. Check delivery outcomes; retry through the existing operator procedure. Publish approved video/social copy.
@@ -36,7 +40,7 @@
 
 For the first week, triage the support inbox daily. Log each reported setup or update failure with the customer's strict doctor JSON (private addresses removed) and decide whether it needs a patch release. The release page carries a **Known issues** block the owner edits directly, without a kit release; copy each confirmed issue there and into the next changelog. There is no telemetry. Never paste access tokens or customer lists into public assets.
 
-Production configuration is still needed. At the October 4 check, notes returned 404 and recovery returned 200. Pushing these branches does not publish the release.
+Production configuration is still needed. At the October 4 check, notes returned 404 and recovery returned 200. On October 17 the Polar webhook pointed at a deleted Vercel preview (HTTP 410); point it at the stable production endpoint before any send. Pushing these branches does not publish the release.
 
 ## Broader product launch
 

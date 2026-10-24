@@ -93,7 +93,7 @@ Copy this prompt into your coding agent:
 Take the new lockfile and tool pins through the normal merge, run `npm ci`,
 then run `npm run kit:setup` when strict doctor reports a tool mismatch.
 
-## 0.1.0 (2026-10-04) — First release
+## 0.1.5 (2026-09-09) — First release
 
 Guided setup into the Documents folder, a first-task choice, a tracked
 dependency lockfile, and an update flow that preserves local plugin edits.
