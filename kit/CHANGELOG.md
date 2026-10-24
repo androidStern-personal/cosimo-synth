@@ -114,7 +114,12 @@ Copy this prompt into your coding agent:
 Take the new lockfile and tool pins through the normal merge, run `npm ci`,
 then run `npm run kit:setup` when strict doctor reports a tool mismatch.
 
-Then fix each plugin you made with `npm run kit:new` on 0.1.x:
+If you edited `kit/ui/editor-tokens.css`, the merge stops on it because 0.2.0
+deletes that file. Copy your values into your plugin's own styles (for a plugin
+made by `npm run kit:new` on 0.1.x, the `:host` style in `view/source.ts`), then
+accept the deletion with `git rm kit/ui/editor-tokens.css` and finish the merge.
+
+After the merge, fix each plugin you made with `npm run kit:new` on 0.1.x:
 
 1. Re-point its view loader:
    `ln -sfn ../../../kit/ui/view-loader.js fx/<plugin>/view/index.js`.
@@ -125,9 +130,6 @@ Then fix each plugin you made with `npm run kit:new` on 0.1.x:
    `const effectPlugins = (await loadDiscovery()).getEffectPlugins();`, and
    compare `view/index.js` with `kit/ui/view-loader.js` instead of
    `kit/ui/effects/effect-view-loader.js`.
-4. If you edited `kit/ui/editor-tokens.css`, the merge stops on it because
-   0.2.0 deletes that file. Copy your values into your plugin's own CSS, then
-   accept the deletion with `git rm kit/ui/editor-tokens.css`.
 
 Finish with `npm run typecheck` and `npm test`; both must pass.
 

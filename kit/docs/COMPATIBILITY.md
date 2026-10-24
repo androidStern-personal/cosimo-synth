@@ -52,7 +52,7 @@ the new release before it merges anything.
 | Plugin format | VST3. No AU, AAX, Windows or Intel builds. |
 | Hosts | Any VST3 host on that Mac. Logic Pro and other AU-only hosts cannot load these plugins. [Host compatibility](HOST_COMPATIBILITY.md) lists known host problems. |
 
-Release 0.2.0 was qualified on an Apple silicon Mac on 4 October 2026: a clean
+Release 0.2.0 was qualified on an Apple silicon Mac on 24 October 2026: a clean
 install and test run, an update from 0.1.5 that kept customer edits, and
 pluginval at strictness 5 for the included Enhance That and the generic
 `CmajPlugin.vst3` loader. Each release is also heard in a DAW before it is
