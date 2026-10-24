@@ -8,7 +8,7 @@ import { getEffectPlugin, repoRoot } from "../kit/fx/build-effect.mjs";
 import { hashInstalledPayload } from "../kit/scripts/toolchain.mjs";
 import { findChocMarkerViolations } from "../kit/scripts/check_choc_markers.mjs";
 import { enhanceThatNativeDependencies } from "./enhance-that-release-config.mjs";
-import { renderEnhanceThatPreinstall } from "./enhance-that-installer.mjs";
+import { renderEnhanceThatPreinstall, renderEnhanceThatPostinstall, renderEnhanceThatReadme } from "./enhance-that-installer.mjs";
 import { buildSourceCmaj, withSourceCmaj } from "./source_cmaj.mjs";
 import {
     adHocVst3SigningArgs, assertArchiveTreeContainsOnlyFilesAndDirectories,
@@ -30,7 +30,7 @@ const identity = Object.freeze({
 });
 
 export function parseEnhanceThatArgs(args) {
-    const options = { mode: "plan", repeat: false, auDeferred: null, includeAU: false };
+    const options = { mode: "plan", repeat: false, auDeferred: null, includeAU: false, variant: "full", version: null };
     let modeSpecified = false;
     for (let i = 0; i < args.length; i++) {
         const arg = args[i];
@@ -38,6 +38,12 @@ export function parseEnhanceThatArgs(args) {
             if (modeSpecified) throw new Error("Choose one packaging mode.");
             options.mode = arg.slice(2);
             modeSpecified = true;
+        } else if (arg === "--variant") {
+            if (!["trial", "full"].includes(args[i + 1])) throw new Error("Choose --variant trial or full.");
+            options.variant = args[++i];
+        } else if (arg === "--version") {
+            if (options.version !== null || !/^\d+\.\d+\.\d+$/u.test(args[i + 1] ?? "")) throw new Error("Choose one numeric --version.");
+            options.version = args[++i];
         } else if (arg === "--verify-repeatable-packaging") options.repeat = true;
         else if (arg === "--include-au") options.includeAU = true;
         else if (arg === "--au-deferred") {
@@ -115,7 +121,7 @@ export function selectEnhanceThatSigningIdentities(output, environment = process
 export async function claimEnhanceThatOutput(directory, { repositoryRoot = repoRoot } = {}) {
     const root = await realpath(repositoryRoot);
     const relative = path.relative(root, path.resolve(directory));
-    if (!/^release\/enhance-that\/\d+\.\d+\.\d+\/(unsigned|release)$/u.test(relative))
+    if (!/^release\/enhance-that\/\d+\.\d+\.\d+\/(?:(?:trial|full)\/)?(unsigned|release)$/u.test(relative))
         throw new Error("Enhance That output must remain inside this worktree's versioned release directory.");
     let current = root;
     for (const component of relative.split(path.sep).slice(0, -1)) {
@@ -158,8 +164,8 @@ async function staticDspEvidence(config, cmakeExecutable, output) {
             const thin = path.join(memberDirectory, `${architecture}.a`);
             run("/usr/bin/lipo", [shared, "-thin", architecture, "-output", thin]);
             const members = run("/usr/bin/ar", ["-t", thin]).split(/\r?\n/u).filter(Boolean);
-            assert.ok(members.includes("cmajor_plugin.cpp.o"));
-            assert.ok(members.every(name => name === "__.SYMDEF" || name === "cmajor_plugin.cpp.o" || /^juce_[A-Za-z0-9_]+\.(?:cpp|mm|c)\.o$/u.test(name)), "Unexpected native archive member");
+            assert.ok(members.includes("ReleasePlugin.cpp.o"));
+            assert.ok(members.every(name => name === "__.SYMDEF" || name === "ReleasePlugin.cpp.o" || /^juce_[A-Za-z0-9_]+\.(?:cpp|mm|c)\.o$/u.test(name)), "Unexpected native archive member");
             membersByArchitecture[architecture] = members;
         }
     } finally { await rm(memberDirectory, { recursive: true }); }
@@ -175,7 +181,7 @@ async function staticDspEvidence(config, cmakeExecutable, output) {
         assert.ok(!/llvm|libcmajor|libcmaj|\.dylib\b/iu.test(link), "Unexpected engine or external library in native link recipe");
         links[format] = { linkRecipeSha256: hash(link), linkedClientObjects: linkedObjects.map(object => path.basename(object)) };
     }
-    return { generatedCppSha256: hash(cpp), wrapperHeaderSha256: hash(header), ...links.VST3,
+    return { generatedCppSha256: hash(cpp), wrapperHeaderSha256: hash(header), productWrapperSha256: await fileHash(path.join(repoRoot, "fx/enhancer_lite/native/ReleasePlugin.cpp")), ...links.VST3,
         ...(links.AU ? { audioUnit: links.AU } : {}),
         staticArchiveSha256: await fileHash(shared), staticArchiveMembers: membersByArchitecture,
         compilerExecutableSha256: await fileHash(cmaj), cmakeExecutableSha256: await fileHash(cmakeExecutable),
@@ -262,11 +268,13 @@ async function assemble({ config, output, source, epoch, options, signing, prove
     }
     const scripts = path.join(work, "scripts");
     await mkdir(scripts, { mode: 0o755 });
-    const preinstall = renderEnhanceThatPreinstall({ teamIdentifier: signing?.application.teamIdentifier ?? null, includeAU: options.includeAU });
+    const preinstall = renderEnhanceThatPreinstall({ includeAU: options.includeAU });
+    const postinstall = renderEnhanceThatPostinstall({ includeAU: options.includeAU });
+    await writeFile(path.join(scripts, "postinstall"), postinstall, { mode: 0o755 });
     await writeFile(path.join(scripts, "preinstall"), preinstall, { mode: 0o755 });
     await chmod(scripts, 0o755);
     await chmod(path.join(scripts, "preinstall"), 0o755);
-    const name = `EnhanceThat-${config.releaseVersion}-macOS`;
+    const name = `EnhanceThat-${config.releaseVersion}-${options.variant}-macOS`;
     const unsigned = path.join(work, `${name}-unsigned.pkg`);
     // Installer versions follow the versioned release, while bundle versions remain the product's own.
     await buildUnsignedFlatPackage(config, staging, unsigned, work, epoch, { scriptsRoot: scripts, packageVersion: config.releaseVersion });
@@ -289,21 +297,22 @@ async function assemble({ config, output, source, epoch, options, signing, prove
         assert.equal(extractedEvidence[format].payloadSha256, staged[format].payloadSha256);
     }
     assert.equal(await readFile(path.join(expanded, "Scripts/preinstall"), "utf8"), preinstall);
+    assert.equal(await readFile(path.join(expanded, "Scripts/postinstall"), "utf8"), postinstall);
     const manifest = {
         schemaVersion: 1, status: "unpublished candidate; host and customer qualification pending",
-        sourceCommit: source.commit, releaseVersion: config.releaseVersion, pluginVersion: config.identity.pluginVersion,
+        sourceCommit: source.commit, releaseVersion: config.releaseVersion, pluginVersion: config.identity.pluginVersion, variant: options.variant,
         formats: { VST3: "included", AU: options.includeAU ? "included" : "deferred" }, auDecision: options.includeAU ? "included" : options.auDeferred,
         supportedArchitectures: ["arm64"], retainedMacOSMajors: [15, 26],
         dependencies: Object.fromEntries(["cmajor", "choc", "juce"].map(key => [key, { commit: provenance[key].actualRevision, clean: provenance[key].clean }])),
         native, built: built.VST3, extracted: extractedEvidence.VST3, signing: { plugin: pluginSigning.VST3, installer: installerSigning }, notarization,
         ...(options.includeAU ? { audioUnit: { built: built.AU, extracted: extractedEvidence.AU, signing: pluginSigning.AU } } : {}),
-        noticesSha256: await fileHash(config.notices), preinstallSha256: hash(preinstall),
+        noticesSha256: await fileHash(config.notices), preinstallSha256: hash(preinstall), postinstallSha256: hash(postinstall),
         packageSha256: await fileHash(packageFile), sourceDateEpoch: epoch,
         qualification: { cleanMacOS15: "pending", cleanMacOS26: "pending", DAW: "pending", listening: "pending", matchingKitAndTools: "pending" },
     };
     await jsonFile(path.join(output, "release-manifest.json"), manifest);
     await writeFile(path.join(output, "THIRD_PARTY_NOTICES.txt"), await readFile(config.notices));
-    await writeFile(path.join(output, "README.txt"), `Enhance That ${config.releaseVersion}\n\nUnpublished ${signing ? "signed/notarized" : "unsigned validation"} candidate. Final host/customer qualification remains pending.\n\nRetained target: Apple Silicon macOS 15 and 26, ${options.includeAU ? "VST3 and AU" : `VST3. AU deferred: ${options.auDeferred}`}\n\nQuit the DAW and open the pkg. Restart/rescan, then load Enhance That.\nThe installer checks local user and system ${options.includeAU ? "VST3 and Components" : "VST3"} folders. If it reports a legacy or user-level copy, retain that exact copy outside all plugin scan folders before retrying. It never deletes those copies or loads their executable as root.\nA matching Developer ID system update retains the previous bundle in /Library/Audio/Plug-Ins/.EnhanceThat.<format>.previous.* before replacement; keep its RECOVERY.txt.\n\nInstalled paths:\n${config.payloadBundles.map(bundle => `/${bundle.relativePath}`).join("\n")}\nUninstall: quit the host and retain/remove the installed bundles, then rescan.\n`);
+    await writeFile(path.join(output, "README.txt"), renderEnhanceThatReadme(config));
     const packageItems = [path.basename(packageFile), "release-manifest.json", "README.txt", "THIRD_PARTY_NOTICES.txt"];
     const checksums = await Promise.all(packageItems.map(async item => `${await fileHash(path.join(output, item))}  ${item}`));
     await writeFile(path.join(output, "checksums.txt"), `${checksums.join("\n")}\n`);
@@ -328,7 +337,7 @@ export async function main(args = process.argv.slice(2)) {
     const kit = JSON.parse(await readFile(path.join(repoRoot, "kit/kit.json"), "utf8"));
     if (!/^\d+\.\d+\.\d+$/u.test(kit.version)) throw new Error("Invalid kit release version.");
     const config = {
-        identity: { ...identity, pluginVersion: patch.version }, releaseVersion: kit.version,
+        identity: { ...identity, pluginVersion: patch.version }, releaseVersion: options.version ?? patch.version, variant: options.variant,
         nativeRoot: plugin.juceOut, nativeDependencies: enhanceThatNativeDependencies,
         paths: { nativeBuildCmakeCache: `${plugin.juceOut}/_build/CMakeCache.txt` },
         builtVst3: path.join(repoRoot, plugin.juceOut, "_build/plugin/EnhanceThat_artefacts/Release/VST3/EnhanceThat.vst3"),
@@ -341,13 +350,14 @@ export async function main(args = process.argv.slice(2)) {
     ];
     const errors = enhanceThatSourceErrors(plugin, patch);
     const source = getReleaseGitState();
-    const output = path.join(repoRoot, "release/enhance-that", kit.version, options.mode);
+    if (config.releaseVersion !== patch.version) throw new Error("Release version must match the committed plugin version.");
+    const output = path.join(repoRoot, "release/enhance-that", config.releaseVersion, options.variant, options.mode);
     if (options.mode === "plan") {
         const noticesEntry = await lstat(config.notices).catch(error => {
             if (error?.code === "ENOENT") return null;
             throw error;
         });
-        console.log(JSON.stringify({ mode: "plan", sourceCommit: source.commit, releaseVersion: kit.version,
+        console.log(JSON.stringify({ mode: "plan", sourceCommit: source.commit, releaseVersion: config.releaseVersion, variant: options.variant,
             nativeCommand: "FX_DISTRIBUTABLE_RUNTIME=1 npm run fx:prod:build -- enhancer-lite --clean",
             outputParent: path.dirname(output), sourceErrors: errors, auDecision: options.includeAU ? "include; host qualification required" : options.auDeferred ?? "pending",
             ...(options.includeAU ? { additionalNativeTarget: "EnhanceThat_AU" } : {}),
@@ -372,7 +382,13 @@ export async function main(args = process.argv.slice(2)) {
     await claimEnhanceThatOutput(output);
     buildSourceCmaj({ cmake });
     run(process.execPath, ["kit/fx/prod-effect.mjs", "build", "enhancer-lite", "--clean"], {
-        capture: false, env: { ...withSourceCmaj(), FX_DISTRIBUTABLE_RUNTIME: "1", BUILDER_KIT_CMAKE: cmake },
+        capture: false, env: {
+            ...withSourceCmaj(),
+            KIT_NATIVE_WRAPPER_SOURCE: path.join(repoRoot, "fx/enhancer_lite/native/ReleasePlugin.cpp"),
+            VITE_ENHANCE_THAT_TRIAL: options.variant === "trial" ? "1" : "0",
+            FX_DISTRIBUTABLE_RUNTIME: "1",
+            BUILDER_KIT_CMAKE: cmake,
+        },
     });
     if (options.includeAU)
         run(cmake, ["--build", path.join(repoRoot, plugin.juceOut, "_build"), "--config", "Release",

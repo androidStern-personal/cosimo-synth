@@ -56,6 +56,7 @@
     "seqfx:release:plan": "node scripts/build_seqfx_beta_release.mjs --plan",
     "seqfx:release:build": "node scripts/build_seqfx_beta_release.mjs",
     "test:seqfx:build-provenance": "npm run fx:build -- seqfx && node --test tests/test_seqfx_build_provenance.mjs",
+    "test:enhance-that:release": "node --test tests/test_enhance_that_release_builder.mjs tests/test_enhance_that_trial.mjs",
     "test:seqfx:release-builder": "node --test tests/test_seqfx_release_builder.mjs",
     "test:seqfx:release-toolchain": "node --test tests/test_seqfx_release_toolchain.mjs",
     "test:seqfx:state-properties": "node --test --test-concurrency=2 tests/test_seqfx_state_properties.mjs tests/test_seqfx_block_properties.mjs",
