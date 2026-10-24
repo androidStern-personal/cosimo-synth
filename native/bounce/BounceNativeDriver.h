@@ -96,6 +96,8 @@ public:
     virtual void noteOn (std::int32_t note, std::uint8_t velocity) = 0;
     virtual void noteOff (std::int32_t note) = 0;
     virtual void process (float* left, float* right, std::uint32_t frameCount) = 0;
+    /** Frames by which the output trails the notes it is sent, known once initialised. */
+    virtual std::uint32_t outputLatencyFrames() const = 0;
     virtual std::size_t residentBytes() const noexcept { return 0; }
 };
 

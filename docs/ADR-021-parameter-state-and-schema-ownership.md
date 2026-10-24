@@ -1,5 +1,7 @@
 # ADR-021: Parameters own ordinary state; structured documents own structure
 
+> October 2026: the host-path preset system this document describes was replaced by the kit's presets-as-state (`kit/ui/presets.ts`, `kit/ui/snapshots.ts`). The text below is kept as history.
+
 Status: accepted, implementation pending — 2026-08-14
 
 ## The two problems this decision separates

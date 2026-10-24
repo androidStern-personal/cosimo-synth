@@ -1,4 +1,4 @@
-# Plugin Monorepo Notes
+# Project Notes
 
 For plug-in work, start with `kit/AGENTS.md` and follow only the route that
 matches the task. It defines the universal source, dependency, generated
@@ -25,11 +25,9 @@ Node/CMake runtime; do not change system tools or ask the customer to activate i
   shell `cd` does not change the app's session root.
 - Read this file and `kit/AGENTS.md`. Use the bundled skill through normal skill
   discovery; if it is unavailable, read
-  `kit/skills/cosimo-make-plugin/SKILL.md` directly before plug-in work.
-- Source the installer environment as above, then run
-  `npm run kit:doctor -- --strict`. Run `npm run kit:setup` only when the doctor
-  or a specific failure identifies setup as the repair, and rerun the strict
-  doctor afterward. Stop and explain any remaining recovery step.
+  `kit/skills/make-plugin/SKILL.md` directly before plug-in work.
+- Run the readiness check from the Always list in `kit/AGENTS.md`. Stop and
+  explain any recovery step it leaves.
 - Never infer JUCE consent or supply `--accept-juce-terms` without the customer's
   explicit acknowledgment. The customer's explicit acknowledgment of the
   shipped notice or its matching recorded receipt is sufficient; do not ask

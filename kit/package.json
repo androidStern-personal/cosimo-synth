@@ -1,0 +1,9 @@
+{
+  "private": true,
+  "type": "module",
+  "sideEffects": [
+    "./ui/preview/main.ts",
+    "./ui/dev-inspector.js",
+    "**/*.css"
+  ]
+}

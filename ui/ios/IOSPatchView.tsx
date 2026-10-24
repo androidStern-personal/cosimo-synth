@@ -6,7 +6,6 @@ import {
     useRef,
     useState,
     type CSSProperties,
-    type PointerEvent as ReactPointerEvent,
     type RefObject,
 } from "react";
 
@@ -14,7 +13,7 @@ import {
     PatchConnectionProvider,
     type PatchConnectionLike,
 } from "../shared/cmajor-react";
-import type { ResourceClient } from "../shared/resource-client";
+import { SynthStateProvider } from "../shared/synth-plugin-state-react";
 import {
     EditableMsegSurface,
     ModulationAmountField,
@@ -22,12 +21,8 @@ import {
     VOICE_MODE_OPTIONS,
 } from "../shared/synth-components";
 import { DistortionVisualizer } from "../shared/distortion-visualizer";
-import {
-    clampMsegRateSeconds,
-    MSEG_RATE_MAX_SECONDS,
-    MSEG_RATE_MIN_SECONDS,
-    type MsegSurfaceOrientation,
-} from "../shared/mseg";
+import { clampMsegRateSeconds, MSEG_RATE_MAX_SECONDS, MSEG_RATE_MIN_SECONDS } from "../shared/mseg";
+import type { MsegSurfaceOrientation } from "../../kit/ui/mseg";
 import {
     MODULATION_SOURCE_OPTIONS,
     applyModulationSourceOption,
@@ -83,9 +78,6 @@ import {
 import { useParameterMenuShell } from "../shared/parameter-menu-shell";
 import { KeyTrackStatus } from "../shared/key-track-status";
 import {
-    clampDisplayPosition,
-} from "../shared/runtime-table-state";
-import {
     useSynthPatchViewModel,
     useOscillatorSelectionViewModel,
     type SynthCallbackControlReadiness,
@@ -116,8 +108,6 @@ const ENVELOPE_EDITOR_SLOT_COUNT = MODULATION_ENV_SLOT_COUNT + 1;
 const KEYBOARD_ROOT_NOTE_MIN = 12;
 const KEYBOARD_ROOT_NOTE_MAX = 72;
 const DISTORTION_WET_HP_MIN_HZ = 20;
-const DISTORTION_WET_HP_MAX_HZ = 4_000;
-const DISTORTION_WET_LP_MIN_HZ = 20;
 const DISTORTION_WET_LP_MAX_HZ = 20_000;
 function requireIOSRackParameterDescriptor(endpointID: string): RackParameterDescriptor {
     const descriptor = getRackParameterDescriptor(endpointID);
@@ -187,7 +177,6 @@ type IOSResponsiveLayout = {
     keyboardAccidentalWidth: number;
 };
 
-
 type IOSPlayPanelProps = {
     playModeValue: number;
     playModeReady: boolean;
@@ -230,12 +219,6 @@ function frequencyHzToLogNormalized(value: number, minHz: number, maxHz: number)
 
 function normalizedToLogFrequencyHz(normalized: number, minHz: number, maxHz: number) {
     return minHz * Math.pow(maxHz / minHz, clamp(normalized, 0, 1));
-}
-
-function formatFrameReadout(position: number, frameCount: number) {
-    const safeFrameCount = Math.max(1, frameCount);
-    const frameIndex = Math.round(clampDisplayPosition(position) * Math.max(0, safeFrameCount - 1)) + 1;
-    return `${String(frameIndex).padStart(2, "0")}/${String(safeFrameCount).padStart(2, "0")}`;
 }
 
 function formatKeyboardRangeLabel(rootNote: number, noteCount: number) {
@@ -1215,6 +1198,7 @@ const IOSDistortionPanel = memo(function IOSDistortionPanel({
 });
 
 const IOSMsegModal = memo(function IOSMsegModal({
+    composition,
     isOpen,
     onClose,
     slotLabel,
@@ -1223,13 +1207,6 @@ const IOSMsegModal = memo(function IOSMsegModal({
     selectedMsegMorph,
     surfaceRef,
     orientation,
-    selectedPointIndex,
-    hoveredSegmentIndex,
-    activeSegmentIndex,
-    onPointerDown,
-    onPointerMove,
-    onPointerLeave,
-    onPointerUp,
     rateSeconds,
     rateReady,
     onSelectShape,
@@ -1238,6 +1215,7 @@ const IOSMsegModal = memo(function IOSMsegModal({
     onToggleLoop,
     rateFocusBindings,
 }: {
+    composition: import("../shared/synth-components").MsegCompositionBindings;
     isOpen: boolean;
     onClose: () => void;
     slotLabel: string;
@@ -1246,13 +1224,6 @@ const IOSMsegModal = memo(function IOSMsegModal({
     selectedMsegMorph: ReturnType<typeof useSynthPatchViewModel>["selectedMsegMorph"];
     surfaceRef: RefObject<SVGSVGElement | null>;
     orientation: MsegSurfaceOrientation;
-    selectedPointIndex: number;
-    hoveredSegmentIndex: number;
-    activeSegmentIndex: number;
-    onPointerDown: (event: ReactPointerEvent<SVGSVGElement>) => void;
-    onPointerMove: (event: ReactPointerEvent<SVGSVGElement>) => void;
-    onPointerLeave: (event: ReactPointerEvent<SVGSVGElement>) => void;
-    onPointerUp: (event: ReactPointerEvent<SVGSVGElement>) => void;
     rateSeconds: number;
     rateReady: boolean;
     onSelectShape: (shapeIndex: number) => void;
@@ -1289,24 +1260,18 @@ const IOSMsegModal = memo(function IOSMsegModal({
 
                     <div className="mseg-modal-stage">
                         {msegState ? (
-                            <EditableMsegSurface
+                            <EditableMsegSurface key={slotIndex} composition={composition}
                                 surfaceRef={surfaceRef}
                                 dataRole="mseg-modal-viewport"
                                 className="mseg-surface mseg-modal-surface"
                                 orientation={orientation}
-                                points={msegState.shape.points}
+                                value={msegState.shape}
                                 referencePoints={msegState.referenceShape?.points ?? null}
                                 morphShapeAPoints={msegState.shapeA?.points ?? null}
                                 morphShapeBPoints={msegState.shapeB?.points ?? null}
                                 morphValue={selectedMsegMorph.value}
                                 editShapeIndex={msegState.editShapeIndex ?? 0}
-                                selectedPointIndex={selectedPointIndex}
-                                hoveredSegmentIndex={hoveredSegmentIndex}
-                                activeSegmentIndex={activeSegmentIndex}
-                                onPointerDown={onPointerDown}
-                                onPointerMove={onPointerMove}
-                                onPointerLeave={onPointerLeave}
-                                onPointerUp={onPointerUp}
+
                             />
                         ) : null}
                     </div>
@@ -1399,11 +1364,9 @@ function IOSPatchViewBody() {
     const synthView = useSynthPatchViewModel({
         oscillatorID: oscillatorSelection.selectedOscillatorID,
         stageRef,
-        msegEditorSurfaceRef,
         keyboardRef,
         voiceModeCount: VOICE_MODE_OPTIONS.length,
         observeFilterSpectrum: false,
-        msegSurfaceOrientation: msegEditorOrientation,
         msegCurveEditActivationMode: "hold-or-drag",
         onMsegCurveEditHoldActivated: () => {
             triggerIOSHaptic("light");
@@ -1412,7 +1375,7 @@ function IOSPatchViewBody() {
     const distortionWetHPKeyTrack = useLaneKeyTrackControlBinding(DISTORTION_WET_HP_DESCRIPTOR);
     const distortionWetLPKeyTrack = useLaneKeyTrackControlBinding(DISTORTION_WET_LP_DESCRIPTOR);
 
-    /* T20 — the ADR-017 long-press parameter menu (shared shell machine). */
+    /* The ADR-017 long-press parameter menu (shared shell machine). */
     const { openParameterMenu, parameterMenuOverlays } = useParameterMenuShell({
         routes: synthView.routes,
         armedSourceKind: armedSource.sourceKind,
@@ -1425,7 +1388,6 @@ function IOSPatchViewBody() {
         ["--cosimo-keyboard-height" as string]: `${layout.keyboardHeight}px`,
         ["--cosimo-control-height" as string]: `${layout.controlHeight}px`,
     }) satisfies CSSProperties, [layout.controlHeight, layout.keyboardHeight, layout.stageMinHeight]);
-
 
     const handleSelectWavetable = useCallback((nextValue: number) => {
         synthView.handleSelectWavetable(nextValue);
@@ -1674,7 +1636,7 @@ function IOSPatchViewBody() {
                     </div>
                 </div>
 
-                <IOSMsegModal
+                <IOSMsegModal composition={synthView.msegEditor.composition}
                     isOpen={isMsegModalOpen}
                     onClose={closeMsegModal}
                     slotLabel={`MSEG ${synthView.selectedMsegSlot + 1}`}
@@ -1683,13 +1645,6 @@ function IOSPatchViewBody() {
                     selectedMsegMorph={synthView.selectedMsegMorph}
                     surfaceRef={msegEditorSurfaceRef}
                     orientation={msegEditorOrientation}
-                    selectedPointIndex={synthView.msegEditor.selectedPointIndex}
-                    hoveredSegmentIndex={synthView.msegEditor.hoveredSegmentIndex}
-                    activeSegmentIndex={synthView.msegEditor.activeSegmentIndex}
-                    onPointerDown={synthView.msegEditor.handlePointerDown}
-                    onPointerMove={synthView.msegEditor.handlePointerMove}
-                    onPointerLeave={synthView.msegEditor.handlePointerLeave}
-                    onPointerUp={synthView.msegEditor.handlePointerUp}
                     rateSeconds={synthView.msegState?.playback.rate.seconds ?? 1}
                     rateReady={synthView.callbackControlReadiness.mseg.rate}
                     onSelectShape={synthView.handleSelectMsegShape}
@@ -1716,16 +1671,12 @@ function IOSPatchViewBody() {
     );
 }
 
-export function IOSPatchView({
-    patchConnection,
-    resourceClient,
-}: {
-    patchConnection: PatchConnectionLike;
-    resourceClient: ResourceClient;
-}) {
+export function IOSPatchView({ patchConnection }: { patchConnection: PatchConnectionLike }) {
     return (
-        <PatchConnectionProvider patchConnection={patchConnection} resourceClient={resourceClient}>
-            <IOSPatchViewBody />
+        <PatchConnectionProvider patchConnection={patchConnection}>
+            <SynthStateProvider patchConnection={patchConnection}>
+                <IOSPatchViewBody />
+            </SynthStateProvider>
         </PatchConnectionProvider>
     );
 }

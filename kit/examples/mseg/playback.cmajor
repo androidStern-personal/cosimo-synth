@@ -1,0 +1,19 @@
+// Offline control-signal example. The editor supplies the shared sampled curve.
+namespace cmaj::data { external float read(int inputIndex, int sampleIndex); external int size(int inputIndex); }
+graph MsegPlayback [[ main ]] {
+    input event int32 trigger;
+    input event int32 legatoTrigger;
+    input event int32 noteOff;
+    input event kit::mseg::Playback playback;
+    input value float32 duration;
+    output stream float32 out;
+    output event kit::mseg::Position position;
+    node reader = kit::mseg::Reader(0);
+    connection trigger -> reader.trigger;
+    connection legatoTrigger -> reader.legatoTrigger;
+    connection noteOff -> reader.noteOff;
+    connection playback -> reader.playback;
+    connection duration -> reader.durationSeconds;
+    connection reader.out -> out;
+    connection reader.positionOut -> position;
+}

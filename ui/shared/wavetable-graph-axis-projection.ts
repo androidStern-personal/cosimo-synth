@@ -10,7 +10,7 @@
  * the vertical Index binding, or the renderer.
  */
 
-import type { RollingAxis } from "./rolling-axis-classifier";
+import type { RollingAxis } from "../../kit/ui/rolling-axis-classifier";
 import type { OscillatorControlID } from "./oscillator-binding";
 
 export type GraphAxisBinding = {

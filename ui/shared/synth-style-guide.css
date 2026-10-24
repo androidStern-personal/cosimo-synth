@@ -603,3 +603,41 @@
 .cosimo-tabs.is-neutral {
     --section-accent: var(--cosimo-ink);
 }
+
+/* Product theme and layout for the shared Builder Kit filter editor. */
+.cosimo-filter-editor__control {
+    height: 100%;
+    display: block;
+    background: transparent;
+    --editor-surface-bg: transparent;
+    --editor-zone-fill: transparent;
+    --editor-zone-stroke: transparent;
+    --editor-axis-stroke: transparent;
+    --editor-grid-stroke: rgb(255 255 255 / .06);
+    --editor-surface-ink-muted: rgb(226 232 240 / .42);
+    --editor-label-weight: 400;
+    --editor-label-font: inherit;
+    --editor-curve-stroke: rgb(var(--section-accent-rgb) / .72);
+    --editor-curve-stroke-width: 2;
+    --editor-curve-preview-stroke: rgb(var(--section-accent-rgb) / .98);
+    --editor-curve-preview-stroke-width: 3;
+    --editor-handle-fill: var(--section-accent);
+    --editor-handle-stroke: rgb(255 255 255 / .42);
+    --editor-handle-stroke-width: 1.6;
+    --editor-handle-halo-fill: rgb(var(--section-accent-rgb) / .16);
+    --editor-handle-halo-stroke: var(--section-accent-dim);
+    --editor-handle-halo-stroke-width: 1;
+    --filter-spectrum-rgb: var(--section-accent-rgb);
+}
+.cosimo-filter-editor__control .filter-range-editor__viewport {
+    height: 100%;
+    border: 1px solid rgb(var(--cosimo-edge-rgb) / .24);
+    border-radius: 24px;
+    overflow: hidden;
+    background: rgb(var(--cosimo-ground-rgb) / .92);
+    box-shadow: var(--cosimo-shadow-inset);
+}
+.cosimo-filter-editor__control .filter-range-editor__surface { position: absolute; inset: 0; overflow: hidden; }
+.cosimo-filter-editor__control .filter-range-editor__value-guide { stroke: rgb(var(--section-accent-rgb) / .20); stroke-width: 1.5; stroke-dasharray: 4 4; }
+.cosimo-filter-editor__control .filter-range-editor__preview-handle { display: none; }
+.cosimo-filter-editor__amount { position: absolute; top: 3px; right: 10px; font-size: 10px; font-weight: 650; pointer-events: none; }

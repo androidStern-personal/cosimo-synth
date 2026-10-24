@@ -2,12 +2,17 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import path from "node:path";
 
-import { loadUIModule } from "./helpers/load_ui_module.mjs";
+import { loadUIModule } from "../kit/tests/helpers/load_ui_module.mjs";
 
 const repoRoot = path.resolve(import.meta.dirname, "..");
 
 async function loadEditorCurveGeometryModule() {
-    return await loadUIModule(repoRoot, "ui/shared/editor-curve-geometry.ts");
+    // The synth's curve sampling and fills build on the kit's plot geometry.
+    const [kit, synth] = await Promise.all([
+        loadUIModule(repoRoot, "kit/ui/editor-curve-geometry.ts"),
+        loadUIModule(repoRoot, "ui/shared/editor-curve-geometry.ts"),
+    ]);
+    return { ...kit, ...synth };
 }
 
 function distanceToLineSegment(pointX, pointY, fromX, fromY, toX, toY) {

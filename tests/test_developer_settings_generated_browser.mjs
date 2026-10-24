@@ -54,13 +54,15 @@ async function openPhoneBundle(compiledModuleUrl, { clipboard = false } = {}) {
     });
 }
 
+/** The phone row's Sound actions menu, which holds the preset bar and the synth actions. */
 async function openPresetActions(page) {
-    const presetBar = page.locator("cosimo-preset-bar");
-    const menuButton = presetBar.locator('[data-action="toggle-shell-menu"]');
+    const presetBar = page.locator('[data-role="synth-preset-bar"]');
+    const menuButton = presetBar.locator('[data-action="toggle-sound-actions"]');
     await menuButton.waitFor({ state: "visible" });
     await menuButton.click();
-    await presetBar.locator(".shell-menu.open").waitFor({ state: "visible" });
-    return presetBar;
+    const menu = presetBar.locator('[data-role="sound-actions"]');
+    await menu.waitFor({ state: "visible" });
+    return menu;
 }
 
 test("generated ordinary and Codex Sites builds gate the complete developer settings clipboard flow", async () => {
@@ -73,14 +75,11 @@ test("generated ordinary and Codex Sites builds gate the complete developer sett
 
     const ordinaryPage = await openPhoneBundle(ordinaryModuleUrl);
     try {
-        const presetBar = await openPresetActions(ordinaryPage);
-        const tuningRow = presetBar.locator('[data-action="perf-tuning"]');
-        assert.equal(await tuningRow.isHidden(), true);
-        assert.equal(await presetBar.locator('.shell-menu.open [data-action="save-as"]').isVisible(), true);
-        assert.equal(await presetBar.locator('.shell-menu.open [data-action="copy"]').isVisible(), true);
-        assert.equal(await presetBar.locator('.shell-menu.open [data-action="paste"]').isVisible(), true);
-
-        await tuningRow.evaluate((button) => button.click());
+        const menu = await openPresetActions(ordinaryPage);
+        assert.equal(await menu.locator('[data-action="perf-tuning"]').count(), 0, "ordinary builds offer no Developer settings");
+        assert.equal(await menu.getByRole("button", { name: "Save as new", exact: true }).isVisible(), true);
+        assert.equal(await menu.getByRole("button", { name: "More", exact: true }).isVisible(), true);
+        assert.equal(await menu.locator('[data-action="share"]').isVisible(), true);
         assert.equal(await ordinaryPage.locator('[data-role="perf-tuning-page"]').count(), 0);
     } finally {
         await ordinaryPage.close();
@@ -88,8 +87,8 @@ test("generated ordinary and Codex Sites builds gate the complete developer sett
 
     const sitesPage = await openPhoneBundle(sitesModuleUrl, { clipboard: true });
     try {
-        const presetBar = await openPresetActions(sitesPage);
-        const tuningRow = presetBar.locator('[data-action="perf-tuning"]');
+        const menu = await openPresetActions(sitesPage);
+        const tuningRow = menu.locator('[data-action="perf-tuning"]');
         assert.equal(await tuningRow.isVisible(), true);
         assert.equal((await tuningRow.textContent())?.trim(), "Developer settings");
         await tuningRow.click();
@@ -209,7 +208,7 @@ test("generated ordinary and Codex Sites builds gate the complete developer sett
 
         await tuningPage.getByRole("button", { name: "Close developer settings" }).click();
         await tuningPage.waitFor({ state: "detached" });
-        await presetBar.locator('[data-action="toggle-shell-menu"]').waitFor({ state: "visible" });
+        await sitesPage.locator('[data-role="synth-preset-bar"] [data-action="toggle-sound-actions"]').waitFor({ state: "visible" });
     } finally {
         await sitesPage.close();
     }

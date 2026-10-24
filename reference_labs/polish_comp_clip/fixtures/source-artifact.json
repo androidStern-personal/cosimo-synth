@@ -1,7 +1,7 @@
 {
   "schema": "cosimo.polishCompClip.sourceArtifact.v1",
   "reportUrl": "https://polarity.me/posts/polarity-music/2024-08-12-sausage-fattener-in-bitwig/",
-  "reportClaimStatus": "Polarity reports a close/null-tested recreation; T27 does not independently reproduce that original-versus-preset comparison.",
+  "reportClaimStatus": "Polarity reports a close/null-tested recreation; this lab does not independently reproduce that original-versus-preset comparison.",
   "repository": "https://github.com/polarity/polarity-music-tools",
   "commit": "3852ef80ec3f97d93c6a7880c167b64a454ae961",
   "path": "Bitwig-5.2/Sausage-Fattener.bwpreset",

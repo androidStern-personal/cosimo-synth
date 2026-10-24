@@ -20,9 +20,12 @@ const artifactContracts = [
         label: "SeqFX worker",
         bundlePath: path.join(runtimeRoot, "worker.js"),
         expectedOwnedSources: [
-            "fx/seqfx/worker/source.ts",
-            "fx/seqfx/worker/seqfx-worker-service.ts",
-            "kit/ui/patch-worker-services.ts",
+            "fx/seqfx/state.ts",
+            "fx/seqfx/pattern-upload.ts",
+            "kit/ui/plugin-state-cmajor.ts",
+        ],
+        forbiddenOwnedSources: [
+            "ui/shared/patch-worker-services.ts",
         ],
         requiresDependencySources: false,
     },
@@ -91,7 +94,7 @@ test("SeqFX packaged patch inputs and loader are byte-exact copies of current so
     }
 
     const [loaderSource, packagedLoader] = await Promise.all([
-        readFile(path.join(repoRoot, "kit", "ui", "effects", "effect-view-loader.js")),
+        readFile(path.join(repoRoot, "kit", "ui", "view-loader.js")),
         readFile(path.join(runtimeRoot, "view", "index.js")),
     ]);
     assert.equal(
@@ -192,6 +195,13 @@ test("SeqFX production app and worker bundles retain checkout-local source prove
                 ownedSourcePaths.includes(expectedSource),
                 true,
                 `${contract.label} map must retain ${expectedSource}`,
+            );
+        }
+        for (const forbiddenSource of contract.forbiddenOwnedSources ?? []) {
+            assert.equal(
+                ownedSourcePaths.includes(forbiddenSource),
+                false,
+                `${contract.label} must not bundle ${forbiddenSource}`,
             );
         }
         if (contract.requiresDependencySources) {

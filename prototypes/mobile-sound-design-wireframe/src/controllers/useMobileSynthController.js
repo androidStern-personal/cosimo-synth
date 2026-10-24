@@ -133,6 +133,23 @@ export function useMobileSynthController(adapter, initialSession = {}) {
   const portPatch = snapshot.patch;
   const portAudition = snapshot.audition;
   const { readout, showReadout } = useTransientReadout();
+  const mounted = useRef(true);
+  const currentCommands = useRef(commands);
+  currentCommands.current = commands;
+  useEffect(() => {
+    mounted.current = true;
+    return () => { mounted.current = false; };
+  }, []);
+  const completeStateCommand = async (command) => {
+    try {
+      const result = await command();
+      return mounted.current && currentCommands.current === commands ? result : null;
+    } catch (error) {
+      console.error("Mobile synth command failed", error);
+      if (mounted.current && currentCommands.current === commands) showReadout("STATE EDIT FAILED");
+      return null;
+    }
+  };
   const [capturedMotionBySourceId, setCapturedMotionBySourceId] = useState({});
   const patch = useMemo(
     () => projectLegacyPatch(snapshot, capturedMotionBySourceId),
@@ -273,8 +290,9 @@ export function useMobileSynthController(adapter, initialSession = {}) {
     selectTarget(targetId);
   };
 
-  const addMapping = (targetId, sourceId) => {
-    const result = commands.addMapping({ targetId, sourceId });
+  const addMapping = async (targetId, sourceId) => {
+    const result = await completeStateCommand(() => commands.addMapping({ targetId, sourceId }));
+    if (!result) return null;
     if (result._tag === "err") {
       if (result.error._tag === "MappingAlreadyExists") {
         setActiveMappingByTarget((current) => ({
@@ -283,6 +301,7 @@ export function useMobileSynthController(adapter, initialSession = {}) {
         }));
         return result.error.mappingId;
       }
+      showReadout(result.error.message);
       return null;
     }
     setActiveMappingByTarget((current) => ({ ...current, [targetId]: result.value }));
@@ -290,9 +309,11 @@ export function useMobileSynthController(adapter, initialSession = {}) {
     return result.value;
   };
 
-  const removeMapping = (mappingId) => {
+  const removeMapping = async (mappingId) => {
     const mapping = patch.mappings.find((item) => item.id === mappingId);
-    commands.removeMapping(mappingId);
+    const result = await completeStateCommand(() => commands.removeMapping(mappingId));
+    if (!result) return;
+    if (result._tag === "err") { showReadout(result.error.message); return; }
     if (!mapping) return;
     const replacement = patch.mappings.find(
       (item) => item.targetKey === mapping.targetKey && item.id !== mappingId,
@@ -363,7 +384,7 @@ export function useMobileSynthController(adapter, initialSession = {}) {
       if (!targetId) return null;
       return targetId;
     },
-    onDrop(sourceId, targetId) {
+    async onDrop(sourceId, targetId) {
       selectTarget(targetId);
       const existing = patch.mappings.find(
         (mapping) => mapping.targetKey === targetId && mapping.sourceId === sourceId,
@@ -373,7 +394,7 @@ export function useMobileSynthController(adapter, initialSession = {}) {
         showReadout(`${sourceLookup[sourceId]?.label || "Source"} → ${TARGETS[targetId]?.label || "Target"}`);
         triggerHaptic("success");
       } else {
-        const mappingId = addMapping(targetId, sourceId);
+        const mappingId = await addMapping(targetId, sourceId);
         if (mappingId) triggerHaptic("success");
       }
     },
@@ -641,27 +662,27 @@ export function useMobileSynthController(adapter, initialSession = {}) {
       workspace,
     },
     actions: {
-      addSource(type) {
-        const result = commands.createSource(type);
-        setSourceAddOpen(false);
-        setDeletedSource(null);
+      async addSource(type) {
+        const result = await completeStateCommand(() => commands.createSource(type));
+        if (!result) return;
         if (result._tag === "err") {
-          showReadout(`ALL ${type.toUpperCase()} SLOTS IN USE`);
+          showReadout(result.error._tag === "SourceSlotsExhausted"
+            ? `ALL ${type.toUpperCase()} SLOTS IN USE` : result.error.message);
           return;
         }
+        setSourceAddOpen(false);
+        setDeletedSource(null);
         openSource(result.value, { allowPending: true });
       },
       beginSourceDrag: sourceDrag.begin,
       cancelSourceDrag: () => sourceDrag.finish(true),
-      addSourceTarget(targetId) {
+      async addSourceTarget(targetId) {
         if (!focusedSource) return;
-        const mappingId = addMapping(targetId, focusedSource.id);
+        const mappingId = await addMapping(targetId, focusedSource.id);
         if (mappingId) setSourceMappingId(mappingId);
       },
-      captureMotion() {
+      async captureMotion() {
         const targetId = portAudition.captureCandidate?.targetId;
-        const sourceId = commands.captureMotion();
-        if (!sourceId) return null;
         const capturedMotion = captureMetadataRef.current?.targetKey === targetId
           ? captureMetadataRef.current
           : {
@@ -669,6 +690,11 @@ export function useMobileSynthController(adapter, initialSession = {}) {
               layer: "Patch base",
               articulation: "Default",
             };
+        const result = await completeStateCommand(() => commands.captureMotion());
+        if (!result) return null;
+        if (result._tag === "err") { showReadout(result.error.message); return null; }
+        const sourceId = result.value;
+        if (!sourceId) return null;
         setCapturedMotionBySourceId((current) => ({
           ...current,
           [sourceId]: capturedMotion,
@@ -831,7 +857,7 @@ export function useMobileSynthController(adapter, initialSession = {}) {
         triggerHaptic("success");
       },
       closeSource,
-      deleteSource(sourceId) {
+      async deleteSource(sourceId) {
         const source = sourceLookup[sourceId];
         if (isPermanentSource(source)) return;
         const uiContext = {
@@ -846,7 +872,9 @@ export function useMobileSynthController(adapter, initialSession = {}) {
           workspace,
           capturedMotion: capturedMotionBySourceId[sourceId] || null,
         };
-        commands.deleteSource(sourceId);
+        const result = await completeStateCommand(() => commands.deleteSource(sourceId));
+        if (!result) return;
+        if (result._tag === "err") { showReadout(result.error.message); return; }
         setCapturedMotionBySourceId((current) => Object.fromEntries(
           Object.entries(current).filter(([id]) => id !== sourceId),
         ));
@@ -899,7 +927,9 @@ export function useMobileSynthController(adapter, initialSession = {}) {
           return;
         }
         if (intent.kind === "envelope") {
-          commands.setEnvelope(intent.sourceId, intent.envelope);
+          void completeStateCommand(() => commands.setEnvelope(intent.sourceId, intent.envelope)).then(result => {
+            if (result?._tag === "err") showReadout(result.error.message);
+          });
           return;
         }
         if (intent.kind === "msegShape") {
@@ -933,9 +963,11 @@ export function useMobileSynthController(adapter, initialSession = {}) {
         commands.beginTrigger();
       },
       stopSourceDrag: () => sourceDrag.finish(false),
-      undoDelete() {
-        commands.undoDeleteSource();
+      async undoDelete() {
         const uiContext = deletedSource?.uiContext;
+        const result = await completeStateCommand(() => commands.undoDeleteSource());
+        if (!result) return;
+        if (result._tag === "err") { showReadout(result.error.message); return; }
         if (uiContext) {
           setActiveMappingByTarget(uiContext.activeMappingByTarget);
           setModuleByWorkspace(uiContext.moduleByWorkspace);

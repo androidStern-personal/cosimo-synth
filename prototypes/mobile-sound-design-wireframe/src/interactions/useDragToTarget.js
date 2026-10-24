@@ -27,10 +27,11 @@ export function useDragToTarget({ resolveTarget, onDrop, onTargetChange }) {
 
   const finish = (cancelled = false) => {
     const current = drag.current;
-    if (!cancelled && current?.targetId) onDrop(current.itemId, current.targetId);
+    const completion = !cancelled && current?.targetId ? onDrop(current.itemId, current.targetId) : undefined;
     drag.current = null;
     setDraggedId(null);
     setTargetId(null);
+    return completion;
   };
 
   return { begin, move, finish, draggedId, targetId };

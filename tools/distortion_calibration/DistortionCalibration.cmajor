@@ -1,4 +1,4 @@
-// The one narrow offline entry point authorised by T25. It exposes the production
+// The one narrow offline entry point into Distortion. It exposes the production
 // wt::DistortionBus both with and without its live level matcher so the focused
 // verification script can measure the actual correction instead of mirroring DSP.
 

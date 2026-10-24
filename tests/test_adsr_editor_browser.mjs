@@ -7,6 +7,7 @@ import {
     expandGlobalModRail,
     getHarnessSnapshot,
     openHarnessPage,
+    waitForAnimationsToFinish,
     waitForHarnessSnapshot,
 } from "./helpers/desktop_patch_view_browser_suite.mjs";
 
@@ -30,24 +31,40 @@ async function settleLayout(page) {
 }
 
 async function openEnvelopeDrawer(page) {
-    await page.locator('[data-role="mobile-global-mod-rail"]').waitFor();
-    await page.waitForTimeout(240);
+    const rail = page.locator('[data-role="mobile-global-mod-rail"]');
+    await rail.waitFor();
+    await waitForAnimationsToFinish(rail);
     await expandGlobalModRail(page);
     await page.locator('[data-role="rack-mod-source-env-1"]').click();
     const drawer = page.locator('[data-role="quick-source-sheet"][data-source-kind="env"]');
     await drawer.waitFor();
-    await page.waitForTimeout(240);
+    await waitForAnimationsToFinish(drawer);
     await settleLayout(page);
     return drawer;
 }
 
-async function readAdsrGeometry(surface) {
-    return surface.evaluate((element, { visibleRoles, hitRoles }) => {
+/**
+ * The ADSR geometry once layout has come to rest. The surface's viewBox follows
+ * its measured size one render after a layout change, so geometry is read in
+ * the first frame where no finite animation is running and the viewBox matches
+ * the rendered size; checking and reading in one frame keeps them consistent.
+ */
+async function readSettledAdsrGeometry(page, surface) {
+    const settled = await page.waitForFunction(({ element, visibleRoles, hitRoles }) => {
         if (!(element instanceof SVGSVGElement)) {
             throw new Error("Expected the ADSR SVG surface.");
         }
+        const animating = document.getAnimations().some((animation) => (
+            animation.playState !== "finished"
+            && animation.effect?.getComputedTiming().endTime !== Infinity
+        ));
         const surfaceRect = element.getBoundingClientRect();
         const viewBox = element.viewBox.baseVal;
+        if (animating
+                || Math.abs(surfaceRect.width - viewBox.width) > 0.75
+                || Math.abs(surfaceRect.height - viewBox.height) > 0.75) {
+            return null;
+        }
         const rectOf = (target) => {
             const bounds = target.getBoundingClientRect();
             return {
@@ -104,14 +121,17 @@ async function readAdsrGeometry(surface) {
                 stroke: getComputedStyle(curve).stroke,
             },
             viewport: { width: window.innerWidth, height: window.innerHeight },
-            surfaceMatchesViewBox: Math.abs(surfaceRect.width - viewBox.width) <= 0.75
-                && Math.abs(surfaceRect.height - viewBox.height) <= 0.75,
         };
-    }, { visibleRoles: VISIBLE_HANDLE_ROLES, hitRoles: CIRCLE_HIT_TARGET_ROLES });
+    }, {
+        element: await surface.elementHandle(),
+        visibleRoles: VISIBLE_HANDLE_ROLES,
+        hitRoles: CIRCLE_HIT_TARGET_ROLES,
+    }, { polling: "raf" });
+    return settled.jsonValue();
 }
 
+/** Settled metrics already have SVG coordinates matching rendered CSS pixels. */
 function assertResponsiveAdsrGeometry(metrics, label) {
-    assert.equal(metrics.surfaceMatchesViewBox, true, `${label}: SVG coordinates must match rendered CSS pixels.`);
     for (const handle of metrics.visibleHandles) {
         assert.equal(
             Math.abs(handle.rect.width - handle.rect.height) <= 0.1,
@@ -204,7 +224,10 @@ test("ADSR native pointer-capture loss closes the active edit before later windo
             (element, activePointerId) => element.releasePointerCapture(activePointerId),
             pointerId,
         );
-        await page.locator('[data-role="adsr-value-bubble"]').waitFor({ state: "detached", timeout: 1_000 });
+        // Chromium delivers a released capture's lostpointercapture just before
+        // the next pointer event, so this move must find the edit already closed.
+        await page.mouse.move(start.x + 90, start.y);
+        await page.locator('[data-role="adsr-value-bubble"]').waitFor({ state: "detached" });
         assert.equal(await page.evaluate(
             () => window.__COSIMO_ADSR_NATIVE_CAPTURE_LOSS_OBSERVED__,
         ), true, "Chromium must emit the native target capture-loss event.");
@@ -212,8 +235,6 @@ test("ADSR native pointer-capture loss closes the active edit before later windo
             await page.locator('[data-role="adsr-editor-surface"]').getAttribute("data-active-handle"),
             null,
         );
-
-        await page.mouse.move(start.x + 90, start.y);
         await settleLayout(page);
         const snapshot = await getHarnessSnapshot(page);
         assert.equal(snapshot.sentMessages.some(({ endpointID }) => endpointID === "env2Attack"), false);
@@ -293,7 +314,7 @@ test("ADSR geometry stays bounded and circular through compact, expanded, full, 
     try {
         const drawer = await openEnvelopeDrawer(phonePage);
         const surface = drawer.locator('[data-role="adsr-editor-surface"]');
-        const compactMetrics = await readAdsrGeometry(surface);
+        const compactMetrics = await readSettledAdsrGeometry(phonePage, surface);
         assertResponsiveAdsrGeometry(compactMetrics, "compact drawer");
 
         const grip = drawer.locator('[data-role="quick-source-sheet-grip"]');
@@ -307,24 +328,21 @@ test("ADSR geometry stays bounded and circular through compact, expanded, full, 
         await phonePage.mouse.down();
         for (const delta of [42, 88, 138]) {
             await phonePage.mouse.move(start.x, start.y - delta, { steps: 3 });
-            await settleLayout(phonePage);
             assertResponsiveAdsrGeometry(
-                await readAdsrGeometry(surface),
+                await readSettledAdsrGeometry(phonePage, surface),
                 `live drawer resize ${delta}px`,
             );
         }
         await phonePage.mouse.up();
         await drawer.waitFor();
-        await settleLayout(phonePage);
-        const expandedMetrics = await readAdsrGeometry(surface);
+        const expandedMetrics = await readSettledAdsrGeometry(phonePage, surface);
         assertResponsiveAdsrGeometry(expandedMetrics, "expanded drawer");
         assert.equal(expandedMetrics.surface.height > compactMetrics.surface.height + 80, true);
 
         await drawer.locator('[data-role="quick-source-sheet-full-editor"]').click();
         const fullSurface = phonePage.locator('[data-role="adsr-editor-surface"]:visible');
         await fullSurface.waitFor();
-        await settleLayout(phonePage);
-        const fullMetrics = await readAdsrGeometry(fullSurface);
+        const fullMetrics = await readSettledAdsrGeometry(phonePage, fullSurface);
         assertResponsiveAdsrGeometry(fullMetrics, "phone full editor");
         assert.equal(
             fullMetrics.curve.height <= fullMetrics.curve.width * 0.63,
@@ -343,8 +361,7 @@ test("ADSR geometry stays bounded and circular through compact, expanded, full, 
         await desktopPage.getByRole("button", { name: "Select envelope 1" }).click();
         const surface = desktopPage.locator('[data-role="adsr-editor-surface"]:visible');
         await surface.waitFor();
-        await settleLayout(desktopPage);
-        const desktopMetrics = await readAdsrGeometry(surface);
+        const desktopMetrics = await readSettledAdsrGeometry(desktopPage, surface);
         assertResponsiveAdsrGeometry(desktopMetrics, "desktop editor");
         assert.equal(desktopMetrics.curve.stroke, "rgb(125, 247, 255)");
 

@@ -2,18 +2,16 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import path from "node:path";
 
-import { loadUIModule } from "./helpers/load_ui_module.mjs";
+import { loadUIModule } from "../kit/tests/helpers/load_ui_module.mjs";
 
 const repoRoot = path.resolve(import.meta.dirname, "..");
-const laneV1Promise = loadUIModule(repoRoot, "ui/shared/lane-state.ts");
 const laneV2Promise = loadUIModule(repoRoot, "ui/shared/lane-state-v2.ts");
 
 // A three-device serial doc (delay, reverb, chorus on the trunk) — the
 // starting point every structural op test builds from.
 async function makeSerialDoc() {
-    const laneV1 = await laneV1Promise;
     const laneV2 = await laneV2Promise;
-    const params = laneV1.createDefaultLaneState().params;
+    const params = Object.fromEntries(["delay", "reverb", "chorus"].map((type) => [type, laneV2.laneDefaultParamsForType(type)]));
     const parsed = laneV2.parseLaneStateV2({
         format: "cosimo.lane",
         version: 2,

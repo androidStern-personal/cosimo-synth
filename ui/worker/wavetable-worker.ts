@@ -1,5 +1,10 @@
 import type { PatchConnectionLike } from "../shared/cmajor-react";
 import {
+    createCmajorPluginStateService,
+    type CmajorStateConnection,
+} from "../../kit/ui/plugin-state-cmajor";
+import { synthPluginState } from "../shared/synth-plugin-state";
+import {
     DEFAULT_SAMPLES_PER_FRAME,
     getFactoryBankCatalogValue,
     type FactoryBankCatalog,
@@ -11,14 +16,12 @@ import {
     buildMipFrameFromSpectrum,
     extractSourceFramesFromSamples,
 } from "../shared/wavetable-mip";
-import {
-    asResourceClient,
-    type ResourceClient,
-    type ResourceClientInput,
-} from "../shared/resource-client";
+import { createPatchConnectionResourceClient, type ResourceClient } from "../../kit/ui/resource-client";
+import { synthPatchRoot } from "../shared/patch-root";
 import { startPatchWorkerServices } from "../shared/patch-worker-services";
-import { createModulationArticulationWorkerService } from "./modulation-articulation-worker-service";
-import { createRackStateWorkerService } from "./rack-state-worker-service";
+import { prepareSharedData } from "../shared/prepared-shared-data";
+import type { SharedDataConnection } from "../../kit/ui/plugin-state-direct-data";
+import { PACKED_WAVETABLE_BYTES, preparePackedWavetable } from "../shared/packed-wavetable";
 
 const runtimeSyncRequestEndpointID = "runtimeSyncRequest";
 // Reserved outside the practical modulation/articulation delivery range so this
@@ -65,13 +68,15 @@ type ServiceTargetKind = "loading" | "active";
 type TimerHandle = ReturnType<NonNullable<typeof globalThis.setTimeout>> | number;
 
 export type WavetableWorkerOptions = {
+    /** Selects the DSP's compiled delivery path. Never silently falls back. */
+    delivery?: "events" | "shared";
     catalogPath?: string;
     /** Maximum in-flight mip batch events; the option name predates batching. */
     maxFramesInFlight?: number;
     mipLevelCount?: number;
     cacheBudgetBytes?: number;
     serviceLoadTimeoutMs?: number;
-    resourceClient?: ResourceClientInput;
+    resourceClient?: ResourceClient;
     setTimeoutFn?: ((callback: () => void, delay: number) => TimerHandle) | null;
     clearTimeoutFn?: ((handle: TimerHandle) => void) | null;
 };
@@ -268,45 +273,6 @@ function clamp(value: number, min: number, max: number) {
     return Math.min(Math.max(value, min), max);
 }
 
-function decodeTextPayload(payload: unknown) {
-    if (typeof payload === "string") {
-        return Promise.resolve(payload);
-    }
-
-    if (payload && typeof (payload as { text?: () => Promise<string> }).text === "function") {
-        return (payload as { text: () => Promise<string> }).text();
-    }
-
-    if (payload instanceof ArrayBuffer) {
-        if (typeof TextDecoder === "function") {
-            return Promise.resolve(new TextDecoder().decode(new Uint8Array(payload)));
-        }
-
-        return Promise.resolve(String.fromCharCode(...new Uint8Array(payload)));
-    }
-
-    if (ArrayBuffer.isView(payload)) {
-        const bytes = new Uint8Array(payload.buffer, payload.byteOffset, payload.byteLength);
-
-        if (typeof TextDecoder === "function") {
-            return Promise.resolve(new TextDecoder().decode(bytes));
-        }
-
-        return Promise.resolve(String.fromCharCode(...bytes));
-    }
-
-    if (Array.isArray(payload)) {
-        const bytes = Uint8Array.from(payload);
-        if (typeof TextDecoder === "function") {
-            return Promise.resolve(new TextDecoder().decode(bytes));
-        }
-
-        return Promise.resolve(String.fromCharCode(...bytes));
-    }
-
-    throw new Error("Unsupported text resource payload");
-}
-
 async function readCatalogFromResourceClient(resourceClient: ResourceClient, catalogPath: string) {
     return getFactoryBankCatalogValue(await resourceClient.readJSON<FactoryBankCatalog>(catalogPath));
 }
@@ -399,7 +365,8 @@ function scheduleMicrotask(callback: () => void) {
 }
 
 export class WavetableWorkerController {
-    private readonly connection: PatchConnectionLike;
+    private readonly connection: PatchConnectionLike & SharedDataConnection;
+    private readonly delivery: "events" | "shared";
     private readonly resourceClient: ResourceClient;
     private readonly catalogPath: string;
     private readonly maxBatchesInFlight: number;
@@ -429,7 +396,8 @@ export class WavetableWorkerController {
 
     constructor(connection: PatchConnectionLike, options: WavetableWorkerOptions = {}) {
         this.connection = connection;
-        this.resourceClient = asResourceClient(options.resourceClient ?? connection);
+        this.delivery = options.delivery ?? "events";
+        this.resourceClient = options.resourceClient ?? createPatchConnectionResourceClient(connection, { patchRoot: synthPatchRoot() });
         this.catalogPath = options.catalogPath ?? defaultCatalogPath;
         this.maxBatchesInFlight = resolvePositiveIntegerOption(
             options.maxFramesInFlight,
@@ -449,6 +417,9 @@ export class WavetableWorkerController {
     async start() {
         if (this.started) {
             return this;
+        }
+        if (this.delivery === "shared" && !this.connection.sharedData) {
+            throw new Error("Cosimo requires a host with direct shared wavetable preparation.");
         }
 
         this.started = true;
@@ -878,6 +849,10 @@ export class WavetableWorkerController {
         };
         this.nextLoadGenerations[runtimeState.oscillatorIndex] = generation + 1;
         this.clearMipTransferState();
+        if (this.delivery === "shared") {
+            void this.prepareSharedTable();
+            return;
+        }
         this.connection.sendEventOrValue?.(loadBeginEndpointID, {
             dspSessionId: runtimeState.dspSessionId,
             oscillatorIndex: runtimeState.oscillatorIndex,
@@ -887,6 +862,53 @@ export class WavetableWorkerController {
         });
         this.createFullMipJobsForServiceTable(2);
         this.pumpUploads();
+    }
+
+    private async prepareSharedTable() {
+        const table = this.serviceTable;
+        if (!table) return;
+        const startedAt = getNow();
+        try {
+            await prepareSharedData(this.connection, {
+                input: table.oscillatorIndex,
+                byteLength: PACKED_WAVETABLE_BYTES,
+            }, destination => {
+                preparePackedWavetable(destination, table, frame => this.getSpectrumForFrame(frame));
+            });
+            if (this.serviceTable !== table || this.knownSessionId !== table.dspSessionId) return;
+            emitWorkerLog("info", "Submitted shared wavetable", {
+                oscillatorIndex: table.oscillatorIndex,
+                tableIndex: table.tableIndex,
+                generation: table.generation,
+                frameCount: table.frameCount,
+                preparedBytes: PACKED_WAVETABLE_BYTES,
+                preparationMs: getNow() - startedAt,
+                sampleUploadBytes: 0,
+            });
+        } catch (error: unknown) {
+            if (this.serviceTable !== table || this.knownSessionId !== table.dspSessionId) return;
+            const candidate = this.candidateValidations[table.oscillatorIndex];
+            if (candidate?.dspSessionId === table.dspSessionId
+                && candidate.generation === table.generation
+                && candidate.desiredIntentSerial === table.desiredIntentSerial) {
+                this.candidateValidations[table.oscillatorIndex] = null;
+            }
+            // Publication has not happened, so report failure of the desired
+            // candidate, not an upload generation the DSP has never seen.
+            this.emitWorkerLoadFailure({
+                dspSessionId: table.dspSessionId,
+                oscillatorIndex: table.oscillatorIndex,
+                generation: 0,
+                tableIndex: table.tableIndex,
+                candidateAttemptSerial: table.desiredIntentSerial,
+                failurePhase: failurePhaseBuildMip,
+                failureReasonCode: failureReasonGeneric,
+            });
+            this.serviceTable = null;
+            this.clearMipTransferState();
+            emitWorkerLog("error", "Shared wavetable preparation failed", { detail: describeErrorDetail(error) });
+            this.scheduleRuntimeStateDrain();
+        }
     }
 
     private handleCandidateLoadFailure(runtimeState: NormalizedRuntimeState) {
@@ -995,8 +1017,11 @@ export class WavetableWorkerController {
         };
         this.clearMipTransferState();
         if (serviceTarget.kind === "loading") {
-            this.createFullMipJobsForServiceTable(2);
-            this.pumpUploads();
+            if (this.delivery === "shared") await this.prepareSharedTable();
+            else {
+                this.createFullMipJobsForServiceTable(2);
+                this.pumpUploads();
+            }
         }
         const candidateValidation = this.candidateValidations[serviceTarget.oscillatorIndex];
         if (
@@ -1498,6 +1523,7 @@ export class WavetableWorkerController {
     }
 
     pumpUploads() {
+        if (this.delivery === "shared") return;
         if (!this.serviceTable) {
             return;
         }
@@ -1607,10 +1633,11 @@ export function createWavetableWorkerController(connection: PatchConnectionLike,
     return new WavetableWorkerController(connection, options);
 }
 
-export default async function runWavetableWorker(connection: PatchConnectionLike, options: WavetableWorkerOptions = {}) {
+export default async function runWavetableWorker(connection: PatchConnectionLike & CmajorStateConnection, options: WavetableWorkerOptions = {}) {
     return startPatchWorkerServices(connection, [
-        createModulationArticulationWorkerService,
-        createRackStateWorkerService,
-        () => createWavetableWorkerController(connection, options),
+        () => createWavetableWorkerController(connection, { ...options, delivery: "shared" }),
+        () => createCmajorPluginStateService(synthPluginState, connection, {
+            onDefect: error => console.error("Cosimo state failed", describeErrorDetail(error)),
+        }),
     ]);
 }

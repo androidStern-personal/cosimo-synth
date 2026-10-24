@@ -29,10 +29,16 @@ rg -Fq '"endpointID": "bounceBankFrameBatch"' "$generated_metadata"
 rg -Fq '"endpointID": "bounceBankCommit"' "$generated_metadata"
 rg -Fq '"endpointID": "sourceMode"' "$generated_metadata"
 
+# The renderer's shared-memory provider reads Cmajor's patch shared-data
+# header, taken from the Cmajor source the code generator was just built from.
+codegen_cache="${COSIMO_CMAJOR_EXTERNAL_CODEGEN_BUILD_DIR:-$repo_dir/build/cmajor_external_codegen-host}/CMakeCache.txt"
+cmajor_dir="$(sed -n 's/^CPM_PACKAGE_builder_kit_cmajor_toolchain_SOURCE_DIR:INTERNAL=//p' "$codegen_cache")"
+
 compile_started="$(date +%s)"
 "${CXX:-c++}" \
     -std=c++17 -O1 -g0 -Wall -Wextra -Werror \
     -Wno-unused-local-typedefs -Wno-unused-function \
+    -I"$cmajor_dir/include" \
     -I"$renderer_dir" \
     -I"$renderer_dir/third_party/xsimd/include" \
     -DCOSIMO_GENERATED_CPP_PATH=\"$generated_cpp\" \

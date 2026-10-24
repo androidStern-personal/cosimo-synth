@@ -777,7 +777,10 @@ let report = null;
 let proofError = null;
 let closeVerified = false;
 try {
-    await buildPlugin("seqfx");
+    // scripts/qualify_seqfx_source.mjs builds the canonical runtime once and
+    // sets SEQFX_CANONICAL_RUNTIME_PREBUILT=1 so this proof captures that build.
+    if (process.env.SEQFX_CANONICAL_RUNTIME_PREBUILT !== "1")
+        await buildPlugin("seqfx");
     const provenanceBefore = await captureSeqFxProofProvenance(repoRoot, { requireClean });
     staticServer = await startStaticServer();
     origin = staticServer.origin;

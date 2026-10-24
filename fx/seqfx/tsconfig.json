@@ -28,23 +28,22 @@
     ]
   },
   "files": [
+    "pattern-upload.ts",
+    "state.ts",
     "view/AuxSource.tsx",
     "view/CrusherEditor.tsx",
     "view/SeqFxGlobalControls.tsx",
     "view/SeqFxPatchView.tsx",
     "view/StutterEnvelopeEditor.tsx",
     "view/crusher-preview.ts",
+    "view/factory-presets.ts",
     "view/seqfx-effect-definitions.ts",
     "view/seqfx-factory-content.ts",
-    "view/seqfx-preset-adapter.ts",
-    "view/seqfx-preset-migrations.ts",
-    "view/seqfx-runtime-bridge.ts",
+    "view/seqfx-session.ts",
     "view/seqfx-state.ts",
     "view/source.tsx",
     "view/stutter-envelope.ts",
     "view/talk-box-contract.ts",
-    "view/tape-stop-v2-trajectory.ts",
-    "worker/seqfx-worker-service.ts",
-    "worker/source.ts"
+    "view/tape-stop-v2-trajectory.ts"
   ]
 }

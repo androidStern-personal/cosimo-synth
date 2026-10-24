@@ -215,7 +215,7 @@ test("the reference lab has no production import path in either direction", asyn
         const files = await walk(path.join(repoRoot, productionRoot));
         for (const file of files.filter((candidate) => /\.(?:cmajor|cmajorpatch|js|mjs|ts|tsx)$/.test(candidate))) {
             const source = await fs.readFile(file, "utf8");
-            assert.ok(!source.includes("reference_labs/polish_comp_clip"), `${file} imports the T27 lab`);
+            assert.ok(!source.includes("reference_labs/polish_comp_clip"), `${file} imports the compressor/clipper reference lab`);
         }
     }
 

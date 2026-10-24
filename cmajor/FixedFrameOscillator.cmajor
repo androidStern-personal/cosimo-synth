@@ -57,7 +57,7 @@ namespace wt
     // Runtime order matches ui/shared/modulation-targets.ts: ten local targets
     // for each oscillator, the two established shared filter targets, the
     // continuous MSEG/envelope controls, append-only Filter Mix and Global
-    // Tune, the complete Amp Envelope controls, then T62's three append-only
+    // Tune, the complete Amp Envelope controls, then the three append-only
     // per-voice Enhancer destinations.
     let modulationOscillatorTargetCount = 10;
     let modulationVoiceTargetCount = (oscillatorCount * modulationOscillatorTargetCount) + 29;
@@ -1279,7 +1279,7 @@ namespace wt
 
     // Per-note loudness ADSR. Its attack and release equations deliberately
     // match RetriggerableASR: at A=10 ms, D=1 ms, S=1 the gain stream is
-    // sample-identical to every pre-T38 sound, including velocity response.
+    // sample-identical to RetriggerableASR's, including velocity response.
     //
     // The attack starts from zero. That is click-free because the engine
     // never retriggers this envelope while it is audible: a hard retrigger
@@ -1577,7 +1577,9 @@ namespace wt
 
     processor SharedVoiceEngine (int voiceCount,
                                  float32 previewFrequencyHz = 440.0f,
-                                 int wavetableFrameCapacity = maxFramesPerTable)
+                                 int wavetableFrameCapacity = maxFramesPerTable,
+                                 bool sharedWavetables = false,
+                                 bool sharedMsegs = false)
     {
         input event (std::notes::NoteOn,
                      std::notes::NoteOff,
@@ -1687,9 +1689,9 @@ namespace wt
         }
 
         node ampEnvelopes = wt::RetriggerableAmpAdsr[voiceCount];
-        node mseg1 = wt::MsegReader[voiceCount];
-        node mseg2 = wt::MsegReader[voiceCount];
-        node mseg3 = wt::MsegReader[voiceCount];
+        node mseg1 = wt::MsegReader (sharedMsegs ? 3 : -1)[voiceCount];
+        node mseg2 = wt::MsegReader (sharedMsegs ? 5 : -1)[voiceCount];
+        node mseg3 = wt::MsegReader (sharedMsegs ? 7 : -1)[voiceCount];
         node modEnv1 = wt::RetriggerableAdsr[voiceCount];
         node modEnv2 = wt::RetriggerableAdsr[voiceCount];
         node modEnv3 = wt::RetriggerableAdsr[voiceCount];
@@ -1750,6 +1752,13 @@ namespace wt
         int32[voiceCount] voiceBounceRootIndex;
         int32[voiceCount] voiceBounceBankSlot;
         bool[voiceCount] voiceBouncePlaying;
+        // A bounced recording already carries the envelope it was played
+        // with, so no live envelope shapes it. A key released before the
+        // recording reaches its own note-off stops it with this short fixed
+        // fade instead; a key held that long lets the recorded tail play out.
+        let bounceReleaseFadeFrames = int32 (std::intrinsics::max (1.0f, 0.005f * float32 (processor.frequency)));
+        let inverseBounceReleaseFadeFrames = 1.0f / float32 (bounceReleaseFadeFrames);
+        int32[voiceCount] voiceBounceReleaseFadeRemaining;
         float32[voiceCount] voicePitchGlideStep;
         int32[voiceCount] voiceGlideSamplesRemaining;
         int32[voiceCount] voiceActive;
@@ -1961,7 +1970,9 @@ namespace wt
         int32 acceptedModulationProgramSerial;
         int32 acceptedArticulationSerial;
         float32[rendererPackedFloatCount] rendererFloats;
-        int32[rendererPackedIntCount] rendererInts;
+        let rendererSharedGenerationOffset = rendererPackedIntCount;
+        let rendererSharedTableIndexOffset = rendererSharedGenerationOffset + oscillatorCount;
+        int32[rendererPackedIntCount + (sharedWavetables ? oscillatorCount * 2 : 0)] rendererInts;
 
         // BounceBankStore residency seam. Callers only address install,
         // commit and read operations; the chunked arrays are a Path B detail.
@@ -2004,8 +2015,8 @@ namespace wt
         int32 sourceModeFadeDirection = 0;
         float32 sourceModeFadeGain = 1.0f;
 
-        // Active slots are immutable while visible. Uploads write into the one
-        // spare slot and publish only after every mip/frame has arrived.
+        // The legacy event receiver owns these arrays. The shared-memory build
+        // has no table payload here: its renderer reads host-owned allocations.
         static_assert (wavetableFrameCapacity > 0 && wavetableFrameCapacity <= maxFramesPerTable);
         static_assert (voiceCount > 0 && voiceCount <= 16);
         static_assert (wavetableFrameCapacity == maxFramesPerTable);
@@ -2014,22 +2025,22 @@ namespace wt
                                               / packedWavetableChunkCount;
         static_assert (wavetableFrameCapacity != maxFramesPerTable
                        || packedWavetableChunkSampleCount == 819904);
-        int32[packedWavetableChunkSampleCount] packedSlot0Chunk0;
-        int32[packedWavetableChunkSampleCount] packedSlot0Chunk1;
-        int32[packedWavetableChunkSampleCount] packedSlot0Chunk2;
-        int32[packedWavetableChunkSampleCount] packedSlot0Chunk3;
-        int32[packedWavetableChunkSampleCount] packedSlot1Chunk0;
-        int32[packedWavetableChunkSampleCount] packedSlot1Chunk1;
-        int32[packedWavetableChunkSampleCount] packedSlot1Chunk2;
-        int32[packedWavetableChunkSampleCount] packedSlot1Chunk3;
-        int32[packedWavetableChunkSampleCount] packedSlot2Chunk0;
-        int32[packedWavetableChunkSampleCount] packedSlot2Chunk1;
-        int32[packedWavetableChunkSampleCount] packedSlot2Chunk2;
-        int32[packedWavetableChunkSampleCount] packedSlot2Chunk3;
-        int32[packedWavetableChunkSampleCount] packedSlot3Chunk0;
-        int32[packedWavetableChunkSampleCount] packedSlot3Chunk1;
-        int32[packedWavetableChunkSampleCount] packedSlot3Chunk2;
-        int32[packedWavetableChunkSampleCount] packedSlot3Chunk3;
+        int32[sharedWavetables ? 1 : packedWavetableChunkSampleCount] packedSlot0Chunk0;
+        int32[sharedWavetables ? 1 : packedWavetableChunkSampleCount] packedSlot0Chunk1;
+        int32[sharedWavetables ? 1 : packedWavetableChunkSampleCount] packedSlot0Chunk2;
+        int32[sharedWavetables ? 1 : packedWavetableChunkSampleCount] packedSlot0Chunk3;
+        int32[sharedWavetables ? 1 : packedWavetableChunkSampleCount] packedSlot1Chunk0;
+        int32[sharedWavetables ? 1 : packedWavetableChunkSampleCount] packedSlot1Chunk1;
+        int32[sharedWavetables ? 1 : packedWavetableChunkSampleCount] packedSlot1Chunk2;
+        int32[sharedWavetables ? 1 : packedWavetableChunkSampleCount] packedSlot1Chunk3;
+        int32[sharedWavetables ? 1 : packedWavetableChunkSampleCount] packedSlot2Chunk0;
+        int32[sharedWavetables ? 1 : packedWavetableChunkSampleCount] packedSlot2Chunk1;
+        int32[sharedWavetables ? 1 : packedWavetableChunkSampleCount] packedSlot2Chunk2;
+        int32[sharedWavetables ? 1 : packedWavetableChunkSampleCount] packedSlot2Chunk3;
+        int32[sharedWavetables ? 1 : packedWavetableChunkSampleCount] packedSlot3Chunk0;
+        int32[sharedWavetables ? 1 : packedWavetableChunkSampleCount] packedSlot3Chunk1;
+        int32[sharedWavetables ? 1 : packedWavetableChunkSampleCount] packedSlot3Chunk2;
+        int32[sharedWavetables ? 1 : packedWavetableChunkSampleCount] packedSlot3Chunk3;
         int32[wavetableSlotCount * mipLevelCount * wavetableFrameCapacity] packedReadyFrameFlags;
         int32[wavetableSlotCount * mipLevelCount] packedLoadedFrameCounts;
         int32[oscillatorCount * mipLevelCount] oscillatorRequestedGenerationByMip;
@@ -4008,6 +4019,38 @@ namespace wt
             voiceBouncePosition.at (voice) = 0.0;
             voiceBounceRootIndex.at (voice) = 0;
             voiceBounceBankSlot.at (voice) = -1;
+            voiceBounceReleaseFadeRemaining.at (voice) = 0;
+        }
+
+        void releaseBounceSampleForVoice (int32 voiceIndex)
+        {
+            let voice = wrap<voiceCount> (voiceIndex);
+            if (! voiceBouncePlaying.at (voice) || voiceBounceReleaseFadeRemaining.at (voice) > 0)
+                return;
+
+            // A root without a recorded note-off is held content to its end.
+            let recordedNoteOff = bounceSlotRootNoteOffFrameOffsets.at (
+                bounceRootMetadataIndex (voiceBounceBankSlot.at (voice), voiceBounceRootIndex.at (voice)));
+            if (recordedNoteOff <= 0 || voiceBouncePosition.at (voice) < float64 (recordedNoteOff))
+                voiceBounceReleaseFadeRemaining.at (voice) = bounceReleaseFadeFrames;
+        }
+
+        /** The level of a voice's bounced recording: its live velocity against the capture velocity, and the release fade. */
+        float32 advanceBounceGainForVoice (int32 voiceIndex)
+        {
+            let voice = wrap<voiceCount> (voiceIndex);
+            var gain = voiceVelocity.at (voice) / bounceCaptureVelocityGain;
+
+            if (voiceBounceReleaseFadeRemaining.at (voice) > 0)
+            {
+                voiceBounceReleaseFadeRemaining.at (voice) -= 1;
+                gain *= float32 (voiceBounceReleaseFadeRemaining.at (voice)) * inverseBounceReleaseFadeFrames;
+
+                if (voiceBounceReleaseFadeRemaining.at (voice) == 0)
+                    stopBounceSampleForVoice (voiceIndex);
+            }
+
+            return gain;
         }
 
         void startBounceSampleForVoice (int32 voiceIndex, float32 pitch)
@@ -4079,17 +4122,15 @@ namespace wt
             if (voiceBouncePosition.at (voice) >= float64 (frameCount))
                 voiceBouncePlaying.at (voice) = false;
 
-            // The bank is captured at fixed velocity 100. Calibrate that
-            // source once, then let the same live per-note Amp Envelope own
-            // all oscillator and Bounce loudness.
-            return sample * (bouncePlaybackMakeupGain / bounceCaptureVelocityGain);
+            return sample * bouncePlaybackMakeupGain;
         }
 
         bool voiceIsSoundingForRackModulation (int32 voiceIndex)
         {
             let voice = wrap<voiceCount> (voiceIndex);
             return voiceActive.at (voice) != 0
-                || ampEnvelopes[voice].gainOut > 0.0f;
+                || ampEnvelopes[voice].gainOut > 0.0f
+                || voiceBouncePlaying.at (voice);
         }
 
         void requestSourceModeTransition (int32 requestedMode)
@@ -4292,6 +4333,51 @@ namespace wt
             tableStagingLastFrameIndexF = 0.0f;
         }
 
+        void adoptSharedMsegs()
+        {
+            // Curves use the same ordered installation serial as other modulation
+            // commands. Only complete shared resources are visible in this block.
+            for (int32 inputIndex = 3; inputIndex < 9; ++inputIndex)
+            {
+                let serial = CosimoThreeOscillatorRenderer::sharedMsegSerial (inputIndex, currentDspSessionId);
+                if (serial != acceptedModulationSerial + 1) continue;
+                if (beginModulationRuntimeInstall (currentDspSessionId, serial) == 0) continue;
+                wt::MsegSharedBufferUpload upload;
+                upload.shapeIndex = (inputIndex - 3) % 2;
+                upload.dspSessionId = currentDspSessionId;
+                upload.deliveryToken = serial;
+                for (wrap<voiceCount> voice)
+                {
+                    if (inputIndex < 5) mseg1[voice].sharedBufferUpload <- upload;
+                    else if (inputIndex < 7) mseg2[voice].sharedBufferUpload <- upload;
+                    else mseg3[voice].sharedBufferUpload <- upload;
+                }
+                completeModulationRuntimeInstall (serial);
+            }
+        }
+
+        void adoptSharedWavetables()
+        {
+            // The framework adopts all finished allocations before this block.
+            // Their metadata and packed samples are in the same allocation.
+            let changed = CosimoThreeOscillatorRenderer::updateSharedTables (currentDspSessionId, rendererInts);
+            for (int32 oscillator = 0; oscillator < oscillatorCount; ++oscillator)
+            {
+                if ((changed & (1 << oscillator)) == 0) continue;
+                tableStagingOscillatorIndex = oscillator;
+                tableStagingSlotIndex = oscillator;
+                tableStagingGeneration = rendererInts.at (rendererSharedGenerationOffset + oscillator);
+                tableStagingTableIndex = rendererInts.at (rendererSharedTableIndexOffset + oscillator);
+                tableStagingFrameCount = rendererInts.at (rendererFrameCountOffset + oscillator);
+                tableStagingLastFrameIndex = tableStagingFrameCount - 1;
+                tableStagingLastFrameIndexF = float32 (tableStagingLastFrameIndex);
+                oscillatorGenerationFrontier.at (oscillator) = tableStagingGeneration;
+                for (int32 mip = 0; mip < mipLevelCount; ++mip)
+                    packedLoadedFrameCounts.at (packedSlotMipIndex (oscillator, mip)) = tableStagingFrameCount;
+                commitPackedStagingTable();
+            }
+        }
+
         void commitPackedStagingTable()
         {
             let oscillator = tableStagingOscillatorIndex;
@@ -4388,9 +4474,7 @@ namespace wt
 
             for (wrap<voiceCount> voice)
             {
-                let isVisible = voiceActive.at (voice) != 0 || ampEnvelopes[voice].gainOut > 0.0f;
-
-                if (isVisible && voiceGeneration.at (voice) >= newestGeneration)
+                if (voiceIsSoundingForRackModulation (int32 (voice)) && voiceGeneration.at (voice) >= newestGeneration)
                 {
                     newestGeneration = voiceGeneration.at (voice);
                     newestVoiceIndex = int32 (voice);
@@ -4885,6 +4969,7 @@ namespace wt
                 off.pitch = note.pitch;
                 off.velocity = voicePendingNoteOffVelocity.at (voice);
                 ampEnvelopes[voice].eventIn <- off;
+                releaseBounceSampleForVoice (index);
                 noteOffVoiceModulators (index, off);
             }
         }
@@ -4951,6 +5036,7 @@ namespace wt
 
             voiceActive.at (voice) = 0;
             ampEnvelopes[voice].eventIn <- note;
+            releaseBounceSampleForVoice (index);
             noteOffVoiceModulators (index, note);
         }
 
@@ -5617,6 +5703,13 @@ namespace wt
             let installKind = beginModulationRuntimeInstall (upload.dspSessionId, upload.deliverySerial);
             if (installKind == 0)
                 return;
+            if const (sharedMsegs)
+            {
+                // A legacy sample event cannot update a shared reader. Never
+                // acknowledge a curve that the voices did not actually adopt.
+                rejectRuntimeInstall (upload.deliverySerial);
+                return;
+            }
             if (upload.slot < 1 || upload.slot > modulationMsegSlotCount
                 || upload.shapeIndex < 0 || upload.shapeIndex > 1)
             {
@@ -6014,13 +6107,15 @@ namespace wt
 
         event oscillatorWavetableLoadBeginIn (OscillatorWavetableLoadBegin request)
         {
-            beginWavetableLoad (request.dspSessionId, request.oscillatorIndex,
+            if const (! sharedWavetables)
+                beginWavetableLoad (request.dspSessionId, request.oscillatorIndex,
                                 request.generation, request.tableIndex, request.frameCount);
         }
 
         event oscillatorWavetableMipFrameIn (OscillatorWavetableMipFrame frame)
         {
-            receiveWavetableMipBatch (frame.dspSessionId, frame.oscillatorIndex,
+            if const (! sharedWavetables)
+                receiveWavetableMipBatch (frame.dspSessionId, frame.oscillatorIndex,
                                       frame.generation, frame.tableIndex, frame.mipIndex,
                                       frame.frameIndexBase, frame.frameCount, frame.samples);
         }
@@ -6124,6 +6219,10 @@ namespace wt
 
             loop
             {
+                if const (sharedWavetables)
+                    adoptSharedWavetables();
+                if const (sharedMsegs)
+                    adoptSharedMsegs();
                 glideTimeSecondsState = std::intrinsics::max (0.0f, glideTimeIn);
                 currentAmpAttackSeconds = ampAttackIn > 0.0f
                     ? std::intrinsics::clamp (ampAttackIn, 0.001f, 10.0f)
@@ -6174,8 +6273,7 @@ namespace wt
                     // would otherwise stall.
                     if (voicePendingStart[voice]
                         && (voiceStealFadeRemaining.at (voice) <= 0
-                            || (voiceActive.at (voice) == 0
-                                && ampEnvelopes[voice].gainOut <= 0.0f)))
+                            || ! voiceIsSoundingForRackModulation (voiceIndex)))
                         applyPendingVoiceStart (voiceIndex);
 
                     // A voice that was not sounding after its previous frame
@@ -6189,8 +6287,7 @@ namespace wt
                     // stationary at exactly zero. A voice mid steal-fade is
                     // sounding by definition; the pending guard only covers
                     // the corner where its envelope idles at exactly zero.
-                    if (voiceActive.at (voice) == 0
-                        && ampEnvelopes[voice].gainOut <= 0.0f
+                    if (! voiceIsSoundingForRackModulation (voiceIndex)
                         && ! voicePendingStart[voice])
                     {
                         if (voiceWasSounding[voice])
@@ -6456,18 +6553,23 @@ namespace wt
                 int32 rendererSucceeded = 0;
                 if (! isBounceSource)
                 {
-                    rendererSucceeded = CosimoThreeOscillatorRenderer::renderAll (
-                        rendererFloats,
-                        rendererInts,
-                        packedSlot0Chunk0, packedSlot0Chunk1,
-                        packedSlot0Chunk2, packedSlot0Chunk3,
-                        packedSlot1Chunk0, packedSlot1Chunk1,
-                        packedSlot1Chunk2, packedSlot1Chunk3,
-                        packedSlot2Chunk0, packedSlot2Chunk1,
-                        packedSlot2Chunk2, packedSlot2Chunk3,
-                        packedSlot3Chunk0, packedSlot3Chunk1,
-                        packedSlot3Chunk2, packedSlot3Chunk3
-                    );
+                    if const (sharedWavetables)
+                        rendererSucceeded = CosimoThreeOscillatorRenderer::renderShared (rendererFloats, rendererInts);
+                    else
+                    {
+                        rendererSucceeded = CosimoThreeOscillatorRenderer::renderAll (
+                            rendererFloats,
+                            rendererInts,
+                            packedSlot0Chunk0, packedSlot0Chunk1,
+                            packedSlot0Chunk2, packedSlot0Chunk3,
+                            packedSlot1Chunk0, packedSlot1Chunk1,
+                            packedSlot1Chunk2, packedSlot1Chunk3,
+                            packedSlot2Chunk0, packedSlot2Chunk1,
+                            packedSlot2Chunk2, packedSlot2Chunk3,
+                            packedSlot3Chunk0, packedSlot3Chunk1,
+                            packedSlot3Chunk2, packedSlot3Chunk3
+                        );
+                    }
                 }
 
                 for (wrap<voiceCount> voice)
@@ -6477,12 +6579,14 @@ namespace wt
 
                     float32 noteLeft = 0.0f;
                     float32 noteRight = 0.0f;
+                    var gain = ampEnvelopes[voice].gainOut;
 
                     if (isBounceSource)
                     {
                         let bounceSample = readBounceSampleForVoice (int32 (voice));
                         noteLeft = bounceSample[0];
                         noteRight = bounceSample[1];
+                        gain = advanceBounceGainForVoice (int32 (voice));
                     }
                     else if (rendererSucceeded != 0)
                     {
@@ -6547,8 +6651,9 @@ namespace wt
                     // Oscillators A/B/C are already combined by the renderer,
                     // and Bounce is the alternative combined source. The
                     // Voice Filter above feeds this note-owned Enhancer; the
-                    // shared per-note Amp Envelope then scales both dry and
-                    // residue before voices are summed.
+                    // note's gain (the Amp Envelope, or a bounced recording's
+                    // own level) then scales both dry and residue before
+                    // voices are summed.
                     if (voiceEnhancerVisualizationEnabled)
                     {
                         voiceEnhancerInputLeftMix += noteLeft;
@@ -6559,7 +6664,6 @@ namespace wt
                         voiceEffectiveEnhancerFrequencyHz.at (voice),
                         voiceEffectiveEnhancerQ.at (voice),
                         voiceEffectiveEnhancerAmount.at (voice));
-                    var gain = ampEnvelopes[voice].gainOut;
 
                     // Steal fade: ramp the dying content linearly to exactly
                     // zero; the final faded sample multiplies by 0, so the

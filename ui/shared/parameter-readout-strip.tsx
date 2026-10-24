@@ -2,7 +2,7 @@
  * The ONE compact numeric-readout cell language (ADR-024): rolling-axis drags
  * (horizontal = base, vertical = the armed source's route amount), truth-table
  * rails, the fixed top-center precision HUD, long-press menu seam, keyboard
- * nudges, and choice cells — extracted from the mobile Voice editor so the T13
+ * nudges, and choice cells — shared with the mobile Voice editor so the
  * quick-editor sheet reuses the EXACT interaction contract instead of
  * inventing drawer-specific controls.
  *
@@ -27,12 +27,12 @@ import {
 } from "react";
 import { createPortal } from "react-dom";
 
+import { PARAMETER_GESTURE_MODULATION_PIXELS_PER_FULL_SPAN } from "./parameter-gesture";
 import {
     PARAMETER_GESTURE_BASE_PIXELS_PER_FULL_RANGE,
-    PARAMETER_GESTURE_MODULATION_PIXELS_PER_FULL_SPAN,
     type ParameterGestureChannel,
     type useParameterGesture,
-} from "./parameter-gesture";
+} from "../../kit/ui/parameter-gesture";
 import {
     ParameterPrecisionHud,
     type ParameterHudModel,

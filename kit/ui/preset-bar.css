@@ -1,0 +1,29 @@
+.bk-preset-bar {
+    position: relative; display: flex; align-items: center; gap: 6px; min-width: 0;
+    font-size: 11px; color: inherit;
+}
+.bk-preset-bar button, .bk-preset-bar select, .bk-preset-bar input {
+    font: inherit; color: inherit; height: 24px; border-radius: 4px;
+    border: 1px solid color-mix(in srgb, currentColor 35%, transparent); background: transparent;
+}
+.bk-preset-bar button { padding: 0 8px; cursor: pointer; white-space: nowrap; }
+.bk-preset-bar button:disabled { opacity: .4; cursor: default; }
+.bk-preset-bar :is(button, select, input):focus-visible { outline: 2px solid var(--editor-accent-start, #d2fa6a); outline-offset: 1px; }
+.bk-preset-bar select { min-width: 0; width: 160px; padding: 0 4px; }
+.bk-preset-bar option, .bk-preset-bar optgroup { color: initial; }
+.bk-preset-bar-dirty { white-space: nowrap; color: var(--editor-accent-start, #d2fa6a); }
+.bk-preset-bar-form { display: flex; align-items: center; gap: 6px; }
+.bk-preset-bar-form label { display: flex; align-items: center; gap: 6px; white-space: nowrap; }
+.bk-preset-bar-form input { width: 180px; padding: 0 6px; }
+.bk-preset-bar-more { position: relative; }
+.bk-preset-bar-menu {
+    position: absolute; top: calc(100% + 4px); right: 0; z-index: 10; display: grid; gap: 4px; min-width: 140px; padding: 6px;
+    border: 1px solid color-mix(in srgb, currentColor 35%, transparent); border-radius: 6px; background: var(--editor-surface-bg, #181a1c);
+}
+.bk-preset-bar-menu button { text-align: left; }
+.bk-preset-bar-menu p { margin: 0 0 2px; }
+.bk-preset-bar-note {
+    position: absolute; top: calc(100% + 4px); left: 0; z-index: 10; display: flex; align-items: center; gap: 8px;
+    margin: 0; padding: 4px 8px; max-width: 420px; border-radius: 4px; background: var(--editor-surface-bg, #181a1c);
+}
+.bk-preset-bar-error { color: #fa9b91; }

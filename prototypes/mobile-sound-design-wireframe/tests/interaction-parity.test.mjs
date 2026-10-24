@@ -172,6 +172,9 @@ function renderController(initialSession = {}) {
     run(callback) {
       act(() => callback(latest));
     },
+    async runAsync(callback) {
+      await act(async () => { await callback(latest); });
+    },
   };
 }
 
@@ -1017,25 +1020,25 @@ test("source-to-target navigation preserves its shallow return trail and exact r
   controller.unmount();
 });
 
-test("source drop creates one mapping and a repeated drop focuses instead of duplicating", () => {
+test("source drop creates one mapping and a repeated drop focuses instead of duplicating", async () => {
   const controller = renderController();
   const originalElementFromPoint = document.elementFromPoint;
   document.elementFromPoint = () => ({
     closest: () => ({ getAttribute: () => "phaser.feedback" }),
   });
-  const drop = () => {
+  const drop = async () => {
     controller.run(({ actions }) => actions.beginSourceDrag("envelope-1"));
     controller.run(({ actions }) => actions.moveSourceDrag(30, 30));
-    controller.run(({ actions }) => actions.stopSourceDrag());
+    await controller.runAsync(({ actions }) => actions.stopSourceDrag());
   };
-  drop();
+  await drop();
   let relations = controller.current().state.patch.mappings.filter(
     (mapping) => mapping.targetKey === "phaser.feedback" && mapping.sourceId === "envelope-1",
   );
   assert.equal(relations.length, 1);
   assert.equal(controller.current().state.selectedTargetId, "phaser.feedback");
   assert.equal(controller.current().state.activeMappingId, relations[0].id);
-  drop();
+  await drop();
   relations = controller.current().state.patch.mappings.filter(
     (mapping) => mapping.targetKey === "phaser.feedback" && mapping.sourceId === "envelope-1",
   );
@@ -1045,15 +1048,15 @@ test("source drop creates one mapping and a repeated drop focuses instead of dup
   controller.unmount();
 });
 
-test("delete and Undo restore the source, mappings, focus, selected row, and scroll", () => {
+test("delete and Undo restore the source, mappings, focus, selected row, and scroll", async () => {
   const controller = renderController();
   controller.run(({ actions }) => actions.openSource("envelope-1"));
   controller.run(({ actions }) => actions.selectSourceMapping("wavetable.warp::envelope-1"));
   controller.run(({ actions }) => actions.setSourceScrollTop(29));
-  controller.run(({ actions }) => actions.deleteSource("envelope-1"));
+  await controller.runAsync(({ actions }) => actions.deleteSource("envelope-1"));
   assert.equal(controller.current().state.sourceLookup["envelope-1"], undefined);
   assert.ok(controller.current().state.deletedSource);
-  controller.run(({ actions }) => actions.undoDelete());
+  await controller.runAsync(({ actions }) => actions.undoDelete());
   assert.equal(controller.current().state.focusedSource.id, "envelope-1");
   assert.equal(controller.current().state.sourceMappingId, "wavetable.warp::envelope-1");
   assert.equal(controller.current().state.sourceScrollTop, 29);
@@ -1063,7 +1066,7 @@ test("delete and Undo restore the source, mappings, focus, selected row, and scr
   controller.unmount();
 });
 
-test("capture remains owned by the parameter moved during Trigger, not later selection", () => {
+test("capture remains owned by the parameter moved during Trigger, not later selection", async () => {
   const controller = renderController();
   controller.run(({ actions }) => actions.startTrigger());
   controller.run(({ actions }) => actions.setParameter("phaser.depth", 73));
@@ -1071,7 +1074,7 @@ test("capture remains owned by the parameter moved during Trigger, not later sel
   assert.equal(controller.current().state.audition.captureCandidate.targetKey, "phaser.depth");
   controller.run(({ actions }) => actions.selectTarget("phaser.feedback"));
   assert.equal(controller.current().state.selectedTargetId, "phaser.feedback");
-  controller.run(({ actions }) => actions.captureMotion());
+  await controller.runAsync(({ actions }) => actions.captureMotion());
   const captured = controller.current().state.patch.sources.find(
     (source) => source.type === "mseg" && source.id !== "mseg-1",
   );
@@ -1170,7 +1173,7 @@ test("fallback Trigger timer cannot terminate a newer held note", async () => {
   controller.unmount();
 });
 
-test("fixed performance sources drop-assign like any source but never open an editor", () => {
+test("fixed performance sources drop-assign like any source but never open an editor", async () => {
   const controller = renderController();
   const originalElementFromPoint = document.elementFromPoint;
   document.elementFromPoint = () => ({
@@ -1178,7 +1181,7 @@ test("fixed performance sources drop-assign like any source but never open an ed
   });
   controller.run(({ actions }) => actions.beginSourceDrag("velocity"));
   controller.run(({ actions }) => actions.moveSourceDrag(30, 30));
-  controller.run(({ actions }) => actions.stopSourceDrag());
+  await controller.runAsync(({ actions }) => actions.stopSourceDrag());
   assert.ok(controller.current().state.patch.mappings.some(
     (mapping) => mapping.targetKey === "phaser.feedback" && mapping.sourceId === "velocity",
   ));
@@ -1188,7 +1191,7 @@ test("fixed performance sources drop-assign like any source but never open an ed
   controller.unmount();
 });
 
-test("the 13th controller assignment surfaces the engine route-budget refusal", () => {
+test("the 13th controller assignment surfaces the engine route-budget refusal", async () => {
   const haptics = [];
   globalThis.__COSIMO_MOBILE_HAPTICS__ = (kind) => haptics.push(kind);
   const controller = renderController();
@@ -1202,11 +1205,11 @@ test("the 13th controller assignment surfaces the engine route-budget refusal", 
     "phaser.mix",
   ];
   for (const targetId of fillTargets) {
-    controller.run(({ actions }) => actions.addSourceTarget(targetId));
+    await controller.runAsync(({ actions }) => actions.addSourceTarget(targetId));
   }
   assert.equal(controller.current().state.patch.mappings.length, 12);
 
-  controller.run(({ actions }) => actions.addSourceTarget("filter.cutoff"));
+  await controller.runAsync(({ actions }) => actions.addSourceTarget("filter.cutoff"));
   assert.equal(controller.current().state.patch.mappings.length, 12);
   assert.equal(controller.current().state.readout, "ROUTE BUDGET FULL · 12 OF 12");
   assert.equal(haptics.at(-1), "light");

@@ -1,8 +1,8 @@
 import {
   FILTER_MODE_LOWPASS,
   createFilterResponseModel,
-  magnitudeAtFrequency,
-} from "../../../ui/shared/filter-response.ts";
+} from "../../../kit/ui/filter-response.ts";
+import { magnitudeAtFrequency } from "../../../ui/shared/filter-depth-concepts.ts";
 import { shapeDistortionSample } from "../../../ui/shared/distortion-visualization.ts";
 
 const WAVETABLE_FRAME_COUNT = 24;

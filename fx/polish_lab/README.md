@@ -67,8 +67,12 @@ this design surface. Those rejected controls are not dormant host parameters.
 
 ## State and interaction contract
 
-Graph and numeric changes write ordinary Cmajor parameters, so host automation
-and saved state reconstruct both graphs without private UI state. Point and
+Every graph, knob and numeric change goes through the kit's plugin state
+(`state.ts`), so a drag, an added point or a Reset is one Undo entry, and the
+header's presets and A-G snapshots carry the whole curve, hidden point slots
+included. The values themselves are ordinary Cmajor parameters, so host
+automation and saved state reconstruct both graphs without private UI state.
+The Dry button is a listening switch: presets and snapshots leave it alone. Point and
 graph targets are touch-sized, axis-specific controls are locked to their
 honest axis, acquisition is relative with no value jump, and a large live
 readout appears during every graph gesture. Escape, pointer cancellation,
@@ -83,7 +87,7 @@ slot also resets deterministically.
 
 ## Evidence boundary
 
-The original T27 extraction, numeric fixtures, retained audio corpus, renders,
+The original extraction, numeric fixtures, retained audio corpus, renders,
 and measurements remain in `reference_labs/polish_comp_clip/`. They preserve
 four distinct kinds of evidence:
 

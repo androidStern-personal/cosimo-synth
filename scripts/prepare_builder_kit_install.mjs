@@ -4,7 +4,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { createReleaseDestination, readCapabilityFromKeychain, readDestinationConfig } from "./release_builder_kit.mjs";
 import { renderInstallation } from "./builder-kit-install.mjs";
-import { reveal } from "../kit/scripts/redacted.mjs";
+import { reveal } from "./redacted.mjs";
 
 async function outsideGit(outputDir) {
     let directory = path.resolve(outputDir);

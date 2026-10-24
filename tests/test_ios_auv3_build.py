@@ -180,13 +180,13 @@ def _cmajor_web_api_root() -> Path:
             str(REPO_ROOT / "kit" / "tools" / "cmajor_web_runtime"),
             "-B",
             str(build_dir),
-            f"-DCOSIMO_CMAJOR_WEB_RUNTIME_DIR={output_dir}",
+            f"-DBUILDER_KIT_CMAJOR_WEB_RUNTIME_DIR={output_dir}",
         ],
         cwd=REPO_ROOT,
         check=True,
     )
     subprocess.run(
-        ["cmake", "--build", str(build_dir), "--target", "cosimo_cmajor_web_runtime"],
+        ["cmake", "--build", str(build_dir), "--target", "builder_kit_cmajor_web_runtime"],
         cwd=REPO_ROOT,
         check=True,
     )
@@ -468,11 +468,15 @@ def _launch_standalone_and_capture_editor_metrics(
         module.run_allow_failure(["xcrun", "simctl", "terminate", udid, CONTAINER_BUNDLE_ID])
 
 
+def _mark_host_runtime(source: str, js_marker: str) -> str:
+    """The dev-served host runtime appends its marker to the page title, so the title alone proves which HTML and JS loaded."""
+    return f'document.title = `${{document.title}} {js_marker}`;\n{source}'
+
+
 def _prepare_dev_server_root(
     destination: Path,
     *,
     title: str,
-    html_marker: str,
     js_marker: str,
     reset: bool = True,
 ) -> Path:
@@ -484,19 +488,14 @@ def _prepare_dev_server_root(
 
     html_path = destination / "patch_gui" / "index.ios.html"
     html_text = IOS_PATCH_HOST_HTML.read_text(encoding="utf-8")
-    html_text = html_text.replace("<title>Cosimo Synth</title>", f"<title>{title}</title>")
-    html_text = html_text.replace(
-        "    const boot = await loadBootConfig();\n",
-        f'    globalThis.__COSIMO_DEV_HTML_MARKER = "{html_marker}";\n'
-        "    const boot = await loadBootConfig();\n",
-        1,
+    html_path.write_text(
+        html_text.replace("<title>Cosimo Synth</title>", f"<title>{title}</title>"),
+        encoding="utf-8",
     )
-    html_path.write_text(html_text, encoding="utf-8")
 
     host_runtime_path = destination / "patch_gui" / "index.ios-host.js"
-    host_runtime_source = IOS_PATCH_HOST_RUNTIME.read_text(encoding="utf-8")
     host_runtime_path.write_text(
-        f'globalThis.__COSIMO_DEV_JS_MARKER = "{js_marker}";\n{host_runtime_source}',
+        _mark_host_runtime(IOS_PATCH_HOST_RUNTIME.read_text(encoding="utf-8"), js_marker),
         encoding="utf-8",
     )
 
@@ -506,7 +505,6 @@ def _prepare_dev_server_root(
 def _write_repo_dev_server_markers(
     *,
     title: str,
-    html_marker: str,
     js_marker: str,
     base_html: str | None = None,
     base_js: str | None = None,
@@ -516,18 +514,11 @@ def _write_repo_dev_server_markers(
     html_source = original_html if base_html is None else base_html
     js_source = original_js if base_js is None else base_js
 
-    html_text = html_source.replace("<title>Cosimo Synth</title>", f"<title>{title}</title>")
-    html_text = html_text.replace(
-        "    const boot = await loadBootConfig();\n",
-        f'    globalThis.__COSIMO_DEV_HTML_MARKER = "{html_marker}";\n'
-        "    const boot = await loadBootConfig();\n",
-        1,
-    )
-    IOS_HOST_SOURCE_HTML.write_text(html_text, encoding="utf-8")
-    IOS_HOST_SOURCE_RUNTIME.write_text(
-        f'globalThis.__COSIMO_DEV_JS_MARKER = "{js_marker}";\n{js_source}',
+    IOS_HOST_SOURCE_HTML.write_text(
+        html_source.replace("<title>Cosimo Synth</title>", f"<title>{title}</title>"),
         encoding="utf-8",
     )
+    IOS_HOST_SOURCE_RUNTIME.write_text(_mark_host_runtime(js_source, js_marker), encoding="utf-8")
 
     return original_html, original_js
 
@@ -859,18 +850,18 @@ def test_ios_auv3_cmake_declares_the_repo_owned_shell_and_bundle_copy_contract()
     assert "LANGUAGES CXX C OBJC OBJCXX" in cmake
     assert "FORMATS Standalone AUv3" in cmake
     assert "generate_ios_auv3_plugin.sh" in cmake_text
-    assert "kit/cmake/CosimoDependencies.cmake" in cmake_text
-    assert "cosimo_add_production_dependencies()" in cmake_text
+    assert "kit/cmake/dependencies.cmake" in cmake_text
+    assert "builder_kit_dependencies()" in cmake_text
     assert "CosimoPluginMain.cpp" in cmake_text
     assert "CosimoSharedWavetableLibrary.mm" in cmake_text
     assert "BounceNativeDriver.cpp" in cmake_text
     assert "BounceNativePlatform.cpp" in cmake_text
     assert "BounceNativeBankStore.cpp" in cmake_text
     assert "CmajorBounceOfflinePerformer.cpp" in cmake_text
-    assert "COSIMO_CMAJOR_SOURCE_DIR" in cmake_text
-    assert '"${COSIMO_CMAJOR_SOURCE_DIR}/include"' in cmake_text
-    assert '"${COSIMO_CHOC_SOURCE_DIR}"' in cmake_text
-    assert '"${COSIMO_CMAJOR_SOURCE_DIR}/javascript/cmaj_api"' in cmake_text
+    assert "BUILDER_KIT_CMAJOR_SOURCE_DIR" in cmake_text
+    assert '"${BUILDER_KIT_CMAJOR_SOURCE_DIR}/include"' in cmake_text
+    assert '"${BUILDER_KIT_CHOC_SOURCE_DIR}"' in cmake_text
+    assert '"${BUILDER_KIT_CMAJOR_SOURCE_DIR}/javascript/cmaj_api"' in cmake_text
     assert "COSIMO_CMAJOR_RUNTIME_DIR" not in cmake_text
     assert "COSIMO_REACT_UI_FILES" in cmake_text
     assert "COSIMO_WORKER_UI_FILES" in cmake_text
@@ -880,7 +871,6 @@ def test_ios_auv3_cmake_declares_the_repo_owned_shell_and_bundle_copy_contract()
     assert '${COSIMO_REPO_ROOT}/package.json' in cmake_text
     assert '${COSIMO_REPO_ROOT}/ui/build.mjs' in cmake_text
     assert '${COSIMO_REPO_ROOT}/ui/vite.shared.mjs' in cmake_text
-    assert '${COSIMO_REPO_ROOT}/kit/fx/vite.shared.mjs' in cmake_text
     assert '${COSIMO_REPO_ROOT}/ui/vite.worker.config.mjs' in cmake_text
     assert '${COSIMO_REPO_ROOT}/ios_auv3/vite.config.mjs' in cmake_text
     assert "copy_directory" in cmake_text
@@ -1880,7 +1870,7 @@ def test_repo_owned_patch_shell_keeps_the_bridge_entrypoints_the_ui_depends_on()
 
 def test_ios_ui_dev_server_configuration_exists() -> None:
     package_json = json.loads(PACKAGE_JSON.read_text(encoding="utf-8"))
-    shared_vite_helpers = (REPO_ROOT / "kit" / "fx" / "vite.shared.mjs").read_text(encoding="utf-8")
+    shared_vite_helpers = (REPO_ROOT / "ui" / "vite.shared.mjs").read_text(encoding="utf-8")
     vite_config = IOS_VITE_CONFIG.read_text(encoding="utf-8")
 
     assert package_json["scripts"]["ios:ui:dev"] == "vite --config ios_auv3/vite.config.mjs"
@@ -1938,7 +1928,7 @@ def test_ios_auv3_xcode_project_script_generates_an_xcode_project(tmp_path: Path
     fake_juce = _write_fake_juce_checkout(tmp_path / "fake-juce")
     build_dir = tmp_path / "xcode-build"
     env = os.environ.copy()
-    env["CPM_cosimo_juce_SOURCE"] = str(fake_juce)
+    env["CPM_builder_kit_juce_SOURCE"] = str(fake_juce)
     env["COSIMO_IOS_SYSROOT"] = "iphonesimulator"
 
     result = subprocess.run(
@@ -2296,8 +2286,8 @@ def test_actual_built_bundle_roots_load_the_runtime_patch_and_ui_files(
 import {
     loadFactoryBankCatalogFromPatch,
     loadFactoryBankFramesFromPatch,
-    parseWaveFile,
 } from "./patch_gui/wavetable-bank.mjs";
+import { createPatchConnectionResourceClient } from "./patch_gui/resource-client.js";
 
 async function fetchJSON(url) {
     const response = await fetch(url);
@@ -2320,13 +2310,7 @@ async function loadBundle(rootUrl) {
     const catalog = await loadFactoryBankCatalogFromPatch(patchConnection);
     const bank = await loadFactoryBankFramesFromPatch(patchConnection, { tableIndex: 0 });
     const firstTable = catalog.tables[0];
-    const sourceResponse = await fetch(new URL(firstTable.sourceWav, rootUrl));
-
-    if (!sourceResponse.ok) {
-        throw new Error(`Could not fetch source wavetable from ${rootUrl}`);
-    }
-
-    const sourceWave = parseWaveFile(await sourceResponse.arrayBuffer());
+    const sourceWave = await createPatchConnectionResourceClient({}, { patchRoot: new URL(rootUrl) }).readAudio(firstTable.sourceWav);
     const viewResponse = await fetch(new URL(manifest.view.src, rootUrl));
 
     if (!viewResponse.ok) {
@@ -2416,7 +2400,6 @@ def test_debug_editor_loads_modified_dev_server_html_and_js_without_rebuilding(
     dev_root = _prepare_dev_server_root(
         tmp_path / "dev-root",
         title="Cosimo Dev HTML V1",
-        html_marker="html-v1",
         js_marker="js-v1",
     )
 
@@ -2439,17 +2422,13 @@ def test_debug_editor_loads_modified_dev_server_html_and_js_without_rebuilding(
             lambda payload: (
                 isinstance(payload.get("hostPage"), dict)
                 and payload["hostPage"].get("bootSource") == "devServer"
-                and payload["hostPage"].get("documentTitle") == "Cosimo Dev HTML V1"
-                and payload["hostPage"].get("htmlMarker") == "html-v1"
-                and payload["hostPage"].get("jsMarker") == "js-v1"
+                and payload["hostPage"].get("documentTitle") == "Cosimo Dev HTML V1 js-v1"
             ),
             timeout_seconds=20.0,
         )
         first_host_page = first_metrics["hostPage"]
         assert first_host_page["bootSource"] == "devServer"
-        assert first_host_page["documentTitle"] == "Cosimo Dev HTML V1"
-        assert first_host_page["htmlMarker"] == "html-v1"
-        assert first_host_page["jsMarker"] == "js-v1"
+        assert first_host_page["documentTitle"] == "Cosimo Dev HTML V1 js-v1"
         assert first_host_page["currentURL"].startswith(root_url)
 
         ios_debug_host_session["module"].run_allow_failure(
@@ -2459,7 +2438,6 @@ def test_debug_editor_loads_modified_dev_server_html_and_js_without_rebuilding(
         _prepare_dev_server_root(
             dev_root,
             title="Cosimo Dev HTML V2",
-            html_marker="html-v2",
             js_marker="js-v2",
             reset=False,
         )
@@ -2476,17 +2454,13 @@ def test_debug_editor_loads_modified_dev_server_html_and_js_without_rebuilding(
             lambda payload: (
                 isinstance(payload.get("hostPage"), dict)
                 and payload["hostPage"].get("bootSource") == "devServer"
-                and payload["hostPage"].get("documentTitle") == "Cosimo Dev HTML V2"
-                and payload["hostPage"].get("htmlMarker") == "html-v2"
-                and payload["hostPage"].get("jsMarker") == "js-v2"
+                and payload["hostPage"].get("documentTitle") == "Cosimo Dev HTML V2 js-v2"
             ),
             timeout_seconds=20.0,
         )
         second_host_page = second_metrics["hostPage"]
         assert second_host_page["bootSource"] == "devServer"
-        assert second_host_page["documentTitle"] == "Cosimo Dev HTML V2"
-        assert second_host_page["htmlMarker"] == "html-v2"
-        assert second_host_page["jsMarker"] == "js-v2"
+        assert second_host_page["documentTitle"] == "Cosimo Dev HTML V2 js-v2"
 
     ios_debug_host_session["module"].run_allow_failure(
         ["xcrun", "simctl", "terminate", ios_debug_host_session["udid"], HOST_BUNDLE_ID]
@@ -2499,7 +2473,6 @@ def test_debug_editor_live_reloads_repo_html_and_js_from_vite_without_reopening(
     _set_factory_library_state(ios_debug_host_session, ready=True)
     original_html, original_js = _write_repo_dev_server_markers(
         title="Cosimo Live HTML V1",
-        html_marker="live-html-v1",
         js_marker="live-js-v1",
     )
 
@@ -2521,22 +2494,17 @@ def test_debug_editor_live_reloads_repo_html_and_js_from_vite_without_reopening(
                 lambda payload: (
                     isinstance(payload.get("hostPage"), dict)
                     and payload["hostPage"].get("bootSource") == "devServer"
-                    and payload["hostPage"].get("documentTitle") == "Cosimo Live HTML V1"
-                    and payload["hostPage"].get("htmlMarker") == "live-html-v1"
-                    and payload["hostPage"].get("jsMarker") == "live-js-v1"
+                    and payload["hostPage"].get("documentTitle") == "Cosimo Live HTML V1 live-js-v1"
                 ),
                 timeout_seconds=20.0,
             )
             initial_host_page = initial_metrics["hostPage"]
 
             assert initial_host_page["bootSource"] == "devServer"
-            assert initial_host_page["documentTitle"] == "Cosimo Live HTML V1"
-            assert initial_host_page["htmlMarker"] == "live-html-v1"
-            assert initial_host_page["jsMarker"] == "live-js-v1"
+            assert initial_host_page["documentTitle"] == "Cosimo Live HTML V1 live-js-v1"
 
             _write_repo_dev_server_markers(
                 title="Cosimo Live HTML V2",
-                html_marker="live-html-v2",
                 js_marker="live-js-v2",
                 base_html=original_html,
                 base_js=original_js,
@@ -2547,17 +2515,13 @@ def test_debug_editor_live_reloads_repo_html_and_js_from_vite_without_reopening(
                 lambda payload: (
                     isinstance(payload.get("hostPage"), dict)
                     and payload["hostPage"].get("bootSource") == "devServer"
-                    and payload["hostPage"].get("documentTitle") == "Cosimo Live HTML V2"
-                    and payload["hostPage"].get("htmlMarker") == "live-html-v2"
-                    and payload["hostPage"].get("jsMarker") == "live-js-v2"
+                    and payload["hostPage"].get("documentTitle") == "Cosimo Live HTML V2 live-js-v2"
                 ),
                 timeout_seconds=20.0,
             )
 
             updated_host_page = updated_metrics["hostPage"]
-            assert updated_host_page["documentTitle"] == "Cosimo Live HTML V2"
-            assert updated_host_page["htmlMarker"] == "live-html-v2"
-            assert updated_host_page["jsMarker"] == "live-js-v2"
+            assert updated_host_page["documentTitle"] == "Cosimo Live HTML V2 live-js-v2"
     finally:
         _restore_repo_dev_server_sources(original_html, original_js)
         ios_debug_host_session["module"].run_allow_failure(
@@ -2573,7 +2537,6 @@ def test_debug_editor_falls_back_to_the_bundled_ui_when_the_dev_server_is_unavai
     dev_root = _prepare_dev_server_root(
         tmp_path / "fallback-root",
         title="Cosimo Dev HTML Fallback",
-        html_marker="html-fallback",
         js_marker="js-fallback",
     )
 
@@ -2596,8 +2559,7 @@ def test_debug_editor_falls_back_to_the_bundled_ui_when_the_dev_server_is_unavai
             lambda payload: (
                 isinstance(payload.get("hostPage"), dict)
                 and payload["hostPage"].get("bootSource") == "devServer"
-                and payload["hostPage"].get("htmlMarker") == "html-fallback"
-                and payload["hostPage"].get("jsMarker") == "js-fallback"
+                and payload["hostPage"].get("documentTitle") == "Cosimo Dev HTML Fallback js-fallback"
             ),
             timeout_seconds=20.0,
         )
@@ -2612,8 +2574,6 @@ def test_debug_editor_falls_back_to_the_bundled_ui_when_the_dev_server_is_unavai
     host_page = fallback["editor"]["hostPage"]
     assert host_page["bootSource"] == "bundle"
     assert host_page["documentTitle"] == "Cosimo Synth"
-    assert host_page["htmlMarker"] == ""
-    assert host_page["jsMarker"] == ""
     assert host_page["currentURL"] == host_page["bundlePageURL"]
 
 
@@ -2747,7 +2707,6 @@ def test_release_editor_ignores_the_dev_server_url(
     dev_root = _prepare_dev_server_root(
         tmp_path / "release-root",
         title="Cosimo Release Should Ignore This",
-        html_marker="html-release",
         js_marker="js-release",
     )
 
@@ -2768,8 +2727,6 @@ def test_release_editor_ignores_the_dev_server_url(
     assert host_page["bootSource"] == "bundle"
     assert host_page["devServerURL"] == ""
     assert host_page["documentTitle"] == "Cosimo Synth"
-    assert host_page["htmlMarker"] == ""
-    assert host_page["jsMarker"] == ""
     assert host_page["currentURL"] == host_page["bundlePageURL"]
 
 def test_ios_host_smoke_discovers_the_extension_and_restores_state_across_relaunch(

@@ -828,7 +828,7 @@ def recommendation(
             f"The winner has {latency:.6g} samples of wrapper latency and requires a "
             f"{host_latency}-sample integer host report. Matching its pre-response "
             "requires delaying dry audio and reporting that latency to the host; "
-            "that conflicts with T26's current literal zero-latency/bit-identical-dry "
+            "that conflicts with the Enhancer's zero-latency, bit-identical-dry "
             "contract and needs Andrew's approval before production integration."
         ),
     }

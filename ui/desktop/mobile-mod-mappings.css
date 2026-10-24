@@ -1,8 +1,8 @@
 /*
- * T14 MAPPINGS panel: Linear-quality list discipline at phone widths. The
- * toolbar is one 40px row that never wraps into a pile at 320px; criteria
- * are removable chips; rows are editing surfaces (T15) sharing the voice
- * cell language for their rails.
+ * MAPPINGS panel: strict list discipline at phone widths. The toolbar is one
+ * 40px row that never wraps into a pile at 320px; criteria are removable
+ * chips; rows are editing surfaces sharing the voice cell language for their
+ * rails.
  */
 
 @media (max-width: 639px) {
@@ -229,7 +229,7 @@
         contain-intrinsic-size: auto 48px;
     }
 
-    /* ADR-025 (amended for T15 rows): off things look off. The mapping's
+    /* ADR-025: off things look off. The mapping's
        content dims as one piece and the source art loses its family color;
        the UNLIT power light carries the whole state — no BYPASSED text.
        The power control itself never dims: it is how you leave the state. */
@@ -365,7 +365,7 @@
         color: rgb(var(--cosimo-accent-coral-rgb) / 0.8);
     }
 
-    /* T15 LED readout: no duplicated label; base value in a small corner;
+    /* LED readout: no duplicated label; base value in a small corner;
        a segmented meter lit from the base tick fills the cell. */
     .mobile-voice-cell.is-mapping-led {
         display: block;
@@ -473,7 +473,7 @@
 
 @media (max-width: 639px) {
     /* The pager owns the panel's full height so the MAPPINGS toolbar stays
-       fixed while ONLY the list scrolls (T14), and SOURCE gets the full
+       fixed while ONLY the list scrolls, and SOURCE gets the full
        panel height for its graph. The wrapping workspace grid must forward
        the definite height or the percentage chain dies at the grid. */
     .mobile-workspace-panel .mobile-mod-workspace {

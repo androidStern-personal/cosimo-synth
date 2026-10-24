@@ -7,6 +7,7 @@ const repoRoot = path.resolve(import.meta.dirname, "..", "..");
 const generatedDirectory = path.join(repoRoot, "build", "developer-settings-generated");
 const ordinaryBundlePath = path.join(repoRoot, "patch_gui", "desktop", "app.js");
 const ordinaryBundleMapPath = `${ordinaryBundlePath}.map`;
+const webProofBundlePath = path.join(repoRoot, "build", "web", "patch_gui", "desktop", "app.js");
 const sitesBundlePath = path.join(repoRoot, "dist", "assets", "patch_gui", "desktop", "app.js");
 const buildEnvironment = { ...process.env };
 delete buildEnvironment.VITE_COSIMO_DEVELOPER_SETTINGS;
@@ -39,12 +40,14 @@ try {
     await fs.copyFile(ordinaryBundlePath, path.join(generatedDirectory, "ordinary-app.js"));
 
     run("npm", ["run", "sites:build"]);
-    const [restoredBundle, restoredBundleMap] = await Promise.all([
+    const [restoredBundle, restoredBundleMap, webProofBundle] = await Promise.all([
         fs.readFile(ordinaryBundlePath),
         fs.readFile(ordinaryBundleMapPath),
+        fs.readFile(webProofBundlePath),
     ]);
     assert.deepEqual(restoredBundle, ordinaryBundle, "sites:build changed the ordinary desktop bundle");
     assert.deepEqual(restoredBundleMap, ordinaryBundleMap, "sites:build changed the ordinary desktop source map");
+    assert.deepEqual(webProofBundle, ordinaryBundle, "sites:build left its Developer Settings bundle in build/web");
     await fs.copyFile(sitesBundlePath, path.join(generatedDirectory, "sites-app.js"));
 } catch (cause) {
     buildFailure = cause;

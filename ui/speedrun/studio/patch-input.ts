@@ -1,17 +1,16 @@
-import { serializeArticulationsV4 } from "../../shared/articulation-image";
-import { ARTICULATIONS_V4_STATE_KEY } from "../../shared/articulation-image";
-import { MODULATION_STATE_KEY } from "../../shared/modulation";
-import type { EffectPresetV2 } from "../../shared/effects/effect-preset-v2";
+import { presetFileText } from "../../../kit/ui/presets";
+import { ARTICULATIONS_V4_STATE_KEY, serializeArticulationsV4 } from "../../shared/articulation-image";
+import { MODULATION_STATE_KEY, serializeModulationState } from "../../shared/modulation";
 import { LANE_STATE_KEY } from "../../shared/lane-state";
 import { serializeLaneStateV2 } from "../../shared/lane-state-v2";
-import { serializeModulationState } from "../../shared/modulation";
 import {
     SoundShareError,
-    createSoundShareEnvelope,
+    SYNTH_PLUGIN_ID,
+    createSoundShareURL,
+    decodeSoundShareFragment,
+    type CreatedSoundShareURL,
     type SoundShareErrorTag,
-} from "../../shared/sound-share-envelope";
-import { createSoundShareURL, decodeSoundShareFragment } from "../../shared/sound-share-link";
-import type { CreatedSoundShareURL } from "../../shared/sound-share-link";
+} from "../../shared/sound-share-link";
 import { validateSoundShareWavetables } from "../../shared/sound-share-wavetable";
 import { readBrowserPatchState } from "../../../web/browser-patch-state.mjs";
 import type { PatchDocument } from "../patch-io";
@@ -48,37 +47,24 @@ export async function readStudioPatchSelection(selection: StudioPatchSelection):
         const decoded = await decodeSoundShareFragment(fragment);
         if (!decoded.ok) throw decoded.error;
         if (decoded.value === null) throw new Error("That URL does not contain a Cosimo sound fragment.");
-        return decoded.value;
+        return JSON.parse(decoded.value) as unknown;
     } catch (error) {
         throw studioError("intake", "PatchSelectionFailed", error, "The selected patch could not be read.");
     }
 }
 
-function presetForDocument(document: PatchDocument, runtime: SpeedrunStudioRuntime): EffectPresetV2 {
-    return {
-        kind: "cosimo.effectPreset",
-        version: 2,
-        effectID: runtime.intakeOptions.currentContract.effectID,
-        presetID: "cosimo.speedrun.current",
-        label: document.label,
-        contract: runtime.intakeOptions.currentContract,
-        parameters: { ...document.parameters },
-        storedState: {
+/**
+ * The preset file a sound link carries: the synth's saved form of this document.
+ * Bounce owns the source mode, so a preset never carries it.
+ */
+export function createStudioSharePresetFile(document: PatchDocument): string {
+    const parameters = Object.fromEntries(Object.entries(document.parameters).filter(([endpointID]) => endpointID !== "sourceMode"));
+    return presetFileText(SYNTH_PLUGIN_ID, {
+        name: document.label,
+        values: {
+            ...parameters,
             [MODULATION_STATE_KEY]: serializeModulationState(document.modulation),
-            [ARTICULATIONS_V4_STATE_KEY]: serializeArticulationsV4(document.articulations),
-            "bounce.v1": null,
-        },
-    };
-}
-
-/** Build the exact M1 carrier used by the studio's adjacent share action. */
-export function createStudioShareEnvelope(
-    document: PatchDocument,
-    runtime: SpeedrunStudioRuntime,
-) {
-    return createSoundShareEnvelope({
-        preset: presetForDocument(document, runtime),
-        supplementalStoredState: {
+            [ARTICULATIONS_V4_STATE_KEY]: JSON.stringify(serializeArticulationsV4(document.articulations)),
             [LANE_STATE_KEY]: serializeLaneStateV2(document.lane),
         },
     });
@@ -97,11 +83,10 @@ export async function createStudioShareLink(
                 message: wavetableResult.error.message,
             };
         }
-        const envelope = createStudioShareEnvelope(document, runtime);
         const baseURL = new URL(runtime.webRootURL);
         baseURL.search = "";
         baseURL.hash = "";
-        const result = await createSoundShareURL(envelope, baseURL.href);
+        const result = await createSoundShareURL(createStudioSharePresetFile(document), baseURL.href);
         if (!result.ok) {
             return {
                 _tag: "unavailable",

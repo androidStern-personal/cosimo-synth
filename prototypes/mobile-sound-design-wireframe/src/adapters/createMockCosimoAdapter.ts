@@ -545,7 +545,7 @@ export function createMockCosimoAdapter({
             });
         },
 
-        addMapping(input) {
+        async addMapping(input) {
             const targetId = requireTargetId(String(input.targetId));
             if (getTargetDescriptor(targetId).modulationTargetKind === null) {
                 return err(new TargetNotModulatable(targetId));
@@ -571,9 +571,10 @@ export function createMockCosimoAdapter({
             return ok(mappingId);
         },
 
-        removeMapping(mappingId) {
+        async removeMapping(mappingId) {
             const mapping = requireMapping(state, mappingId);
             dispatch({ type: "REMOVE_MAPPING", mappingId: mapping.id });
+            return ok(undefined);
         },
 
         setMappingAmount(mappingId, amount, layer) {
@@ -620,7 +621,7 @@ export function createMockCosimoAdapter({
             });
         },
 
-        createSource(type) {
+        async createSource(type) {
             const slot = firstAvailableSourceSlot(state.patch.sources, type);
             if (slot === null) {
                 return err(new SourceSlotsExhausted(type, SOURCE_LIMITS[type]));
@@ -633,14 +634,16 @@ export function createMockCosimoAdapter({
             return ok(sourceIdFromKnownIdentity(source.id));
         },
 
-        deleteSource(sourceId) {
+        async deleteSource(sourceId) {
             const source = requireSource(state, sourceId);
-            if (source.id === "amp-envelope") return;
+            if (source.id === "amp-envelope") return ok(undefined);
             dispatch({ type: "DELETE_SOURCE", sourceId: source.id });
+            return ok(undefined);
         },
 
-        undoDeleteSource() {
+        async undoDeleteSource() {
             dispatch({ type: "UNDO_DELETE_SOURCE" });
+            return ok(undefined);
         },
 
         setMacroValue(sourceId, value) {
@@ -655,7 +658,7 @@ export function createMockCosimoAdapter({
             dispatch({ type: "RENAME_MACRO", sourceId: source.id, name });
         },
 
-        setEnvelope(sourceId, envelope) {
+        async setEnvelope(sourceId, envelope) {
             const source = requireSource(state, sourceId);
             requireSourceState(state, sourceId, "envelope");
             dispatch({
@@ -669,6 +672,7 @@ export function createMockCosimoAdapter({
                     }
                     : envelope,
             });
+            return ok(undefined);
         },
 
         setMsegShape({ sourceId, shapeIndex, shape }) {
@@ -899,24 +903,25 @@ export function createMockCosimoAdapter({
             dispatch({ type: "CANCEL_TRIGGER" });
         },
 
-        captureMotion() {
+        async captureMotion() {
             const candidate = state.audition.captureCandidate;
-            if (!candidate) return null;
+            if (!candidate) return ok(null);
             const slot = firstAvailableSourceSlot(state.patch.sources, "mseg");
             const source = createSourceIdentity("mseg", slot);
             const targetId = requireTargetId(candidate.targetKey);
             const amount = getTargetDescriptor(targetId).modAmount.max;
             dispatch({ type: "CAPTURE_MOTION", source, amount });
-            return source === null ? null : sourceIdFromKnownIdentity(source.id);
+            return ok(source === null ? null : sourceIdFromKnownIdentity(source.id));
         },
 
-        reset() {
+        async reset() {
             // Reset returns to THIS adapter's initial state (the composition
             // root decides what a fresh patch is), not the reducer's baked
             // demo fixture.
             state = initialPrototypeState(createInitialState);
             snapshot = projectSnapshot(state);
             for (const listener of listeners) listener();
+            return ok(undefined);
         },
     };
 

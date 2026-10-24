@@ -1,29 +1,36 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import path from "node:path";
 
 import {
+    clampMsegRateSeconds,
+    createDefaultMsegPlayback,
+    createDefaultMsegShape,
+    normalizeMsegPlayback,
+    normalizeMsegShape,
+    sampleRenderedMsegBuffer,
+    setMsegSegmentCurvePower,
+    toMsegPlaybackConfigEvent,
+} from "../patch_gui/mseg.js";
+import { loadUIModule } from "../kit/tests/helpers/load_ui_module.mjs";
+
+const {
     MSEG_BODY_SAMPLES,
     MSEG_EDITOR_CURVE_TOLERANCE_PX,
     MSEG_CURVE_POWER_LIMIT,
     MSEG_POINT_RADIUS_PX,
     MSEG_PADDED_SAMPLES,
-    clampMsegRateSeconds,
+    createMsegTimeAxisTicks,
     createMsegEditorMetrics,
-    createDefaultMsegPlayback,
-    createDefaultMsegShape,
     evaluateMsegShape,
     findMsegPointHitIndex,
     findMsegSegmentHitIndex,
     msegEditorCoordinatesToPoint,
-    normalizeMsegPlayback,
-    normalizeMsegShape,
     pointToMsegEditorCoordinates,
     renderMsegShape,
+    resolveMsegSurfaceOrientation,
     sampleMsegSegmentEditorPolyline,
-    sampleRenderedMsegBuffer,
-    setMsegSegmentCurvePower,
-    toMsegPlaybackConfigEvent,
-} from "../patch_gui/mseg.js";
+} = await loadUIModule(path.resolve(import.meta.dirname, ".."), "kit/ui/mseg.ts");
 
 function expectThrows(message, callback) {
     assert.throws(callback, new RegExp(message));
@@ -413,4 +420,43 @@ test("reference_sampler_matches_renderer_contract_at_boundaries", () => {
     assert.ok(Math.abs(sampleRenderedMsegBuffer(rendered, 0.5) - 0.5) <= 0.001);
     assert.ok(sampleRenderedMsegBuffer(rendered, 0.999) >= 0.89);
     assert.ok(Math.abs(sampleRenderedMsegBuffer(rendered, 1.0) - 0.9) <= 1e-6);
+});
+
+test("MSEG orientation holds a stable near-square boundary before following the longer axis", () => {
+    assert.equal(resolveMsegSurfaceOrientation(100, 107, "horizontal"), "horizontal");
+    assert.equal(resolveMsegSurfaceOrientation(100, 109, "horizontal"), "vertical");
+    assert.equal(resolveMsegSurfaceOrientation(107, 100, "vertical"), "vertical");
+    assert.equal(resolveMsegSurfaceOrientation(109, 100, "vertical"), "horizontal");
+});
+
+test("MSEG time-axis quarters format seconds and reduced note subdivisions", () => {
+    assert.deepEqual(createMsegTimeAxisTicks({ kind: "seconds", totalSeconds: 1 }), [
+        { fraction: 0.25, label: "0.25s" },
+        { fraction: 0.5, label: "0.5s" },
+        { fraction: 0.75, label: "0.75s" },
+    ]);
+    assert.deepEqual(createMsegTimeAxisTicks({
+        kind: "notes",
+        totalDivision: { numerator: 1, denominator: 2 },
+    }), [
+        { fraction: 0.25, label: "1/8" },
+        { fraction: 0.5, label: "1/4" },
+        { fraction: 0.75, label: "3/8" },
+    ]);
+});
+
+test("MSEG point geometry round-trips without changing its stored coordinate system", () => {
+    const storedPoint = { x: 0.23, y: 0.76 };
+
+    for (const orientation of ["horizontal", "vertical"]) {
+        const editorPoint = pointToMsegEditorCoordinates(storedPoint, 640, 360, { orientation });
+        const roundTrip = msegEditorCoordinatesToPoint(editorPoint.x, editorPoint.y, 640, 360, { orientation });
+        assert.equal(Math.abs(roundTrip.x - storedPoint.x) <= 1e-12, true);
+        assert.equal(Math.abs(roundTrip.y - storedPoint.y) <= 1e-12, true);
+    }
+
+    const verticalStart = pointToMsegEditorCoordinates({ x: 0.1, y: 0.2 }, 320, 640, { orientation: "vertical" });
+    const verticalEnd = pointToMsegEditorCoordinates({ x: 0.9, y: 0.8 }, 320, 640, { orientation: "vertical" });
+    assert.equal(verticalStart.y < verticalEnd.y, true, "Time must advance down the longer vertical axis.");
+    assert.equal(verticalStart.x < verticalEnd.x, true, "Value must advance across the remaining axis.");
 });

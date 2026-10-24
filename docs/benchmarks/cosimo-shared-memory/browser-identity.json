@@ -1,0 +1,16 @@
+{
+  "baselineSynthCommit": "343c54772ec7be6b88889cf3b2443d4c400be700",
+  "sha256": {
+    "build/cosimo_shared_memory_baseline/browser/old-raw.js": "914d713a82561fd2ccfe2638c5c1217cf3e00f03faa14f8fa99f3cc4b9e98c2a",
+    "build/cosimo_shared_memory_baseline/browser/old-renderer.wasm": "a3a33d882ea32cc957ebdb9eac1d39ca4cccffe576cd407c93c246fee94fb46e",
+    "build/web/cmaj_Cosimo_Synth.js": "b4d56e25ebacfde5587991a0914c66a0243b3c9f346ea90799c7737f4c598272",
+    "build/web/cmaj_Cosimo_Synth.offline.js": "3ed74e00016bfee7d9d4040176f86498449e86656ebf3f5eded7770cccd11d24",
+    "build/web/patch_gui/wavetable-worker.js": "bdc28bbc457899858e639640333f47b476d3d9f6f6a0a6444f1c421bbe550486",
+    "build/web/cmaj_api/cmaj-audio-worklet-helper.js": "e7fa49a07af6b9cc9708895f4225d742cd607816b7fbbf95483d4958e2f41f3f",
+    "build/web/cmaj_api/cmaj-shared-data.js": "1907b2953ea6a5a57ff90ed498b2e7c059b404308010ad02a3b9ebdcb0dd422f",
+    "build/web/cmaj_api/cmaj-shared-data-reader.js": "5a5defc2918dd3a42a573a920c7834b8ffb169295dedc42f3d9cd5f9fb5d051b"
+  },
+  "comparison": "Actual full Cosimo in Chromium AudioWorklet; archived DSP and event-upload worker versus current direct-preparation DSP and worker. Both use common authored host instrumentation; archived renderer uses corrected stack placement to avoid its existing overlap.",
+  "scope": "Single quiet serial timing run per side; separate same-allocation pointer audit. Browser callback timing uses Date.now and cannot establish precise deadline margins or physical device xruns.",
+  "driver": "Exact measured driver preserved; its original location is build/cosimo_shared_memory_baseline/browser/run.mjs and relative paths are resolved from there."
+}

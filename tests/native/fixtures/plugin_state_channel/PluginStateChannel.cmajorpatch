@@ -1,0 +1,8 @@
+{
+    "CmajorVersion": 1,
+    "ID": "dev.cmajor.test.plugin-state-channel",
+    "version": "1.0",
+    "name": "Plugin State Channel Probe",
+    "source": "PluginStateChannel.cmajor",
+    "worker": "worker.js"
+}

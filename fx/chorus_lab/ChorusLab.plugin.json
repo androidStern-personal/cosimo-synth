@@ -3,6 +3,7 @@
   "alias": "chorus",
   "cmakeTarget": "ChorusLab",
   "productName": "ChorusLab",
+  "stateSource": "fx/chorus_lab/state.ts",
   "runtimeOut": "build/fx/chorus_lab_runtime",
   "juceOut": "build/chorus_lab_juce"
 }

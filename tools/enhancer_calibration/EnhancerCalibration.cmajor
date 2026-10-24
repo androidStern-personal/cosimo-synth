@@ -1,6 +1,6 @@
-// Offline evidence seam for T26. This graph contains the production
+// Offline evidence seam for the Enhancer. This graph contains the production
 // wt::EnhancerBus unchanged; it exists only so deterministic review material can
-// be rendered and measured before T28 composes the Polish chain.
+// be rendered and measured from the Enhancer alone, outside the Polish chain.
 
 graph EnhancerCalibration [[ main ]]
 {

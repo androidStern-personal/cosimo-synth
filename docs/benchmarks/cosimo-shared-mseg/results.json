@@ -1,0 +1,146 @@
+[
+  {
+    "runtime": "jit",
+    "voices": 1,
+    "beforeBlockUs": 168.008626953125,
+    "afterBlockUs": 172.1060380859375,
+    "changePercent": 2.43880996298822,
+    "audio": {
+      "samples": 131072,
+      "beforeRms": 0.011264564163195375,
+      "afterRms": 0.01126456414220946,
+      "maxAbsDifference": 5.960464477539063e-08,
+      "rmsDifference": 4.188420657636179e-10,
+      "exact": false
+    },
+    "edit": {
+      "before": {
+        "deliveryUs": 18.6665,
+        "adoptionUs": 165.292
+      },
+      "after": {
+        "deliveryUs": 5.583,
+        "adoptionUs": 168.16649999999998
+      }
+    }
+  },
+  {
+    "runtime": "jit",
+    "voices": 8,
+    "beforeBlockUs": 602.67753125,
+    "afterBlockUs": 606.0704755859375,
+    "changePercent": 0.5629784022145756,
+    "audio": {
+      "samples": 131072,
+      "beforeRms": 0.015052728465324303,
+      "afterRms": 0.015052728426357605,
+      "maxAbsDifference": 8.940696716308594e-08,
+      "rmsDifference": 8.224915551502901e-10,
+      "exact": false
+    },
+    "edit": {
+      "before": {
+        "deliveryUs": 18.625,
+        "adoptionUs": 584.8755
+      },
+      "after": {
+        "deliveryUs": 5.479,
+        "adoptionUs": 593.7715
+      }
+    }
+  },
+  {
+    "runtime": "aot",
+    "voices": 1,
+    "beforeBlockUs": 188.293416015625,
+    "afterBlockUs": 186.7740888671875,
+    "changePercent": -0.8068934010477813,
+    "audio": {
+      "samples": 131072,
+      "beforeRms": 0.01126454281413809,
+      "afterRms": 0.01126454281413809,
+      "maxAbsDifference": 0.0,
+      "rmsDifference": 0.0,
+      "exact": true
+    },
+    "edit": {
+      "before": {
+        "deliveryUs": 19.125,
+        "adoptionUs": 183.3545
+      },
+      "after": {
+        "deliveryUs": 4.833,
+        "adoptionUs": 184.375
+      }
+    }
+  },
+  {
+    "runtime": "aot",
+    "voices": 8,
+    "beforeBlockUs": 605.1695556640625,
+    "afterBlockUs": 603.1698818359375,
+    "changePercent": -0.3304319937130207,
+    "audio": {
+      "samples": 131072,
+      "beforeRms": 0.015052701843870982,
+      "afterRms": 0.015052701843870982,
+      "maxAbsDifference": 0.0,
+      "rmsDifference": 0.0,
+      "exact": true
+    },
+    "edit": {
+      "before": {
+        "deliveryUs": 19.333,
+        "adoptionUs": 591.1044999999999
+      },
+      "after": {
+        "deliveryUs": 5.354,
+        "adoptionUs": 598.271
+      }
+    }
+  },
+  {
+    "runtime": "wasm",
+    "voices": 1,
+    "beforeBlockUs": 286.9428310546873,
+    "afterBlockUs": 294.1280927734375,
+    "changePercent": 2.50407431067019,
+    "audio": {
+      "samples": 131072,
+      "beforeRms": 0.011264564506951283,
+      "afterRms": 0.011264564476121564,
+      "maxAbsDifference": 5.960464477539063e-08,
+      "rmsDifference": 4.6099695042158617e-10,
+      "exact": false
+    },
+    "edit": {
+      "beforeRenderMedianUs": 101.25000000016371,
+      "beforeEventMedianUs": 81.50000000023283,
+      "afterDirectPrepareAndSubmitMedianUs": 101.00000000011278,
+      "beforeAdoptionBlockMedianUs": 281.25,
+      "afterAdoptionBlockMedianUs": 287.49999999990905
+    }
+  },
+  {
+    "runtime": "wasm",
+    "voices": 8,
+    "beforeBlockUs": 675.8750000000005,
+    "afterBlockUs": 684.5674648437497,
+    "changePercent": 1.2861053957831325,
+    "audio": {
+      "samples": 131072,
+      "beforeRms": 0.015052728896584527,
+      "afterRms": 0.015052728878048718,
+      "maxAbsDifference": 5.960464477539063e-08,
+      "rmsDifference": 8.449222270964427e-10,
+      "exact": false
+    },
+    "edit": {
+      "beforeRenderMedianUs": 148.2079999996131,
+      "beforeEventMedianUs": 84.70800000031886,
+      "afterDirectPrepareAndSubmitMedianUs": 150.95799999926385,
+      "beforeAdoptionBlockMedianUs": 676.9999999996799,
+      "afterAdoptionBlockMedianUs": 676.4169999996739
+    }
+  }
+]

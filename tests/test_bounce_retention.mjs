@@ -105,7 +105,6 @@ test("retention keeps only the live and direct single-level Revert roots", () =>
     const { thirdPatch } = generations();
     const roots = collectBounceBankRetentionRoots({
         livePatchDocument: thirdPatch,
-        userPresetState: null,
     });
     assert.equal(roots.complete, true);
     assert.deepEqual(roots.digests, [digest("2"), digest("3")]);
@@ -121,7 +120,6 @@ test("retirement deletes only unreachable candidates whose inactive DSP slot was
         candidateDigests: [digest("1"), digest("4")],
         dspOverwrittenDigests: [digest("1")],
         livePatchDocument: thirdPatch,
-        userPresetState: null,
         lockManager: acquiredLockManager,
     });
     assert.equal(result.completed, true);
@@ -131,23 +129,14 @@ test("retirement deletes only unreachable candidates whose inactive DSP slot was
     assert.deepEqual([...store.values.keys()].sort(), [digest("2"), digest("3"), digest("4")]);
 });
 
-test("user presets and in-flight state saves are retention roots", async () => {
-    const { first, firstPatch, thirdPatch } = generations();
-    const userPresetState = JSON.stringify({
-        kind: "cosimo.effectPresetState",
-        version: 2,
-        userPresets: {
-            synth: [{ storedState: { [BOUNCE_STATE_KEY]: serializeBounceDocument(first) } }],
-        },
-        activePresetByEffect: {},
-    });
+test("in-flight state saves are retention roots", async () => {
+    const { firstPatch, thirdPatch } = generations();
     const store = new MemoryStore([digest("1"), digest("2"), digest("3")]);
     const result = await retireSupersededBounceBanks({
         store,
         candidateDigests: [digest("1")],
         dspOverwrittenDigests: [digest("1")],
         livePatchDocument: thirdPatch,
-        userPresetState,
         inFlightPatchDocuments: [firstPatch],
         lockManager: acquiredLockManager,
     });
@@ -156,25 +145,8 @@ test("user presets and in-flight state saves are retention roots", async () => {
     assert.ok(result.retainedDigests.includes(digest("1")));
 });
 
-test("unrecognized preset state, external files, bad store indexes, and lock contention retain", async () => {
+test("bad store indexes and lock contention retain", async () => {
     const { thirdPatch } = generations();
-    for (const options of [
-        { userPresetState: { kind: "future", version: 99 } },
-        { userPresetState: null, hasExternalPresetFileStore: true },
-    ]) {
-        const store = new MemoryStore([digest("1"), digest("2"), digest("3")]);
-        const result = await retireSupersededBounceBanks({
-            store,
-            candidateDigests: [digest("1")],
-            dspOverwrittenDigests: [digest("1")],
-            livePatchDocument: thirdPatch,
-            lockManager: acquiredLockManager,
-            ...options,
-        });
-        assert.equal(result.completed, false);
-        assert.equal(store.values.has(digest("1")), true);
-    }
-
     const malformedStore = new MemoryStore([digest("1")]);
     malformedStore.list = async () => [{ digest: "future-index-entry", byteLength: 1 }];
     const malformed = await retireSupersededBounceBanks({

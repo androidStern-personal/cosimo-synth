@@ -263,7 +263,7 @@
     text-align: right;
 }
 
-/* T28: the lane terminates at one visible, immutable boundary. This is a
+/* The lane terminates at one visible, immutable boundary. This is a
    selector only—there are deliberately no drag, menu, power, or add affordances. */
 .rack-polish-boundary {
     position: relative;
@@ -1584,8 +1584,8 @@
 }
 
 /* ADR-025 row 13 (capture treatment) lives in styles.css: the one rule with
-   the specificity to beat the eligibility outline. A weaker duplicate here
-   never won and was deleted with the T08A fix. */
+   the specificity to beat the eligibility outline, so this sheet must not
+   restate it. */
 
 .rack-editor-control.is-suspended {
     background-image: repeating-linear-gradient(
@@ -1785,6 +1785,31 @@
 
 .desktop-global-mod-rail-voice-popover .mobile-global-mod-rail-voice-glide[data-disabled="true"] {
     opacity: 0.38;
+}
+
+.voice-history {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: calc(4px * var(--rail-scale, 1));
+}
+
+.voice-history-button {
+    height: calc(26px * var(--rail-scale, 1));
+    padding: 0;
+    border: 1px solid var(--cosimo-line);
+    border-radius: var(--cosimo-radius-sm);
+    background: var(--cosimo-wash);
+    box-shadow: none;
+    color: var(--cosimo-ink-muted);
+    cursor: pointer;
+    font-family: var(--cosimo-font-label, sans-serif);
+    font-size: var(--rail-label, var(--cosimo-type-label));
+    font-weight: 600;
+}
+
+.voice-history-button:disabled {
+    opacity: 0.38;
+    cursor: default;
 }
 
 .rack-mod-row {
@@ -1999,13 +2024,15 @@
     white-space: nowrap;
 }
 
-.effects-rack-workspace button:focus-visible,
-.rack-editor-control:focus-within {
+.rack-editor-control .rack-parameter-knob:focus-visible { outline: none; }
+
+/* A tile paints one keyboard indicator. Pointer focus is not selection. */
+.effects-rack-workspace button:focus-visible:not(.rack-editor-control button),
+.rack-editor-control:has(:focus-visible) {
     position: relative;
     z-index: 6;
     outline: 2px solid #f5ffff;
     outline-offset: 2px;
-    filter: drop-shadow(0 0 3px #38d9d5);
 }
 
 @media (max-width: 639px) {

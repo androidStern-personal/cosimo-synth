@@ -155,7 +155,7 @@ export type WavetableModulationShadingRange = {
 };
 
 /**
- * T02C: the wavetable graphic shades the selected route's possible Index
+ * The wavetable graphic shades the selected route's possible Index
  * travel only while that route is live — mapped with a nonzero amount. Every
  * other truth-table state (including mapped-zero and bypassed) draws nothing,
  * and the range is exactly the Index rail's clamped band.

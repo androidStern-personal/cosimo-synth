@@ -1,6 +1,6 @@
 // Production contract for the fixed, post-lane wt::PolishBus.
-// The accepted T26 Enhancer is a real child; T27's comparison renderer is not
-// imported into this path.
+// The production Enhancer is a real child; the Polish Voicing Lab's comparison
+// renderer is not imported into this path.
 
 function requirePolishLatency (relativePath)
 {
@@ -205,7 +205,7 @@ processor PolishNeutralTimingContract [[ main ]]
     void main()
     {
         static_assert (wt::polishEnhancerLatencyFrames == 60,
-                       "Polish must retain T26's accepted 60-frame Enhancer");
+                       "Polish must retain the Enhancer's 60-frame latency");
         static_assert (wt::polishCompressorLookaheadFrames == 96,
                        "Polish compressor lookahead changed");
         static_assert (wt::polishLatencyFrames == 156,
@@ -287,9 +287,9 @@ processor PolishStaticLawContract [[ main ]]
 }
 
 //==============================================================================
-// The public Enhancer macro drives the accepted T26 bus, with exactly the baked
-// two-band routing and amounts. Mono makes Safe Bass mathematically inert, so a
-// direct T26 reference plus the fixed compressor delay must null bit-for-bit.
+// The public Enhancer macro drives the production Enhancer bus, with exactly the
+// baked two-band routing and amounts. Mono makes Safe Bass mathematically inert, so
+// a direct Enhancer reference plus the fixed compressor delay must null bit-for-bit.
 
 ## testProcessor()
 

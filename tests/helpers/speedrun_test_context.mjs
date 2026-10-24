@@ -2,7 +2,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
-import { loadUIModule } from "./load_ui_module.mjs";
+import { loadUIModule } from "../../kit/tests/helpers/load_ui_module.mjs";
 
 export const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 
@@ -16,17 +16,15 @@ export async function loadSpeedrunModules() {
         contractModule,
         modulationModule,
         articulationModule,
-        synthIdentity,
     ] = await Promise.all([
         loadUIModule(repoRoot, "ui/speedrun/patch-io.ts"),
         loadUIModule(repoRoot, "ui/speedrun/analyzer.ts"),
         loadUIModule(repoRoot, "ui/speedrun/recipe.ts"),
         loadUIModule(repoRoot, "ui/speedrun/partial-states.ts"),
         loadUIModule(repoRoot, "ui/speedrun/timeline.ts"),
-        loadUIModule(repoRoot, "ui/shared/effects/effect-state-contract.ts"),
+        loadUIModule(repoRoot, "ui/speedrun/contract.ts"),
         loadUIModule(repoRoot, "ui/shared/modulation.ts"),
         loadUIModule(repoRoot, "ui/shared/articulation-image.ts"),
-        loadUIModule(repoRoot, "ui/shared/effects/synth-preset-identity.ts"),
     ]);
     return {
         patchIO,
@@ -37,7 +35,6 @@ export async function loadSpeedrunModules() {
         contractModule,
         modulationModule,
         articulationModule,
-        synthIdentity,
     };
 }
 
@@ -49,14 +46,14 @@ export async function createCurrentSpeedrunContext() {
     const visibleParameters = inputEndpoints.filter((endpoint) => (
         endpoint.purpose === "parameter" && endpoint.annotation?.hidden !== true
     ));
-    const { contractModule, patchIO, synthIdentity } = await loadSpeedrunModules();
-    const currentContract = contractModule.buildCanonicalPluginStateContract({
-        effectID: synthIdentity.SYNTH_PRESET_EFFECT_ID,
+    const { contractModule, patchIO } = await loadSpeedrunModules();
+    const currentContract = contractModule.buildSpeedrunContract({
+        effectID: patchIO.SYNTH_CONTRACT_ID,
         parameters: visibleParameters,
         storedState: [
-            { key: "modulation.v6", schemaVersion: 6, required: true },
-            { key: "articulations.v4", schemaVersion: 4, required: true },
-            { key: "bounce.v1", schemaVersion: 1, required: true },
+            { key: "modulation.v6", schemaVersion: 6 },
+            { key: "articulations.v4", schemaVersion: 4 },
+            { key: "bounce.v1", schemaVersion: 1 },
         ],
     });
     const options = { currentContract, inputEndpoints };
@@ -95,16 +92,17 @@ export function barePatchFromDefaults(defaults, overrides = {}) {
 }
 
 /** The largest current-contract sound: every public control moved, every
-    legal modulation pair stored and active, and one enabled instance of all
-    eight lane device types. This is generated from the live contract so it
+    Key Track switched on and offset, every legal modulation pair stored and
+    active, and one enabled instance of all eight lane device types. This is generated from the live contract so it
     drifts loudly instead of becoming a stale fixture. */
 export async function buildMaximalCurrentSpeedrunPatch() {
-    const [context, lane, laneV1, modulationTargets, rack] = await Promise.all([
+    const [context, lane, laneV1, modulationTargets, rack, keyTrack] = await Promise.all([
         createCurrentSpeedrunContext(),
         loadUIModule(repoRoot, "ui/shared/lane-state-v2.ts"),
         loadUIModule(repoRoot, "ui/shared/lane-state.ts"),
         loadUIModule(repoRoot, "ui/shared/modulation-targets.ts"),
         loadUIModule(repoRoot, "ui/shared/rack-parameter-descriptors.ts"),
+        loadUIModule(repoRoot, "ui/shared/key-track.ts"),
     ]);
 
     let laneState = lane.createDefaultLaneStateV2();
@@ -131,10 +129,11 @@ export async function buildMaximalCurrentSpeedrunPatch() {
             const effectId = laneV1.LANE_TYPE_TO_EFFECT_ID.get(parsed.deviceType);
             if (effectId === undefined) throw new Error(`No effect identity for ${parsed.deviceType}.`);
             const descriptors = rack.getRackEffectDescriptor(effectId).parameters;
+            // A record field without a knob (Key Track, switched on below) keeps its value.
             return [deviceId, {
                 params: Object.fromEntries(Object.entries(record.params).map(([endpointID, initial]) => {
                     const descriptor = descriptors.find((candidate) => candidate.endpointID === endpointID);
-                    if (descriptor === undefined) throw new Error(`No descriptor for ${deviceId}.${endpointID}.`);
+                    if (descriptor === undefined) return [endpointID, initial];
                     const value = Math.abs(descriptor.max - initial) >= Math.abs(initial - descriptor.min)
                         ? descriptor.max
                         : descriptor.min;
@@ -143,6 +142,16 @@ export async function buildMaximalCurrentSpeedrunPatch() {
             }];
         })),
     };
+    for (const [deviceId, record] of Object.entries(laneState.devices)) {
+        for (const endpointID of Object.keys(record.params)) {
+            const endpoints = keyTrack.getLaneKeyTrackEndpoints(endpointID);
+            if (endpoints === null) continue;
+            const { knobMax } = keyTrack.requireKeyTrackRange(keyTrack.getKeyTrackDefinition(`lane.${endpointID}`).family);
+            const tracked = lane.setLaneKeyTrackEnabled(laneState, deviceId, endpointID, true);
+            laneState = tracked && lane.setLaneDeviceParam(tracked, deviceId, endpoints.offsetEndpointID, knobMax);
+            if (!laneState) throw new Error(`Could not key-track maximal-patch ${deviceId}.${endpointID}.`);
+        }
+    }
 
     const parameters = { ...context.defaults.parameters };
     for (const annotation of Object.values(context.defaults.annotations)) {

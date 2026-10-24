@@ -1,0 +1,173 @@
+import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+
+import {
+    createCmajorPluginStateClient,
+    type CmajorStateConnection,
+} from "../../kit/ui/plugin-state-cmajor";
+import { PluginStateProvider, useOptionalPluginState } from "../../kit/ui/plugin-state-react";
+import type { PluginStateEditResult } from "../../kit/index";
+import type { PatchParameterPresentationPriority, PatchConnectionLike } from "./cmajor-react";
+import type { PatchControlBinding } from "./patch-controls";
+import { synthPluginState, synthParameterByEndpoint } from "./synth-plugin-state";
+import { acquireSynthViewState } from "./synth-state-client";
+import {
+    captureUserEditReporter,
+    type UserEditReporter,
+} from "./user-edit-bus";
+
+type SynthStateClient = ReturnType<typeof createCmajorPluginStateClient<typeof synthPluginState>>;
+type ViewConnection =
+    | { readonly kind: "connected"; readonly patchConnection: PatchConnectionLike; readonly client: SynthStateClient }
+    | { readonly kind: "failed"; readonly patchConnection: PatchConnectionLike };
+
+function reportStateDefect(error: unknown) {
+    console.error("Cosimo Voice state failed", error instanceof Error ? error.stack ?? error.message : String(error));
+}
+
+function hasStateChannel(connection: PatchConnectionLike): connection is PatchConnectionLike & CmajorStateConnection {
+    return "addEventListener" in connection && typeof connection.addEventListener === "function"
+        && "removeEventListener" in connection && typeof connection.removeEventListener === "function"
+        && "sendMessageToServer" in connection && typeof connection.sendMessageToServer === "function";
+}
+
+/** Keep one state client for the complete synth view, including closed popovers. */
+export function SynthStateProvider({ patchConnection, children }: {
+    readonly patchConnection: PatchConnectionLike;
+    readonly children: ReactNode;
+}) {
+    const [viewConnection, setViewConnection] = useState<ViewConnection | null>(null);
+
+    useEffect(() => {
+        if (!hasStateChannel(patchConnection)) {
+            setViewConnection({ kind: "failed", patchConnection });
+            return;
+        }
+        const lease = acquireSynthViewState(patchConnection);
+        setViewConnection({ kind: "connected", patchConnection, client: lease.client });
+        return lease.release;
+    }, [patchConnection]);
+
+    if (viewConnection?.patchConnection !== patchConnection) {
+        return <div role="status">Connecting Voice controls…</div>;
+    }
+    if (viewConnection.kind === "failed") {
+        return <div role="alert">Voice controls require the current plugin state runtime.</div>;
+    }
+    return <PluginStateProvider definition={synthPluginState} client={viewConnection.client}>
+        {children}
+    </PluginStateProvider>;
+}
+
+/** Translate the state hook to the synth's established control interface. */
+type SynthParameterOptions = {
+    readonly initialValue: number;
+    readonly coerce: (rawValue: unknown) => number;
+    readonly active?: boolean;
+    readonly presentationPriority?: PatchParameterPresentationPriority;
+};
+
+export function useSynthPluginParameterBinding(key: string, options: SynthParameterOptions): PatchControlBinding<number> {
+    const binding = useOptionalSynthPluginParameterBinding(key, options);
+    if (!binding) throw new Error("A declared synth parameter and SynthStateProvider are required.");
+    return binding;
+}
+
+/** Generic host controls use this only when the synth state provider owns the declaration. */
+export function useOptionalSynthPluginParameterBinding(key: string, options: SynthParameterOptions): PatchControlBinding<number> | null {
+    const parameter = useOptionalPluginState(synthParameterByEndpoint[key] ?? null);
+    const valueState = parameter && "value" in parameter.state ? parameter.state : null;
+    const firstHostValue = useRef<{ readonly key: typeof key; readonly value: number } | null>(null);
+    if (valueState !== null && firstHostValue.current?.key !== key) {
+        firstHostValue.current = { key, value: options.coerce(valueState.value) };
+    }
+    const isReady = options.active !== false && valueState !== null;
+    const hostValue = isReady && valueState !== null ? options.coerce(valueState.value) : options.initialValue;
+    const initialValue = valueState !== null
+        ? options.coerce(valueState.metadata?.defaultValue ?? options.initialValue)
+        : options.initialValue;
+    // The state control's setValue closes over the rendered field version and is
+    // new on every render. Reading it here keeps this binding's identity until its
+    // own value changes, so memoized controls skip renders for unrelated edits.
+    const presentation = useRef({ isReady, coerce: options.coerce, setValue: parameter?.setValue });
+    presentation.current = { isReady, coerce: options.coerce, setValue: parameter?.setValue };
+    const reportingGesture = useRef<{ readonly reporter: UserEditReporter; started: boolean } | null>(null);
+    const notifications = useRef<Promise<void> | null>(null);
+    const deferredValue = useDeferredValue(hostValue);
+    const value = options.presentationPriority === "deferred-during-gesture" && reportingGesture.current
+        ? deferredValue : hostValue;
+
+    // Commands are already dispatched. Only their edit-bus notifications wait
+    // here, preserving begin/edit/end order while the client owns ticket lifetime.
+    const reportAfter = useCallback((
+        command: Promise<PluginStateEditResult> | undefined,
+        report: (result: PluginStateEditResult | undefined) => void,
+    ) => {
+        const settled = command?.catch(error => { reportStateDefect(error); return undefined; });
+        notifications.current = (notifications.current ?? Promise.resolve())
+            .then(() => settled)
+            .then(report)
+            .catch(reportStateDefect);
+    }, []);
+
+    const setValue = useCallback((nextValue: number) => {
+        const current = presentation.current;
+        if (!current.isReady) return;
+        const coercedValue = current.coerce(nextValue);
+        const reporter = captureUserEditReporter();
+        reportAfter(current.setValue?.(coercedValue), result => {
+            if (result?.kind !== "accepted") return;
+            if (typeof result.changed !== "boolean") {
+                reportStateDefect(new Error("An accepted Voice edit did not report whether its value changed."));
+                return;
+            }
+            reporter.parameterEdit({ endpointID: key, changed: result.changed });
+        });
+    }, [key, reportAfter]);
+
+    const beginGesture = useCallback(() => {
+        if (!presentation.current.isReady || reportingGesture.current) return;
+        const gesture = { reporter: captureUserEditReporter(), started: false };
+        reportingGesture.current = gesture;
+        reportAfter(parameter?.beginGesture(), result => {
+            if (result?.kind !== "accepted") return;
+            gesture.started = true;
+            gesture.reporter.gestureStart();
+        });
+    }, [parameter?.beginGesture, reportAfter]);
+
+    const endGesture = useCallback(() => {
+        const gesture = reportingGesture.current;
+        if (!gesture) return;
+        reportingGesture.current = null;
+        reportAfter(parameter?.endGesture(), () => {
+            // A view closing or a native restore can interrupt the end receipt;
+            // every reported start still closes its local audition group once.
+            if (!gesture.started) return;
+            gesture.started = false;
+            gesture.reporter.gestureEnd();
+        });
+    }, [parameter?.endGesture, reportAfter]);
+    useEffect(() => endGesture, [endGesture]);
+    useEffect(() => { if (options.active === false) endGesture(); }, [endGesture, options.active]);
+
+    const commitValue = useCallback((nextValue: number) => {
+        beginGesture();
+        setValue(nextValue);
+        endGesture();
+    }, [beginGesture, endGesture, setValue]);
+
+    const binding = useMemo(() => ({
+        endpointID: key,
+        value,
+        initialValue,
+        isReady,
+        hostBaseline: isReady && firstHostValue.current?.key === key
+            ? { _tag: "host-confirmed" as const, value: firstHostValue.current.value }
+            : { _tag: "pending" as const },
+        setValue,
+        commitValue,
+        beginGesture,
+        endGesture,
+    }), [beginGesture, commitValue, endGesture, initialValue, isReady, key, setValue, value]);
+    return parameter ? binding : null;
+}

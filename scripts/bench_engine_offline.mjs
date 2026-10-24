@@ -51,8 +51,13 @@ for (const scenario of scenarios) {
     let bestMilliseconds = Infinity;
     let peak = 0;
     for (let rep = 0; rep < reps; rep += 1) {
-        const performer = await createInstalledPerformer({ EngineClass, ...scenario.spec });
-        const rendered = renderScore(performer, scenario.score, scenario.totalFrames);
+        const runtime = await createInstalledPerformer({ EngineClass, ...scenario.spec });
+        let rendered;
+        try {
+            rendered = renderScore(runtime.performer, scenario.score, scenario.totalFrames);
+        } finally {
+            runtime.dispose();
+        }
         bestMilliseconds = Math.min(bestMilliseconds, rendered.elapsedMilliseconds);
         peak = Math.max(peak, peakAbsolute(rendered.samples));
     }

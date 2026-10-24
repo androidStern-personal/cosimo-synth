@@ -1,8 +1,7 @@
 /**
- * DEPRECATED (rasterizer compensation layer): superseded by the live-performance render path in
- * ui/speedrun/live/ (see VIDEO_BOUNCE_LIVE_RENDER_PLAN.md). Kept only as the
- * VITE_COSIMO_VIDEO_BOUNCE_SCRIPTED=1 escape hatch until the live render is
- * accepted; scheduled for deletion with its suites afterwards.
+ * The rasterizer compensation layer of the scripted video render, which a build with
+ * VITE_COSIMO_VIDEO_BOUNCE_SCRIPTED=1 selects. The default render is the live
+ * performance in ui/speedrun/live/.
  */
 const SVG_PRESENTATION_PROPERTIES = [
     "color",
@@ -83,7 +82,7 @@ function restoreCaptureSvgSizes(root: ParentNode) {
 }
 
 /**
- * Capture-only fallback for open shadow roots such as the preset-name bar.
+ * Capture-only fallback for open shadow roots such as the keyboard's.
  * Clone the rendered leaf into its light DOM and project it through a slot;
  * product components and their normal shadow-root path remain untouched.
  */
@@ -483,11 +482,6 @@ export async function settleCaptureSubtree(
     await Promise.resolve();
     await nextAnimationFrame();
     await nextAnimationFrame();
-    if (rasterizerWorkarounds) {
-        inlineCaptureSvgPresentation(root);
-        inlineCaptureColors(root);
-        await emulateCaptureMasks(root);
-    }
     if (scrubAnimations) {
         await scrubAnimations();
     } else {
@@ -504,9 +498,15 @@ export async function settleCaptureSubtree(
         // browser one paint turn before Remotion reads the frame bitmap.
         await nextAnimationFrame();
     }
-    // Last, so it reads each element's final visibility for this frame — a
-    // reveal in the closing scrub must not serialize with a stale mask.
+    // Last, so they read this frame's final tree: an element that mounts or is
+    // replaced during the settle turns must not reach the rasterizer without
+    // its inlined paint, and a reveal in the closing scrub must not serialize
+    // with a stale mask.
     if (rasterizerWorkarounds) {
+        inlineCaptureSvgPresentation(root);
+        inlineCaptureColors(root);
+        await emulateCaptureMasks(root);
+        await Promise.all([...root.querySelectorAll<HTMLImageElement>("img")].map(decodeImage));
         maskCaptureHiddenLeaves(root);
         await nextAnimationFrame();
     }

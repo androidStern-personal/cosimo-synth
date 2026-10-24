@@ -12,7 +12,7 @@
   },
   "view": {
     "src": "view/index.js",
-    "devModule": "/fx/polish_lab/view/source.js",
+    "devModule": "/fx/polish_lab/view/source.tsx",
     "width": 1180,
     "height": 820,
     "resizable": true

@@ -6,7 +6,6 @@ import {
 import { LANE_TYPE_TO_EFFECT_ID } from "../shared/lane-state";
 import type {
     LaneChainNodeV2,
-    LaneDevicePlacementV2,
     LaneStateV2,
 } from "../shared/lane-state-v2";
 import { parseLaneInstanceId } from "../shared/lane-state-v2";

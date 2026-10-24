@@ -5,6 +5,7 @@ import { buildCumulativeStates } from "../../../ui/speedrun/partial-states";
 import type { DefaultsSnapshot } from "../../../ui/speedrun/patch-io";
 import type { SpeedrunRecipe, UIOp } from "../../../ui/speedrun/recipe";
 import { renderScriptedVideoInIframe } from "../../../ui/speedrun/scripted/iframe-renderer";
+import { SPEEDRUN_END_CARD_FRAMES } from "../../../ui/speedrun/stage";
 import { SPEEDRUN_WEBM_FORMAT } from "../../../ui/speedrun/studio/video-support";
 import { assembleTimeline } from "../../../ui/speedrun/timeline";
 import fixtureRecipeJson from "./effects-lane-recipe.golden.json";
@@ -103,6 +104,7 @@ function slimInspection(inspection: {
     readonly svgCount: number;
     readonly keyboardNoteCount: number;
     readonly keyboardActiveNoteCount: number;
+    readonly railMappingActive: boolean;
 }) {
     return {
         frame: inspection.frame,
@@ -112,6 +114,7 @@ function slimInspection(inspection: {
         svgCount: inspection.svgCount,
         keyboardNoteCount: inspection.keyboardNoteCount,
         keyboardActiveNoteCount: inspection.keyboardActiveNoteCount,
+        railMappingActive: inspection.railMappingActive,
     };
 }
 
@@ -154,6 +157,7 @@ async function renderHardeningTwice() {
     return {
         firstFrame,
         durationInFrames: timeline.durationInFrames,
+        endCardStartFrame: timeline.durationInFrames - SPEEDRUN_END_CARD_FRAMES,
         digestFrames: hardeningDigestFrames,
         first: await renderHardeningOnce(),
         second: await renderHardeningOnce(),

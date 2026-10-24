@@ -16,13 +16,12 @@ import {
 const { repoRoot, cmajorApiRoot } = createViteRepoContext(import.meta.url);
 
 /**
- * T17B: test-harness servers are spawned per suite file and never use HMR,
- * so they skip file watching entirely — the dev default below polls the
- * whole repo every 120ms (Andrew's 88d0b198 pin so twin rebuilds always
- * surface), which costs ~4 CPU cores PER SERVER and was the dominant cost
- * of the browser gates. Harness servers also self-exit when their spawning
- * test process dies, because a SIGKILLed run cannot clean up its children
- * and orphaned pollers burned the machine for hours.
+ * Test-harness servers are spawned per suite file and never use HMR, so they
+ * skip file watching entirely: the dev default below polls the whole repo
+ * every 120ms so twin rebuilds always surface, which costs about four CPU
+ * cores per server. Harness servers also exit when their spawning test
+ * process dies, because a killed run cannot clean up its children and an
+ * orphaned poller would keep burning the machine.
  */
 const isTestHarnessServer = process.env.COSIMO_TEST_HARNESS === "1";
 

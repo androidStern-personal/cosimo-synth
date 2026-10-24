@@ -1,14 +1,10 @@
-import type { PatchConnectionLike } from "./cmajor-react";
 import type { LaneDeviceInstance, LaneDeviceType } from "./lane-modulation-targets";
 import {
-    LEGACY_LANE_DEVICE_PARAM_ENDPOINTS,
-    PRE_CHORUS_LEGACY_CLAMP_ENDPOINTS,
     LANE_SLOT_ORDINAL_COUNT,
     LANE_SLOT_PARAM_COUNT,
     buildLaneSlotParamValues,
     getLaneSlotId,
     laneDeviceParamEndpoints,
-    materializeLaneDeviceParams,
 } from "./lane-slot-params";
 import { getRackEffectDescriptor } from "./rack-parameter-descriptors";
 import {
@@ -50,7 +46,7 @@ import {
 } from "./effect-output-trim";
 
 /**
- * lane.v2 — the device-instance + topology-tree document (M3).
+ * lane.v2 — the device-instance + topology-tree document.
  *
  * v1 pins one device of each type in a serial permutation; v2 is the general
  * form the subway map renders and the marker-grammar wire carries: an
@@ -70,9 +66,9 @@ import {
  * The document stores what the wire validates: crossovers live in the
  * engine's 40..18000 clamp range, fan-outs in 2..4 (parallel) / 2..3
  * (split), and the flattened chain — placements plus one marker per group —
- * fits one topology upload. Parsing validates and never coerces (C11). Since
- * T78, persisted intake is greenfield: only a complete lane.v2 document is
- * accepted, and only true absence creates the current clean default.
+ * fits one topology upload. Parsing validates and never coerces: only a
+ * complete lane.v2 document is accepted, and only true absence creates the
+ * clean default.
  */
 
 export const LANE_SPLIT_XOVER_MIN_HZ = 40;
@@ -207,43 +203,20 @@ function parseDeviceRecord(deviceId: string, input: unknown):
         return { failure: err(`device ${deviceId} must be { params }`) };
     }
     const endpoints = laneDeviceParamEndpoints(parsedId.deviceType);
-    const effectId = LANE_TYPE_TO_EFFECT_ID.get(parsedId.deviceType);
-    if (effectId === undefined) {
-        return { failure: err(`device ${deviceId} has no effect descriptor`) };
-    }
-    const presentationEndpoints = getRackEffectDescriptor(effectId).parameters
-        .map((descriptor) => descriptor.endpointID);
     const inputParams = input.params as Record<string, unknown>;
     const inputKeys = Object.keys(inputParams);
-    const hasShape = (expected: ReadonlyArray<string>) => inputKeys.length === expected.length
-        && inputKeys.every((key) => expected.includes(key));
-    const trimEndpointID = effectOutputTrimLaneEndpointID(parsedId.deviceType);
-    const currentLegacyEndpoints = [
-        ...LEGACY_LANE_DEVICE_PARAM_ENDPOINTS[parsedId.deviceType],
-        trimEndpointID,
-    ];
-    const currentPreClampChorusEndpoints = [
-        ...PRE_CHORUS_LEGACY_CLAMP_ENDPOINTS,
-        trimEndpointID,
-    ];
-    // T78 deliberately introduces no old-preset compatibility path. Both
-    // full and previously supported supplemental shapes must already carry
-    // Output Trim; pre-Output-Trim records receive no hidden 0 dB migration.
-    const hasCurrentShape = inputKeys.includes(trimEndpointID)
-        && (hasShape(endpoints)
-            || hasShape(presentationEndpoints)
-            || hasShape(currentLegacyEndpoints)
-            || (parsedId.deviceType === "chorus" && hasShape(currentPreClampChorusEndpoints)));
-    if (!hasCurrentShape) {
+    if (inputKeys.length !== endpoints.length || !endpoints.every((endpointID) => Object.hasOwn(inputParams, endpointID))) {
         return { failure: err(`device ${deviceId} must carry every parameter once`) };
     }
-    for (const endpointID of inputKeys) {
+    const params: Record<string, number> = {};
+    for (const endpointID of endpoints) {
         const value = inputParams[endpointID];
         if (typeof value !== "number" || !Number.isFinite(value)) {
             return { failure: err(`device ${deviceId}.${endpointID} must be a finite number`) };
         }
+        params[endpointID] = value;
     }
-    return { record: { params: materializeLaneDeviceParams(parsedId.deviceType, inputParams) } };
+    return { record: { params } };
 }
 
 function parsePlacement(input: unknown, deviceIds: ReadonlySet<string>):
@@ -358,15 +331,14 @@ export function parseLaneStateV2(input: unknown): LaneStateV2ParseOutcome {
         }
 
         const isSplit = rawNode.kind === "split";
-        const legacySplitKeys = ["kind", "groupId", "enabled", "xoverLowHz", "xoverHighHz", "branches"];
-        const currentSplitKeys = [
-            "kind", "groupId", "enabled", "xoverLowHz", "xoverHighHz",
-            "xoverLowKeyTrackEnabled", "xoverLowKeyTrackOffsetSemitones",
-            "xoverHighKeyTrackEnabled", "xoverHighKeyTrackOffsetSemitones", "branches",
-        ];
-        const expectedKeys = isSplit ? currentSplitKeys : ["kind", "groupId", "enabled", "branches"];
-        const isLegacySplit = isSplit && hasExactKeys(rawNode, legacySplitKeys);
-        if (!hasExactKeys(rawNode, expectedKeys) && !isLegacySplit) {
+        const expectedKeys = isSplit
+            ? [
+                "kind", "groupId", "enabled", "xoverLowHz", "xoverHighHz",
+                "xoverLowKeyTrackEnabled", "xoverLowKeyTrackOffsetSemitones",
+                "xoverHighKeyTrackEnabled", "xoverHighKeyTrackOffsetSemitones", "branches",
+            ]
+            : ["kind", "groupId", "enabled", "branches"];
+        if (!hasExactKeys(rawNode, expectedKeys)) {
             return err(`a ${rawNode.kind} group is { ${expectedKeys.join(", ")} }`);
         }
         const groupId = parseLaneGroupId(rawNode.groupId);
@@ -389,7 +361,7 @@ export function parseLaneStateV2(input: unknown): LaneStateV2ParseOutcome {
             return err(`group ${String(rawNode.groupId)} crossovers must sit in `
                 + `${LANE_SPLIT_XOVER_MIN_HZ}..${LANE_SPLIT_XOVER_MAX_HZ} Hz`);
         }
-        if (isSplit && !isLegacySplit && (
+        if (isSplit && (
             typeof rawNode.xoverLowKeyTrackEnabled !== "boolean"
             || typeof rawNode.xoverHighKeyTrackEnabled !== "boolean"
             || typeof rawNode.xoverLowKeyTrackOffsetSemitones !== "number"
@@ -424,10 +396,10 @@ export function parseLaneStateV2(input: unknown): LaneStateV2ParseOutcome {
                 enabled: rawNode.enabled,
                 xoverLowHz: rawNode.xoverLowHz as number,
                 xoverHighHz: rawNode.xoverHighHz as number,
-                xoverLowKeyTrackEnabled: isLegacySplit ? false : rawNode.xoverLowKeyTrackEnabled as boolean,
-                xoverLowKeyTrackOffsetSemitones: isLegacySplit ? 0 : rawNode.xoverLowKeyTrackOffsetSemitones as number,
-                xoverHighKeyTrackEnabled: isLegacySplit ? false : rawNode.xoverHighKeyTrackEnabled as boolean,
-                xoverHighKeyTrackOffsetSemitones: isLegacySplit ? 0 : rawNode.xoverHighKeyTrackOffsetSemitones as number,
+                xoverLowKeyTrackEnabled: rawNode.xoverLowKeyTrackEnabled as boolean,
+                xoverLowKeyTrackOffsetSemitones: rawNode.xoverLowKeyTrackOffsetSemitones as number,
+                xoverHighKeyTrackEnabled: rawNode.xoverHighKeyTrackEnabled as boolean,
+                xoverHighKeyTrackOffsetSemitones: rawNode.xoverHighKeyTrackOffsetSemitones as number,
                 branches,
             }
             : {
@@ -477,11 +449,11 @@ export function createFullDefaultLaneStateV2(): LaneStateV2 {
 const STARTER_DEVICE_IDS = ["distortion#1", "delay#1", "reverb#1"] as const;
 
 /**
- * The fresh-instrument STARTER (M4): a compact bypassed line — drive →
+ * The fresh-instrument STARTER: a compact bypassed line — drive →
  * delay → reverb — so the out-of-box sound stays the deployed dry voice
  * while the map opens with a short line and add-ghosts instead of eight
  * resident pills. It is sliced from the current resident-eight constructor,
- * so every record is complete under the T78 schema.
+ * so every record is complete.
  */
 export function createDefaultLaneStateV2(): LaneStateV2 {
     const full = createFullDefaultLaneStateV2();
@@ -505,9 +477,9 @@ export function createDefaultLaneStateV2(): LaneStateV2 {
 }
 
 /**
- * Deserialize current persisted state. Only true absence creates a fresh
- * T78 document; old, corrupt, and incomplete documents are rejected instead
- * of acquiring implicit Output Trim defaults.
+ * Deserialize persisted state. Only true absence creates a fresh document;
+ * corrupt and incomplete documents are rejected instead of acquiring
+ * implicit defaults.
  */
 export function deserializeLaneStateV2(input: unknown): LaneStateV2 | null {
     if (input === undefined) {
@@ -747,15 +719,8 @@ export function buildLaneRuntimeEventsV2(state: LaneStateV2): ReadonlyArray<{ re
     return events;
 }
 
-/** Send a complete lane.v2 document as one logical commit. */
-export function commitLaneStateV2(connection: PatchConnectionLike, state: LaneStateV2): void {
-    for (const event of buildLaneRuntimeEventsV2(state)) {
-        connection.sendEventOrValue?.(event.endpointID, event.value);
-    }
-}
-
 //==============================================================================
-// Tree editing (M4). Every op is pure: it returns a NEW document, the same
+// Tree editing. Every op is pure: it returns a NEW document, the same
 // document copy for a no-op, or null when the edit is not representable —
 // unknown identity, a full unit pool, a non-empty branch removal, a wire
 // overflow. Callers surface null as a refusal; they never coerce.

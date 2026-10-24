@@ -23,7 +23,6 @@ import {
     useMemo,
     useRef,
     useState,
-    type KeyboardEvent as ReactKeyboardEvent,
     type PointerEvent as ReactPointerEvent,
     type ReactNode,
 } from "react";
@@ -37,9 +36,7 @@ import {
 import type { OscillatorModulationParameterKind } from "./modulation-targets";
 import { parameterEntrySpecForMobileVoiceControl } from "./parameter-value-entry";
 import type { ParameterMenuRequest } from "./parameter-context-menu";
-import {
-    type ModulationRoute,
-} from "./modulation";
+import type { ModulationRoute } from "./modulation";
 import { findRackModulationSource, type RackModulationSourceKind } from "./rack-modulation-sources";
 import { usePatchParameterBinding, type PatchControlBinding } from "./patch-controls";
 import {
@@ -53,11 +50,8 @@ import {
     WARP_MODE_LABELS,
     type MobileVoiceBindableControlID,
 } from "./mobile-voice-display-descriptors";
-import type { RollingAxis } from "./rolling-axis-classifier";
-import {
-    useParameterGesture,
-    type ParameterGestureChannel,
-} from "./parameter-gesture";
+import type { RollingAxis } from "../../kit/ui/rolling-axis-classifier";
+import { useParameterGesture, type ParameterGestureChannel } from "../../kit/ui/parameter-gesture";
 import {
     ReadoutCell,
     useReadoutCells,
@@ -263,7 +257,7 @@ export function MobileVoiceFocusedEditor({
     const [graphAxis, setGraphAxis] = useState<RollingAxis | null>(null);
 
     /* ADR-024 tabs: the fixed bar + directional panel slide (shared with the
-       Mod page's SOURCE/MAPPINGS pair — T14's one-selector rule). */
+       Mod page's SOURCE/MAPPINGS pair, so the app has one selector). */
     const panelTransition = useDirectionalPanelTransition({
         order: selection.options.map((option) => option.id),
         activeId: oscillatorID,
@@ -279,18 +273,6 @@ export function MobileVoiceFocusedEditor({
         }
         return address.targetKind;
     }, [contract]);
-
-    const routeFor = useCallback((parameterKind: OscillatorModulationParameterKind | null) => {
-        if (parameterKind === null || armedSource === null) {
-            return null;
-        }
-        const targetKind = targetKindFor(parameterKind);
-        return routes.find((route) => (
-            route.targetKind === targetKind
-            && route.sourceKind === armedSource.sourceKind
-            && route.sourceSlot === armedSource.sourceSlot
-        )) ?? null;
-    }, [armedSource, routes, targetKindFor]);
 
     const armedSourceIdentity = useMemo(() => (
         armedSource === null
@@ -586,7 +568,7 @@ export function MobileVoiceFocusedEditor({
         ? formatMobileVoiceValue("percent", clamp01(bindings.warpAmount.value))
         : formatMobileVoiceValue("percent", clamp01(bindings.framePosition.value));
 
-    // T02C: the graphic shades the selected source's possible Index travel,
+    // The graphic shades the selected source's possible Index travel,
     // derived from the SAME presentation the Index cell rail draws (canonical
     // amount, polarity, clamping — never a second projection).
     const indexPresentation = cellApi.presentCell("framePosition");

@@ -274,9 +274,9 @@ export class SpeedrunStudioSession {
         /**
          * Required so a mode can never be selected by omission. The shipped
          * product path is "live" — a real-time performance of the real UI
-         * recorded from the compositor. "scripted" is the deprecated
-         * frame-stepped rasterizer path; "replica" remains only for the
-         * parked replica suites and the explicit build-flag fallback.
+         * recorded from the compositor. "scripted" is the frame-stepped
+         * rasterizer path and "replica" the replica composition, each
+         * selected by its build flag.
          */
         readonly compositionMode: "replica" | "scripted" | "live";
         readonly preferredContainer?: SpeedrunVideoContainer;

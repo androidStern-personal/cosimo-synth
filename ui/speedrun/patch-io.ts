@@ -5,15 +5,8 @@ import {
     type ArticulationsState,
 } from "../shared/articulation-image";
 import type { PatchConnectionLike } from "../shared/cmajor-react";
-import {
-    normalizeEffectPresetV2,
-    type EffectPresetV2,
-} from "../shared/effects/effect-preset-v2";
-import type {
-    EffectParameterContract,
-    EffectPluginStateContract,
-} from "../shared/effects/effect-state-contract";
-import { buildSynthPresetMigrations } from "../shared/effects/synth-preset-migrations";
+import { fullStoredStateValues } from "../shared/full-stored-state";
+import type { SpeedrunContract, SpeedrunContractParameter } from "./contract";
 import { LANE_STATE_KEY } from "../shared/lane-state";
 import {
     createDefaultLaneStateV2,
@@ -27,16 +20,17 @@ import {
     type ModulationState,
 } from "../shared/modulation";
 import { getModulationArticulationCellIndex } from "../shared/modulation-runtime-program";
-import {
-    parseSoundShareEnvelope,
-    type SoundShareEnvelopeV2,
-} from "../shared/sound-share-envelope";
 
 // bounce/document.mjs owns this key; restated here because that module is
 // untyped and importing it would add an implicit-any boundary.
 const BOUNCE_STATE_KEY = "bounce.v1";
 
+/** Names the synth in speedrun parameter contracts, and so in every recipe's contract hash. */
+export const SYNTH_CONTRACT_ID = "cosimo-synth";
+
 const BROWSER_PATCH_STATE_FORMAT = "cosimo.browserPatchState";
+/** Copy JSON and sound links both carry this Builder Kit preset file. */
+const PRESET_FILE_KIND = "builder-kit.preset";
 const BROWSER_PATCH_STATE_VERSION = 5;
 const SPEEDRUN_BOUNCE_REFUSAL = "Speedrun videos for bounced sounds come later";
 
@@ -77,13 +71,13 @@ export type ParameterEndpointMetadata = {
 };
 
 export type PatchIntakeOptions = {
-    readonly currentContract: EffectPluginStateContract;
+    readonly currentContract: SpeedrunContract;
     readonly inputEndpoints?: ReadonlyArray<ParameterEndpointMetadata>;
 };
 
 export type PatchIntakeErrorTag =
     | "UnknownShape"
-    | "MigrationFailed"
+    | "UnreadablePatch"
     | "InvalidParameters"
     | "InvalidModulation"
     | "InvalidLane"
@@ -123,7 +117,7 @@ function finiteNumber(value: unknown): number | null {
 }
 
 function readEndpointAnnotation(
-    parameter: EffectParameterContract,
+    parameter: SpeedrunContractParameter,
     inputEndpoints: ReadonlyArray<ParameterEndpointMetadata>,
 ): EndpointAnnotation {
     const endpoint = inputEndpoints.find((candidate) => candidate.endpointID === parameter.endpointID);
@@ -227,22 +221,6 @@ function normalizeBareParameters(
     ]));
 }
 
-function exactPresetParameters(
-    preset: EffectPresetV2,
-    defaults: DefaultsSnapshot,
-): Record<string, number> {
-    return Object.fromEntries(Object.values(defaults.annotations).map((annotation) => {
-        const value = preset.parameters[annotation.endpointID];
-        if (typeof value !== "number" || !Number.isFinite(value)) {
-            throw new PatchIntakeError(
-                "InvalidParameters",
-                `${annotation.endpointID} must be a finite number.`,
-            );
-        }
-        return [annotation.endpointID, value];
-    }));
-}
-
 function decodeJSONString(value: unknown): unknown {
     if (typeof value !== "string") return value;
     try {
@@ -296,26 +274,36 @@ function ensureOscillatorMode(parameters: Readonly<Record<string, number>>, boun
     }
 }
 
-function requireShareLane(envelope: SoundShareEnvelopeV2): unknown {
-    const keys = Object.keys(envelope.supplementalStoredState);
-    if (keys.length !== 1 || keys[0] !== LANE_STATE_KEY) {
-        throw new PatchIntakeError(
-            "InvalidLane",
-            `Shared sound must carry exactly ${LANE_STATE_KEY} as supplemental state.`,
-        );
+/** A preset file's values hold parameters and the sound documents side by side. */
+function presetFilePatch(input: Record<string, unknown>): BarePatch {
+    if (input.version !== 1 || !isRecord(input.values)) {
+        throw new PatchIntakeError("UnknownShape", "This preset file version cannot be read.");
     }
-    return envelope.supplementalStoredState[LANE_STATE_KEY];
+    const parameters: Record<string, unknown> = {};
+    const storedState: Record<string, unknown> = {};
+    for (const [key, value] of Object.entries(input.values)) {
+        if (key === MODULATION_STATE_KEY || key === ARTICULATIONS_V4_STATE_KEY || key === LANE_STATE_KEY) storedState[key] = value;
+        else parameters[key] = value;
+    }
+    return {
+        label: typeof input.name === "string" && input.name.trim().length > 0 ? input.name.trim() : "Shared Sound",
+        parameters,
+        storedState,
+        laneValue: storedState[LANE_STATE_KEY],
+    };
 }
 
 function browserOrBarePatch(input: Record<string, unknown>): BarePatch | null {
     if (input.format === BROWSER_PATCH_STATE_FORMAT) {
         if (input.version !== BROWSER_PATCH_STATE_VERSION || !isRecord(input.sound)) return null;
         if (!isRecord(input.sound.parameters) || !isRecord(input.sound.storedState)) return null;
+        // A saved browser project also keeps its presets and snapshots; only the sound matters here.
+        const storedState = soundStoredState(input.sound.storedState);
         return {
             label: "Current Sound",
             parameters: input.sound.parameters,
-            storedState: input.sound.storedState,
-            laneValue: input.sound.storedState[LANE_STATE_KEY],
+            storedState,
+            laneValue: storedState[LANE_STATE_KEY],
         };
     }
     if (!isRecord(input.parameters) || !isRecord(input.storedState)) return null;
@@ -362,7 +350,7 @@ function buildDocumentFromParts({
 function errorFromUnknown(cause: unknown): PatchIntakeError {
     if (cause instanceof PatchIntakeError) return cause;
     return new PatchIntakeError(
-        "MigrationFailed",
+        "UnreadablePatch",
         cause instanceof Error ? cause.message : "The patch could not be normalized.",
         { cause },
     );
@@ -375,51 +363,7 @@ export function intakePatch(input: unknown, options: PatchIntakeOptions): PatchI
             throw new PatchIntakeError("UnknownShape", "Speedrun patch input must be an object.");
         }
 
-        const parsedEnvelope = input.format === "cosimo.soundShare"
-            ? parseSoundShareEnvelope(input)
-            : null;
-        if (parsedEnvelope !== null) {
-            if (!parsedEnvelope.ok) throw parsedEnvelope.error;
-            const preset = normalizeEffectPresetV2(parsedEnvelope.value.preset, {
-                currentContract: options.currentContract,
-                migrations: buildSynthPresetMigrations(options.currentContract),
-            });
-            return {
-                ok: true,
-                value: {
-                    defaults,
-                    document: buildDocumentFromParts({
-                        label: preset.label,
-                        parameters: exactPresetParameters(preset, defaults),
-                        storedState: preset.storedState,
-                        laneValue: requireShareLane(parsedEnvelope.value),
-                        defaults,
-                    }),
-                },
-            };
-        }
-
-        if (input.kind === "cosimo.effectPreset") {
-            const preset = normalizeEffectPresetV2(input, {
-                currentContract: options.currentContract,
-                migrations: buildSynthPresetMigrations(options.currentContract),
-            });
-            return {
-                ok: true,
-                value: {
-                    defaults,
-                    document: buildDocumentFromParts({
-                        label: preset.label,
-                        parameters: exactPresetParameters(preset, defaults),
-                        storedState: preset.storedState,
-                        laneValue: undefined,
-                        defaults,
-                    }),
-                },
-            };
-        }
-
-        const bare = browserOrBarePatch(input);
+        const bare = input.kind === PRESET_FILE_KIND ? presetFilePatch(input) : browserOrBarePatch(input);
         if (bare === null) {
             throw new PatchIntakeError("UnknownShape", "Unknown speedrun patch input shape.");
         }
@@ -454,11 +398,7 @@ export function intakePatch(input: unknown, options: PatchIntakeOptions): PatchI
     }
 }
 
-function storedStateValues(input: unknown): Record<string, unknown> {
-    if (!isRecord(input)) return {};
-    return isRecord(input.values) ? { ...input.values } : { ...input };
-}
-
+/** Cmajor answers a full stored-state request with `{ parameters, values }`. */
 function soundStoredState(input: Readonly<Record<string, unknown>>): Record<string, unknown> {
     return Object.fromEntries([
         MODULATION_STATE_KEY,
@@ -482,14 +422,14 @@ function captureStoredState(connection: PatchConnectionLike, timeoutMs: number):
         )), timeoutMs);
         connection.requestFullStoredState?.((value) => {
             globalThis.clearTimeout(timeout);
-            resolve(storedStateValues(value));
+            resolve({ ...fullStoredStateValues(value) });
         });
     });
 }
 
 function captureParameters(
     connection: PatchConnectionLike,
-    currentContract: EffectPluginStateContract,
+    currentContract: SpeedrunContract,
     timeoutMs: number,
 ): Promise<Record<string, unknown>> {
     if (

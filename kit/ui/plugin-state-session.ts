@@ -1,0 +1,841 @@
+import { atom, createStore } from "jotai/vanilla";
+import { UndoHistory } from "./undo-history";
+import type { EngineApplication, EngineTarget } from "./plugin-state-engine";
+import { codecThrewMessage, savedInProject, type PluginStateChangeReason, type PluginStateFields, type PluginStateFieldValue, type PluginStateJson } from "./plugin-state-definition";
+
+/** Native-assigned service lifetime and full-document identity. */
+export interface PluginStateScope {
+    readonly owner: string;
+    readonly document: number;
+}
+
+/** Opaque identity for one Undo entry, valid only in its original document. */
+export interface PluginStateHistoryEntry {
+    readonly scope: PluginStateScope;
+    readonly id: number;
+}
+
+/** A command address already authenticated and ordered by the channel adapter. */
+export interface PluginStateAddress extends PluginStateScope {
+    readonly client: number;
+    readonly sequence: number;
+}
+
+/** Host-owned scalar metadata and its current observation. */
+export interface PluginStateNativeParameter {
+    readonly endpoint: string;
+    readonly value: number;
+    readonly min: number;
+    readonly max: number;
+    readonly step: number;
+    readonly defaultValue: number;
+}
+
+/** Native adapter snapshot; stored values remain untrusted until their field codec parses them. */
+export interface PluginStateNativeSnapshot {
+    readonly parameters: readonly PluginStateNativeParameter[];
+    readonly values: Readonly<Record<string, unknown>>;
+}
+
+/** Native persistence evidence, separate from edit acceptance and DSP application. */
+export type PluginStatePersistence =
+    | { readonly kind: "host-managed" | "not-written" | "pending" | "observed-in-native-state" }
+    | { readonly kind: "failed"; readonly reason: string };
+
+/** The exact client gesture currently protecting a field; one gesture may protect several fields. */
+export interface PluginStateGestureOwner {
+    readonly client: number;
+    readonly gesture: number;
+}
+
+/** Failed readiness may retain a last valid display value; it is not an accepted editable baseline. */
+export type PluginStateFieldSnapshot<Value> = (
+    | { readonly readiness: { readonly kind: "pending" } }
+    | { readonly readiness: { readonly kind: "failed"; readonly reason: "missing-parameter" | "invalid-state" | "service-closed" }; readonly version?: number }
+    | {
+        readonly readiness: { readonly kind: "ready" } | { readonly kind: "failed"; readonly reason: "service-closed" | "invalid-state" };
+        readonly value: Value;
+        readonly version: number;
+        readonly persistence: PluginStatePersistence;
+        readonly metadata?: Omit<PluginStateNativeParameter, "endpoint" | "value">;
+        readonly gesture?: PluginStateGestureOwner;
+    }) & {
+        readonly application?: PluginStateApplication;
+        readonly target?: EngineTarget;
+        /** Correlates only the current failed save; hidden by public controls. */
+        readonly persistenceRequest?: number;
+    };
+
+/** Requested application progress remains distinct from native persistence. */
+export type PluginStateApplication = EngineApplication
+    | { readonly kind: "pending" | "waiting-for-inputs" | "unconfirmed" };
+
+/** Immutable accepted value and explicitly declared scalar inputs for one engine target. */
+export interface PluginStateEngineInput {
+    readonly value: unknown;
+    readonly parameters: Readonly<Record<string, number>>;
+    readonly reason: PluginStateChangeReason;
+}
+
+/** A composed engine binding; dependency names are declared parameter field keys. */
+export interface PluginStateEnginePort {
+    readonly key: string;
+    readonly dependencies: readonly string[];
+    /** Replace the requested target; preparation and transport belong to the binding. */
+    replace(input: PluginStateEngineInput, target: EngineTarget): void;
+    /** Cancel obsolete document work synchronously. Must not throw. */
+    cancel(): void;
+    /** Release binding work and transport resources; unexpected failures are diagnosed by the session. */
+    stop(): Promise<void>;
+}
+
+/** One immutable projection of values, readiness, versions, and shared history availability. */
+export interface PluginStateSnapshot<Fields extends PluginStateFields = PluginStateFields> {
+    readonly scope: PluginStateScope | null;
+    readonly revision: number;
+    readonly fields: { readonly [Key in keyof Fields]: PluginStateFieldSnapshot<PluginStateFieldValue<Fields[Key]>> };
+    readonly history: {
+        readonly canUndo: boolean;
+        readonly canRedo: boolean;
+        readonly undoEntry?: PluginStateHistoryEntry;
+        readonly redoEntry?: PluginStateHistoryEntry;
+    };
+    /**
+     * The accepted change that last altered field values: `load` when the document was loaded or
+     * replaced, `recall` for an edit marked as a recall, `history` for Undo and Redo, and `edit`
+     * for every other change. `keys` lists the fields whose values changed, in definition order;
+     * `revision` is the snapshot revision that made the change. A snapshot that alters no value
+     * keeps the same object, so a view detects a new change by identity.
+     */
+    readonly lastChange?: { readonly reason: PluginStateChangeReason; readonly keys: readonly string[]; readonly revision: number };
+}
+
+/** Shared edit command; agent adapters require expectedVersion before entering this seam. */
+export type PluginStateCommand = {
+    readonly kind: "edit";
+    readonly key: string;
+    readonly value: unknown;
+    readonly expectedVersion?: number;
+    readonly gesture?: number;
+} | {
+    /** Accept a compound user action as one change and, unless `history` is false, one Undo entry. */
+    readonly kind: "edit-many";
+    readonly edits: readonly { readonly key: string; readonly value: unknown; readonly expectedVersion?: number }[];
+    readonly history?: false;
+    /** A preset or snapshot is replacing the sound; preparation sees reason "recall". */
+    readonly recall?: true;
+    /** Write into this client's open gesture, which must cover every edited key. */
+    readonly gesture?: number;
+} | {
+    /** Establish a valid stored baseline without treating invalid display data as Undo history. */
+    readonly kind: "recover";
+    readonly key: string;
+    readonly value: unknown;
+    readonly expectedVersion: 0;
+} | {
+    /** Retry only the current failed application or save; no editable-state mutation. */
+    readonly kind: "retry";
+    readonly key: string;
+    readonly expectedVersion: number;
+    readonly expectedGeneration: number | null;
+    readonly expectedPersistenceRequest: number | null;
+} | {
+    /** Open one gesture over these fields; it seals as one Undo entry listing every field that moved. */
+    readonly kind: "begin"; readonly keys: readonly string[]; readonly gesture: number; readonly label?: string;
+} | { readonly kind: "end"; readonly keys: readonly string[]; readonly gesture: number }
+  | { readonly kind: "undo"; readonly expectedEntry?: PluginStateHistoryEntry }
+  | { readonly kind: "redo"; readonly expectedEntry?: PluginStateHistoryEntry };
+
+/** Known acceptance is independent of subsequent native publication success. */
+export type PluginStateResult =
+    | {
+        readonly kind: "accepted";
+        readonly revision: number;
+        readonly version?: number;
+        /** Edit/recovery commands report actual accepted value change, independently of engine delivery. */
+        readonly changed?: boolean;
+        /** Present only when this command creates or seals a nonempty Undo entry. */
+        readonly historyEntry?: PluginStateHistoryEntry;
+    }
+    | { readonly kind: "rejected"; readonly reason: "not-ready" | "invalid-command" | "invalid-value" | "stale-version" | "stale-history" | "stale-scope" | "busy" | "service-closed" | "sequence" };
+
+/** Exact addressed result routed back to the originating client. */
+export interface PluginStateReceipt {
+    readonly address: PluginStateAddress;
+    readonly result: PluginStateResult;
+}
+
+/** Ordered native operations; scalar values never enter a second stored parameter bank. */
+export type PluginStateOperation =
+    | { readonly kind: "stored"; readonly key: string; readonly value: PluginStateJson }
+    | { readonly kind: "parameter"; readonly endpoint: string; readonly value: number }
+    | { readonly kind: "gesture-start" | "gesture-end"; readonly endpoint: string };
+
+/** One scope-guarded request for native effects. */
+export interface PluginStatePublication {
+    readonly request: number;
+    readonly scope: PluginStateScope;
+    readonly operations: readonly PluginStateOperation[];
+}
+
+/** Native adapter methods enqueue effects synchronously; replies arrive through dispatch. */
+export interface PluginStateNativePort<Fields extends PluginStateFields> {
+    /** Enqueue an ordered publication; report expected I/O failures with a published event. */
+    publish(publication: PluginStatePublication): void;
+    /** Send a coherent projection and, when present, its addressed command receipt. */
+    update(snapshot: PluginStateSnapshot<Fields>, receipt?: PluginStateReceipt): void;
+    /** Notify terminal service closure once. This cleanup method must not throw. */
+    close(reason: { readonly reason: "service-closed" }): void;
+}
+
+/** Parsed adapter events; only domain field values are parsed again by their codecs. */
+export type PluginStateEvent =
+    | { readonly kind: "opened"; readonly scope: PluginStateScope; readonly native: PluginStateNativeSnapshot }
+    | { readonly kind: "replaced"; readonly scope: PluginStateScope; readonly native: PluginStateNativeSnapshot;
+        /** Set when the host wrote one stored key directly; names that key, not every changed key. */
+        readonly changedStoredKey?: string }
+    | { readonly kind: "engine"; readonly target: EngineTarget; readonly status: EngineApplication }
+    | { readonly kind: "detached"; readonly scope: PluginStateScope; readonly client: number }
+    | { readonly kind: "parameter"; readonly scope: PluginStateScope; readonly endpoint: string; readonly value: number;
+        /** Native write identity and ordering, captured alongside the value. */
+        readonly intent: number; readonly origin: "owner" | "external"; readonly observation: number }
+    | { readonly kind: "command"; readonly address: PluginStateAddress; readonly command: PluginStateCommand }
+    | {
+        readonly kind: "published";
+        readonly scope: PluginStateScope;
+        readonly request: number;
+        readonly result: { readonly kind: "observed" } | { readonly kind: "failed"; readonly reason: string };
+        /** Native counters sampled after failure, before releasing a write fence. */
+        readonly observations?: readonly { readonly endpoint: string; readonly observation: number }[];
+    };
+
+/** The sole mutable owner for one patch lifetime. */
+export interface PluginStateSession<Fields extends PluginStateFields> {
+    /** Enqueue an event and settle its known result after its immediate effects are dispatched. */
+    dispatch(event: PluginStateEvent): Promise<PluginStateResult>;
+    /** Read one immutable coherent projection with inferred domain field values. */
+    getSnapshot(): PluginStateSnapshot<Fields>;
+    /** Subscribe via Jotai; callbacks may enqueue later commands. */
+    subscribe(listener: (snapshot: PluginStateSnapshot<Fields>) => void): () => void;
+    /** Stop accepting work for this patch lifetime. */
+    stop(): Promise<void>;
+}
+
+type RuntimeField = PluginStateFieldSnapshot<unknown>;
+type RuntimeSnapshot = PluginStateSnapshot<PluginStateFields>;
+type ValueChange = { readonly key: string; readonly before: unknown; readonly after: unknown };
+type HistoryEntry = { readonly changes: readonly ValueChange[]; readonly order: number };
+/** One open gesture over one or more fields, with each field's baseline, latest value and version guard floor. */
+type Gesture = PluginStateGestureOwner & {
+    readonly keys: readonly string[];
+    readonly before: ReadonlyMap<string, unknown>;
+    readonly after: ReadonlyMap<string, unknown>;
+    readonly guardFloorVersions: ReadonlyMap<string, number>;
+    readonly order: number;
+};
+type Model = {
+    readonly snapshot: RuntimeSnapshot;
+    readonly history: UndoHistory<HistoryEntry>;
+    readonly gestures: readonly Gesture[];
+    readonly editOrder: number;
+    readonly detached: ReadonlySet<number>;
+    readonly parameters: ReadonlyMap<string, PluginStateNativeParameter>;
+    readonly publications: ReadonlyMap<number, { readonly key: string; readonly version: number }>;
+    readonly parameterIntents: ReadonlyMap<string, number>;
+    readonly parameterAppliedIntents: ReadonlyMap<string, number>;
+    readonly parameterObservations: ReadonlyMap<string, number>;
+};
+
+function sameScope(left: PluginStateScope, right: PluginStateScope): boolean {
+    return left.owner === right.owner && left.document === right.document;
+}
+
+function historyReference(scope: PluginStateScope, entry: { readonly order: number }): PluginStateHistoryEntry {
+    return Object.freeze({ scope, id: entry.order });
+}
+
+function validParameter(parameter: PluginStateNativeParameter): boolean {
+    return [parameter.value, parameter.min, parameter.max, parameter.step, parameter.defaultValue].every(Number.isFinite)
+        && parameter.min <= parameter.max && parameter.step >= 0
+        && parameter.value >= parameter.min && parameter.value <= parameter.max
+        && parameter.defaultValue >= parameter.min && parameter.defaultValue <= parameter.max;
+}
+
+function readyField(value: unknown, persistence: PluginStatePersistence, version = 0, metadata?: Omit<PluginStateNativeParameter, "endpoint" | "value">, gesture?: PluginStateGestureOwner, application?: PluginStateApplication, persistenceRequest?: number): RuntimeField {
+    return Object.freeze({ readiness: Object.freeze({ kind: "ready" as const }), value, version, persistence: Object.freeze(persistence), ...(metadata ? { metadata } : {}), ...(gesture ? { gesture } : {}), ...(application ? { application: Object.freeze(application) } : {}), ...(persistenceRequest === undefined ? {} : { persistenceRequest }) });
+}
+
+/** An author codec threw while the session handled one command. */
+class CodecThrew extends Error {
+    constructor(key: string, cause: unknown) { super(codecThrewMessage(key), { cause }); }
+}
+
+function codecCall<Result>(key: string, call: () => Result): Result {
+    try { return call(); }
+    catch (error) { throw new CodecThrew(key, error); }
+}
+
+/** Create a patch-lifetime state owner with explicit native effects and Jotai reactivity. */
+export function createPluginStateSession<const Fields extends PluginStateFields>(
+    definition: Fields,
+    ports: {
+        readonly native: PluginStateNativePort<Fields>;
+        readonly bindings?: readonly PluginStateEnginePort[];
+        readonly historyLimit?: number;
+        /** Retain an unexpected cause for diagnostics. Must not throw. */
+        readonly onDefect: (error: unknown) => void;
+    },
+): PluginStateSession<Fields> {
+    const store = createStore();
+    const initialFields: Record<string, RuntimeField> = {};
+    for (const key of Object.keys(definition)) initialFields[key] = Object.freeze({ readiness: Object.freeze({ kind: "pending" }) });
+    const state = atom<Model>({
+        snapshot: Object.freeze({ scope: null, revision: 0, fields: Object.freeze(initialFields), history: Object.freeze({ canUndo: false, canRedo: false }) }),
+        history: new UndoHistory<HistoryEntry>({ limit: ports.historyLimit, compare: (a, b) => a.order - b.order }), gestures: [], editOrder: 0, detached: new Set<number>(), parameters: new Map(), publications: new Map(), parameterIntents: new Map(), parameterAppliedIntents: new Map(), parameterObservations: new Map(),
+    });
+    const snapshotAtom = atom((get) => get(state).snapshot);
+    let stopped = false;
+    let stopping: Promise<void> | undefined;
+    let nextPublication = 0;
+    let draining = false;
+    let accepted: PluginStateResult | undefined;
+    let engineEffects: (() => void)[] = [];
+    const queue: { readonly event: PluginStateEvent; readonly finish: (result: PluginStateResult) => void }[] = [];
+
+    const getSnapshot = (): PluginStateSnapshot<Fields> => {
+        // SAFETY: fields are created only from definition keys. Each stored value
+        // comes from that exact field's typed codec; parameter fields hold numbers.
+        return store.get(snapshotAtom) as PluginStateSnapshot<Fields>;
+    };
+    const historyParticipates = (key: string) => definition[key]?.history !== false;
+    const historyBusy = (model: Model) => model.gestures.some(gesture => gesture.keys.some(historyParticipates));
+    const gestureFor = (model: Model, key: string) => model.gestures.find(gesture => gesture.keys.includes(key));
+    const replaceGesture = (model: Model, previous: Gesture, next?: Gesture): readonly Gesture[] =>
+        next ? model.gestures.map(gesture => gesture === previous ? next : gesture) : model.gestures.filter(gesture => gesture !== previous);
+    /** Record the gesture's moved fields together; a sample that a later edit revisited adds nothing. */
+    const sealGesture = (history: UndoHistory<HistoryEntry>, gesture: Gesture): UndoHistory<HistoryEntry> => {
+        const changes = gesture.keys.filter(historyParticipates).flatMap(key => {
+            const before = gesture.before.get(key), after = gesture.after.get(key);
+            return equalValue(key, before, after) ? [] : [{ key, before, after }];
+        });
+        return changes.length ? history.record({ changes, order: gesture.order }) : history;
+    };
+    /** An edit inside a gesture may carry any version from the gesture's floor up to the current one. */
+    const versionAccepted = (gesture: Gesture | undefined, key: string, expectedVersion: number | undefined, version: number) =>
+        expectedVersion === undefined || expectedVersion === version
+        || (gesture !== undefined && expectedVersion >= (gesture.guardFloorVersions.get(key) ?? version) && expectedVersion <= version);
+    const publishSnapshot = (model: Model, fields: Readonly<Record<string, RuntimeField>>, history = model.history): Model => {
+        const undo = history.undoEntry, redo = history.redoEntry;
+        return {
+            ...model, history,
+            snapshot: Object.freeze({
+                ...model.snapshot, revision: model.snapshot.revision + 1, fields: Object.freeze(fields),
+                history: Object.freeze({
+                    canUndo: !stopped && !historyBusy(model) && undo !== undefined && undo.changes.every(change => fields[change.key]?.readiness.kind === "ready"),
+                    canRedo: !stopped && !historyBusy(model) && redo !== undefined && redo.changes.every(change => fields[change.key]?.readiness.kind === "ready"),
+                    ...(model.snapshot.scope && undo ? { undoEntry: historyReference(model.snapshot.scope, undo) } : {}),
+                    ...(model.snapshot.scope && redo ? { redoEntry: historyReference(model.snapshot.scope, redo) } : {}),
+                }),
+            }),
+        };
+    };
+    /** Whether a field's accepted value differs between two snapshots; gaining or losing a value counts. */
+    const valueChanged = (key: string, before: RuntimeField | undefined, after: RuntimeField | undefined) => {
+        if (before === after) return false;
+        const old = before && "value" in before ? before : undefined, field = after && "value" in after ? after : undefined;
+        return old && field ? !Object.is(old.value, field.value) && !equalValue(key, old.value, field.value) : old !== field;
+    };
+    // Why each engine binding last prepared, so a retry repeats that preparation faithfully.
+    const preparedReasons = new Map<string, PluginStateChangeReason>();
+    const commit = (next: Model, retryKey?: string, reason: PluginStateChangeReason = "edit") => {
+        const previous = store.get(state);
+        if (next.snapshot === previous.snapshot) { store.set(state, next); return; }
+        const scope = next.snapshot.scope;
+        const reset = scope !== null && (!previous.snapshot.scope || !sameScope(scope, previous.snapshot.scope));
+        const keys = Object.keys(definition).filter(key => valueChanged(key, previous.snapshot.fields[key], next.snapshot.fields[key]));
+        const lastChange = keys.length ? Object.freeze({ reason: reset ? "load" as const : reason, keys: Object.freeze(keys), revision: next.snapshot.revision })
+            : next.snapshot.lastChange;
+        const fields = { ...next.snapshot.fields };
+        if (scope) for (const binding of ports.bindings ?? []) {
+            const field = fields[binding.key];
+            if (!field) continue;
+            const old = previous.snapshot.fields[binding.key];
+            const changed = reset || binding.key === retryKey || !old || old.readiness.kind !== field.readiness.kind
+                || ("value" in field && (!('value' in old) || !Object.is(field.value, old.value)))
+                || binding.dependencies.some(key => {
+                    const before = previous.snapshot.fields[key];
+                    const after = fields[key];
+                    return before !== after && (!before || !after || !("value" in before) || !("value" in after)
+                        || !Object.is(before.value, after.value));
+                });
+            if (!changed) {
+                const application = field.application ?? old?.application;
+                const target = old?.target ?? field.target;
+                fields[binding.key] = field.application === application && field.target === target ? field
+                    : Object.freeze({ ...field, ...(application ? { application } : {}), ...(target ? { target } : {}) });
+                continue;
+            }
+            const target = Object.freeze({ scope, key: binding.key, generation: reset ? 0 : (old?.target?.generation ?? -1) + 1 });
+            const parameters: Record<string, number> = {};
+            let ready = "value" in field && field.readiness.kind === "ready";
+            for (const key of binding.dependencies) {
+                const dependency = fields[key];
+                if (definition[key]?.kind !== "parameter" || !dependency || !("value" in dependency)
+                    || dependency.readiness.kind !== "ready" || typeof dependency.value !== "number") ready = false;
+                else parameters[key] = dependency.value;
+            }
+            fields[binding.key] = Object.freeze({ ...field, target, application: Object.freeze({ kind: ready ? "pending" as const : "waiting-for-inputs" as const }) });
+            if (ready && "value" in field) {
+                const prepared: PluginStateChangeReason = reset ? "load"
+                    : binding.key === retryKey ? preparedReasons.get(binding.key) ?? "edit" : reason;
+                preparedReasons.set(binding.key, prepared);
+                const input = Object.freeze({ value: field.value, parameters: Object.freeze(parameters), reason: prepared });
+                engineEffects.push(() => binding.replace(input, target));
+            } else engineEffects.push(() => binding.cancel());
+        }
+        store.set(state, { ...next, snapshot: Object.freeze({ ...next.snapshot, fields: Object.freeze(fields), ...(lastChange ? { lastChange } : {}) }) });
+    };
+    const applyValues = (model: Model, changes: readonly { readonly key: string; readonly value: unknown }[], history: UndoHistory<HistoryEntry>, cause: "edit" | "recall" | "history" | "recover"): PluginStateResult => {
+        if (!model.snapshot.scope) return { kind: "rejected", reason: "not-ready" };
+        // Prepare all encodings before changing any accepted value. Native I/O
+        // remains separately reported per field; local acceptance is one commit.
+        const fields = { ...model.snapshot.fields };
+        const publications = new Map(model.publications);
+        const parameterIntents = new Map(model.parameterIntents);
+        const outgoing: PluginStatePublication[] = [];
+        for (const { key, value } of changes) {
+            const field = definition[key], previous = fields[key];
+            if (!field || !previous) return { kind: "rejected", reason: "not-ready" };
+            const baseline = "value" in previous ? previous : undefined;
+            if (!baseline && cause !== "recover") return { kind: "rejected", reason: "not-ready" };
+            if (cause === "history" && previous.readiness.kind !== "ready") return { kind: "rejected", reason: "not-ready" };
+            let operations: readonly PluginStateOperation[];
+            if (field.kind === "parameter") {
+                if (typeof value !== "number") return { kind: "rejected", reason: "invalid-value" };
+                operations = gestureFor(model, key)
+                    ? [{ kind: "parameter", endpoint: field.endpoint, value }]
+                    : [{ kind: "gesture-start", endpoint: field.endpoint },
+                        { kind: "parameter", endpoint: field.endpoint, value },
+                        { kind: "gesture-end", endpoint: field.endpoint }];
+            } else operations = savedInProject(field) ? [{ kind: "stored", key, value: codecCall(key, () => field.codec.encode(value)) }] : [];
+            const version = (baseline?.version ?? 0) + 1;
+            if (operations.length) {
+                const request = ++nextPublication;
+                publications.set(request, { key, version });
+                if (field.kind === "parameter") parameterIntents.set(key, request);
+                outgoing.push({ request, scope: model.snapshot.scope, operations });
+            }
+            fields[key] = readyField(value, { kind: field.kind === "parameter" ? "host-managed" : savedInProject(field) ? "pending" : "not-written" }, version, baseline?.metadata, baseline?.gesture, field.kind === "parameter" ? { kind: "pending" } : undefined);
+        }
+        const next = publishSnapshot(model, fields, history);
+        const first = changes[0];
+        const only = changes.length === 1 && first ? fields[first.key] : undefined;
+        const result: PluginStateResult = { kind: "accepted", revision: next.snapshot.revision,
+            ...(only && "version" in only ? { version: only.version } : {}),
+            ...(cause !== "history" ? { changed: true } : {}),
+            ...((cause === "edit" || cause === "recall") && history.undoEntry && history.undoEntry !== model.history.undoEntry
+                ? { historyEntry: historyReference(model.snapshot.scope, history.undoEntry) } : {}),
+        };
+        accepted = result;
+        commit({ ...next, publications, parameterIntents }, undefined, cause === "recover" ? "edit" : cause);
+        for (const publication of outgoing) { if (!stopped) ports.native.publish(publication); }
+        return result;
+    };
+    const applyValue = (model: Model, key: string, value: unknown, history: UndoHistory<HistoryEntry>, cause: "edit" | "history" | "recover") =>
+        applyValues(model, [{ key, value }], history, cause);
+    const parseEditValue = (model: Model, key: string, value: unknown): { readonly kind: "ok"; readonly value: unknown } | { readonly kind: "error" } => {
+        const field = definition[key];
+        if (!field) return { kind: "error" };
+        if (field.kind === "stored") return codecCall(key, () => field.codec.parse(value));
+        const metadata = model.parameters.get(key);
+        if (!metadata || typeof value !== "number" || !Number.isFinite(value)) return { kind: "error" };
+        const clamped = Math.min(metadata.max, Math.max(metadata.min, value));
+        return { kind: "ok", value: metadata.step > 0
+            ? Math.min(metadata.max, Math.max(metadata.min, metadata.min + Math.round((clamped - metadata.min) / metadata.step) * metadata.step))
+            : clamped };
+    };
+    function equalValue(key: string, before: unknown, after: unknown) {
+        const field = definition[key];
+        return field?.kind === "stored" ? codecCall(key, () => field.codec.equals(before, after)) : Object.is(before, after);
+    }
+    const apply = (event: PluginStateEvent): PluginStateResult => {
+        const model = store.get(state);
+        if (event.kind === "opened" || event.kind === "replaced") {
+            if (model.snapshot.scope && (event.kind === "opened" || event.scope.owner !== model.snapshot.scope.owner
+                || event.scope.document <= model.snapshot.scope.document)) return { kind: "rejected", reason: "stale-scope" };
+            const fields: Record<string, RuntimeField> = {};
+            const parameters = new Map<string, PluginStateNativeParameter>();
+            for (const [key, field] of Object.entries(definition)) {
+                if (field.kind === "parameter") {
+                    const parameter = event.native.parameters.find((candidate) => candidate.endpoint === field.endpoint);
+                    if (parameter && validParameter(parameter)) {
+                        parameters.set(key, Object.freeze({ ...parameter }));
+                        const { min, max, step, defaultValue } = parameter;
+                        fields[key] = readyField(parameter.value, { kind: "host-managed" }, 0, Object.freeze({ min, max, step, defaultValue }), undefined, { kind: "unconfirmed" });
+                    } else fields[key] = Object.freeze({ readiness: Object.freeze({ kind: "failed", reason: parameter ? "invalid-state" : "missing-parameter" }) });
+                } else {
+                    const before = model.snapshot.fields[key];
+                    // Loading another project replaces only what the project saves.
+                    if (!savedInProject(field) && event.kind === "replaced" && before && "value" in before) {
+                        fields[key] = readyField(before.value, { kind: "not-written" }, before.version);
+                        continue;
+                    }
+                    const present = savedInProject(field) && Object.hasOwn(event.native.values, key);
+                    const parsed = present ? field.codec.parse(event.native.values[key]) : field.initial;
+                    if (parsed.kind === "ok") fields[key] = readyField(parsed.value, { kind: present ? "observed-in-native-state" : "not-written" });
+                    else {
+                        const before = model.snapshot.fields[key];
+                        const retainDisplay = event.kind === "replaced" && event.changedStoredKey !== undefined && before && "value" in before;
+                        fields[key] = Object.freeze({ readiness: Object.freeze({ kind: "failed", reason: "invalid-state" }), version: 0,
+                            ...(retainDisplay ? { value: before.value, persistence: Object.freeze({ kind: "failed" as const, reason: "invalid-state" }) } : {}),
+                        });
+                    }
+                }
+            }
+            const next = publishSnapshot(model, fields, model.history.clear());
+            commit({ ...next, gestures: [], detached: new Set(), publications: new Map(), parameterIntents: new Map(), parameterAppliedIntents: new Map(), parameterObservations: new Map(), editOrder: 0, parameters, snapshot: Object.freeze({ ...next.snapshot, scope: Object.freeze({ ...event.scope }) }) });
+        } else if (event.kind === "command") {
+            if (!model.snapshot.scope) return { kind: "rejected", reason: "not-ready" };
+            if (!sameScope(event.address, model.snapshot.scope)) return { kind: "rejected", reason: "stale-scope" };
+            if (model.detached.has(event.address.client)) return { kind: "rejected", reason: "service-closed" };
+            if (event.command.kind === "undo" || event.command.kind === "redo") {
+                if (historyBusy(model)) return { kind: "rejected", reason: "busy" };
+                const undo = event.command.kind === "undo";
+                const entry = undo ? model.history.undoEntry : model.history.redoEntry;
+                const expected = event.command.expectedEntry;
+                if (expected && (!entry || !sameScope(expected.scope, model.snapshot.scope) || expected.id !== entry.order))
+                    return { kind: "rejected", reason: "stale-history" };
+                if (!entry) return { kind: "accepted", revision: model.snapshot.revision };
+                return applyValues(model, entry.changes.map(change => ({ key: change.key, value: undo ? change.before : change.after })),
+                    undo ? model.history.undo() : model.history.redo(), "history");
+            }
+            if (event.command.kind === "edit-many") {
+                const changes: ValueChange[] = [];
+                const keys = new Set<string>();
+                const { client } = event.address;
+                const gestureId = event.command.gesture;
+                if (!Array.isArray(event.command.edits) || event.command.edits.length === 0
+                    || (gestureId !== undefined && (event.command.history === false || event.command.recall))) return { kind: "rejected", reason: "invalid-command" };
+                const ownGesture = gestureId === undefined ? undefined
+                    : model.gestures.find(gesture => gesture.client === client && gesture.gesture === gestureId);
+                if (gestureId !== undefined && !ownGesture) return { kind: "rejected", reason: "invalid-command" };
+                for (const { key, value, expectedVersion } of event.command.edits) {
+                    if (!Object.hasOwn(definition, key) || keys.has(key)) return { kind: "rejected", reason: "invalid-command" };
+                    keys.add(key);
+                    const current = model.snapshot.fields[key];
+                    if (!current || !("value" in current) || current.readiness.kind !== "ready") return { kind: "rejected", reason: "not-ready" };
+                    const active = gestureFor(model, key);
+                    if (active && active !== ownGesture) return { kind: "rejected", reason: active.client === client ? "invalid-command" : "busy" };
+                    if (ownGesture && !active) return { kind: "rejected", reason: "invalid-command" };
+                    if (!versionAccepted(active, key, expectedVersion, current.version)) return { kind: "rejected", reason: "stale-version" };
+                    const parsed = parseEditValue(model, key, value);
+                    if (parsed.kind === "error") return { kind: "rejected", reason: "invalid-value" };
+                    if (!equalValue(key, current.value, parsed.value)) changes.push({ key, before: current.value, after: parsed.value });
+                }
+                if (!changes.length) return { kind: "accepted", revision: model.snapshot.revision, changed: false };
+                const editOrder = model.editOrder + 1;
+                const values = changes.map(({ key, after }) => ({ key, value: after }));
+                if (ownGesture) {
+                    const after = new Map(ownGesture.after);
+                    for (const { key, value } of values) after.set(key, value);
+                    const gestures = replaceGesture(model, ownGesture, { ...ownGesture, after, order: editOrder });
+                    return applyValues({ ...model, gestures, editOrder }, values,
+                        changes.some(({ key }) => historyParticipates(key)) ? model.history.clearRedo() : model.history, "edit");
+                }
+                const recorded = event.command.history === false ? [] : changes.filter(({ key }) => historyParticipates(key));
+                return applyValues({ ...model, editOrder }, values, recorded.length
+                    ? model.history.record({ changes: recorded, order: editOrder }) : model.history, event.command.recall ? "recall" : "edit");
+            }
+            if (event.command.kind === "begin" || event.command.kind === "end") {
+                const { keys, gesture: gestureId } = event.command;
+                const { client } = event.address;
+                if (!Array.isArray(keys) || keys.length === 0 || new Set(keys).size !== keys.length
+                    || !keys.every(key => Object.hasOwn(definition, key))) return { kind: "rejected", reason: "invalid-command" };
+                if (!Number.isSafeInteger(gestureId) || gestureId <= 0) return { kind: "rejected", reason: "invalid-command" };
+                const ready: Record<string, Extract<RuntimeField, { readonly value: unknown }>> = {};
+                for (const key of keys) {
+                    const current = model.snapshot.fields[key];
+                    if (!current || !("value" in current) || current.readiness.kind !== "ready") return { kind: "rejected", reason: "not-ready" };
+                    ready[key] = current;
+                }
+                for (const key of keys) {
+                    const active = gestureFor(model, key);
+                    if (active && active.client !== client) return { kind: "rejected", reason: "busy" };
+                    if (active && active.gesture !== gestureId) return { kind: "rejected", reason: "invalid-command" };
+                }
+                const open = model.gestures.find(gesture => gesture.client === client && gesture.gesture === gestureId);
+                if (open && (open.keys.length !== keys.length || !keys.every(key => open.keys.includes(key))))
+                    return { kind: "rejected", reason: "invalid-command" };
+                const begin = event.command.kind === "begin";
+                const only = keys.length === 1 && keys[0] !== undefined ? ready[keys[0]] : undefined;
+                const version = only ? { version: only.version } : {};
+                if (begin === Boolean(open)) return { kind: "accepted", revision: model.snapshot.revision, ...version };
+                let gestures: readonly Gesture[];
+                let history = model.history;
+                let historyEntry: PluginStateHistoryEntry | undefined;
+                let owner: PluginStateGestureOwner | undefined;
+                if (open) {
+                    gestures = replaceGesture(model, open);
+                    history = sealGesture(history, open);
+                    if (history !== model.history && history.undoEntry) historyEntry = historyReference(model.snapshot.scope, open);
+                } else {
+                    owner = Object.freeze({ client, gesture: gestureId });
+                    const baseline = new Map(keys.map(key => [key, ready[key]?.value]));
+                    gestures = [...model.gestures, { ...owner, keys: Object.freeze([...keys]), before: baseline, after: baseline,
+                        guardFloorVersions: new Map(keys.map(key => [key, ready[key]?.version ?? 0])), order: 0 }];
+                }
+                const fields = { ...model.snapshot.fields };
+                for (const [key, previous] of Object.entries(ready))
+                    fields[key] = readyField(previous.value, previous.persistence, previous.version, previous.metadata, owner, previous.application, previous.persistenceRequest);
+                const next = publishSnapshot({ ...model, gestures }, fields, history);
+                const result: PluginStateResult = { kind: "accepted", revision: next.snapshot.revision, ...version,
+                    ...(historyEntry ? { historyEntry } : {}),
+                };
+                accepted = result;
+                commit({ ...next, gestures });
+                if (stopped) return result;
+                const operations = keys.flatMap(key => {
+                    const field = definition[key];
+                    return field?.kind === "parameter" ? [{ kind: begin ? "gesture-start" as const : "gesture-end" as const, endpoint: field.endpoint }] : [];
+                });
+                if (operations.length) ports.native.publish({ request: ++nextPublication, scope: model.snapshot.scope, operations });
+                return result;
+            }
+            const { key } = event.command;
+            if (!Object.hasOwn(definition, key)) return { kind: "rejected", reason: "invalid-command" };
+            const field = definition[key];
+            const current = model.snapshot.fields[key];
+            if (!field || !current) return { kind: "rejected", reason: "invalid-command" };
+            if (event.command.kind === "retry") {
+                if (!("value" in current) || current.readiness.kind !== "ready") return { kind: "rejected", reason: "not-ready" };
+                if (event.command.expectedVersion !== current.version
+                    || event.command.expectedGeneration !== (current.target?.generation ?? null)) return { kind: "rejected", reason: "stale-version" };
+                const failedSave = current.persistence.kind === "failed" && current.persistenceRequest !== undefined;
+                if (event.command.expectedPersistenceRequest !== (failedSave ? current.persistenceRequest : null))
+                    return { kind: "rejected", reason: "stale-version" };
+                if (failedSave) {
+                    const operations: readonly PluginStateOperation[] = field.kind === "parameter"
+                        ? [{ kind: "parameter", endpoint: field.endpoint, value: Number(current.value) }]
+                        : [{ kind: "stored", key, value: codecCall(key, () => field.codec.encode(current.value)) }];
+                    const request = ++nextPublication;
+                    const publications = new Map(model.publications).set(request, { key, version: current.version });
+                    const next = publishSnapshot(model, { ...model.snapshot.fields, [key]: Object.freeze({ ...current,
+                        persistence: Object.freeze({ kind: "pending" as const }),
+                        ...(field.kind === "parameter" ? { application: Object.freeze({ kind: "pending" as const }) } : {}),
+                    }) });
+                    const result: PluginStateResult = { kind: "accepted", revision: next.snapshot.revision, version: current.version, changed: false };
+                    accepted = result;
+                    commit({ ...next, publications, parameterIntents: field.kind === "parameter"
+                        ? new Map(model.parameterIntents).set(key, request) : model.parameterIntents });
+                    if (!stopped) ports.native.publish({ request, scope: model.snapshot.scope, operations });
+                    return result;
+                }
+                if (current.application?.kind !== "failed" || current.application.error.kind === "defect"
+                    || !ports.bindings?.some(binding => binding.key === key))
+                    return { kind: "rejected", reason: "not-ready" };
+                const next = publishSnapshot(model, model.snapshot.fields);
+                const result: PluginStateResult = { kind: "accepted", revision: next.snapshot.revision, version: current.version, changed: false };
+                accepted = result;
+                commit(next, key);
+                return result;
+            }
+            if (event.command.kind === "recover") {
+                if (event.command.expectedVersion !== 0 || Object.hasOwn(event.command, "gesture")) return { kind: "rejected", reason: "invalid-command" };
+                if (field.kind !== "stored") return { kind: "rejected", reason: "not-ready" };
+                if ("version" in current && current.version !== 0) return { kind: "rejected", reason: "stale-version" };
+                if (current.readiness.kind !== "failed" || current.readiness.reason !== "invalid-state") return { kind: "rejected", reason: "not-ready" };
+                const { value } = event.command;
+                const parsed = codecCall(key, () => field.codec.parse(value));
+                if (parsed.kind === "error") return { kind: "rejected", reason: "invalid-value" };
+                return applyValue(model, key, parsed.value, model.history, "recover");
+            }
+            if (!("value" in current) || current.readiness.kind !== "ready") return { kind: "rejected", reason: "not-ready" };
+            const previous = current;
+            const activeGesture = gestureFor(model, key);
+            if (activeGesture && activeGesture.client !== event.address.client) return { kind: "rejected", reason: "busy" };
+            const { value, expectedVersion } = event.command;
+            if (event.command.gesture !== undefined && (!activeGesture || activeGesture.gesture !== event.command.gesture)) {
+                return { kind: "rejected", reason: "invalid-command" };
+            }
+            if (activeGesture && event.command.gesture === undefined) return { kind: "rejected", reason: "invalid-command" };
+            if (!versionAccepted(activeGesture, key, expectedVersion, previous.version)) return { kind: "rejected", reason: "stale-version" };
+            const parsed = parseEditValue(model, key, value);
+            if (parsed.kind === "error") return { kind: "rejected", reason: "invalid-value" };
+            const nextValue = parsed.value;
+            if (equalValue(key, previous.value, nextValue)) return { kind: "accepted", revision: model.snapshot.revision, version: previous.version, changed: false };
+            const editOrder = model.editOrder + 1;
+            if (activeGesture) {
+                const gestures = replaceGesture(model, activeGesture, { ...activeGesture, after: new Map(activeGesture.after).set(key, nextValue), order: editOrder });
+                return applyValue({ ...model, gestures, editOrder }, key, nextValue, historyParticipates(key) ? model.history.clearRedo() : model.history, "edit");
+            }
+            return applyValue({ ...model, editOrder }, key, nextValue, historyParticipates(key)
+                ? model.history.record({ changes: [{ key, before: previous.value, after: nextValue }], order: editOrder }) : model.history, "edit");
+        } else if (event.kind === "engine") {
+            const field = model.snapshot.fields[event.target.key];
+            if (!field?.target || !sameScope(field.target.scope, event.target.scope)
+                || field.target.generation !== event.target.generation) return { kind: "accepted", revision: model.snapshot.revision };
+            commit(publishSnapshot(model, { ...model.snapshot.fields,
+                [event.target.key]: Object.freeze({ ...field, application: Object.freeze({ ...event.status }) }),
+            }));
+        } else if (event.kind === "detached") {
+            if (!model.snapshot.scope || !sameScope(event.scope, model.snapshot.scope)) return { kind: "rejected", reason: "stale-scope" };
+            if (model.detached.has(event.client)) return { kind: "accepted", revision: model.snapshot.revision };
+            const gestures = model.gestures.filter(gesture => gesture.client !== event.client);
+            const fields = { ...model.snapshot.fields };
+            const operations: PluginStateOperation[] = [];
+            let history = model.history;
+            for (const gesture of model.gestures) {
+                if (gesture.client !== event.client) continue;
+                history = sealGesture(history, gesture);
+                for (const key of gesture.keys) {
+                    const current = fields[key];
+                    if (current && "value" in current) fields[key] = readyField(current.value, current.persistence, current.version, current.metadata, undefined, current.application, current.persistenceRequest);
+                    const field = definition[key];
+                    if (field?.kind === "parameter") operations.push({ kind: "gesture-end", endpoint: field.endpoint });
+                }
+            }
+            const next = gestures.length === model.gestures.length ? model : publishSnapshot({ ...model, gestures }, fields, history);
+            accepted = { kind: "accepted", revision: next.snapshot.revision };
+            commit({ ...next, gestures, detached: new Set(model.detached).add(event.client) });
+            if (!stopped && operations.length > 0) ports.native.publish({ request: ++nextPublication, scope: model.snapshot.scope, operations });
+            return accepted;
+        } else if (event.kind === "parameter") {
+            if (!model.snapshot.scope || !sameScope(event.scope, model.snapshot.scope)) return { kind: "rejected", reason: "stale-scope" };
+            // definePluginState guarantees at most one field per endpoint.
+            const [key, metadata] = [...model.parameters].find(([, candidate]) => candidate.endpoint === event.endpoint) ?? [];
+            if (key === undefined || metadata === undefined) return { kind: "accepted", revision: model.snapshot.revision };
+            if (!validParameter({ ...metadata, value: event.value })) return { kind: "rejected", reason: "invalid-value" };
+            if (!Number.isSafeInteger(event.intent) || event.intent < 0 || !Number.isSafeInteger(event.observation) || event.observation < 0
+                || (event.origin !== "owner" && event.origin !== "external")) return { kind: "rejected", reason: "invalid-command" };
+            if (event.observation <= (model.parameterObservations.get(key) ?? -1)) return { kind: "accepted", revision: model.snapshot.revision };
+            const parameterObservations = new Map(model.parameterObservations).set(key, event.observation);
+            // Own writes already supplied the desired value and history.
+            // Their delayed echo is not a competing edit or a version change.
+            if (event.origin === "owner" || event.intent < (model.parameterIntents.get(key) ?? 0)) {
+                commit({ ...model, parameterObservations });
+                return { kind: "accepted", revision: model.snapshot.revision };
+            }
+            const field = model.snapshot.fields[key];
+            if (!field || !("value" in field)) return { kind: "accepted", revision: model.snapshot.revision };
+            const next = Object.is(field.value, event.value) ? model : publishSnapshot(model, {
+                ...model.snapshot.fields, [key]: readyField(event.value, { kind: "host-managed" }, field.version + 1, field.metadata, field.gesture, { kind: "unconfirmed" }),
+            });
+            const active = gestureFor(model, key);
+            const gestures = active && next !== model
+                ? replaceGesture(model, active, { ...active, guardFloorVersions: new Map(active.guardFloorVersions).set(key, field.version + 1) }) : model.gestures;
+            commit({ ...next, gestures, parameterObservations });
+        } else {
+            if (!model.snapshot.scope || !sameScope(event.scope, model.snapshot.scope)) return { kind: "rejected", reason: "stale-scope" };
+            const publication = model.publications.get(event.request);
+            if (publication) {
+                const publications = new Map(model.publications);
+                publications.delete(event.request);
+                const parameterAppliedIntents = new Map(model.parameterAppliedIntents);
+                const parameterIntents = new Map(model.parameterIntents);
+                const parameterObservations = new Map(model.parameterObservations);
+                const declaration = definition[publication.key];
+                if (declaration?.kind === "parameter") {
+                    if (event.result.kind === "observed") parameterAppliedIntents.set(publication.key,
+                        Math.max(event.request, parameterAppliedIntents.get(publication.key) ?? 0));
+                    const barrier = event.observations?.find(item => item.endpoint === declaration.endpoint);
+                    if (barrier) parameterObservations.set(publication.key,
+                        Math.max(parameterObservations.get(publication.key) ?? -1, barrier.observation));
+                    // A failed send cannot fence out real automation forever.
+                    // Keep the fence for every still-pending or successful write.
+                    let intent = parameterAppliedIntents.get(publication.key) ?? 0;
+                    for (const [request, pending] of publications) if (pending.key === publication.key) intent = Math.max(intent, request);
+                    // Missing native evidence means the failed attempt's order is
+                    // unknown. Keep its fence until retry or authoritative restore.
+                    if (event.result.kind === "observed" || barrier) parameterIntents.set(publication.key, intent);
+                }
+                const field = model.snapshot.fields[publication.key];
+                if (field && "value" in field && field.version === publication.version) {
+                    const persistence: PluginStatePersistence = event.result.kind === "observed"
+                        ? { kind: definition[publication.key]?.kind === "parameter" ? "host-managed" : "observed-in-native-state" }
+                        : { kind: "failed", reason: event.result.reason };
+                    const application = definition[publication.key]?.kind === "parameter"
+                        ? event.result.kind === "observed" ? { kind: "sent" as const, proof: "native-publication-processed" as const }
+                            : { kind: "failed" as const, error: Object.freeze({ kind: "transport" as const, message: event.result.reason }) }
+                        : field.application;
+                    const next = publishSnapshot(model, { ...model.snapshot.fields, [publication.key]: Object.freeze({ ...readyField(field.value, persistence, field.version, field.metadata, field.gesture, application),
+                        ...(event.result.kind === "failed" ? { persistenceRequest: event.request } : {}),
+                    }) });
+                    commit({ ...next, publications, parameterIntents, parameterAppliedIntents, parameterObservations });
+                } else commit({ ...model, publications, parameterIntents, parameterAppliedIntents, parameterObservations });
+            }
+        }
+        return { kind: "accepted", revision: store.get(state).snapshot.revision };
+    };
+    const close = (receipt?: PluginStateReceipt) => {
+        if (stopped) return;
+        stopped = true;
+        let finishStop = () => {};
+        stopping = new Promise<void>(resolve => { finishStop = resolve; });
+        const cleanups: Promise<void>[] = [];
+        for (const binding of ports.bindings ?? []) {
+            try { cleanups.push(binding.stop()); }
+            catch (error) { cleanups.push(Promise.reject(error)); }
+        }
+        void Promise.allSettled(cleanups).then(results => {
+            for (const result of results) if (result.status === "rejected") ports.onDefect(result.reason);
+            finishStop();
+        });
+        const model = store.get(state);
+        const fields: Record<string, RuntimeField> = {};
+        for (const [key, field] of Object.entries(model.snapshot.fields)) {
+            const { gesture: _gesture, ...retained } = "value" in field ? field : { ...field, gesture: undefined };
+            fields[key] = Object.freeze({ ...retained, readiness: Object.freeze({ kind: "failed", reason: "service-closed" }) });
+        }
+        try {
+            store.set(state, { ...publishSnapshot(model, fields), gestures: [], publications: new Map() });
+        } catch (error) { ports.onDefect(error); }
+        if (receipt) {
+            try { ports.native.update(getSnapshot(), receipt); }
+            catch (error) { ports.onDefect(error); }
+        }
+        ports.native.close({ reason: "service-closed" });
+    };
+    // Author codecs run before any state changes, so a throwing codec rejects
+    // only the command that reached it; the service and other clients carry on.
+    const applyGuarded = (event: PluginStateEvent): PluginStateResult => {
+        try { return apply(event); }
+        catch (error) {
+            if (!(error instanceof CodecThrew) || event.kind !== "command") throw error;
+            ports.onDefect(error);
+            return { kind: "rejected", reason: "invalid-value" };
+        }
+    };
+    const drain = () => {
+        if (draining) return;
+        draining = true;
+        try {
+            for (let item = queue.shift(); item; item = queue.shift()) {
+                accepted = undefined;
+                engineEffects = [];
+                let result: PluginStateResult;
+                let updating = false;
+                try {
+                    const previous = store.get(state).snapshot;
+                    result = stopped ? { kind: "rejected", reason: "service-closed" } : applyGuarded(item.event);
+                    accepted = result;
+                    for (const effect of engineEffects) { if (!stopped) effect(); }
+                    if (!stopped && (store.get(state).snapshot !== previous || item.event.kind === "command")) {
+                        updating = true;
+                        ports.native.update(getSnapshot(), item.event.kind === "command" ? { address: item.event.address, result } : undefined);
+                    }
+                } catch (error) {
+                    result = accepted ?? { kind: "rejected", reason: "service-closed" };
+                    ports.onDefect(error);
+                    close(!updating && item.event.kind === "command" ? { address: item.event.address, result } : undefined);
+                }
+                item.finish(result);
+            }
+        } finally { draining = false; }
+    };
+    return {
+        getSnapshot,
+        subscribe: (listener) => store.sub(snapshotAtom, () => listener(getSnapshot())),
+        dispatch: (event) => new Promise((finish) => { queue.push({ event, finish }); drain(); }),
+        stop: () => { close(); return stopping ?? Promise.resolve(); },
+    };
+}

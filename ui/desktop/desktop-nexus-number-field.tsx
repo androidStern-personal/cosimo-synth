@@ -26,40 +26,6 @@ export type NexusNumberFieldProps = {
     dataRole?: string;
 };
 
-export type NexusNumberWidgetLike = {
-    value: number;
-    decimalPlaces: number;
-    colors: {
-        fill: string;
-        dark: string;
-        light: string;
-        accent: string;
-    };
-    element: HTMLInputElement;
-    colorInterface(): void;
-    on(eventName: string, listener: (value?: number) => void): void;
-    passiveUpdate(value: number): void;
-    render(): void;
-    destroy(): void;
-};
-
-type NexusNumberConstructorLike = new (
-    host: HTMLDivElement,
-    options: {
-        size: [number, number];
-        value: number;
-        min: number;
-        max: number;
-        step: number;
-    },
-) => NexusNumberWidgetLike;
-
-let nexusNumberConstructor: NexusNumberConstructorLike = Nexus.Number as unknown as NexusNumberConstructorLike;
-
-export function setNexusNumberConstructorForTests(nextConstructor: NexusNumberConstructorLike | null) {
-    nexusNumberConstructor = nextConstructor ?? Nexus.Number as unknown as NexusNumberConstructorLike;
-}
-
 export function styleNexusNumberInput(
     element: HTMLInputElement,
     host: HTMLDivElement,
@@ -113,7 +79,7 @@ export function NexusNumberField({
     dataRole,
 }: NexusNumberFieldProps) {
     const hostRef = useRef<HTMLDivElement | null>(null);
-    const widgetRef = useRef<NexusNumberWidgetLike | null>(null);
+    const widgetRef = useRef<InstanceType<typeof Nexus.Number> | null>(null);
     const bindingRef = useRef(binding);
     const entrySpecRef = useRef(entrySpec);
     const textEntryActiveRef = useRef(false);
@@ -156,7 +122,7 @@ export function NexusNumberField({
         || !Number.isFinite(displayValue)) {
         throw new RangeError(`Nexus field "${label}" requires a finite displayed numeric domain.`);
     }
-    // T20: a stationary long press anywhere on the field opens the ADR-017
+    // A stationary long press anywhere on the field opens the ADR-017
     // parameter menu (typing stays available through normal focus).
     const longPressMenu = useLongPressParameterMenu(useCallback(() => ({
         controlKey: binding.endpointID,
@@ -184,7 +150,7 @@ export function NexusNumberField({
 
         host.replaceChildren();
 
-        const widget = new nexusNumberConstructor(host, {
+        const widget = new Nexus.Number(host, {
             size: [width, height],
             value: displayValue,
             min: displayMin,

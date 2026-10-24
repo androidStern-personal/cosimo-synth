@@ -1,10 +1,30 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import type { PluginStateNativeParameter } from "../../kit/ui/plugin-state-session";
+import { usePluginState } from "../../kit/ui/plugin-state-react";
+import { synthPluginState } from "../../ui/shared/synth-plugin-state";
+import { Mseg } from "../../kit/index";
+import {
+    normalizeMsegShape,
+    addMsegPoint,
+    createDefaultMsegPlayback,
+    createDefaultMsegShape,
+    deleteMsegPoint,
+    moveMsegPoint,
+    setMsegSegmentCurvePower,
+    type MsegState,
+} from "../../ui/shared/mseg";
+import {
+    createDefaultMsegShape as defaultKitCurve,
+    addMsegPoint as addKitPoint,
+    pointToMsegEditorCoordinates,
+} from "../../kit/ui/mseg";
+import { Component, useEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
+import { createModulationEditorFixture, createModulationProjectionHost } from "./modulation_editor_state";
 import { createRoot, type Root } from "react-dom/client";
 
 import desktopCssText from "../../ui/desktop/styles.css?inline";
-import editorTokensCssText from "../../kit/ui/editor-tokens.css?inline";
-import editorCurveSurfaceCssText from "../../kit/ui/editor-curve-surface.css?inline";
-import filterRangeEditorCssText from "../../kit/ui/filter-range-editor.css?inline";
+import editorTokensCssText from "../../ui/shared/editor-tokens.css?inline";
+import editorCurveSurfaceCssText from "../../ui/shared/editor-curve-surface.css?inline";
+import filterRangeEditorCssText from "../../kit/ui/filter-editor.css?inline";
 import {
     PatchConnectionProvider,
     usePatchEndpoint,
@@ -12,7 +32,7 @@ import {
     usePatchVisualEndpoint,
     type PatchConnectionLike,
 } from "../../ui/shared/cmajor-react";
-import { acquireAnalyzerActivity } from "../../kit/ui/analyzer-activity";
+import { acquireAnalyzerActivity } from "../../ui/shared/analyzer-activity";
 import {
     advancePolishTelemetryDisplay,
     createPolishTelemetryDisplay,
@@ -27,7 +47,8 @@ import {
 } from "../../ui/shared/parameter-value-entry";
 import { KeyboardDock, ensureKeyboardElement, type PianoKeyboardElement } from "../../ui/desktop/desktop-keyboard-adapter";
 import { PrecisionNumberField } from "../../ui/desktop/desktop-precision-number-field";
-import { NexusNumberField, setNexusNumberConstructorForTests, type NexusNumberWidgetLike } from "../../ui/desktop/desktop-nexus-number-field";
+import Nexus from "nexusui";
+import { NexusNumberField } from "../../ui/desktop/desktop-nexus-number-field";
 import { ArticulationControlSurface, type ArticulationCardView } from "../../ui/desktop/articulation-ui";
 import {
     EditableMsegSurface,
@@ -39,17 +60,19 @@ import {
     WavetableStageSection,
 } from "../../ui/shared/synth-components";
 import {
-    FilterRangeEditor,
-    type FilterRangeEndpoints,
-    type FilterRangeMode,
+    FilterEditor,
+    type FilterRange,
+    type FilterMode,
     type FilterRangePolarity,
-    type FilterRangeValue,
+    type FilterValue,
     cutoffRangeOctaves,
+    geometricCenterCutoffHz,
+} from "../../kit/ui/filter-editor";
+import {
     cutoffsFromBaseModulationOctaves,
     cutoffsFromCenterRangeOctaves,
-    geometricCenterCutoffHz,
     modulationOctavesFromCutoffRange,
-} from "../../kit/ui/filter-range-editor";
+} from "../../ui/shared/filter-modulation-range";
 import {
     useFactoryBankCatalog,
     useFactoryTableFrames,
@@ -67,23 +90,13 @@ import {
     serializeArticulationsV4,
 } from "../../ui/shared/articulation-image";
 import { addCapturedArticulationV4 } from "../../ui/shared/articulation-v4-editor";
+import { SynthStateProvider } from "../../ui/shared/synth-plugin-state-react";
 import { MockPatchConnection, loadHarnessManifest } from "../../ui/shared/patch-connection-mock";
 import { useModulationRouteAmountBinding } from "../../ui/shared/modulation-route-amount";
 import { ParameterMenuContext } from "../../ui/shared/parameter-context-menu";
 import { useParameterMenuShell } from "../../ui/shared/parameter-menu-shell";
 import { MobileModMappingsPanel } from "../../ui/desktop/mobile-mod-mappings-panel";
 import type { SynthKeyboardInputMode } from "../../ui/shared/synth-input-router";
-import { subscribeToUserEdits } from "../../ui/shared/user-edit-bus";
-import {
-    addMsegPoint,
-    createDefaultMsegPlayback,
-    createDefaultMsegShape,
-    deleteMsegPoint,
-    moveMsegPoint,
-    pointToMsegEditorCoordinates,
-    setMsegSegmentCurvePower,
-    type MsegState,
-} from "../../ui/shared/mseg";
 import {
     MODULATION_STATE_KEY,
     createDefaultRoute,
@@ -91,23 +104,6 @@ import {
     serializeModulationState,
     type ModulationRouteUpdate,
 } from "../../ui/shared/modulation";
-import { useStandaloneEffectPresets } from "../../kit/ui/effects/use-standalone-effect-presets";
-import {
-    buildCanonicalPluginStateContract,
-    buildPluginStateContract,
-} from "../../ui/shared/effects/effect-state-contract";
-import {
-    EFFECT_PRESET_V2_KIND,
-    EFFECT_PRESET_V2_SCHEMA_VERSION,
-    type EffectPresetMigration,
-    type EffectPresetV2,
-    type EffectStoredStateAdapter,
-} from "../../ui/shared/effects/effect-preset-v2";
-import type {
-    EffectPreset,
-    EffectPresetDescriptorRegistry,
-    EffectPresetValue,
-} from "../../ui/shared/effects/effect-preset-shared";
 
 type Deferred<TValue> = {
     promise: Promise<TValue>;
@@ -140,6 +136,14 @@ function waitForMicrotask() {
     return new Promise<void>((resolve) => {
         queueMicrotask(() => resolve());
     });
+}
+
+async function waitForStateReaderMounted(isMounted: () => boolean) {
+    const deadline = performance.now() + 3000;
+    while (!isMounted()) {
+        if (performance.now() >= deadline) throw new Error("The state provider did not mount its fixture reader.");
+        await new Promise<void>(resolve => requestAnimationFrame(() => resolve()));
+    }
 }
 
 function readSurfaceBounds(selector: string) {
@@ -187,7 +191,7 @@ function installFilterRangeEditorTestStyles() {
     styleElement.textContent = `
         .filter-range-editor-test {
             width: 640px;
-            height: 320px;
+            grid-template-rows: 320px auto;
         }
         .filter-range-editor-test .filter-range-editor__viewport,
         .filter-range-editor-test .filter-range-editor__surface {
@@ -221,256 +225,6 @@ function cloneValue<TValue>(value: TValue): TValue {
     }
 
     return JSON.parse(JSON.stringify(value)) as TValue;
-}
-
-function createStandalonePresetDescriptorRegistry(): EffectPresetDescriptorRegistry {
-    return {
-        ott: {
-            effectID: "ott",
-            label: "OTT",
-            params: {
-                ottMix: { type: "number", min: 0, max: 100, defaultValue: 100 },
-                ottAmount: { type: "number", min: 0, max: 100, defaultValue: 100 },
-                ottTimePercent: { type: "number", min: 10, max: 1000, defaultValue: 100, clamp: true },
-                ottBandDrive: { type: "number", min: 0, max: 100, defaultValue: 0 },
-                ottEnvelopeMatch: { type: "number", min: 0, max: 100, defaultValue: 0 },
-                envelopeBoostClampDb: { type: "number", min: 0, max: 24, defaultValue: 6 },
-            },
-        },
-    };
-}
-
-function createStandaloneFactoryPresets(): Record<string, EffectPreset[]> {
-    return {
-        ott: [{
-            kind: "cosimo.effectPreset",
-            version: 1,
-            effectID: "ott",
-            presetID: "ott.default-smash",
-            label: "Default Smash",
-            values: {
-                ottMix: 100,
-                ottAmount: 100,
-                ottTimePercent: 100,
-                ottBandDrive: 0,
-                ottEnvelopeMatch: 0,
-                envelopeBoostClampDb: 6,
-            },
-        }, {
-            kind: "cosimo.effectPreset",
-            version: 1,
-            effectID: "ott",
-            presetID: "ott.envelope-tamed",
-            label: "Envelope Tamed",
-            values: {
-                ottMix: 86,
-                ottAmount: 92,
-                ottTimePercent: 100,
-                ottBandDrive: 12,
-                ottEnvelopeMatch: 38,
-                envelopeBoostClampDb: 6,
-            },
-        }],
-    };
-}
-
-class StandalonePresetHookPatchConnection implements PatchConnectionLike {
-    storedState: Record<string, unknown> = {};
-    parameterValues: Record<string, EffectPresetValue> = {
-        ottMix: 11,
-        ottAmount: 22,
-        ottTimePercent: 100,
-        ottBandDrive: 0,
-        ottEnvelopeMatch: 0,
-        envelopeBoostClampDb: 6,
-    };
-    events: Array<{ endpointID: string; value: unknown }> = [];
-    storedWrites: Array<{ key: string; value: unknown }> = [];
-    requestedParameters: string[] = [];
-    private storedStateListeners = new Set<(message: unknown) => void>();
-    private parameterListeners = new Map<string, Set<(value: unknown) => void>>();
-    private statusListeners = new Set<(status: unknown) => void>();
-
-    addStatusListener(listener: (status: unknown) => void) {
-        this.statusListeners.add(listener);
-    }
-
-    removeStatusListener(listener: (status: unknown) => void) {
-        this.statusListeners.delete(listener);
-    }
-
-    requestStatusUpdate() {
-        const status = {
-            details: {
-                inputs: [
-                    { endpointID: "hostSlot0Guard", purpose: "parameter", annotation: { hidden: true, init: 0, min: 0, max: 1 } },
-                    { endpointID: "ottMix", purpose: "parameter", annotation: { init: 100, min: 0, max: 100 } },
-                    { endpointID: "ottAmount", purpose: "parameter", annotation: { init: 100, min: 0, max: 100 } },
-                    { endpointID: "ottTimePercent", purpose: "parameter", annotation: { init: 100, min: 10, max: 1000 } },
-                    { endpointID: "ottBandDrive", purpose: "parameter", annotation: { init: 0, min: 0, max: 100 } },
-                    { endpointID: "ottEnvelopeMatch", purpose: "parameter", annotation: { init: 0, min: 0, max: 100 } },
-                    { endpointID: "envelopeBoostClampDb", purpose: "parameter", annotation: { init: 6, min: 0, max: 24 } },
-                ],
-            },
-        };
-
-        for (const listener of this.statusListeners) {
-            listener(status);
-        }
-    }
-
-    addStoredStateValueListener(listener: (message: unknown) => void) {
-        this.storedStateListeners.add(listener);
-    }
-
-    removeStoredStateValueListener(listener: (message: unknown) => void) {
-        this.storedStateListeners.delete(listener);
-    }
-
-    requestFullStoredState(callback: (state: Record<string, unknown>) => void) {
-        callback({ ...this.storedState });
-    }
-
-    sendStoredStateValue(key: string, value: unknown) {
-        this.storedState[key] = value;
-        this.storedWrites.push({ key, value });
-
-        for (const listener of this.storedStateListeners) {
-            listener({ key, value });
-        }
-    }
-
-    addParameterListener(endpointID: string, listener: (value: unknown) => void) {
-        if (!this.parameterListeners.has(endpointID)) {
-            this.parameterListeners.set(endpointID, new Set());
-        }
-
-        this.parameterListeners.get(endpointID)?.add(listener);
-    }
-
-    removeParameterListener(endpointID: string, listener: (value: unknown) => void) {
-        this.parameterListeners.get(endpointID)?.delete(listener);
-    }
-
-    requestParameterValue(endpointID: string) {
-        this.requestedParameters.push(endpointID);
-
-        if (Object.prototype.hasOwnProperty.call(this.parameterValues, endpointID)) {
-            this.emitParameterValue(endpointID, this.parameterValues[endpointID]);
-        }
-    }
-
-    sendEventOrValue(endpointID: string, value: unknown) {
-        this.events.push({ endpointID, value });
-        this.emitParameterValue(endpointID, value as EffectPresetValue);
-    }
-
-    emitParameterValue(endpointID: string, value: EffectPresetValue) {
-        this.parameterValues[endpointID] = value;
-
-        for (const listener of this.parameterListeners.get(endpointID) ?? []) {
-            listener(value);
-        }
-    }
-
-    getListenerCounts() {
-        return {
-            storedState: this.storedStateListeners.size,
-            parameters: Object.fromEntries(Array.from(this.parameterListeners.entries()).map(([endpointID, listeners]) => [
-                endpointID,
-                listeners.size,
-            ])),
-        };
-    }
-}
-
-const statefulHookStatus = {
-    details: {
-        inputs: [
-            { endpointID: "amount", purpose: "parameter", annotation: { init: 0.5, min: 0, max: 1 } },
-        ],
-    },
-};
-
-class StatefulPresetHookPatchConnection implements PatchConnectionLike {
-    storedState: Record<string, unknown> = {};
-    parameterValues: Record<string, EffectPresetValue> = {
-        amount: 0.25,
-    };
-    events: Array<{ endpointID: string; value: unknown }> = [];
-    storedWrites: Array<{ key: string; value: unknown }> = [];
-    requestedParameters: string[] = [];
-    private storedStateListeners = new Set<(message: unknown) => void>();
-    private parameterListeners = new Map<string, Set<(value: unknown) => void>>();
-    private statusListeners = new Set<(status: unknown) => void>();
-
-    addStatusListener(listener: (status: unknown) => void) {
-        this.statusListeners.add(listener);
-    }
-
-    removeStatusListener(listener: (status: unknown) => void) {
-        this.statusListeners.delete(listener);
-    }
-
-    requestStatusUpdate() {
-        for (const listener of this.statusListeners) {
-            listener(statefulHookStatus);
-        }
-    }
-
-    addStoredStateValueListener(listener: (message: unknown) => void) {
-        this.storedStateListeners.add(listener);
-    }
-
-    removeStoredStateValueListener(listener: (message: unknown) => void) {
-        this.storedStateListeners.delete(listener);
-    }
-
-    requestFullStoredState(callback: (state: Record<string, unknown>) => void) {
-        callback({ ...this.storedState });
-    }
-
-    sendStoredStateValue(key: string, value: unknown) {
-        this.storedState[key] = value;
-        this.storedWrites.push({ key, value });
-
-        for (const listener of this.storedStateListeners) {
-            listener({ key, value });
-        }
-    }
-
-    addParameterListener(endpointID: string, listener: (value: unknown) => void) {
-        if (!this.parameterListeners.has(endpointID)) {
-            this.parameterListeners.set(endpointID, new Set());
-        }
-
-        this.parameterListeners.get(endpointID)?.add(listener);
-    }
-
-    removeParameterListener(endpointID: string, listener: (value: unknown) => void) {
-        this.parameterListeners.get(endpointID)?.delete(listener);
-    }
-
-    requestParameterValue(endpointID: string) {
-        this.requestedParameters.push(endpointID);
-
-        if (Object.prototype.hasOwnProperty.call(this.parameterValues, endpointID)) {
-            this.emitParameterValue(endpointID, this.parameterValues[endpointID]);
-        }
-    }
-
-    sendEventOrValue(endpointID: string, value: unknown) {
-        this.events.push({ endpointID, value });
-        this.emitParameterValue(endpointID, value as EffectPresetValue);
-    }
-
-    emitParameterValue(endpointID: string, value: EffectPresetValue) {
-        this.parameterValues[endpointID] = value;
-
-        for (const listener of this.parameterListeners.get(endpointID) ?? []) {
-            listener(value);
-        }
-    }
 }
 
 function mountHarness(target: HTMLElement, render: (root: Root) => void) {
@@ -701,7 +455,7 @@ export async function installNexusNumberFieldHarness(target: HTMLElement) {
     const setValueCalls: number[] = [];
     let externalValueSetter: ((nextValue: number) => void) | null = null;
 
-    class FakeNexusNumber implements NexusNumberWidgetLike {
+    class FakeNexusNumber {
         value: number;
         decimalPlaces = 0;
         colors = {
@@ -768,16 +522,10 @@ export async function installNexusNumberFieldHarness(target: HTMLElement) {
         }
     }
 
-    setNexusNumberConstructorForTests(FakeNexusNumber as unknown as new (
-        host: HTMLDivElement,
-        options: {
-            size: [number, number];
-            value: number;
-            min: number;
-            max: number;
-            step: number;
-        },
-    ) => NexusNumberWidgetLike);
+    // The field creates its widget from the Nexus library; a recording widget
+    // stands in for Nexus.Number until the harness unmounts.
+    const libraryNumber = Nexus.Number;
+    Nexus.Number = FakeNexusNumber as unknown as typeof Nexus.Number;
 
     const mounted = mountHarness(target, (root) => {
         function Harness() {
@@ -867,7 +615,7 @@ export async function installNexusNumberFieldHarness(target: HTMLElement) {
         },
         async unmount() {
             mounted.unmount();
-            setNexusNumberConstructorForTests(null);
+            Nexus.Number = libraryNumber;
             await waitForMicrotask();
         },
     };
@@ -1469,7 +1217,7 @@ export async function installFoldedAnalyzerActivityHarness(target: HTMLElement) 
     await waitForMicrotask();
 }
 
-export async function installModulationRouteAmountBindingHarness(target: HTMLElement) {
+export async function installModulationRouteAmountBindingHarness(target: HTMLElement, parameters: readonly PluginStateNativeParameter[]) {
     const routeId = "fine-grained-route-amount";
     const initialRoute = createDefaultRoute({
         id: routeId,
@@ -1480,34 +1228,14 @@ export async function installModulationRouteAmountBindingHarness(target: HTMLEle
         ...createDefaultModulationState(),
         routes: [initialRoute],
     };
-    const storedStateListeners = new Set<(message: unknown) => void>();
-    const sentStoredStates: string[] = [];
     const bindingRenderLog: number[] = [];
     const parentRenderLog: Array<number | null> = [];
     let setAmount: ((nextAmount: number) => boolean) | null = null;
     let bindingValue = 0;
     let parentAmount: number | null = null;
 
-    const patchConnection: PatchConnectionLike = {
-        addStoredStateValueListener(listener) {
-            storedStateListeners.add(listener);
-        },
-        removeStoredStateValueListener(listener) {
-            storedStateListeners.delete(listener);
-        },
-        requestFullStoredState(callback) {
-            callback({
-                values: {
-                    [MODULATION_STATE_KEY]: serializeModulationState(initialState),
-                },
-            });
-        },
-        sendStoredStateValue(key, value) {
-            if (key === MODULATION_STATE_KEY && typeof value === "string") {
-                sentStoredStates.push(value);
-            }
-        },
-    };
+    const native = await createModulationProjectionHost({ [MODULATION_STATE_KEY]: serializeModulationState(initialState) }, parameters);
+    const patchConnection = native.connection;
     const mounted = mountHarness(target, (root) => {
         function Reader() {
             const { state } = useModulationState();
@@ -1547,10 +1275,7 @@ export async function installModulationRouteAmountBindingHarness(target: HTMLEle
                 ...initialState,
                 routes: [{ ...initialRoute, amount: nextAmount }],
             });
-            storedStateListeners.forEach((listener) => listener({
-                key: MODULATION_STATE_KEY,
-                value: serializedState,
-            }));
+            native.replace(MODULATION_STATE_KEY, serializedState);
             await waitForMicrotask();
         },
         getSnapshot() {
@@ -1559,14 +1284,13 @@ export async function installModulationRouteAmountBindingHarness(target: HTMLEle
                 parentAmount,
                 bindingRenderLog: [...bindingRenderLog],
                 parentRenderLog: [...parentRenderLog],
-                sentStoredAmounts: sentStoredStates.map((serializedState) => (
-                    JSON.parse(serializedState).routes[0]?.amount ?? null
-                )),
-                storedStateListenerCount: storedStateListeners.size,
+                sentStoredAmounts: native.writes.filter(write => write.key === MODULATION_STATE_KEY).map(write => JSON.parse(String(write.value)).routes[0]?.amount ?? null),
+                stateListenerCount: native.counts.listeners,
             };
         },
         async unmount() {
             mounted.unmount();
+            await native.stop();
             await waitForMicrotask();
         },
     };
@@ -1667,47 +1391,29 @@ export async function installMobileModMappingsAmountOnlyHarness(target: HTMLElem
 }
 
 export async function installPatchParameterRebindingHarness(target: HTMLElement) {
-    const parameterListeners = new Map<string, Set<(value: unknown) => void>>();
-    const requestedParameters: string[] = [];
-    const renderLog: Array<{ endpointID: string; value: number }> = [];
+    const connection = new MockPatchConnection(await loadHarnessManifest());
+    connection.setParameterValue("filterCutoff", 6_000);
+    connection.setParameterValue("filterQ", 2.5);
+    const renderLog: Array<{ endpointID: string; value: number; isReady: boolean }> = [];
     let selectEndpoint: ((endpointID: string) => void) | null = null;
 
-    const patchConnection: PatchConnectionLike = {
-        addParameterListener(endpointID, listener) {
-            const listeners = parameterListeners.get(endpointID) ?? new Set<(value: unknown) => void>();
-            listeners.add(listener);
-            parameterListeners.set(endpointID, listeners);
-        },
-        removeParameterListener(endpointID, listener) {
-            parameterListeners.get(endpointID)?.delete(listener);
-        },
-        requestParameterValue(endpointID) {
-            requestedParameters.push(endpointID);
-        },
-    };
     const mounted = mountHarness(target, (root) => {
         function Reader({ endpointID }: { endpointID: string }) {
-            const initialValue = endpointID === "parameterA" ? 0.1 : 0.25;
-            const binding = usePatchParameterBinding<number>({
-                endpointID,
-                initialValue,
-                coerce: Number,
-            });
-
+            const binding = usePatchParameterBinding<number>({ endpointID, initialValue: 0, coerce: Number });
             useEffect(() => {
-                renderLog.push({ endpointID: binding.endpointID, value: binding.value });
-            }, [binding.endpointID, binding.value]);
-
+                renderLog.push({ endpointID: binding.endpointID, value: binding.value, isReady: binding.isReady });
+            }, [binding.endpointID, binding.value, binding.isReady]);
             return null;
         }
 
         function Harness() {
-            const [endpointID, setEndpointID] = useState("parameterA");
+            const [endpointID, setEndpointID] = useState("filterCutoff");
             selectEndpoint = setEndpointID;
-
             return (
-                <PatchConnectionProvider patchConnection={patchConnection}>
-                    <Reader endpointID={endpointID} />
+                <PatchConnectionProvider patchConnection={connection}>
+                    <SynthStateProvider patchConnection={connection}>
+                        <Reader endpointID={endpointID} />
+                    </SynthStateProvider>
                 </PatchConnectionProvider>
             );
         }
@@ -1716,22 +1422,73 @@ export async function installPatchParameterRebindingHarness(target: HTMLElement)
     });
 
     window.__COSIMO_DESKTOP_MODULE_HARNESS__ = {
-        async emitParameter(endpointID: string, value: number) {
-            parameterListeners.get(endpointID)?.forEach((listener) => listener(value));
-            await waitForMicrotask();
-        },
         async selectEndpoint(endpointID: string) {
             selectEndpoint?.(endpointID);
             await waitForMicrotask();
         },
         getSnapshot() {
+            return { renderLog: cloneValue(renderLog), lastRender: cloneValue(renderLog.at(-1) ?? null) };
+        },
+        async unmount() {
+            mounted.unmount();
+            await waitForMicrotask();
+        },
+    };
+
+    await waitForMicrotask();
+}
+
+/** Renders each binding the synth must refuse, under its own error boundary, beside an inactive placeholder. */
+export async function installPatchParameterBindingRequirementsHarness(target: HTMLElement) {
+    const writes: string[] = [];
+    const patchConnection: PatchConnectionLike = {
+        sendEventOrValue(endpointID) { writes.push(endpointID); },
+        sendParameterGestureStart(endpointID) { writes.push(`start:${endpointID}`); },
+        sendParameterGestureEnd(endpointID) { writes.push(`end:${endpointID}`); },
+    };
+    const errors: Record<string, string> = {};
+    let placeholder: PatchControlBinding<number> | null = null;
+
+    class Refusal extends Component<{ name: string; children: ReactNode }, { refused: boolean }> {
+        state = { refused: false };
+        static getDerivedStateFromError() { return { refused: true }; }
+        componentDidCatch(error: Error) { errors[this.props.name] = error.message; }
+        render() { return this.state.refused ? null : this.props.children; }
+    }
+
+    function Binding({ endpointID, active = true }: { endpointID: string; active?: boolean }) {
+        const binding = usePatchParameterBinding<number>({ endpointID, initialValue: 0.25, coerce: Number, active });
+        if (!active) placeholder = binding;
+        return null;
+    }
+
+    const mounted = mountHarness(target, (root) => {
+        root.render(
+            <PatchConnectionProvider patchConnection={patchConnection}>
+                <Refusal name="undeclared"><Binding endpointID="parameterA" /></Refusal>
+                <Refusal name="withoutProvider"><Binding endpointID="filterCutoff" /></Refusal>
+                <Refusal name="placeholder"><Binding endpointID="parameterA" active={false} /></Refusal>
+            </PatchConnectionProvider>,
+        );
+    });
+
+    window.__COSIMO_DESKTOP_MODULE_HARNESS__ = {
+        editPlaceholder(value: number) {
+            placeholder?.beginGesture();
+            placeholder?.setValue(value);
+            placeholder?.commitValue(value);
+            placeholder?.endGesture();
+        },
+        getSnapshot() {
             return {
-                listenerCounts: Object.fromEntries(Array.from(parameterListeners.entries()).map(([endpointID, listeners]) => (
-                    [endpointID, listeners.size]
-                ))),
-                requestedParameters: [...requestedParameters],
-                renderLog: cloneValue(renderLog),
-                lastRender: cloneValue(renderLog.at(-1) ?? null),
+                errors: { ...errors },
+                placeholder: placeholder === null ? null : {
+                    endpointID: placeholder.endpointID,
+                    value: placeholder.value,
+                    isReady: placeholder.isReady,
+                    hostBaseline: cloneValue(placeholder.hostBaseline),
+                },
+                writes: [...writes],
             };
         },
         async unmount() {
@@ -1743,237 +1500,57 @@ export async function installPatchParameterRebindingHarness(target: HTMLElement)
     await waitForMicrotask();
 }
 
-export async function installPatchParameterHostBaselineHarness(target: HTMLElement) {
-    type HarnessConnection = PatchConnectionLike & {
-        readonly id: "first" | "second" | "fallback" | "untrusted";
-        readonly listeners: Map<string, Set<(value: unknown) => void>>;
-        readonly requests: string[];
-        readonly writes: Array<{ endpointID: string; value: number }>;
-        readonly gestures: string[];
-        emitResponse: (endpointID: string, value: number) => void;
-    };
+// Delay the real owner bootstrap, which now owns articulation hydration. GUI
+// storage callbacks no longer determine readiness or supply the initial bank.
+class DeferredArticulationOwnerConnection extends MockPatchConnection {
+    private readonly attached: Promise<void>;
+    private readonly opening: { pending: boolean; release(): void };
 
-    const createConnection = (
-        id: HarnessConnection["id"],
-        protocol: "listener" | "authoritative-initial" | "none" = "listener",
-    ): HarnessConnection => {
-        const listeners = new Map<string, Set<(value: unknown) => void>>();
-        const requests: string[] = [];
-        const writes: Array<{ endpointID: string; value: number }> = [];
-        const gestures: string[] = [];
-        const connection: HarnessConnection = {
-            id,
-            listeners,
-            requests,
-            writes,
-            gestures,
-            sendEventOrValue(endpointID, value) {
-                writes.push({ endpointID, value: Number(value) });
-                listeners.get(endpointID)?.forEach((listener) => listener(value));
+    constructor(label: string, articulationValue: unknown) {
+        let release!: () => void;
+        const ready = new Promise<void>((resolve) => { release = resolve; });
+        const opening = { pending: true, release() { opening.pending = false; release(); } };
+        super({ name: label }, {
+            loadStateChannel: async () => {
+                await ready;
+                const moduleURL = "/cmaj_api/cmaj-plugin-state-channel.js";
+                return import(/* @vite-ignore */ moduleURL);
             },
-            sendParameterGestureStart(endpointID) {
-                gestures.push(`start:${endpointID}`);
-            },
-            sendParameterGestureEnd(endpointID) {
-                gestures.push(`end:${endpointID}`);
-            },
-            emitResponse(endpointID, value) {
-                listeners.get(endpointID)?.forEach((listener) => listener(value));
-            },
-        };
-        if (protocol === "listener") {
-            connection.addParameterListener = (endpointID, listener) => {
-                const endpointListeners = listeners.get(endpointID) ?? new Set();
-                endpointListeners.add(listener);
-                listeners.set(endpointID, endpointListeners);
+        });
+        this.opening = opening;
+        this.attached = new Promise<void>((resolve) => {
+            const observe = (message: unknown) => {
+                if (message === null || typeof message !== "object" || !("kind" in message) || message.kind !== "attached") return;
+                this.removeEventListener("kit_state", observe);
+                resolve();
             };
-            connection.removeParameterListener = (endpointID, listener) => {
-                listeners.get(endpointID)?.delete(listener);
-            };
-            connection.requestParameterValue = (endpointID) => {
-                requests.push(endpointID);
-            };
-        } else if (protocol === "authoritative-initial") {
-            connection.parameterInitialValuesAreAuthoritative = true;
-        }
-        return connection;
-    };
-    const connections = {
-        first: createConnection("first"),
-        second: createConnection("second"),
-        fallback: createConnection("fallback", "authoritative-initial"),
-        untrusted: createConnection("untrusted", "none"),
-    } as const;
-    let binding: PatchControlBinding<number> | null = null;
-    let staleEndGesture: (() => void) | null = null;
-    let selectConnection: ((id: HarnessConnection["id"]) => void) | null = null;
-    let selectEndpoint: ((endpointID: string) => void) | null = null;
-    const userGestureCounts = { starts: 0, ends: 0 };
-    const unsubscribeFromUserEdits = subscribeToUserEdits({
-        onGestureStart: () => {
-            userGestureCounts.starts += 1;
-        },
-        onGestureEnd: () => {
-            userGestureCounts.ends += 1;
-        },
-    });
+            this.addEventListener("kit_state", observe);
+        });
+        this.sendStoredStateValue(MODULATION_STATE_KEY, serializeModulationState(createDefaultModulationState()));
+        this.sendStoredStateValue(ARTICULATIONS_V4_STATE_KEY, articulationValue);
+    }
 
-    const mounted = mountHarness(target, (root) => {
-        function Reader({ endpointID }: { endpointID: string }) {
-            binding = usePatchParameterBinding<number>({
-                endpointID,
-                initialValue: 0.1,
-                coerce: Number,
-            });
-            return (
-                <button
-                    type="button"
-                    data-role="host-baseline-control"
-                    disabled={binding.hostBaseline?._tag !== "host-confirmed"}
-                    onClick={() => binding?.commitValue(0.6)}
-                >
-                    Parameter
-                </button>
-            );
-        }
+    async releaseStateOwner() {
+        this.opening.release();
+        // Wait for the actual old-view response even when React has detached it.
+        // This observer adds no client lease and cannot keep that view alive.
+        await this.attached;
+    }
+    get pendingStateOwnerCount() { return this.opening.pending ? 1 : 0; }
+}
 
-        function Harness() {
-            const [connectionID, setConnectionID] = useState<HarnessConnection["id"]>("first");
-            const [endpointID, setEndpointID] = useState("parameterA");
-            selectConnection = setConnectionID;
-            selectEndpoint = setEndpointID;
-            return (
-                <PatchConnectionProvider patchConnection={connections[connectionID]}>
-                    <Reader endpointID={endpointID} />
-                </PatchConnectionProvider>
-            );
-        }
-
-        root.render(<Harness />);
-    });
-
-    const requireBinding = () => {
-        if (binding === null) {
-            throw new Error("Patch parameter baseline harness is not ready.");
-        }
-        return binding;
-    };
-
-    window.__COSIMO_DESKTOP_MODULE_HARNESS__ = {
-        async emitResponse(connectionID: HarnessConnection["id"], endpointID: string, value: number) {
-            connections[connectionID].emitResponse(endpointID, value);
-            await waitForMicrotask();
-        },
-        async writeValue(value: number) {
-            requireBinding().setValue(value);
-            await waitForMicrotask();
-        },
-        async commitValue(value: number) {
-            requireBinding().commitValue(value);
-            await waitForMicrotask();
-        },
-        async selectConnection(connectionID: HarnessConnection["id"]) {
-            selectConnection?.(connectionID);
-            await waitForMicrotask();
-            await waitForMicrotask();
-        },
-        async selectEndpoint(endpointID: string) {
-            staleEndGesture = requireBinding().endGesture;
-            selectEndpoint?.(endpointID);
-            await waitForMicrotask();
-            await waitForMicrotask();
-        },
-        async beginGesture() {
-            requireBinding().beginGesture();
-            await waitForMicrotask();
-        },
-        async endGesture() {
-            requireBinding().endGesture();
-            await waitForMicrotask();
-        },
-        async endStaleGesture() {
-            staleEndGesture?.();
-            await waitForMicrotask();
-        },
-        getSnapshot() {
-            const currentBinding = requireBinding();
-            return {
-                value: currentBinding.value,
-                hostBaseline: cloneValue(currentBinding.hostBaseline),
-                controlDisabled: (target.querySelector('[data-role="host-baseline-control"]') as HTMLButtonElement | null)?.disabled ?? null,
-                first: {
-                    requests: [...connections.first.requests],
-                    writes: cloneValue(connections.first.writes),
-                    gestures: [...connections.first.gestures],
-                    listenerCounts: Object.fromEntries([...connections.first.listeners].map(([endpointID, listeners]) => [endpointID, listeners.size])),
-                },
-                second: {
-                    requests: [...connections.second.requests],
-                    writes: cloneValue(connections.second.writes),
-                    gestures: [...connections.second.gestures],
-                    listenerCounts: Object.fromEntries([...connections.second.listeners].map(([endpointID, listeners]) => [endpointID, listeners.size])),
-                },
-                fallback: {
-                    requests: [...connections.fallback.requests],
-                    writes: cloneValue(connections.fallback.writes),
-                },
-                untrusted: {
-                    requests: [...connections.untrusted.requests],
-                    writes: cloneValue(connections.untrusted.writes),
-                },
-                userGestureCounts: { ...userGestureCounts },
-            };
-        },
-        async unmount() {
-            mounted.unmount();
-            unsubscribeFromUserEdits();
-            await waitForMicrotask();
-        },
-    };
-
-    await waitForMicrotask();
+function articulationBankWithSlots(slotCount: number) {
+    let state = createEmptyArticulationsState();
+    for (let slotIndex = 0; slotIndex < slotCount; slotIndex += 1) {
+        state = addCapturedArticulationV4(state, { overrides: {}, routeAmounts: {} });
+    }
+    return serializeArticulationsV4(state);
 }
 
 export async function installArticulationReconnectHydrationHarness(target: HTMLElement) {
-    class DeferredFullStatePatchConnection extends MockPatchConnection {
-        private pendingFullStateCallbacks: Array<(state: Record<string, unknown>) => void> | undefined;
-        private responseState: Record<string, unknown> = {};
-
-        constructor(label: string, slotCount: number) {
-            super({ name: label });
-            let articulations = createEmptyArticulationsState();
-            for (let slotIndex = 0; slotIndex < slotCount; slotIndex += 1) {
-                articulations = addCapturedArticulationV4(articulations, {
-                    overrides: {},
-                    routeAmounts: {},
-                });
-            }
-            this.responseState = {
-                [MODULATION_STATE_KEY]: serializeModulationState(createDefaultModulationState()),
-                [ARTICULATIONS_V4_STATE_KEY]: serializeArticulationsV4(articulations),
-            };
-        }
-
-        override requestFullStoredState(callback: (state: Record<string, unknown>) => void) {
-            const callbacks = this.pendingFullStateCallbacks ?? [];
-            callbacks.push(callback);
-            this.pendingFullStateCallbacks = callbacks;
-        }
-
-        releaseFullStoredState() {
-            const callbacks = this.pendingFullStateCallbacks ?? [];
-            this.pendingFullStateCallbacks = [];
-            callbacks.forEach((callback) => callback(cloneValue(this.responseState)));
-        }
-
-        get pendingFullStateRequestCount() {
-            return this.pendingFullStateCallbacks?.length ?? 0;
-        }
-    }
-
     const connections = {
-        first: new DeferredFullStatePatchConnection("Old articulation connection", 2),
-        second: new DeferredFullStatePatchConnection("New articulation connection", 2),
+        first: new DeferredArticulationOwnerConnection("Old articulation connection", articulationBankWithSlots(2)),
+        second: new DeferredArticulationOwnerConnection("New articulation connection", articulationBankWithSlots(2)),
     } as const;
     let synthView: ReturnType<typeof useSynthPatchViewModel> | null = null;
     let selectConnection: ((connectionID: keyof typeof connections) => void) | null = null;
@@ -1981,11 +1558,9 @@ export async function installArticulationReconnectHydrationHarness(target: HTMLE
     const mounted = mountHarness(target, (root) => {
         function Reader() {
             const stageRef = useRef<HTMLDivElement | null>(null);
-            const msegEditorSurfaceRef = useRef<SVGSVGElement | null>(null);
             const keyboardRef = useRef(null);
             synthView = useSynthPatchViewModel({
                 stageRef,
-                msegEditorSurfaceRef,
                 keyboardRef,
                 voiceModeCount: 3,
                 observeFilterSpectrum: false,
@@ -2017,7 +1592,6 @@ export async function installArticulationReconnectHydrationHarness(target: HTMLE
             return (
                 <div>
                     <div ref={stageRef} />
-                    <svg ref={msegEditorSurfaceRef} />
                     <button
                         type="button"
                         data-role="reconnect-articulation-capture"
@@ -2070,7 +1644,9 @@ export async function installArticulationReconnectHydrationHarness(target: HTMLE
             selectConnection = setConnectionID;
             return (
                 <PatchConnectionProvider patchConnection={connections[connectionID]}>
-                    <Reader />
+                    <SynthStateProvider patchConnection={connections[connectionID]}>
+                        <Reader />
+                    </SynthStateProvider>
                 </PatchConnectionProvider>
             );
         }
@@ -2091,8 +1667,8 @@ export async function installArticulationReconnectHydrationHarness(target: HTMLE
             await waitForMicrotask();
             await waitForMicrotask();
         },
-        async releaseFullStoredState(connectionID: keyof typeof connections) {
-            connections[connectionID].releaseFullStoredState();
+        async releaseStateOwner(connectionID: keyof typeof connections) {
+            await connections[connectionID].releaseStateOwner();
             await waitForMicrotask();
             await waitForMicrotask();
         },
@@ -2141,8 +1717,8 @@ export async function installArticulationReconnectHydrationHarness(target: HTMLE
                     second: cloneValue(connections.second.getDebugSnapshot()),
                 },
                 pendingRequests: {
-                    first: connections.first.pendingFullStateRequestCount,
-                    second: connections.second.pendingFullStateRequestCount,
+                    first: connections.first.pendingStateOwnerCount,
+                    second: connections.second.pendingStateOwnerCount,
                 },
             };
         },
@@ -2152,74 +1728,32 @@ export async function installArticulationReconnectHydrationHarness(target: HTMLE
         },
     };
 
-    await waitForMicrotask();
+    await waitForStateReaderMounted(() => synthView !== null);
 }
 
-export async function installArticulationKeyHydrationHarness(target: HTMLElement) {
-    class DeferredKeyStatePatchConnection extends MockPatchConnection {
-        private pendingArticulationRequests = 0;
-
-        constructor(
-            label: string,
-            private readonly articulationResponse: unknown,
-        ) {
-            super({ name: label });
-            // The production adapter contract allows either full-state or
-            // request-by-key hydration. Shadow the mock's full-state method so
-            // this harness exercises the declared fallback, not the preferred path.
-            Object.defineProperty(this, "requestFullStoredState", {
-                configurable: true,
-                value: undefined,
-            });
-        }
-
-        override requestStoredStateValue(key: string) {
-            if (key !== ARTICULATIONS_V4_STATE_KEY) {
-                super.requestStoredStateValue(key);
-                return;
-            }
-            this.pendingArticulationRequests += 1;
-        }
-
-        releaseArticulationState() {
-            if (this.pendingArticulationRequests <= 0) {
-                return;
-            }
-            this.pendingArticulationRequests -= 1;
-            this.setStoredStateValue(ARTICULATIONS_V4_STATE_KEY, cloneValue(this.articulationResponse));
-        }
-
-        get pendingArticulationRequestCount() {
-            return this.pendingArticulationRequests;
-        }
-    }
-
-    const stateWithSlots = (slotCount: number) => {
-        let state = createEmptyArticulationsState();
-        for (let slotIndex = 0; slotIndex < slotCount; slotIndex += 1) {
-            state = addCapturedArticulationV4(state, { overrides: {}, routeAmounts: {} });
-        }
-        return serializeArticulationsV4(state);
-    };
+export async function installArticulationOwnerHydrationHarness(target: HTMLElement) {
     const connections = {
-        undefined: new DeferredKeyStatePatchConnection("Undefined key response", undefined),
-        malformed: new DeferredKeyStatePatchConnection("Malformed key response", { kind: "not-articulations" }),
-        valid: new DeferredKeyStatePatchConnection("Valid key response", stateWithSlots(1)),
-        reconnectOld: new DeferredKeyStatePatchConnection("Disconnected key response", stateWithSlots(1)),
-        reconnectNew: new DeferredKeyStatePatchConnection("Current key response", stateWithSlots(2)),
+        undefined: new DeferredArticulationOwnerConnection("Undefined saved value", undefined),
+        malformed: new DeferredArticulationOwnerConnection("Malformed saved value", { kind: "not-articulations" }),
+        valid: new DeferredArticulationOwnerConnection("Valid saved value", articulationBankWithSlots(1)),
+        reconnectOld: new DeferredArticulationOwnerConnection("Disconnected saved value", articulationBankWithSlots(1)),
+        reconnectNew: new DeferredArticulationOwnerConnection("Current saved value", articulationBankWithSlots(2)),
     } as const;
     type ConnectionID = keyof typeof connections;
+    let articulationReadiness: unknown = null;
+    let repairArticulations: (() => Promise<unknown>) | null = null;
     let synthView: ReturnType<typeof useSynthPatchViewModel> | null = null;
     let selectConnection: ((connectionID: ConnectionID) => void) | null = null;
 
     const mounted = mountHarness(target, (root) => {
         function Reader() {
+            const articulation = usePluginState(synthPluginState[ARTICULATIONS_V4_STATE_KEY]);
+            articulationReadiness = articulation.state;
+            repairArticulations = () => articulation.setValue(createEmptyArticulationsState());
             const stageRef = useRef<HTMLDivElement | null>(null);
-            const msegEditorSurfaceRef = useRef<SVGSVGElement | null>(null);
             const keyboardRef = useRef(null);
             synthView = useSynthPatchViewModel({
                 stageRef,
-                msegEditorSurfaceRef,
                 keyboardRef,
                 voiceModeCount: 3,
                 observeFilterSpectrum: false,
@@ -2229,8 +1763,9 @@ export async function installArticulationKeyHydrationHarness(target: HTMLElement
             return (
                 <button
                     type="button"
-                    data-role="key-hydration-capture"
+                    data-role="owner-hydration-capture"
                     disabled={!synthView.canCaptureArticulation}
+                    onClick={() => synthView?.handleCaptureArticulationSlot()}
                 >
                     Capture
                 </button>
@@ -2242,7 +1777,9 @@ export async function installArticulationKeyHydrationHarness(target: HTMLElement
             selectConnection = setConnectionID;
             return (
                 <PatchConnectionProvider patchConnection={connections[connectionID]}>
-                    <Reader />
+                    <SynthStateProvider patchConnection={connections[connectionID]}>
+                        <Reader />
+                    </SynthStateProvider>
                 </PatchConnectionProvider>
             );
         }
@@ -2252,7 +1789,7 @@ export async function installArticulationKeyHydrationHarness(target: HTMLElement
 
     const requireSynthView = () => {
         if (synthView === null) {
-            throw new Error("Articulation key hydration harness is not ready.");
+            throw new Error("Articulation owner hydration harness is not ready.");
         }
         return synthView;
     };
@@ -2263,20 +1800,33 @@ export async function installArticulationKeyHydrationHarness(target: HTMLElement
             await waitForMicrotask();
             await waitForMicrotask();
         },
-        async releaseArticulationState(connectionID: ConnectionID) {
-            connections[connectionID].releaseArticulationState();
+        async releaseStateOwner(connectionID: ConnectionID) {
+            await connections[connectionID].releaseStateOwner();
             await waitForMicrotask();
             await waitForMicrotask();
+        },
+        async repairArticulations() {
+            if (!repairArticulations) throw new Error("The articulation control is not mounted.");
+            return repairArticulations();
+        },
+        restoreValidConnectionArticulations(value: unknown) {
+            connections.valid.sendStoredStateValue(ARTICULATIONS_V4_STATE_KEY, value);
+        },
+        restoreValidConnectionBank(slotCount: number) {
+            connections.valid.sendStoredStateValue(ARTICULATIONS_V4_STATE_KEY, articulationBankWithSlots(slotCount));
         },
         getSnapshot() {
             const currentSynthView = requireSynthView();
             return {
+                articulationReadiness: cloneValue(articulationReadiness),
+                malformedStoredValue: cloneValue(connections.malformed.getDebugSnapshot().storedState[ARTICULATIONS_V4_STATE_KEY]),
+                validStoredValue: cloneValue(connections.valid.getDebugSnapshot().storedState[ARTICULATIONS_V4_STATE_KEY]),
                 hasHydrated: currentSynthView.hasHydratedArticulations,
                 canCapture: currentSynthView.canCaptureArticulation,
                 slotCount: currentSynthView.articulationSlots.length,
-                captureDisabled: (target.querySelector('[data-role="key-hydration-capture"]') as HTMLButtonElement | null)?.disabled ?? null,
+                captureDisabled: (target.querySelector('[data-role="owner-hydration-capture"]') as HTMLButtonElement | null)?.disabled ?? null,
                 pendingRequests: Object.fromEntries(Object.entries(connections).map(([connectionID, connection]) => (
-                    [connectionID, connection.pendingArticulationRequestCount]
+                    [connectionID, connection.pendingStateOwnerCount]
                 ))),
             };
         },
@@ -2286,7 +1836,7 @@ export async function installArticulationKeyHydrationHarness(target: HTMLElement
         },
     };
 
-    await waitForMicrotask();
+    await waitForStateReaderMounted(() => synthView !== null);
 }
 
 export async function installPrecisionOptimisticEchoHarness(target: HTMLElement) {
@@ -2354,13 +1904,8 @@ export async function installPrecisionOptimisticEchoHarness(target: HTMLElement)
     await waitForMicrotask();
 }
 
-export async function installMsegStateHookHarness(target: HTMLElement) {
-    const storedStateListeners = new Set<(message: unknown) => void>();
-    const sentEvents: Array<{ endpointID: string; value: unknown }> = [];
+export async function installMsegStateHookHarness(target: HTMLElement, parameters: readonly PluginStateNativeParameter[]) {
     const renderLog: Array<MsegState | null> = [];
-    let requestFullStoredStateCount = 0;
-    let addStoredStateValueListenerCount = 0;
-    let removeStoredStateValueListenerCount = 0;
 
     const bootModulationState = createDefaultModulationState();
     const { rate: _parameterOwnedRate, ...bootPlayback } = createDefaultMsegPlayback();
@@ -2381,24 +1926,8 @@ export async function installMsegStateHookHarness(target: HTMLElement) {
     const bootState = {
         [MODULATION_STATE_KEY]: serializeModulationState(bootModulationState),
     };
-    const patchConnection: PatchConnectionLike = {
-        addStoredStateValueListener(listener) {
-            addStoredStateValueListenerCount += 1;
-            storedStateListeners.add(listener);
-        },
-        removeStoredStateValueListener(listener) {
-            removeStoredStateValueListenerCount += 1;
-            storedStateListeners.delete(listener);
-        },
-        requestFullStoredState(callback) {
-            requestFullStoredStateCount += 1;
-            queueMicrotask(() => callback(bootState));
-        },
-        sendEventOrValue(endpointID, value) {
-            sentEvents.push({ endpointID, value });
-        },
-        sendStoredStateValue() {},
-    };
+    const native = await createModulationProjectionHost(bootState, parameters);
+    const patchConnection = native.connection;
     const mounted = mountHarness(target, (root) => {
         function Reader() {
             const { state } = useMsegState();
@@ -2420,18 +1949,19 @@ export async function installMsegStateHookHarness(target: HTMLElement) {
     window.__COSIMO_DESKTOP_MODULE_HARNESS__ = {
         getSnapshot() {
             return {
-                requestFullStoredStateCount,
-                addStoredStateValueListenerCount,
-                removeStoredStateValueListenerCount,
-                storedStateListenerCount: storedStateListeners.size,
+                requestStateAttachCount: native.counts.attached,
+                addStateListenerCount: native.counts.added,
+                removeStateListenerCount: native.counts.removed,
+                stateListenerCount: native.counts.listeners,
                 bootState: cloneValue(bootState),
-                sentEvents: cloneValue(sentEvents),
+                sentEvents: cloneValue(native.events),
                 renderLog: cloneValue(renderLog),
                 lastRender: cloneValue(renderLog.at(-1) ?? null),
             };
         },
         async unmount() {
             mounted.unmount();
+            await native.stop();
             await waitForMicrotask();
         },
     };
@@ -2526,6 +2056,43 @@ export async function installStagePositionDragHookHarness(target: HTMLElement) {
     await waitForMicrotask();
 }
 
+/** Actual customer editor with its ordinary controlled-value seam. */
+export async function installStockMsegEditorHarness(target: HTMLElement) {
+    let current = addKitPoint(defaultKitCurve(), .5, .35);
+    let setMode: (mode: "immediate" | "hold-or-drag") => void;
+    let setDelay: (delay: number) => void;
+    const hapticLog: string[] = [];
+    const mounted = mountHarness(target, root => {
+        function Harness() {
+            const [shape, setShape] = useState(current);
+            current = shape;
+            const [mode, updateMode] = useState<"immediate" | "hold-or-drag">("immediate");
+            const [delay, updateDelay] = useState(350);
+            setMode = updateMode; setDelay = updateDelay;
+            return <Mseg.Editor value={shape} onValueChange={setShape} style={{height: 180}} surfaceProps={{"data-role": "mseg-editor", curveEditActivationMode: mode,
+                curveEditHoldDelayMs: delay, onCurveEditHoldActivated: () => hapticLog.push("light")}} />;
+        }
+        root.render(<Harness />);
+    });
+    window.__COSIMO_DESKTOP_MODULE_HARNESS__ = {
+        getSnapshot() { return {points: cloneValue(current.points), hapticLog: [...hapticLog]}; },
+        async setCurveEditMode(mode: "immediate" | "hold-or-drag") { setMode(mode); await waitForMicrotask(); },
+        async setCurveEditHoldDelayMs(delay: number) { setDelay(delay); await waitForMicrotask(); },
+        getPointCoordinates(index: number) {
+            const {bounds} = readSurfaceBounds('[data-role="mseg-editor"]');
+            const point = pointToMsegEditorCoordinates(current.points[index], bounds.width, bounds.height);
+            return {x: bounds.left + point.x, y: bounds.top + point.y};
+        },
+        async dispatchPointer(type: string, init: PointerEventInit) {
+            const {surface} = readSurfaceBounds('[data-role="mseg-editor"]');
+            surface.dispatchEvent(new PointerEvent(type, {bubbles: true, ...init}));
+            await waitForMicrotask();
+        },
+        async unmount() { mounted.unmount(); await waitForMicrotask(); },
+    };
+    await waitForMicrotask();
+}
+
 export async function installMsegEditorInteractionsHookHarness(target: HTMLElement) {
     const actionLog: Array<{ type: string; pointIndex?: number; segmentIndex?: number; x?: number; y?: number; curvePower?: number }> = [];
     const hapticLog: string[] = [];
@@ -2542,9 +2109,15 @@ export async function installMsegEditorInteractionsHookHarness(target: HTMLEleme
         depth: 0.4,
     };
 
+    const owner = await createModulationEditorFixture(currentMsegState.shape);
+    const controller = owner.modulation.getMsegSlotController(0);
     const mounted = mountHarness(target, (root) => {
         function Harness() {
-            const [msegState, setMsegState] = useState<MsegState>(currentMsegState);
+            useSyncExternalStore(owner.client.subscribe, owner.client.getSnapshot, owner.client.getSnapshot);
+            const msegState: MsegState = { ...currentMsegState, ...controller.getState()! };
+            const setMsegState = (update: (previous: MsegState) => MsegState) => {
+                void controller.setShape(update({ ...msegState, ...controller.getState()! }).shape);
+            };
             const [orientation, setOrientation] = useState<"horizontal" | "vertical">("horizontal");
             const [curveEditMode, setCurveEditMode] = useState<"immediate" | "hold-or-drag">("immediate");
             const [curveEditHoldDelayMs, setCurveEditHoldDelayMs] = useState(350);
@@ -2559,59 +2132,23 @@ export async function installMsegEditorInteractionsHookHarness(target: HTMLEleme
             currentCurveEditMode = curveEditMode;
             const surfaceRef = useRef<SVGSVGElement | null>(null);
             const controllerRef = useRef({
-                addPoint(x: number, y: number) {
-                    actionLog.push({ type: "add", x, y });
-                    setMsegState((previousState) => ({
-                        ...previousState,
-                        shape: addMsegPoint(previousState.shape, x, y),
-                    }));
-                },
-                movePoint(pointIndex: number, x: number, y: number) {
-                    actionLog.push({ type: "move", pointIndex, x, y });
-                    setMsegState((previousState) => ({
-                        ...previousState,
-                        shape: moveMsegPoint(previousState.shape, pointIndex, x, y),
-                    }));
-                },
-                deletePoint(pointIndex: number) {
-                    actionLog.push({ type: "delete", pointIndex });
-                    setMsegState((previousState) => ({
-                        ...previousState,
-                        shape: deleteMsegPoint(previousState.shape, pointIndex),
-                    }));
-                },
-                setSegmentCurvePower(segmentIndex: number, curvePower: number) {
-                    actionLog.push({ type: "curve", segmentIndex, curvePower });
-                    setMsegState((previousState) => ({
-                        ...previousState,
-                        shape: setMsegSegmentCurvePower(previousState.shape, segmentIndex, curvePower),
-                    }));
-                },
-                getState() {
-                    return currentStateRef.current;
+                ...controller,
+                setShape(value: unknown) {
+                    const before = controller.getState()!.shape;
+                    const after = normalizeMsegShape(value);
+                    if (after.points.length > before.points.length) actionLog.push({type: "add"});
+                    else if (after.points.length < before.points.length) actionLog.push({type: "delete"});
+                    else {
+                        const index = after.points.findIndex((p, i) => p.curvePower !== before.points[i].curvePower);
+                        if (index >= 0) actionLog.push({type: "curve", segmentIndex: index, curvePower: after.points[index].curvePower});
+                        else actionLog.push({type: "move"});
+                    }
+                    return controller.setShape(after);
                 },
             });
-            const {
-                isOpen,
-                selectedPointIndex,
-                hoveredSegmentIndex,
-                activeSegmentIndex,
-                openEditor,
-                closeEditor,
-                handlePointerDown,
-                handlePointerMove,
-                handlePointerLeave,
-                handlePointerUp,
-            } = useMsegEditorInteractions({
-                msegState,
-                msegController: controllerRef,
-                surfaceRef,
-                orientation,
-                curveEditActivationMode: curveEditMode,
-                curveEditHoldDelayMs,
-                onCurveEditHoldActivated: () => {
-                    hapticLog.push("light");
-                },
+            const {isOpen, canUndo, undoLastEdit, beginEditorSession, openEditor, closeEditor, composition} = useMsegEditorInteractions({
+                msegState, owner, msegController: controllerRef, curveEditActivationMode: curveEditMode,
+                curveEditHoldDelayMs, onCurveEditHoldActivated: () => hapticLog.push("light"),
             });
 
             useEffect(() => {
@@ -2629,28 +2166,13 @@ export async function installMsegEditorInteractionsHookHarness(target: HTMLEleme
 
             return (
                 <div>
+                    <button id="undo-editor" disabled={!canUndo} onClick={undoLastEdit}>Undo</button>
+                    <button id="new-editor-session" onClick={beginEditorSession}>New session</button>
                     <button id="open-editor" type="button" onClick={openEditor}>Open</button>
                     <button id="close-editor" type="button" onClick={closeEditor}>Close</button>
-                    <div
-                        id="editor-state"
-                        data-open={isOpen ? "true" : "false"}
-                        data-selected={selectedPointIndex}
-                        data-hovered-segment={hoveredSegmentIndex}
-                        data-active-segment={activeSegmentIndex}
-                    />
-                    <EditableMsegSurface
-                        surfaceRef={surfaceRef}
-                        points={msegState.shape.points}
-                        selectedPointIndex={selectedPointIndex}
-                        hoveredSegmentIndex={hoveredSegmentIndex}
-                        activeSegmentIndex={activeSegmentIndex}
-                        onPointerDown={handlePointerDown}
-                        onPointerMove={handlePointerMove}
-                        onPointerLeave={handlePointerLeave}
-                        onPointerUp={handlePointerUp}
-                        className="h-[180px]"
-                        dataRole="mseg-surface"
-                    />
+                    <div id="editor-state" data-open={isOpen ? "true" : "false"}/>
+                    <EditableMsegSurface surfaceRef={surfaceRef} value={msegState.shape} composition={composition}
+                        orientation={orientation} className="h-[180px]" dataRole="mseg-surface"/>
                     <div id="point-count">{msegState.shape.points.length}</div>
                 </div>
             );
@@ -2660,6 +2182,27 @@ export async function installMsegEditorInteractionsHookHarness(target: HTMLEleme
     });
 
     window.__COSIMO_DESKTOP_MODULE_HARNESS__ = {
+        holdNextEnd() { owner.holdNextEnd(); },
+        holdNextBegin() { owner.holdNextBegin(); },
+        holdNextUndo() { owner.holdNextUndo(); },
+        async switchSide(side: number) { return owner.modulation.setMsegSlotEditShapeIndex(0, side); },
+        async releaseEndReplies() { owner.releaseReplies(); await owner.drain(); await new Promise(requestAnimationFrame); },
+        async newEditorSession() { (document.getElementById("new-editor-session") as HTMLButtonElement).click(); await owner.drain(); },
+        async holdFacadeGesture() { return owner.modulation.beginGesture(); },
+        async endFacadeGesture() { return owner.modulation.endGesture(); },
+        async peerGesture(begin: boolean) { return owner.other.dispatch({ kind: begin ? "begin" : "end", keys: ["modulation.v6"], gesture: 90 }); },
+        async peerRenameShape(name: string) {
+            const bank = owner.modulation.getState();
+            if (!bank) throw new Error("Modulation owner is not ready.");
+            return owner.other.dispatch({ kind: "edit", key: "modulation.v6", value: {
+                ...bank, msegSlots: bank.msegSlots.map((slot, index) => index === 0
+                    ? { ...slot, shapeA: { ...slot.shapeA, name } } : slot),
+            } });
+        },
+        async blurEditor() { window.dispatchEvent(new Event("blur")); await owner.drain(); },
+        async scalarEdit(value: number) { return owner.other.dispatch({ kind: "edit", key: "globalTune", value }); },
+        async sharedUndo() { return owner.other.dispatch({ kind: "undo" }); },
+        async editorUndo() { (document.getElementById("undo-editor") as HTMLButtonElement).click(); await owner.drain(); },
         async openEditor() {
             (document.getElementById("open-editor") as HTMLButtonElement | null)?.click();
             await waitForMicrotask();
@@ -2724,9 +2267,9 @@ export async function installMsegEditorInteractionsHookHarness(target: HTMLEleme
         },
         getSnapshot() {
             const editorState = document.getElementById("editor-state");
-            const selectedPointIndex = Number(editorState?.getAttribute("data-selected") ?? 0);
-            const hoveredSegmentIndex = Number(editorState?.getAttribute("data-hovered-segment") ?? -1);
-            const activeSegmentIndex = Number(editorState?.getAttribute("data-active-segment") ?? -1);
+            const selectedPointIndex = Number(document.querySelector('[data-slot="mseg-root"]')?.getAttribute("data-selected-point") ?? -1);
+            const hoveredSegmentIndex = Number(document.querySelector('[data-role="mseg-surface"]')?.getAttribute("data-hovered-segment") ?? -1);
+            const activeSegmentIndex = Number(document.querySelector('[data-role="mseg-surface"]')?.getAttribute("data-active-segment") ?? -1);
             const isOpen = editorState?.getAttribute("data-open") === "true";
             const pointCountText = document.getElementById("point-count")?.textContent ?? "0";
             const highlightedSegment = document.querySelector('[data-role="mseg-highlight-segment"]');
@@ -2736,6 +2279,9 @@ export async function installMsegEditorInteractionsHookHarness(target: HTMLEleme
 
             return {
                 isOpen,
+                canUndo: !(document.getElementById("undo-editor") as HTMLButtonElement)?.disabled,
+                ownerState: owner.session.getSnapshot(),
+                editShapeIndex: owner.modulation.getMsegSlotEditShapeIndex(0),
                 selectedPointIndex,
                 hoveredSegmentIndex,
                 activeSegmentIndex,
@@ -2965,11 +2511,9 @@ export async function installAutoPreviewSynthHookHarness(target: HTMLElement) {
     const mounted = mountHarness(target, (root) => {
         function Harness() {
             const stageRef = useRef<HTMLDivElement | null>(null);
-            const msegEditorSurfaceRef = useRef<SVGSVGElement | null>(null);
             const keyboardRef = useRef(null);
             synthView = useSynthPatchViewModel({
                 stageRef,
-                msegEditorSurfaceRef,
                 keyboardRef,
                 voiceModeCount: 3,
                 observeFilterSpectrum: false,
@@ -2989,14 +2533,15 @@ export async function installAutoPreviewSynthHookHarness(target: HTMLElement) {
             return (
                 <div>
                     <div ref={stageRef} />
-                    <svg ref={msegEditorSurfaceRef} />
                 </div>
             );
         }
 
         root.render(
             <PatchConnectionProvider patchConnection={patchConnection}>
-                <Harness />
+                <SynthStateProvider patchConnection={patchConnection}>
+                    <Harness />
+                </SynthStateProvider>
             </PatchConnectionProvider>,
         );
     });
@@ -3245,26 +2790,33 @@ export async function installSharedMsegOverviewHarness(target: HTMLElement) {
 }
 
 export async function installSharedEditableMsegSurfaceHarness(target: HTMLElement) {
-    const pointerLog: string[] = [];
-    const selectedPointIndex = 1;
-    const points = [
-        { x: 0, y: 0, curvePower: 0 },
-        { x: 0.5, y: 1, curvePower: 0 },
-        { x: 1, y: 0, curvePower: 0 },
-    ];
+    const editLog: string[] = [];
+    const value = {
+        ...createDefaultMsegShape(),
+        points: [
+            { x: 0, y: 0, curvePower: 0 },
+            { x: 0.5, y: 1, curvePower: 0 },
+            { x: 1, y: 0, curvePower: 0 },
+        ],
+    };
 
     const mounted = mountHarness(target, (root) => {
         function Harness() {
             const surfaceRef = useRef<SVGSVGElement | null>(null);
+            const [shape, setShape] = useState(value);
 
             return (
                 <EditableMsegSurface
                     surfaceRef={surfaceRef}
-                    points={points}
-                    selectedPointIndex={selectedPointIndex}
-                    onPointerDown={() => pointerLog.push("down")}
-                    onPointerMove={() => pointerLog.push("move")}
-                    onPointerUp={() => pointerLog.push("up")}
+                    value={shape}
+                    composition={{
+                        editorKey: 0,
+                        onValueChange: (next) => {
+                            editLog.push("change");
+                            setShape({ ...shape, points: next.points });
+                        },
+                        onGestureEnd: (cancelled) => editLog.push(cancelled ? "cancel" : "end"),
+                    }}
                     className="h-[180px]"
                 />
             );
@@ -3278,7 +2830,7 @@ export async function installSharedEditableMsegSurfaceHarness(target: HTMLElemen
             const circles = Array.from(document.querySelectorAll("circle"));
 
             return {
-                pointerLog: cloneValue(pointerLog),
+                editLog: cloneValue(editLog),
                 circleCount: circles.length,
                 radii: circles.map((circle) => circle.getAttribute("r")),
                 surfaceClassName: document.querySelector("svg")?.className.baseVal ?? null,
@@ -3320,11 +2872,8 @@ export async function installSharedMsegOrientationHarness(target: HTMLElement) {
                     <EditableMsegSurface
                         surfaceRef={surfaceRef}
                         orientation={orientation}
-                        points={points}
-                        selectedPointIndex={1}
-                        onPointerDown={() => {}}
-                        onPointerMove={() => {}}
-                        onPointerUp={() => {}}
+                        value={{ ...createDefaultMsegShape(), points }}
+                        composition={{ editorKey: 0, onValueChange: () => {} }}
                         className="h-[180px]"
                         dataRole="shared-mseg-orientation-surface"
                     />
@@ -3532,7 +3081,7 @@ export async function installSharedFilterRangeEditorHarness(target: HTMLElement)
 
     const state = {
         value: {
-            mode: "lowpass" as FilterRangeMode,
+            mode: "lowpass" as FilterMode,
             cutoffHz: geometricCenterCutoffHz(200, 3200),
             q: 4,
         },
@@ -3540,20 +3089,20 @@ export async function installSharedFilterRangeEditorHarness(target: HTMLElement)
             startCutoffHz: 200,
             endCutoffHz: 3200,
         },
-        valueLog: [] as FilterRangeValue[],
-        rangeLog: [] as FilterRangeEndpoints[],
+        valueLog: [] as FilterValue[],
+        rangeLog: [] as FilterRange[],
         editLog: [] as string[],
         rangePolarity: "bipolar" as FilterRangePolarity,
         previewActive: true,
     };
     let setHarnessRangePolarity: ((nextPolarity: FilterRangePolarity) => void) | null = null;
     let setHarnessPreviewActive: ((nextPreviewActive: boolean) => void) | null = null;
-    let setHarnessValue: ((nextValue: Partial<FilterRangeValue>) => void) | null = null;
+    let setHarnessValue: ((nextValue: Partial<FilterValue>) => void) | null = null;
 
     const mounted = mountHarness(target, (root) => {
         function Harness() {
-            const [value, setValue] = useState<FilterRangeValue>(state.value);
-            const [range, setRange] = useState<FilterRangeEndpoints>(state.range);
+            const [value, setValue] = useState<FilterValue>(state.value);
+            const [range, setRange] = useState<FilterRange>(state.range);
             const [rangePolarity, setRangePolarity] = useState<FilterRangePolarity>(state.rangePolarity);
             const [previewActive, setPreviewActive] = useState(state.previewActive);
             const preview = useMemo(() => ({
@@ -3601,7 +3150,7 @@ export async function installSharedFilterRangeEditorHarness(target: HTMLElement)
                 };
             }, [value.cutoffHz]);
 
-            const updateValue = (nextValue: FilterRangeValue) => {
+            const updateValue = (nextValue: FilterValue) => {
                 const modulationAmount = modulationOctavesFromCutoffRange({
                     baseCutoffHz: value.cutoffHz,
                     range,
@@ -3623,13 +3172,13 @@ export async function installSharedFilterRangeEditorHarness(target: HTMLElement)
                 setRange(nextRange);
             };
 
-            const updateRange = (nextRange: FilterRangeEndpoints) => {
+            const updateRange = (nextRange: FilterRange) => {
                 state.rangeLog.push(cloneValue(nextRange));
                 setRange(nextRange);
             };
 
             return (
-                <FilterRangeEditor
+                <FilterEditor
                     className="filter-range-editor-test"
                     value={value}
                     range={range}
@@ -3640,8 +3189,8 @@ export async function installSharedFilterRangeEditorHarness(target: HTMLElement)
                     showReadout
                     onValueChange={updateValue}
                     onRangeChange={updateRange}
-                    onEditStart={(targetName) => state.editLog.push(`start:${targetName}`)}
-                    onEditEnd={(targetName) => state.editLog.push(`end:${targetName}`)}
+                    onGestureStart={(targetName) => state.editLog.push(`start:${targetName}`)}
+                    onGestureEnd={(_cancelled, targetName) => state.editLog.push(`end:${targetName}`)}
                 />
             );
         }
@@ -3746,234 +3295,8 @@ export async function installSharedFilterRangeEditorHarness(target: HTMLElement)
         setPreviewActive(nextPreviewActive: boolean) {
             setHarnessPreviewActive?.(nextPreviewActive);
         },
-        setValue(nextValue: Partial<FilterRangeValue>) {
+        setValue(nextValue: Partial<FilterValue>) {
             setHarnessValue?.(nextValue);
-        },
-        async unmount() {
-            mounted.unmount();
-            await waitForMicrotask();
-        },
-    };
-
-    await waitForMicrotask();
-}
-
-export async function installStandaloneEffectPresetHookHarness(target: HTMLElement) {
-    const patchConnection = new StandalonePresetHookPatchConnection();
-    const descriptorRegistry = createStandalonePresetDescriptorRegistry();
-    const factoryPresets = createStandaloneFactoryPresets();
-    let latestSnapshot: Record<string, unknown> | null = null;
-    let latestMutations: ReturnType<typeof useStandaloneEffectPresets>["mutations"] | null = null;
-    let firstMutations: ReturnType<typeof useStandaloneEffectPresets>["mutations"] | null = null;
-    let mutationsStable = true;
-
-    const mounted = mountHarness(target, (root) => {
-        function Harness() {
-            const { state, mutations } = useStandaloneEffectPresets("ott", {
-                descriptorRegistry,
-                factoryPresets,
-                initialFilter: { query: "env" },
-            });
-
-            if (!firstMutations) {
-                firstMutations = mutations;
-            } else if (firstMutations !== mutations) {
-                mutationsStable = false;
-            }
-
-            latestMutations = mutations;
-
-            useEffect(() => {
-                latestSnapshot = {
-                    ready: state.ready,
-                    filter: state.filter,
-                    visibleLabels: state.visiblePresets.map((preset) => preset.label),
-                    presetKeys: state.presets.map((preset) => preset.presetKey),
-                    activePreset: state.activePreset,
-                    currentValues: state.currentValues,
-                    missingCurrentValueEndpointIDs: state.missingCurrentValueEndpointIDs,
-                    mutationKeys: Object.keys(mutations).sort(),
-                    mutationsStable,
-                };
-            });
-
-            return null;
-        }
-
-        root.render(
-            <PatchConnectionProvider patchConnection={patchConnection}>
-                <Harness />
-            </PatchConnectionProvider>,
-        );
-    });
-
-    window.__COSIMO_DESKTOP_MODULE_HARNESS__ = {
-        async applyEnvelopeTamed() {
-            if (!latestMutations) {
-                throw new Error("Standalone preset mutations are not available.");
-            }
-
-            const result = latestMutations.applyPreset("factory:ott.envelope-tamed");
-            await waitForMicrotask();
-            return result;
-        },
-        getSnapshot() {
-            return {
-                latest: cloneValue(latestSnapshot),
-                events: cloneValue(patchConnection.events),
-                storedWrites: cloneValue(patchConnection.storedWrites),
-                requestedParameters: cloneValue(patchConnection.requestedParameters),
-                listenerCounts: patchConnection.getListenerCounts(),
-            };
-        },
-        async unmount() {
-            mounted.unmount();
-            await waitForMicrotask();
-        },
-    };
-
-    await waitForMicrotask();
-}
-
-export async function installStandaloneEffectPresetHookOptionsHarness(target: HTMLElement) {
-    const effectID = "hook-stateful";
-    const patchConnection = new StatefulPresetHookPatchConnection();
-    const adapterApplies: unknown[] = [];
-    const storedStateAdapters: Array<EffectStoredStateAdapter<{ pattern: string }>> = [{
-        key: "hook.matrix.v1",
-        schemaVersion: 1,
-        getContract() {
-            return {
-                key: "hook.matrix.v1",
-                schemaVersion: 1,
-                required: true,
-            };
-        },
-        capture() {
-            return { pattern: "captured" };
-        },
-        normalizeForPreset(value) {
-            if (!value || typeof value !== "object" || Array.isArray(value) || (value as { pattern?: unknown }).pattern !== "ok") {
-                throw new Error("hook matrix state must contain pattern ok.");
-            }
-
-            return { pattern: "ok" };
-        },
-        serializeForPreset(value) {
-            return { pattern: value.pattern };
-        },
-        apply(value) {
-            adapterApplies.push({ pattern: value.pattern });
-        },
-    }];
-    const oldContract = buildCanonicalPluginStateContract({
-        effectID,
-        parameters: [{
-            endpointID: "mix",
-            type: "number",
-            min: 0,
-            max: 1,
-            defaultValue: 0.5,
-        }],
-    });
-    const currentContract = buildPluginStateContract({
-        effectID,
-        status: statefulHookStatus,
-        storedState: storedStateAdapters,
-    });
-    const factoryPreset: EffectPresetV2 = {
-        kind: EFFECT_PRESET_V2_KIND,
-        version: EFFECT_PRESET_V2_SCHEMA_VERSION,
-        effectID,
-        presetID: "hook.old-mix",
-        label: "Old Mix",
-        contract: oldContract,
-        parameters: {
-            mix: 0.75,
-        },
-        storedState: {},
-    };
-    const factoryPresets = {
-        [effectID]: [factoryPreset],
-    };
-    let migrationCallCount = 0;
-    const presetMigrations: EffectPresetMigration[] = [{
-        effectID,
-        fromHash: oldContract.hash,
-        toHash: currentContract.hash,
-        migrate(preset) {
-            migrationCallCount += 1;
-
-            return {
-                ...preset,
-                contract: currentContract,
-                parameters: {
-                    amount: preset.parameters.mix,
-                },
-                storedState: {
-                    "hook.matrix.v1": { pattern: "ok" },
-                },
-            };
-        },
-    }];
-    let latestSnapshot: Record<string, unknown> | null = null;
-    let latestMutations: ReturnType<typeof useStandaloneEffectPresets>["mutations"] | null = null;
-
-    const mounted = mountHarness(target, (root) => {
-        function Harness() {
-            const { state, mutations } = useStandaloneEffectPresets(effectID, {
-                factoryPresets,
-                storedStateAdapters,
-                presetMigrations,
-            });
-
-            latestMutations = mutations;
-
-            useEffect(() => {
-                latestSnapshot = {
-                    ready: state.ready,
-                    lastError: state.lastError,
-                    currentContractHash: state.currentContract?.hash ?? null,
-                    currentContractStoredStateKeys: state.currentContract?.storedState.map((entry) => entry.key) ?? [],
-                    presets: state.presets.map((preset) => ({
-                        presetKey: preset.presetKey,
-                        canApply: preset.canApply,
-                        parameters: preset.preset.parameters,
-                        storedState: preset.preset.storedState,
-                        contractHash: preset.preset.contract.hash,
-                    })),
-                };
-            });
-
-            return null;
-        }
-
-        root.render(
-            <PatchConnectionProvider patchConnection={patchConnection}>
-                <Harness />
-            </PatchConnectionProvider>,
-        );
-    });
-
-    window.__COSIMO_DESKTOP_MODULE_HARNESS__ = {
-        async applyMigratedFactory() {
-            if (!latestMutations) {
-                throw new Error("Standalone preset mutations are not available.");
-            }
-
-            const result = latestMutations.applyPreset("factory:hook.old-mix");
-            await waitForMicrotask();
-            return result;
-        },
-        getSnapshot() {
-            return {
-                latest: cloneValue(latestSnapshot),
-                events: cloneValue(patchConnection.events),
-                storedWrites: cloneValue(patchConnection.storedWrites),
-                requestedParameters: cloneValue(patchConnection.requestedParameters),
-                adapterApplies: cloneValue(adapterApplies),
-                migrationCallCount,
-            };
         },
         async unmount() {
             mounted.unmount();

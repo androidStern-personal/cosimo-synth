@@ -35,8 +35,47 @@ jobs:
       - name: Test
         run: npm test
 
+      # Browser suites for the kit's internals stay in this repository; the
+      # exported-lockfile job runs the ones customers receive.
+      - name: Kit-internal browser tests
+        run: |
+          npx playwright install --with-deps chromium
+          npm run test:controls-docs
+
       # Exports the customer kit and proves its canonical typecheck/test scripts,
-      # Enhancer Lite build, and update-flow merge. The proof symlinks this checkout's
-      # node_modules into the export and sets its own git identity there.
+      # Enhance That build and update-flow merge, reusing this checkout's
+      # node_modules.
       - name: Export kit and prove it
-        run: node kit/scripts/export_kit.mjs /tmp/kit-export --force --prove
+        run: node scripts/export_kit.mjs "$RUNNER_TEMP/kit-proof" --force --prove
+
+  exported-lockfile:
+    # A customer installs from the exported package-lock.json, not from this
+    # repository's node_modules; install it cold and run the customer gates.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      # The export itself needs only Node.
+      - name: Export kit
+        run: node scripts/export_kit.mjs "$RUNNER_TEMP/kit-export" --force
+
+      - name: Install from the exported lockfile
+        working-directory: ${{ runner.temp }}/kit-export
+        run: npm ci
+
+      - name: Customer typecheck, tests and Enhance That build
+        working-directory: ${{ runner.temp }}/kit-export
+        run: |
+          npm run typecheck
+          npm test
+          npm run fx:build -- enhancer-lite
+
+      - name: Customer browser tests
+        working-directory: ${{ runner.temp }}/kit-export
+        run: |
+          npx playwright install --with-deps chromium
+          npm run test:browser

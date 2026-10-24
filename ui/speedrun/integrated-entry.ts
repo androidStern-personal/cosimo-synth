@@ -8,7 +8,7 @@ import { SPEEDRUN_MAX_DURATION_IN_FRAMES } from "./timeline";
 import { loadSpeedrunStudioRuntime } from "./studio/runtime";
 
 // Load-bearing re-exports: performance/render iframes import THIS bundle by
-// URL and destructure these entry points from it (see the srcdoc bootstraps
+// URL and destructure these entry points from it (see the frame bootstraps
 // in live/live-session.ts and scripted/iframe-renderer.ts). Do not remove.
 export { runLivePerformanceInCurrentDocument } from "./live/live-performance";
 export { renderScriptedVideoInCurrentDocument } from "./scripted/iframe-renderer";
@@ -17,10 +17,9 @@ export { renderScriptedVideoInCurrentDocument } from "./scripted/iframe-renderer
 const STYLE_LINK_MARKER = "cosimo-video-bounce-runtime";
 /**
  * The shipped path is "live": a real-time performance of the real UI
- * recorded from the compositor. Build-flag escape hatches, kept until the
- * deprecated paths are deleted: VITE_COSIMO_VIDEO_BOUNCE_SCRIPTED=1 selects
- * the frame-stepped rasterizer path, VITE_COSIMO_VIDEO_BOUNCE_REPLICA=1 the
- * parked replica composition.
+ * recorded from the compositor. A build flag selects another path:
+ * VITE_COSIMO_VIDEO_BOUNCE_SCRIPTED=1 the frame-stepped rasterizer path,
+ * VITE_COSIMO_VIDEO_BOUNCE_REPLICA=1 the replica composition.
  */
 const VIDEO_COMPOSITION_MODE = import.meta.env.VITE_COSIMO_VIDEO_BOUNCE_REPLICA === "1"
     ? "replica"
@@ -90,7 +89,6 @@ export async function createVideoBounceSession(
             async renderVideo(options) {
                 const artifact = await session.renderVideo({
                     preferredContainer: preferredContainer(options.container),
-                    videoBitrate: options.quality,
                     compositionMode: VIDEO_COMPOSITION_MODE,
                     onProgress: (progress) => options.onProgress(progress.progress),
                 });

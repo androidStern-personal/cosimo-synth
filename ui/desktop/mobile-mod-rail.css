@@ -1,6 +1,6 @@
-/* The perimeter-docked mobile Mod bar (T10B, approved design "B2 · Linear
-   Glass · Shouldered"): T60 applies one live 0.85–1.30 coefficient to the
-   complete 40px / 28px / 10px baseline geometry, starting at T42's 1.10.
+/* The perimeter-docked mobile Mod bar: one live 0.85–1.30 coefficient
+   scales the complete 40px / 28px / 10px baseline geometry, starting at 1.10,
+   so the whole bar resizes as one piece.
    Floating placement stays flush against either screen edge with a
    tab-with-shoulders silhouette in a translucent glass material. Route count
    is a corner badge on the selected-source module, live activity is the thin
@@ -556,9 +556,8 @@
         color: color-mix(in srgb, var(--cosimo-accent-violet) 72%, white);
     }
 
-    /* T05: the voice-settings toggle is a text module labeled with the active
-       play mode (T04: the keyboard menu button was rejected; this placement
-       is provisional). */
+    /* The voice-settings toggle is a text module labeled with the active
+       play mode, so the current mode reads without opening the settings. */
     .mobile-global-mod-rail-toggle.is-voice {
         width: calc(34px * var(--rail-scale));
         font-family: var(--cosimo-font-label, sans-serif);
@@ -713,7 +712,7 @@
     }
 }
 
-/* T60's bottom dock owns the parked row and the existing Voice / FX / Mod
+/* The bottom dock owns the parked row and the existing Voice / FX / Mod
    strip as one flex child. This avoids flex-gap ghost space when the Mod bar
    is hidden: the portal itself transitions from exactly 40px to zero. */
 @media (max-width: 639px) {
@@ -738,7 +737,7 @@
             flex-basis 180ms cubic-bezier(0.22, 0.72, 0.22, 1);
     }
 
-    /* T70: the drawer owns its live height; the existing dock keeps owning
+    /* The drawer owns its live height; the existing dock keeps owning
        the stable portal and places it against that height. The Mod bar thus
        follows every drag frame without remounting or entering the editor. */
     .mobile-bottom-dock[data-mod-bar-placement="parked"][data-mseg-drawer-open="true"]

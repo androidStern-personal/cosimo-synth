@@ -9,6 +9,9 @@ const repoRoot = path.resolve(thisDirectory, "..");
 export default defineConfig(({ command }) => ({
     root: repoRoot,
     clearScreen: false,
+    // Vite's library mode preserves dependency NODE_ENV branches. This worker
+    // runs in the browser's patch worker, where the Node process global does not exist.
+    define: { "process.env.NODE_ENV": JSON.stringify(command === "build" ? "production" : "development") },
     build: {
         outDir: path.join(repoRoot, "patch_gui"),
         emptyOutDir: false,

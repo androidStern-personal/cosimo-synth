@@ -3,19 +3,20 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import test from "node:test";
 
-import {
-  SHAPER_MAX_POINTS,
-  effectiveShapePoints,
-  evaluateBipolarTransfer,
-  morphOwner,
-} from "../fx/polish_lab/view/curve-model.js";
-import {
+import { loadUIModule } from "../kit/tests/helpers/load_ui_module.mjs";
+
+const repoRoot = path.resolve(import.meta.dirname, "..");
+const {
+    SHAPER_MAX_POINTS,
+    effectiveShapePoints,
+    evaluateBipolarTransfer,
+    morphOwner,
+} = await loadUIModule(repoRoot, "fx/polish_lab/view/curve-model.ts");
+const {
     desiredGainReductionDbForLevel,
     effectiveCompressorSettings,
     evaluateCompressorTransfer,
-} from "../fx/polish_lab/view/dynamics-model.js";
-
-const repoRoot = path.resolve(import.meta.dirname, "..");
+} = await loadUIModule(repoRoot, "fx/polish_lab/view/dynamics-model.ts");
 const sourcePath = path.join(repoRoot, "fx/polish_lab/PolishVoicingLab.cmajor");
 const manifestPath = path.join(repoRoot, "fx/polish_lab/PolishVoicingLab.cmajorpatch");
 
@@ -63,16 +64,16 @@ test("the design lab starts from a neutral two-sided curve", async () => {
 
 test("the interactive graph models use only the visible compressor and bipolar waveshaper state", () => {
     assert.ok(Math.abs(desiredGainReductionDbForLevel(0, 0, 4, 6) - (-0.5625)) < 1e-12);
-    assert.ok(Math.abs(evaluateCompressorTransfer(0, new Map()) - (-0.5625)) < 1e-12);
-    assert.ok(Math.abs(evaluateCompressorTransfer(6, new Map()) - 1.5) < 1e-12);
+    assert.ok(Math.abs(evaluateCompressorTransfer(0, {}) - (-0.5625)) < 1e-12);
+    assert.ok(Math.abs(evaluateCompressorTransfer(6, {}) - 1.5) < 1e-12);
 
-    const unrelatedState = effectiveCompressorSettings(new Map([
-        ["amount", 100],
-        ["macroRatioTarget", 1000],
-        ["macroMakeupDb", 12],
-        ["ratio", 4],
-        ["makeupDb", 2],
-    ]));
+    const unrelatedState = effectiveCompressorSettings({
+        amount: 100,
+        macroRatioTarget: 1000,
+        macroMakeupDb: 12,
+        ratio: 4,
+        makeupDb: 2,
+    });
     assert.deepEqual(unrelatedState, {
         thresholdDb: 0,
         ratio: 4,
@@ -177,9 +178,9 @@ test("the waveshaper supports independent sides, arbitrary output, bends, and on
 test("the plugin exposes only the requested design surface while remaining isolated and independently named", async () => {
     const source = await fs.readFile(sourcePath, "utf8");
     const manifest = JSON.parse(await fs.readFile(manifestPath, "utf8"));
-    const viewSource = await fs.readFile(path.join(repoRoot, "fx/polish_lab/view/source.js"), "utf8");
-    const curveModelSource = await fs.readFile(path.join(repoRoot, "fx/polish_lab/view/curve-model.js"), "utf8");
-    const helpSource = await fs.readFile(path.join(repoRoot, "fx/polish_lab/view/control-help.js"), "utf8");
+    const viewSource = await fs.readFile(path.join(repoRoot, "fx/polish_lab/view/source.tsx"), "utf8");
+    const curveModelSource = await fs.readFile(path.join(repoRoot, "fx/polish_lab/view/curve-model.ts"), "utf8");
+    const helpSource = await fs.readFile(path.join(repoRoot, "fx/polish_lab/view/control-help.ts"), "utf8");
     const initial = parseInitialValues(source);
     const requiredControls = [
         "thresholdDb", "ratio", "kneeDb", "attackMs", "releaseMs", "makeupDb",
@@ -214,7 +215,7 @@ test("the plugin exposes only the requested design surface while remaining isola
     assert.match(source, /frame\.clipOutput = meterClipOutput/);
     assert.doesNotMatch(source, /ClipCoreChannel|tensionWarp|evaluatePositiveCurve|\bdriveDb\b/);
     assert.doesNotMatch(curveModelSource, /CURVE_DEFAULTS|sanitizeCurve|tensionWarp|evaluateCurve/);
-    assert.match(viewSource, /COMPRESSOR_CONTROLS/);
+    assert.match(viewSource, /COMPRESSOR_KNOBS = \["thresholdDb", "ratio", "kneeDb", "attackMs", "releaseMs", "makeupDb"\]/);
     assert.match(viewSource, /data-morph-controls/);
     for (const removedEndpoint of [
         "amount", "macroCurve", "inputTrimDb", "outputTrimDb", "macroInputDriveDb",
@@ -234,6 +235,21 @@ test("the plugin exposes only the requested design surface while remaining isola
         assert.doesNotMatch(productSurface, /Sausage|Fattener|Dada Life/i);
         assert.doesNotMatch(productSurface, /reference_labs\/polish_comp_clip/);
     }
+});
+
+test("the plugin state declares every sound parameter by its endpoint, with Dry outside the sound", async () => {
+    const source = await fs.readFile(sourcePath, "utf8");
+    const { default: definition } = await loadUIModule(repoRoot, "fx/polish_lab/state.ts");
+    const endpoints = [...source.matchAll(/^\s*input value (?:bool|float32) (\w+) \[\[/gm)].map(([, endpointID]) => endpointID);
+    const parameters = Object.entries(definition).filter(([, field]) => field.kind === "parameter");
+
+    assert.deepEqual(endpoints.filter(endpointID => endpointID !== "hostSlot0Guard").sort(), parameters.map(([key]) => key).sort());
+    for (const [key, field] of parameters) assert.equal(field.endpoint, key);
+    assert.deepEqual(parameters.filter(([, field]) => field.preset === false).map(([key]) => key), ["bypass"]);
+    assert.deepEqual(
+        Object.keys(definition).filter(key => definition[key].kind !== "parameter").sort(),
+        ["activePreset", "activeSnapshot", "presetLibrary", "snapshotSlots"],
+    );
 });
 
 test("the generic VST3 install path builds and associates the compiled self-contained lab runtime", async () => {

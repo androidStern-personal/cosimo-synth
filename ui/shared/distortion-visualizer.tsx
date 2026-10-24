@@ -69,11 +69,6 @@ function mapPlotY(sampleValue: number, plot: PlotRect, range: number) {
     return plot.top + (plot.height * normalized);
 }
 
-function mapHistoryX(sampleIndex: number, sampleCount: number) {
-    const normalized = sampleCount <= 1 ? 0 : sampleIndex / (sampleCount - 1);
-    return HISTORY_PLOT.left + (HISTORY_PLOT.width * normalized);
-}
-
 function buildPolylinePath(points: Array<{ x: number; y: number }>) {
     if (points.length === 0) {
         return "";

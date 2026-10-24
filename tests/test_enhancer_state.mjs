@@ -4,7 +4,7 @@ import path from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
 
-import { loadUIModule } from "./helpers/load_ui_module.mjs";
+import { loadUIModule } from "../kit/tests/helpers/load_ui_module.mjs";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const laneDeviceTypes = [
@@ -12,222 +12,44 @@ const laneDeviceTypes = [
     "flanger", "phaser", "delay", "reverb",
 ];
 
-async function loadEnhancerState() {
-    return loadUIModule(repoRoot, "ui/shared/enhancer-state.ts");
+/** The Enhancer plugin's sound settings: each field's DSP endpoint. */
+async function loadEnhancerSettingEndpoints() {
+    const { default: definition } = await loadUIModule(repoRoot, "fx/enhancer/state.ts");
+    return Object.values(definition).filter((field) => field.kind === "parameter").map((field) => field.endpoint);
 }
 
-test("the Enhancer saves both bands, routing, saturation mode, and de-emphasis", async () => {
-    const enhancer = await loadEnhancerState();
-    const defaults = enhancer.createDefaultEnhancerState();
+test("the Enhancer plugin declares one sound parameter per saved setting", async () => {
+    const [{ default: definition }, pluginSource] = await Promise.all([
+        loadUIModule(repoRoot, "fx/enhancer/state.ts"),
+        fs.readFile(path.join(repoRoot, "fx/enhancer/EnhancerPlugin.cmajor"), "utf8"),
+    ]);
+    const pluginParameters = [...pluginSource.matchAll(/^\s*input value float32 (\w+) \[\[/gm)].map(([, endpointID]) => endpointID);
+    const parameterFields = Object.entries(definition).filter(([, field]) => field.kind === "parameter");
 
-    assert.equal(enhancer.ENHANCER_STATE_FORMAT, "cosimo.enhancer");
-    assert.equal(enhancer.ENHANCER_STATE_VERSION, 4);
-    assert.deepEqual(enhancer.ENHANCER_CURVES, ["tube", "solid"]);
-    assert.deepEqual(enhancer.ENHANCER_MODES, ["stereo", "mid-side"]);
-    assert.deepEqual(enhancer.ENHANCER_SATURATION_MODES, ["subtle", "medium"]);
-    assert.equal(enhancer.ENHANCER_SETTING_DESCRIPTORS.length, 14);
     assert.deepEqual(
-        enhancer.ENHANCER_SETTING_DESCRIPTORS.map(({ id }) => id),
+        parameterFields.map(([key, field]) => ({ key, endpoint: field.endpoint })),
         [
             "b1FreqHz", "b1Q", "b1Mode", "b1MidAmount", "b1SideAmount", "b1Curve",
             "b2FreqHz", "b2Q", "b2Mode", "b2MidAmount", "b2SideAmount", "b2Curve",
             "saturationMode", "deEmphasis",
-        ],
+        ].map((key) => ({ key, endpoint: `${key}In` })),
     );
+    assert.deepEqual(parameterFields.map(([, field]) => field.endpoint), pluginParameters);
+    assert.ok(parameterFields.every(([, field]) => field.preset === undefined), "every setting is part of a preset and a snapshot");
     assert.deepEqual(
-        enhancer.ENHANCER_SETTING_DESCRIPTORS
-            .filter(({ kind }) => kind === "number")
-            .map(({ id, dspEndpointID, min, max, initial, unit }) => (
-                { id, dspEndpointID, min, max, initial, unit }
-            )),
-        [
-            { id: "b1FreqHz", dspEndpointID: "b1FreqHzIn", min: 20, max: 20_000, initial: 130, unit: "Hz" },
-            { id: "b1Q", dspEndpointID: "b1QIn", min: 0.1, max: 10, initial: 0.71, unit: "" },
-            { id: "b1MidAmount", dspEndpointID: "b1MidAmountIn", min: 0, max: 1, initial: 0, unit: "" },
-            { id: "b1SideAmount", dspEndpointID: "b1SideAmountIn", min: 0, max: 1, initial: 0, unit: "" },
-            { id: "b2FreqHz", dspEndpointID: "b2FreqHzIn", min: 20, max: 20_000, initial: 9_000, unit: "Hz" },
-            { id: "b2Q", dspEndpointID: "b2QIn", min: 0.1, max: 10, initial: 0.71, unit: "" },
-            { id: "b2MidAmount", dspEndpointID: "b2MidAmountIn", min: 0, max: 1, initial: 0, unit: "" },
-            { id: "b2SideAmount", dspEndpointID: "b2SideAmountIn", min: 0, max: 1, initial: 0, unit: "" },
-            { id: "deEmphasis", dspEndpointID: "deEmphasisIn", min: 0, max: 1, initial: 1, unit: "" },
-        ],
+        Object.keys(definition).filter((key) => definition[key].kind !== "parameter").sort(),
+        ["activePreset", "activeSnapshot", "presetLibrary", "snapshotSlots"],
     );
-    assert.deepEqual(defaults, {
-        format: "cosimo.enhancer",
-        version: 4,
-        b1FreqHz: 130,
-        b1Q: 0.71,
-        b1Mode: "stereo",
-        b1MidAmount: 0,
-        b1SideAmount: 0,
-        b1Curve: "solid",
-        b2FreqHz: 9000,
-        b2Q: 0.71,
-        b2Mode: "stereo",
-        b2MidAmount: 0,
-        b2SideAmount: 0,
-        b2Curve: "tube",
-        saturationMode: "subtle",
-        deEmphasis: 1,
-    });
-    assert.ok(enhancer.ENHANCER_SETTING_DESCRIPTORS.every(
-        ({ exposure }) => exposure === "static-preset",
-    ));
-    for (const { id, initial } of enhancer.ENHANCER_SETTING_DESCRIPTORS) {
-        assert.equal(defaults[id], initial);
-    }
-
-    assert.deepEqual(
-        enhancer.parseEnhancerState(enhancer.serializeEnhancerState(defaults)),
-        { _tag: "ok", value: defaults },
-    );
-    assert.equal(enhancer.serializeEnhancerState(defaults), JSON.stringify(defaults));
-
-    const edited = {
-        ...defaults,
-        b1FreqHz: 47.5,
-        b1Q: 10,
-        b1Mode: "mid-side",
-        b1MidAmount: 0.75,
-        b1SideAmount: 0.25,
-        b1Curve: "tube",
-        b2FreqHz: 19_999.5,
-        b2Q: 0.1,
-        b2Mode: "stereo",
-        b2MidAmount: 1,
-        b2SideAmount: 0.5,
-        b2Curve: "solid",
-        saturationMode: "medium",
-        deEmphasis: 0.42,
-    };
-    assert.deepEqual(enhancer.parseEnhancerState(edited), { _tag: "ok", value: edited });
-    assert.deepEqual(enhancer.toEnhancerDspSettings(edited), {
-        b1FreqHzIn: 47.5,
-        b1QIn: 10,
-        b1ModeIn: 1,
-        b1MidAmountIn: 0.75,
-        b1SideAmountIn: 0.25,
-        b1CurveIn: 0,
-        b2FreqHzIn: 19_999.5,
-        b2QIn: 0.1,
-        b2ModeIn: 0,
-        b2MidAmountIn: 1,
-        b2SideAmountIn: 0.5,
-        b2CurveIn: 1,
-        saturationModeIn: 1,
-        deEmphasisIn: 0.42,
-    });
-});
-
-test("the unpublished always-M/S v1 document migrates without changing its sound", async () => {
-    const enhancer = await loadEnhancerState();
-    const legacy = {
-        format: "cosimo.enhancer",
-        version: 1,
-        b1FreqHz: 310,
-        b1Q: 1.2,
-        b1MidAmount: 0.7,
-        b1SideAmount: 0.2,
-        b1Curve: "tube",
-        b2FreqHz: 7500,
-        b2Q: 0.8,
-        b2MidAmount: 0.3,
-        b2SideAmount: 0.9,
-        b2Curve: "solid",
-    };
-
-    assert.deepEqual(enhancer.parseEnhancerState(legacy), {
-        _tag: "ok",
-        value: {
-            ...legacy,
-            version: 4,
-            b1Mode: "mid-side",
-            b2Mode: "mid-side",
-            saturationMode: "subtle",
-            deEmphasis: 1,
-        },
-    });
-});
-
-test("the prior two-mode v2 document migrates to full de-emphasis", async () => {
-    const enhancer = await loadEnhancerState();
-    const current = enhancer.createDefaultEnhancerState();
-    const {
-        deEmphasis: ignoredDeEmphasis,
-        saturationMode: ignoredSaturationMode,
-        ...withoutNewGlobals
-    } = current;
-    void ignoredDeEmphasis;
-    void ignoredSaturationMode;
-    const legacy = { ...withoutNewGlobals, version: 2 };
-
-    assert.deepEqual(enhancer.parseEnhancerState(legacy), {
-        _tag: "ok",
-        value: current,
-    });
-});
-
-test("the prior de-emphasis v3 document migrates to Subtle intensity", async () => {
-    const enhancer = await loadEnhancerState();
-    const current = enhancer.createDefaultEnhancerState();
-    const { saturationMode: ignoredSaturationMode, ...withoutSaturationMode } = current;
-    void ignoredSaturationMode;
-    const legacy = { ...withoutSaturationMode, version: 3 };
-
-    assert.deepEqual(enhancer.parseEnhancerState(legacy), {
-        _tag: "ok",
-        value: current,
-    });
-});
-
-test("malformed or partial Enhancer state is rejected at the persistence boundary", async () => {
-    const enhancer = await loadEnhancerState();
-    const defaults = enhancer.createDefaultEnhancerState();
-    const invalidDocuments = [
-        null,
-        [],
-        "not json",
-        { ...defaults, format: "cosimo.polish" },
-        { ...defaults, version: 5 },
-        { ...defaults, b1FreqHz: 19.999 },
-        { ...defaults, b2FreqHz: 20_001 },
-        { ...defaults, b1Q: 0.099 },
-        { ...defaults, b2Q: 10.001 },
-        { ...defaults, b1Q: Number.NaN },
-        { ...defaults, b2Q: Number.POSITIVE_INFINITY },
-        { ...defaults, b1MidAmount: -0.001 },
-        { ...defaults, b2SideAmount: 1.001 },
-        { ...defaults, deEmphasis: -0.001 },
-        { ...defaults, deEmphasis: 1.001 },
-        { ...defaults, b1Mode: "left-right" },
-        { ...defaults, b2Mode: 1 },
-        { ...defaults, b1Curve: "tape" },
-        { ...defaults, b2Curve: 1 },
-        { ...defaults, saturationMode: "aggressive" },
-        { ...defaults, saturationMode: 1 },
-        { ...defaults, extra: true },
-        Object.fromEntries(Object.entries(defaults).filter(([key]) => key !== "b2Curve")),
-    ];
-
-    for (const document of invalidDocuments) {
-        assert.equal(
-            enhancer.parseEnhancerState(document)._tag,
-            "err",
-            `unexpectedly accepted ${JSON.stringify(document)}`,
-        );
-    }
 });
 
 test("the saved sound and routing settings cannot enter host automation, modulation, or Effects Lane catalogs", async () => {
-    const [enhancer, rack, modulation, lanes] = await Promise.all([
-        loadEnhancerState(),
+    const [settingEndpoints, rack, modulation, lanes] = await Promise.all([
+        loadEnhancerSettingEndpoints(),
         loadUIModule(repoRoot, "ui/shared/rack-parameter-descriptors.ts"),
         loadUIModule(repoRoot, "ui/shared/modulation-targets.ts"),
         loadUIModule(repoRoot, "ui/shared/lane-slot-params.ts"),
     ]);
-    const endpointIDs = new Set(
-        enhancer.ENHANCER_SETTING_DESCRIPTORS.map(({ dspEndpointID }) => dspEndpointID),
-    );
+    const endpointIDs = new Set(settingEndpoints);
 
     for (const descriptor of rack.allRackParameterDescriptors()) {
         assert.equal(endpointIDs.has(descriptor.endpointID), false);
@@ -243,9 +65,9 @@ test("the saved sound and routing settings cannot enter host automation, modulat
     assert.equal(rack.RACK_EFFECT_DESCRIPTORS.some(({ id }) => id === "enhancer"), false);
 });
 
-test("the accepted DSP metadata survives composition only inside the fixed T28 Polish boundary", async () => {
-    const [enhancer, source, polish, desktopManifest, iosManifest, synth, rack] = await Promise.all([
-        loadEnhancerState(),
+test("the Enhancer DSP reaches the synth only inside the Polish bus", async () => {
+    const [settingEndpoints, source, polish, desktopManifest, iosManifest, synth, rack] = await Promise.all([
+        loadEnhancerSettingEndpoints(),
         fs.readFile(path.join(repoRoot, "cmajor/Enhancer.cmajor"), "utf8"),
         fs.readFile(path.join(repoRoot, "cmajor/Polish.cmajor"), "utf8"),
         fs.readFile(path.join(repoRoot, "WavetableSynth.cmajorpatch"), "utf8").then(JSON.parse),
@@ -282,7 +104,7 @@ test("the accepted DSP metadata survives composition only inside the fixed T28 P
     );
     assert.equal([...smoothingSection.matchAll(/smoothEnhancerControl/g)].length, 14);
 
-    for (const { dspEndpointID } of enhancer.ENHANCER_SETTING_DESCRIPTORS) {
+    for (const dspEndpointID of settingEndpoints) {
         const declaration = source.split("\n").find((line) => line.includes(` ${dspEndpointID} `));
         assert.ok(declaration, `missing DSP endpoint ${dspEndpointID}`);
         assert.match(declaration, /automatable: false/);

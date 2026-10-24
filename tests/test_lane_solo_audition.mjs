@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import path from "node:path";
 
-import { loadUIModule } from "./helpers/load_ui_module.mjs";
+import { loadUIModule } from "../kit/tests/helpers/load_ui_module.mjs";
 
 const repoRoot = path.resolve(import.meta.dirname, "..");
 const auditionPromise = loadUIModule(repoRoot, "ui/shared/lane-solo-audition.ts");
@@ -123,6 +123,10 @@ test("Init or preset reset clears every group with one zero runtime event", asyn
                 enabled: true,
                 xoverLowHz: 800,
                 xoverHighHz: 2500,
+                xoverLowKeyTrackEnabled: false,
+                xoverLowKeyTrackOffsetSemitones: 0,
+                xoverHighKeyTrackEnabled: false,
+                xoverHighKeyTrackOffsetSemitones: 0,
                 branches: [[], []],
             },
         ],
@@ -164,6 +168,10 @@ test("rack deletion reconciliation clears only the affected group at runtime", a
                 enabled: true,
                 xoverLowHz: 800,
                 xoverHighHz: 2500,
+                xoverLowKeyTrackEnabled: false,
+                xoverLowKeyTrackOffsetSemitones: 0,
+                xoverHighKeyTrackEnabled: false,
+                xoverHighKeyTrackOffsetSemitones: 0,
                 branches: [[], []],
             },
         ],

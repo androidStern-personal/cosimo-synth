@@ -1,0 +1,133 @@
+import test from "node:test";
+import assert from "node:assert/strict";
+import { spawnSync } from "node:child_process";
+import { mkdtemp, rm, symlink, writeFile } from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
+
+const root = path.resolve(import.meta.dirname, "../..");
+
+test("component result, history and custom delivery types are public, while native identity fields and engine internals are not", async () => {
+    const directory = await mkdtemp(path.join(os.tmpdir(), "kit-public-state-types-"));
+    try {
+        await symlink(path.join(root, "node_modules"), path.join(directory, "node_modules"));
+        await writeFile(path.join(directory, "fixture.ts"), `
+import { usePluginState, usePluginHistory, definePluginState, parameter, storedValue, preparedState, sharedData, Native, type PluginStateControl,
+    type PluginStateDelivery, type PluginStateDeliveryContext, type PluginStateDocumentContext, type PluginStateEffect,
+    type PluginStateSubmission, type PluginStateDeliveryOutcome,
+    type PluginStateChanges, type PluginStateEditor,
+    type PluginStateControlState, type PluginStateHistory, type PluginStateHistoryEntry,
+    type PluginStateEditResult, type PluginStateRejectionReason } from ${JSON.stringify(path.join(root, "kit/index"))};
+const control: PluginStateControl<number> = usePluginState(parameter("gain"));
+const history: PluginStateHistory = usePluginHistory();
+const state: PluginStateControlState<number> = control.state;
+// @ts-expect-error Engine progress is private to the framework.
+state.application;
+// @ts-expect-error There is one lifecycle discriminant.
+state.kind;
+// @ts-expect-error Pending commands are included in status.
+state.pending;
+// @ts-expect-error A value cannot be read before narrowing its availability.
+state.value;
+if (state.status === "idle" || state.status === "updating") {
+    const value: number = state.value;
+    const minimum: number | undefined = state.metadata?.min;
+    void control.setValue(value);
+}
+if (control.error) {
+    const message: string = control.error.message;
+    // @ts-expect-error Recovery is expressed by the callback, not internal cause enums.
+    control.error.kind;
+}
+const reason: PluginStateRejectionReason = "stale-history";
+const definition = definePluginState({ gain: parameter("gain"), enabled: storedValue({ codec: Native.boolean(), initial: true }) });
+const editor: PluginStateEditor<typeof definition> = usePluginState(definition);
+const changes: PluginStateChanges<typeof definition> = { gain: 0.7, enabled: false };
+const compoundResult: Promise<PluginStateEditResult> = editor.edit(changes);
+void editor.edit({ gain: 0.5 });
+// @ts-expect-error A field value must match its declared codec.
+void editor.edit({ gain: 0.7, enabled: 1 });
+// @ts-expect-error Parameters retain their number contract in compound edits.
+void editor.edit({ gain: "loud" });
+// @ts-expect-error Unknown field names cannot enter compound edits.
+void editor.edit({ cutoff: 1000 });
+const unknownField = { gain: 0.7, cutoff: 1000 };
+// @ts-expect-error Passing a variable must not bypass unknown-field checking.
+void editor.edit(unknownField);
+// @ts-expect-error Rendered versions are private, not supplied by authors.
+void editor.edit({ gain: { value: 0.7, expectedVersion: 0 } });
+const floats = preparedState({ codec: Native.number(), initial: 1,
+    engine: sharedData({ type: "float32" }),
+    async prepare(value) {
+        return { length: value * 4, write(destination) {
+            const samples: Float32Array = destination;
+            // @ts-expect-error Float resources must not infer the byte writer API.
+            const bytes: Uint8Array = destination;
+            samples.fill(value);
+        } };
+    },
+});
+preparedState({ codec: Native.number(), initial: 1,
+    engine: sharedData({ type: "bytes", length: 4 }),
+    prepare(value, destination) { const bytes: Uint8Array = destination; bytes[0] = value; },
+});
+// @ts-expect-error A shared writer cannot retain its reservation across an await.
+preparedState({ codec: Native.number(), initial: 1, engine: sharedData({ type: "float32", length: 4 }), prepare: async () => {} });
+// @ts-expect-error A dynamically sized plan's writer is also synchronous.
+preparedState({ codec: Native.number(), initial: 1, engine: sharedData({ type: "float32" }), prepare: async () => ({ length: 4, write: async () => {} }) });
+// @ts-expect-error Internal application types are not exported for component authors.
+import type { PluginStateApplicationState } from ${JSON.stringify(path.join(root, "kit/index"))};
+// A custom delivery seam is written entirely from public types.
+const tempoDelivery: PluginStateDelivery<number> = {
+    eventEndpoints: ["tempo"],
+    outputEndpoints: ["tempoAck"],
+    create(document: PluginStateDocumentContext) {
+        const stopListening = document.listen("tempoAck", () => {});
+        return {
+            async apply(bpm: number, context: PluginStateDeliveryContext): Promise<PluginStateDeliveryOutcome> {
+                const effect: PluginStateEffect = { kind: "event", endpoint: "tempo", value: bpm };
+                const submitted: PluginStateSubmission = context.send(effect);
+                return submitted.kind === "submitted" ? await submitted.completion : submitted;
+            },
+            stop: stopListening,
+        };
+    },
+};
+preparedState({ codec: Native.number(), initial: 120, engine: tempoDelivery, prepare: value => value });
+// @ts-expect-error History tokens cannot be fabricated from public data.
+const fake: PluginStateHistoryEntry = {};
+if (history.undoEntry) {
+    const eligible: boolean = history.canUndoEntry(history.undoEntry);
+    const redoEligible: boolean = history.canRedoEntry(history.undoEntry);
+    void history.undo(history.undoEntry);
+    // @ts-expect-error The public token hides owner and document identities.
+    history.undoEntry.scope;
+    // @ts-expect-error The public token hides native entry IDs.
+    history.undoEntry.id;
+}
+async function edit() {
+    const result: PluginStateEditResult = await control.setValue(4);
+    if (result.kind === "accepted") {
+        const changed: boolean | undefined = result.changed;
+        if (result.historyEntry) void history.undo(result.historyEntry);
+        // @ts-expect-error Transport revisions are internal.
+        result.revision;
+        // @ts-expect-error Field versions are internal.
+        result.version;
+    }
+}
+`);
+        await writeFile(path.join(directory, "tsconfig.json"), JSON.stringify({
+            extends: path.join(root, "tsconfig.json"),
+            // The fixture declares values only to check their types, so it never reads them.
+            compilerOptions: { noUnusedLocals: false, noUnusedParameters: false },
+            // Replacing include drops the project's style module declarations; name them again.
+            files: [path.join(directory, "fixture.ts"), path.join(root, "kit/tests/helpers/plugin_state_public_react.tsx"),
+                path.join(root, "kit/ui/style-modules.d.ts")], include: [],
+        }));
+        const result = spawnSync(process.execPath, [path.join(root, "node_modules/typescript/bin/tsc"), "--project", path.join(directory, "tsconfig.json")], {
+            cwd: root, encoding: "utf8", timeout: 120000,
+        });
+        assert.equal(result.status, 0, result.error?.message ?? result.stdout + result.stderr);
+    } finally { await rm(directory, { recursive: true, force: true }); }
+});

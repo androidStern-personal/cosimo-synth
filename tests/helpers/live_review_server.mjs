@@ -2,7 +2,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { stageCmajorWebRuntime } from "../../ui/vite.shared.mjs";
-import { startStaticWebServer } from "./static_web_server.mjs";
+import { startStaticWebServer } from "../../kit/tests/helpers/static_web_server.mjs";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 

@@ -1,0 +1,11 @@
+processor PluginStateSystem
+{
+    input value float gain [[ name: "Gain", min: -12, max: 12, step: 0.5, init: 1 ]];
+    input event float curveValue;
+    output stream float out;
+    float preparedCurve = 0;
+
+    event curveValue (float value) { preparedCurve = value; }
+
+    void main() { loop { out <- gain + preparedCurve; advance(); } }
+}

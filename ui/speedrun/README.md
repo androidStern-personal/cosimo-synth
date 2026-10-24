@@ -113,6 +113,9 @@ takes the video's real duration and shows one own-tab capture prompt.
 `VIDEO_BOUNCE_LIVE_RENDER_PLAN.md` is the architecture record; the
 frame-stepped scripted path is deprecated behind
 `VITE_COSIMO_VIDEO_BOUNCE_SCRIPTED=1` pending deletion.
+`npm run test:video-bounce:integration` records through that capture in
+Playwright's full Chromium (`npx playwright install chromium`), because its
+headless shell cannot capture a tab.
 
 Review-grade renders (no engine, no capture permission — used by agents/CI to
 WATCH output before shipping):

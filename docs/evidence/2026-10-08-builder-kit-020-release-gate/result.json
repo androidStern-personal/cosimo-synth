@@ -1,0 +1,132 @@
+{
+  "branch": "claude/builder-kit-020-review-fixes",
+  "commit": "9bc4a87754a21dca38cb571d7b16c9b09e441dd5",
+  "npm_ci": "passed",
+  "typecheck": "passed",
+  "sdk_repair": "/Applications/Xcode-beta-root.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk (shell-only SDKROOT)",
+  "npm_test": "failed: final doctor failure returns a safe actionable status, never ready; expected nonzero status, actual 0",
+  "test_dsp": "failed: npm script is missing",
+  "remaining_suites": {
+    "kit_export": "9 passed",
+    "plugin_state": "255 passed"
+  },
+  "direct_dsp": "supplemental compiler setup stopped after gate failure; no DSP verdict",
+  "fx_prod_build": "not run after gate failure",
+  "synth_desktop_build": "not run after gate failure",
+  "install": "not run",
+  "ableton": "not opened",
+  "source_changes": "none",
+  "run_date": "2026-10-08",
+  "timezone": "America/Chicago",
+  "evaluated_worktree": "<REPO>",
+  "initial_git_state": "clean, detached HEAD 44f179fdb9c35b27456bedfdf389ec563f5c9a85",
+  "post_gate_git_state": "clean at evaluated commit",
+  "tests": {
+    "initial_orphans": {
+      "passed": 797,
+      "failed": 2,
+      "skipped": 1
+    },
+    "xcode_sdk_orphans": {
+      "passed": 799,
+      "failed": 0,
+      "skipped": 1
+    },
+    "seqfx_state_properties": {
+      "passed": 8,
+      "failed": 0
+    },
+    "effect_presets_unit": {
+      "passed": 12,
+      "failed": 0
+    },
+    "enhancer_state": {
+      "passed": 3,
+      "failed": 0
+    },
+    "enhancer_lite_state": {
+      "passed": 64,
+      "failed": 0
+    },
+    "bounce_bank": {
+      "passed": 3,
+      "failed": 0
+    },
+    "speedrun_unit": {
+      "passed": 21,
+      "failed": 0
+    },
+    "speedrun_midi": {
+      "passed": 5,
+      "failed": 0
+    },
+    "kit_release_contracts": {
+      "passed": 84,
+      "failed": 2,
+      "note": "One failing nested assertion plus its failing parent test."
+    },
+    "kit_export_separately": {
+      "passed": 9,
+      "failed": 0
+    },
+    "plugin_state_separately": {
+      "passed": 255,
+      "failed": 0
+    },
+    "focused_native_sdk_recheck": {
+      "passed": 5,
+      "failed": 0
+    }
+  },
+  "commands": [
+    {
+      "command": "git fetch origin claude/builder-kit-020-review-fixes",
+      "result": "passed"
+    },
+    {
+      "command": "git checkout claude/builder-kit-020-review-fixes",
+      "result": "passed; new local tracking branch"
+    },
+    {
+      "command": "npm run kit:doctor -- --strict",
+      "result": "exit 1: missing source-worktree dependencies and delivered pinned tools; no setup was run"
+    },
+    {
+      "command": "npm ci && npm run typecheck && npm test",
+      "result": "npm ci/typecheck passed; npm test exit 1 on two native linker failures"
+    },
+    {
+      "command": "npm run test:dsp",
+      "result": "exit 1: missing script"
+    },
+    {
+      "command": "SDKROOT=<selected-Xcode-SDK> node --test tests/test_complete_sound_state_contract.mjs tests/test_future_daw_note_meta_bridge.mjs",
+      "result": "exit 0, 5 passed"
+    },
+    {
+      "command": "SDKROOT=<selected-Xcode-SDK> npm test",
+      "result": "exit 1 on installer final-doctor assertion"
+    },
+    {
+      "command": "SDKROOT=<selected-Xcode-SDK> node scripts/source_cmaj.mjs node kit/scripts/test_dsp.mjs",
+      "result": "terminated by this task (exit 143) during LLVM submodule clone; compiler and DSP tests not completed"
+    },
+    {
+      "command": "SDKROOT=<selected-Xcode-SDK> npm run test:kit:export && npm run test:plugin-state",
+      "result": "exit 0; remaining npm-test suites run separately"
+    },
+    {
+      "command": "npm run fx:prod:build -- enhancer-lite",
+      "result": "not run"
+    },
+    {
+      "command": "npm run synth:desktop:build",
+      "result": "not run"
+    }
+  ],
+  "toolchain_pins": {
+    "cmajor": "dca85fc1f87af241af66ca31989940f2887a7e56",
+    "choc": "eedf2aebd3049a84cdcf280664c73c53796118ac",
+    "juce": "501c07674e1ad693085a7e7c398f205c2677f5da"
+  }
+}

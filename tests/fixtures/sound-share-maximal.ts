@@ -9,6 +9,7 @@ import {
     LANE_DEVICE_TYPE_ORDER,
     addLaneDevice,
     createDefaultLaneStateV2,
+    laneDefaultParamsForType,
     parseLaneInstanceId,
     parseLaneStateV2,
     serializeLaneStateV2,
@@ -121,7 +122,7 @@ function createShape(slotIndex: number, shapeIndex: 0 | 1) {
     return {
         format: "cosimo.mseg.shape" as const,
         version: 1 as const,
-        name: `T46 MSEG ${slotIndex + 1}${shapeIndex === 0 ? "A" : "B"}`,
+        name: `Max MSEG ${slotIndex + 1}${shapeIndex === 0 ? "A" : "B"}`,
         globalSmooth: shapeIndex === 1,
         points: Array.from({ length: 16 }, (_, pointIndex) => ({
             x: pointIndex / 15,
@@ -161,9 +162,9 @@ function createMaximalModulation(): ModulationState {
             },
         })),
         envelopeSlots: defaults.envelopeSlots.map((_, slotIndex) => ({
-            name: `T46 Envelope ${slotIndex + 1}`,
+            name: `Max Envelope ${slotIndex + 1}`,
         })),
-        macroNames: defaults.macroNames.map((_, slotIndex) => `T46 Macro ${slotIndex + 1}`),
+        macroNames: defaults.macroNames.map((_, slotIndex) => `Max Macro ${slotIndex + 1}`),
         routes,
     };
     const parsed = parseModulationState(candidate);
@@ -223,7 +224,7 @@ function parseRequiredArticulations(
         slots: Array.from({ length: ARTICULATION_MAX_SLOTS }, (_, slotIndex) => ({
             id: `t46-articulation-${slotIndex}`,
             runtimeSlot: slotIndex,
-            name: `T46 Articulation ${slotIndex + 1}`,
+            name: `Max Articulation ${slotIndex + 1}`,
             color: `#${((slotIndex * 2_654_435_761) & 0xff_ffff).toString(16).padStart(6, "0")}`,
             key: slotIndex,
             velRange: { min: slotIndex, max: slotIndex },
@@ -261,12 +262,14 @@ function createMaximalLane(): LaneStateV2 {
         if (parsedID === null) throw new Error(`Maximal Effects Lane device id ${deviceID} is invalid.`);
         const effectID = LANE_TYPE_TO_EFFECT_ID.get(parsedID.deviceType);
         if (effectID === undefined) throw new Error(`Maximal Effects Lane type ${parsedID.deviceType} has no effect.`);
+        // Every lane field once: the effect's parameters move off their
+        // defaults; the lane-only Key Track and Output Trim fields keep theirs.
         const descriptors = getRackEffectDescriptor(effectID).parameters;
         return [deviceID, {
-            params: Object.fromEntries(descriptors.map((descriptor, parameterIndex) => [
-                descriptor.endpointID,
-                laneParameterValue(descriptor, parameterIndex),
-            ])),
+            params: Object.fromEntries(Object.entries(laneDefaultParamsForType(parsedID.deviceType)).map(([endpointID, initial]) => {
+                const parameterIndex = descriptors.findIndex((descriptor) => descriptor.endpointID === endpointID);
+                return [endpointID, parameterIndex < 0 ? initial : laneParameterValue(descriptors[parameterIndex]!, parameterIndex)];
+            })),
         }];
     }));
     const candidate: LaneStateV2 = {
@@ -323,7 +326,7 @@ export function createMaximalSoundFixture(inputs: ReadonlyArray<ParameterInput>)
     const lane = createMaximalLane();
     const articulableRouteCount = Object.keys(articulations.slots[0]?.routeAmounts ?? {}).length;
     return {
-        label: "T46 Maximum Current Sound",
+        label: "The Maximum Current Sound",
         parameters,
         modulation,
         articulations,

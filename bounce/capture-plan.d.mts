@@ -15,17 +15,27 @@ export type BounceCaptureParameter = {
     readonly value: BounceWireValue;
 };
 
-/** One runtime event captured for offline rendering. */
+/** One runtime event or direct preparation captured for offline rendering. */
 export type BounceSetupEvent = {
     readonly endpointID: string;
     readonly value: BounceWireValue;
     readonly advanceFrames: number;
     readonly sessionScoped: boolean;
+    /** Prepare a source shape in shared memory instead of sending its samples. */
+    readonly preparation?: "mseg";
 };
 
 /** A setup event whose note field is filled from the current root job. */
 export type BounceRootSetupEvent = BounceSetupEvent & {
     readonly rootNoteField: string;
+};
+
+/** Decoded source frames; final packed mip preparation belongs to each renderer. */
+export type BounceWavetableSource = {
+    readonly input: number;
+    readonly tableIndex: number;
+    readonly generation: number;
+    readonly frames: ReadonlyArray<Float32Array>;
 };
 
 /** Immutable state captured at the instant Bounce begins. */
@@ -36,6 +46,7 @@ export type BounceCaptureSnapshot = {
     readonly tempoBpm: number;
     readonly parameters: ReadonlyArray<BounceCaptureParameter>;
     readonly setupEvents: ReadonlyArray<BounceSetupEvent>;
+    readonly wavetableSources: ReadonlyArray<BounceWavetableSource>;
     readonly rootSetupEvents: ReadonlyArray<BounceRootSetupEvent>;
     readonly settleFrames: number;
     readonly sourceGeneration: number;
@@ -62,6 +73,8 @@ export type BounceCapturePlan = {
     readonly silenceWindowFrames: number;
     readonly tailPaddingFrames: number;
     readonly blockFrames: number;
+    /** Frames the synth's output path delays a sound; a capture skips them. */
+    readonly outputLatencyFrames: number;
     readonly jobs: ReadonlyArray<BounceCaptureJob>;
 };
 
@@ -92,6 +105,7 @@ export type BounceSetupEventInput = {
     readonly value: unknown;
     readonly advanceFrames?: number;
     readonly sessionScoped?: boolean;
+    readonly preparation?: "mseg";
 };
 
 /** Input shape accepted for a root-scoped setup event. */
@@ -134,6 +148,8 @@ export const BOUNCE_SILENCE_WINDOW_SECONDS: 0.05;
 export const BOUNCE_TAIL_PADDING_SECONDS: 0.1;
 /** Maximum offline render block size. */
 export const BOUNCE_OFFLINE_BLOCK_FRAMES: 128;
+/** Frames the synth's fixed output path delays a sound; a capture skips them. */
+export const BOUNCE_OUTPUT_LATENCY_FRAMES: 156;
 
 /** Clone and normalize a press-time capture recipe. */
 export function createBounceCaptureSnapshot(options: {
@@ -142,6 +158,7 @@ export function createBounceCaptureSnapshot(options: {
     readonly parameters?: Readonly<Record<string, BounceWireValue>>
         | ReadonlyArray<BounceCaptureParameter>;
     readonly setupEvents?: ReadonlyArray<BounceSetupEventInput>;
+    readonly wavetableSources?: ReadonlyArray<BounceWavetableSource>;
     readonly rootSetupEvents?: ReadonlyArray<BounceRootSetupEventInput>;
     readonly settleFrames?: number;
     readonly sourceGeneration?: number;

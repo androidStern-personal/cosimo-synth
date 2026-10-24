@@ -1,10 +1,9 @@
 namespace wt
 {
-    // Experimental one-band Enhancer for evaluating a voice-affordable signal
-    // path. It deliberately remains separate from the accepted two-band
-    // EnhancerBus. The measured Bell/Low/High selection laws, routing, and four
-    // Spectre transfers are preserved; only the oversampling implementation and
-    // tanh evaluation are approximated. There is no de-emphasis path.
+    // A one-band harmonic enhancer. A Low, Bell or High filter boosts the
+    // selected band and a 4x-oversampled Tube or Solid saturator adds
+    // harmonics, in stereo or mid/side. The saturation curves are fitted to
+    // measurements; tanh is approximated for speed. There is no de-emphasis.
 
     let enhancerLiteOversampleFactor = 4;
     let enhancerLiteFrequencyMinHz = 20.0f;

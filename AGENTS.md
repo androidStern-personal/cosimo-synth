@@ -6,6 +6,7 @@
 - The active integration coordinator owns rebases, merges to `master`, pushes, deployments, and the integration queue unless that authority is explicitly delegated. Keep source review, automated qualification, installed-host proof, listening acceptance, and physical-device acceptance as separate results.
 - Treat fixed ports, native build directories, generated artifacts, installed plug-ins, devices, DAWs, and shared trackers as shared or external state. Serialize mutations, use only artifacts from the current worktree, and never stop or replace another task's resource.
 - Everything under `kit/` ships to Builder Kit customers. Keep it product-neutral and free of personal identifiers, machine paths, signing identities, device details, and private Cosimo behavior; extend it through the documented seams.
+- The synth and the owner's plug-ins may compose kit internals under `kit/ui/` where no public name covers the need, import from `kit/index.ts` wherever a public name does, and never re-export a kit module; `tests/test_kit_import_boundary.mjs` fails on any re-export.
 
 ## Read when relevant
 

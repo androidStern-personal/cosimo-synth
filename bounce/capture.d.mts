@@ -67,5 +67,3 @@ export type CaptureBounceBankOptions = BounceCaptureRequest & {
 /** Snapshot, render, assemble, encode, and digest one Bounce bank. */
 export function captureBounceBank(options: CaptureBounceBankOptions): Promise<BounceCaptureResult>;
 
-/** Digest bank bytes using the platform SHA-256 implementation. */
-export function digestBounceBank(bytes: Uint8Array): Promise<string>;

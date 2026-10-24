@@ -1,3 +1,4 @@
+import { nativeReleaseDependencies } from "./native-release-dependencies.mjs";
 import { createHash } from "node:crypto";
 import { spawnSync } from "node:child_process";
 import { createReadStream } from "node:fs";
@@ -39,15 +40,15 @@ const approvedExternalTools = Object.freeze({
 });
 
 const pinnedSourceBuiltGenerator = Object.freeze({
-    cmajorCommit: "2fc4c2dce2a1b625c1578409e10bf312a5ac39b5",
-    chocCommit: "11f7dc63d7cb78f6dbaa559fe09ade8e941c0188",
+    cmajorCommit: nativeReleaseDependencies.cmajor.revision,
+    chocCommit: nativeReleaseDependencies.choc.revision,
 });
 
 const fixedChildPath = "/usr/bin:/bin:/usr/sbin:/sbin";
 const inheritedChildEnvironmentNames = Object.freeze([
-    "COSIMO_CMAKE_JOBS",
+    "BUILDER_KIT_CMAKE_JOBS",
+    "BUILDER_KIT_PLUGIN_JOBS",
     "COSIMO_NOTARY_PROFILE",
-    "COSIMO_PLUGIN_JOBS",
     "CPM_SOURCE_CACHE",
     "HOME",
     "SOURCE_DATE_EPOCH",

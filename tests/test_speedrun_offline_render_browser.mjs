@@ -1,14 +1,17 @@
 import assert from "node:assert/strict";
+import { existsSync } from "node:fs";
+import path from "node:path";
 import test from "node:test";
 
 import { chromium, webkit } from "playwright";
 
-import { startStaticRepoServer } from "./helpers/desktop_harness_browser.mjs";
+import { startProductWebServer } from "./helpers/product_web_server.mjs";
 import {
     createCurrentSpeedrunContext,
     readSpeedrunFixture,
 } from "./helpers/speedrun_test_context.mjs";
 
+const repoRoot = path.resolve(import.meta.dirname, "..");
 let server;
 let fixture;
 
@@ -156,18 +159,27 @@ async function openHarness(browserType) {
 }
 
 test.before(async () => {
-    [server, fixture] = await Promise.all([
-        startStaticRepoServer(),
-        buildFixture(),
-    ]);
+    // The harness page loads the built web synth from the repository root.
+    // Start the server first so after() can stop it even when the fixture fails.
+    server = await startProductWebServer(repoRoot);
+    fixture = await buildFixture();
 });
 
 test.after(async () => {
-    await server?.stop();
+    await server?.close();
 });
 
-for (const [browserName, browserType] of [["Chromium", chromium], ["WebKit", webkit]]) {
-    test(`${browserName}: real offline services render deterministic, differential checkpoint audio`, { timeout: 240_000 }, async () => {
+const browserEngines = [
+    ["Chromium", chromium, false],
+    ["WebKit", webkit, !existsSync(webkit.executablePath())
+        && "Playwright's WebKit is not installed here, and Safari's engine must render this itself."],
+];
+
+for (const [browserName, browserType, skip] of browserEngines) {
+    test(`${browserName}: real offline services render deterministic, differential checkpoint audio`, {
+        timeout: 240_000,
+        skip,
+    }, async () => {
         const { browser, page } = await openHarness(browserType);
         try {
             const first = await page.evaluate((request) => (

@@ -1,5 +1,7 @@
 # Three-Oscillator Hard-Cut Roadmap
 
+> October 2026: the host-path preset system this document describes was replaced by the kit's presets-as-state (`kit/ui/presets.ts`, `kit/ui/snapshots.ts`). The text below is kept as history.
+
 Status: product hard cut, functional platform QA, and desktop/Web performance complete; final delivery active — 2026-08-15
 
 Base: `4e7941208f66279159859ad52d257e877a970291`

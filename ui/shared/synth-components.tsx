@@ -1,6 +1,5 @@
 import {
     type ReactNode,
-    useCallback,
     useEffect,
     useId,
     useLayoutEffect,
@@ -11,60 +10,37 @@ import {
     type RefObject,
 } from "react";
 
+import { Mseg, FilterEditor, type FilterSpectrumFrame, type FilterSpectrumRenderMode } from "../../kit/index";
+import { responseModeToFilterMode } from "../../kit/ui/filter-editor";
+import { buildMsegSurfacePaths } from "../../kit/ui/mseg-editor-geometry";
+
 import type { PatchControlBinding } from "./patch-controls";
 import { useSliderDrag } from "./use-slider-drag";
 import { clampDisplayPosition } from "./runtime-table-state";
 import {
-    MSEG_EDITOR_HORIZONTAL_PADDING_PX,
-    MSEG_EDITOR_VERTICAL_PADDING_PX,
-    MSEG_POINT_RADIUS_PX,
     MSEG_RATE_MAX_SECONDS,
     MSEG_RATE_MIN_SECONDS,
-    MSEG_SELECTED_POINT_RADIUS_PX,
     clampMsegRateSeconds,
-    createMsegTimeAxisTicks,
+    sampleRenderedMsegBuffer,
+    type MsegState,
+} from "./mseg";
+import {
+    MSEG_EDITOR_HORIZONTAL_PADDING_PX,
+    MSEG_EDITOR_VERTICAL_PADDING_PX,
     createMsegEditorMetrics,
     pointToMsegEditorCoordinates,
     renderMsegShape,
     resolveMsegSurfaceOrientation,
-    sampleRenderedMsegBuffer,
-    sampleMsegEditorPolyline,
-    sampleMsegSegmentEditorPolyline,
     type MsegSurfaceOrientation,
-    type MsegState,
     type MsegTimeAxisScale,
-} from "./mseg";
+} from "../../kit/ui/mseg";
 import { CanvasWavetableDisplay, type WavetableModulationRangeOverlay } from "./wavetable-display";
 import type { SynthFocusBindings } from "./synth-input-router";
-import {
-    createFilterResponseModel,
-    FILTER_CUTOFF_MAX_HZ,
-    FILTER_CUTOFF_MIN_HZ,
-    FILTER_Q_MAX,
-    FILTER_Q_MIN,
-    filterCutoffHzToNormalized,
-    filterQToNormalized,
-    normalizedToFilterCutoffHz,
-    normalizedToFilterQ,
-} from "./filter-response";
-import {
-    advanceFilterSpectrumDisplayState,
-    buildFilterSpectrumBands,
-    buildFilterSpectrumDbTicks,
-    buildFilterSpectrumFrequencyTicks,
-    buildFilterSpectrumGraphPoints,
-    buildFilterSpectrumRenderGeometry,
-    createFilterSpectrumDisplayFrame,
-    type FilterSpectrumRenderGeometry,
-    type FilterSpectrumRenderMode,
-    type FilterSpectrumDisplayState,
-    type FilterSpectrumFrame,
-} from "./filter-spectrum";
+import { filterQToNormalized, normalizedToFilterQ } from "../../kit/ui/filter-response";
 import { uiMediaTimeNow } from "./ui-media-clock";
 import {
     composeModulationAmount,
     formatModulationAmountReadout,
-    getModulationAmountDepth,
     getModulationAmountPercentLabel,
     getModulationAmountSliderPosition,
     getModulationTargetClampHint,
@@ -210,11 +186,11 @@ export type FilterEndpointState = {
 };
 
 /**
- * T04A: the armed source's modulation travel — the filter at source = 0
+ * The armed source's modulation travel — the filter at source = 0
  * (start) and at full deflection (end) — drawn as the two response curves
  * with the swept region shaded in the source color. Renders only while the
- * armed source has at least one filter mapping (T07: color never implies a
- * mapping that does not exist). The start of a fully unipolar travel is the
+ * armed source has at least one filter mapping, so color never implies a
+ * mapping that does not exist. The start of a fully unipolar travel is the
  * base handle itself; only bipolar travel gets its own start handle.
  */
 export type FilterModulationTravel = {
@@ -369,41 +345,16 @@ function clamp(value: number, min: number, max: number) {
     return Math.min(Math.max(value, min), max);
 }
 
-function buildMsegSurfacePaths(
-    points: Array<{ x: number; y: number; curvePower: number }>,
-    width: number,
-    height: number,
-    options: {
-        orientation?: MsegSurfaceOrientation;
-        pointRadius?: number;
-        horizontalPadding?: number;
-        verticalPadding?: number;
-    } = {},
-) {
-    const metrics = createMsegEditorMetrics(width, height, {
-        pointRadius: options.pointRadius,
-        horizontalPadding: options.horizontalPadding ?? MSEG_EDITOR_HORIZONTAL_PADDING_PX,
-        verticalPadding: options.verticalPadding ?? MSEG_EDITOR_VERTICAL_PADDING_PX,
-    });
-    const curvePath = polylineToSvgPath(sampleMsegEditorPolyline(
-        { points },
-        width,
-        height,
-        {
-            orientation: options.orientation,
-            pointRadius: options.pointRadius,
-            horizontalPadding: options.horizontalPadding,
-            verticalPadding: options.verticalPadding,
-        },
-    ));
-    const fillPath = options.orientation === "vertical"
-        ? `${curvePath} L ${metrics.plotLeft.toFixed(3)} ${metrics.plotBottom.toFixed(3)} ` +
-            `L ${metrics.plotLeft.toFixed(3)} ${metrics.plotTop.toFixed(3)} Z`
-        : `${curvePath} L ${metrics.plotRight.toFixed(3)} ${metrics.plotBottom.toFixed(3)} ` +
-            `L ${metrics.plotLeft.toFixed(3)} ${metrics.plotBottom.toFixed(3)} Z`;
+function polylineToSvgPath(polyline: Array<{ x: number; y: number }>) {
+    if (polyline.length === 0) {
+        return "";
+    }
 
-    return { curvePath, fillPath, metrics };
+    return polyline.map((point, pointIndex) => (
+        `${pointIndex === 0 ? "M" : "L"} ${point.x.toFixed(3)} ${point.y.toFixed(3)}`
+    )).join(" ");
 }
+
 
 function buildMsegMorphSurfacePaths(
     shapeAPoints: Array<{ x: number; y: number; curvePower: number }> | null | undefined,
@@ -452,37 +403,6 @@ function buildMsegMorphSurfacePaths(
     }
 }
 
-function polylineToSvgPath(polyline: Array<{ x: number; y: number }>) {
-    if (polyline.length === 0) {
-        return "";
-    }
-
-    return polyline.map((point, pointIndex) => (
-        `${pointIndex === 0 ? "M" : "L"} ${point.x.toFixed(3)} ${point.y.toFixed(3)}`
-    )).join(" ");
-}
-
-function buildMsegSegmentPath(
-    points: Array<{ x: number; y: number; curvePower: number }>,
-    segmentIndex: number,
-    width: number,
-    height: number,
-    options: {
-        orientation?: MsegSurfaceOrientation;
-        pointRadius?: number;
-        horizontalPadding?: number;
-        verticalPadding?: number;
-    } = {},
-) {
-    return polylineToSvgPath(sampleMsegSegmentEditorPolyline(
-        { points },
-        segmentIndex,
-        width,
-        height,
-        options,
-    ));
-}
-
 function SelectChevron({ className }: { className?: string }) {
     return (
         <svg
@@ -528,7 +448,6 @@ export function MsegPreview({
     morphShapeAPoints = null,
     morphShapeBPoints = null,
     morphValue = null,
-    showMorphCurve = false,
     editShapeIndex = 0,
     orientation = "horizontal",
     className,
@@ -539,7 +458,6 @@ export function MsegPreview({
     morphShapeAPoints?: Array<{ x: number; y: number; curvePower: number }> | null;
     morphShapeBPoints?: Array<{ x: number; y: number; curvePower: number }> | null;
     morphValue?: number | null;
-    showMorphCurve?: boolean;
     /** Shape identity controls color only; selection never swaps A/B colors. */
     editShapeIndex?: 0 | 1;
     orientation?: MsegSurfaceOrientation;
@@ -815,7 +733,7 @@ export function WavetableCanvas({
     /** ADR-024 compact seams; defaults preserve the established drawing. */
     paintBackground?: boolean;
     showSliceCaption?: boolean;
-    /** T02C: the selected source's Index travel, shaded onto the graphic. */
+    /** The selected source's Index travel, shaded onto the graphic. */
     modulationRange?: WavetableModulationRangeOverlay | null;
 }) {
     const canvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -875,293 +793,79 @@ export function WavetableCanvas({
     );
 }
 
+export type MsegCompositionBindings = { readonly editorKey: number } & Pick<Mseg.RootProps, "onValueChange" | "onGestureEnd"> &
+    Pick<Mseg.SurfaceProps, "curveEditActivationMode" | "curveEditHoldDelayMs" | "onCurveEditHoldActivated">;
 export function EditableMsegSurface({
     surfaceRef,
-    points,
+    value,
+    composition,
     referencePoints = null,
     morphShapeAPoints = null,
     morphShapeBPoints = null,
     morphValue = null,
     realizedMorphEmphasis = "resting",
+    playheadPosition = null,
     editShapeIndex = 0,
-    selectedPointIndex,
-    hoveredSegmentIndex = -1,
-    activeSegmentIndex = -1,
     orientation = "horizontal",
     timeAxisScale,
     onOrientationChange,
-    onPointerDown,
-    onPointerMove,
-    onPointerLeave,
-    onPointerUp,
     className,
     dataRole,
 }: {
     surfaceRef: RefObject<SVGSVGElement | null>;
-    points: Array<{ x: number; y: number; curvePower: number }>;
+    composition: MsegCompositionBindings;
+    value: MsegState["shape"];
     referencePoints?: Array<{ x: number; y: number; curvePower: number }> | null;
     morphShapeAPoints?: Array<{ x: number; y: number; curvePower: number }> | null;
     morphShapeBPoints?: Array<{ x: number; y: number; curvePower: number }> | null;
     morphValue?: number | null;
     /** The realized A/B result is always present; active only changes its visual prominence. */
     realizedMorphEmphasis?: "resting" | "active";
+    playheadPosition?: number | null;
     /** Shape identity controls color only; selection never swaps A/B colors. */
     editShapeIndex?: 0 | 1;
-    selectedPointIndex: number;
-    hoveredSegmentIndex?: number;
-    activeSegmentIndex?: number;
     orientation?: MsegSurfaceOrientation;
     timeAxisScale?: MsegTimeAxisScale;
     onOrientationChange?: (orientation: MsegSurfaceOrientation) => void;
-    onPointerDown: (event: ReactPointerEvent<SVGSVGElement>) => void;
-    onPointerMove: (event: ReactPointerEvent<SVGSVGElement>) => void;
-    onPointerLeave?: (event: ReactPointerEvent<SVGSVGElement>) => void;
-    onPointerUp: (event: ReactPointerEvent<SVGSVGElement>) => void;
     className?: string;
     dataRole?: string;
 }) {
+    const curve = useMemo<Mseg.Curve>(() => ({...value, format: "mseg.shape"}), [value]);
     const size = useResizeObserver(surfaceRef);
-    const emphasizedSegmentIndex = activeSegmentIndex >= 0 ? activeSegmentIndex : hoveredSegmentIndex;
-    const hasEmphasizedSegment = emphasizedSegmentIndex >= 0;
-    const timeAxisTicks = timeAxisScale === undefined ? [] : createMsegTimeAxisTicks(timeAxisScale);
-
     useLayoutEffect(() => {
-        const nextOrientation = resolveMsegSurfaceOrientation(size.width, size.height, orientation);
-        if (nextOrientation !== orientation) {
-            onOrientationChange?.(nextOrientation);
-        }
+        const next = resolveMsegSurfaceOrientation(size.width, size.height, orientation);
+        if (next !== orientation) onOrientationChange?.(next);
     }, [onOrientationChange, orientation, size.height, size.width]);
-
-    const {
-        curvePath,
-        fillPath,
-        referenceCurvePath,
-        referenceFillPath,
-        morphCurvePath,
-        highlightedSegmentPath,
-        metrics,
-    } = useMemo(() => {
-        const basePaths = buildMsegSurfacePaths(points, size.width, size.height, {
-            orientation,
-        });
-        const referencePaths = referencePoints
-            ? buildMsegSurfacePaths(referencePoints, size.width, size.height, { orientation })
-            : null;
-        const effectiveMorphPaths = buildMsegMorphSurfacePaths(
-            morphShapeAPoints,
-            morphShapeBPoints,
-            morphValue,
-            size.width,
-            size.height,
-            { orientation },
-        );
-        const nextHighlightedSegmentPath = emphasizedSegmentIndex >= 0
-            ? buildMsegSegmentPath(points, emphasizedSegmentIndex, size.width, size.height, { orientation })
-            : "";
-
-        return {
-            ...basePaths,
-            referenceCurvePath: referencePaths?.curvePath ?? "",
-            referenceFillPath: referencePaths?.fillPath ?? "",
-            morphCurvePath: effectiveMorphPaths?.curvePath ?? "",
-            highlightedSegmentPath: nextHighlightedSegmentPath,
-        };
-    }, [emphasizedSegmentIndex, morphShapeAPoints, morphShapeBPoints, morphValue, orientation, points, referencePoints, size.height, size.width]);
-
-    return (
-        <svg
-            ref={surfaceRef}
-            data-role={dataRole}
-            data-time-axis={orientation}
-            data-morph-presentation={realizedMorphEmphasis === "active" ? "morph-active" : "edit-shape"}
-            data-edit-shape={editShapeIndex === 0 ? "a" : "b"}
-            className={joinClasses(
-                "h-full w-full touch-none overflow-hidden rounded-[20px] bg-white/[0.03]",
-                className,
-            )}
-            viewBox={`0 0 ${size.width} ${size.height}`}
-            onPointerDown={onPointerDown}
-            onPointerMove={onPointerMove}
-            onPointerLeave={onPointerLeave}
-            onPointerUp={onPointerUp}
-            onPointerCancel={onPointerUp}
-            onLostPointerCapture={onPointerUp}
-        >
-            <g>
-                {MSEG_GRID_STEPS.map((step) => (
-                    <line
-                        key={`editable-h-${step}`}
-                        className="cosimo-grid-line"
-                        x1={metrics.plotLeft}
-                        y1={metrics.plotTop + (metrics.plotHeight * (1 - step))}
-                        x2={metrics.plotRight}
-                        y2={metrics.plotTop + (metrics.plotHeight * (1 - step))}
-                    />
-                ))}
-                {MSEG_GRID_STEPS.map((step) => (
-                    <line
-                        key={`editable-v-${step}`}
-                        className="cosimo-grid-line"
-                        x1={metrics.plotLeft + (metrics.plotWidth * step)}
-                        y1={metrics.plotTop}
-                        x2={metrics.plotLeft + (metrics.plotWidth * step)}
-                        y2={metrics.plotBottom}
-                    />
-                ))}
-            </g>
-            {referenceFillPath ? (
-                <path
-                    data-role="mseg-reference-fill"
-                    data-shape-identity={editShapeIndex === 0 ? "b" : "a"}
-                    className={editShapeIndex === 0
-                        ? "cosimo-reference-curve-fill cosimo-mseg-shape-b-fill"
-                        : "cosimo-reference-curve-fill cosimo-mseg-shape-a-fill"}
-                    d={referenceFillPath}
-                />
-            ) : null}
-            {referenceCurvePath ? (
-                <path
-                    data-role="mseg-reference-curve"
-                    data-shape-identity={editShapeIndex === 0 ? "b" : "a"}
-                    className={editShapeIndex === 0
-                        ? "cosimo-reference-curve-line cosimo-mseg-shape-b-curve-line"
-                        : "cosimo-reference-curve-line cosimo-mseg-shape-a-curve-line"}
-                    d={referenceCurvePath}
-                />
-            ) : null}
-            <path
-                data-role="mseg-base-fill"
-                data-shape-identity={editShapeIndex === 0 ? "a" : "b"}
-                className={joinClasses(
-                    "cosimo-curve-fill",
-                    editShapeIndex === 0 ? "cosimo-mseg-shape-a-fill" : "cosimo-mseg-shape-b-fill",
-                    hasEmphasizedSegment && "cosimo-curve-fill-muted",
-                )}
-                d={fillPath}
-            />
-            <path
-                data-role="mseg-base-curve"
-                data-shape-identity={editShapeIndex === 0 ? "a" : "b"}
-                className={joinClasses(
-                    "cosimo-curve-line",
-                    editShapeIndex === 0 ? "cosimo-mseg-shape-a-curve-line" : "cosimo-mseg-shape-b-curve-line",
-                    hasEmphasizedSegment && "cosimo-curve-line-muted",
-                )}
-                d={curvePath}
-            />
-            {morphCurvePath ? (
-                <path
-                    data-role="mseg-effective-curve"
-                    className={joinClasses(
-                        "cosimo-mseg-effective-curve-line",
-                        realizedMorphEmphasis === "active" && "is-active",
-                    )}
-                    d={morphCurvePath}
-                />
-            ) : null}
-            {highlightedSegmentPath ? (
-                <path
-                    data-role="mseg-highlight-segment"
-                    data-segment-index={String(emphasizedSegmentIndex)}
-                    className={joinClasses(
-                        "cosimo-curve-line cosimo-curve-line-highlight",
-                        editShapeIndex === 0 ? "cosimo-mseg-shape-a-curve-line" : "cosimo-mseg-shape-b-curve-line",
-                    )}
-                    d={highlightedSegmentPath}
-                />
-            ) : null}
-            <g
-                data-role="mseg-edit-points"
-                data-shape-identity={editShapeIndex === 0 ? "a" : "b"}
-            >
-                {points.map((point, pointIndex) => {
-                    const coordinates = pointToMsegEditorCoordinates(point, size.width, size.height, {
-                        orientation,
-                    });
-                    const isSelected = pointIndex === selectedPointIndex;
-                    const isEmphasizedSegmentEndpoint =
-                        hasEmphasizedSegment &&
-                        (pointIndex === emphasizedSegmentIndex || pointIndex === emphasizedSegmentIndex + 1);
-                    const pointState = hasEmphasizedSegment
-                        ? isEmphasizedSegmentEndpoint
-                            ? "highlighted"
-                            : "muted"
-                        : isSelected
-                            ? "selected"
-                            : "default";
-                    const radius = pointState === "selected"
-                        ? MSEG_SELECTED_POINT_RADIUS_PX
-                        : MSEG_POINT_RADIUS_PX;
-                    const pointClassName = pointState === "selected"
-                        ? "cosimo-mseg-point-selected"
-                        : pointState === "highlighted"
-                            ? "cosimo-mseg-point-highlight"
-                            : pointState === "muted"
-                                ? "cosimo-mseg-point-muted"
-                                : "cosimo-mseg-point-default";
-
-                    return (
-                        <circle
-                            key={`point-${pointIndex}-${point.x}-${point.y}`}
-                            data-role="mseg-point"
-                            data-point-index={String(pointIndex)}
-                            data-point-state={pointState}
-                            cx={coordinates.x}
-                            cy={coordinates.y}
-                            r={radius}
-                            className={pointClassName}
-                            vectorEffect="non-scaling-stroke"
-                        />
-                    );
-                })}
-            </g>
-            {timeAxisTicks.length === 0 ? null : (
-                <g
-                    data-role="mseg-time-axis"
-                    data-time-unit={timeAxisScale?.kind}
-                    className="cosimo-mseg-time-axis"
-                    aria-hidden="true"
-                >
-                    {timeAxisTicks.map((tick) => {
-                        const isVerticalTime = orientation === "vertical";
-                        const axisX = isVerticalTime
-                            ? metrics.plotLeft
-                            : metrics.plotLeft + (metrics.plotWidth * tick.fraction);
-                        const axisY = isVerticalTime
-                            ? metrics.plotTop + (metrics.plotHeight * tick.fraction)
-                            : metrics.plotBottom;
-                        const labelX = isVerticalTime ? axisX + 9 : axisX;
-                        const labelY = isVerticalTime ? axisY : axisY - 9;
-
-                        return (
-                            <g key={`mseg-time-${tick.fraction}`}>
-                                <line
-                                    data-role="mseg-time-tick"
-                                    data-axis-fraction={String(tick.fraction)}
-                                    className="cosimo-mseg-time-tick"
-                                    x1={axisX}
-                                    y1={axisY}
-                                    x2={isVerticalTime ? axisX + 6 : axisX}
-                                    y2={isVerticalTime ? axisY : axisY - 6}
-                                />
-                                <text
-                                    data-role="mseg-time-label"
-                                    data-axis-fraction={String(tick.fraction)}
-                                    className="cosimo-mseg-time-label"
-                                    x={labelX}
-                                    y={labelY}
-                                    textAnchor={isVerticalTime ? "start" : "middle"}
-                                    dominantBaseline={isVerticalTime ? "middle" : undefined}
-                                >
-                                    {tick.label}
-                                </text>
-                            </g>
-                        );
-                    })}
-                </g>
-            )}
-        </svg>
-    );
+    const reference = useMemo(() => referencePoints ? {...curve, points: referencePoints} : null, [curve, referencePoints]);
+    const morph = useMemo(() => {
+        if (!morphShapeAPoints || !morphShapeBPoints || morphValue === null) return null;
+        const a = new Float32Array(Mseg.sampleCount), b = new Float32Array(Mseg.sampleCount);
+        Mseg.renderInto({...curve, points: morphShapeAPoints}, a); Mseg.renderInto({...curve, points: morphShapeBPoints}, b);
+        return a.slice(1, -2).map((sample, index) => sample * (1 - morphValue) + b[index + 1] * morphValue);
+    }, [curve, morphShapeAPoints, morphShapeBPoints, morphValue]);
+    const shape = editShapeIndex === 0 ? "a" : "b";
+    const other = editShapeIndex === 0 ? "b" : "a";
+    return <Mseg.Root key={`${editShapeIndex}:${composition.editorKey}`} defaultSelection={{kind: "point", index: 0}} value={curve} onValueChange={composition.onValueChange} onGestureEnd={composition.onGestureEnd} style={{display: "contents"}}>
+        <Mseg.Surface ref={surfaceRef} orientation={orientation} curveEditActivationMode={composition.curveEditActivationMode}
+            curveEditHoldDelayMs={composition.curveEditHoldDelayMs} onCurveEditHoldActivated={composition.onCurveEditHoldActivated}
+            className={joinClasses("h-full w-full touch-none overflow-hidden rounded-[20px] bg-white/[0.03]", className)}
+            data-role={dataRole} data-morph-presentation={realizedMorphEmphasis === "active" ? "morph-active" : "edit-shape"} data-edit-shape={shape}
+            aria-label="MSEG curve">
+            <Mseg.Grid className="cosimo-grid-line" opacity={1}/>
+            {reference && <><Mseg.Fill value={reference} data-role="mseg-reference-fill" data-shape-identity={other} className={`cosimo-reference-curve-fill cosimo-mseg-shape-${other}-fill`} fillOpacity={1}/>
+                <Mseg.Line value={reference} data-role="mseg-reference-curve" data-shape-identity={other} className={`cosimo-reference-curve-line cosimo-mseg-shape-${other}-curve-line`}/></>}
+            <Mseg.Fill data-role="mseg-base-fill" data-shape-identity={shape} className={`cosimo-curve-fill cosimo-mseg-shape-${shape}-fill`} fillOpacity={1}/>
+            <Mseg.Line data-role="mseg-base-curve" data-shape-identity={shape} className={`cosimo-curve-line cosimo-mseg-shape-${shape}-curve-line`}/>
+            {morph && <Mseg.Plot samples={morph} data-role="mseg-effective-curve" className={joinClasses("cosimo-mseg-effective-curve-line", realizedMorphEmphasis === "active" && "is-active")}/>}
+            <Mseg.SegmentHighlight data-role="mseg-highlight-segment" className={`cosimo-curve-line cosimo-curve-line-highlight cosimo-mseg-shape-${shape}-curve-line`}/>
+            <Mseg.Points data-role="mseg-edit-points" data-shape-identity={shape} renderPoint={({index, state, position, handleProps}) => <g {...handleProps} transform={undefined}>
+                <circle data-role="mseg-point" data-point-index={index} data-point-state={state} cx={position.x} cy={position.y} r={state === "selected" ? 10 : 8}
+                    className={state === "selected" ? "cosimo-mseg-point-selected" : state === "highlighted" ? "cosimo-mseg-point-highlight" : state === "muted" ? "cosimo-mseg-point-muted" : "cosimo-mseg-point-default"}/>
+            </g>}/>
+            <Mseg.Playhead position={playheadPosition} data-role="mod-source-mseg-playhead" data-progress={playheadPosition?.toFixed(3)} className="cosimo-mseg-playhead"/>
+            {timeAxisScale && <Mseg.TimeAxis scale={timeAxisScale} data-role="mseg-time-axis" className="cosimo-mseg-time-axis"/>}
+        </Mseg.Surface>
+    </Mseg.Root>;
 }
 
 export function RangeField({
@@ -1216,7 +920,6 @@ export function ModulationAmountField({
     polarityAriaLabel,
     className,
 }: ModulationAmountFieldProps) {
-    const depth = getModulationAmountDepth(targetKind, amount);
     const knobPosition = getModulationAmountSliderPosition(targetKind, amount);
     const depthLabel = getModulationAmountPercentLabel(targetKind, amount);
     const unitReadout = formatModulationAmountReadout(targetKind, amount, polarity);
@@ -1331,1097 +1034,51 @@ export function ModulationAmountField({
     );
 }
 
-function buildMagnitudePlotPoints(
-    magnitudesDb: number[],
-    width: number,
-    height: number,
-    {
-        horizontalPadding = 18,
-        verticalPadding = 16,
-        minDb = -24,
-        maxDb = 18,
-    }: {
-        horizontalPadding?: number;
-        verticalPadding?: number;
-        minDb?: number;
-        maxDb?: number;
-    } = {},
-) {
-    const plotLeft = horizontalPadding;
-    const plotRight = Math.max(horizontalPadding + 1, width - horizontalPadding);
-    const plotTop = verticalPadding;
-    const plotBottom = Math.max(verticalPadding + 1, height - verticalPadding);
-    const plotWidth = Math.max(1, plotRight - plotLeft);
-    const plotHeight = Math.max(1, plotBottom - plotTop);
-    const points: Array<{ x: number; y: number }> = [];
-
-    for (let index = 0; index < magnitudesDb.length; index += 1) {
-        const x = plotLeft + (plotWidth * (index / Math.max(1, magnitudesDb.length - 1)));
-        const normalized = clamp((clamp(magnitudesDb[index], minDb, maxDb) - minDb) / (maxDb - minDb), 0, 1);
-        const y = plotBottom - (plotHeight * normalized);
-        points.push({ x, y });
-    }
-
-    return {
-        points,
-        plotLeft,
-        plotRight,
-        plotTop,
-        plotBottom,
-        plotWidth,
-        plotHeight,
+export function FilterResponseGraph(props: FilterResponseGraphProps) {
+    const { modulationTravel: travel } = props;
+    const base = { mode: props.baseMode, cutoffHz: props.baseCutoffHz, q: props.baseQ };
+    // The desktop harness reads the base and live filter state the graph was given.
+    const graphState = {
+        base,
+        live: props.liveHasActive
+            ? { hasActive: true, mode: props.liveMode, cutoffHz: props.liveCutoffHz, q: props.liveQ }
+            : { hasActive: false, ...base },
     };
-}
-
-function buildFilterResponsePath(
-    magnitudesDb: number[],
-    width: number,
-    height: number,
-    options: {
-        horizontalPadding?: number;
-        verticalPadding?: number;
-        minDb?: number;
-        maxDb?: number;
-    } = {},
-) {
-    const plot = buildMagnitudePlotPoints(magnitudesDb, width, height, options);
-    let path = "";
-
-    for (let index = 0; index < plot.points.length; index += 1) {
-        const point = plot.points[index];
-        path += `${index === 0 ? "M" : "L"} ${point.x.toFixed(3)} ${point.y.toFixed(3)} `;
-    }
-
-    return {
-        ...plot,
-        path: path.trim(),
-    };
-}
-
-function drawFilterSpectrumOverlay({
-    canvas,
-    width,
-    height,
-    geometry,
-}: {
-    canvas: HTMLCanvasElement;
-    width: number;
-    height: number;
-    geometry: FilterSpectrumRenderGeometry;
-}) {
-    const devicePixelRatio = window.devicePixelRatio || 1;
-    const scaledWidth = Math.max(1, Math.round(width * devicePixelRatio));
-    const scaledHeight = Math.max(1, Math.round(height * devicePixelRatio));
-
-    if (canvas.width !== scaledWidth || canvas.height !== scaledHeight) {
-        canvas.width = scaledWidth;
-        canvas.height = scaledHeight;
-    }
-
-    const context = canvas.getContext("2d");
-
-    if (!context) {
-        return;
-    }
-
-    context.setTransform(devicePixelRatio, 0, 0, devicePixelRatio, 0, 0);
-    context.clearRect(0, 0, width, height);
-
-    const accentRgb = window.getComputedStyle(canvas).getPropertyValue("--section-accent-rgb")
-        .trim()
-        .split(/\s+/)
-        .map((component) => Number.parseInt(component, 10));
-    const [accentR, accentG, accentB] = accentRgb.length === 3 && accentRgb.every(Number.isFinite)
-        ? accentRgb
-        : [169, 140, 255];
-    const accentColor = (alpha: number) => `rgba(${accentR}, ${accentG}, ${accentB}, ${alpha})`;
-    const gradient = context.createLinearGradient(0, geometry.plotTop, 0, geometry.plotBottom);
-    gradient.addColorStop(0, accentColor(0.14));
-    gradient.addColorStop(1, accentColor(0.00));
-
-    if (geometry.kind === "graph") {
-        if (geometry.points.length === 0) {
-            return;
-        }
-
-        context.beginPath();
-        context.moveTo(geometry.points[0].x, geometry.plotBottom);
-
-        for (const point of geometry.points) {
-            context.lineTo(point.x, point.y);
-        }
-
-        context.lineTo(geometry.points[geometry.points.length - 1].x, geometry.plotBottom);
-        context.closePath();
-        context.fillStyle = gradient;
-        context.fill();
-
-        context.beginPath();
-        for (let index = 0; index < geometry.points.length; index += 1) {
-            const point = geometry.points[index];
-            if (index === 0) {
-                context.moveTo(point.x, point.y);
-            } else {
-                context.lineTo(point.x, point.y);
-            }
-        }
-        context.strokeStyle = accentColor(0.64);
-        context.lineWidth = 1.9;
-        context.stroke();
-
-        context.beginPath();
-        for (let index = 0; index < geometry.peakPoints.length; index += 1) {
-            const point = geometry.peakPoints[index];
-            if (index === 0) {
-                context.moveTo(point.x, point.y);
-            } else {
-                context.lineTo(point.x, point.y);
-            }
-        }
-
-        context.strokeStyle = accentColor(0.30);
-        context.lineWidth = 1;
-        context.stroke();
-        return;
-    }
-
-    const drawBarPath = (x: number, y: number, barWidth: number, barHeight: number, radius: number) => {
-        const right = x + barWidth;
-        const bottom = y + barHeight;
-        const safeRadius = Math.max(0, Math.min(radius, barWidth * 0.5, barHeight * 0.5));
-        context.beginPath();
-        context.moveTo(x, bottom);
-        context.lineTo(x, y + safeRadius);
-        if (safeRadius > 0) {
-            context.quadraticCurveTo(x, y, x + safeRadius, y);
-            context.lineTo(right - safeRadius, y);
-            context.quadraticCurveTo(right, y, right, y + safeRadius);
-        } else {
-            context.lineTo(x, y);
-            context.lineTo(right, y);
-        }
-        context.lineTo(right, bottom);
-        context.closePath();
-    };
-
-    for (const bar of geometry.bars) {
-        if (bar.height <= 0 || bar.width <= 0) {
-            continue;
-        }
-
-        drawBarPath(bar.x, bar.y, bar.width, bar.height, bar.radius);
-        context.fillStyle = gradient;
-        context.fill();
-        context.strokeStyle = accentColor(0.56);
-        context.lineWidth = geometry.rounded ? 1.45 : 1.1;
-        context.stroke();
-    }
-
-    context.beginPath();
-    for (const peakBar of geometry.peakBars) {
-        if (peakBar.width <= 0) {
-            continue;
-        }
-
-        const centerX = peakBar.x + (peakBar.width * 0.5);
-        const halfWidth = Math.min(5, peakBar.width * 0.45);
-        context.moveTo(centerX - halfWidth, peakBar.y);
-        context.lineTo(centerX + halfWidth, peakBar.y);
-    }
-    context.strokeStyle = accentColor(0.32);
-    context.lineWidth = 1;
-    context.stroke();
-}
-
-export function FilterResponseGraph({
-    baseMode,
-    baseCutoffHz,
-    baseQ,
-    liveMode,
-    liveCutoffHz,
-    liveQ,
-    liveHasActive,
-    spectrumFrame = null,
-    spectrumRenderMode = "graph",
-    resonanceNormalizedFromQ = filterQToNormalized,
-    resonanceQFromSurface = normalizedToFilterQ,
-    resonanceCurveDebugState = {
-        familyId: "linear",
-        coefficients: {},
-    },
-    onGestureStart,
-    onGestureEnd,
-    onCutoffSet,
-    onQSet,
-    modulationTravel = null,
-    onTravelEndpointSet,
-    onTravelTranslate,
-    onTravelGestureStart,
-    onTravelGestureEnd,
-    className,
-}: FilterResponseGraphProps) {
-    const viewportRef = useRef<HTMLDivElement | null>(null);
-    const spectrumCanvasRef = useRef<HTMLCanvasElement | null>(null);
-    const surfaceRef = useRef<SVGSVGElement | null>(null);
-    const size = useResizeObserver(viewportRef);
-    const [activePointerId, setActivePointerId] = useState<number | null>(null);
-    const dragStateRef = useRef<{
-        pointerId: number;
-        target: "value" | FilterTravelGestureSide;
-        startClientX: number;
-        startClientY: number;
-        pointerOffsetX: number;
-        pointerOffsetY: number;
-        hasMoved: boolean;
-        /** Grab-time endpoint screen points for rigid center translation. */
-        travelAnchor?: {
-            readonly startPoint: { readonly x: number; readonly y: number };
-            readonly endPoint: { readonly x: number; readonly y: number };
-        };
-    } | null>(null);
-    const applyHandlePointerPositionRef = useRef<(clientX: number, clientY: number) => void>(() => undefined);
-    const onGestureStartRef = useRef(onGestureStart);
-    const onGestureEndRef = useRef(onGestureEnd);
-    const onTravelEndpointSetRef = useRef(onTravelEndpointSet);
-    const onTravelTranslateRef = useRef(onTravelTranslate);
-    const onTravelGestureStartRef = useRef(onTravelGestureStart);
-    const onTravelGestureEndRef = useRef(onTravelGestureEnd);
-    onGestureStartRef.current = onGestureStart;
-    onGestureEndRef.current = onGestureEnd;
-    onTravelEndpointSetRef.current = onTravelEndpointSet;
-    onTravelTranslateRef.current = onTravelTranslate;
-    onTravelGestureStartRef.current = onTravelGestureStart;
-    onTravelGestureEndRef.current = onTravelGestureEnd;
-    const baseModel = useMemo(() => createFilterResponseModel({
-        mode: baseMode,
-        cutoffHz: baseCutoffHz,
-        q: baseQ,
-    }), [baseCutoffHz, baseMode, baseQ]);
-    const liveModel = useMemo(() => createFilterResponseModel({
-        mode: liveHasActive ? liveMode : baseMode,
-        cutoffHz: liveHasActive ? liveCutoffHz : baseCutoffHz,
-        q: liveHasActive ? liveQ : baseQ,
-    }), [baseCutoffHz, baseMode, baseQ, liveCutoffHz, liveHasActive, liveMode, liveQ]);
-    const basePath = useMemo(
-        () => buildFilterResponsePath(baseModel.magnitudesDb, size.width, size.height),
-        [baseModel.magnitudesDb, size.height, size.width],
-    );
-    const livePath = useMemo(
-        () => buildFilterResponsePath(liveModel.magnitudesDb, size.width, size.height),
-        [liveModel.magnitudesDb, size.height, size.width],
-    );
-    const spectrumBands = useMemo(() => buildFilterSpectrumBands(), []);
-    const spectrumGraphPoints = useMemo(() => buildFilterSpectrumGraphPoints(), []);
-    const spectrumFrequencyTicks = useMemo(() => buildFilterSpectrumFrequencyTicks(), []);
-    const spectrumDbTicks = useMemo(() => buildFilterSpectrumDbTicks(), []);
-    const [spectrumDisplay, setSpectrumDisplay] = useState<FilterSpectrumDisplayState | null>(null);
-
-    useEffect(() => {
-        const nextFrame = createFilterSpectrumDisplayFrame({
-            frame: spectrumFrame,
-            bands: spectrumBands,
-            graphPoints: spectrumGraphPoints,
-        });
-
-        if (!nextFrame) {
-            return;
-        }
-
-        setSpectrumDisplay((previousState) => (
-            advanceFilterSpectrumDisplayState(previousState, nextFrame, uiMediaTimeNow())
-        ));
-    }, [spectrumBands, spectrumFrame, spectrumGraphPoints]);
-
-    const spectrumGeometry = useMemo(() => (
-        spectrumDisplay
-            ? buildFilterSpectrumRenderGeometry({
-                renderMode: spectrumRenderMode,
-                width: size.width,
-                height: size.height,
-                displayState: spectrumDisplay,
-            })
-            : null
-    ), [size.height, size.width, spectrumDisplay, spectrumRenderMode]);
-
-    useEffect(() => {
-        const canvas = spectrumCanvasRef.current;
-
-        if (!canvas) {
-            return;
-        }
-
-        let animationFrameID = window.requestAnimationFrame(() => {
-            if (!spectrumGeometry) {
-                const context = canvas.getContext("2d");
-                if (context) {
-                    const devicePixelRatio = window.devicePixelRatio || 1;
-                    context.setTransform(devicePixelRatio, 0, 0, devicePixelRatio, 0, 0);
-                    context.clearRect(0, 0, size.width, size.height);
-                }
-                return;
-            }
-
-            drawFilterSpectrumOverlay({
-                canvas,
-                width: size.width,
-                height: size.height,
-                geometry: spectrumGeometry,
-            });
-        });
-
-        return () => {
-            window.cancelAnimationFrame(animationFrameID);
-        };
-    }, [size.height, size.width, spectrumGeometry]);
-
-    const baseHandle = useMemo(() => {
-        const cutoffNormalized = filterCutoffHzToNormalized(baseModel.cutoffHz);
-        const qNormalized = clamp(resonanceNormalizedFromQ(baseModel.q), 0, 1);
-
-        return {
-            cutoffNormalized,
-            qNormalized,
-            x: basePath.plotLeft + (basePath.plotWidth * cutoffNormalized),
-            y: basePath.plotBottom - (basePath.plotHeight * qNormalized),
-        };
-    }, [baseModel, basePath, resonanceNormalizedFromQ]);
-
-    const travelGeometry = useMemo(() => {
-        if (!modulationTravel) {
-            return null;
-        }
-
-        const pointFor = (state: FilterEndpointState) => ({
-            x: basePath.plotLeft + (basePath.plotWidth * clamp(
-                filterCutoffHzToNormalized(clamp(state.cutoffHz, FILTER_CUTOFF_MIN_HZ, FILTER_CUTOFF_MAX_HZ)),
-                0,
-                1,
-            )),
-            y: basePath.plotBottom - (basePath.plotHeight * clamp(resonanceNormalizedFromQ(state.q), 0, 1)),
-        });
-        const toPolyline = (points: ReadonlyArray<{ x: number; y: number }>) => (
-            points.map((point) => `${point.x.toFixed(2)} ${point.y.toFixed(2)}`).join(" L ")
-        );
-
-        const startResponse = buildFilterResponsePath(
-            createFilterResponseModel({
-                mode: baseMode,
-                cutoffHz: modulationTravel.start.cutoffHz,
-                q: modulationTravel.start.q,
-            }).magnitudesDb,
-            size.width,
-            size.height,
-        );
-        const endResponse = buildFilterResponsePath(
-            createFilterResponseModel({
-                mode: baseMode,
-                cutoffHz: modulationTravel.end.cutoffHz,
-                q: modulationTravel.end.q,
-            }).magnitudesDb,
-            size.width,
-            size.height,
-        );
-        const shadePath = startResponse.points.length > 0 && endResponse.points.length > 0
-            ? `M ${toPolyline(startResponse.points)} L ${toPolyline([...endResponse.points].reverse())} Z`
-            : "";
-
-        const startPoint = pointFor(modulationTravel.start);
-        const endPoint = pointFor(modulationTravel.end);
-        const basePoint = { x: baseHandle.x, y: baseHandle.y };
-        // ADR-025 zero language: a 0% endpoint parks as a dotted tab beside
-        // base instead of stacking a dead handle on the base grab area.
-        const endParked = Math.hypot(endPoint.x - basePoint.x, endPoint.y - basePoint.y) < 3;
-        const startParked = modulationTravel.showStartHandle
-            && Math.hypot(startPoint.x - basePoint.x, startPoint.y - basePoint.y) < 3;
-        const presentedEnd = endParked ? { x: basePoint.x + 18, y: basePoint.y } : endPoint;
-        const presentedStart = startParked ? { x: basePoint.x - 18, y: basePoint.y } : startPoint;
-        const travelStart = modulationTravel.showStartHandle ? presentedStart : basePoint;
-        const centerPoint = {
-            x: (travelStart.x + presentedEnd.x) / 2,
-            y: (travelStart.y + presentedEnd.y) / 2,
-        };
-
-        return {
-            startCurvePath: startResponse.path,
-            endCurvePath: endResponse.path,
-            shadePath,
-            startPoint: presentedStart,
-            endPoint: presentedEnd,
-            /** Unparked endpoint points: the rigid-translate anchor. */
-            trueStartPoint: modulationTravel.showStartHandle ? startPoint : basePoint,
-            trueEndPoint: endPoint,
-            centerPoint,
-            startParked,
-            endParked,
-        };
-    }, [baseHandle, baseMode, basePath, modulationTravel, resonanceNormalizedFromQ, size.height, size.width]);
-
-    const beginTravelEndpointDrag = (side: FilterTravelEndpointSide, handleX: number, handleY: number) => (
-        (event: ReactPointerEvent<SVGCircleElement>) => {
-            event.preventDefault();
-            endDrag();
-            try {
-                surfaceRef.current?.setPointerCapture(event.pointerId);
-            } catch {
-                // Window-level termination still owns unsupported or synthetic pointers.
-            }
-            const bounds = surfaceRef.current?.getBoundingClientRect();
-            dragStateRef.current = {
-                pointerId: event.pointerId,
-                target: side,
-                startClientX: event.clientX,
-                startClientY: event.clientY,
-                pointerOffsetX: bounds ? event.clientX - (bounds.left + handleX) : 0,
-                pointerOffsetY: bounds ? event.clientY - (bounds.top + handleY) : 0,
-                hasMoved: false,
-            };
-            // Snapshot the fixed endpoint before the first write: endpoint
-            // math must anchor on where the OTHER endpoint was at grab time.
-            onTravelGestureStartRef.current?.(side);
-            setActivePointerId(event.pointerId);
-        }
-    );
-
-    const applyHandlePointerPosition = (clientX: number, clientY: number) => {
-        const surface = surfaceRef.current;
-        const dragState = dragStateRef.current;
-
-        if (!surface || !dragState) {
-            return;
-        }
-
-        const bounds = surface.getBoundingClientRect();
-        const stateAtPlotPoint = (rawPlotX: number, rawPlotY: number): FilterEndpointState => {
-            const plotX = clamp(rawPlotX, basePath.plotLeft, basePath.plotRight);
-            const plotY = clamp(rawPlotY, basePath.plotTop, basePath.plotBottom);
-            const cutoffNormalized = clamp(
-                (plotX - basePath.plotLeft) / Math.max(1, basePath.plotWidth),
-                0,
-                1,
-            );
-            const qNormalized = clamp(
-                1 - ((plotY - basePath.plotTop) / Math.max(1, basePath.plotHeight)),
-                0,
-                1,
-            );
-            return {
-                cutoffHz: clamp(normalizedToFilterCutoffHz(cutoffNormalized), FILTER_CUTOFF_MIN_HZ, FILTER_CUTOFF_MAX_HZ),
-                q: clamp(resonanceQFromSurface(qNormalized), FILTER_Q_MIN, FILTER_Q_MAX),
-            };
-        };
-
-        if (dragState.target === "center") {
-            const anchor = dragState.travelAnchor;
-            if (!anchor) {
-                return;
-            }
-            // Rigid screen-space translation: the interval your eye tracks is
-            // a screen object, so both endpoints move by ONE pixel delta,
-            // clamped so neither leaves the plot (rigid means rigid: it stops
-            // at the rails instead of squashing one side).
-            const rawDeltaX = clientX - dragState.startClientX;
-            const rawDeltaY = clientY - dragState.startClientY;
-            const minX = Math.min(anchor.startPoint.x, anchor.endPoint.x);
-            const maxX = Math.max(anchor.startPoint.x, anchor.endPoint.x);
-            const minY = Math.min(anchor.startPoint.y, anchor.endPoint.y);
-            const maxY = Math.max(anchor.startPoint.y, anchor.endPoint.y);
-            const deltaX = clamp(rawDeltaX, basePath.plotLeft - minX, basePath.plotRight - maxX);
-            const deltaY = clamp(rawDeltaY, basePath.plotTop - minY, basePath.plotBottom - maxY);
-            onTravelTranslateRef.current?.(
-                stateAtPlotPoint(anchor.startPoint.x + deltaX, anchor.startPoint.y + deltaY),
-                stateAtPlotPoint(anchor.endPoint.x + deltaX, anchor.endPoint.y + deltaY),
-            );
-            return;
-        }
-
-        const next = stateAtPlotPoint(
-            (clientX - dragState.pointerOffsetX) - bounds.left,
-            (clientY - dragState.pointerOffsetY) - bounds.top,
-        );
-
-        if (dragState.target !== "value") {
-            // Travel endpoints move in both axes with the same transfers as
-            // the base handle; the consumer maps them onto route amounts.
-            onTravelEndpointSetRef.current?.(dragState.target, next);
-            return;
-        }
-
-        onCutoffSet(next.cutoffHz);
-        onQSet(next.q);
-    };
-    applyHandlePointerPositionRef.current = applyHandlePointerPosition;
-
-    const endDrag = useCallback((pointerId?: number) => {
-        const dragState = dragStateRef.current;
-
-        if (!dragState || (pointerId !== undefined && dragState.pointerId !== pointerId)) {
-            return;
-        }
-
-        dragStateRef.current = null;
-        setActivePointerId(null);
-        const surface = surfaceRef.current;
-
-        try {
-            if (surface?.hasPointerCapture(dragState.pointerId)) {
-                surface.releasePointerCapture(dragState.pointerId);
-            }
-        } catch {
-            // Capture may already be gone after cancellation, blur, or unmount.
-        }
-
-        if (dragState.target === "value") {
-            if (dragState.hasMoved) {
-                onGestureEndRef.current?.();
-            }
-        } else {
-            onTravelGestureEndRef.current?.();
-        }
-    }, []);
-
-    const updateFilterDragFromPointer = useCallback((event: Pick<
-        PointerEvent,
-        "pointerId" | "pointerType" | "buttons" | "clientX" | "clientY"
-    >) => {
-        const dragState = dragStateRef.current;
-
-        if (!dragState || dragState.pointerId !== event.pointerId) {
-            return;
-        }
-
-        if (event.pointerType === "mouse" && event.buttons === 0) {
-            endDrag(event.pointerId);
-            return;
-        }
-
-        const deltaX = event.clientX - dragState.startClientX;
-        const deltaY = event.clientY - dragState.startClientY;
-
-        if (!dragState.hasMoved && Math.abs(deltaX) < 1.5 && Math.abs(deltaY) < 1.5) {
-            return;
-        }
-
-        if (!dragState.hasMoved) {
-            dragState.hasMoved = true;
-            if (dragState.target === "value") {
-                onGestureStartRef.current?.();
-            }
-        }
-        applyHandlePointerPositionRef.current(event.clientX, event.clientY);
-    }, [endDrag]);
-
-    useEffect(() => {
-        const handleFallbackPointerMove = (event: PointerEvent) => {
-            const dragState = dragStateRef.current;
-            if (!dragState || dragState.pointerId !== event.pointerId) {
-                return;
-            }
-            const surface = surfaceRef.current;
-            if (event.target instanceof Node && surface?.contains(event.target)) {
-                return;
-            }
-            updateFilterDragFromPointer(event);
-        };
-        const handlePointerEnd = (event: PointerEvent) => endDrag(event.pointerId);
-        const handleBlur = () => endDrag();
-        const handleVisibilityChange = () => {
-            if (document.visibilityState !== "visible") {
-                endDrag();
-            }
-        };
-
-        window.addEventListener("pointermove", handleFallbackPointerMove, true);
-        window.addEventListener("pointerup", handlePointerEnd, true);
-        window.addEventListener("pointercancel", handlePointerEnd, true);
-        window.addEventListener("blur", handleBlur);
-        document.addEventListener("visibilitychange", handleVisibilityChange);
-        return () => {
-            window.removeEventListener("pointermove", handleFallbackPointerMove, true);
-            window.removeEventListener("pointerup", handlePointerEnd, true);
-            window.removeEventListener("pointercancel", handlePointerEnd, true);
-            window.removeEventListener("blur", handleBlur);
-            document.removeEventListener("visibilitychange", handleVisibilityChange);
-            endDrag();
-        };
-    }, [endDrag, updateFilterDragFromPointer]);
-
-    const debugState = useMemo(() => ({
-        base: {
-            mode: baseModel.mode,
-            cutoffHz: baseModel.cutoffHz,
-            q: baseModel.q,
-            peakIndex: baseModel.peakIndex,
-            minIndex: baseModel.minIndex,
-        },
-        live: {
-            hasActive: liveHasActive,
-            mode: liveModel.mode,
-            cutoffHz: liveModel.cutoffHz,
-            q: liveModel.q,
-            peakIndex: liveModel.peakIndex,
-            minIndex: liveModel.minIndex,
-        },
-        handle: {
-            x: baseHandle.x,
-            y: baseHandle.y,
-            cutoffNormalized: baseHandle.cutoffNormalized,
-            qNormalized: baseHandle.qNormalized,
-            isDragging: activePointerId !== null,
-        },
-        resonanceCurve: resonanceCurveDebugState,
-        plot: {
-            left: basePath.plotLeft,
-            right: basePath.plotRight,
-            top: basePath.plotTop,
-            bottom: basePath.plotBottom,
-            width: basePath.plotWidth,
-            height: basePath.plotHeight,
-        },
-        spectrum: spectrumDisplay ? {
-            hasSpectrum: true,
-            renderMode: spectrumRenderMode,
-            sampleRateHz: spectrumDisplay.sampleRateHz,
-            sourceBinCount: spectrumDisplay.sourceBinCount,
-            bandCount: spectrumDisplay.bands.length,
-            graphPointCount: spectrumDisplay.graphPoints.length,
-            peakBandIndex: spectrumDisplay.peakBandIndex,
-            peakGraphPointIndex: spectrumDisplay.peakGraphPointIndex,
-            bandMagnitudesDb: spectrumDisplay.bandMagnitudesDb,
-            smoothedMagnitudesDb: spectrumDisplay.smoothedMagnitudesDb,
-            peakMagnitudesDb: spectrumDisplay.peakMagnitudesDb,
-            renderGeometry: spectrumGeometry ? (
-                spectrumGeometry.kind === "graph"
-                    ? {
-                        kind: "graph",
-                        pointCount: spectrumGeometry.pointCount,
-                        peakPointCount: spectrumGeometry.peakPointCount,
-                    }
-                    : {
-                        kind: "bars",
-                        barCount: spectrumGeometry.barCount,
-                        rounded: spectrumGeometry.rounded,
-                    }
-            ) : null,
-            frequencyTicks: spectrumDisplay.frequencyTicks,
-            dbTicks: spectrumDisplay.dbTicks,
-        } : {
-            hasSpectrum: false,
-            renderMode: spectrumRenderMode,
-            sampleRateHz: null,
-            sourceBinCount: 0,
-            bandCount: spectrumBands.length,
-            graphPointCount: spectrumGraphPoints.length,
-            peakBandIndex: -1,
-            peakGraphPointIndex: -1,
-            bandMagnitudesDb: [],
-            smoothedMagnitudesDb: [],
-            peakMagnitudesDb: [],
-            renderGeometry: null,
-            frequencyTicks: spectrumFrequencyTicks,
-            dbTicks: spectrumDbTicks,
-        },
-    }), [
-        baseModel,
-        baseHandle,
-        liveHasActive,
-        liveModel,
-        activePointerId,
-        spectrumBands.length,
-        spectrumDbTicks,
-        spectrumDisplay,
-        spectrumFrequencyTicks,
-        spectrumGeometry,
-        spectrumGraphPoints.length,
-        spectrumRenderMode,
-        resonanceCurveDebugState,
-    ]);
-
-    const visibleFrequencyTicks = useMemo(() => {
-        if (size.width <= 360) {
-            return spectrumFrequencyTicks.filter((_, index) => [0, 2, 4, 6, 9].includes(index));
-        }
-
-        if (size.width <= 480) {
-            return spectrumFrequencyTicks.filter((_, index) => [0, 1, 2, 4, 6, 8, 9].includes(index));
-        }
-
-        return spectrumFrequencyTicks;
-    }, [size.width, spectrumFrequencyTicks]);
-
-    const visibleDbTicks = useMemo(() => {
-        if (size.width <= 360) {
-            return spectrumDbTicks.filter((_, index) => [0, 2, 4].includes(index));
-        }
-
-        if (size.width <= 480) {
-            return spectrumDbTicks.filter((_, index) => [0, 1, 2, 4].includes(index));
-        }
-
-        return spectrumDbTicks;
-    }, [size.width, spectrumDbTicks]);
-
-    return (
-        <div className={joinClasses("relative h-full w-full", className)}>
-            <div
-                ref={viewportRef}
-                className="synth-display-recess relative h-full w-full overflow-hidden rounded-[24px]"
-            >
-                <canvas
-                    ref={spectrumCanvasRef}
-                    data-role="filter-spectrum-canvas"
-                    className="pointer-events-none absolute inset-0 h-full w-full"
-                />
-                <svg
-                    ref={surfaceRef}
-                    data-role="filter-response-graph"
-                    className="absolute inset-0 h-full w-full touch-none overflow-hidden"
-                    viewBox={`0 0 ${size.width} ${size.height}`}
-                    onPointerMove={(event) => updateFilterDragFromPointer(event.nativeEvent)}
-                    onPointerUp={(event) => {
-                        endDrag(event.pointerId);
-                    }}
-                    onPointerCancel={(event) => {
-                        endDrag(event.pointerId);
-                    }}
-                    onLostPointerCapture={(event) => {
-                        endDrag(event.pointerId);
-                    }}
-                >
-                    {visibleDbTicks.map((tick) => (
-                        <line
-                            key={`filter-grid-h-${tick.label}`}
-                            x1={basePath.plotLeft}
-                            x2={basePath.plotRight}
-                            y1={basePath.plotTop + (basePath.plotHeight * (tick.normalizedY ?? 0))}
-                            y2={basePath.plotTop + (basePath.plotHeight * (tick.normalizedY ?? 0))}
-                            stroke="rgba(255,255,255,0.07)"
-                            strokeWidth="1"
-                        />
-                    ))}
-                    {visibleFrequencyTicks.map((tick) => (
-                        <line
-                            key={`filter-grid-v-${tick.label}`}
-                            y1={basePath.plotTop}
-                            y2={basePath.plotBottom}
-                            x1={basePath.plotLeft + (basePath.plotWidth * (tick.normalizedX ?? 0))}
-                            x2={basePath.plotLeft + (basePath.plotWidth * (tick.normalizedX ?? 0))}
-                            stroke="rgba(255,255,255,0.04)"
-                            strokeWidth="1"
-                        />
-                    ))}
-                    {visibleDbTicks.map((tick) => (
-                        <text
-                            key={`filter-db-label-${tick.label}`}
-                            x={basePath.plotLeft + 2}
-                            y={(basePath.plotTop + (basePath.plotHeight * (tick.normalizedY ?? 0))) - 4}
-                            fill="rgba(226,232,240,0.44)"
-                            fontSize="10"
-                        >
-                            {tick.label}
-                        </text>
-                    ))}
-                    {visibleFrequencyTicks.map((tick) => (
-                        <text
-                            key={`filter-frequency-label-${tick.label}`}
-                            x={basePath.plotLeft + (basePath.plotWidth * (tick.normalizedX ?? 0))}
-                            y={Math.max(basePath.plotBottom - 6, 16)}
-                            fill="rgba(226,232,240,0.42)"
-                            fontSize="10"
-                            textAnchor="middle"
-                        >
-                            {tick.label}
-                        </text>
-                    ))}
-                    <path d={basePath.path} fill="none" stroke="rgb(var(--section-accent-rgb) / 0.36)" strokeWidth="2" />
-                    <path
-                        d={livePath.path}
-                        fill="none"
-                        stroke={liveHasActive ? "rgb(var(--section-accent-rgb) / 0.98)" : "rgb(var(--section-accent-rgb) / 0.72)"}
-                        strokeWidth={liveHasActive ? "3" : "2"}
-                    />
-                    <line
-                        x1={baseHandle.x}
-                        x2={baseHandle.x}
-                        y1={basePath.plotBottom}
-                        y2={baseHandle.y}
-                        stroke="rgb(var(--section-accent-rgb) / 0.20)"
-                        strokeWidth="1.5"
-                        strokeDasharray="4 4"
-                        pointerEvents="none"
-                    />
-                    <circle
-                        data-role="filter-response-handle-hit-target"
-                        cx={baseHandle.x}
-                        cy={baseHandle.y}
-                        r="18"
-                        fill="transparent"
-                        className="cursor-grab active:cursor-grabbing"
-                        onPointerDown={(event) => {
-                            event.preventDefault();
-                            endDrag();
-                            try {
-                                surfaceRef.current?.setPointerCapture(event.pointerId);
-                            } catch {
-                                // Window-level termination still owns unsupported or synthetic pointers.
-                            }
-                            const bounds = surfaceRef.current?.getBoundingClientRect();
-                            // With a unipolar travel routed, base IS the travel
-                            // start: its drags pin the end (the center grip
-                            // owns translation). Bipolar travel keeps the
-                            // plain translate: base is already the center.
-                            const target = modulationTravel && modulationTravel.baseHandleMode === "start"
-                                ? "base" as const
-                                : "value" as const;
-                            dragStateRef.current = {
-                                pointerId: event.pointerId,
-                                target,
-                                startClientX: event.clientX,
-                                startClientY: event.clientY,
-                                pointerOffsetX: bounds ? event.clientX - (bounds.left + baseHandle.x) : 0,
-                                pointerOffsetY: bounds ? event.clientY - (bounds.top + baseHandle.y) : 0,
-                                hasMoved: false,
-                            };
-                            if (target === "base") {
-                                onTravelGestureStartRef.current?.("base");
-                            }
-                            setActivePointerId(event.pointerId);
-                        }}
-                    />
-                    <circle
-                        cx={baseHandle.x}
-                        cy={baseHandle.y}
-                        r="15"
-                        fill="rgb(var(--section-accent-rgb) / 0.16)"
-                        stroke="var(--section-accent-dim)"
-                        strokeWidth="1"
-                        pointerEvents="none"
-                    />
-                    <circle
-                        data-role="filter-response-handle"
-                        cx={baseHandle.x}
-                        cy={baseHandle.y}
-                        r="10.5"
-                        fill="var(--section-accent)"
-                        stroke="rgb(255 255 255 / 0.42)"
-                        strokeWidth="1.6"
-                        pointerEvents="none"
-                    />
-                    <path
-                        d={`M ${baseHandle.x.toFixed(2)} ${(baseHandle.y - 4).toFixed(2)} L ${baseHandle.x.toFixed(2)} ${(baseHandle.y + 4).toFixed(2)} M ${(baseHandle.x - 4).toFixed(2)} ${baseHandle.y.toFixed(2)} L ${(baseHandle.x + 4).toFixed(2)} ${baseHandle.y.toFixed(2)}`}
-                        stroke="rgba(5, 9, 19, 0.72)"
-                        strokeWidth="1.8"
-                        strokeLinecap="round"
-                        pointerEvents="none"
-                    />
-                    {modulationTravel && travelGeometry ? (
-                        <g
-                            data-role="filter-travel-overlay"
-                            data-cutoff-route-storage={modulationTravel.cutoffRouteStorageAmount}
-                        >
-                            {modulationTravel.cutoffAmountLabel !== undefined ? (
-                                <text
-                                    data-role="filter-travel-cutoff-amount-label"
-                                    x={Math.max(8, size.width - 10)}
-                                    y="15"
-                                    textAnchor="end"
-                                    fill={modulationTravel.accent}
-                                    fontSize="10"
-                                    fontWeight="650"
-                                    pointerEvents="none"
-                                >
-                                    {modulationTravel.cutoffAmountLabel}
-                                </text>
-                            ) : null}
-                            {travelGeometry.shadePath ? (
-                                <path
-                                    data-role="filter-travel-shade"
-                                    d={travelGeometry.shadePath}
-                                    fill={modulationTravel.accent}
-                                    fillOpacity="0.14"
-                                    stroke="none"
-                                    pointerEvents="none"
-                                />
-                            ) : null}
-                            <path
-                                data-role="filter-travel-start-curve"
-                                d={travelGeometry.startCurvePath}
-                                fill="none"
-                                stroke={modulationTravel.accent}
-                                strokeOpacity="0.5"
-                                strokeWidth="1.6"
-                                pointerEvents="none"
-                            />
-                            <path
-                                data-role="filter-travel-end-curve"
-                                d={travelGeometry.endCurvePath}
-                                fill="none"
-                                stroke={modulationTravel.accent}
-                                strokeOpacity="0.9"
-                                strokeWidth="2"
-                                pointerEvents="none"
-                            />
-                            {modulationTravel.centerHandle && !travelGeometry.endParked ? (
-                                <g data-role="filter-travel-center">
-                                    <rect
-                                        data-role="filter-travel-handle-center"
-                                        x={travelGeometry.centerPoint.x - 5}
-                                        y={travelGeometry.centerPoint.y - 5}
-                                        width="10"
-                                        height="10"
-                                        rx="2"
-                                        transform={`rotate(45 ${travelGeometry.centerPoint.x} ${travelGeometry.centerPoint.y})`}
-                                        fill="rgb(9 13 15 / 0.9)"
-                                        stroke={modulationTravel.accent}
-                                        strokeWidth="1.6"
-                                        pointerEvents="none"
-                                    />
-                                    <circle
-                                        data-role="filter-travel-hit-target-center"
-                                        role="slider"
-                                        aria-label="Translate filter modulation travel"
-                                        aria-valuemin={FILTER_CUTOFF_MIN_HZ}
-                                        aria-valuemax={FILTER_CUTOFF_MAX_HZ}
-                                        aria-valuenow={Math.round(baseCutoffHz)}
-                                        tabIndex={0}
-                                        cx={travelGeometry.centerPoint.x}
-                                        cy={travelGeometry.centerPoint.y}
-                                        r="14"
-                                        fill="transparent"
-                                        className="cursor-grab active:cursor-grabbing"
-                                        onPointerDown={(event) => {
-                                            event.preventDefault();
-                                            endDrag();
-                                            try {
-                                                surfaceRef.current?.setPointerCapture(event.pointerId);
-                                            } catch {
-                                                // Window-level termination still owns unsupported or synthetic pointers.
-                                            }
-                                            // Rigid screen-space translation: both endpoints
-                                            // ride one pixel delta from their grab-time spots.
-                                            dragStateRef.current = {
-                                                pointerId: event.pointerId,
-                                                target: "center",
-                                                startClientX: event.clientX,
-                                                startClientY: event.clientY,
-                                                pointerOffsetX: 0,
-                                                pointerOffsetY: 0,
-                                                hasMoved: false,
-                                                travelAnchor: {
-                                                    startPoint: travelGeometry.trueStartPoint,
-                                                    endPoint: travelGeometry.trueEndPoint,
-                                                },
-                                            };
-                                            onTravelGestureStartRef.current?.("center");
-                                            setActivePointerId(event.pointerId);
-                                        }}
-                                    />
-                                </g>
-                            ) : null}
-                            {(travelGeometry.endParked || travelGeometry.startParked) ? (
-                                <g data-role="filter-travel-parked-leaders" pointerEvents="none">
-                                    {travelGeometry.endParked ? (
-                                        <line
-                                            x1={baseHandle.x}
-                                            y1={baseHandle.y}
-                                            x2={travelGeometry.endPoint.x}
-                                            y2={travelGeometry.endPoint.y}
-                                            stroke={modulationTravel.accent}
-                                            strokeOpacity="0.5"
-                                            strokeWidth="1.2"
-                                            strokeDasharray="2 3"
-                                        />
-                                    ) : null}
-                                    {travelGeometry.startParked ? (
-                                        <line
-                                            x1={baseHandle.x}
-                                            y1={baseHandle.y}
-                                            x2={travelGeometry.startPoint.x}
-                                            y2={travelGeometry.startPoint.y}
-                                            stroke={modulationTravel.accent}
-                                            strokeOpacity="0.5"
-                                            strokeWidth="1.2"
-                                            strokeDasharray="2 3"
-                                        />
-                                    ) : null}
-                                </g>
-                            ) : null}
-                            {([
-                                ...(modulationTravel.showStartHandle
-                                    ? [["start", travelGeometry.startPoint, modulationTravel.start, travelGeometry.startParked] as const]
-                                    : []),
-                                ["end", travelGeometry.endPoint, modulationTravel.end, travelGeometry.endParked] as const,
-                            ]).map(([side, point, state, parked]) => (
-                                <g key={`filter-travel-${side}`} data-parked={parked}>
-                                    <circle
-                                        data-role={`filter-travel-handle-${side}`}
-                                        data-parked={parked}
-                                        cx={point.x}
-                                        cy={point.y}
-                                        r="6.5"
-                                        fill={side === "end" ? modulationTravel.accent : "rgb(9 13 15 / 0.9)"}
-                                        fillOpacity={parked ? 0.35 : side === "end" ? 1 : 0.9}
-                                        stroke={side === "end" ? "rgb(255 255 255 / 0.5)" : modulationTravel.accent}
-                                        strokeWidth={side === "end" ? 1.4 : 2}
-                                        strokeDasharray={parked ? "2 3" : undefined}
-                                        pointerEvents="none"
-                                    />
-                                    <circle
-                                        data-role={`filter-travel-hit-target-${side}`}
-                                        role="slider"
-                                        aria-label={`Filter modulation travel ${side}`}
-                                        aria-valuemin={FILTER_CUTOFF_MIN_HZ}
-                                        aria-valuemax={FILTER_CUTOFF_MAX_HZ}
-                                        aria-valuenow={Math.round(state.cutoffHz)}
-                                        tabIndex={0}
-                                        cx={point.x}
-                                        cy={point.y}
-                                        r={parked ? 12 : 16}
-                                        fill="transparent"
-                                        className="cursor-grab active:cursor-grabbing"
-                                        onPointerDown={beginTravelEndpointDrag(side, point.x, point.y)}
-                                        onKeyDown={(event) => {
-                                            const stepOctaves = event.key === "ArrowRight"
-                                                ? 0.1
-                                                : event.key === "ArrowLeft" ? -0.1 : 0;
-                                            const stepSurface = event.key === "ArrowUp"
-                                                ? 0.03
-                                                : event.key === "ArrowDown" ? -0.03 : 0;
-                                            if (stepOctaves === 0 && stepSurface === 0) {
-                                                return;
-                                            }
-                                            event.preventDefault();
-                                            // Keyboard steps are one-shot travel gestures.
-                                            onTravelGestureStartRef.current?.(side);
-                                            onTravelEndpointSetRef.current?.(side, {
-                                                cutoffHz: clamp(
-                                                    state.cutoffHz * (2 ** stepOctaves),
-                                                    FILTER_CUTOFF_MIN_HZ,
-                                                    FILTER_CUTOFF_MAX_HZ,
-                                                ),
-                                                q: clamp(
-                                                    resonanceQFromSurface(clamp(
-                                                        resonanceNormalizedFromQ(state.q) + stepSurface,
-                                                        0,
-                                                        1,
-                                                    )),
-                                                    FILTER_Q_MIN,
-                                                    FILTER_Q_MAX,
-                                                ),
-                                            });
-                                            onTravelGestureEndRef.current?.();
-                                        }}
-                                    />
-                                </g>
-                            ))}
-                        </g>
-                    ) : null}
-                </svg>
-            </div>
-            <pre data-role="filter-graph-debug" className="hidden">
-                {JSON.stringify(debugState)}
-            </pre>
-        </div>
-    );
+    return <div className={joinClasses("cosimo-filter-editor relative h-full w-full", props.className)}
+        data-role="cosimo-filter-editor"
+        data-filter-graph={JSON.stringify(graphState)}
+        data-resonance-curve={JSON.stringify(props.resonanceCurveDebugState ?? { familyId: "linear", coefficients: {} })}
+        data-cutoff-route-storage={travel?.cutoffRouteStorageAmount}>
+        <FilterEditor
+            className="cosimo-filter-editor__control"
+            value={{ mode: responseModeToFilterMode(props.baseMode), cutoffHz: props.baseCutoffHz, q: props.baseQ }}
+            preview={props.liveHasActive ? { mode: responseModeToFilterMode(props.liveMode), cutoffHz: props.liveCutoffHz, q: props.liveQ } : null}
+            plotPadding={{ horizontal: 18, top: 16, bottom: 16 }}
+            qScale={{ qToSurface: props.resonanceNormalizedFromQ ?? filterQToNormalized,
+                surfaceToQ: props.resonanceQFromSurface ?? normalizedToFilterQ }}
+            spectrum={props.spectrumFrame ? { frame: props.spectrumFrame, renderMode: props.spectrumRenderMode,
+                timestampMs: uiMediaTimeNow() } : null}
+            onValueChange={(next) => { props.onCutoffSet(next.cutoffHz); props.onQSet(next.q); }}
+            modulation={travel ? { start: travel.start, end: travel.end, color: travel.accent,
+                axes: travel.cutoffEditable && travel.qEditable ? "both" : travel.qEditable ? "q" : "cutoff",
+                showStartHandle: travel.showStartHandle, showCenterHandle: travel.centerHandle,
+                baseHandleMode: travel.baseHandleMode === "start" ? "start" : "value" } : null}
+            onModulationChange={travel ? (next, target) => {
+                if (target === "center") props.onTravelTranslate?.(next.start, next.end);
+                else props.onTravelEndpointSet?.(target, target === "end" ? next.end : next.start);
+            } : undefined}
+            onGestureStart={(target) => {
+                if (target === "value") props.onGestureStart?.();
+                else if (target.startsWith("modulation-")) props.onTravelGestureStart?.(target.slice(11) as FilterTravelGestureSide);
+            }}
+            onGestureEnd={(_cancelled, target) => {
+                if (target === "value") props.onGestureEnd?.();
+                else if (target.startsWith("modulation-")) props.onTravelGestureEnd?.();
+            }}
+        />
+        {travel?.cutoffAmountLabel !== undefined ? <div className="cosimo-filter-editor__amount"
+            data-role="filter-travel-cutoff-amount-label" style={{ color: travel.accent }}>{travel.cutoffAmountLabel}</div> : null}
+    </div>;
 }
 
 export function VoiceModeToolbar({

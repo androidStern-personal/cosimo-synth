@@ -1,5 +1,5 @@
 /**
- * The Auto-preview retrigger scheduler (T12) — pure timing policy, no notes.
+ * The Auto-preview retrigger scheduler — pure timing policy, no notes.
  *
  * The engine layer feeds it three facts with explicit timestamps — "a canonical
  * parameter value actually changed under a user gesture", "the gesture ended",
@@ -7,7 +7,7 @@
  * saying WHEN to retrigger the preview and when to end it. What sounds (the
  * held chord or the remembered intentional pitch) is the engine's business.
  *
- * Locked behavior (TODOS T12, 2026-08-19):
+ * Behavior:
  * - The first actual change retriggers immediately and the preview holds.
  * - While the rate window (minRetriggerIntervalMs) is closed, later changes
  *   mark one pending retrigger; it fires exactly when the window opens, which

@@ -1,0 +1,266 @@
+{
+  "mode": "new",
+  "tableIndex": 3,
+  "selectionToActiveMs": 39.51500000059605,
+  "desiredObservedToActiveMs": 34.775000005960464,
+  "observedFinishedMs": 49.57500000298023,
+  "state": [
+    {
+      "dspSessionId": 256177875,
+      "oscillatorIndex": 0,
+      "desiredIntentSerial": 2,
+      "desiredTableIndex": 3,
+      "generationFrontier": 2,
+      "serviceState": 2,
+      "hasActive": 1,
+      "activeTableIndex": 3,
+      "activeGeneration": 2,
+      "hasLoading": 0,
+      "loadingTableIndex": 0,
+      "loadingGeneration": 0,
+      "hasFailure": 0,
+      "failedTableIndex": 0,
+      "failedGeneration": 0,
+      "failureScope": 0,
+      "failurePhase": 0,
+      "failureReasonCode": 0
+    },
+    {
+      "dspSessionId": 256177875,
+      "oscillatorIndex": 1,
+      "desiredIntentSerial": 1,
+      "desiredTableIndex": 35,
+      "generationFrontier": 1,
+      "serviceState": 2,
+      "hasActive": 1,
+      "activeTableIndex": 35,
+      "activeGeneration": 1,
+      "hasLoading": 0,
+      "loadingTableIndex": 0,
+      "loadingGeneration": 0,
+      "hasFailure": 0,
+      "failedTableIndex": 0,
+      "failedGeneration": 0,
+      "failureScope": 0,
+      "failurePhase": 0,
+      "failureReasonCode": 0
+    },
+    {
+      "dspSessionId": 256177875,
+      "oscillatorIndex": 2,
+      "desiredIntentSerial": 1,
+      "desiredTableIndex": 35,
+      "generationFrontier": 1,
+      "serviceState": 2,
+      "hasActive": 1,
+      "activeTableIndex": 35,
+      "activeGeneration": 1,
+      "hasLoading": 0,
+      "loadingTableIndex": 0,
+      "loadingGeneration": 0,
+      "hasFailure": 0,
+      "failedTableIndex": 0,
+      "failedGeneration": 0,
+      "failureScope": 0,
+      "failurePhase": 0,
+      "failureReasonCode": 0
+    }
+  ],
+  "pointerAudit": [
+    {
+      "type": "shared-pointer-audit",
+      "kind": "memory-identity",
+      "rendererImportUsesConfiguredMemory": true
+    },
+    {
+      "type": "shared-pointer-audit",
+      "kind": "memory-identity",
+      "cmajorByteViewUsesConfiguredMemory": true
+    },
+    {
+      "type": "shared-pointer-audit",
+      "kind": "renderer-read",
+      "input": 0,
+      "address": 0,
+      "byteLength": 0
+    },
+    {
+      "type": "shared-pointer-audit",
+      "kind": "renderer-read",
+      "input": 1,
+      "address": 0,
+      "byteLength": 0
+    },
+    {
+      "type": "shared-pointer-audit",
+      "kind": "renderer-read",
+      "input": 2,
+      "address": 0,
+      "byteLength": 0
+    },
+    {
+      "kind": "reservation",
+      "input": 0,
+      "id": 1,
+      "address": 87563832,
+      "byteLength": 13118496,
+      "bufferIsConfiguredMemory": true
+    },
+    {
+      "type": "shared-pointer-audit",
+      "kind": "renderer-read",
+      "input": 0,
+      "address": 87563832,
+      "byteLength": 13118496
+    },
+    {
+      "kind": "reservation",
+      "input": 1,
+      "id": 2,
+      "address": 100682328,
+      "byteLength": 13118496,
+      "bufferIsConfiguredMemory": true
+    },
+    {
+      "type": "shared-pointer-audit",
+      "kind": "renderer-read",
+      "input": 1,
+      "address": 100682328,
+      "byteLength": 13118496
+    },
+    {
+      "kind": "reservation",
+      "input": 2,
+      "id": 3,
+      "address": 113800824,
+      "byteLength": 13118496,
+      "bufferIsConfiguredMemory": true
+    },
+    {
+      "type": "shared-pointer-audit",
+      "kind": "renderer-read",
+      "input": 2,
+      "address": 113800824,
+      "byteLength": 13118496
+    },
+    {
+      "kind": "reservation",
+      "input": 0,
+      "id": 4,
+      "address": 126919320,
+      "byteLength": 13118496,
+      "bufferIsConfiguredMemory": true
+    },
+    {
+      "type": "shared-pointer-audit",
+      "kind": "renderer-read",
+      "input": 0,
+      "address": 126919320,
+      "byteLength": 13118496
+    }
+  ],
+  "sharedMemory": {
+    "ownedBytes": 140050432,
+    "retainedSampleBytes": 39355488,
+    "memoryObjectAlive": true,
+    "readerReleased": false
+  },
+  "messages": {},
+  "jsonInstrumentationMs": 0,
+  "callback": [
+    {
+      "type": "cosimo-perf",
+      "epoch": 1,
+      "sampleRateHz": 48000,
+      "renderQuantumFrames": 128,
+      "quantizedAverageLoad": 0.181640625,
+      "quantizedMaxLoad": 0.375,
+      "quantizedOverBudgetBlocks": 0,
+      "definiteDeadlineMissBlocks": 0,
+      "clockSource": "Date.now",
+      "processMultiplier": 1,
+      "callbackGapBlocks": 112,
+      "maxCallbackGapLoad": 4.125,
+      "frameDiscontinuityBlocks": 0,
+      "blockCount": 256
+    }
+  ],
+  "audio": [
+    {
+      "rms": 0.06719115745291886,
+      "samples": 6656,
+      "nonfinite": 0
+    },
+    {
+      "rms": 0.019885800273464416,
+      "samples": 96000,
+      "nonfinite": 0
+    }
+  ],
+  "errors": [],
+  "auditVerification": {
+    "matches": [
+      {
+        "input": 0,
+        "reservation": {
+          "kind": "reservation",
+          "input": 0,
+          "id": 4,
+          "address": 126919320,
+          "byteLength": 13118496,
+          "bufferIsConfiguredMemory": true
+        },
+        "read": {
+          "type": "shared-pointer-audit",
+          "kind": "renderer-read",
+          "input": 0,
+          "address": 126919320,
+          "byteLength": 13118496
+        },
+        "sameAllocation": true
+      },
+      {
+        "input": 1,
+        "reservation": {
+          "kind": "reservation",
+          "input": 1,
+          "id": 2,
+          "address": 100682328,
+          "byteLength": 13118496,
+          "bufferIsConfiguredMemory": true
+        },
+        "read": {
+          "type": "shared-pointer-audit",
+          "kind": "renderer-read",
+          "input": 1,
+          "address": 100682328,
+          "byteLength": 13118496
+        },
+        "sameAllocation": true
+      },
+      {
+        "input": 2,
+        "reservation": {
+          "kind": "reservation",
+          "input": 2,
+          "id": 3,
+          "address": 113800824,
+          "byteLength": 13118496,
+          "bufferIsConfiguredMemory": true
+        },
+        "read": {
+          "type": "shared-pointer-audit",
+          "kind": "renderer-read",
+          "input": 2,
+          "address": 113800824,
+          "byteLength": 13118496
+        },
+        "sameAllocation": true
+      }
+    ],
+    "rendererUsesConfiguredMemory": true,
+    "cmajorUsesConfiguredMemory": true,
+    "finiteAudibleRender": true
+  },
+  "browser": "147.0.7727.15"
+}

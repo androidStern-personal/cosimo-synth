@@ -213,7 +213,7 @@ namespace wt
         // the assertions pin it to the two physical timing stages below.
         processor.latency = 156;
         static_assert (enhancerLatencySamples == 60,
-                       "Polish must retain the accepted T26 Enhancer latency");
+                       "Polish must retain the Enhancer's 60-frame latency");
         static_assert (polishLatencyFrames == 156,
                        "Update PolishBus's declared latency with its stage sum");
 

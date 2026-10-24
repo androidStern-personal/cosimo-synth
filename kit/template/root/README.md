@@ -21,13 +21,19 @@ interface, or start a new plugin. You can also give it your own request.
 When you are ready: [try the Wavefold example](WAVEFOLD.md),
 [update or recover your kit](UPDATING.md), or [get setup help](SUPPORT.md).
 
+See [what changed in Builder Kit](kit/CHANGELOG.md) and the
+[plugin state guide](kit/docs/PLUGIN_STATE.md) for the state and Undo APIs.
+
+Explore the controls with `npm run ui:docs:dev`: Knob, MSEG, Filter and Slider
+pages include working previews and their source.
+
 ## If you choose to build the included plugin as-is
 
 After the first-session strict doctor and choice above, follow this section only
 when you choose to build the included plugin as-is.
 
 Ask your coding agent to follow the **Included Enhance That, Unchanged** route in
-`kit/skills/cosimo-make-plugin/SKILL.md`. That is the authoritative procedure.
+`kit/skills/make-plugin/SKILL.md`. That is the authoritative procedure.
 It keeps the included `enhancer-lite` target unchanged, runs the typecheck and
 tests, builds the dedicated native plug-in, and installs it. Product-owner
 placeholder details do not block this unchanged included plug-in.

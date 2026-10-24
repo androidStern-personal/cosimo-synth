@@ -5,11 +5,7 @@ import { setTimeout as delay } from "node:timers/promises";
 import { fileURLToPath } from "node:url";
 
 import { stageCmajorWebRuntime } from "../../ui/vite.shared.mjs";
-import { startStaticWebServer } from "./static_web_server.mjs";
-
-// The traversal guard lives with the shared static server now; re-exported so
-// existing imports (and their unit tests) keep working.
-export { pathStaysWithinRepoRoot, resolveRepoServedPath } from "./static_web_server.mjs";
+import { startStaticWebServer } from "../../kit/tests/helpers/static_web_server.mjs";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const DESKTOP_HARNESS_READINESS_TIMEOUT_MS = 90_000;
@@ -123,7 +119,7 @@ export async function startDesktopHarnessServer() {
                 // Harness servers skip file watching (tests never use HMR;
                 // repo-wide 120ms polling costs ~4 CPU cores per server) and
                 // self-exit when their spawner dies, so killed runs cannot
-                // leave core-burning orphans behind (T17B).
+                // leave core-burning orphans behind.
                 COSIMO_TEST_HARNESS: "1",
                 COSIMO_HARNESS_SPAWNER_PID: String(process.pid),
                 COSIMO_CMAJOR_WEB_RUNTIME_INSTANCE: `harness-${process.pid}-${port}`,

@@ -17,7 +17,7 @@ included with the kit.
 
 MIT License
 
-Copyright (c) Cosimo
+Copyright (c) Song Machines
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
@@ -41,7 +41,7 @@ SOFTWARE.
 
 Scope
 
-This license covers the Cosimo-authored code and documentation in this
+This license covers the code and documentation Song Machines wrote for this
 repository: everything under kit/, the starter plugin and tests, and the root
 files generated from the kit template. Code you add is yours. Third-party
 software the build downloads or links (JUCE, Cmajor, CHOC, CPM.cmake, and the

@@ -1,5 +1,7 @@
 # Spectral Partial Shape Refactor Plan
 
+> October 2026: the host-path preset system this document describes was replaced by the kit's presets-as-state (`kit/ui/presets.ts`, `kit/ui/snapshots.ts`). The text below is kept as history.
+
 This plan replaces the old scalar harmonic controls with one shaped partial table for Spectral Chord Resonator.
 
 ## Architecture Contract

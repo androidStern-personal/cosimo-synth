@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+import shutil
 import subprocess
 import tempfile
 
@@ -18,20 +19,22 @@ from bench import (
 )
 
 
+pytestmark = pytest.mark.skipif(
+    shutil.which("cmaj") is None,
+    reason="These probes compile and render the production ChorusBus with the native cmaj CLI, which is not installed.",
+)
+
 REPO_ROOT = Path(__file__).resolve().parents[1]
+KEY_TRACK_SOURCE = REPO_ROOT / "cmajor" / "KeyTrack.cmajor"
 CHORUS_SOURCE = REPO_ROOT / "cmajor" / "Chorus.cmajor"
-CHORUS_RING_OFFSET_RATIO = 2.0 ** (7.0 / 12.0)
-CHORUS_RING_OFFSET_MODE_RATIOS = {
-    0: 2.0 ** (7.0 / 12.0),
-    1: 2.0 ** (-5.0 / 12.0),
-    2: 2.0,
-    3: 0.5,
-}
+CHORUS_RING_KEY_TRACK_OFFSET_SEMITONES = 7.0
 
 
 def _build_chorus_probe_source() -> str:
     return (
-        CHORUS_SOURCE.read_text(encoding="utf-8")
+        KEY_TRACK_SOURCE.read_text(encoding="utf-8")
+        + "\n"
+        + CHORUS_SOURCE.read_text(encoding="utf-8")
         + "\n"
         + """
 processor ChorusProbeSource
@@ -120,8 +123,9 @@ graph ChorusProbe [[ main ]]
     input value float32 chorusTone [[ init: 0.5f ]];
     input value float32 chorusFeedback [[ init: 0.45f ]];
     input value float32 chorusRingAmount [[ init: 0.0f ]];
-    input value float32 chorusRingOffsetMode [[ init: 0.0f ]];
-    input value float32 chorusRingFineSemitones [[ init: 0.0f ]];
+    input value float32 chorusRingFrequencyHz [[ init: 28.0f ]];
+    input value float32 chorusRingKeyTrackEnabled [[ init: 0.0f ]];
+    input value float32 chorusRingKeyTrackOffsetSemitones [[ init: 0.0f ]];
 
     output stream float leftOut;
     output stream float rightOut;
@@ -148,8 +152,9 @@ graph ChorusProbe [[ main ]]
         chorusTone -> chorus.toneIn;
         chorusFeedback -> chorus.feedbackIn;
         chorusRingAmount -> chorus.ringAmountIn;
-        chorusRingOffsetMode -> chorus.ringOffsetModeIn;
-        chorusRingFineSemitones -> chorus.ringFineSemitonesIn;
+        chorusRingFrequencyHz -> chorus.ringFrequencyHzIn;
+        chorusRingKeyTrackEnabled -> chorus.ringKeyTrackEnabledIn;
+        chorusRingKeyTrackOffsetSemitones -> chorus.ringKeyTrackOffsetSemitonesIn;
         chorus.out -> wetSplit.in;
         wetSplit.leftOut -> leftOut;
         wetSplit.rightOut -> rightOut;
@@ -197,8 +202,9 @@ def _setup_js(
     tone: float = 0.5,
     feedback: float = 0.45,
     ring_amount: float = 0.0,
-    ring_offset_mode: int = 0,
-    ring_fine_semitones: float = 0.0,
+    ring_frequency_hz: float = 28.0,
+    ring_key_track_enabled: float = 0.0,
+    ring_key_track_offset_semitones: float = 0.0,
     source_mode: int = 2,
     source_frequency_hz: float = 440.0,
     source_amplitude: float = 0.5,
@@ -217,8 +223,9 @@ def _setup_js(
             f"patch.setInputValue_chorusTone({float(tone):.6f}, 0);",
             f"patch.setInputValue_chorusFeedback({float(feedback):.6f}, 0);",
             f"patch.setInputValue_chorusRingAmount({float(ring_amount):.6f}, 0);",
-            f"patch.setInputValue_chorusRingOffsetMode({float(ring_offset_mode):.6f}, 0);",
-            f"patch.setInputValue_chorusRingFineSemitones({float(ring_fine_semitones):.6f}, 0);",
+            f"patch.setInputValue_chorusRingFrequencyHz({float(ring_frequency_hz):.6f}, 0);",
+            f"patch.setInputValue_chorusRingKeyTrackEnabled({float(ring_key_track_enabled):.6f}, 0);",
+            f"patch.setInputValue_chorusRingKeyTrackOffsetSemitones({float(ring_key_track_offset_semitones):.6f}, 0);",
         ]
     )
 
@@ -418,15 +425,19 @@ def test_tone_macro_changes_loop_bandwidth() -> None:
 def test_ring_amount_adds_tracked_sideband_energy() -> None:
     source_hz = 440.0
     tracking_hz = 220.0
-    ring_hz = tracking_hz * CHORUS_RING_OFFSET_RATIO
+    ring_hz = tracking_hz * 2.0 ** (CHORUS_RING_KEY_TRACK_OFFSET_SEMITONES / 12.0)
     lower_sideband_hz = abs(source_hz - ring_hz)
     upper_sideband_hz = source_hz + ring_hz
+    key_track = {
+        "ring_key_track_enabled": 1.0,
+        "ring_key_track_offset_semitones": CHORUS_RING_KEY_TRACK_OFFSET_SEMITONES,
+    }
     ring_off = _render_chorus(
-        setup_js=_setup_js(source_frequency_hz=source_hz, tracking_hz=tracking_hz, mix=1.0, feedback=0.72, ring_amount=0.0),
+        setup_js=_setup_js(source_frequency_hz=source_hz, tracking_hz=tracking_hz, mix=1.0, feedback=0.72, ring_amount=0.0, **key_track),
         num_samples=32_768,
     )[4410:]
     ring_on = _render_chorus(
-        setup_js=_setup_js(source_frequency_hz=source_hz, tracking_hz=tracking_hz, mix=1.0, feedback=0.72, ring_amount=1.0),
+        setup_js=_setup_js(source_frequency_hz=source_hz, tracking_hz=tracking_hz, mix=1.0, feedback=0.72, ring_amount=1.0, **key_track),
         num_samples=32_768,
     )[4410:]
 
@@ -436,7 +447,7 @@ def test_ring_amount_adds_tracked_sideband_energy() -> None:
 
 
 @pytest.mark.cmajor
-def test_ring_offset_modes_select_expected_pitch_ratios() -> None:
+def test_ring_key_track_offset_sets_the_ring_pitch_from_the_played_note() -> None:
     source_hz = 660.0
     tracking_hz = 220.0
     ring_off = _render_chorus(
@@ -450,8 +461,8 @@ def test_ring_offset_modes_select_expected_pitch_ratios() -> None:
         num_samples=32_768,
     )[4410:]
 
-    for mode, ratio in CHORUS_RING_OFFSET_MODE_RATIOS.items():
-        ring_hz = tracking_hz * ratio
+    for offset_semitones in (7.0, -5.0, 12.0, -12.0, 9.0):
+        ring_hz = tracking_hz * 2.0 ** (offset_semitones / 12.0)
         lower_sideband_hz = abs(source_hz - ring_hz)
         upper_sideband_hz = source_hz + ring_hz
         ring_on = _render_chorus(
@@ -461,44 +472,8 @@ def test_ring_offset_modes_select_expected_pitch_ratios() -> None:
                 mix=1.0,
                 feedback=0.72,
                 ring_amount=1.0,
-                ring_offset_mode=mode,
-            ),
-            num_samples=32_768,
-        )[4410:]
-
-        assert _band_energy_around(ring_on, lower_sideband_hz) > max(_band_energy_around(ring_off, lower_sideband_hz) * 4.0, 1e-5)
-        assert _band_energy_around(ring_on, upper_sideband_hz) > max(_band_energy_around(ring_off, upper_sideband_hz) * 4.0, 1e-5)
-
-
-@pytest.mark.cmajor
-def test_ring_fine_offsets_selected_pitch_by_whole_step_range() -> None:
-    source_hz = 660.0
-    tracking_hz = 220.0
-    ring_off = _render_chorus(
-        setup_js=_setup_js(
-            source_frequency_hz=source_hz,
-            tracking_hz=tracking_hz,
-            mix=1.0,
-            feedback=0.72,
-            ring_amount=0.0,
-        ),
-        num_samples=32_768,
-    )[4410:]
-
-    for fine_semitones in (-2.0, 2.0):
-        ring_ratio = 2.0 ** ((7.0 + fine_semitones) / 12.0)
-        ring_hz = tracking_hz * ring_ratio
-        lower_sideband_hz = abs(source_hz - ring_hz)
-        upper_sideband_hz = source_hz + ring_hz
-        ring_on = _render_chorus(
-            setup_js=_setup_js(
-                source_frequency_hz=source_hz,
-                tracking_hz=tracking_hz,
-                mix=1.0,
-                feedback=0.72,
-                ring_amount=1.0,
-                ring_offset_mode=0,
-                ring_fine_semitones=fine_semitones,
+                ring_key_track_enabled=1.0,
+                ring_key_track_offset_semitones=offset_semitones,
             ),
             num_samples=32_768,
         )[4410:]

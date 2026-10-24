@@ -3,7 +3,7 @@
   "ID": "dev.cosimo.distortion-calibration",
   "version": "1.0",
   "name": "Distortion Calibration",
-  "description": "Offline T25 production DistortionBus level-match verification seam",
+  "description": "Offline production DistortionBus level-match verification seam",
   "category": "effect",
   "source": [
     "../../cmajor/Distortion.cmajor",

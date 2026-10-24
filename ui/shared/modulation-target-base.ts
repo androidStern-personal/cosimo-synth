@@ -1,5 +1,5 @@
 /**
- * T14/T15: the ONE resolver from a modulation target kind to its BASE
+ * The ONE resolver from a modulation target kind to its BASE
  * parameter's live-editing contract (engine endpoint + unit-aware entry
  * spec + labels). The mappings table's per-row rails and value sheets edit
  * any route's base through this — never a second per-surface table.
@@ -15,7 +15,7 @@
  */
 
 import {
-    allRackParameterDescriptors,
+    getRackParameterDescriptor,
     type RackParameterDescriptor,
 } from "./rack-parameter-descriptors";
 import { laneMirrorRackKind, parseLaneModulationTargetKind } from "./lane-modulation-targets";
@@ -258,17 +258,6 @@ export function keyTrackModulationTargetBasePresentation(
     };
 }
 
-const rackDescriptorsByEndpoint: ReadonlyMap<string, RackParameterDescriptor> = new Map(
-    allRackParameterDescriptors().flatMap((descriptor: RackParameterDescriptor) => [
-        [descriptor.endpointID, descriptor] as const,
-        ...(
-            descriptor.modulationIdentityEndpointID === undefined
-                ? []
-                : [[descriptor.modulationIdentityEndpointID, descriptor] as const]
-        ),
-    ]),
-);
-
 const voiceControlByParameterKind: ReadonlyMap<OscillatorModulationParameterKind, MobileVoiceBindableControlID> = new Map(
     MOBILE_VOICE_PAGES.flatMap((page) => page.cells)
         .flatMap((controlID) => {
@@ -336,12 +325,12 @@ export function resolveModulationTargetBase(targetKind: ModulationTargetKind): M
                 },
             };
         }
-        // T6: every instance has its own lane.v2 document slot, and the base
+        // Every instance has its own lane.v2 document slot, and the base
         // CONTRACT (endpoint, spec, labels) is the type's. Which slot a
         // binding edits comes from the deviceId its caller threads through
         // useLaneOrHostParameterBinding.
-        const descriptor = rackDescriptorsByEndpoint.get(parsedLane.endpointID);
-        if (descriptor === undefined) {
+        const descriptor = getRackParameterDescriptor(parsedLane.endpointID);
+        if (descriptor === null) {
             throw new Error(`Rack modulation target "${targetKind}" has no rack descriptor.`);
         }
         const entrySpec = parameterEntrySpecForRackParameter(descriptor, descriptor.initial);

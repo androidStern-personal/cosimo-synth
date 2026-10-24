@@ -6,6 +6,7 @@ import {
     createDefaultModulationState,
     openHarnessPage,
     selectRackEffect,
+    withUiTimersPaused,
 } from "./helpers/desktop_patch_view_browser_suite.mjs";
 
 test("Wavetable Index drag replaces the generic HUD knob with the production wavetable", async () => {
@@ -76,16 +77,16 @@ test("main Filter Cutoff drag shows the live production response and frequency",
         await hud.waitFor();
         const response = hud.locator('[data-role="parameter-hud-filter"]');
         assert.equal(await response.count(), 1, await hud.innerHTML());
-        assert.equal(await response.locator('[data-role="filter-response-graph"]').count(), 1);
+        assert.equal(await response.locator('[data-role="filter-range-editor-surface"]').count(), 1);
         assert.equal(await hud.locator(".mobile-voice-hud-knob").count(), 0);
         assert.equal(
             await hud.locator('[data-role="mobile-voice-hud-base"]').textContent(),
             await cutoffKnob.getAttribute("aria-valuetext"),
         );
 
-        const initialPath = await response.locator('[data-role="filter-response-graph"] path').first().getAttribute("d");
+        const initialPath = await response.locator('[data-role="filter-range-editor-surface"] path').first().getAttribute("d");
         await page.mouse.move(startX + 72, startY, { steps: 8 });
-        const updatedPath = await response.locator('[data-role="filter-response-graph"] path').first().getAttribute("d");
+        const updatedPath = await response.locator('[data-role="filter-range-editor-surface"] path').first().getAttribute("d");
         assert.notEqual(updatedPath, initialPath, "the production response must follow the live cutoff");
 
         await page.mouse.up();
@@ -103,7 +104,7 @@ test("direct filter-graph dragging hides a lingering HUD while ordinary paramete
         await page.locator('[data-role="filter-mode-chip"]').click();
         const cutoffKnob = page.locator('[data-role="voice-filter-knob-filterCutoff"]');
         const resonanceKnob = page.locator('[data-role="voice-filter-knob-filterQ"]');
-        const graphHandle = page.locator('[data-role="filter-card"] [data-role="filter-response-handle-hit-target"]');
+        const graphHandle = page.locator('[data-role="filter-card"] [data-role="filter-range-value-hit-target"]');
         const [cutoffBounds, resonanceBounds] = await Promise.all([
             cutoffKnob.boundingBox(),
             resonanceKnob.boundingBox(),
@@ -120,26 +121,32 @@ test("direct filter-graph dragging hides a lingering HUD while ordinary paramete
         await page.mouse.move(cutoffPoint.x - 24, cutoffPoint.y, { steps: 6 });
         const hud = page.locator('[data-role="mobile-voice-hud"]');
         await hud.locator('[data-role="parameter-hud-filter"]').waitFor();
-        await page.mouse.up();
-
         const graphHandleBounds = await graphHandle.boundingBox();
         assert.ok(graphHandleBounds);
         const graphPoint = {
             x: graphHandleBounds.x + (graphHandleBounds.width / 2),
             y: graphHandleBounds.y + (graphHandleBounds.height / 2),
         };
-        await page.mouse.move(graphPoint.x, graphPoint.y);
-        await page.mouse.down();
-        await page.mouse.move(graphPoint.x - 16, graphPoint.y + 8, { steps: 3 });
-        await page.waitForTimeout(80);
-        assert.equal(
-            await hud.evaluate((element) => element.classList.contains("is-visible")),
-            false,
-            "a direct graph gesture must suppress the still-lingering cutoff HUD",
-        );
-        await page.mouse.up();
+        // The linger waits on the paused UI clock, so the graph gesture
+        // certainly starts while the cutoff HUD is still lingering.
+        await withUiTimersPaused(page, async () => {
+            await page.mouse.up();
+            assert.equal(await hud.evaluate((element) => element.classList.contains("is-visible")), true,
+                "the cutoff HUD lingers after release");
 
-        await page.waitForTimeout(450);
+            await page.mouse.move(graphPoint.x, graphPoint.y);
+            await page.mouse.down();
+            await page.mouse.move(graphPoint.x - 16, graphPoint.y + 8);
+            await page.waitForFunction(() => {
+                const huds = document.querySelectorAll('[data-role="mobile-voice-hud"]');
+                return huds.length === 1 && !huds[0].classList.contains("is-visible");
+            });
+            await page.mouse.move(graphPoint.x - 16, graphPoint.y + 16, { steps: 2 });
+            assert.equal(await page.locator('[data-role="mobile-voice-hud"].is-visible').count(), 0,
+                "a direct graph gesture must keep the lingering cutoff HUD hidden");
+            await page.mouse.up();
+        });
+        await hud.waitFor({ state: "detached" });
         const resonancePoint = {
             x: resonanceBounds.x + (resonanceBounds.width / 2),
             y: resonanceBounds.y + (resonanceBounds.height / 2),
@@ -188,15 +195,15 @@ test("Effects Filter Cutoff drag shows the selected rack filter response", async
             await cutoffKnob.getAttribute("aria-valuetext"),
         );
 
-        const initialPath = await response.locator('[data-role="filter-response-graph"] path').first().getAttribute("d");
+        const initialPath = await response.locator('[data-role="filter-range-editor-surface"] path').first().getAttribute("d");
         await page.mouse.move(startX - 72, startY, { steps: 8 });
-        const updatedPath = await response.locator('[data-role="filter-response-graph"] path').first().getAttribute("d");
+        const updatedPath = await response.locator('[data-role="filter-range-editor-surface"] path').first().getAttribute("d");
         assert.notEqual(updatedPath, initialPath, "the rack response must follow the live cutoff");
 
         await page.mouse.up();
 
         const graphHandle = page.locator(
-            '[data-role="rack-editor-filter"] [data-role="filter-response-handle-hit-target"]',
+            '[data-role="rack-editor-filter"] [data-role="filter-range-value-hit-target"]',
         );
         const graphHandleBounds = await graphHandle.boundingBox();
         assert.ok(graphHandleBounds);
@@ -253,7 +260,7 @@ test("Distortion Drive HUD uses the live production curve for every shape", asyn
             await hud.waitFor();
 
             const visual = hud.locator('[data-role="parameter-hud-distortion"]');
-            await visual.waitFor({ timeout: 5_000 });
+            await visual.waitFor();
             assert.equal(await visual.locator('[data-role="distortion-visualizer"]').count(), 1);
             assert.equal(await hud.locator(".mobile-voice-hud-knob").count(), 0);
             assert.equal(

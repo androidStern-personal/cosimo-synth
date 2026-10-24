@@ -1,7 +1,6 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import fs from "node:fs/promises";
-import { createServer } from "node:http";
 import os from "node:os";
 import path from "node:path";
 import test, { after, before } from "node:test";
@@ -9,8 +8,8 @@ import { fileURLToPath } from "node:url";
 
 import { chromium, webkit } from "playwright";
 
-import { adaptCosimoAudioWorkletModuleLoading } from "../web/audio-worklet-instrumentation.mjs";
 import { stageCmajorWebRuntime } from "../ui/vite.shared.mjs";
+import { startProductWebServer } from "./helpers/product_web_server.mjs";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const browserName = process.env.COSIMO_WEB_RENDERER_BROWSER ?? "chromium";
@@ -18,7 +17,6 @@ const browserName = process.env.COSIMO_WEB_RENDERER_BROWSER ?? "chromium";
 let server;
 let browser;
 let root;
-let baseUrl;
 
 function run(command, args) {
     const result = spawnSync(command, args, {
@@ -31,12 +29,6 @@ function run(command, args) {
     if (result.status !== 0) {
         throw new Error(`${command} failed:\n${result.stderr || result.stdout}`);
     }
-}
-
-function contentType(filePath) {
-    if (filePath.endsWith(".html")) return "text/html; charset=utf-8";
-    if (filePath.endsWith(".js")) return "text/javascript; charset=utf-8";
-    return "application/octet-stream";
 }
 
 before(async () => {
@@ -58,6 +50,9 @@ export async function createConnection(audioContext) {
         CmajorVersion: 1,
         ID: "dev.cosimo.renderer-worklet-test",
         name: "Renderer Worklet Test",
+        // The product generator always emits shared memory, so the worklet
+        // must be given its shared-data budget even though this patch reads none.
+        sharedData: { format: "bytes", inputCount: 1, maxRetainedBytes: 65536 },
     });
     await connection.initialise({
         CmajorClass: ThreeOscillatorExternalSmoke,
@@ -72,11 +67,6 @@ export async function createConnection(audioContext) {
         buildDirectory: path.join(root, "cmajor-runtime-build"),
         outputDirectory: path.join(root, "cmaj_api"),
     });
-    const helperPath = path.join(root, "cmaj_api/cmaj-audio-worklet-helper.js");
-    await fs.writeFile(
-        helperPath,
-        adaptCosimoAudioWorkletModuleLoading(await fs.readFile(helperPath, "utf8")),
-    );
     await fs.writeFile(path.join(root, "index.html"), `<!doctype html>
 <button id="start">Start</button>
 <script type="module">
@@ -117,20 +107,8 @@ document.querySelector("#start").addEventListener("click", async () => {
 });
 </script>`);
 
-    server = createServer(async (request, response) => {
-        try {
-            const pathname = new URL(request.url ?? "/", "http://127.0.0.1").pathname;
-            const relative = pathname === "/" ? "index.html" : decodeURIComponent(pathname.slice(1));
-            const filePath = path.resolve(root, relative);
-            if (!filePath.startsWith(`${root}${path.sep}`)) throw new Error("invalid path");
-            response.writeHead(200, { "content-type": contentType(filePath) });
-            response.end(await fs.readFile(filePath));
-        } catch {
-            response.writeHead(404).end();
-        }
-    });
-    await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
-    baseUrl = `http://127.0.0.1:${server.address().port}`;
+    // The product server's isolation headers give the page the shared memory the engine needs.
+    server = await startProductWebServer(root);
 
     browser = browserName === "webkit"
         ? await webkit.launch({ headless: true })
@@ -142,13 +120,13 @@ document.querySelector("#start").addEventListener("click", async () => {
 
 after(async () => {
     await browser?.close();
-    await new Promise((resolve) => server?.close(resolve));
+    await server?.close();
     await fs.rm(root, { recursive: true, force: true });
 });
 
 test("canonical renderer produces B-only audio in the real AudioWorklet", { timeout: 120_000 }, async () => {
     const page = await browser.newPage();
-    await page.goto(baseUrl);
+    await page.goto(server.baseUrl);
     await page.click("#start");
     await page.waitForFunction(() => window.cosimoRendererResult !== null, null, { timeout: 90_000 });
     const result = await page.evaluate(() => window.cosimoRendererResult);

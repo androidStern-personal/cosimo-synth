@@ -17,9 +17,9 @@ function requireNoDeclaredLatency (relativePath)
 ## global ("../../cmajor/Distortion.cmajor")
 
 //==============================================================================
-// The original T25 regression: the completed wet signal must reach Classic Mix at
-// approximately the same RMS level as dry. The pre-T25 processor fails this by a
-// wide margin because +36 dB of Drive is never compensated.
+// The wet signal must reach Classic Mix at approximately the same RMS level as
+// dry. Without level matching, +36 dB of Drive would arrive uncompensated and
+// fail this by a wide margin.
 
 ## testProcessor()
 

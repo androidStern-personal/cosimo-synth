@@ -1,0 +1,11 @@
+{
+    "CmajorVersion": 1,
+    "ID": "dev.cmajor.test.plugin-state-system",
+    "version": "1.0",
+    "name": "Plugin State System Probe",
+    "source": "PluginStateSystem.cmajor",
+    "view": {
+        "src": "view/index.js",
+        "devModule": "/fx/state_lab/view/source.ts"
+    }
+}

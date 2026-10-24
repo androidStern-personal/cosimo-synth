@@ -3,12 +3,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-import {
-    adaptCosimoAudioWorkletModuleLoading,
-    fixCosimoAudioWorkletListenerRemoval,
-    instrumentCosimoAudioWorkletSource,
-    poolCosimoAudioWorkletEventDelivery,
-} from "./audio-worklet-instrumentation.mjs";
+import { buildOfflineRendererModule } from "./offline-renderer-module.mjs";
 import { copyWebHostAssets } from "./web-host-assets.mjs";
 import { stageCmajorWebRuntime } from "../ui/vite.shared.mjs";
 
@@ -43,7 +38,6 @@ function run(command, args) {
 
 async function buildRendererAwarePatchModule() {
     const generatedClassPath = path.join(outputDirectory, "cmaj_WavetableSynth.class.js");
-    const offlineClassPath = path.join(outputDirectory, "cmaj_Cosimo_Synth.offline.js");
     run("node", [
         "scripts/generate_cmajor_javascript_with_renderer.mjs",
         "WavetableSynth.cmajorpatch",
@@ -57,25 +51,23 @@ async function buildRendererAwarePatchModule() {
     ]);
     const manifest = JSON.parse(manifestSource);
     const patchModule = `// Generated product WebAudio module with the canonical renderer.\n\n`
-        + `import * as helpers from "./cmaj_api/cmaj-audio-worklet-helper.js";\n\n`
+        + `import * as helpers from "./cmaj_api/cmaj-audio-worklet-helper.js";\n`
+        + `import { createCosimoMidiHandler } from "./cosimo-midi.mjs";\n\n`
         + `export const manifest = ${JSON.stringify(manifest, null, 2)};\n\n`
         + `export function getOutputEndpoints() { return WavetableSynth.prototype.getOutputEndpoints(); }\n`
         + `export function getInputEndpoints() { return WavetableSynth.prototype.getInputEndpoints(); }\n\n`
         + `export async function createAudioWorkletNodePatchConnection(audioContext, workletName) {\n`
         + `  const connection = new helpers.AudioWorkletPatchConnection(manifest);\n`
-        + `  await connection.initialise({ CmajorClass: WavetableSynth, audioContext, workletName, hostDescription: "WebAudio" });\n`
+        + `  const midi = createCosimoMidiHandler(connection);\n`
+        + `  connection.sendMessageToServer = midi.sendMessageToServer;\n`
+        + `  await connection.initialise({ CmajorClass: WavetableSynth, audioContext, workletName, hostDescription: "WebAudio", handleStateHostEffect: midi.handleStateHostEffect, performanceMessagePrefix: "cosimo-perf", performanceMarkedEndpoints: ["modulationProgram", "modulationAmount"] });\n`
         + `  return connection;\n`
         + `}\n\n`
         + generatedClass;
 
-    const offlineModule = `// Generated class-only Cosimo performer for offline Bounce workers.\n`
-        + `// It deliberately has no AudioWorklet helper import.\n\n`
-        + generatedClass
-        + `\nexport { WavetableSynth };\nexport default WavetableSynth;\n`;
-
     await Promise.all([
         fs.writeFile(path.join(outputDirectory, "cmaj_Cosimo_Synth.js"), patchModule),
-        fs.writeFile(offlineClassPath, offlineModule),
+        buildOfflineRendererModule({outputDirectory,generatedClass,sharedData:manifest.sharedData}),
     ]);
     await fs.rm(generatedClassPath);
 }
@@ -85,19 +77,6 @@ async function copyCmajorWebRuntime() {
         buildDirectory: path.join(repoRoot, "build", "cmajor_web_runtime-web"),
         outputDirectory: path.join(outputDirectory, "cmaj_api"),
     });
-}
-
-async function instrumentAudioWorklet() {
-    const helperPath = path.join(outputDirectory, "cmaj_api", "cmaj-audio-worklet-helper.js");
-    const source = await fs.readFile(helperPath, "utf8");
-    await fs.writeFile(
-        helperPath,
-        poolCosimoAudioWorkletEventDelivery(
-            fixCosimoAudioWorkletListenerRemoval(
-                adaptCosimoAudioWorkletModuleLoading(instrumentCosimoAudioWorkletSource(source)),
-            ),
-        ),
-    );
 }
 
 async function copyBounceBrowserRuntime() {
@@ -140,7 +119,6 @@ async function buildWebProof() {
         buildRendererAwarePatchModule(),
     ]);
 
-    await instrumentAudioWorklet();
     await fs.copyFile(
         path.join(repoRoot, "patch_gui", "wavetable-test-worker.js"),
         path.join(outputDirectory, "patch_gui", "wavetable-test-worker.js"),

@@ -10,7 +10,6 @@ type BounceActions = {
     readonly onBounce: () => void;
     readonly onCancel: () => void;
     readonly onRevert: () => void;
-    readonly requestBounceGuard: (continuation: () => void) => void;
 };
 
 function phaseLabel(state: BounceUIState) {
@@ -80,7 +79,6 @@ export function BounceActionControl({
     state,
     onBounce,
     onCancel,
-    requestBounceGuard,
     compact = false,
     showReadyAction = true,
 }: Omit<BounceActions, "onRevert"> & { compact?: boolean; showReadyAction?: boolean }) {
@@ -137,7 +135,7 @@ export function BounceActionControl({
                 disabled={!state.hydrated || !state.captureReady}
                 title={!state.captureReady ? "Waiting for the complete patch state…" : "Render this sound into a sampled source"}
                 className="h-8 rounded-[8px] border border-cyan-200/20 bg-cyan-300/12 px-3 text-[9px] font-bold uppercase tracking-[0.16em] text-cyan-100 shadow-[0_0_16px_rgb(34_211_238/0.08)] transition hover:border-cyan-200/35 hover:bg-cyan-300/18 disabled:cursor-wait disabled:opacity-40"
-                onClick={() => requestBounceGuard(onBounce)}
+                onClick={onBounce}
             >
                 Bounce
             </button>
@@ -163,7 +161,6 @@ export function BounceSampledSourceStage({
     onBounce,
     onCancel,
     onRevert,
-    requestBounceGuard,
     compact = false,
     className = "",
 }: BounceActions & {
@@ -208,7 +205,6 @@ export function BounceSampledSourceStage({
                         state={state}
                         onBounce={onBounce}
                         onCancel={onCancel}
-                        requestBounceGuard={requestBounceGuard}
                         showReadyAction={false}
                     />
                     {!state.busy ? (

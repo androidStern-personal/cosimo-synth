@@ -1,3 +1,5 @@
+import { createSynthDocumentClient } from "./synth-document-client";
+import { fullStoredStateValues } from "./full-stored-state";
 import {
     useCallback,
     useEffect,
@@ -10,6 +12,12 @@ import {
 } from "react";
 import { useLaneParameterBinding } from "./lane-param-bindings";
 import { getRackParameterDescriptor } from "./rack-parameter-descriptors";
+import type { PluginStateClientResult } from "../../kit/ui/plugin-state-client";
+import { acquireSynthViewState } from "./synth-state-client";
+import type { createModulationStateClient } from "./modulation-client";
+import { useMsegEditorHistory, type MsegStateOwner } from "./mseg-editor-history";
+import { usePluginHistory, type FilterSpectrumFrame } from "../../kit/index";
+import { useSynthPluginParameterBinding } from "./synth-plugin-state-react";
 
 import {
     usePatchConnection,
@@ -30,37 +38,24 @@ import { createAutoPreviewScheduler } from "./auto-preview-scheduler";
 import { createPreviewStrategyEngine } from "./auto-preview-strategies";
 import { PERF_TUNING_AVAILABLE, getPerfTuningState, subscribePerfTuning } from "./perf-tuning";
 import { createPreviewNoteMemory } from "./preview-note-memory";
-import { clearUiTimeout, uiTimeout } from "./ui-timers";
 import {
     AUTO_PREVIEW_SYNC_CONFIG,
     quantizeStrikeTime,
     type AutoPreviewStrikeKind,
     type LoopSyncSource,
 } from "./auto-preview-sync";
-import {
-    deriveMsegSegmentCurvePower,
-    clampMsegRateSeconds,
-    findMsegPointHitIndex,
-    findMsegSegmentHitIndex,
-    msegEditorCoordinatesToPoint,
-    type MsegSurfaceOrientation,
-    type MsegShape,
-    type MsegState,
-} from "./mseg";
+import { clampMsegRateSeconds, type MsegState } from "./mseg";
 import {
     MODULATION_STATE_KEY,
-    MODULATION_STATE_VERSION,
     MODULATION_TARGET_OPTIONS,
-    acquireModulationRuntimeBridge,
     buildDisplayedMsegState,
     clampModulationRouteAmount,
     createDefaultModulationState,
+    createDefaultRoute,
+    createAvailableGeneratedRouteId,
     createDefaultEnvelope,
     createFirstAvailableModulationRoute,
-    normalizeModulationState,
     parseModulationState,
-    releaseModulationRuntimeBridge,
-    serializeModulationState,
     type ModulationEnvelope,
     type GeneratedModulationRouteInput,
     type ModulationRoute,
@@ -71,7 +66,6 @@ import {
 } from "./modulation";
 import { isOscillatorModulationTargetKind } from "./modulation-targets";
 import {
-    GLOBAL_TUNE_ENDPOINT_ID,
     GLOBAL_TUNE_INITIAL_SEMITONES,
     clampGlobalTuneSemitones,
 } from "./global-tune";
@@ -84,10 +78,7 @@ import {
     VOICE_ENHANCER_Q_ENDPOINT_ID,
 } from "./voice-enhancer";
 import { getModulationArticulationCellIndex } from "./modulation-runtime-program";
-import type {
-    EffectStoredStateAdapter,
-    EffectStoredStateContext,
-} from "./effects/effect-preset-v2";
+import { articulationStateCodec } from "./synth-document-state";
 import {
     ARTICULATIONS_V4_STATE_KEY,
     createEmptyArticulationsState,
@@ -98,7 +89,6 @@ import {
     type ArticulationVoiceParameterId,
     type OscillatorArticulationParameterId,
 } from "./articulation-image";
-import { createBouncePresetStoredStateAdapter } from "./bounce-preset-state";
 import {
     articulationEditorStatesEqual,
     articulationSnapshotsEqual,
@@ -148,10 +138,7 @@ import {
     type EffectiveWarpState,
     type RuntimeTablePresentation,
 } from "./runtime-table-state";
-import {
-    normalizeFilterSpectrumMessage,
-    type FilterSpectrumFrame,
-} from "./filter-spectrum";
+import { normalizeFilterSpectrumMessage } from "../../kit/ui/filter-spectrum";
 import {
     DISTORTION_HISTORY_ENDPOINT_ID,
     DISTORTION_SCOPE_ENDPOINT_ID,
@@ -250,9 +237,6 @@ export const EFFECTIVE_UNISON_STATE_ENDPOINT_ID = "effectiveUnisonState";
 export const EFFECTIVE_FILTER_STATE_ENDPOINT_ID = "effectiveFilterState";
 export const FILTER_SPECTRUM_ENDPOINT_ID = "filterSpectrum";
 export const DISPLAY_SWIPE_THRESHOLD_PX = 2;
-export const MSEG_DRAG_THRESHOLD_PX = 8;
-const PLAY_MODE_ENDPOINT_ID = "playMode";
-const GLIDE_TIME_ENDPOINT_ID = "glideTime";
 const FILTER_MODE_ENDPOINT_ID = "filterMode";
 const FILTER_CUTOFF_ENDPOINT_ID = "filterCutoff";
 const FILTER_CUTOFF_KEY_TRACK_ENABLED_ENDPOINT_ID = "filterCutoffKeyTrackEnabled";
@@ -281,25 +265,13 @@ const AMP_ATTACK_ENDPOINT_ID = "ampAttack";
 const AMP_DECAY_ENDPOINT_ID = "ampDecay";
 const AMP_SUSTAIN_ENDPOINT_ID = "ampSustain";
 const AMP_RELEASE_ENDPOINT_ID = "ampRelease";
-const DISTORTION_MODE_ENDPOINT_ID = "distortionMode";
-const DISTORTION_DRIVE_DB_ENDPOINT_ID = "distortionDriveDb";
-const DISTORTION_KNEE_ENDPOINT_ID = "distortionKnee";
-const DISTORTION_WET_ENDPOINT_ID = "distortionWet";
-const DISTORTION_WET_HP_HZ_ENDPOINT_ID = "distortionWetHPHz";
-const DISTORTION_WET_LP_HZ_ENDPOINT_ID = "distortionWetLPHz";
 const DISTORTION_TYPE_ENDPOINT_ID = "distortionType";
-const CHORUS_MIX_ENDPOINT_ID = "chorusMix";
-const CHORUS_MOTION_MODE_ENDPOINT_ID = "chorusMotionMode";
-const CHORUS_BLOOM_MODE_ENDPOINT_ID = "chorusBloomMode";
-const CHORUS_TONE_ENDPOINT_ID = "chorusTone";
-const CHORUS_FEEDBACK_ENDPOINT_ID = "chorusFeedback";
-const CHORUS_RING_AMOUNT_ENDPOINT_ID = "chorusRingAmount";
 const RUNTIME_SYNC_REQUEST_ENDPOINT_ID = "runtimeSyncRequest";
 const RUNTIME_STATE_ENDPOINT_ID = "runtimeState";
 const RETRY_DESIRED_TABLE_REQUEST_ENDPOINT_ID = "retryDesiredTableRequest";
 const WAVETABLE_PREWARM_REQUEST_ENDPOINT_ID = "wavetablePrewarmRequest";
 const MIDI_INPUT_ENDPOINT_ID = "midiIn";
-/** T12 locked starting cadence; tune on a real phone before shipping. */
+/** Auto-preview starting cadence, tuned on a real phone. */
 const AUTO_PREVIEW_SCHEDULER_CONFIG = {
     minRetriggerIntervalMs: 250,
     movementStoppedMs: 150,
@@ -309,40 +281,10 @@ const AUTO_PREVIEW_SCHEDULER_CONFIG = {
 const AUTO_PREVIEW_MIN_NOTE_MS = 250;
 const VOICE_ARTICULATION_START_ENDPOINT_ID = "voiceArticulationStart";
 const ARTICULATION_AUDITION_FALLBACK_NOTE = 60;
-export { SYNTH_PRESET_EFFECT_ID } from "./effects/synth-preset-identity";
 export const GLIDE_TIME_MIN_SECONDS = 0;
 export const GLIDE_TIME_MAX_SECONDS = 2;
 export const GLIDE_TIME_STEP_SECONDS = 0.001;
 
-type ActiveMsegPointPointerState = {
-    kind: "point-drag";
-    pointerId: number;
-    pointIndex: number;
-    startClientX: number;
-    startClientY: number;
-    moved: boolean;
-    deleteOnRelease: boolean;
-};
-
-type ActiveMsegPendingSegmentPointerState = {
-    kind: "pending-segment";
-    pointerId: number;
-    segmentIndex: number;
-    startClientX: number;
-    startClientY: number;
-    holdTimeoutId: number | null;
-};
-
-type ActiveMsegCurvePointerState = {
-    kind: "curve-drag";
-    pointerId: number;
-    segmentIndex: number;
-};
-
-type ActiveMsegPointerState =
-    | ActiveMsegPointPointerState
-    | ActiveMsegPendingSegmentPointerState
-    | ActiveMsegCurvePointerState;
 
 export type CatalogLoadState = {
     catalog: FactoryBankCatalog | null;
@@ -480,6 +422,7 @@ export type SynthPatchViewModel = {
     playMode: PatchControlBinding<number>;
     glideTime: PatchControlBinding<number>;
     globalTune: PatchControlBinding<number>;
+    voiceHistory: ReturnType<typeof usePluginHistory>;
     pan: PatchControlBinding<number>;
     oscillatorOctave: PatchControlBinding<number>;
     oscillatorSemitone: PatchControlBinding<number>;
@@ -549,7 +492,8 @@ export type SynthPatchViewModel = {
     articulationSlots: ArticulationSlot[];
     selectedArticulationSlot: ArticulationSlot | null;
     selectedArticulationIsDirty: boolean;
-    presetStoredStateAdapters: EffectStoredStateAdapter[];
+    /** Re-anchor every oscillator's articulation base to a sound that replaced the current one. */
+    resetArticulationPatchBases: (parameters: Readonly<Record<string, number>>) => void;
     articulationHeldInput: ArticulationHeldInput;
     discardedArticulationEdit: {
         slotId: string;
@@ -573,8 +517,7 @@ export type SynthPatchViewModel = {
     handleAddRouteWithOverrides: (overrides: GeneratedModulationRouteInput) => boolean;
     handleRemoveRoute: (routeIndex: number) => void;
     handleRouteChange: (routeIndex: number, update: ModulationRouteUpdate) => void;
-    handleAddArticulationSlot: () => void;
-    handleCaptureArticulationSlot: (options?: { autoAssign?: boolean }) => void;
+    handleCaptureArticulationSlot: () => void;
     handleSelectArticulationSlot: (slotId: string) => void;
     handleUpdateSelectedArticulationSlot: () => void;
     handleRevertSelectedArticulationSlot: () => void;
@@ -983,13 +926,22 @@ export function useObservedUnisonState({
 
 const modulationAmountRenderIdleMilliseconds = 50;
 
+function submitModulationEdit(result: Promise<PluginStateClientResult | undefined> | undefined): void {
+    void result?.catch(error => console.error("Modulation edit failed", error));
+}
+
 export function useModulationState() {
     const patchConnection = usePatchConnection();
-    const [state, setState] = useState<ModulationState | null>(null);
-    const bridgeRef = useRef<ReturnType<typeof acquireModulationRuntimeBridge> | null>(null);
+    const [projection, setProjection] = useState<{ state: ModulationState | null }>({ state: null });
+    // Selection is presentation state and can notify without changing bank identity.
+    const setState = (state: ModulationState | null) => setProjection({ state });
+    const [owner, setOwner] = useState<MsegStateOwner | null>(null);
+    const bridgeRef = useRef<ReturnType<typeof createModulationStateClient> | null>(null);
 
     useEffect(() => {
-        const bridge = acquireModulationRuntimeBridge(patchConnection);
+        const lease = acquireSynthViewState(patchConnection);
+        const bridge = lease.modulation;
+        setOwner(lease);
         let pendingAmountState: ModulationState | null = null;
         let pendingAmountTimer: ReturnType<typeof setTimeout> | null = null;
         const clearPendingAmountState = () => {
@@ -1000,7 +952,7 @@ export function useModulationState() {
             pendingAmountState = null;
         };
         const handleStateChange = (
-            nextState: ModulationState,
+            nextState: ModulationState | null,
             changeKind: ModulationStateChangeKind,
         ) => {
             if (changeKind === "routeAmount") {
@@ -1029,38 +981,20 @@ export function useModulationState() {
         return () => {
             clearPendingAmountState();
             bridge.unsubscribe(handleStateChange);
-            releaseModulationRuntimeBridge(patchConnection);
+            lease.release();
             bridgeRef.current = null;
         };
     }, [patchConnection]);
 
     return {
-        state,
+        state: projection.state,
+        owner,
         bridge: bridgeRef,
     };
 }
 
 function buildShortMidi(status: number, noteNumber: number, velocity = 0) {
     return ((status & 0xff) << 16) | ((noteNumber & 0x7f) << 8) | (velocity & 0x7f);
-}
-
-function readFullStoredStateValue(storedState: unknown, key: string) {
-    const fullState = storedState && typeof storedState === "object"
-        ? storedState as Record<string, unknown>
-        : {};
-    const values = fullState.values && typeof fullState.values === "object"
-        ? fullState.values as Record<string, unknown>
-        : {};
-
-    if (Object.prototype.hasOwnProperty.call(values, key)) {
-        return values[key];
-    }
-
-    if (Object.prototype.hasOwnProperty.call(fullState, key)) {
-        return fullState[key];
-    }
-
-    return undefined;
 }
 
 function currentArticulationRouteIds(routes: ReadonlyArray<ModulationRoute>): ReadonlySet<string> {
@@ -1088,14 +1022,14 @@ export function parseArticulationStateFromFullStoredState(
     storedState: unknown,
     fallbackRoutes: ReadonlyArray<ModulationRoute>,
 ) {
-    const rawModulation = readFullStoredStateValue(storedState, MODULATION_STATE_KEY);
+    const rawModulation = fullStoredStateValues(storedState)[MODULATION_STATE_KEY];
     const parsedModulation = rawModulation === undefined
         ? null
         : parseModulationState(decodeArticulationDocument(rawModulation));
     const acceptedRouteIds = parsedModulation?._tag === "ok"
         ? currentArticulationRouteIds(parsedModulation.value.routes)
         : currentArticulationRouteIds(fallbackRoutes);
-    const rawArticulations = readFullStoredStateValue(storedState, ARTICULATIONS_V4_STATE_KEY);
+    const rawArticulations = fullStoredStateValues(storedState)[ARTICULATIONS_V4_STATE_KEY];
 
     return {
         acceptedRouteIds,
@@ -1385,18 +1319,17 @@ export function replaceVisibleArticulationSnapshotV4(
 }
 
 function articulationStatesEqual(left: ArticulationsState, right: ArticulationsState): boolean {
-    return JSON.stringify(serializeArticulationsV4(left)) === JSON.stringify(serializeArticulationsV4(right));
+    return articulationStateCodec.equals(left, right);
 }
 
 function useStoredArticulationEditorState(
-    modulationBridge: RefObject<ReturnType<typeof acquireModulationRuntimeBridge> | null>,
+    modulationBridge: RefObject<ReturnType<typeof createModulationStateClient> | null>,
     modulationState: ModulationState | null,
     getBaseSnapshot: () => ArticulationSnapshot | null,
     oscillatorID: OscillatorID,
 ) {
     const patchConnection = usePatchConnection();
-    const emptyState = createEmptyArticulationsState();
-    const [state, setState] = useState<ArticulationsState>(emptyState);
+    const [state, setState] = useState<ArticulationsState>(() => createEmptyArticulationsState());
     const [bank, setBank] = useState<ArticulationEditorState>(() => createDefaultArticulationEditorState());
     const [hasHydrated, setHasHydrated] = useState(false);
     const stateRef = useRef(state);
@@ -1404,344 +1337,140 @@ function useStoredArticulationEditorState(
     const modulationStateRef = useRef(modulationState);
     const acceptedRouteIdsRef = useRef<ReadonlySet<string>>(new Set());
     const getBaseSnapshotRef = useRef(getBaseSnapshot);
-    const pendingEchoTokensRef = useRef(new Map<string, number>());
-    const activeStoredStateConnectionRef = useRef<typeof patchConnection | null>(patchConnection);
-
+    const clientRef = useRef<ReturnType<typeof createSynthDocumentClient<ArticulationsState>> | null>(null);
     getBaseSnapshotRef.current = getBaseSnapshot;
     modulationStateRef.current = modulationState;
-    if (modulationState !== null) {
-        acceptedRouteIdsRef.current = currentArticulationRouteIds(modulationState.routes);
-    }
-
-    const rememberPendingEcho = useCallback((serializedBank: string) => {
-        const pendingEchoTokens = pendingEchoTokensRef.current;
-        pendingEchoTokens.set(serializedBank, (pendingEchoTokens.get(serializedBank) ?? 0) + 1);
-    }, []);
-
-    const consumePendingEcho = useCallback((serializedBank: string) => {
-        const pendingEchoTokens = pendingEchoTokensRef.current;
-        const pendingCount = pendingEchoTokens.get(serializedBank) ?? 0;
-        if (pendingCount <= 0) return false;
-        if (pendingCount === 1) pendingEchoTokens.delete(serializedBank);
-        else pendingEchoTokens.set(serializedBank, pendingCount - 1);
-        return true;
-    }, []);
+    if (modulationState !== null) acceptedRouteIdsRef.current = currentArticulationRouteIds(modulationState.routes);
 
     const applyCurrentState = useCallback((nextState: ArticulationsState) => {
         stateRef.current = nextState;
-        setState((previousState) => articulationStatesEqual(previousState, nextState) ? previousState : nextState);
-
-        const baseSnapshot = getBaseSnapshotRef.current();
-        if (baseSnapshot === null) {
-            return;
-        }
-
-        const routes = modulationBridge.current?.getState().routes ?? modulationStateRef.current?.routes ?? [];
-        const nextBank = projectCurrentArticulationsToEditorBank(
-            nextState,
-            baseSnapshot,
-            routes,
-            oscillatorID,
-        );
+        setState(previous => articulationStatesEqual(previous, nextState) ? previous : nextState);
+        const base = getBaseSnapshotRef.current();
+        if (!base) return;
+        const routes = modulationBridge.current?.getState()?.routes ?? modulationStateRef.current?.routes ?? [];
+        const nextBank = projectCurrentArticulationsToEditorBank(nextState, base, routes, oscillatorID);
         bankRef.current = nextBank;
-        setBank((previousBank) => (
-            articulationEditorStatesEqual(previousBank, nextBank) ? previousBank : nextBank
-        ));
-    }, [modulationBridge, oscillatorID, patchConnection]);
-
-    const refreshProjection = useCallback(() => {
-        applyCurrentState(stateRef.current);
-    }, [applyCurrentState]);
-
-    const applyIncomingState = useCallback((
-        rawValue: unknown,
-        isHydration: boolean,
-        acceptedRouteIds: ReadonlySet<string> = acceptedRouteIdsRef.current,
-    ) => {
-        if (rawValue === undefined) {
-            if (isHydration) {
-                acceptedRouteIdsRef.current = acceptedRouteIds;
-                setHasHydrated(true);
-                applyCurrentState(createEmptyArticulationsState());
-            }
-            return;
-        }
-
-        const parsedState = parseArticulationsV4(decodeArticulationDocument(rawValue), acceptedRouteIds);
-        if (parsedState._tag === "err") {
-            if (isHydration) {
-                acceptedRouteIdsRef.current = acceptedRouteIds;
-                setHasHydrated(true);
-                applyCurrentState(createEmptyArticulationsState());
-            }
-            return;
-        }
-
-        const serializedState = JSON.stringify(serializeArticulationsV4(parsedState.value));
-        if (consumePendingEcho(serializedState)) return;
-        acceptedRouteIdsRef.current = acceptedRouteIds;
-        setHasHydrated(true);
-        applyCurrentState(parsedState.value);
-    }, [applyCurrentState, consumePendingEcho]);
-
+        setBank(previous => articulationEditorStatesEqual(previous, nextBank) ? previous : nextBank);
+    }, [modulationBridge, oscillatorID]);
+    const refreshProjection = useCallback(() => applyCurrentState(stateRef.current), [applyCurrentState]);
     useEffect(() => {
-        const effectPatchConnection = patchConnection;
-        let effectIsLive = true;
-        activeStoredStateConnectionRef.current = effectPatchConnection;
-        const isCurrentConnection = () => (
-            effectIsLive
-            && activeStoredStateConnectionRef.current === effectPatchConnection
-        );
+        const client = createSynthDocumentClient<ArticulationsState>(patchConnection, ARTICULATIONS_V4_STATE_KEY);
+        clientRef.current = client;
         setHasHydrated(false);
-        pendingEchoTokensRef.current.clear();
-        const usesKeyRequestFallback = typeof effectPatchConnection.requestFullStoredState !== "function"
-            && typeof effectPatchConnection.requestStoredStateValue === "function";
-        let isAwaitingKeyHydration = usesKeyRequestFallback;
-        const handleStoredStateValue = (message: unknown) => {
-            if (!isCurrentConnection()) return;
-            if (!message || typeof message !== "object") return;
-            const nextMessage = message as { key?: unknown; value?: unknown };
-            if (nextMessage.key !== ARTICULATIONS_V4_STATE_KEY) return;
-            const isHydration = isAwaitingKeyHydration;
-            isAwaitingKeyHydration = false;
-            applyIncomingState(nextMessage.value, isHydration);
+        // Every state update notifies this client; only a new articulation document needs projecting.
+        const read = () => {
+            const current = client.read();
+            setHasHydrated(current !== undefined);
+            if (!current || current === stateRef.current) return;
+            applyCurrentState(current);
         };
-
-        effectPatchConnection.addStoredStateValueListener?.(handleStoredStateValue);
-        if (typeof effectPatchConnection.requestFullStoredState === "function") {
-            effectPatchConnection.requestFullStoredState((storedState) => {
-                if (!isCurrentConnection()) return;
-                const parsedSnapshot = parseArticulationStateFromFullStoredState(
-                    storedState,
-                    modulationBridge.current?.getState().routes ?? modulationStateRef.current?.routes ?? [],
-                );
-                acceptedRouteIdsRef.current = parsedSnapshot.acceptedRouteIds;
-                if (parsedSnapshot.parsedState === null) {
-                    applyIncomingState(undefined, true, parsedSnapshot.acceptedRouteIds);
-                    return;
-                }
-                if (parsedSnapshot.parsedState._tag === "err") {
-                    setHasHydrated(true);
-                    return;
-                }
-                applyIncomingState(
-                    serializeArticulationsV4(parsedSnapshot.parsedState.value),
-                    true,
-                    parsedSnapshot.acceptedRouteIds,
-                );
-            });
-        } else if (typeof effectPatchConnection.requestStoredStateValue === "function") {
-            effectPatchConnection.requestStoredStateValue(ARTICULATIONS_V4_STATE_KEY);
-        } else {
-            applyIncomingState(undefined, true);
-        }
-
-        return () => {
-            effectIsLive = false;
-            effectPatchConnection.removeStoredStateValueListener?.(handleStoredStateValue);
-            if (activeStoredStateConnectionRef.current === effectPatchConnection) {
-                activeStoredStateConnectionRef.current = null;
-            }
-        };
-    }, [applyIncomingState, patchConnection]);
-
+        const unsubscribe = client.subscribe(read);
+        read();
+        return () => { unsubscribe(); client.stop(); if (clientRef.current === client) clientRef.current = null; };
+    }, [applyCurrentState, patchConnection]);
     const setAndPersistState = useCallback((
-        nextStateValue: ArticulationsState | ((previousState: ArticulationsState) => ArticulationsState),
+        value: ArticulationsState | ((previous: ArticulationsState) => ArticulationsState),
         acceptedRouteIds: ReadonlySet<string> = acceptedRouteIdsRef.current,
-        refreshProjection = false,
+        refresh = false,
     ) => {
-        const previousState = stateRef.current;
-        const candidate = typeof nextStateValue === "function"
-            ? nextStateValue(previousState)
-            : nextStateValue;
-        const parsedState = parseArticulationsV4(
-            serializeArticulationsV4(candidate),
-            acceptedRouteIds,
-        );
-        if (parsedState._tag === "err") return;
-
-        if (articulationStatesEqual(previousState, parsedState.value)) {
-            if (refreshProjection) {
-                acceptedRouteIdsRef.current = acceptedRouteIds;
-                applyCurrentState(parsedState.value);
-            }
+        const current = clientRef.current?.read();
+        if (!current) return;
+        const candidate = typeof value === "function" ? value(current) : value;
+        const parsed = parseArticulationsV4(serializeArticulationsV4(candidate), acceptedRouteIds);
+        if (parsed._tag === "err") return;
+        acceptedRouteIdsRef.current = acceptedRouteIds;
+        if (articulationStatesEqual(current, parsed.value)) {
+            if (refresh) applyCurrentState(parsed.value);
             return;
         }
-
-        const nextState = parsedState.value;
-        const serializedState = JSON.stringify(serializeArticulationsV4(nextState));
-        acceptedRouteIdsRef.current = acceptedRouteIds;
-        applyCurrentState(nextState);
-        setHasHydrated(true);
-        if (typeof patchConnection.sendStoredStateValue === "function") {
-            rememberPendingEcho(serializedState);
-            patchConnection.sendStoredStateValue(ARTICULATIONS_V4_STATE_KEY, serializedState);
-        }
-    }, [applyCurrentState, patchConnection, rememberPendingEcho]);
-
-    return useMemo(() => ({
-        state,
-        stateRef,
-        bank,
-        bankRef,
-        hasHydrated,
-        refreshProjection,
-        setAndPersistState,
-    }), [bank, hasHydrated, refreshProjection, setAndPersistState, state]);
+        void clientRef.current?.set(parsed.value).catch(error => console.error("Articulation edit failed", error));
+    }, [applyCurrentState]);
+    return useMemo(() => ({ state, stateRef, bank, bankRef, hasHydrated, refreshProjection, setAndPersistState }),
+        [state, bank, hasHydrated, refreshProjection, setAndPersistState]);
 }
 
-function parsePresetStoredStateValue(rawValue: unknown, label: string) {
-    if (typeof rawValue !== "string") {
-        return rawValue;
-    }
-
-    try {
-        return JSON.parse(rawValue);
-    } catch (error) {
-        throw new Error(`${label} must be valid JSON.`);
-    }
-}
-
-function parseStrictArticulationPresetState(
-    rawValue: unknown,
-    acceptedRouteIds: ReadonlySet<string>,
-): ArticulationsState {
-    const parsedValue = parsePresetStoredStateValue(rawValue, "Articulation preset state");
-    const parsedState = parseArticulationsV4(parsedValue, acceptedRouteIds);
-    if (parsedState._tag === "err") {
-        throw parsedState.error;
-    }
-
-    return parsedState.value;
-}
-
-function parseStrictModulationPresetState(rawValue: unknown): ModulationState {
-    const parsedValue = parsePresetStoredStateValue(rawValue, "Modulation preset state");
-    const parsedState = parseModulationState(parsedValue);
-    if (parsedState._tag === "err") {
-        throw parsedState.error;
-    }
-
-    return parsedState.value;
-}
-
-function presetParameterNumber(
-    context: EffectStoredStateContext,
-    endpointID: string,
-    fallback: number,
-) {
-    const value = context.parameters[endpointID];
-    return typeof value === "number" && Number.isFinite(value) ? value : fallback;
-}
-
-/** Build one oscillator's stable local/shared patch base from the preset transaction itself. */
-export function buildPresetArticulationBaseSnapshot(
-    context: EffectStoredStateContext,
+/** Build one oscillator's stable local/shared articulation base from a recalled sound's parameters. */
+export function buildArticulationBaseSnapshot(
+    soundParameters: Readonly<Record<string, number>>,
     modulationState: ModulationState,
     oscillatorID: OscillatorID,
 ): ArticulationSnapshot {
+    const parameterOr = (endpointID: string, fallback: number) => {
+        const value = soundParameters[endpointID];
+        return typeof value === "number" && Number.isFinite(value) ? value : fallback;
+    };
     const defaults = createDefaultArticulationSnapshot();
     const parameters = defaults.parameters;
     return normalizeArticulationSnapshot({
         parameters: {
-            wavetablePosition: presetParameterNumber(
-                context,
-                getOscillatorControlAddress(oscillatorID, "framePosition").endpointID,
+            wavetablePosition: parameterOr(getOscillatorControlAddress(oscillatorID, "framePosition").endpointID,
                 parameters.wavetablePosition,
             ),
-            pan: presetParameterNumber(context, getOscillatorControlAddress(oscillatorID, "pan").endpointID, parameters.pan),
-            octave: presetParameterNumber(context, getOscillatorControlAddress(oscillatorID, "octave").endpointID, parameters.octave),
-            semitone: presetParameterNumber(context, getOscillatorControlAddress(oscillatorID, "semitone").endpointID, parameters.semitone),
-            fineCents: presetParameterNumber(context, getOscillatorControlAddress(oscillatorID, "fineCents").endpointID, parameters.fineCents),
-            volumeDb: presetParameterNumber(context, getOscillatorControlAddress(oscillatorID, "volumeDb").endpointID, parameters.volumeDb),
-            mute: presetParameterNumber(
-                context,
-                getOscillatorControlAddress(oscillatorID, "mute").endpointID,
+            pan: parameterOr(getOscillatorControlAddress(oscillatorID, "pan").endpointID, parameters.pan),
+            octave: parameterOr(getOscillatorControlAddress(oscillatorID, "octave").endpointID, parameters.octave),
+            semitone: parameterOr(getOscillatorControlAddress(oscillatorID, "semitone").endpointID, parameters.semitone),
+            fineCents: parameterOr(getOscillatorControlAddress(oscillatorID, "fineCents").endpointID, parameters.fineCents),
+            volumeDb: parameterOr(getOscillatorControlAddress(oscillatorID, "volumeDb").endpointID, parameters.volumeDb),
+            mute: parameterOr(getOscillatorControlAddress(oscillatorID, "mute").endpointID,
                 getOscillatorDefaultMute(oscillatorID),
             ),
-            solo: presetParameterNumber(context, getOscillatorControlAddress(oscillatorID, "solo").endpointID, parameters.solo),
-            warpMode: presetParameterNumber(
-                context,
-                getOscillatorControlAddress(oscillatorID, "warpMode").endpointID,
+            solo: parameterOr(getOscillatorControlAddress(oscillatorID, "solo").endpointID, parameters.solo),
+            warpMode: parameterOr(getOscillatorControlAddress(oscillatorID, "warpMode").endpointID,
                 parameters.warpMode,
             ),
-            warpAmount: presetParameterNumber(
-                context,
-                getOscillatorControlAddress(oscillatorID, "warpAmount").endpointID,
+            warpAmount: parameterOr(getOscillatorControlAddress(oscillatorID, "warpAmount").endpointID,
                 parameters.warpAmount,
             ),
-            filterMode: presetParameterNumber(context, FILTER_MODE_ENDPOINT_ID, parameters.filterMode),
-            filterCutoff: presetParameterNumber(context, FILTER_CUTOFF_ENDPOINT_ID, parameters.filterCutoff),
-            filterQ: presetParameterNumber(context, FILTER_Q_ENDPOINT_ID, parameters.filterQ),
-            unisonVoices: presetParameterNumber(
-                context,
-                getOscillatorControlAddress(oscillatorID, "unisonVoices").endpointID,
+            filterMode: parameterOr(FILTER_MODE_ENDPOINT_ID, parameters.filterMode),
+            filterCutoff: parameterOr(FILTER_CUTOFF_ENDPOINT_ID, parameters.filterCutoff),
+            filterQ: parameterOr(FILTER_Q_ENDPOINT_ID, parameters.filterQ),
+            unisonVoices: parameterOr(getOscillatorControlAddress(oscillatorID, "unisonVoices").endpointID,
                 parameters.unisonVoices,
             ),
-            unisonDetune: presetParameterNumber(
-                context,
-                getOscillatorControlAddress(oscillatorID, "unisonDetune").endpointID,
+            unisonDetune: parameterOr(getOscillatorControlAddress(oscillatorID, "unisonDetune").endpointID,
                 parameters.unisonDetune,
             ),
-            unisonBlend: presetParameterNumber(
-                context,
-                getOscillatorControlAddress(oscillatorID, "unisonBlend").endpointID,
+            unisonBlend: parameterOr(getOscillatorControlAddress(oscillatorID, "unisonBlend").endpointID,
                 parameters.unisonBlend,
             ),
-            unisonWidth: presetParameterNumber(
-                context,
-                getOscillatorControlAddress(oscillatorID, "unisonWidth").endpointID,
+            unisonWidth: parameterOr(getOscillatorControlAddress(oscillatorID, "unisonWidth").endpointID,
                 parameters.unisonWidth,
             ),
-            unisonPhase: presetParameterNumber(
-                context,
-                getOscillatorControlAddress(oscillatorID, "phase").endpointID,
+            unisonPhase: parameterOr(getOscillatorControlAddress(oscillatorID, "phase").endpointID,
                 parameters.unisonPhase,
             ),
-            unisonRandom: presetParameterNumber(
-                context,
-                getOscillatorControlAddress(oscillatorID, "phaseRandom").endpointID,
+            unisonRandom: parameterOr(getOscillatorControlAddress(oscillatorID, "phaseRandom").endpointID,
                 parameters.unisonRandom,
             ),
-            unisonPhaseMode: presetParameterNumber(
-                context,
-                getOscillatorControlAddress(oscillatorID, "retrigger").endpointID,
+            unisonPhaseMode: parameterOr(getOscillatorControlAddress(oscillatorID, "retrigger").endpointID,
                 parameters.unisonPhaseMode,
             ),
-            unisonDetuneMode: presetParameterNumber(
-                context,
-                getOscillatorControlAddress(oscillatorID, "unisonDetuneMode").endpointID,
+            unisonDetuneMode: parameterOr(getOscillatorControlAddress(oscillatorID, "unisonDetuneMode").endpointID,
                 parameters.unisonDetuneMode,
             ),
-            unisonStackMode: presetParameterNumber(
-                context,
-                getOscillatorControlAddress(oscillatorID, "unisonStackMode").endpointID,
+            unisonStackMode: parameterOr(getOscillatorControlAddress(oscillatorID, "unisonStackMode").endpointID,
                 parameters.unisonStackMode,
             ),
-            unisonWavetablePositionSpread: presetParameterNumber(
-                context,
-                getOscillatorControlAddress(oscillatorID, "unisonWavetablePositionSpread").endpointID,
+            unisonWavetablePositionSpread: parameterOr(getOscillatorControlAddress(oscillatorID, "unisonWavetablePositionSpread").endpointID,
                 parameters.unisonWavetablePositionSpread,
             ),
-            unisonWarpSpread: presetParameterNumber(
-                context,
-                getOscillatorControlAddress(oscillatorID, "unisonWarpSpread").endpointID,
+            unisonWarpSpread: parameterOr(getOscillatorControlAddress(oscillatorID, "unisonWarpSpread").endpointID,
                 parameters.unisonWarpSpread,
             ),
             msegMorphs: [
-                presetParameterNumber(context, MSEG_1_MORPH_ENDPOINT_ID, parameters.msegMorphs[0]),
-                presetParameterNumber(context, MSEG_2_MORPH_ENDPOINT_ID, parameters.msegMorphs[1]),
-                presetParameterNumber(context, MSEG_3_MORPH_ENDPOINT_ID, parameters.msegMorphs[2]),
+                parameterOr(MSEG_1_MORPH_ENDPOINT_ID, parameters.msegMorphs[0]),
+                parameterOr(MSEG_2_MORPH_ENDPOINT_ID, parameters.msegMorphs[1]),
+                parameterOr(MSEG_3_MORPH_ENDPOINT_ID, parameters.msegMorphs[2]),
             ],
         },
             envelopes: modulationState.envelopeSlots.map((envelope, slotIndex) => {
                 const endpointPrefix = `env${slotIndex + 1}`;
                 return {
                     name: envelope.name,
-                    attackSeconds: presetParameterNumber(context, `${endpointPrefix}Attack`, 0.01),
-                    decaySeconds: presetParameterNumber(context, `${endpointPrefix}Decay`, 0.25),
-                    sustain: presetParameterNumber(context, `${endpointPrefix}Sustain`, 0.5),
-                    releaseSeconds: presetParameterNumber(context, `${endpointPrefix}Release`, 0.2),
+                    attackSeconds: parameterOr(`${endpointPrefix}Attack`, 0.01),
+                    decaySeconds: parameterOr(`${endpointPrefix}Decay`, 0.25),
+                    sustain: parameterOr(`${endpointPrefix}Sustain`, 0.5),
+                    releaseSeconds: parameterOr(`${endpointPrefix}Release`, 0.2),
                 };
             }),
         modRouteAmounts: modulationState.routes.flatMap((route) => (
@@ -1750,132 +1479,6 @@ export function buildPresetArticulationBaseSnapshot(
                 : [{ routeId: route.id, amount: route.amount }]
         )),
     });
-}
-
-function useSynthPresetStoredStateAdapters({
-    articulationBankState,
-    modulationBridge,
-    modulationState,
-    setArticulationPatchBase,
-}: {
-    articulationBankState: ReturnType<typeof useStoredArticulationEditorState>;
-    modulationBridge: ReturnType<typeof useModulationState>["bridge"];
-    modulationState: ModulationState | null;
-    setArticulationPatchBase: (oscillatorID: OscillatorID, snapshot: ArticulationSnapshot) => void;
-}) {
-    const patchConnection = usePatchConnection();
-    const { stateRef, setAndPersistState } = articulationBankState;
-    const latestModulationStateRef = useRef<ModulationState | null>(null);
-
-    useEffect(() => {
-        latestModulationStateRef.current = modulationState;
-    }, [modulationState]);
-
-    return useMemo<EffectStoredStateAdapter[]>(() => {
-        const subscribeToStoredStateKey = (stateKey: string, listener: () => void) => {
-            const handleStoredStateValue = (message: unknown) => {
-                if (!message || typeof message !== "object") {
-                    return;
-                }
-
-                if ((message as { key?: unknown }).key === stateKey) {
-                    listener();
-                }
-            };
-
-            patchConnection.addStoredStateValueListener?.(handleStoredStateValue);
-
-            return () => {
-                patchConnection.removeStoredStateValueListener?.(handleStoredStateValue);
-            };
-        };
-
-        const presetModulationState = (context?: EffectStoredStateContext) => {
-            if (!context || !(MODULATION_STATE_KEY in context.storedState)) {
-                throw new Error("Synth preset modulation state is required before articulation validation.");
-            }
-
-            return parseStrictModulationPresetState(context.storedState[MODULATION_STATE_KEY]);
-        };
-
-        const modulationAdapter: EffectStoredStateAdapter = {
-            key: MODULATION_STATE_KEY,
-            schemaVersion: MODULATION_STATE_VERSION,
-            getContract() {
-                return {
-                    key: MODULATION_STATE_KEY,
-                    schemaVersion: MODULATION_STATE_VERSION,
-                    required: true,
-                };
-            },
-            capture() {
-                return modulationBridge.current?.getState()
-                    ?? latestModulationStateRef.current
-                    ?? createDefaultModulationState();
-            },
-            normalizeForPreset(value: unknown) {
-                return parseStrictModulationPresetState(value);
-            },
-            serializeForPreset(value) {
-                return serializeModulationState(parseStrictModulationPresetState(value));
-            },
-            apply(value) {
-                const nextState = parseStrictModulationPresetState(value);
-
-                if (modulationBridge.current) {
-                    modulationBridge.current.setState(nextState);
-                    return;
-                }
-
-                patchConnection.sendStoredStateValue?.(MODULATION_STATE_KEY, serializeModulationState(nextState));
-            },
-            subscribe(listener: () => void) {
-                return subscribeToStoredStateKey(MODULATION_STATE_KEY, listener);
-            },
-        };
-        const articulationAdapter: EffectStoredStateAdapter = {
-            key: ARTICULATIONS_V4_STATE_KEY,
-            schemaVersion: 4,
-            getContract() {
-                return {
-                    key: ARTICULATIONS_V4_STATE_KEY,
-                    schemaVersion: 4,
-                    required: true,
-                };
-            },
-            capture() {
-                return stateRef.current;
-            },
-            normalizeForPreset(value: unknown, context?: EffectStoredStateContext) {
-                const routeIds = currentArticulationRouteIds(presetModulationState(context).routes);
-                return parseStrictArticulationPresetState(value, routeIds);
-            },
-            serializeForPreset(value, context) {
-                const routeIds = currentArticulationRouteIds(presetModulationState(context).routes);
-                return serializeArticulationsV4(parseStrictArticulationPresetState(value, routeIds));
-            },
-            apply(value, context) {
-                const nextModulationState = presetModulationState(context);
-                const routeIds = currentArticulationRouteIds(nextModulationState.routes);
-                if (!context) {
-                    throw new Error("Synth preset context is required before articulation application.");
-                }
-                for (const oscillator of OSCILLATOR_BINDING_CONTRACTS) {
-                    setArticulationPatchBase(
-                        oscillator.id,
-                        buildPresetArticulationBaseSnapshot(context, nextModulationState, oscillator.id),
-                    );
-                }
-                setAndPersistState(parseStrictArticulationPresetState(value, routeIds), routeIds, true);
-            },
-            subscribe(listener: () => void) {
-                return subscribeToStoredStateKey(ARTICULATIONS_V4_STATE_KEY, listener);
-            },
-        };
-
-        const bounceAdapter = createBouncePresetStoredStateAdapter(patchConnection);
-        return [modulationAdapter, articulationAdapter, bounceAdapter];
-    }, [modulationBridge, patchConnection, setAndPersistState, setArticulationPatchBase, stateRef]);
 }
 
 export function useMsegState() {
@@ -2037,162 +1640,35 @@ export function useStagePositionDrag({
 
 export function useMsegEditorInteractions({
     msegState,
+    owner,
     msegController,
-    surfaceRef,
-    orientation = "horizontal",
     curveEditActivationMode = "immediate",
     curveEditHoldDelayMs = 350,
     onCurveEditHoldActivated = null,
 }: {
     msegState: MsegState | null;
+    owner: MsegStateOwner | null;
     msegController: RefObject<MsegEditorControllerLike | null>;
-    surfaceRef: RefObject<SVGSVGElement | null>;
-    orientation?: MsegSurfaceOrientation;
     curveEditActivationMode?: "immediate" | "hold-or-drag";
     curveEditHoldDelayMs?: number;
     onCurveEditHoldActivated?: (() => void) | null;
 }) {
     const [isOpen, setIsOpen] = useState(false);
-    const [selectedPointIndex, setSelectedPointIndex] = useState(0);
-    const [hoveredSegmentIndex, setHoveredSegmentIndex] = useState(-1);
-    const [activeSegmentIndex, setActiveSegmentIndex] = useState(-1);
-    const [undoShape, setUndoShape] = useState<MsegShape | null>(null);
-    const activePointerRef = useRef<ActiveMsegPointerState | null>(null);
-    const activeGestureUndoCapturedRef = useRef(false);
-
-    const captureUndoShape = useCallback(() => {
-        if (activeGestureUndoCapturedRef.current) {
-            return;
-        }
-        const shape = msegController.current?.getState().shape ?? msegState?.shape;
-        if (!shape) {
-            return;
-        }
-        setUndoShape({
-            ...shape,
-            points: shape.points.map((point) => ({ ...point })),
-        });
-        activeGestureUndoCapturedRef.current = true;
-    }, [msegController, msegState?.shape]);
-
-    const clearPendingSegmentTimer = useCallback((pointerState: ActiveMsegPointerState | null) => {
-        if (pointerState?.kind === "pending-segment" && pointerState.holdTimeoutId !== null) {
-            clearUiTimeout(pointerState.holdTimeoutId);
-            pointerState.holdTimeoutId = null;
-        }
+    const history = useMsegEditorHistory(owner, msegState?.editShapeIndex ?? 0);
+    const [editorKey, setEditorKey] = useState(0);
+    const cancelActivePointer = useCallback(() => {
+        setEditorKey(key => key + 1);
+        void history.finishGesture(true);
+    }, [history.finishGesture]);
+    useEffect(() => {
+        const closeOnEscape = (event: KeyboardEvent) => { if (event.key === "Escape") setIsOpen(false); };
+        window.addEventListener("keydown", closeOnEscape);
+        return () => window.removeEventListener("keydown", closeOnEscape);
     }, []);
-
-    const cancelActivePointer = useCallback((pointerId?: number) => {
-        const activePointer = activePointerRef.current;
-        if (!activePointer || (pointerId !== undefined && activePointer.pointerId !== pointerId)) {
-            return;
-        }
-
-        activePointerRef.current = null;
-        activeGestureUndoCapturedRef.current = false;
-        clearPendingSegmentTimer(activePointer);
-        try {
-            if (surfaceRef.current?.hasPointerCapture(activePointer.pointerId)) {
-                surfaceRef.current.releasePointerCapture(activePointer.pointerId);
-            }
-        } catch {
-            // Capture may already be gone after cancellation, blur, or unmount.
-        }
-        setHoveredSegmentIndex(-1);
-        setActiveSegmentIndex(-1);
-    }, [clearPendingSegmentTimer, surfaceRef]);
-
-    useEffect(() => {
-        if (!msegState) {
-            return;
-        }
-
-        setSelectedPointIndex((previousIndex) => clamp(
-            previousIndex,
-            0,
-            Math.max(0, msegState.shape.points.length - 1),
-        ));
-    }, [msegState]);
-
-    const resolvePointerLocation = useCallback((clientX: number, clientY: number) => {
-        if (!msegState || !surfaceRef.current) {
-            return null;
-        }
-
-        const bounds = surfaceRef.current.getBoundingClientRect();
-        const localX = clientX - bounds.left;
-        const localY = clientY - bounds.top;
-        const currentShape = msegController.current?.getState().shape ?? msegState.shape;
-        const pointIndex = findMsegPointHitIndex(
-            currentShape,
-            localX,
-            localY,
-            bounds.width,
-            bounds.height,
-            undefined,
-            { orientation },
-        );
-        const segmentIndex = pointIndex >= 0
-            ? -1
-            : findMsegSegmentHitIndex(
-                currentShape,
-                localX,
-                localY,
-                bounds.width,
-                bounds.height,
-                undefined,
-                { orientation },
-            );
-
-        return {
-            bounds,
-            localX,
-            localY,
-            pointIndex,
-            segmentIndex,
-        };
-    }, [msegController, msegState, orientation, surfaceRef]);
-
-    const updateHoveredSegmentIndex = useCallback((clientX: number, clientY: number) => {
-        const pointerLocation = resolvePointerLocation(clientX, clientY);
-        setHoveredSegmentIndex(pointerLocation?.segmentIndex ?? -1);
-        return pointerLocation;
-    }, [resolvePointerLocation]);
-
-    useEffect(() => {
-        if (!isOpen) {
-            cancelActivePointer();
-            return;
-        }
-
-        const handleEscapeKey = (event: KeyboardEvent) => {
-            if (event.key === "Escape") {
-                setIsOpen(false);
-            }
-        };
-        const handleBlur = () => cancelActivePointer();
-        const handleVisibilityChange = () => {
-            if (document.visibilityState !== "visible") {
-                cancelActivePointer();
-            }
-        };
-
-        window.addEventListener("keydown", handleEscapeKey);
-        window.addEventListener("blur", handleBlur);
-        document.addEventListener("visibilitychange", handleVisibilityChange);
-        return () => {
-            window.removeEventListener("keydown", handleEscapeKey);
-            window.removeEventListener("blur", handleBlur);
-            document.removeEventListener("visibilitychange", handleVisibilityChange);
-            cancelActivePointer();
-        };
-    }, [cancelActivePointer, isOpen]);
-
     const beginEditorSession = useCallback(() => {
-        setUndoShape(null);
-        activeGestureUndoCapturedRef.current = false;
+        history.beginSession();
         cancelActivePointer();
-    }, [cancelActivePointer]);
+    }, [cancelActivePointer, history.beginSession]);
 
     const openEditor = useCallback(() => {
         beginEditorSession();
@@ -2210,340 +1686,18 @@ export function useMsegEditorInteractions({
         cancelActivePointer();
     }, [cancelActivePointer]);
 
-    const undoLastEdit = useCallback(() => {
-        if (!undoShape || !msegController.current) {
-            return;
-        }
-        msegController.current.setShape(undoShape);
-        setSelectedPointIndex((previousIndex) => clamp(
-            previousIndex,
-            0,
-            Math.max(0, undoShape.points.length - 1),
-        ));
-        setUndoShape(null);
-        activeGestureUndoCapturedRef.current = false;
-    }, [msegController, undoShape]);
+    const onValueChange = useCallback((value: import("../../kit/index").Mseg.Curve) => {
+        const target = msegController.current;
+        if (target) history.edit(() => target.setShape(value), true);
+    }, [msegController, history.edit]);
+    const composition = useMemo(() => ({editorKey, onValueChange, onGestureEnd: history.finishGesture,
+        curveEditActivationMode, curveEditHoldDelayMs, onCurveEditHoldActivated: onCurveEditHoldActivated ?? undefined}),
+        [editorKey, onValueChange, history.finishGesture, curveEditActivationMode, curveEditHoldDelayMs, onCurveEditHoldActivated]);
 
-    const applyCurveEditFromClientCoordinates = useCallback((segmentIndex: number, clientX: number, clientY: number) => {
-        if (!surfaceRef.current || !msegController.current) {
-            return;
-        }
+    const undoLastEdit = history.undo;
 
-        const currentShape = msegController.current.getState().shape ?? msegState?.shape;
-        if (!currentShape) {
-            return;
-        }
-
-        const bounds = surfaceRef.current.getBoundingClientRect();
-        const point = msegEditorCoordinatesToPoint(
-            clientX - bounds.left,
-            clientY - bounds.top,
-            bounds.width,
-            bounds.height,
-            { orientation },
-        );
-        const curvePower = deriveMsegSegmentCurvePower(currentShape, segmentIndex, point.x, point.y);
-        captureUndoShape();
-        msegController.current.setSegmentCurvePower(segmentIndex, curvePower);
-    }, [captureUndoShape, msegController, msegState?.shape, orientation, surfaceRef]);
-
-    const handlePointerDown = useCallback((event: ReactPointerEvent<SVGSVGElement>) => {
-        if (event.button !== 0 || !msegState || !surfaceRef.current) {
-            return;
-        }
-
-        const pointerLocation = updateHoveredSegmentIndex(event.clientX, event.clientY);
-        if (!pointerLocation) {
-            return;
-        }
-
-        if (pointerLocation.pointIndex >= 0) {
-            activeGestureUndoCapturedRef.current = false;
-            setSelectedPointIndex(pointerLocation.pointIndex);
-            setActiveSegmentIndex(-1);
-            activePointerRef.current = {
-                kind: "point-drag",
-                pointerId: event.pointerId,
-                pointIndex: pointerLocation.pointIndex,
-                startClientX: event.clientX,
-                startClientY: event.clientY,
-                moved: false,
-                deleteOnRelease:
-                    pointerLocation.pointIndex > 0 &&
-                    pointerLocation.pointIndex < msegState.shape.points.length - 1,
-            };
-            try {
-                event.currentTarget.setPointerCapture(event.pointerId);
-            } catch {
-                // Window-level termination still owns unsupported or synthetic pointers.
-            }
-            event.preventDefault();
-            return;
-        }
-
-        if (pointerLocation.segmentIndex >= 0) {
-            activeGestureUndoCapturedRef.current = false;
-            setActiveSegmentIndex(pointerLocation.segmentIndex);
-            setHoveredSegmentIndex(pointerLocation.segmentIndex);
-            if (curveEditActivationMode === "immediate") {
-                activePointerRef.current = {
-                    kind: "curve-drag",
-                    pointerId: event.pointerId,
-                    segmentIndex: pointerLocation.segmentIndex,
-                };
-            } else {
-                const holdTimeoutId = uiTimeout(() => {
-                    const activePointer = activePointerRef.current;
-                    if (
-                        !activePointer
-                        || activePointer.kind !== "pending-segment"
-                        || activePointer.pointerId !== event.pointerId
-                    ) {
-                        return;
-                    }
-
-                    activePointerRef.current = {
-                        kind: "curve-drag",
-                        pointerId: activePointer.pointerId,
-                        segmentIndex: activePointer.segmentIndex,
-                    };
-                    setActiveSegmentIndex(activePointer.segmentIndex);
-                    setHoveredSegmentIndex(activePointer.segmentIndex);
-                    onCurveEditHoldActivated?.();
-                }, curveEditHoldDelayMs);
-
-                activePointerRef.current = {
-                    kind: "pending-segment",
-                    pointerId: event.pointerId,
-                    segmentIndex: pointerLocation.segmentIndex,
-                    startClientX: event.clientX,
-                    startClientY: event.clientY,
-                    holdTimeoutId,
-                };
-            }
-
-            try {
-                event.currentTarget.setPointerCapture(event.pointerId);
-            } catch {
-                // Window-level termination still owns unsupported or synthetic pointers.
-            }
-            event.preventDefault();
-            return;
-        }
-
-        const point = msegEditorCoordinatesToPoint(
-            pointerLocation.localX,
-            pointerLocation.localY,
-            pointerLocation.bounds.width,
-            pointerLocation.bounds.height,
-            { orientation },
-        );
-        activeGestureUndoCapturedRef.current = false;
-        captureUndoShape();
-        msegController.current?.addPoint(point.x, point.y);
-        const points = msegController.current?.getState().shape.points ?? [];
-        const nextPointIndex = points.findIndex(
-            (nextPoint: { x: number; y: number }) =>
-                Math.abs(nextPoint.x - point.x) <= 1e-6 &&
-                Math.abs(nextPoint.y - point.y) <= 1e-6,
-        );
-
-            if (nextPointIndex >= 0) {
-            setSelectedPointIndex(nextPointIndex);
-        }
-
-        setActiveSegmentIndex(-1);
-        event.preventDefault();
-    }, [
-        curveEditActivationMode,
-        curveEditHoldDelayMs,
-        captureUndoShape,
-        msegController,
-        msegState,
-        onCurveEditHoldActivated,
-        orientation,
-        surfaceRef,
-        updateHoveredSegmentIndex,
-    ]);
-
-    const handlePointerMove = useCallback((event: ReactPointerEvent<SVGSVGElement>) => {
-        const activePointer = activePointerRef.current;
-        if (!activePointer || activePointer.pointerId !== event.pointerId || !surfaceRef.current) {
-            updateHoveredSegmentIndex(event.clientX, event.clientY);
-            return;
-        }
-
-        if (activePointer.kind === "curve-drag") {
-            applyCurveEditFromClientCoordinates(activePointer.segmentIndex, event.clientX, event.clientY);
-            setActiveSegmentIndex(activePointer.segmentIndex);
-            setHoveredSegmentIndex(activePointer.segmentIndex);
-            event.preventDefault();
-            return;
-        }
-
-        if (activePointer.kind === "pending-segment") {
-            const movementDistance = Math.hypot(
-                event.clientX - activePointer.startClientX,
-                event.clientY - activePointer.startClientY,
-            );
-
-            if (movementDistance < MSEG_DRAG_THRESHOLD_PX) {
-                return;
-            }
-
-            clearPendingSegmentTimer(activePointer);
-            activePointerRef.current = {
-                kind: "curve-drag",
-                pointerId: activePointer.pointerId,
-                segmentIndex: activePointer.segmentIndex,
-            };
-            setActiveSegmentIndex(activePointer.segmentIndex);
-            setHoveredSegmentIndex(activePointer.segmentIndex);
-            applyCurveEditFromClientCoordinates(activePointer.segmentIndex, event.clientX, event.clientY);
-            event.preventDefault();
-            return;
-        }
-
-        const movementDistance = Math.hypot(
-            event.clientX - activePointer.startClientX,
-            event.clientY - activePointer.startClientY,
-        );
-
-        if (!activePointer.moved && movementDistance < MSEG_DRAG_THRESHOLD_PX) {
-            return;
-        }
-
-        const bounds = surfaceRef.current.getBoundingClientRect();
-        const point = msegEditorCoordinatesToPoint(
-            event.clientX - bounds.left,
-            event.clientY - bounds.top,
-            bounds.width,
-            bounds.height,
-            { orientation },
-        );
-        if (!activePointer.moved) {
-            captureUndoShape();
-            activePointerRef.current = {
-                ...activePointer,
-                moved: true,
-            };
-        }
-        msegController.current?.movePoint(activePointer.pointIndex, point.x, point.y);
-        setSelectedPointIndex(activePointer.pointIndex);
-        setHoveredSegmentIndex(-1);
-        setActiveSegmentIndex(-1);
-        event.preventDefault();
-    }, [
-        applyCurveEditFromClientCoordinates,
-        captureUndoShape,
-        clearPendingSegmentTimer,
-        msegController,
-        orientation,
-        surfaceRef,
-        updateHoveredSegmentIndex,
-    ]);
-
-    const handlePointerLeave = useCallback((event: ReactPointerEvent<SVGSVGElement>) => {
-        if (activePointerRef.current?.pointerId === event.pointerId) {
-            return;
-        }
-
-        setHoveredSegmentIndex(-1);
-    }, []);
-
-    const handlePointerUp = useCallback((event: ReactPointerEvent<SVGSVGElement>) => {
-        const activePointer = activePointerRef.current;
-        if (!activePointer || activePointer.pointerId !== event.pointerId) {
-            return;
-        }
-
-        if (event.type !== "pointerup") {
-            cancelActivePointer(event.pointerId);
-            event.preventDefault();
-            return;
-        }
-
-        const pointerState = activePointer;
-        activePointerRef.current = null;
-        setActiveSegmentIndex(-1);
-        try {
-            if (event.currentTarget.hasPointerCapture(event.pointerId)) {
-                event.currentTarget.releasePointerCapture(event.pointerId);
-            }
-        } catch {
-            // Capture may already be gone after a platform cancellation.
-        }
-
-        if (pointerState.kind === "pending-segment") {
-            clearPendingSegmentTimer(pointerState);
-            if (surfaceRef.current) {
-                const bounds = surfaceRef.current.getBoundingClientRect();
-                const point = msegEditorCoordinatesToPoint(
-                    event.clientX - bounds.left,
-                    event.clientY - bounds.top,
-                    bounds.width,
-                    bounds.height,
-                    { orientation },
-                );
-                captureUndoShape();
-                msegController.current?.addPoint(point.x, point.y);
-                const points = msegController.current?.getState().shape.points ?? [];
-                const nextPointIndex = points.findIndex(
-                    (nextPoint: { x: number; y: number }) =>
-                        Math.abs(nextPoint.x - point.x) <= 1e-6 &&
-                        Math.abs(nextPoint.y - point.y) <= 1e-6,
-                );
-
-                if (nextPointIndex >= 0) {
-                    setSelectedPointIndex(nextPointIndex);
-                }
-            }
-            event.preventDefault();
-            setHoveredSegmentIndex(resolvePointerLocation(event.clientX, event.clientY)?.segmentIndex ?? -1);
-            return;
-        }
-
-        if (pointerState.kind === "curve-drag") {
-            setHoveredSegmentIndex(resolvePointerLocation(event.clientX, event.clientY)?.segmentIndex ?? -1);
-            event.preventDefault();
-            return;
-        }
-
-        if (!pointerState.moved && pointerState.deleteOnRelease && msegController.current) {
-            captureUndoShape();
-            msegController.current.deletePoint(pointerState.pointIndex);
-            const pointCount = msegController.current.getState().shape.points.length;
-            setSelectedPointIndex(clamp(pointerState.pointIndex - 1, 0, Math.max(0, pointCount - 1)));
-        }
-
-        setHoveredSegmentIndex(resolvePointerLocation(event.clientX, event.clientY)?.segmentIndex ?? -1);
-        event.preventDefault();
-    }, [
-        cancelActivePointer,
-        captureUndoShape,
-        clearPendingSegmentTimer,
-        msegController,
-        orientation,
-        resolvePointerLocation,
-        surfaceRef,
-    ]);
-
-    return {
-        isOpen,
-        selectedPointIndex,
-        hoveredSegmentIndex,
-        activeSegmentIndex,
-        canUndo: undoShape !== null,
-        beginEditorSession,
-        openEditor,
-        resumeEditorSession,
-        closeEditor,
-        undoLastEdit,
-        handlePointerDown,
-        handlePointerMove,
-        handlePointerLeave,
-        handlePointerUp,
-    };
+    return { cancelGesture: cancelActivePointer, composition, isOpen, canUndo: history.canUndo, beginEditorSession, openEditor,
+        resumeEditorSession, closeEditor, undoLastEdit, finishGesture: history.finishGesture };
 }
 
 function useStableArrowTarget(targetID: string, onArrowStep: (direction: ArrowStepDirection) => void) {
@@ -2620,10 +1774,8 @@ export function useSynthKeyboardRouting({
 export function useSynthPatchViewModel({
     oscillatorID = DEFAULT_SELECTED_OSCILLATOR_ID,
     stageRef,
-    msegEditorSurfaceRef,
     keyboardRef,
     voiceModeCount,
-    msegSurfaceOrientation = "horizontal",
     msegCurveEditActivationMode = "immediate",
     onMsegCurveEditHoldActivated = null,
     onKeyboardOctaveDown,
@@ -2637,10 +1789,8 @@ export function useSynthPatchViewModel({
 }: {
     oscillatorID?: OscillatorID;
     stageRef: RefObject<HTMLDivElement | null>;
-    msegEditorSurfaceRef: RefObject<SVGSVGElement | null>;
     keyboardRef: RefObject<SynthKeyboardLike | null>;
     voiceModeCount: number;
-    msegSurfaceOrientation?: MsegSurfaceOrientation;
     msegCurveEditActivationMode?: "immediate" | "hold-or-drag";
     onMsegCurveEditHoldActivated?: (() => void) | null;
     onKeyboardOctaveDown?: () => boolean;
@@ -2673,21 +1823,19 @@ export function useSynthPatchViewModel({
         initialValue: DEFAULT_FACTORY_TABLE_INDEX,
         coerce: (value) => Math.max(0, Math.trunc(Number(value) || 0)),
     });
-    const playMode = usePatchParameterBinding<number>({
-        endpointID: PLAY_MODE_ENDPOINT_ID,
+    const playMode = useSynthPluginParameterBinding("playMode", {
         initialValue: 0,
         coerce: (value) => clamp(Math.round(Number(value) || 0), 0, Math.max(0, voiceModeCount - 1)),
     });
-    const glideTime = usePatchParameterBinding<number>({
-        endpointID: GLIDE_TIME_ENDPOINT_ID,
+    const glideTime = useSynthPluginParameterBinding("glideTime", {
         initialValue: 0,
         coerce: (value) => clamp(Number(value) || 0, GLIDE_TIME_MIN_SECONDS, GLIDE_TIME_MAX_SECONDS),
     });
-    const globalTune = usePatchParameterBinding<number>({
-        endpointID: GLOBAL_TUNE_ENDPOINT_ID,
+    const globalTune = useSynthPluginParameterBinding("globalTune", {
         initialValue: GLOBAL_TUNE_INITIAL_SEMITONES,
         coerce: clampGlobalTuneSemitones,
     });
+    const voiceHistory = usePluginHistory();
     const pan = usePatchParameterBinding<number>({
         endpointID: oscillatorEndpointID("pan"),
         initialValue: 0,
@@ -2762,8 +1910,7 @@ export function useSynthPatchViewModel({
         initialValue: 0.707107,
         coerce: (value) => clamp(Number(value) || 0, 0.1, 20),
     });
-    // T05: linear dry/wet blend, 1.0 = fully filtered (preserves every
-    // existing patch; the appended engine endpoint defaults to 1).
+    // Linear dry/wet blend, 1.0 = fully filtered.
     const filterMix = usePatchParameterBinding<number>({
         endpointID: FILTER_MIX_ENDPOINT_ID,
         initialValue: 1,
@@ -3102,7 +2249,7 @@ export function useSynthPatchViewModel({
         VOICE_ARTICULATION_START_ENDPOINT_ID,
         null,
     );
-    const { state: modulationState, bridge: modulationBridge } = useModulationState();
+    const { state: modulationState, bridge: modulationBridge, owner: modulationOwner } = useModulationState();
     const articulationPatchBaseRef = useRef<Partial<Record<OscillatorID, ArticulationSnapshot>>>({});
     const articulationPatchBaseConnectionRef = useRef(patchConnection);
     const [articulationPatchBaseRevision, setArticulationPatchBaseRevision] = useState(0);
@@ -3156,12 +2303,13 @@ export function useSynthPatchViewModel({
     useEffect(() => {
         setDiscardedArticulationEdit(null);
     }, [patchConnection]);
-    const presetStoredStateAdapters = useSynthPresetStoredStateAdapters({
-        articulationBankState,
-        modulationBridge,
-        modulationState,
-        setArticulationPatchBase,
-    });
+    const resetArticulationPatchBases = useCallback((parameters: Readonly<Record<string, number>>) => {
+        const currentModulation = modulationBridge.current?.getState() ?? modulationState ?? createDefaultModulationState();
+        for (const oscillator of OSCILLATOR_BINDING_CONTRACTS) {
+            setArticulationPatchBase(oscillator.id, buildArticulationBaseSnapshot(parameters, currentModulation, oscillator.id));
+        }
+        articulationBankState.refreshProjection();
+    }, [articulationBankState, modulationBridge, modulationState, setArticulationPatchBase]);
     const activeAuditionRef = useRef<{ slotId: string; note: number } | null>(null);
     const lastPlayedNoteRef = useRef(ARTICULATION_AUDITION_FALLBACK_NOTE);
     const [lastPlayedNote, setLastPlayedNote] = useState(ARTICULATION_AUDITION_FALLBACK_NOTE);
@@ -3171,7 +2319,7 @@ export function useSynthPatchViewModel({
     previewNoteMemoryRef.current = previewNoteMemory;
     const heldMidiNotesRef = useRef(new Map<number, HeldMidiNote>());
     const heldMidiOrderRef = useRef(0);
-    /** When the newest voice started (any note-on we emitted or tracked) — the T12B loop-phase anchor. */
+    /** When the newest voice started (any note-on we emitted or tracked) — the loop-sync phase anchor. */
     const lastNoteOnAtRef = useRef<number | null>(null);
     const [articulationHeldInput, setArticulationHeldInput] = useState<ArticulationHeldInput>({
         note: null,
@@ -3215,11 +2363,13 @@ export function useSynthPatchViewModel({
     const displayedMsegControllerRef = useRef<MsegEditorControllerLike | null>(null);
     displayedMsegControllerRef.current = modulationBridge.current?.getMsegSlotController(selectedMsegSlot) ?? null;
     const routes = useMemo(() => modulationState?.routes ?? [], [modulationState?.routes]);
+    const selectedMsegShape = modulationBridge.current?.getMsegSlotEditShapeIndex(selectedMsegSlot);
     const msegState = useMemo(() => {
         if (!modulationState || !modulationBridge.current) {
             return null;
         }
         const state = buildDisplayedMsegState(modulationBridge.current, selectedMsegSlot);
+        if (!state) return null;
         return {
             ...state,
             playback: {
@@ -3227,7 +2377,7 @@ export function useSynthPatchViewModel({
                 rate: { kind: "seconds" as const, seconds: selectedMsegRate.value },
             },
         };
-    }, [modulationBridge, modulationState, selectedMsegRate.value, selectedMsegSlot]);
+    }, [modulationBridge, modulationState, selectedMsegRate.value, selectedMsegSlot, selectedMsegShape]);
     const observedMsegPlayhead = useMemo(() => {
         return resolveMsegPreviewPlayheadState({
             observedState: observedMsegState,
@@ -3235,10 +2385,12 @@ export function useSynthPatchViewModel({
             slotIndex: selectedMsegSlot,
         });
     }, [msegState?.playback, observedMsegState, selectedMsegSlot]);
+    // ADSR values are host parameters with their own readiness; only the
+    // display name comes from the modulation document, which may still be opening.
     const selectedEnvelope = useMemo(() => {
         const name = modulationState?.envelopeSlots[selectedEnvelopeSlot]?.name;
         const bindings = envelopeEditorBindings[selectedEnvelopeSlot];
-        if (!modulationState || !bindings) return null;
+        if (!bindings) return null;
         return {
             name: selectedEnvelopeSlot === 3
                 ? "Amp Envelope"
@@ -3278,9 +2430,8 @@ export function useSynthPatchViewModel({
     });
     const msegEditor = useMsegEditorInteractions({
         msegState,
+        owner: modulationOwner,
         msegController: displayedMsegControllerRef,
-        surfaceRef: msegEditorSurfaceRef,
-        orientation: msegSurfaceOrientation,
         curveEditActivationMode: msegCurveEditActivationMode,
         onCurveEditHoldActivated: onMsegCurveEditHoldActivated,
     });
@@ -3349,12 +2500,18 @@ export function useSynthPatchViewModel({
     }, [oscillator.oscillatorIndex, retryDesiredTableLoad]);
 
     const handleSelectMsegSlot = useCallback((slotIndex: number) => {
-        setSelectedMsegSlot(clamp(Math.round(slotIndex), 0, 2));
-    }, []);
+        const next = clamp(Math.round(slotIndex), 0, 2);
+        if (next === selectedMsegSlot) return;
+        msegEditor.beginEditorSession();
+        setSelectedMsegSlot(next);
+    }, [msegEditor.beginEditorSession, selectedMsegSlot]);
 
     const handleSelectMsegShape = useCallback((shapeIndex: number) => {
-        displayedMsegControllerRef.current?.setEditShapeIndex?.(shapeIndex);
-    }, []);
+        if ((Math.round(shapeIndex) === 1 ? 1 : 0) === selectedMsegShape) return;
+        msegEditor.cancelGesture();
+        void msegEditor.finishGesture(true);
+        submitModulationEdit(modulationBridge.current?.setMsegSlotEditShapeIndex(selectedMsegSlot, shapeIndex));
+    }, [msegEditor.cancelGesture, msegEditor.finishGesture, modulationBridge, selectedMsegSlot, selectedMsegShape]);
 
     const handleSelectEnvelopeSlot = useCallback((slotIndex: number) => {
         setSelectedEnvelopeSlot(clamp(Math.round(slotIndex), 0, 3));
@@ -3380,12 +2537,12 @@ export function useSynthPatchViewModel({
             return;
         }
 
-        displayedMsegControllerRef.current?.setPlayback({
+        submitModulationEdit(modulationBridge.current?.setMsegSlotPlayback(selectedMsegSlot, {
             ...msegState.playback,
             loop: msegState.playback.loop ? null : { startX: 0, endX: 1 },
             noteOffPolicy: "finish_loop",
-        });
-    }, [msegState]);
+        }));
+    }, [modulationBridge, msegState, selectedMsegSlot]);
 
     const handleMsegMorphChange = useCallback((nextValue: number) => {
         const nextMorph = clamp(Number(nextValue) || 0, 0, 1);
@@ -3415,8 +2572,8 @@ export function useSynthPatchViewModel({
             : MODULATION_TARGET_OPTIONS.filter((option) => (
                 !isOscillatorModulationTargetKind(option.value)
             ));
-        const route = createFirstAvailableModulationRoute(bridge.getState().routes, targetOptions);
-        if (route) bridge.addRoute(route);
+        const route = createFirstAvailableModulationRoute(bridge.getState()?.routes ?? [], targetOptions);
+        if (route) submitModulationEdit(bridge.addRoute(route));
     }, [modulationBridge, oscillatorTargetsActive]);
 
     const handleAddRouteWithOverrides = useCallback((overrides: GeneratedModulationRouteInput) => {
@@ -3424,22 +2581,28 @@ export function useSynthPatchViewModel({
             return false;
         }
         const bridge = modulationBridge.current;
-        return bridge !== null && bridge.addGeneratedRoute(overrides) !== null;
+        const bank = bridge?.getState();
+        if (!bridge?.isReady() || !bank) return false;
+        const route = createDefaultRoute({ ...overrides, id: createAvailableGeneratedRouteId(bank.routes) });
+        if (parseModulationState({ ...bank, routes: [...bank.routes, route] })._tag === "err") return false;
+        // True means the edit passed validation and was submitted; the owner decides acceptance.
+        submitModulationEdit(bridge.addRoute(route));
+        return true;
     }, [modulationBridge, oscillatorTargetsActive]);
 
     const handleRemoveRoute = useCallback((routeIndex: number) => {
-        modulationBridge.current?.removeRoute(routeIndex);
+        submitModulationEdit(modulationBridge.current?.removeRoute(routeIndex));
     }, [modulationBridge]);
 
     const handleRouteChange = useCallback((routeIndex: number, update: ModulationRouteUpdate) => {
         const bridge = modulationBridge.current;
-        const currentRoute = bridge?.getState().routes[routeIndex];
+        const currentRoute = bridge?.getState()?.routes[routeIndex];
 
         if (!bridge || !currentRoute) {
             return;
         }
 
-        bridge.setRoute(routeIndex, { ...currentRoute, ...update });
+        submitModulationEdit(bridge.setRoute(routeIndex, { ...currentRoute, ...update }));
     }, [modulationBridge]);
 
     const captureCurrentArticulationSnapshot = useCallback((): ArticulationSnapshot => {
@@ -3708,7 +2871,7 @@ export function useSynthPatchViewModel({
         const parameters = snapshot.parameters;
 
         // Applying a snapshot writes through the scalar bindings but is not a
-        // direct user edit: suppress the T12 user-edit seam for the batch.
+        // direct user edit: keep the batch off the user-edit bus.
         runProgrammaticWrites(() => {
             wavetablePosition.setValue(parameters.wavetablePosition);
             pan.setValue(parameters.pan);
@@ -3753,7 +2916,7 @@ export function useSynthPatchViewModel({
             });
         });
 
-        const currentRoutes = bridge?.getState().routes ?? modulationState?.routes ?? [];
+        const currentRoutes = bridge?.getState()?.routes ?? modulationState?.routes ?? [];
         const routeAmountById = new Map(snapshot.modRouteAmounts.map((routeAmount) => [
             routeAmount.routeId,
             routeAmount.amount,
@@ -3778,7 +2941,7 @@ export function useSynthPatchViewModel({
         });
 
         if (hasRouteAmountChange) {
-            bridge?.replaceRoutes(nextRoutes);
+            submitModulationEdit(bridge?.replaceRoutes(nextRoutes));
         }
     }, [
         filterCutoff,
@@ -3814,7 +2977,7 @@ export function useSynthPatchViewModel({
         wavetablePosition,
     ]);
 
-    const handleCaptureArticulationSlot = useCallback((_options: { autoAssign?: boolean } = {}) => {
+    const handleCaptureArticulationSlot = useCallback(() => {
         const baseSnapshot = currentArticulationPatchBase();
         if (baseSnapshot === null) {
             return;
@@ -3835,10 +2998,6 @@ export function useSynthPatchViewModel({
         currentArticulationPatchBase,
         oscillatorID,
     ]);
-
-    const handleAddArticulationSlot = useCallback(() => {
-        handleCaptureArticulationSlot({ autoAssign: true });
-    }, [handleCaptureArticulationSlot]);
 
     const selectArticulationSlot = useCallback((slotId: string, options: { recordDirtyDiscard?: boolean } = {}) => {
         const state = articulationBankState.stateRef.current;
@@ -3870,7 +3029,7 @@ export function useSynthPatchViewModel({
         }
 
         articulationPatchBaseRef.current[oscillatorID] = baseSnapshot;
-        const routes = modulationBridge.current?.getState().routes ?? modulationState?.routes ?? [];
+        const routes = modulationBridge.current?.getState()?.routes ?? modulationState?.routes ?? [];
         isApplyingArticulationRef.current = true;
         setSelectedArticulationIsDirty(false);
         applyArticulationSnapshot(resolveVisibleArticulationSnapshotV4(slot, baseSnapshot, routes, oscillatorID));
@@ -3908,7 +3067,7 @@ export function useSynthPatchViewModel({
         if (baseSnapshot === null) {
             return;
         }
-        const routes = modulationBridge.current?.getState().routes ?? modulationState?.routes ?? [];
+        const routes = modulationBridge.current?.getState()?.routes ?? modulationState?.routes ?? [];
         articulationBankState.setAndPersistState((previousState) => replaceVisibleArticulationSnapshotV4(
             previousState,
             slotId,
@@ -3952,7 +3111,7 @@ export function useSynthPatchViewModel({
 
         isApplyingArticulationRef.current = true;
         setSelectedArticulationIsDirty(false);
-        const routes = modulationBridge.current?.getState().routes ?? modulationState?.routes ?? [];
+        const routes = modulationBridge.current?.getState()?.routes ?? modulationState?.routes ?? [];
         applyArticulationSnapshot(resolveVisibleArticulationSnapshotV4(slot, baseSnapshot, routes, oscillatorID));
         setTimeout(() => {
             isApplyingArticulationRef.current = false;
@@ -4073,7 +3232,7 @@ export function useSynthPatchViewModel({
         articulationBankState.setAndPersistState(assignedState);
 
         if (nextSlot) {
-            const routes = modulationBridge.current?.getState().routes ?? modulationState?.routes ?? [];
+            const routes = modulationBridge.current?.getState()?.routes ?? modulationState?.routes ?? [];
             isApplyingArticulationRef.current = true;
             setSelectedArticulationIsDirty(false);
             applyArticulationSnapshot(resolveVisibleArticulationSnapshotV4(nextSlot, baseSnapshot, routes, oscillatorID));
@@ -4147,7 +3306,7 @@ export function useSynthPatchViewModel({
         if (baseSnapshot === null) {
             return;
         }
-        const routes = modulationBridge.current?.getState().routes ?? modulationState?.routes ?? [];
+        const routes = modulationBridge.current?.getState()?.routes ?? modulationState?.routes ?? [];
         articulationBankState.setAndPersistState((previousState) => replaceVisibleArticulationSnapshotV4(
             previousState,
             slotId,
@@ -4181,7 +3340,7 @@ export function useSynthPatchViewModel({
         articulationBankState.setAndPersistState(nextState);
 
         if (nextSlot) {
-            const routes = modulationBridge.current?.getState().routes ?? modulationState?.routes ?? [];
+            const routes = modulationBridge.current?.getState()?.routes ?? modulationState?.routes ?? [];
             isApplyingArticulationRef.current = true;
             setSelectedArticulationIsDirty(false);
             applyArticulationSnapshot(resolveVisibleArticulationSnapshotV4(nextSlot, baseSnapshot, routes, oscillatorID));
@@ -4213,7 +3372,7 @@ export function useSynthPatchViewModel({
         articulationBankState.setAndPersistState(nextState);
 
         if (selectedChanged && nextSlot) {
-            const routes = modulationBridge.current?.getState().routes ?? modulationState?.routes ?? [];
+            const routes = modulationBridge.current?.getState()?.routes ?? modulationState?.routes ?? [];
             isApplyingArticulationRef.current = true;
             setSelectedArticulationIsDirty(false);
             applyArticulationSnapshot(resolveVisibleArticulationSnapshotV4(nextSlot, baseSnapshot, routes, oscillatorID));
@@ -4282,8 +3441,8 @@ export function useSynthPatchViewModel({
         const heldCountBefore = heldMidiNotesRef.current.size;
 
         if (isNoteOn) {
-            // The newest note-on anchors every per-voice MSEG loop's phase
-            // (T12B): loop-sync boundaries are computed from this moment.
+            // The newest note-on anchors every per-voice MSEG loop's phase:
+            // loop-sync boundaries are computed from this moment.
             lastNoteOnAtRef.current = performance.now();
             if (intentional) {
                 lastPlayedNoteRef.current = safeNote;
@@ -4347,7 +3506,7 @@ export function useSynthPatchViewModel({
         sendMidiInputEvent(0x90, note, 100);
     }, [handleStopArticulationAudition, isArticulationBaseReady, selectArticulationSlot, sendMidiInputEvent]);
 
-    // The Mod rail's Note key (T10B): one piano key fixed to the most recently
+    // The Mod rail's Note key: one piano key fixed to the most recently
     // played intentional pitch. It goes through sendMidiInputEvent so it joins
     // the held set without replacing chord memory, and it remembers its own
     // started pitch so a keyboard note played mid-press cannot orphan the
@@ -4373,7 +3532,7 @@ export function useSynthPatchViewModel({
         sendMidiInputEvent(0x90, note, 100);
     }, [handleStopNoteKeyAudition, sendMidiInputEvent]);
 
-    // ── Auto-preview (T12/T12C): when no manual notes are held, retrigger the
+    // ── Auto-preview: when no manual notes are held, retrigger the
     // most recent completed intentional group after a real changed edit.
     // Engine-owned strikes take the raw connection so they never disturb the
     // held-note, chord-memory, or last-played bookkeeping.
@@ -4382,7 +3541,7 @@ export function useSynthPatchViewModel({
     const autoPreviewEngineRef = useRef<AutoPreviewEngine | null>(null);
     const autoPreviewOwnedGroupRef = useRef<AutoPreviewOwnedGroup | null>(null);
     const autoPreviewOffTimerRef = useRef<number | null>(null);
-    // T12B loop-sync state: the strike currently deferred to a loop boundary,
+    // Loop-sync state: the strike currently deferred to a loop boundary,
     // a reach-in to clear it from outside the mount closure, and live MSEG
     // rates mirrored for the resolver.
     const autoPreviewPendingStrikeRef = useRef<{ timer: number; capMs: number | null } | null>(null);
@@ -4436,7 +3595,7 @@ export function useSynthPatchViewModel({
             }
         };
         autoPreviewClearPendingRef.current = clearPendingStrike;
-        // T12B: the slowest looping MSEG that modulates anything is the
+        // The slowest looping MSEG that modulates anything is the
         // audible rhythm; its cycle grid (anchored at the newest note-on,
         // which restarts every per-voice MSEG) is what strikes align to.
         // Unmapped MSEGs are ignored entirely.
@@ -4546,7 +3705,7 @@ export function useSynthPatchViewModel({
                 releaseOwnedGroup();
             },
         });
-        // The dev tuning page's alternative feels (T12 follow-up): same engine
+        // The dev tuning page's alternative feels: same engine
         // surface, different retrigger policy. Strategy strikes are held notes
         // choked by the next strike; release comes from the strategy itself.
         const createStrategyEngine = () => createPreviewStrategyEngine({
@@ -4804,6 +3963,7 @@ export function useSynthPatchViewModel({
         playMode,
         glideTime,
         globalTune,
+        voiceHistory,
         pan,
         oscillatorOctave,
         oscillatorSemitone,
@@ -4873,7 +4033,7 @@ export function useSynthPatchViewModel({
         articulationSlots,
         selectedArticulationSlot,
         selectedArticulationIsDirty,
-        presetStoredStateAdapters,
+        resetArticulationPatchBases,
         articulationHeldInput,
         discardedArticulationEdit: discardedArticulationEdit?.patchConnection === patchConnection
             ? {
@@ -4898,7 +4058,6 @@ export function useSynthPatchViewModel({
         handleAddRouteWithOverrides,
         handleRemoveRoute,
         handleRouteChange,
-        handleAddArticulationSlot,
         handleCaptureArticulationSlot,
         handleSelectArticulationSlot,
         handleUpdateSelectedArticulationSlot,

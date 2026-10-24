@@ -9,6 +9,24 @@ import { createBounceRuntimeRestorer } from "./bounce/runtime-restorer.mjs";
 globalThis.__COSIMO_DESKTOP_RUNTIME_KIND__ = "standalone";
 globalThis.__COSIMO_VIDEO_BOUNCE_MODULE_URL__ = new URL("./video-bounce/index.js", import.meta.url).href;
 
+// A plugin host gives the view a per-user file store; the browser has none, so the
+// user's files (the synth's preset library) live in this site's local storage.
+const userFilesPrefix = "cosimo.user-files.";
+globalThis.chocUserFiles ??= {
+    async list(scope) {
+        const folder = `${userFilesPrefix}${scope}/`;
+        return Object.keys(localStorage).filter((key) => key.startsWith(folder)).map((key) => key.slice(folder.length));
+    },
+    async read(scope, fileName) {
+        const text = localStorage.getItem(`${userFilesPrefix}${scope}/${fileName}`);
+        if (text === null) throw new Error(`${fileName} is not in the user's files.`);
+        return text;
+    },
+    async write(scope, fileName, contents) {
+        localStorage.setItem(`${userFilesPrefix}${scope}/${fileName}`, contents);
+    },
+};
+
 const searchParameters = new URLSearchParams(globalThis.location.search);
 const isTestMode = searchParameters.has("test");
 // ?perf=1 turns on the AudioWorklet's render-load counters and a small
@@ -16,13 +34,8 @@ const isTestMode = searchParameters.has("test");
 // on-device (iPhone Safari/Chrome) dropout diagnosis path.
 const isPerfHudVisible = searchParameters.has("perf");
 const isPerfMetricsMode = isTestMode || isPerfHudVisible;
-const hostOwnsRuntimeLanes = isTestMode && searchParameters.get("runtime-owner") === "host";
 const browserAudioLeaveEvent = "cosimo-browser-audio-leave";
 const browserAudioReturnEvent = "cosimo-browser-audio-return";
-
-if (hostOwnsRuntimeLanes) {
-    patch.manifest.worker = "patch_gui/wavetable-test-worker.js";
-}
 
 const elements = {
     audioRecoveryNotice: document.getElementById("cosimo-audio-recovery-notice"),
@@ -88,10 +101,6 @@ const state = {
     started: false,
     startedVoiceIndices: new Set(),
     voiceArticulationStarts: [],
-    runtimeInstallQueue: Promise.resolve(),
-    runtimeInstallOwnedLanes: new Set(),
-    runtimeInstallAckRevision: 0,
-    runtimeSyncSerial: 10_000,
 };
 
 function describeError(error) {
@@ -116,7 +125,7 @@ function showBounceRestoreState(restoreState) {
     if (restoreState.status === "error" && restoreState.error) {
         elements.error.dataset.kind = "bounce-restore";
         elements.error.textContent = [
-            "Bounced source unavailable — oscillator fallback is active.",
+            "The saved bounce bank could not be restored.",
             restoreState.error.message,
         ].join("\n\n");
         elements.error.style.display = "block";
@@ -136,93 +145,6 @@ function showBounceRestoreState(restoreState) {
 
 function endpointEvent(message) {
     return message?.event ?? message;
-}
-
-function waitForRuntimeInstallAck(predicate, timeoutMilliseconds = 5_000) {
-    const deadline = performance.now() + timeoutMilliseconds;
-    return new Promise((resolve, reject) => {
-        const poll = () => {
-            const acknowledgement = state.latestRuntimeInstallAck;
-            if (acknowledgement && predicate(acknowledgement, state.runtimeInstallAckRevision)) {
-                resolve(acknowledgement);
-                return;
-            }
-            if (performance.now() >= deadline) {
-                reject(new Error("Timed out waiting for a runtime install acknowledgement."));
-                return;
-            }
-            setTimeout(poll, 1);
-        };
-        poll();
-    });
-}
-
-async function requestRuntimeInstallFrontier(dspSessionId) {
-    state.runtimeSyncSerial += 1;
-    const syncSerial = state.runtimeSyncSerial;
-    const revisionFloor = state.runtimeInstallAckRevision;
-    state.connection.sendEventOrValue("runtimeSyncRequest", syncSerial);
-    return waitForRuntimeInstallAck((candidate, revision) => (
-        revision > revisionFloor
-        && candidate.dspSessionId === dspSessionId
-        && candidate.syncSerial === syncSerial
-    ));
-}
-
-async function claimRuntimeInstallLane(laneKind, dspSessionId) {
-    const ownershipKey = `${dspSessionId}:${laneKind}`;
-    if (state.runtimeInstallOwnedLanes.has(ownershipKey)) {
-        return state.latestRuntimeInstallAck;
-    }
-    const acknowledgement = await requestRuntimeInstallFrontier(dspSessionId);
-    state.runtimeInstallOwnedLanes.add(ownershipKey);
-    return acknowledgement;
-}
-
-async function sendAcknowledgedRuntimeEvent(laneKind, endpointID, value) {
-    if (!hostOwnsRuntimeLanes || !state.connection) {
-        throw new Error("Acknowledged runtime test events require exclusive host lane ownership.");
-    }
-
-    const runtimeStateEvent = endpointEvent(state.latestRuntimeState);
-    const runtimeState = runtimeStateEvent?.value ?? runtimeStateEvent;
-    const dspSessionId = Math.trunc(Number(runtimeState?.dspSessionId) || 0);
-    const acknowledgement = await claimRuntimeInstallLane(laneKind, dspSessionId);
-
-    const deliverySerial = laneKind === "articulation"
-        ? Math.min(0, Math.trunc(Number(acknowledgement.acceptedArticulationSerial) || 0)) - 1
-        : Math.max(0, Math.trunc(Number(acknowledgement.acceptedModulationSerial) || 0)) + 1;
-    const revisionFloor = state.runtimeInstallAckRevision;
-    state.connection.sendEventOrValue(endpointID, {
-        ...value,
-        dspSessionId,
-        deliverySerial,
-    });
-    const terminal = await waitForRuntimeInstallAck((candidate, revision) => (
-        revision > revisionFloor
-        && candidate.dspSessionId === dspSessionId
-        && (candidate.rejectedSerial === deliverySerial
-            || (laneKind === "articulation"
-                ? candidate.acceptedArticulationSerial <= deliverySerial
-                : candidate.acceptedModulationSerial >= deliverySerial))
-    ));
-
-    return {
-        accepted: terminal.rejectedSerial !== deliverySerial && (laneKind === "articulation"
-            ? terminal.acceptedArticulationSerial <= deliverySerial
-            : terminal.acceptedModulationSerial >= deliverySerial),
-        acknowledgement: { ...terminal },
-        deliverySerial,
-        dspSessionId,
-    };
-}
-
-function enqueueAcknowledgedRuntimeEvent(laneKind, endpointID, value) {
-    const operation = state.runtimeInstallQueue.then(() => (
-        sendAcknowledgedRuntimeEvent(laneKind, endpointID, value)
-    ));
-    state.runtimeInstallQueue = operation.catch(() => {});
-    return operation;
 }
 
 function findEndpointID(connection, purpose) {
@@ -437,7 +359,6 @@ async function startAudio() {
 function getSnapshot() {
     updateAudioPeak();
     const audioLifecycle = state.audioLifecycle?.getSnapshot() ?? null;
-    const persistedState = state.browserPatchPersistence?.browserState ?? null;
 
     return {
         audioConnected: state.audioConnected,
@@ -502,10 +423,6 @@ function getSnapshot() {
         modulationRejectedRouteCount: state.modulationRejectedRouteCount,
         parameterValues: { ...state.parameterValues },
         phase: state.phase,
-        persistedStateKeys: [
-            ...Object.keys(persistedState?.sound.storedState ?? {}),
-            ...Object.keys(persistedState?.auxiliary ?? {}),
-        ].sort(),
         silentHeldNotePollCount: state.silentHeldNotePollCount,
         heldNoteCount: state.heldNotes.size,
         started: state.started,
@@ -526,28 +443,6 @@ globalThis.__COSIMO_WEB_POC__ = {
         const nextChannel = midiChannel(channel);
         sendMIDI(0x90 | nextChannel, note, velocity);
         state.heldNotes.add(heldNoteKey(nextChannel, note));
-    },
-    setMpeSlideForTest(value = 0, channel = 1) {
-        if (!isTestMode) {
-            throw new Error("MPE slide injection is only exposed in test mode.");
-        }
-        const nextChannel = midiChannel(channel);
-        const controllerValue = Math.max(0, Math.min(127, Math.round(Number(value) * 127)));
-        sendMIDI(0xb0 | nextChannel, 74, controllerValue);
-    },
-    setMpePressureForTest(value = 0, channel = 1) {
-        if (!isTestMode) {
-            throw new Error("MPE pressure injection is only exposed in test mode.");
-        }
-        const nextChannel = midiChannel(channel);
-        const pressureValue = Math.max(0, Math.min(127, Math.round(Number(value) * 127)));
-        sendMIDI(0xd0 | nextChannel, pressureValue);
-    },
-    runtimeInstallAckForTest() {
-        if (!isTestMode) {
-            throw new Error("Runtime acknowledgements are only exposed in test mode.");
-        }
-        return state.latestRuntimeInstallAck ? { ...state.latestRuntimeInstallAck } : null;
     },
     resetAudioMetrics() {
         state.audioWorkletPerfEpoch += 1;
@@ -577,22 +472,6 @@ globalThis.__COSIMO_WEB_POC__ = {
         });
         return state.audioWorkletPerfEpoch;
     },
-    sendEvent(endpointID, value) {
-        if (!state.connection) throw new Error("Cosimo is not ready.");
-        state.connection.sendEventOrValue(endpointID, value);
-    },
-    sendAcknowledgedRuntimeEvent(laneKind, endpointID, value) {
-        return enqueueAcknowledgedRuntimeEvent(laneKind, endpointID, value);
-    },
-    sendPerfGapProbe() {
-        if (!isTestMode || !state.connection?.audioNode?.port) {
-            throw new Error("Performance gap probes are only available in test mode.");
-        }
-        state.connection.audioNode.port.postMessage({
-            type: "patch",
-            payload: { type: "cosimo-perf-gap-probe" },
-        });
-    },
     setPerfProcessMultiplier(multiplier) {
         if (!isTestMode || !state.connection?.audioNode?.port) {
             throw new Error("Performance load amplification is only available in test mode.");
@@ -601,10 +480,6 @@ globalThis.__COSIMO_WEB_POC__ = {
             type: "patch",
             payload: { type: "cosimo-perf-process-multiplier", multiplier },
         });
-    },
-    setParameter(endpointID, value) {
-        if (!state.connection) throw new Error("Cosimo is not ready.");
-        state.connection.sendEventOrValue(endpointID, value);
     },
     start: startAudio,
     storedState() {
@@ -692,8 +567,8 @@ async function initialise() {
         "cosimo-web-audio-worklet",
     );
     const persistence = installBrowserPatchStatePersistence(connection, {
-        // The engine stays on its safe oscillator default until the referenced
-        // OPFS bank has been verified and committed after audio starts.
+        // The engine stays on its oscillator default until the bounce restorer has
+        // verified and installed the saved bank, after audio starts.
         deferParameterRestore: (endpointID, value, browserState) => (
             endpointID === "sourceMode"
             && value === 1
@@ -704,7 +579,7 @@ async function initialise() {
     const bounceRestorer = createBounceRuntimeRestorer({
         connection,
         store: createBrowserBounceBankStore(),
-        sendRuntimeSourceMode: (value) => persistence.sendRuntimeEventOrValue("sourceMode", value, 0, 0),
+        applySavedSourceMode: () => persistence.applyDeferredParameter("sourceMode"),
     });
     connection.acceptCommittedBounceDocument = (value) => (
         bounceRestorer.acceptCommittedDocument(value)
@@ -806,7 +681,6 @@ async function initialise() {
         connection.addEndpointListener("runtimeInstallAck", (message) => {
             const event = endpointEvent(message);
             state.latestRuntimeInstallAck = event?.value ?? event;
-            state.runtimeInstallAckRevision += 1;
         });
         connection.addEndpointListener("effectiveFilterState", (message) => {
             state.latestEffectiveFilterState = endpointEvent(message);

@@ -1,0 +1,50 @@
+{
+  "date": "2026-09-11",
+  "cmajorCommit": "bb471ab",
+  "lookupProbe": {
+    "before": {
+      "label": "before",
+      "blocks": 128,
+      "samples": 32768,
+      "rms": 0.0206035785846585,
+      "addressReads": 98304,
+      "sizeReads": 98304,
+      "expectedAddressReads": 384,
+      "expectedSizeReads": 384
+    },
+    "after": {
+      "label": "after",
+      "blocks": 128,
+      "samples": 32768,
+      "rms": 0.0206035785846585,
+      "addressReads": 384,
+      "sizeReads": 384,
+      "expectedAddressReads": 384,
+      "expectedSizeReads": 384
+    }
+  },
+  "audioComparisons": {
+    "wasm": {
+      "reference": "build/shared-table-block-check/before.f32",
+      "candidate": "build/shared-table-block-check/after.f32",
+      "float32Samples": 32768,
+      "exactBytes": true,
+      "sha256": "daa91ef1ff39a272920ff3cb7601bace45fbc04ac9c9e66c7b2d61e33cc8d002"
+    },
+    "jit": {
+      "reference": "build/cosimo_shared_memory_baseline/final/new-jit.f32",
+      "candidate": "build/shared-table-block-check/native/jit.f32",
+      "float32Samples": 32768,
+      "exactBytes": true,
+      "sha256": "7a5959ebfe928bc829f053e526047d7658dc85f6dc0683941f143467e303c70e"
+    },
+    "compiled": {
+      "reference": "build/cosimo_shared_memory_baseline/final/new-aot.f32",
+      "candidate": "build/shared-table-block-check/native/aot.f32",
+      "float32Samples": 32768,
+      "exactBytes": true,
+      "sha256": "df21f1e8a5399b00d6f681e13280a880c28b70194781eae8ab28aaf9f2da933c"
+    }
+  },
+  "qualification": "Real full Cosimo DSP in native JIT, compiled native and offline Wasm. Not an installed DAW or CPU speedup measurement."
+}

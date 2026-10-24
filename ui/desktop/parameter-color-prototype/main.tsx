@@ -1,10 +1,7 @@
 import { useEffect, useState, type CSSProperties, type ReactNode } from "react";
 import { createRoot } from "react-dom/client";
 
-import {
-    RackParameterKnob,
-    type RackParameterHud,
-} from "../rack-parameter-knob";
+import { RackParameterKnob } from "../rack-parameter-knob";
 import type { ModulationRoute } from "../../shared/modulation";
 import type { PatchControlBinding } from "../../shared/patch-controls";
 import {
@@ -76,8 +73,7 @@ function requireBoardDescriptor(): RackParameterDescriptor {
 const descriptor = requireBoardDescriptor();
 
 const noOp = () => {};
-const noHud = (_hud: RackParameterHud | null) => {};
-const noContextMenu = (_clientX: number, _clientY: number) => {};
+const noContextMenu = () => {};
 
 function createStaticBinding(parameter: RackParameterDescriptor, value: number): PatchControlBinding<number> {
     return {

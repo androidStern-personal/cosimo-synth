@@ -1,7 +1,11 @@
+import { articulationStateCodec } from "./synth-document-state";
+import { fullStoredStateValues } from "./full-stored-state";
+import { effectOutputTrimHostEndpointID, effectOutputTrimLaneEndpointID } from "./effect-output-trim";
 import {
     ArticulationSlotsExhausted,
     MappingAlreadyExists,
     SourceSlotsExhausted,
+    StateEditRefused,
     TargetNotModulatable,
     type ArticulationTriggerMode,
     type AuditionState,
@@ -20,7 +24,6 @@ import {
     createEmptyArticulationsState,
     lowestFreeRuntimeSlot,
     parseArticulationsV4,
-    serializeArticulationsV4,
     type ArticulationSlotV4,
     type ArticulationsState,
     type ArticulationVoiceParameterId,
@@ -30,10 +33,12 @@ import {
     createDefaultArticulationName,
 } from "./articulations";
 import type { PatchConnectionLike } from "./cmajor-react";
+import type { PluginStateClientResult } from "../../kit/ui/plugin-state-client";
+import type { PluginStateHistoryEntry, PluginStateScope } from "../../kit/ui/plugin-state-session";
+import { acquireSynthViewState } from "./synth-state-client";
 import {
     clampNormalizedValue,
     makeMappingId,
-    parseNormalizedValue,
     splitMappingId,
     type ArticulationId,
     type MappingId,
@@ -45,33 +50,26 @@ import {
     MODULATION_MACRO_SLOT_COUNT,
     MODULATION_SOURCE_OPTIONS,
     MODULATION_STATE_KEY,
-    acquireModulationRuntimeBridge,
     createDefaultEnvelope,
     createDefaultModulationState,
     getModulationAmountBounds,
     modulationRoutePairKey,
     normalizeEnvelope,
-    parseModulationState,
-    releaseModulationRuntimeBridge,
     type ModulationEnvelope,
     type ModulationRoute,
-    type ModulationRuntimeBridge,
     type ModulationSourceKind,
     type ModulationState,
     type ModulationTargetKind,
 } from "./modulation";
 import { getModulationArticulationCellIndex } from "./modulation-runtime-program";
-import { createDefaultMsegPlayback, createDefaultMsegShape } from "./mseg";
 import { err, ok } from "./result";
 import {
     EFFECT_ID_TO_LANE_TYPE,
     LANE_STATE_KEY,
     LANE_TYPE_TO_EFFECT_ID,
     RACK_EFFECT_ORDER,
-    sendLaneParamValue,
 } from "./lane-state";
 import {
-    commitLaneStateV2,
     createDefaultLaneStateV2,
     findLaneDevicePath,
     getLaneDeviceEnabled,
@@ -79,7 +77,7 @@ import {
     moveLaneDevice,
     parseLaneInstanceId,
     parseLaneStateV2,
-    serializeLaneStateV2,
+    synchronizeLaneOutputTrimsFromHostParameters,
     setLaneDeviceEnabled,
     setLaneDeviceParam,
     type LaneStateV2,
@@ -129,13 +127,11 @@ type ParseOutcome<T> =
 
 type DeletedSourceBackup = {
     readonly definition: SourceDefinition;
-    readonly modulationState: ModulationState;
-    readonly envelopeValue: ModulationEnvelope | null;
-    readonly macroValue: NormalizedValue | null;
-    readonly msegMorphValue: NormalizedValue | null;
-    readonly routes: ReadonlyArray<ModulationRoute>;
+    readonly scope: PluginStateScope;
+    readonly historyEntry: PluginStateHistoryEntry | undefined;
+    readonly historyHead: PluginStateHistoryEntry | undefined;
+    readonly version: number;
     readonly mappingCreationOrder: ReadonlyArray<string>;
-    readonly articulationRouteAmounts: Readonly<Record<string, Readonly<Record<string, number>>>>;
 };
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -162,19 +158,6 @@ function parseJsonDocument(input: unknown, label: string): ParseOutcome<unknown>
         const detail = cause instanceof Error ? cause.message : "unknown JSON parse failure";
         return parseError(`${label} is not valid JSON: ${detail}`);
     }
-}
-
-function readFullStoredStateValue(storedState: unknown, key: string): unknown {
-    if (!isRecord(storedState)) {
-        return undefined;
-    }
-
-    const nestedValues = isRecord(storedState.values) ? storedState.values : null;
-    if (nestedValues !== null && Object.hasOwn(nestedValues, key)) {
-        return nestedValues[key];
-    }
-
-    return Object.hasOwn(storedState, key) ? storedState[key] : undefined;
 }
 
 function createSourceDefinitions(): ReadonlyArray<SourceDefinition> {
@@ -341,13 +324,6 @@ function parseStoredArticulations(
         : parseError(parsed.error.message);
 }
 
-function stableToken(value: unknown): string {
-    try {
-        return `${typeof value}:${JSON.stringify(value)}`;
-    } catch {
-        return `${typeof value}:${String(value)}`;
-    }
-}
 
 function midiNoteNumber(note: string): number {
     const match = /^([A-Ga-g])([#b]?)(-?\d+)$/.exec(note.trim());
@@ -395,9 +371,14 @@ function clampMidiValue(value: number): number {
 
 class CosimoBridgeAdapter implements CosimoAdapterPort {
     private readonly connection: PatchConnectionLike;
-    private readonly modulationBridge: ModulationRuntimeBridge;
+    private readonly stateLease: ReturnType<typeof acquireSynthViewState>;
+    private readonly modulationBridge: ReturnType<typeof acquireSynthViewState>["modulation"];
+    private readonly removeStateListener: () => void;
+    private pendingHydration: { readonly value: unknown } | undefined;
+    private hydrationRequest = 0;
+    private documentScope: PluginStateScope | null = null;
+    private confirmedMappingIds: ReadonlySet<string> = new Set();
     private parameterValues = createInitialParameterValues();
-    private laneParamDeliverySerial = 0;
     private articulations = createEmptyArticulationsState();
     // lane.v1 is desired state. effectiveRackState has no intent correlation and
     // therefore cannot safely become the base for a later editor command.
@@ -425,33 +406,113 @@ class CosimoBridgeAdapter implements CosimoAdapterPort {
     private readonly routeReducers = new Map<string, MappingReducer>();
     private mappingCreationOrder: Array<string> = [];
     private readonly listeners = new Set<() => void>();
-    private readonly pendingStoredStateEchoes = new Map<string, Map<string, number>>();
     private readonly parameterListenerCleanups: Array<() => void> = [];
     private deletedSourceBackup: DeletedSourceBackup | null = null;
     private activeMidiNote: number | null = null;
-    private acceptedModulationState = createDefaultModulationState();
+    private projectedModulationState = createDefaultModulationState();
     private snapshot: PatchSnapshot;
     private commandDepth = 0;
     private snapshotDirty = false;
+    private stateSnapshotDeferred = false;
     private hydrationComplete = false;
     private disposed = false;
 
-    private readonly handleModulationState = (state: ModulationState): void => {
+    private readonly handleModulationState = (state: ModulationState | null): void => {
         if (this.disposed) {
             return;
         }
-        if (!this.hydrationComplete) {
+        if (state === null || !this.hydrationComplete) {
             this.markSnapshotDirty();
             return;
         }
         const validRoutes = this.collectValidRoutes(state);
-        if (validRoutes.length !== state.routes.length) {
+        const snapshot = this.stateLease.client.getSnapshot();
+        const confirmed = snapshot.kind === "ready" && !snapshot.pendingFields.includes(MODULATION_STATE_KEY);
+        if (confirmed && validRoutes.length !== state.routes.length) {
             this.detach(`${MODULATION_STATE_KEY} contains a mapping without its canonical current identity`);
             return;
         }
-        this.acceptedModulationState = state;
-        this.adoptValidRoutes(validRoutes);
+        this.projectedModulationState = state;
+        if (confirmed) {
+            this.confirmedMappingIds = this.collectArticulationMappingIds(validRoutes);
+            this.adoptValidRoutes(validRoutes);
+        } else this.markSnapshotDirty();
     };
+
+    private readonly handleStateSnapshot = (): void => {
+        if (this.disposed) return;
+        if (this.commandDepth > 0) { this.stateSnapshotDeferred = true; return; }
+        const snapshot = this.stateLease.client.getSnapshot();
+        if (snapshot.kind !== "ready") {
+            if (this.connectionState._tag === "detached") return;
+            this.connectionState = snapshot.kind === "connecting" ? { _tag: "connecting" }
+                : { _tag: "detached", reason: snapshot.kind === "failed" ? snapshot.reason : "State client closed." };
+            this.markSnapshotDirty();
+            return;
+        }
+        const fields: Readonly<Record<string, import("../../kit/ui/plugin-state-session").PluginStateFieldSnapshot<unknown>>> = snapshot.state.fields;
+        const rack = snapshot.state.fields[LANE_STATE_KEY];
+        if (rack?.readiness.kind === "ready" && "value" in rack) {
+            const parsed = parseLaneStateV2(rack.value);
+            if (parsed._tag === "ok") {
+                const parameters = Object.fromEntries(Object.entries(snapshot.state.fields).flatMap(([key, field]) =>
+                    "value" in field && typeof field.value === "number" ? [[key, field.value]] : []));
+                this.rackState = synchronizeLaneOutputTrimsFromHostParameters(parsed.value, parameters);
+                this.refreshLaneParameterValues();
+            }
+        }
+        const articulations = snapshot.state.fields[ARTICULATIONS_V4_STATE_KEY];
+        if (articulations?.readiness.kind === "ready" && "value" in articulations)
+            this.articulations = articulations.value;
+        for (const descriptor of allTargetDescriptors()) {
+            if (descriptor.binding._tag !== "endpoint" || getRackParameterDescriptor(descriptor.binding.endpointId)) continue;
+            const field = fields[descriptor.binding.endpointId];
+            if (field?.readiness.kind === "ready" && "value" in field && typeof field.value === "number")
+                this.parameterValues = { ...this.parameterValues, [descriptor.targetId]: descriptor.binding.fromEngine(field.value) };
+        }
+        for (let index = 0; index < this.macroValues.length; index++) {
+            const field = fields[`macro${index + 1}`];
+            if (field?.readiness.kind === "ready" && "value" in field && typeof field.value === "number") this.macroValues[index] = clampNormalizedValue(field.value);
+        }
+        for (let index = 0; index < this.msegMorphValues.length; index++) {
+            const field = fields[MSEG_MORPH_ENDPOINT_IDS[index]!];
+            if (field?.readiness.kind === "ready" && "value" in field && typeof field.value === "number") this.msegMorphValues[index] = clampNormalizedValue(field.value);
+        }
+        const scope = snapshot.state.scope;
+        const changedDocument = scope && this.documentScope && !this.sameDocument(this.documentScope);
+        this.documentScope = scope;
+        if (changedDocument) {
+            this.deletedSourceBackup = null;
+            this.hydrationComplete = false;
+            this.requestHydration();
+        }
+        const field = snapshot.state.fields[MODULATION_STATE_KEY];
+        if (field.readiness.kind === "failed") {
+            this.detach(field.readiness.reason === "invalid-state"
+                ? `${MODULATION_STATE_KEY} does not match the current modulation schema`
+                : `${MODULATION_STATE_KEY}: ${field.readiness.reason}`);
+            return;
+        }
+        if (snapshot.pendingFields.includes(MODULATION_STATE_KEY)) return;
+        if (this.pendingHydration) this.hydrate(this.pendingHydration.value);
+        else this.handleModulationState(this.modulationBridge.getState());
+    };
+
+    private sameDocument(scope: PluginStateScope): boolean {
+        const current = this.stateLease.client.getSnapshot();
+        return !this.disposed && current.kind === "ready"
+            && current.state.scope?.owner === scope.owner && current.state.scope.document === scope.document;
+    }
+
+    private requestHydration(): void {
+        const request = ++this.hydrationRequest;
+        const receive = (storedState: unknown) => {
+            if (this.disposed || request !== this.hydrationRequest) return;
+            this.hydrate(storedState);
+        };
+        if (typeof this.connection.requestFullStoredState === "function") this.connection.requestFullStoredState(receive);
+        else receive({});
+    }
 
     private adoptValidRoutes(validRoutes: ReadonlyArray<ValidRoute>): void {
         for (const validRoute of validRoutes) {
@@ -468,55 +529,24 @@ class CosimoBridgeAdapter implements CosimoAdapterPort {
     }
 
     private readonly handleStoredStateValue = (message: unknown): void => {
-        if (this.disposed || !isRecord(message) || typeof message.key !== "string") {
-            return;
-        }
-        if (this.consumePendingStoredStateEcho(message.key, message.value)) {
-            return;
-        }
-
-        this.runCommand(() => {
-            if (message.key === LANE_STATE_KEY) {
-                const parsed = parseLaneStateV2(message.value);
-                if (parsed._tag === "err") {
-                    this.detach(parsed.message);
-                    return;
-                }
-                this.rackState = parsed.value;
-                this.refreshLaneParameterValues();
-                commitLaneStateV2(this.connection, this.rackState);
-                this.markSnapshotDirty();
-                return;
-            }
-            if (message.key === ARTICULATIONS_V4_STATE_KEY) {
-                const parsed = parseStoredArticulations(
-                    message.value,
-                    this.collectArticulationMappingIds(),
-                );
-                if (parsed._tag === "err") {
-                    this.detach(parsed.message);
-                    return;
-                }
-                this.articulations = parsed.value;
-                this.markSnapshotDirty();
-            }
-        });
+        if (this.disposed || !isRecord(message)) return;
+        if (message.key === LANE_STATE_KEY || message.key === ARTICULATIONS_V4_STATE_KEY)
+            this.handleStateSnapshot();
     };
 
     constructor(connection: PatchConnectionLike) {
         this.connection = connection;
-        this.modulationBridge = acquireModulationRuntimeBridge(connection);
+        this.stateLease = acquireSynthViewState(connection);
+        this.modulationBridge = this.stateLease.modulation;
         this.snapshot = this.buildSnapshot();
         this.modulationBridge.subscribe(this.handleModulationState);
         this.handleModulationState(this.modulationBridge.getState());
         this.connection.addStoredStateValueListener?.(this.handleStoredStateValue);
         this.installParameterListeners();
 
-        if (typeof this.connection.requestFullStoredState === "function") {
-            this.connection.requestFullStoredState((storedState) => this.hydrate(storedState));
-        } else {
-            this.hydrate({});
-        }
+        this.removeStateListener = this.stateLease.client.subscribe(this.handleStateSnapshot);
+        this.handleStateSnapshot();
+        this.requestHydration();
     }
 
     // Bound arrows: useSyncExternalStore detaches these from the instance
@@ -554,12 +584,12 @@ class CosimoBridgeAdapter implements CosimoAdapterPort {
         setEnvelope: (sourceId, envelope) => this.runCommand(() => this.setEnvelope(sourceId, envelope)),
         setMsegShape: (input) => this.runCommand(() => {
             const definition = this.requireSource(input.sourceId, "mseg");
-            this.modulationBridge.setMsegSlotShape(this.slotIndex(definition), input.shapeIndex, input.shape);
+            this.consumeStateEdit(this.modulationBridge.setMsegSlotShape(this.slotIndex(definition), input.shapeIndex, input.shape));
         }),
         setMsegMorph: (input) => this.runCommand(() => this.setMsegMorph(input)),
         setMsegPlayback: (input) => this.runCommand(() => {
             const definition = this.requireSource(input.sourceId, "mseg");
-            this.modulationBridge.setMsegSlotPlayback(this.slotIndex(definition), input.playback);
+            this.consumeStateEdit(this.modulationBridge.setMsegSlotPlayback(this.slotIndex(definition), input.playback));
         }),
         addArticulation: () => this.runCommand(() => this.addArticulation()),
         duplicateArticulation: (articulationId) => this.runCommand(
@@ -597,7 +627,6 @@ class CosimoBridgeAdapter implements CosimoAdapterPort {
                 throw new Error(`Rack is missing effect ${knownEffectId}`);
             }
             this.rackState = next;
-            commitLaneStateV2(this.connection, this.rackState);
             this.persistLaneState();
             this.markSnapshotDirty();
         }),
@@ -614,8 +643,8 @@ class CosimoBridgeAdapter implements CosimoAdapterPort {
             if (articulationId !== "Default") {
                 this.requireArticulation(articulationId);
             }
-            // TODO(COSIMO_ADAPTER_COMMAND_MAP): audition selector forcing is an
-            // open engine path; retain the requested articulation locally only.
+            // The engine has no input that forces the audition articulation,
+            // so the requested articulation is kept locally.
             this.audition = { ...this.audition, articulation: articulationId };
             this.markSnapshotDirty();
         }),
@@ -650,7 +679,8 @@ class CosimoBridgeAdapter implements CosimoAdapterPort {
         }
         this.parameterListenerCleanups.length = 0;
         this.modulationBridge.unsubscribe(this.handleModulationState);
-        releaseModulationRuntimeBridge(this.connection);
+        this.removeStateListener();
+        this.stateLease.release();
         this.listeners.clear();
     }
 
@@ -752,21 +782,20 @@ class CosimoBridgeAdapter implements CosimoAdapterPort {
             return;
         }
 
-        const rawArticulations = readFullStoredStateValue(storedState, ARTICULATIONS_V4_STATE_KEY);
-        const rawRackState = readFullStoredStateValue(storedState, LANE_STATE_KEY);
-        const rawModulationState = readFullStoredStateValue(storedState, MODULATION_STATE_KEY);
-
-        let restoredModulationState = this.modulationBridge.getState();
-        if (rawModulationState !== undefined) {
-            const parsedModulationState = parseModulationState(rawModulationState);
-            if (parsedModulationState._tag === "err") {
-                this.detach(parsedModulationState.error.message);
-                return;
-            }
-            restoredModulationState = parsedModulationState.value;
+        const storedValues = fullStoredStateValues(storedState);
+        const rawArticulations = storedValues[ARTICULATIONS_V4_STATE_KEY];
+        const rawRackState = storedValues[LANE_STATE_KEY];
+        if (rawArticulations !== undefined) {
+            const parsed = articulationStateCodec.parse(rawArticulations);
+            if (parsed.kind === "error") { this.detach(parsed.message); return; }
         }
+        this.pendingHydration = { value: storedState };
+        const clientSnapshot = this.stateLease.client.getSnapshot();
+        const restoredModulationState = this.modulationBridge.getState();
+        if (!restoredModulationState || !this.modulationBridge.isReady()
+            || clientSnapshot.kind !== "ready" || clientSnapshot.pendingFields.includes(MODULATION_STATE_KEY)) return;
         const validRoutes = this.collectValidRoutes(restoredModulationState);
-        if (rawModulationState !== undefined && validRoutes.length !== restoredModulationState.routes.length) {
+        if (validRoutes.length !== restoredModulationState.routes.length) {
             this.detach(`${MODULATION_STATE_KEY} contains a mapping without its canonical current identity`);
             return;
         }
@@ -788,7 +817,9 @@ class CosimoBridgeAdapter implements CosimoAdapterPort {
         }
 
         this.runCommand(() => {
-            this.acceptedModulationState = restoredModulationState;
+            this.projectedModulationState = restoredModulationState;
+            this.confirmedMappingIds = this.collectArticulationMappingIds(validRoutes);
+            this.pendingHydration = undefined;
             this.articulations = parsedArticulations.value;
             this.rackState = parsedRackState.value;
             this.refreshLaneParameterValues();
@@ -799,10 +830,6 @@ class CosimoBridgeAdapter implements CosimoAdapterPort {
             }
             this.hydrationComplete = true;
             this.adoptValidRoutes(validRoutes);
-            if (rawModulationState === undefined) {
-                this.modulationBridge.replaceRoutes([]);
-            }
-            commitLaneStateV2(this.connection, this.rackState);
             this.markSnapshotDirty();
         });
     }
@@ -819,6 +846,10 @@ class CosimoBridgeAdapter implements CosimoAdapterPort {
         } finally {
             this.commandDepth -= 1;
             if (this.commandDepth === 0) {
+                if (this.stateSnapshotDeferred) {
+                    this.stateSnapshotDeferred = false;
+                    this.handleStateSnapshot();
+                }
                 this.flushSnapshot();
             }
         }
@@ -843,7 +874,7 @@ class CosimoBridgeAdapter implements CosimoAdapterPort {
     }
 
     private buildSnapshot(): PatchSnapshot {
-        const validRoutes = this.collectValidRoutes(this.acceptedModulationState);
+        const validRoutes = this.collectValidRoutes(this.projectedModulationState);
         const mappings = this.projectMappingsInCreationOrder(validRoutes);
         const articulationRouteById = new Map(validRoutes.flatMap((validRoute) => (
             getModulationArticulationCellIndex(validRoute.route) === null
@@ -938,7 +969,7 @@ class CosimoBridgeAdapter implements CosimoAdapterPort {
     }
 
     private projectSources(): ReadonlyArray<ModulationSource> {
-        const state = this.acceptedModulationState;
+        const state = this.projectedModulationState;
         const sources: Array<ModulationSource> = [];
         for (const definition of SOURCE_DEFINITIONS) {
             if (definition.type !== "fixed" && !this.visibleSourceIds.has(definition.idRaw)) {
@@ -1100,17 +1131,14 @@ class CosimoBridgeAdapter implements CosimoAdapterPort {
                         throw new Error(`Rack is missing effect ${laneParameter.effectId}`);
                     }
                     this.rackState = next;
-                    this.laneParamDeliverySerial += 1;
-                    sendLaneParamValue(
-                        this.connection,
-                        laneParameter.effectId,
-                        laneParameter.endpointID,
-                        engineValue,
-                        this.laneParamDeliverySerial,
-                    );
-                    this.persistLaneState();
+                    const device = parseLaneInstanceId(laneDeviceIdForEffect(laneParameter.effectId));
+                    if (device && laneParameter.endpointID === effectOutputTrimLaneEndpointID(device.deviceType)) {
+                        this.editParameter(effectOutputTrimHostEndpointID(device.deviceType, device.instanceNumber), engineValue);
+                    } else {
+                        this.persistLaneState();
+                    }
                 } else {
-                    this.connection.sendEventOrValue?.(
+                    this.editParameter(
                         descriptor.binding.endpointId,
                         descriptor.binding.toEngine(input.value),
                     );
@@ -1143,14 +1171,13 @@ class CosimoBridgeAdapter implements CosimoAdapterPort {
         this.markSnapshotDirty();
     }
 
-    private addMapping(input: Parameters<CosimoCommands["addMapping"]>[0]): ReturnType<CosimoCommands["addMapping"]> {
+    private mappingRoute(input: Parameters<CosimoCommands["addMapping"]>[0], source: SourceDefinition) {
         const descriptor = getTargetDescriptor(input.targetId);
         const targetKind = descriptor.modulationTargetKind;
         if (targetKind === null) {
             return err(new TargetNotModulatable(descriptor.targetId));
         }
-        const source = this.requireSource(input.sourceId);
-        const routes = this.collectValidRoutes(this.acceptedModulationState);
+        const routes = this.collectValidRoutes(this.projectedModulationState);
         const sourceId = sourceIdFromDefinition(source);
         const mappingId = makeMappingId(descriptor.targetId, sourceId);
         if (routes.some((validRoute) => validRoute.route.id === mappingId)) {
@@ -1168,7 +1195,7 @@ class CosimoBridgeAdapter implements CosimoAdapterPort {
             amount: specAmountToRouteAmount(descriptor.modAmount, targetKind, amount),
             reducer: input.reducer === "Mean" ? "mean" : "max",
         };
-        const rawRoutes = this.acceptedModulationState.routes;
+        const rawRoutes = this.projectedModulationState.routes;
         if (rawRoutes.some((candidate) => (
             candidate.id === mappingId
             || modulationRoutePairKey(candidate) === modulationRoutePairKey(route)
@@ -1176,33 +1203,34 @@ class CosimoBridgeAdapter implements CosimoAdapterPort {
             return err(new MappingAlreadyExists(mappingId));
         }
 
-        const addedRoute = this.modulationBridge.addRoute(route);
-        if (addedRoute === null) {
-            return err(new MappingAlreadyExists(mappingId));
-        }
-        if (addedRoute.id !== mappingId) {
-            throw new Error(`Mapping identity collision for ${mappingId}`);
-        }
-
-        this.routeReducers.set(mappingId, input.reducer ?? "Max");
-        return ok(mappingId);
+        return ok({ mappingId, route });
     }
 
-    private removeMapping(mappingId: MappingId): void {
+    private async addMapping(input: Parameters<CosimoCommands["addMapping"]>[0]): ReturnType<CosimoCommands["addMapping"]> {
+        const parsed = this.mappingRoute(input, this.requireSource(input.sourceId));
+        if (parsed._tag === "err") return parsed;
+        const accepted = await this.editBank({ ...this.projectedModulationState, routes: [...this.projectedModulationState.routes, parsed.value.route] });
+        if (accepted._tag === "err") return accepted;
+        if (!this.sameDocument(accepted.value.scope)) return err(new StateEditRefused(accepted.value.receipt));
+        this.routeReducers.set(parsed.value.mappingId, input.reducer ?? "Max");
+        return ok(parsed.value.mappingId);
+    }
+
+    private async removeMapping(mappingId: MappingId): ReturnType<CosimoCommands["removeMapping"]> {
         const mapping = this.requireMapping(mappingId);
-        this.modulationBridge.removeRoute(mapping.routeIndex);
+        const articulations = { ...this.articulations, slots: this.articulations.slots.map(slot => ({ ...slot,
+            routeAmounts: Object.fromEntries(Object.entries(slot.routeAmounts).filter(([id]) => id !== mappingId)),
+        })) };
+        const accepted = await this.editDocuments([
+            { key: MODULATION_STATE_KEY, value: { ...this.projectedModulationState,
+                routes: this.projectedModulationState.routes.filter(route => route.id !== mapping.route.id) } },
+            { key: ARTICULATIONS_V4_STATE_KEY, value: articulations },
+        ]);
+        if (accepted._tag === "err") return accepted;
+        if (!this.sameDocument(accepted.value.scope)) return err(new StateEditRefused(accepted.value.receipt));
         this.routeReducers.delete(mappingId);
-        this.articulations = {
-            ...this.articulations,
-            slots: this.articulations.slots.map((slot) => ({
-                ...slot,
-                routeAmounts: Object.fromEntries(
-                    Object.entries(slot.routeAmounts).filter(([routeId]) => routeId !== mappingId),
-                ),
-            })),
-        };
-        this.persistArticulations();
         this.markSnapshotDirty();
+        return ok(undefined);
     }
 
     private setMappingAmount(
@@ -1217,11 +1245,12 @@ class CosimoBridgeAdapter implements CosimoAdapterPort {
             amount,
         );
         if (layer._tag === "patchBase") {
-            this.modulationBridge.setRouteAmount(mapping.routeIndex, routeAmount);
+            this.consumeStateEdit(this.modulationBridge.setRouteAmountById(mapping.route.id, routeAmount));
             return;
         }
 
-        if (getModulationArticulationCellIndex(mapping.route) === null) {
+        if (!this.confirmedMappingIds.has(mapping.route.id)
+            || getModulationArticulationCellIndex(mapping.route) === null) {
             return;
         }
 
@@ -1236,7 +1265,7 @@ class CosimoBridgeAdapter implements CosimoAdapterPort {
 
     private setMappingEnabled(mappingId: MappingId, enabled: boolean): void {
         const mapping = this.requireMapping(mappingId);
-        this.modulationBridge.setRoute(mapping.routeIndex, { ...mapping.route, enabled });
+        this.consumeStateEdit(this.modulationBridge.setRoute(mapping.routeIndex, { ...mapping.route, enabled }));
     }
 
     private setMappingPolarity(
@@ -1244,21 +1273,21 @@ class CosimoBridgeAdapter implements CosimoAdapterPort {
         polarity: ModulationMapping["polarity"],
     ): void {
         const mapping = this.requireMapping(mappingId);
-        this.modulationBridge.setRoute(mapping.routeIndex, {
+        this.consumeStateEdit(this.modulationBridge.setRoute(mapping.routeIndex, {
             ...mapping.route,
             polarity: polarity === "Bipolar" ? "bipolar" : "unipolar",
-        });
+        }));
     }
 
     private setMappingReducer(mappingId: MappingId, reducer: MappingReducer): void {
         const mapping = this.requireMapping(mappingId);
-        this.modulationBridge.setRoute(mapping.routeIndex, {
+        this.consumeStateEdit(this.modulationBridge.setRoute(mapping.routeIndex, {
             ...mapping.route,
             reducer: reducer === "Mean" ? "mean" : "max",
-        });
+        }));
     }
 
-    private createSource(type: Exclude<SourceType, "fixed">): ReturnType<CosimoCommands["createSource"]> {
+    private async createSource(type: Exclude<SourceType, "fixed">): ReturnType<CosimoCommands["createSource"]> {
         const definitions = SOURCE_DEFINITIONS.filter((definition) => (
             definition.type === type && definition.idRaw !== "amp-envelope"
         ));
@@ -1266,172 +1295,169 @@ class CosimoBridgeAdapter implements CosimoAdapterPort {
         if (definition === undefined) {
             return err(new SourceSlotsExhausted(type, definitions.length));
         }
-        this.visibleSourceIds.add(definition.idRaw);
-        this.resetSourceSlot(definition);
-        this.deletedSourceBackup = null;
-        this.markSnapshotDirty();
+        const accepted = await this.editDocuments([
+            { key: MODULATION_STATE_KEY, value: this.resetSourceBank(this.projectedModulationState, definition) },
+            ...this.sourceParameterResets(definition),
+        ]);
+        if (accepted._tag === "err") return accepted;
+        if (!this.sameDocument(accepted.value.scope)) return err(new StateEditRefused(accepted.value.receipt));
+        this.runCommand(() => {
+            this.visibleSourceIds.add(definition.idRaw);
+            this.deletedSourceBackup = null;
+            this.markSnapshotDirty();
+        });
         return ok(sourceIdFromDefinition(definition));
     }
 
-    private deleteSource(sourceId: SourceId): void {
-        const definition = SOURCE_DEFINITION_BY_ID.get(String(sourceId));
-        if (definition === undefined) {
-            throw new Error(`Unknown source id: ${sourceId}`);
-        }
-        if (definition.type === "fixed" || definition.idRaw === "amp-envelope") {
-            return;
-        }
-        this.requireSource(sourceId);
-
-        const state = this.acceptedModulationState;
-        const removedRoutes = state.routes.filter((route) => {
-            const validRoute = this.collectValidRoutes({ ...state, routes: [route] })[0];
-            return validRoute?.sourceId === sourceId;
+    private consumeStateEdit(completion: Promise<PluginStateClientResult>): void {
+        const snapshot = this.stateLease.client.getSnapshot();
+        const scope = snapshot.kind === "ready" ? snapshot.state.scope : null;
+        void completion.then(result => {
+            if (this.disposed || !scope || !this.sameDocument(scope) || result.kind === "accepted") return;
+            this.audition = { ...this.audition, status: new StateEditRefused(result).message };
+            this.markSnapshotDirty();
+        }, error => {
+            if (this.disposed || (scope && !this.sameDocument(scope))) return;
+            console.error("Cosimo adapter state edit failed", error);
+            this.detach("State edit failed unexpectedly.");
         });
-        const removedMappingIds = new Set(removedRoutes.map((route) => route.id));
-        const articulationRouteAmounts: Record<string, Readonly<Record<string, number>>> = {};
-        for (const slot of this.articulations.slots) {
-            articulationRouteAmounts[slot.id] = Object.fromEntries(
-                Object.entries(slot.routeAmounts).filter(([routeId]) => removedMappingIds.has(routeId)),
-            );
-        }
-        this.deletedSourceBackup = {
-            definition,
-            modulationState: state,
-            envelopeValue: definition.type === "envelope"
-                ? buildParameterOwnedEnvelope(
-                    this.parameterValues,
-                    state.envelopeSlots[this.slotIndex(definition)]?.name ?? definition.label,
-                    this.slotIndex(definition),
-                )
-                : null,
-            macroValue: definition.type === "macro"
-                ? this.macroValues[this.slotIndex(definition)] ?? clampNormalizedValue(0)
-                : null,
-            msegMorphValue: definition.type === "mseg"
-                ? this.msegMorphValues[this.slotIndex(definition)] ?? clampNormalizedValue(0)
-                : null,
-            routes: removedRoutes,
-            mappingCreationOrder: [...this.mappingCreationOrder],
-            articulationRouteAmounts,
-        };
-
-        this.mappingCreationOrder = this.mappingCreationOrder
-            .filter((mappingId) => !removedMappingIds.has(mappingId));
-        this.modulationBridge.replaceRoutes(state.routes.filter((route) => !removedMappingIds.has(route.id)));
-        this.articulations = {
-            ...this.articulations,
-            slots: this.articulations.slots.map((slot) => ({
-                ...slot,
-                routeAmounts: Object.fromEntries(
-                    Object.entries(slot.routeAmounts).filter(([routeId]) => !removedMappingIds.has(routeId)),
-                ),
-            })),
-        };
-        this.resetSourceSlot(definition);
-        this.visibleSourceIds.delete(definition.idRaw);
-        this.persistArticulations();
-        this.markSnapshotDirty();
     }
 
-    private undoDeleteSource(): void {
-        const backup = this.deletedSourceBackup;
-        if (backup === null) {
-            return;
+    // Callers also check the returned scope immediately before dependent
+    // effects: their await introduces another turn in which a reset can arrive.
+    private async editDocuments(values: ReadonlyArray<{ readonly key: string; readonly value: unknown }>) {
+        const current = this.stateLease.client.getSnapshot();
+        if (this.disposed || current.kind !== "ready" || !current.state.scope)
+            return err(new StateEditRefused({ kind: "rejected", reason: "not-ready" }));
+        if (values.some(({ key }) => current.pendingFields.includes(key)))
+            return err(new StateEditRefused({ kind: "rejected", reason: "busy" }));
+        const fields: Readonly<Record<string, import("../../kit/ui/plugin-state-session").PluginStateFieldSnapshot<unknown>>> = current.state.fields;
+        const edits = [];
+        for (const { key, value } of values) {
+            const field = fields[key];
+            if (!field || field.readiness.kind !== "ready" || !("version" in field))
+                return err(new StateEditRefused({ kind: "rejected", reason: "not-ready" }));
+            edits.push({ key, value, expectedVersion: field.version });
         }
-        if (this.visibleSourceIds.has(backup.definition.idRaw)) {
-            this.deletedSourceBackup = null;
-            return;
-        }
+        const scope = current.state.scope;
+        const result = await this.stateLease.client.dispatch({ kind: "edit-many", edits });
+        if (result.kind !== "accepted" || !this.sameDocument(scope)) return err(new StateEditRefused(result));
+        return ok({ receipt: result, scope });
+    }
 
-        this.visibleSourceIds.add(backup.definition.idRaw);
-        const slotIndex = this.slotIndex(backup.definition);
-        if (backup.definition.type === "macro") {
-            if (backup.macroValue !== null) {
-                this.macroValues[slotIndex] = backup.macroValue;
-                this.connection.sendEventOrValue?.(`macro${slotIndex + 1}`, backup.macroValue);
-            }
-            this.modulationBridge.setState({
-                ...this.acceptedModulationState,
-                macroNames: [...backup.modulationState.macroNames],
-            });
-        } else if (backup.definition.type === "envelope") {
-            this.setEnvelope(
-                sourceIdFromDefinition(backup.definition),
-                backup.envelopeValue ?? createDefaultEnvelope(slotIndex),
-            );
-        } else {
-            const slot = backup.modulationState.msegSlots[slotIndex];
-            if (slot === undefined) {
-                throw new Error(`Deleted source backup is missing MSEG slot ${slotIndex + 1}`);
-            }
-            this.modulationBridge.setMsegSlotShape(slotIndex, 0, slot.shapeA);
-            this.modulationBridge.setMsegSlotShape(slotIndex, 1, slot.shapeB);
-            this.setMsegMorph({
-                sourceId: sourceIdFromDefinition(backup.definition),
-                morph: backup.msegMorphValue ?? clampNormalizedValue(0),
-                layer: { _tag: "patchBase" },
-            });
-            this.modulationBridge.setMsegSlotPlayback(slotIndex, slot.playback);
-        }
+    private async editBank(value: ModulationState) {
+        const current = this.stateLease.client.getSnapshot();
+        if (this.disposed) return err(new StateEditRefused({ kind: "rejected", reason: "service-closed" }));
+        const field = current.kind === "ready" ? current.state.fields[MODULATION_STATE_KEY] : undefined;
+        if (current.kind === "ready" && field && "gesture" in field && field.gesture?.client === current.client)
+            return err(new StateEditRefused({ kind: "rejected", reason: "busy" }));
+        const scope = current.kind === "ready" ? current.state.scope : null;
+        const result = await this.modulationBridge.setState(value);
+        if (result.kind !== "accepted" || !scope || !this.sameDocument(scope)) return err(new StateEditRefused(result));
+        return ok({ receipt: result, scope });
+    }
 
-        const currentRoutes = this.acceptedModulationState.routes;
-        const currentIds = new Set(currentRoutes.map((route) => route.id));
-        const backedUpRoutes = new Map(backup.routes.map((route) => [route.id, route]));
-        const restoredMappingIds: Array<string> = [];
-        for (const mappingId of backup.mappingCreationOrder) {
-            if (currentIds.has(mappingId)) {
-                continue;
-            }
-            if (backedUpRoutes.has(mappingId)) {
-                restoredMappingIds.push(mappingId);
-                currentIds.add(mappingId);
-            }
-        }
-        const restoredMappingIdSet = new Set(restoredMappingIds);
-        const restoredRoutes = backup.routes.filter((route) => restoredMappingIdSet.has(route.id));
-        const originalMappingIds = new Set(backup.mappingCreationOrder);
-        this.mappingCreationOrder = [
-            ...backup.mappingCreationOrder.filter((mappingId) => currentIds.has(mappingId)),
-            ...this.mappingCreationOrder.filter((mappingId) => !originalMappingIds.has(mappingId)),
-        ];
-        this.modulationBridge.replaceRoutes([...currentRoutes, ...restoredRoutes]);
-        this.articulations = {
-            ...this.articulations,
-            slots: this.articulations.slots.map((slot) => ({
-                ...slot,
-                routeAmounts: {
-                    ...slot.routeAmounts,
-                    ...Object.fromEntries(
-                        Object.entries(backup.articulationRouteAmounts[slot.id] ?? {})
-                            .filter(([mappingId]) => restoredMappingIdSet.has(mappingId)),
-                    ),
-                },
-            })),
+    private resetSourceBank(state: ModulationState, definition: SourceDefinition): ModulationState {
+        const index = this.slotIndex(definition);
+        const defaults = createDefaultModulationState();
+        if (definition.type === "envelope") return { ...state,
+            envelopeSlots: state.envelopeSlots.map((slot, slotIndex) => slotIndex === index ? defaults.envelopeSlots[index]! : slot),
         };
-        this.deletedSourceBackup = null;
-        this.persistArticulations();
-        this.markSnapshotDirty();
+        if (definition.type === "mseg") return { ...state,
+            msegSlots: state.msegSlots.map((slot, slotIndex) => slotIndex === index ? defaults.msegSlots[index]! : slot),
+        };
+        return state;
+    }
+
+    private sourceParameterResets(definition: SourceDefinition) {
+        const index = this.slotIndex(definition);
+        if (definition.type === "envelope") return this.envelopeParameterEdits(definition, createDefaultEnvelope(index));
+        if (definition.type === "mseg") return [{ key: MSEG_MORPH_ENDPOINT_IDS[index]!, value: 0 }];
+        return [{ key: `macro${index + 1}`, value: 0 }];
+    }
+
+    private async deleteSource(sourceId: SourceId): ReturnType<CosimoCommands["deleteSource"]> {
+        const definition = SOURCE_DEFINITION_BY_ID.get(String(sourceId));
+        if (!definition) throw new Error(`Unknown source id: ${sourceId}`);
+        if (definition.type === "fixed" || definition.idRaw === "amp-envelope") return ok(undefined);
+        this.requireSource(sourceId);
+        const state = this.projectedModulationState;
+        const removedMappingIds = new Set(this.collectValidRoutes(state)
+            .filter(route => route.sourceId === sourceId).map(route => route.route.id));
+        const metadata = {
+            definition,
+            mappingCreationOrder: [...this.mappingCreationOrder],
+        };
+        const next = this.resetSourceBank({ ...state, routes: state.routes.filter(route => !removedMappingIds.has(route.id)) }, definition);
+        const articulations = { ...this.articulations, slots: this.articulations.slots.map(slot => ({ ...slot,
+            routeAmounts: Object.fromEntries(Object.entries(slot.routeAmounts).filter(([id]) => !removedMappingIds.has(id))),
+        })) };
+        const accepted = await this.editDocuments([
+            { key: MODULATION_STATE_KEY, value: next },
+            { key: ARTICULATIONS_V4_STATE_KEY, value: articulations },
+            ...this.sourceParameterResets(definition),
+        ]);
+        if (accepted._tag === "err") return accepted;
+        if (!this.sameDocument(accepted.value.scope)) return err(new StateEditRefused(accepted.value.receipt));
+        const current = this.stateLease.client.getSnapshot();
+        if (current.kind !== "ready") return err(new StateEditRefused(accepted.value.receipt));
+        this.runCommand(() => {
+            this.deletedSourceBackup = { ...metadata, scope: accepted.value.scope,
+                historyEntry: accepted.value.receipt.historyEntry, historyHead: current.state.history.undoEntry,
+                version: "version" in current.state.fields[MODULATION_STATE_KEY] ? (current.state.fields[MODULATION_STATE_KEY].version ?? 0) : 0,
+            };
+            this.mappingCreationOrder = this.mappingCreationOrder.filter(id => !removedMappingIds.has(id));
+            this.visibleSourceIds.delete(definition.idRaw);
+            this.markSnapshotDirty();
+        });
+        return ok(undefined);
+    }
+
+    private async undoDeleteSource(): ReturnType<CosimoCommands["undoDeleteSource"]> {
+        const backup = this.deletedSourceBackup;
+        if (!backup) return ok(undefined);
+        if (!this.sameDocument(backup.scope)) return err(new StateEditRefused({ kind: "rejected", reason: "stale-scope" }));
+        if (backup.historyEntry) {
+            const result = await this.stateLease.client.dispatch({ kind: "undo", expectedEntry: backup.historyEntry });
+            if (result.kind !== "accepted" || !this.sameDocument(backup.scope)) return err(new StateEditRefused(result));
+        } else {
+            const current = this.stateLease.client.getSnapshot();
+            if (current.kind === "ready" && (current.pendingFields.length > 0
+                || Object.values(current.state.fields).some(field => "gesture" in field && field.gesture !== undefined)))
+                return err(new StateEditRefused({ kind: "rejected", reason: "busy" }));
+            const field = current.kind === "ready" ? current.state.fields[MODULATION_STATE_KEY] : undefined;
+            if (current.kind !== "ready" || !field || !("version" in field) || field.version !== backup.version
+                || JSON.stringify(current.state.history.undoEntry) !== JSON.stringify(backup.historyHead))
+                return err(new StateEditRefused({ kind: "rejected", reason: "stale-history" }));
+        }
+        this.runCommand(() => {
+            this.visibleSourceIds.add(backup.definition.idRaw);
+            const restoredIds = new Set(this.projectedModulationState.routes.map(route => route.id));
+            this.mappingCreationOrder = backup.mappingCreationOrder.filter(id => restoredIds.has(id));
+            this.deletedSourceBackup = null;
+            this.markSnapshotDirty();
+        });
+        return ok(undefined);
     }
 
     private setMacroValue(sourceId: SourceId, value: NormalizedValue): void {
         const definition = this.requireSource(sourceId, "macro");
         const slotIndex = this.slotIndex(definition);
         this.macroValues[slotIndex] = value;
-        this.connection.sendEventOrValue?.(`macro${slotIndex + 1}`, value);
+        this.editParameter(`macro${slotIndex + 1}`, value);
         this.markSnapshotDirty();
     }
 
     private renameMacro(sourceId: SourceId, name: string): void {
         const definition = this.requireSource(sourceId, "macro");
         const slotIndex = this.slotIndex(definition);
-        const state = this.acceptedModulationState;
+        const state = this.projectedModulationState;
         const macroNames = [...state.macroNames];
         macroNames[slotIndex] = name.trim().length === 0 ? definition.label : name.trim();
-        this.modulationBridge.setState({ ...state, macroNames });
+        this.consumeStateEdit(this.modulationBridge.setState({ ...state, macroNames }));
     }
 
-    private setEnvelope(sourceId: SourceId, envelope: ModulationEnvelope): void {
+    private async setEnvelope(sourceId: SourceId, envelope: ModulationEnvelope): ReturnType<CosimoCommands["setEnvelope"]> {
         const definition = this.requireSource(sourceId, "envelope");
         const slotIndex = this.slotIndex(definition);
         const isAmpEnvelope = slotIndex === 3;
@@ -1447,31 +1473,24 @@ class CosimoBridgeAdapter implements CosimoAdapterPort {
         const normalizedEnvelope = isAmpEnvelope
             ? { ...baseEnvelope, name: "Amp Envelope", releaseSeconds: Math.max(0.005, baseEnvelope.releaseSeconds) }
             : baseEnvelope;
-        if (!isAmpEnvelope) {
-            this.modulationBridge.setEnvelope(slotIndex, normalizedEnvelope);
-        }
+        const edits = this.envelopeParameterEdits(definition, normalizedEnvelope);
+        const accepted = await this.editDocuments(isAmpEnvelope ? edits : [
+            { key: MODULATION_STATE_KEY, value: { ...this.projectedModulationState,
+                envelopeSlots: this.projectedModulationState.envelopeSlots.map((slot, index) => index === slotIndex ? { name: normalizedEnvelope.name } : slot) } },
+            ...edits,
+        ]);
+        return accepted._tag === "err" ? accepted : ok(undefined);
+    }
 
-        const parameterValues = [
-            ["attack", normalizedEnvelope.attackSeconds],
-            ["decay", normalizedEnvelope.decaySeconds],
-            ["sustain", normalizedEnvelope.sustain],
-            ["release", normalizedEnvelope.releaseSeconds],
-        ] as const;
-        for (const [field, engineValue] of parameterValues) {
-            const parsedTarget = parseTargetId(`${isAmpEnvelope ? "ampEnvelope" : `env${slotIndex + 1}`}.${field}`);
-            if (parsedTarget._tag === "err") {
-                throw parsedTarget.error;
-            }
-            const descriptor = getTargetDescriptor(parsedTarget.value);
-            if (descriptor.binding._tag !== "endpoint") {
-                throw new Error(`Envelope target ${descriptor.targetId} has no engine endpoint`);
-            }
-            this.setParameter({
-                targetId: parsedTarget.value,
-                value: descriptor.binding.fromEngine(engineValue),
-                layer: { _tag: "patchBase" },
-            });
-        }
+    private envelopeParameterEdits(definition: SourceDefinition, envelope: ModulationEnvelope) {
+        const slotIndex = this.slotIndex(definition);
+        const prefix = slotIndex === 3 ? "amp" : `env${slotIndex + 1}`;
+        return [
+            { key: `${prefix}Attack`, value: envelope.attackSeconds },
+            { key: `${prefix}Decay`, value: envelope.decaySeconds },
+            { key: `${prefix}Sustain`, value: envelope.sustain },
+            { key: `${prefix}Release`, value: envelope.releaseSeconds },
+        ];
     }
 
     private setMsegMorph(input: Parameters<CosimoCommands["setMsegMorph"]>[0]): void {
@@ -1481,7 +1500,7 @@ class CosimoBridgeAdapter implements CosimoAdapterPort {
         }
         const slotIndex = this.slotIndex(definition);
         this.msegMorphValues[slotIndex] = clampNormalizedValue(input.morph);
-        this.connection.sendEventOrValue?.(`mseg${slotIndex + 1}Morph`, input.morph);
+        this.editParameter(`mseg${slotIndex + 1}Morph`, input.morph);
         this.markSnapshotDirty();
     }
 
@@ -1636,7 +1655,7 @@ class CosimoBridgeAdapter implements CosimoAdapterPort {
         const slot = this.requireArticulation(articulationId);
         const parameterId = descriptor.articulationParameterId;
         const targetRouteIds = new Set(
-            this.collectValidRoutes(this.acceptedModulationState)
+            this.collectValidRoutes(this.projectedModulationState)
                 .filter((validRoute) => validRoute.targetId === targetId)
                 .map((validRoute) => validRoute.route.id),
         );
@@ -1733,7 +1752,6 @@ class CosimoBridgeAdapter implements CosimoAdapterPort {
             throw new Error(`Rack is missing effect ${knownEffectId}`);
         }
         this.rackState = next;
-        commitLaneStateV2(this.connection, this.rackState);
         this.persistLaneState();
         this.markSnapshotDirty();
     }
@@ -1741,8 +1759,8 @@ class CosimoBridgeAdapter implements CosimoAdapterPort {
     private restoreEffectOrder(effectOrder: ReadonlyArray<EffectModuleId>): void {
         const order = effectOrder.map((effectId) => requireEffectId(effectId));
         // A full-order restore is a serial statement over the DOCUMENT'S own
-        // devices (the starter default is a trio, so eight is no longer the
-        // universal count): the restored list must restate exactly the
+        // devices (the starter default is a trio, so eight is not a universal
+        // count): the restored list must restate exactly the
         // devices this document places, in any order.
         const current = this.projectEffectOrder();
         if (order.length !== current.length
@@ -1761,7 +1779,6 @@ class CosimoBridgeAdapter implements CosimoAdapterPort {
                     this.rackState, laneDeviceIdForEffect(restoredEffectId)) ?? false,
             })),
         };
-        commitLaneStateV2(this.connection, this.rackState);
         this.persistLaneState();
         this.markSnapshotDirty();
     }
@@ -1823,78 +1840,98 @@ class CosimoBridgeAdapter implements CosimoAdapterPort {
         this.markSnapshotDirty();
     }
 
-    private captureMotion(): SourceId | null {
+    private async captureMotion(): ReturnType<CosimoCommands["captureMotion"]> {
         const candidate = this.audition.captureCandidate;
-        if (candidate === null) {
-            return null;
-        }
+        if (!candidate) return ok(null);
         const descriptor = getTargetDescriptor(candidate.targetId);
-        const msegDefinitions = SOURCE_DEFINITIONS.filter((definition) => definition.type === "mseg");
-        const definition = msegDefinitions.find((entry) => !this.visibleSourceIds.has(entry.idRaw));
-        if (definition === undefined) {
-            return null;
-        }
-        this.visibleSourceIds.add(definition.idRaw);
-        this.resetSourceSlot(definition);
+        const definition = SOURCE_DEFINITIONS.find(entry => entry.type === "mseg" && !this.visibleSourceIds.has(entry.idRaw));
+        if (!definition) return ok(null);
         const sourceId = sourceIdFromDefinition(definition);
-        // Reuse the one engine-route creation path. Capture commits at full
-        // target amount because the captured motion is the modulation.
-        const added = this.addMapping({
-            targetId: descriptor.targetId,
-            sourceId,
-            amount: descriptor.modAmount.max,
+        const parsed = this.mappingRoute({ targetId: descriptor.targetId, sourceId, amount: descriptor.modAmount.max }, definition);
+        if (parsed._tag === "err") return parsed;
+        const reset = this.resetSourceBank(this.projectedModulationState, definition);
+        const accepted = await this.editDocuments([
+            { key: MODULATION_STATE_KEY, value: { ...reset, routes: [...reset.routes, parsed.value.route] } },
+            ...this.sourceParameterResets(definition),
+        ]);
+        if (accepted._tag === "err") return accepted;
+        if (!this.sameDocument(accepted.value.scope)) return err(new StateEditRefused(accepted.value.receipt));
+        this.runCommand(() => {
+            this.visibleSourceIds.add(definition.idRaw);
+            this.routeReducers.set(parsed.value.mappingId, "Max");
+            if (this.audition.captureCandidate === candidate) this.audition = {
+                ...this.audition, triggerActive: false, captureCandidate: null,
+                status: `Captured · ${descriptor.label} · ${definition.label}`,
+            };
+            this.markSnapshotDirty();
         });
-        if (added._tag === "err") {
-            throw added.error;
-        }
-        this.audition = {
-            ...this.audition,
-            triggerActive: false,
-            captureCandidate: null,
-            status: `Captured · ${descriptor.label} · ${definition.label}`,
-        };
-        this.markSnapshotDirty();
-        return sourceId;
+        return ok(sourceId);
     }
 
-    private reset(): void {
-        this.parameterValues = createInitialParameterValues();
-        this.articulations = createEmptyArticulationsState();
-        this.rackState = createInitialLaneState();
-        this.compoundSettings = {};
-        this.connectionState = { _tag: "ready" };
-        this.audition = {
-            articulation: "Default",
-            note: "C3",
-            repeat: false,
-            latch: false,
-            triggerActive: false,
-            captureCandidate: null,
-            status: "Waiting for note",
-        };
-        this.activeMidiNote = null;
-        this.visibleSourceIds.clear();
-        for (const sourceId of INITIAL_VISIBLE_SOURCE_IDS) {
-            this.visibleSourceIds.add(sourceId);
+    private async reset(): ReturnType<CosimoCommands["reset"]> {
+        // Reset follows any edits already submitted by this view. Capture its
+        // document before waiting so an old reset cannot target a new preset.
+        const before = this.stateLease.client.getSnapshot();
+        const scope = before.kind === "ready" ? before.state.scope : null;
+        if (!scope) return err(new StateEditRefused({ kind: "rejected", reason: "not-ready" }));
+        if (before.kind === "ready" && before.pendingFields.length > 0) {
+            await new Promise<void>(resolve => {
+                const remove = this.stateLease.client.subscribe(() => {
+                    const snapshot = this.stateLease.client.getSnapshot();
+                    if (snapshot.kind !== "ready" || snapshot.pendingFields.length === 0) { remove(); resolve(); }
+                });
+            });
         }
-        for (let index = 0; index < this.macroValues.length; index += 1) {
-            this.macroValues[index] = clampNormalizedValue(0);
-            this.connection.sendEventOrValue?.(`macro${index + 1}`, 0);
-        }
-        for (let index = 0; index < this.msegMorphValues.length; index += 1) {
-            this.msegMorphValues[index] = clampNormalizedValue(0);
-            this.connection.sendEventOrValue?.(MSEG_MORPH_ENDPOINT_IDS[index], 0);
-        }
-        this.routeReducers.clear();
-        this.mappingCreationOrder = [];
-        this.deletedSourceBackup = null;
+        if (!this.sameDocument(scope)) return err(new StateEditRefused({ kind: "rejected", reason: "stale-scope" }));
         const modulationState = createDefaultModulationState();
-        this.modulationBridge.setState({ ...modulationState, routes: [] });
-        this.persistLaneState();
-        commitLaneStateV2(this.connection, this.rackState);
-        this.persistArticulations();
-        this.uploadAllBoundBaseValues();
-        this.markSnapshotDirty();
+        const rack = createInitialLaneState();
+        const current = this.stateLease.client.getSnapshot();
+        if (current.kind !== "ready") return err(new StateEditRefused({ kind: "rejected", reason: "not-ready" }));
+        const values = new Map<string, number>(Object.entries(current.state.fields).flatMap(([key, field]) =>
+            "metadata" in field && field.metadata ? [[key, field.metadata.defaultValue]] : []));
+        const accepted = await this.editDocuments([
+            { key: MODULATION_STATE_KEY, value: { ...modulationState, routes: [] } },
+            { key: LANE_STATE_KEY, value: rack },
+            { key: ARTICULATIONS_V4_STATE_KEY, value: createEmptyArticulationsState() },
+            ...Array.from(values, ([key, value]) => ({ key, value })),
+        ]);
+        if (accepted._tag === "err") return accepted;
+        if (!this.sameDocument(accepted.value.scope)) return err(new StateEditRefused(accepted.value.receipt));
+        this.runCommand(() => {
+            this.parameterValues = { ...this.parameterValues, ...Object.fromEntries(allTargetDescriptors()
+                .filter(descriptor => descriptor.binding._tag === "unbacked")
+                .map(descriptor => [descriptor.targetId, descriptor.initialValue])) };
+            this.articulations = createEmptyArticulationsState();
+            this.rackState = createInitialLaneState();
+            this.compoundSettings = {};
+            this.connectionState = { _tag: "ready" };
+            this.audition = {
+                articulation: "Default",
+                note: "C3",
+                repeat: false,
+                latch: false,
+                triggerActive: false,
+                captureCandidate: null,
+                status: "Waiting for note",
+            };
+            this.activeMidiNote = null;
+            this.visibleSourceIds.clear();
+            for (const sourceId of INITIAL_VISIBLE_SOURCE_IDS) {
+                this.visibleSourceIds.add(sourceId);
+            }
+            for (let index = 0; index < this.macroValues.length; index += 1) {
+                this.macroValues[index] = clampNormalizedValue(0);
+            }
+            for (let index = 0; index < this.msegMorphValues.length; index += 1) {
+                this.msegMorphValues[index] = clampNormalizedValue(0);
+            }
+            this.routeReducers.clear();
+            this.mappingCreationOrder = [];
+            this.deletedSourceBackup = null;
+
+            this.markSnapshotDirty();
+        });
+        return ok(undefined);
     }
 
     private requireSource(sourceId: SourceId, expectedType?: SourceType): SourceDefinition {
@@ -1910,7 +1947,7 @@ class CosimoBridgeAdapter implements CosimoAdapterPort {
     }
 
     private requireMapping(mappingId: MappingId | string): ValidRoute {
-        const validRoute = this.collectValidRoutes(this.acceptedModulationState)
+        const validRoute = this.collectValidRoutes(this.projectedModulationState)
             .find((candidate) => candidate.route.id === mappingId);
         if (validRoute !== undefined) {
             return validRoute;
@@ -1934,7 +1971,7 @@ class CosimoBridgeAdapter implements CosimoAdapterPort {
     }
 
     private collectArticulationMappingIds(
-        validRoutes = this.collectValidRoutes(this.acceptedModulationState),
+        validRoutes = this.collectValidRoutes(this.projectedModulationState),
     ): ReadonlySet<string> {
         return new Set(validRoutes.flatMap((validRoute) => (
             getModulationArticulationCellIndex(validRoute.route) === null
@@ -1950,93 +1987,27 @@ class CosimoBridgeAdapter implements CosimoAdapterPort {
         return definition.slot - 1;
     }
 
-    private resetSourceSlot(definition: SourceDefinition): void {
-        if (definition.type === "fixed") {
-            return;
-        }
-        const slotIndex = this.slotIndex(definition);
-        if (definition.type === "macro") {
-            this.macroValues[slotIndex] = clampNormalizedValue(0);
-            return;
-        }
-        if (definition.type === "envelope") {
-            this.setEnvelope(
-                sourceIdFromDefinition(definition),
-                slotIndex === 3
-                    ? { name: "Amp Envelope", attackSeconds: 0.01, decaySeconds: 0.001, sustain: 1, releaseSeconds: 0.2 }
-                    : createDefaultEnvelope(slotIndex),
-            );
-            return;
-        }
-        const label = `MSEG ${slotIndex + 1}`;
-        const shape = createDefaultMsegShape(label);
-        this.modulationBridge.setMsegSlotShape(slotIndex, 0, shape);
-        this.modulationBridge.setMsegSlotShape(slotIndex, 1, shape);
-        this.msegMorphValues[slotIndex] = clampNormalizedValue(0);
-        this.connection.sendEventOrValue?.(MSEG_MORPH_ENDPOINT_IDS[slotIndex], 0);
-        this.modulationBridge.setMsegSlotPlayback(slotIndex, createDefaultMsegPlayback());
+    private editParameter(endpoint: string, value: unknown): void {
+        this.editDocument(endpoint, value);
     }
 
-    private uploadAllBoundBaseValues(): void {
-        for (const descriptor of allTargetDescriptors()) {
-            if (descriptor.binding._tag !== "endpoint") {
-                continue;
-            }
-            if (getRackParameterDescriptor(descriptor.binding.endpointId) !== null) {
-                // Effect parameters have no host endpoints: their values ride
-                // the lane document's record uploads (commitLaneState).
-                continue;
-            }
-            const value = this.parameterValues[descriptor.targetId];
-            if (value === undefined) {
-                throw new Error(`Patch base is missing target ${descriptor.targetId}`);
-            }
-            this.connection.sendEventOrValue?.(descriptor.binding.endpointId, descriptor.binding.toEngine(value));
-        }
+    private editDocument(key: string, value: unknown): void {
+        const snapshot = this.stateLease.client.getSnapshot();
+        if (snapshot.kind !== "ready") throw new Error("Cosimo state is not ready.");
+        const fields: Readonly<Record<string, import("../../kit/ui/plugin-state-session").PluginStateFieldSnapshot<unknown>>> = snapshot.state.fields;
+        const field = fields[key];
+        if (!field || field.readiness.kind !== "ready" || !("version" in field)) throw new Error(`Cosimo field ${key} is not ready.`);
+        this.consumeStateEdit(this.stateLease.client.dispatch({ kind: "edit", key, value, expectedVersion: field.version }));
     }
 
     private persistArticulations(): void {
-        this.sendStoredStateValue(
-            ARTICULATIONS_V4_STATE_KEY,
-            JSON.stringify(serializeArticulationsV4(this.articulations)),
-        );
+        this.editDocument(ARTICULATIONS_V4_STATE_KEY, this.articulations);
     }
 
     private persistLaneState(): void {
-        this.sendStoredStateValue(LANE_STATE_KEY, serializeLaneStateV2(this.rackState));
+        this.editDocument(LANE_STATE_KEY, this.rackState);
     }
 
-    private sendStoredStateValue(key: string, value: unknown): void {
-        if (typeof this.connection.sendStoredStateValue !== "function") {
-            return;
-        }
-        const token = stableToken(value);
-        const pendingByToken = this.pendingStoredStateEchoes.get(key) ?? new Map<string, number>();
-        pendingByToken.set(token, (pendingByToken.get(token) ?? 0) + 1);
-        this.pendingStoredStateEchoes.set(key, pendingByToken);
-        this.connection.sendStoredStateValue(key, value);
-    }
-
-    private consumePendingStoredStateEcho(key: string, value: unknown): boolean {
-        const pendingByToken = this.pendingStoredStateEchoes.get(key);
-        if (pendingByToken === undefined) {
-            return false;
-        }
-        const token = stableToken(value);
-        const count = pendingByToken.get(token) ?? 0;
-        if (count === 0) {
-            return false;
-        }
-        if (count === 1) {
-            pendingByToken.delete(token);
-        } else {
-            pendingByToken.set(token, count - 1);
-        }
-        if (pendingByToken.size === 0) {
-            this.pendingStoredStateEchoes.delete(key);
-        }
-        return true;
-    }
 
     private freeArticulationKey(from: number): number {
         const occupied = new Set(this.articulations.slots.map((slot) => slot.key));

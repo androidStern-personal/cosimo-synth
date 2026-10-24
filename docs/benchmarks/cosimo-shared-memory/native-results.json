@@ -1,0 +1,295 @@
+{
+  "scope": "Native only; full production Cosimo, real QuickJS preparation and packed renderer.",
+  "measurements": [
+    {
+      "case": "old-jit",
+      "mode": "jit-paced",
+      "sampleRate": 48000,
+      "blockSize": 128,
+      "tableIndex": 3,
+      "activeTableIndex": 3,
+      "applied": true,
+      "compileMs": 5668.812041,
+      "selectionCallToObservedActiveMs": 1626.376042,
+      "desiredObservedToActiveMs": 1619.546541,
+      "audioDuringLoad": {
+        "blocks": 610,
+        "medianUs": 268.292,
+        "p95Us": 347.04200000000003,
+        "p99Us": 414.917,
+        "maxUs": 493.75,
+        "overBudgetBlocks": 0,
+        "rms": 0.07044587793640956,
+        "nonfinite": 0
+      },
+      "workerMessages": {
+        "send_value:wavetableLoadBegin": {
+          "messages": 1,
+          "jsonBytes": 201
+        },
+        "send_value:wavetableMipFrame": {
+          "messages": 154,
+          "jsonBytes": 19537534
+        }
+      },
+      "jsonInstrumentationMs": 53.23208699999996,
+      "inputPushFailures": 0,
+      "processPeakRSSBytes": 537034752,
+      "steadyRms": 0.01959272576095407,
+      "steadyAudioFile": "build/cosimo_shared_memory_baseline/final/old-jit.f32",
+      "sharedReservations": 0,
+      "sharedReservationBytes": 0,
+      "sharedPointers": [
+        {
+          "input": 0,
+          "reservedAddress": 0,
+          "readerAddress": 0,
+          "reservedBytes": 0,
+          "readerBytes": 0,
+          "sameAllocation": false
+        },
+        {
+          "input": 1,
+          "reservedAddress": 0,
+          "readerAddress": 0,
+          "reservedBytes": 0,
+          "readerBytes": 0,
+          "sameAllocation": false
+        },
+        {
+          "input": 2,
+          "reservedAddress": 0,
+          "readerAddress": 0,
+          "reservedBytes": 0,
+          "readerBytes": 0,
+          "sameAllocation": false
+        }
+      ],
+      "prepMemory": "unavailable: peakRSS is entire process, not JS preparation"
+    },
+    {
+      "case": "new-jit",
+      "mode": "jit-paced",
+      "sampleRate": 48000,
+      "blockSize": 128,
+      "tableIndex": 3,
+      "activeTableIndex": 3,
+      "applied": true,
+      "compileMs": 5529.7345,
+      "selectionCallToObservedActiveMs": 872.632708,
+      "desiredObservedToActiveMs": 868.175917,
+      "audioDuringLoad": {
+        "blocks": 329,
+        "medianUs": 226.5,
+        "p95Us": 269.95799999999997,
+        "p99Us": 317.458,
+        "maxUs": 375.791,
+        "overBudgetBlocks": 0,
+        "rms": 0.07041663980128392,
+        "nonfinite": 0
+      },
+      "workerMessages": {},
+      "jsonInstrumentationMs": 0.0,
+      "inputPushFailures": 0,
+      "processPeakRSSBytes": 535871488,
+      "steadyRms": 0.01959272576095407,
+      "steadyAudioFile": "build/cosimo_shared_memory_baseline/final/new-jit.f32",
+      "sharedReservations": 1,
+      "sharedReservationBytes": 13118496,
+      "sharedPointers": [
+        {
+          "input": 0,
+          "reservedAddress": 52269416448,
+          "readerAddress": 52269416448,
+          "reservedBytes": 13118496,
+          "readerBytes": 13118496,
+          "sameAllocation": true
+        },
+        {
+          "input": 1,
+          "reservedAddress": 52219084800,
+          "readerAddress": 52219084800,
+          "reservedBytes": 13118496,
+          "readerBytes": 13118496,
+          "sameAllocation": true
+        },
+        {
+          "input": 2,
+          "reservedAddress": 52252639232,
+          "readerAddress": 52252639232,
+          "reservedBytes": 13118496,
+          "readerBytes": 13118496,
+          "sameAllocation": true
+        }
+      ],
+      "prepMemory": "unavailable: peakRSS is entire process, not JS preparation"
+    },
+    {
+      "case": "old-aot",
+      "mode": "aot-paced",
+      "sampleRate": 48000,
+      "blockSize": 128,
+      "tableIndex": 3,
+      "activeTableIndex": 3,
+      "applied": true,
+      "compileMs": 53.943167,
+      "selectionCallToObservedActiveMs": 1668.111542,
+      "desiredObservedToActiveMs": 1664.037333,
+      "audioDuringLoad": {
+        "blocks": 626,
+        "medianUs": 270.45799999999997,
+        "p95Us": 356.375,
+        "p99Us": 428.333,
+        "maxUs": 502.91600000000005,
+        "overBudgetBlocks": 0,
+        "rms": 0.07043504441087702,
+        "nonfinite": 0
+      },
+      "workerMessages": {
+        "send_value:wavetableLoadBegin": {
+          "messages": 1,
+          "jsonBytes": 197
+        },
+        "send_value:wavetableMipFrame": {
+          "messages": 154,
+          "jsonBytes": 19536918
+        }
+      },
+      "jsonInstrumentationMs": 54.814161000000006,
+      "inputPushFailures": 0,
+      "processPeakRSSBytes": 221265920,
+      "steadyRms": 0.019592698838672592,
+      "steadyAudioFile": "build/cosimo_shared_memory_baseline/final/old-aot.f32",
+      "sharedReservations": 0,
+      "sharedReservationBytes": 0,
+      "sharedPointers": [
+        {
+          "input": 0,
+          "reservedAddress": 0,
+          "readerAddress": 0,
+          "reservedBytes": 0,
+          "readerBytes": 0,
+          "sameAllocation": false
+        },
+        {
+          "input": 1,
+          "reservedAddress": 0,
+          "readerAddress": 0,
+          "reservedBytes": 0,
+          "readerBytes": 0,
+          "sameAllocation": false
+        },
+        {
+          "input": 2,
+          "reservedAddress": 0,
+          "readerAddress": 0,
+          "reservedBytes": 0,
+          "readerBytes": 0,
+          "sameAllocation": false
+        }
+      ],
+      "prepMemory": "unavailable: peakRSS is entire process, not JS preparation"
+    },
+    {
+      "case": "new-aot",
+      "mode": "aot-paced",
+      "sampleRate": 48000,
+      "blockSize": 128,
+      "tableIndex": 3,
+      "activeTableIndex": 3,
+      "applied": true,
+      "compileMs": 39.453666,
+      "selectionCallToObservedActiveMs": 875.557916,
+      "desiredObservedToActiveMs": 869.092542,
+      "audioDuringLoad": {
+        "blocks": 329,
+        "medianUs": 234.625,
+        "p95Us": 286.959,
+        "p99Us": 406,
+        "maxUs": 444.167,
+        "overBudgetBlocks": 0,
+        "rms": 0.07041933323813183,
+        "nonfinite": 0
+      },
+      "workerMessages": {},
+      "jsonInstrumentationMs": 0.0,
+      "inputPushFailures": 0,
+      "processPeakRSSBytes": 220856320,
+      "steadyRms": 0.019592698838672592,
+      "steadyAudioFile": "build/cosimo_shared_memory_baseline/final/new-aot.f32",
+      "sharedReservations": 1,
+      "sharedReservationBytes": 13118496,
+      "sharedPointers": [
+        {
+          "input": 0,
+          "reservedAddress": 52927922176,
+          "readerAddress": 52927922176,
+          "reservedBytes": 13118496,
+          "readerBytes": 13118496,
+          "sameAllocation": true
+        },
+        {
+          "input": 1,
+          "reservedAddress": 52877590528,
+          "readerAddress": 52877590528,
+          "reservedBytes": 13118496,
+          "readerBytes": 13118496,
+          "sameAllocation": true
+        },
+        {
+          "input": 2,
+          "reservedAddress": 52911144960,
+          "readerAddress": 52911144960,
+          "reservedBytes": 13118496,
+          "readerBytes": 13118496,
+          "sameAllocation": true
+        }
+      ],
+      "prepMemory": "unavailable: peakRSS is entire process, not JS preparation"
+    }
+  ],
+  "audioComparisons": {
+    "jit": {
+      "reference": "build/cosimo_shared_memory_baseline/final/old-jit.f32",
+      "candidate": "build/cosimo_shared_memory_baseline/final/new-jit.f32",
+      "referenceSamples": 32768,
+      "candidateSamples": 32768,
+      "sameLength": true,
+      "maxAbsSampleDifference": 0.0,
+      "rmsDifference": 0.0,
+      "referenceRms": 0.019592725760954142,
+      "candidateRms": 0.019592725760954142,
+      "nonfinite": 0,
+      "referenceSha256": "7a5959ebfe928bc829f053e526047d7658dc85f6dc0683941f143467e303c70e",
+      "candidateSha256": "7a5959ebfe928bc829f053e526047d7658dc85f6dc0683941f143467e303c70e",
+      "exactBytes": true,
+      "capture": "stereo interleavedfloat32,48kHz,16384frames; noteoff+2secondsunpacedsettle,thenMIDI60velocity100",
+      "tolerance": "reported measurements; no invented pass threshold"
+    },
+    "aot": {
+      "reference": "build/cosimo_shared_memory_baseline/final/old-aot.f32",
+      "candidate": "build/cosimo_shared_memory_baseline/final/new-aot.f32",
+      "referenceSamples": 32768,
+      "candidateSamples": 32768,
+      "sameLength": true,
+      "maxAbsSampleDifference": 0.0,
+      "rmsDifference": 0.0,
+      "referenceRms": 0.019592698838672585,
+      "candidateRms": 0.019592698838672585,
+      "nonfinite": 0,
+      "referenceSha256": "df21f1e8a5399b00d6f681e13280a880c28b70194781eae8ab28aaf9f2da933c",
+      "candidateSha256": "df21f1e8a5399b00d6f681e13280a880c28b70194781eae8ab28aaf9f2da933c",
+      "exactBytes": true,
+      "capture": "stereo interleavedfloat32,48kHz,16384frames; noteoff+2secondsunpacedsettle,thenMIDI60velocity100",
+      "tolerance": "reported measurements; no invented pass threshold"
+    }
+  },
+  "limitations": [
+    "One serial quiet-window run per case; no statistical performance claim.",
+    "JSON counting adds 53.232087ms in baseline JIT and54.814161ms in baseline AOT; pipeline time is not corrected by subtracting overlapping work.",
+    "Callback timings exclude scheduling delay and compare process() duration to the 128/48000s audio budget.",
+    "Peak RSS describes the entire process, not JS preparation memory.",
+    "Same-allocation addresses are runtime observations, not stable identifiers.",
+    "This document makes no browser, DAW, device, or listening acceptance claim."
+  ]
+}

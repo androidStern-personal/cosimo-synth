@@ -5,7 +5,7 @@ import {
     canLoadEffectDevServer,
     createEffectPatchView,
     EFFECT_DEV_STATUS_PATH,
-} from "../ui/effects/effect-view-loader.js";
+} from "../ui/view-loader.js";
 
 const originalFetch = globalThis.fetch;
 const originalSetTimeout = globalThis.setTimeout;
@@ -109,8 +109,8 @@ test("effect dev loader accepts a server that serves the requested module", asyn
         kind: "fx-vite-dev-server",
         plugins: [
             {
-                name: "spectral_chord_resonator",
-                sourceModule: "/fx/spectral_chord_resonator/view/source.js",
+                name: "demo_verb",
+                sourceModule: "/fx/demo_verb/view/source.js",
             },
         ],
     });
@@ -119,19 +119,19 @@ test("effect dev loader accepts a server that serves the requested module", asyn
         await canLoadEffectDevServer(
             "http://effect-dev.test/",
             25,
-            "/fx/spectral_chord_resonator/view/source.js",
+            "/fx/demo_verb/view/source.js",
         ),
         true,
     );
 });
 
-test("effect dev loader rejects a stale server from another worktree", async () => {
+test("effect dev loader rejects a dev server that serves a different plugin", async () => {
     installStatusResponse({
         kind: "fx-vite-dev-server",
         plugins: [
             {
-                name: "ott_lab",
-                sourceModule: "/fx/ott_lab/view/source.js",
+                name: "demo_delay",
+                sourceModule: "/fx/demo_delay/view/source.js",
             },
         ],
     });
@@ -140,7 +140,7 @@ test("effect dev loader rejects a stale server from another worktree", async () 
         await canLoadEffectDevServer(
             "http://effect-dev.test/",
             25,
-            "/fx/spectral_chord_resonator/view/source.js",
+            "/fx/demo_verb/view/source.js",
         ),
         false,
     );
@@ -151,8 +151,8 @@ test("effect dev loader rejects malformed status even when port is reachable", a
         kind: "not-the-fx-dev-server",
         plugins: [
             {
-                name: "spectral_chord_resonator",
-                sourceModule: "/fx/spectral_chord_resonator/view/source.js",
+                name: "demo_verb",
+                sourceModule: "/fx/demo_verb/view/source.js",
             },
         ],
     });
@@ -161,7 +161,7 @@ test("effect dev loader rejects malformed status even when port is reachable", a
         await canLoadEffectDevServer(
             "http://effect-dev.test/",
             25,
-            "/fx/spectral_chord_resonator/view/source.js",
+            "/fx/demo_verb/view/source.js",
         ),
         false,
     );
@@ -302,14 +302,14 @@ test("dev path falls back to the packaged module when the probe hangs past its t
     assert.equal(fetchCalls.length, 1);
 });
 
-test("dev path falls back to the packaged module when a stale worktree server answers the probe", async () => {
+test("dev path falls back to the packaged module when the dev server serves a different plugin", async () => {
     installFakeDom();
     const fetchCalls = installStatusResponse({
         kind: "fx-vite-dev-server",
         plugins: [
             {
-                name: "ott_lab",
-                sourceModule: "/fx/ott_lab/view/source.js",
+                name: "demo_delay",
+                sourceModule: "/fx/demo_delay/view/source.js",
             },
         ],
     });

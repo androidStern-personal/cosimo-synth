@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import path from "node:path";
 
-import { loadUIModule } from "./helpers/load_ui_module.mjs";
+import { loadUIModule } from "../kit/tests/helpers/load_ui_module.mjs";
 
 const repoRoot = path.resolve(import.meta.dirname, "..");
 
@@ -14,7 +14,7 @@ async function loadPreferencesModule() {
     return await loadUIModule(repoRoot, "ui/shared/mod-bar-preferences.ts");
 }
 
-test("T42 scales every measured Mod rail geometry value through one 1.10 contract", async () => {
+test("one 1.10 scale reaches every measured Mod rail geometry value", async () => {
     const {
         MOBILE_MOD_RAIL_BASE_GEOMETRY,
         MOBILE_MOD_RAIL_GEOMETRY,
@@ -42,7 +42,7 @@ test("T42 scales every measured Mod rail geometry value through one 1.10 contrac
     assert.ok(Math.abs(afterCollapsedHeight - 167.2) <= 1e-12);
 });
 
-test("T60 derives every floating geometry field from any live coefficient", async () => {
+test("every floating geometry field derives from any live coefficient", async () => {
     const {
         MOBILE_MOD_RAIL_BASE_GEOMETRY,
         scaleMobileModRailGeometry,
@@ -63,7 +63,7 @@ test("T60 derives every floating geometry field from any live coefficient", asyn
     }
 });
 
-test("T60 application preferences round-trip three placements, scale bounds, and parked visibility", async () => {
+test("application preferences round-trip three placements, scale bounds, and parked visibility", async () => {
     const {
         MOD_BAR_MAX_SCALE,
         MOD_BAR_MIN_SCALE,
@@ -174,7 +174,7 @@ test("drawer placement opens downward when there is room and upward when below i
     assert.equal(cramped.extent, 100);
 });
 
-test("T42 default placement fits the full scaled drawer when possible and clamps cramped phones safely", async () => {
+test("default placement fits the full scaled drawer when possible and clamps cramped phones safely", async () => {
     const {
         MOBILE_MOD_RAIL_GEOMETRY,
         MOBILE_MOD_RAIL_SCALE,
@@ -230,18 +230,14 @@ test("T42 default placement fits the full scaled drawer when possible and clamps
     assertInsideBand(narrow, narrowMetrics);
 });
 
-test("stored docks round-trip and legacy right-edge values migrate", async () => {
+test("stored docks round-trip, and a stored dock without an edge is rejected", async () => {
     const { serializeRailDock, parseStoredRailDock } = await loadPerimeterModule();
 
     const dock = { edge: "left", normalizedY: 0.62 };
     assert.deepEqual(parseStoredRailDock(serializeRailDock(dock)), dock);
 
-    // v1 formats stored only the vertical position on the right edge.
-    assert.deepEqual(parseStoredRailDock("0.42"), { edge: "right", normalizedY: 0.42 });
-    assert.deepEqual(
-        parseStoredRailDock(JSON.stringify({ normalizedY: 0.9 })),
-        { edge: "right", normalizedY: 0.9 },
-    );
+    assert.equal(parseStoredRailDock("0.42"), null);
+    assert.equal(parseStoredRailDock(JSON.stringify({ normalizedY: 0.9 })), null);
 
     // Garbage and out-of-domain input yield null (caller applies the default dock).
     assert.equal(parseStoredRailDock(null), null);

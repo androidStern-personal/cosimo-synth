@@ -1,0 +1,328 @@
+import { atom, createStore } from "jotai/vanilla";
+import { isBoundedStateJson, parseHistoryEntry } from "./plugin-state-protocol";
+import { codecThrewMessage, type PluginStateFields } from "./plugin-state-definition";
+import type {
+    PluginStateCommand, PluginStateResult, PluginStateScope, PluginStateSnapshot,
+    PluginStateFieldSnapshot, PluginStateReceipt,
+} from "./plugin-state-session";
+
+/** Platform adapter input after envelope, snapshot, and domain-codec validation. */
+export type PluginStateClientEvent<Fields extends PluginStateFields> =
+    | { readonly kind: "attached"; readonly request: number; readonly scope: PluginStateScope; readonly client: number; readonly revision: number; readonly state: PluginStateSnapshot<Fields> }
+    | { readonly kind: "update"; readonly scope: PluginStateScope; readonly revision: number; readonly state: PluginStateSnapshot<Fields>; readonly receipt?: PluginStateReceipt }
+    /** An update built on a state this GUI does not hold; the GUI attaches again for the whole state. */
+    | { readonly kind: "resync"; readonly scope: PluginStateScope; readonly receipt?: PluginStateReceipt }
+    | { readonly kind: "receipt"; readonly address: PluginStateReceipt["address"]; readonly result: PluginStateResult }
+    | { readonly kind: "reset" | "owner-changed"; readonly scope: PluginStateScope }
+    | { readonly kind: "closed"; readonly reason: string }
+    | { readonly kind: "attach-failed"; readonly request: number; readonly reason: string };
+
+/** Commands echo the assigned client incarnation as a stale-binding guard; native routing owns identity. */
+export type PluginStateClientMessage =
+    | { readonly kind: "attach"; readonly request: number }
+    | { readonly kind: "command"; readonly scope: PluginStateScope; readonly client: number; readonly sequence: number; readonly command: PluginStateCommand };
+
+/** The platform adapter owns parsing and routing; the client owns local drafts. */
+export interface PluginStateClientChannel<Fields extends PluginStateFields> {
+    subscribe(listener: (message: PluginStateClientEvent<Fields>) => void): () => void;
+    send(message: PluginStateClientMessage): void;
+}
+
+/** A sent command without a reply has unknown acceptance after reset/closure. */
+export type PluginStateClientResult = PluginStateResult
+    | { readonly kind: "interrupted"; readonly reason: "reset" | "closed"; readonly acceptance: "unknown" };
+
+/** A disconnected view never masquerades as a ready plugin with default values. */
+export type PluginStateClientSnapshot<Fields extends PluginStateFields> =
+    | { readonly kind: "connecting" }
+    | { readonly kind: "ready"; readonly client: number; readonly state: PluginStateSnapshot<Fields>; readonly pendingFields: readonly string[];
+        /** Fields whose displayed draft differs from the accepted baseline. Never crosses the native protocol. */
+        readonly draftFields: readonly string[] }
+    | { readonly kind: "closed" }
+    | { readonly kind: "failed"; readonly reason: string };
+
+function sameScope(a: PluginStateScope | null, b: PluginStateScope): boolean {
+    return a !== null && a.owner === b.owner && a.document === b.document;
+}
+
+/** Own one GUI connection, its reactive projection, and its pending edits. */
+export function createPluginStateClient<const Fields extends PluginStateFields>(
+    definition: Fields,
+    ports: { readonly channel: PluginStateClientChannel<Fields>; readonly onDefect: (error: unknown) => void },
+) {
+    const store = createStore();
+    const projection = atom<PluginStateClientSnapshot<Fields>>(Object.freeze({ kind: "connecting" }));
+    // React observes this read-only atom with Jotai's own subscription machinery.
+    // Only this module can write the private projection atom.
+    const snapshotAtom = atom(get => get(projection));
+    const getSnapshot = () => store.get(projection);
+    let stopped = false;
+    let attachRequest = 1;
+    let expectedScope: PluginStateScope | undefined;
+    let remove = () => {};
+    let nextSequence = 0;
+    let base: Extract<PluginStateClientSnapshot<Fields>, { readonly kind: "ready" }> | undefined;
+    const drafts = new Map<number, { readonly key: string; readonly value: unknown }>();
+    const tickets = new Map<number, { readonly finish: (result: PluginStateClientResult) => void; readonly pendingFields: readonly string[]; sent: boolean }>();
+    const outgoing: Extract<PluginStateClientMessage, { readonly kind: "command" }>[] = [];
+    let sending = false;
+    const duringAttach = new Map<string, Extract<PluginStateClientEvent<Fields>, { readonly kind: "update" }>>();
+    const scopeKey = (scope: PluginStateScope) => JSON.stringify([scope.owner, scope.document]);
+
+    const retainValues = (incoming: PluginStateSnapshot<Fields>, previous?: PluginStateSnapshot<Fields>): PluginStateSnapshot<Fields> => {
+        const fields: Record<string, PluginStateFieldSnapshot<unknown>> = {};
+        for (const key of Object.keys(definition)) {
+            const next = incoming.fields[key];
+            const before = previous?.fields[key];
+            const field = definition[key];
+            if (!next || !field) continue;
+            const value = "value" in next && before && "value" in before
+                && (field.kind === "stored" ? field.codec.equals(before.value, next.value) : before.value === next.value)
+                ? before.value : "value" in next ? next.value : undefined;
+            fields[key] = Object.freeze("value" in next ? { ...next, value } : next);
+        }
+        // The same change keeps its object across updates, so a view detects a new change by identity.
+        const lastChange = previous?.lastChange && previous.lastChange.revision === incoming.lastChange?.revision ? previous.lastChange : incoming.lastChange;
+        // SAFETY: keys are the definition's keys; parsed adapter values retain
+        // their field type and may only be replaced by an equal prior field value.
+        return Object.freeze({ ...incoming, fields: Object.freeze(fields), ...(lastChange ? { lastChange } : {}) }) as PluginStateSnapshot<Fields>;
+    };
+    /** Parse and encode one outgoing edit value. A throwing author codec rejects only this edit. */
+    const parseOutbound = (key: string, value: unknown): { readonly kind: "ok"; readonly value: unknown; readonly encoded: unknown } | { readonly kind: "error" } => {
+        const field = definition[key];
+        if (field?.kind !== "stored")
+            return typeof value === "number" && Number.isFinite(value) ? { kind: "ok", value, encoded: value } : { kind: "error" };
+        try {
+            const parsed = field.codec.parse(value);
+            return parsed.kind === "ok" ? { kind: "ok", value: parsed.value, encoded: field.codec.encode(parsed.value) } : { kind: "error" };
+        } catch (error) {
+            ports.onDefect(new Error(codecThrewMessage(key), { cause: error }));
+            return { kind: "error" };
+        }
+    };
+    const redraw = () => {
+        if (!base) return;
+        const fields: Record<string, PluginStateFieldSnapshot<unknown>> = { ...base.state.fields };
+        const pendingFields = new Set<string>();
+        const draftFields = new Set<string>();
+        for (const ticket of tickets.values()) {
+            for (const key of ticket.pendingFields) pendingFields.add(key);
+        }
+        const displayedDrafts = new Map<string, unknown>();
+        for (const { key, value } of drafts.values()) displayedDrafts.set(key, value);
+        for (const [key, value] of displayedDrafts) {
+            const field = fields[key];
+            if (field && ("value" in field || (field.readiness.kind === "failed" && field.readiness.reason === "invalid-state"))) {
+                const accepted = base.state.fields[key];
+                const declaration = definition[key];
+                // A held receipt does not make an already accepted value a new
+                // draft. Its current save/preparation errors must stay visible.
+                const differs = !accepted || accepted.readiness.kind !== "ready" || !("value" in accepted)
+                    || (declaration?.kind === "stored" ? !declaration.codec.equals(accepted.value, value)
+                        : !Object.is(accepted.value, value));
+                if (differs) draftFields.add(key);
+                fields[key] = Object.freeze("value" in field ? { ...field, value }
+                    : { ...field, value, version: 0, persistence: Object.freeze({ kind: "not-written" as const }) });
+                pendingFields.add(key);
+            }
+        }
+        // SAFETY: drafts were parsed by their declared field codec before insertion.
+        const state = Object.freeze({ ...base.state, fields: Object.freeze(fields) }) as PluginStateSnapshot<Fields>;
+        store.set(projection, Object.freeze({ ...base, state, pendingFields: Object.freeze([...pendingFields]), draftFields: Object.freeze([...draftFields]) }));
+    };
+    // Receipt ownership must settle without projecting drafts: codec failures
+    // cannot erase known acceptance or interrupt the rest of close's cleanup.
+    const settle = (receipt: PluginStateReceipt) => {
+        if (!base || !sameScope(base.state.scope, receipt.address) || receipt.address.client !== base.client) return false;
+        const ticket = tickets.get(receipt.address.sequence);
+        if (!ticket?.sent) return false;
+        const ownDraft = drafts.get(receipt.address.sequence);
+        if (ownDraft) {
+            for (const [sequence, draft] of drafts) {
+                if (draft.key === ownDraft.key && sequence <= receipt.address.sequence) drafts.delete(sequence);
+            }
+        }
+        tickets.delete(receipt.address.sequence);
+        ticket.finish(receipt.result);
+        return true;
+    };
+    const interrupt = (reason: "reset" | "closed") => {
+        const pending = [...tickets.values()];
+        tickets.clear();
+        drafts.clear();
+        outgoing.length = 0;
+        base = undefined;
+        duringAttach.clear();
+        for (const ticket of pending) ticket.finish(ticket.sent
+            ? { kind: "interrupted", reason, acceptance: "unknown" }
+            : { kind: "rejected", reason: reason === "reset" ? "stale-scope" : "service-closed" });
+    };
+    /** Give up this attachment and its unanswered commands, then attach for the whole current state. */
+    const attachAgain = () => {
+        interrupt("reset");
+        nextSequence = 0;
+        attachRequest++;
+        store.set(projection, Object.freeze({ kind: "connecting" }));
+        ports.channel.send({ kind: "attach", request: attachRequest });
+    };
+    const close = (knownReceipt?: PluginStateReceipt) => {
+        if (stopped) return;
+        stopped = true;
+        remove();
+        if (knownReceipt) settle(knownReceipt);
+        interrupt("closed");
+        store.set(projection, Object.freeze({ kind: "closed" }));
+    };
+    const drain = () => {
+        if (sending) return;
+        sending = true;
+        try {
+            for (let message = outgoing.shift(); message; message = outgoing.shift()) {
+                redraw();
+                const ticket = tickets.get(message.sequence);
+                if (stopped || !ticket || !base || !sameScope(base.state.scope, message.scope) || base.client !== message.client) continue;
+                ticket.sent = true;
+                ports.channel.send(message);
+            }
+        } catch (error) {
+            ports.onDefect(error);
+            close();
+        } finally { sending = false; }
+    };
+    const receive = (message: PluginStateClientEvent<Fields>) => {
+        if (stopped) return;
+        const current = getSnapshot();
+        if (message.kind === "attached") {
+            if (current.kind !== "connecting" || message.request !== attachRequest
+                || (expectedScope && !sameScope(expectedScope, message.scope))) return;
+            expectedScope = message.scope;
+            const pending = duringAttach.get(scopeKey(message.scope));
+            const newest = pending && pending.revision > message.revision ? pending.state : message.state;
+            duringAttach.clear();
+            base = { kind: "ready", client: message.client, state: retainValues(newest), pendingFields: [], draftFields: [] };
+            redraw();
+        } else if (message.kind === "update") {
+            if (current.kind === "connecting") {
+                if (expectedScope && !sameScope(expectedScope, message.scope)) return;
+                const key = scopeKey(message.scope);
+                const pending = duringAttach.get(key);
+                if (!pending || message.revision > pending.revision) duringAttach.set(key, message);
+            } else if (base && sameScope(base.state.scope, message.scope)) {
+                const changed = message.revision > base.state.revision;
+                if (changed) {
+                    base = { ...base, state: retainValues(message.state, base.state) };
+                }
+                const settled = message.receipt && settle(message.receipt);
+                if (changed || settled) redraw();
+            }
+        } else if (message.kind === "receipt") {
+            if (settle(message)) redraw();
+        } else if (message.kind === "closed") close();
+        else if (message.kind === "attach-failed") {
+            if (message.request !== attachRequest || current.kind !== "connecting") return;
+            duringAttach.clear();
+            store.set(projection, Object.freeze({ kind: "failed", reason: message.reason }));
+        } else if (message.kind === "resync") {
+            if (!base || !sameScope(base.state.scope, message.scope)) return;
+            if (message.receipt) settle(message.receipt);
+            attachAgain();
+        } else {
+            if (expectedScope && (message.kind === "reset"
+                ? message.scope.owner !== expectedScope.owner || message.scope.document <= expectedScope.document
+                : sameScope(expectedScope, message.scope))) return;
+            expectedScope = message.scope;
+            attachAgain();
+        }
+    };
+    const receiveSafely = (message: PluginStateClientEvent<Fields>) => {
+        try { receive(message); }
+        catch (error) {
+            ports.onDefect(error);
+            close(message.kind === "update" || message.kind === "resync" ? message.receipt : message.kind === "receipt" ? message : undefined);
+        }
+    };
+    try {
+        remove = ports.channel.subscribe(receiveSafely);
+        if (stopped) remove();
+        else ports.channel.send({ kind: "attach", request: attachRequest });
+    } catch (error) {
+        ports.onDefect(error);
+        close();
+    }
+    return {
+        reactivity: Object.freeze({ store, snapshot: snapshotAtom }),
+        getSnapshot,
+        subscribe(listener: (snapshot: PluginStateClientSnapshot<Fields>) => void): () => void {
+            return store.sub(projection, () => {
+                try { listener(getSnapshot()); } catch (error) { ports.onDefect(error); }
+            });
+        },
+        dispatch(command: PluginStateCommand): Promise<PluginStateClientResult> {
+            try {
+                if (stopped) return Promise.resolve({ kind: "rejected", reason: "service-closed" });
+                if (!base?.state.scope) return Promise.resolve({ kind: "rejected", reason: "not-ready" });
+                const scope = base.state.scope;
+                const client = base.client;
+                let draft: { readonly key: string; readonly value: unknown } | undefined;
+                let outbound = command;
+                if ((command.kind === "undo" || command.kind === "redo") && command.expectedEntry !== undefined) {
+                    const expectedEntry = parseHistoryEntry(command.expectedEntry);
+                    if (!expectedEntry) return Promise.resolve({ kind: "rejected", reason: "invalid-command" });
+                    outbound = { ...command, expectedEntry };
+                }
+                if (command.kind === "edit-many") {
+                    if (!Array.isArray(command.edits) || command.edits.length === 0) return Promise.resolve({ kind: "rejected", reason: "invalid-command" });
+                    const edits = [], keys = new Set<string>();
+                    for (const edit of command.edits) {
+                        const field = definition[edit.key], current = base.state.fields[edit.key];
+                        if (!Object.hasOwn(definition, edit.key) || !field || keys.has(edit.key)) return Promise.resolve({ kind: "rejected", reason: "invalid-command" });
+                        keys.add(edit.key);
+                        if (!current || current.readiness.kind !== "ready" || !("value" in current)) return Promise.resolve({ kind: "rejected", reason: "not-ready" });
+                        const parsed = parseOutbound(edit.key, edit.value);
+                        if (parsed.kind === "error") return Promise.resolve({ kind: "rejected", reason: "invalid-value" });
+                        edits.push({ ...edit, value: parsed.encoded });
+                    }
+                    // A compound action waits for the owner's one coherent
+                    // accepted projection; it never paints partial local drafts.
+                    outbound = { kind: "edit-many", edits, ...(command.history === false ? { history: false as const } : {}),
+                        ...(command.recall === true ? { recall: true as const } : {}),
+                        ...(command.gesture === undefined ? {} : { gesture: command.gesture }) };
+                }
+                if (command.kind === "edit" || command.kind === "recover") {
+                    const field = definition[command.key];
+                    const current = base.state.fields[command.key];
+                    if (!Object.hasOwn(definition, command.key) || !field) return Promise.resolve({ kind: "rejected", reason: "invalid-command" });
+                    if (command.kind === "recover") {
+                        if (command.expectedVersion !== 0 || Object.hasOwn(command, "gesture")) return Promise.resolve({ kind: "rejected", reason: "invalid-command" });
+                        if (field.kind !== "stored" || !current) return Promise.resolve({ kind: "rejected", reason: "not-ready" });
+                        if ("version" in current && current.version !== 0) return Promise.resolve({ kind: "rejected", reason: "stale-version" });
+                        if (current.readiness.kind !== "failed" || current.readiness.reason !== "invalid-state") return Promise.resolve({ kind: "rejected", reason: "not-ready" });
+                    } else if (!current || current.readiness.kind !== "ready" || !("value" in current)) return Promise.resolve({ kind: "rejected", reason: "not-ready" });
+                    const parsed = parseOutbound(command.key, command.value);
+                    if (parsed.kind === "error") return Promise.resolve({ kind: "rejected", reason: "invalid-value" });
+                    draft = { key: command.key, value: parsed.value };
+                    outbound = { ...command, value: parsed.encoded };
+                }
+                if (!isBoundedStateJson({ kind: "command", scope, client, sequence: nextSequence + 1, command: outbound }))
+                    return Promise.resolve({ kind: "rejected", reason: command.kind === "edit" || command.kind === "recover" ? "invalid-value" : "invalid-command" });
+                const sequence = ++nextSequence;
+                if (draft) drafts.set(sequence, draft);
+                return new Promise(finish => {
+                    // Compound edits have no optimistic drafts; their pending
+                    // fields follow the existing ticket's receipt and lifetime.
+                    tickets.set(sequence, { finish, sent: false,
+                        pendingFields: outbound.kind === "edit-many" ? outbound.edits.map(edit => edit.key)
+                            : outbound.kind === "retry" ? [outbound.key] : [],
+                    });
+                    outgoing.push({ kind: "command", scope, client, sequence, command: outbound });
+                    drain();
+                });
+            } catch (error) {
+                ports.onDefect(error);
+                close();
+                return Promise.resolve({ kind: "rejected", reason: "service-closed" });
+            }
+        },
+        stop: () => close(),
+    };
+}

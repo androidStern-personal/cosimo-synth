@@ -5,6 +5,8 @@
     "moduleResolution": "Bundler",
     "jsx": "react-jsx",
     "strict": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
     "skipLibCheck": true,
     "isolatedModules": true,
     "noEmit": true,
@@ -17,10 +19,13 @@
     "fx/**/*.ts",
     "fx/**/*.tsx",
     "kit/index.ts",
+    "kit/ui/style-modules.d.ts",
     "kit/ui/**/*.ts",
     "kit/ui/**/*.tsx",
     "ui/**/*.d.ts",
     "ui/**/*.ts",
-    "ui/**/*.tsx"
+    "ui/**/*.tsx",
+    "kit/examples/**/*.ts",
+    "kit/examples/**/*.tsx"
   ]
 }

@@ -2,6 +2,52 @@
 
 #include <cstdint>
 
+extern "C" {
+__attribute__((import_module("env"), import_name("cmaj_sharedDataAddress")))
+std::uint32_t cmaj_sharedDataAddress (std::int32_t input);
+__attribute__((import_module("env"), import_name("cmaj_sharedDataSize")))
+std::uint32_t cmaj_sharedDataSize (std::int32_t input);
+}
+
+static cosimo::three_osc::bridge::SharedDataView readSharedData (std::int32_t input) noexcept
+{
+    return { reinterpret_cast<const void*> (cmaj_sharedDataAddress (input)), cmaj_sharedDataSize (input) };
+}
+
+// This storage belongs to the companion Wasm instance in one synth's memory.
+static cosimo::three_osc::bridge::SharedTableBlock sharedTableBlock;
+static cosimo::three_osc::bridge::SharedMsegBlock sharedMsegBlock;
+
+extern "C" void CosimoThreeOscillatorRenderer__beginSharedBlock() noexcept
+{
+    sharedTableBlock.refresh (readSharedData);
+    sharedMsegBlock.refresh (readSharedData);
+}
+
+extern "C" std::int32_t CosimoThreeOscillatorRenderer__sharedMsegSerial (
+    std::int32_t input, std::int32_t session) noexcept
+{
+    return sharedMsegBlock.serial (input, session);
+}
+
+extern "C" float CosimoThreeOscillatorRenderer__sampleSharedMseg (
+    std::int32_t input, std::int32_t session, std::int32_t serial, float position) noexcept
+{
+    return sharedMsegBlock.sample (input, session, serial, position);
+}
+
+extern "C" std::int32_t CosimoThreeOscillatorRenderer__renderShared (
+    float* floats, std::int32_t floatCount, std::int32_t* ints, std::int32_t intCount) noexcept
+{
+    return sharedTableBlock.render ({ floats, floatCount }, { ints, intCount });
+}
+
+extern "C" std::int32_t CosimoThreeOscillatorRenderer__updateSharedTables (
+    std::int32_t session, std::int32_t* ints, std::int32_t intCount) noexcept
+{
+    return sharedTableBlock.update (session, { ints, intCount });
+}
+
 extern "C" std::int32_t CosimoThreeOscillatorRenderer__renderAll (
     float* packedFloats, std::int32_t packedFloatCount,
     std::int32_t* packedInts, std::int32_t packedIntCount,

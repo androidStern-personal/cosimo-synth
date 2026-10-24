@@ -12,7 +12,7 @@
   },
   "view": {
     "src": "view/index.js",
-    "devModule": "/fx/enhancer_lite/view/source.ts",
+    "devModule": "/fx/enhancer_lite/view/source.tsx",
     "width": 820,
     "height": 560,
     "resizable": true

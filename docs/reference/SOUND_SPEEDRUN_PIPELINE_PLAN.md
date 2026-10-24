@@ -1,5 +1,7 @@
 # Sound Speedrun Pipeline — Technical Plan
 
+> October 2026: the host-path preset system this document describes was replaced by the kit's presets-as-state (`kit/ui/presets.ts`, `kit/ui/snapshots.ts`). The text below is kept as history.
+
 Status: design complete, not implemented.
 
 Goal: one reusable, entirely browser-side pipeline:

@@ -8,9 +8,14 @@ import {
     readSpeedrunFixture,
 } from "./helpers/speedrun_test_context.mjs";
 
-function createSourceOnlyT78IntakeContext({ patchIO, contractModule, synthIdentity }) {
-    const currentContract = contractModule.buildCanonicalPluginStateContract({
-        effectID: synthIdentity.SYNTH_PRESET_EFFECT_ID,
+/** The Builder Kit preset file that Copy JSON and sound links carry. */
+function presetFile(name, values) {
+    return { kind: "builder-kit.preset", version: 1, plugin: "dev.cosimo.wavetable-synth", name, values };
+}
+
+function createSourceOnlyT78IntakeContext({ patchIO, contractModule }) {
+    const currentContract = contractModule.buildSpeedrunContract({
+        effectID: patchIO.SYNTH_CONTRACT_ID,
         parameters: [
             { endpointID: "voiceEnhancerFrequency", type: "number", min: 20, max: 20_000, defaultValue: 130 },
             { endpointID: "voiceEnhancerQ", type: "number", min: 0.1, max: 10, defaultValue: 0.71 },
@@ -105,7 +110,6 @@ test("bare and browser-state patches complete, clamp, and snap public parameters
             },
             storedState: { "lane.v1": lane },
         },
-        auxiliary: {},
     }, context.options);
 
     assert.equal(result.ok, true, result.error?.message);
@@ -116,40 +120,27 @@ test("bare and browser-state patches complete, clamp, and snap public parameters
     assert.deepEqual(result.value.document.modulation, context.defaults.modulation);
 });
 
-test("current shared-sound envelopes enter through exact contract and strict document parsing", async () => {
+test("synth preset files from sound links and Copy JSON enter through strict document parsing", async () => {
     const [{ patchIO }, context, lane] = await Promise.all([
         loadSpeedrunModules(),
         createCurrentSpeedrunContext(),
         readSpeedrunFixture("effects-lane-split.json"),
     ]);
-    const envelope = {
-        format: "cosimo.soundShare",
-        version: 2,
-        preset: {
-            kind: "cosimo.effectPreset",
-            version: 2,
-            effectID: context.options.currentContract.effectID,
-            presetID: "speedrun.share",
-            label: "Shared Split",
-            contract: context.options.currentContract,
-            parameters: { ...context.defaults.parameters, filterCutoff: 720 },
-            storedState: {
-                "modulation.v6": context.defaults.modulation,
-                "articulations.v4": context.defaults.articulations,
-                "bounce.v1": null,
-            },
-        },
-        supplementalStoredState: { "lane.v1": lane },
-    };
-    const result = patchIO.intakePatch(envelope, context.options);
+    const result = patchIO.intakePatch(presetFile("Shared Split", {
+        filterCutoff: 720,
+        "modulation.v6": context.defaults.modulation,
+        "articulations.v4": context.defaults.articulations,
+        "lane.v1": lane,
+    }), context.options);
 
     assert.equal(result.ok, true, result.error?.message);
     assert.equal(result.value.document.label, "Shared Split");
     assert.equal(result.value.document.parameters.filterCutoff, 720);
+    assert.equal(result.value.document.parameters.filterMix, context.defaults.parameters.filterMix, "missing controls take their defaults");
     assert.deepEqual(result.value.document.lane, lane);
 });
 
-test("speedrun browser and URL-share intake reject old or incomplete T78 lane state", async () => {
+test("speedrun browser and URL-share intake reject incomplete lane state", async () => {
     const modules = await loadSpeedrunModules();
     const { patchIO } = modules;
     const context = createSourceOnlyT78IntakeContext(modules);
@@ -157,24 +148,11 @@ test("speedrun browser and URL-share intake reject old or incomplete T78 lane st
     const missingTrim = structuredClone(context.defaults.lane);
     delete missingTrim.devices["delay#1"].params.delayOutputTrimDb;
 
-    const makeEnvelope = (lane) => ({
-        format: "cosimo.soundShare",
-        version: 2,
-        preset: {
-            kind: "cosimo.effectPreset",
-            version: 2,
-            effectID: context.options.currentContract.effectID,
-            presetID: "speedrun.t78-rejection",
-            label: "Rejected T78 State",
-            contract: context.options.currentContract,
-            parameters: context.defaults.parameters,
-            storedState: {
-                "modulation.v6": context.defaults.modulation,
-                "articulations.v4": context.defaults.articulations,
-                "bounce.v1": null,
-            },
-        },
-        supplementalStoredState: { "lane.v1": lane },
+    const makePresetFile = (lane) => presetFile("Rejected Lane State", {
+        ...context.defaults.parameters,
+        "modulation.v6": context.defaults.modulation,
+        "articulations.v4": context.defaults.articulations,
+        "lane.v1": lane,
     });
 
     for (const lane of [oldVersion, missingTrim]) {
@@ -185,13 +163,13 @@ test("speedrun browser and URL-share intake reject old or incomplete T78 lane st
         assert.equal(browser.ok, false);
         assert.equal(browser.error._tag, "InvalidLane");
 
-        const shared = patchIO.intakePatch(makeEnvelope(lane), context.options);
+        const shared = patchIO.intakePatch(makePresetFile(lane), context.options);
         assert.equal(shared.ok, false);
         assert.equal(shared.error._tag, "InvalidLane");
     }
 });
 
-test("speedrun rejects pre-Polish browser and shared-sound versions whole", async () => {
+test("speedrun rejects old browser states, retired share envelopes, and unknown preset file versions whole", async () => {
     const [{ patchIO }, context] = await Promise.all([
         loadSpeedrunModules(),
         createCurrentSpeedrunContext(),
@@ -200,19 +178,21 @@ test("speedrun rejects pre-Polish browser and shared-sound versions whole", asyn
         format: "cosimo.browserPatchState",
         version: 4,
         sound: { parameters: {}, storedState: {} },
-        auxiliary: {},
     }, context.options);
-    const legacyShare = patchIO.intakePatch({
+    const retiredShare = patchIO.intakePatch({
         format: "cosimo.soundShare",
-        version: 1,
+        version: 2,
         preset: {},
         supplementalStoredState: {},
     }, context.options);
+    const futurePresetFile = patchIO.intakePatch({ ...presetFile("Future", {}), version: 2 }, context.options);
 
     assert.equal(legacyBrowser.ok, false);
     assert.equal(legacyBrowser.error._tag, "UnknownShape");
-    assert.equal(legacyShare.ok, false);
-    assert.equal(legacyShare.error._tag, "MigrationFailed");
+    assert.equal(retiredShare.ok, false);
+    assert.equal(retiredShare.error._tag, "UnknownShape");
+    assert.equal(futurePresetFile.ok, false);
+    assert.equal(futurePresetFile.error._tag, "UnknownShape");
 });
 
 test("intake refuses bounced sounds with the locked studio message", async () => {
@@ -245,6 +225,41 @@ test("corrupt structured state is rejected without partial patch acceptance", as
     assert.equal(result.error._tag, "InvalidModulation");
 });
 
+test("current-patch capture reads stored state only from the values of Cmajor's full reply", async () => {
+    const [{ patchIO }, context] = await Promise.all([
+        loadSpeedrunModules(),
+        createCurrentSpeedrunContext(),
+    ]);
+    const captureWithReply = (reply) => {
+        const listeners = new Map();
+        return patchIO.captureCurrentPatch({
+            addParameterListener(endpointID, listener) {
+                listeners.set(endpointID, listener);
+            },
+            removeParameterListener(endpointID) {
+                listeners.delete(endpointID);
+            },
+            requestParameterValue(endpointID) {
+                listeners.get(endpointID)?.(context.defaults.parameters[endpointID]);
+            },
+            requestFullStoredState(callback) {
+                callback(reply);
+            },
+        }, context.options);
+    };
+
+    // A saved value beside `values` instead of inside it is not Cmajor's reply,
+    // so this unreadable modulation document is never read.
+    const [besideValues, empty] = await Promise.all([
+        captureWithReply({ parameters: [], "modulation.v6": "not a modulation document" }),
+        captureWithReply({ parameters: [], values: {} }),
+    ]);
+
+    assert.equal(besideValues.ok, true, besideValues.error?.message);
+    assert.equal(empty.ok, true, empty.error?.message);
+    assert.deepEqual(besideValues.value.document, empty.value.document);
+});
+
 test("current-patch capture reads every parameter and full stored state without writes", async () => {
     const [{ patchIO }, context] = await Promise.all([
         loadSpeedrunModules(),
@@ -266,7 +281,8 @@ test("current-patch capture reads every parameter and full stored state without 
             callback({
                 values: {
                     ...barePatchFromDefaults(context.defaults).storedState,
-                    "effects.presets.v2": { userPresets: {} },
+                    activePreset: null,
+                    activeSnapshot: null,
                 },
             });
         },

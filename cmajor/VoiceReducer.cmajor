@@ -46,8 +46,8 @@ namespace wt
     //
     // ADR-012: "Every continuous creative parameter owned by a rack module is eligible
     // to be a modulation destination, including Mix/Wet." Established identities
-    // remain 0..35; T50 appends Flanger Base Delay and both split crossovers at
-    // 36..38. T78 appends one Output Trim destination per editable effect type at
+    // are append-only: 0..35, then Flanger Base Delay and both split crossovers at
+    // 36..38, then one Output Trim destination per editable effect type at
     // 39..46. Rack order, enabled state and discrete mode selectors are deliberately
     // absent - they are not continuous, and the glossary's "Routable Effect Parameter"
     // excludes them in v1. Hiding a destination from the v1 UI is a UI-surface
@@ -77,7 +77,7 @@ namespace wt
     let rackModTargetChorusTone                 = 14;
     let rackModTargetChorusFeedback             = 15;
     let rackModTargetChorusRingAmount           = 16;
-    let rackModTargetChorusRingFineSemitones    = 17;
+    let rackModTargetChorusRingFrequencySemitones = 17;
     let rackModTargetFlangerRate                = 18;
     let rackModTargetFlangerDepth               = 19;
     let rackModTargetFlangerFeedback            = 20;
@@ -129,7 +129,7 @@ namespace wt
     let rackModTargetLaneChorusTone = rackModStaticTargetCount + rackModTargetChorusTone;
     let rackModTargetLaneChorusFeedback = rackModStaticTargetCount + rackModTargetChorusFeedback;
     let rackModTargetLaneChorusRingAmount = rackModStaticTargetCount + rackModTargetChorusRingAmount;
-    let rackModTargetLaneChorusRingFineSemitones = rackModStaticTargetCount + rackModTargetChorusRingFineSemitones;
+    let rackModTargetLaneChorusRingFrequencySemitones = rackModStaticTargetCount + rackModTargetChorusRingFrequencySemitones;
     let rackModTargetLaneFlangerRate = rackModStaticTargetCount + rackModTargetFlangerRate;
     let rackModTargetLaneFlangerDepth = rackModStaticTargetCount + rackModTargetFlangerDepth;
     let rackModTargetLaneFlangerFeedback = rackModStaticTargetCount + rackModTargetFlangerFeedback;

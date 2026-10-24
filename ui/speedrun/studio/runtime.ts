@@ -1,11 +1,9 @@
-import { buildCanonicalPluginStateContract } from "../../shared/effects/effect-state-contract";
+import { buildSpeedrunContract } from "../contract";
 import { ARTICULATIONS_V4_STATE_KEY } from "../../shared/articulation-image";
-import { LANE_STATE_KEY } from "../../shared/lane-state";
 import { MODULATION_STATE_KEY } from "../../shared/modulation";
-import { SYNTH_PRESET_EFFECT_ID } from "../../shared/effects/synth-preset-identity";
 import { getFactoryBankCatalogValue } from "../../shared/wavetable-bank";
 import type { WavetableCatalog } from "../recipe";
-import type { ParameterEndpointMetadata, PatchIntakeOptions } from "../patch-io";
+import { SYNTH_CONTRACT_ID, type ParameterEndpointMetadata, type PatchIntakeOptions } from "../patch-io";
 import { SpeedrunStudioError, studioError } from "./errors";
 
 type OfflineSynthClass = {
@@ -62,8 +60,9 @@ async function loadCatalog(webRootURL: URL): Promise<WavetableCatalog> {
 }
 
 /** Resolve the generated performer and derive the live contract instead of pinning a stale endpoint list. */
-export async function loadSpeedrunStudioRuntime(): Promise<SpeedrunStudioRuntime> {
-    const webRootURL = resolveSpeedrunWebRootURL();
+export async function loadSpeedrunStudioRuntime(
+    webRootURL = resolveSpeedrunWebRootURL(),
+): Promise<SpeedrunStudioRuntime> {
     const engineModuleURL = new URL("cmaj_Cosimo_Synth.offline.js", webRootURL);
     const [Synth, catalog] = await Promise.all([
         loadSynthClass(engineModuleURL),
@@ -76,13 +75,13 @@ export async function loadSpeedrunStudioRuntime(): Promise<SpeedrunStudioRuntime
             : null;
         return endpoint.purpose === "parameter" && annotation?.hidden !== true;
     });
-    const currentContract = buildCanonicalPluginStateContract({
-        effectID: SYNTH_PRESET_EFFECT_ID,
+    const currentContract = buildSpeedrunContract({
+        effectID: SYNTH_CONTRACT_ID,
         parameters: visibleParameters,
         storedState: [
-            { key: MODULATION_STATE_KEY, schemaVersion: 6, required: true },
-            { key: ARTICULATIONS_V4_STATE_KEY, schemaVersion: 4, required: true },
-            { key: "bounce.v1", schemaVersion: 1, required: true },
+            { key: MODULATION_STATE_KEY, schemaVersion: 6 },
+            { key: ARTICULATIONS_V4_STATE_KEY, schemaVersion: 4 },
+            { key: "bounce.v1", schemaVersion: 1 },
         ],
     });
     if (currentContract.parameters.length === 0) {

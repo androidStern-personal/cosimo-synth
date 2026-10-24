@@ -1,0 +1,85 @@
+--- build/web/cmaj_api/cmaj-audio-worklet-helper.js
++++ audit/assets/cmaj_api/cmaj-audio-worklet-helper.js
+@@ -242,8 +242,18 @@
+                 for (const imported of WebAssembly.Module.imports (sharedData.module))
+                     if (imported.kind === "function" && imported.module === "env" && Object.hasOwn (available, imported.name))
+                         externalFunctions[imported.name] = available[imported.name];
++                const auditLast = new Array(sharedData.configuration.inputCount);
++                const auditAddress = input => {
++                    const address = reader.exports.address(input), byteLength = reader.exports.byteSize(input);
++                    if (!auditLast[input] || auditLast[input].address !== address || auditLast[input].byteLength !== byteLength) {
++                        auditLast[input] = {address,byteLength};
++                        this.port.postMessage({type:'shared-pointer-audit',kind:'renderer-read',input,address,byteLength});
++                    }
++                    return address;
++                };
+                 initialiseOptions = { memory: sharedData.configuration.memory, module: sharedData.module, externalFunctions,
+-                    externalModules, sharedDataAddress: reader.exports.address, sharedDataSize: reader.exports.byteSize };
++                    externalModules, sharedDataAddress: auditAddress, sharedDataSize: reader.exports.byteSize,
++                    auditMemory: detail => this.port.postMessage({type:'shared-pointer-audit',kind:'memory-identity',...detail}) };
+             }
+             wrapper.initialise (sessionID, sampleRate, initialiseOptions)
+                 .then (() => { if (! this.stopped) this.initialisePatch (wrapper, initialValueOverrides, stateChannelToken); })
+@@ -886,6 +896,9 @@
+             }
+         });
+         this.#initialisingAudioNode = node;
++        node.port.addEventListener('message', event => {
++            if(event.data?.type==='shared-pointer-audit') (globalThis.__sharedAudit ??= []).push(event.data);
++        });
+
+         const waitUntilWorkletInitialised = async () =>
+         {
+@@ -933,6 +946,7 @@
+         }
+
+         this.audioNode = node;
++
+         this.#initialisingAudioNode = undefined;
+
+         node.port.addEventListener ("message", e =>
+@@ -1256,7 +1270,17 @@
+             if (this.#sharedDataHost && this.manifest.sharedData.format === "bytes")
+             {
+                 this.#sharedDataPreparation = createSharedDataPreparation (this.#sharedDataHost, this.manifest.sharedData.inputCount);
+-                worker.sharedData = this.#sharedDataPreparation.api;
++                const actual = this.#sharedDataPreparation.api;
++                worker.sharedData = Object.freeze({
++                    reserve: (input, byteLength) => {
++                        const destination = actual.reserve(input,byteLength);
++                        (globalThis.__sharedAudit ??= []).push({kind:'reservation',input,id:destination.id,
++                            address:destination.byteOffset,byteLength:destination.byteLength,
++                            bufferIsConfiguredMemory:destination.buffer===this.#sharedDataHost.readerConfiguration.memory.buffer});
++                        return destination;
++                    },
++                    commit: id => actual.commit(id), cancel: id => actual.cancel(id)
++                });
+                 this.#sharedDataPoll = setInterval (() => this.#sharedDataPreparation?.drain(), 10);
+             }
+             else if (this.#sharedDataHost)
+--- build/web/cmaj_Cosimo_Synth.js
++++ audit/assets/cmaj_Cosimo_Synth.js
+@@ -37721,15 +37721,20 @@
+         const requirements = this.getMemoryRequirements();
+         const memory = options.memory ?? new WebAssembly.Memory({initial:Math.ceil(this.getRuntimeMemoryRequirements().minimumBytes/65536),maximum:requirements.maximumPages,shared:true});
+         const modules = options.externalModules ?? await this.compileExternalModules();
+-        const renderer = new WebAssembly.Instance(modules[0], {env:{memory,
++        const rendererImports = {env:{memory,
+             cmaj_sharedDataAddress: options.sharedDataAddress ?? (() => 0),
+-            cmaj_sharedDataSize: options.sharedDataSize ?? (() => 0)}});
++            cmaj_sharedDataSize: options.sharedDataSize ?? (() => 0)}};
++        const renderer = new WebAssembly.Instance(modules[0], rendererImports);
++        options.auditMemory?.({rendererImportUsesConfiguredMemory:rendererImports.env.memory===options.memory});
+         renderer.exports._initialize?.();
+         const module = options.module ?? await this.compile();
+         const externalFunctions = {...options.externalFunctions};
+         for (const imported of WebAssembly.Module.imports(module))
+             if (imported.kind === 'function' && typeof renderer.exports[imported.name] === 'function')
+                 externalFunctions[imported.name] = renderer.exports[imported.name];
+-        return super.initialise(sessionID, frequency, {...options,memory,module,externalFunctions});
++        return super.initialise(sessionID, frequency, {...options,memory,module,externalFunctions}).then(result=>{
++            options.auditMemory?.({cmajorByteViewUsesConfiguredMemory:this.byteMemory.buffer===options.memory.buffer});
++            return result;
++        });
+     }
+ }

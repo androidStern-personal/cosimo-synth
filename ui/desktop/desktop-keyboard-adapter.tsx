@@ -207,7 +207,7 @@ export function KeyboardDock({
     /**
      * Observes the user's own key presses (the element's note-down/note-up
      * events), which host/DAW playback never dispatches — the intentional-note
-     * feed for last-played-pitch bookkeeping (T10B).
+     * feed for last-played-pitch bookkeeping.
      */
     onIntentionalNote?: (status: number, noteNumber: number, velocity: number) => void;
 }) {

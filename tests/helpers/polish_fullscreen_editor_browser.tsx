@@ -147,7 +147,7 @@ function PolishFullScreenEditorTestHost({
     );
 }
 
-/** Mount the controlled T75 surface without supplying a compact Polish implementation. */
+/** Mount the controlled full-page Polish surface without supplying a compact Polish implementation. */
 export function mountPolishFullScreenEditorTest(
     initialModBarPlacement: ModBarPlacement = "floating",
 ): void {

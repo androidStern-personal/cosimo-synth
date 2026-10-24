@@ -22,7 +22,7 @@ import {
     type PointerEvent as ReactPointerEvent,
 } from "react";
 
-import { PARAMETER_GESTURE_LONG_PRESS_MS } from "./parameter-gesture";
+import { PARAMETER_GESTURE_LONG_PRESS_MS } from "../../kit/ui/parameter-gesture";
 
 import {
     MODULATION_SOURCE_OPTIONS,
@@ -35,6 +35,7 @@ import {
     type ParameterEntryCommit,
     type ParameterEntrySpec,
 } from "./parameter-value-entry";
+import { clearUiTimeout, uiTimeout } from "./ui-timers";
 
 export const PARAMETER_MENU_ITEMS = [
     { action: "edit-values", label: "Edit values…" },
@@ -134,7 +135,7 @@ export function useLongPressParameterMenu(
 
     const clearPress = useCallback(() => {
         if (pressRef.current !== null) {
-            window.clearTimeout(pressRef.current.timer);
+            clearUiTimeout(pressRef.current.timer);
             pressRef.current = null;
         }
     }, []);
@@ -152,7 +153,7 @@ export function useLongPressParameterMenu(
             pointerId,
             startX: clientX,
             startY: clientY,
-            timer: window.setTimeout(() => {
+            timer: uiTimeout(() => {
                 pressRef.current = null;
                 openMenu({ ...buildRequest(), clientX, clientY });
             }, PARAMETER_GESTURE_LONG_PRESS_MS),

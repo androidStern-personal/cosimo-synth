@@ -1,7 +1,5 @@
 export type VideoBounceContainer = "auto" | "mp4" | "webm";
 
-export type VideoBounceQuality = "very-low" | "low" | "medium" | "high";
-
 export type VideoBouncePrepared = {
     readonly label: string;
     readonly sectionCount: number;
@@ -28,7 +26,6 @@ export type IntegratedVideoBounceSession = {
     renderAudio(onProgress: (progress: number) => void): Promise<VideoBounceAudioArtifact>;
     renderVideo(options: {
         readonly container: VideoBounceContainer;
-        readonly quality: VideoBounceQuality;
         readonly onProgress: (progress: number) => void;
     }): Promise<VideoBounceVideoArtifact>;
     cancel(): void;

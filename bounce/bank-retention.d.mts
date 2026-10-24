@@ -30,13 +30,10 @@ export type BounceBankRetirementResult = {
 /** Web Lock name serializing browser bank garbage collection. */
 export const BOUNCE_BANK_GC_LOCK_NAME: "cosimo-bounce-bank-gc-v1";
 
-/** Compute all bank digests rooted by live, preset, and in-flight state. */
+/** Compute all bank digests rooted by the live patch and in-flight state saves. */
 export function collectBounceBankRetentionRoots(options: {
     readonly livePatchDocument: unknown;
-    readonly userPresetState?: unknown;
-    readonly userPresetStateKnown?: boolean;
     readonly inFlightPatchDocuments?: ReadonlyArray<unknown>;
-    readonly hasExternalPresetFileStore?: boolean;
 }): BounceBankRetentionRoots;
 
 /** Delete only proven-unreachable banks from an overwritten DSP slot. */
@@ -46,15 +43,5 @@ export function retireSupersededBounceBanks(options: {
     readonly dspOverwrittenDigests?: ReadonlyArray<string>;
     readonly lockManager?: LockManager;
     readonly livePatchDocument: unknown;
-    readonly userPresetState?: unknown;
-    readonly userPresetStateKnown?: boolean;
     readonly inFlightPatchDocuments?: ReadonlyArray<unknown>;
-    readonly hasExternalPresetFileStore?: boolean;
 }): Promise<BounceBankRetirementResult>;
-
-/** Focused parser helpers exposed for the plain-Node retention tests. */
-export const bounceBankRetentionInternals: Readonly<{
-    addBounceDocumentRoots(document: unknown, digests: Set<string>): void;
-    scanUserPresetState(value: unknown, digests: Set<string>): void;
-    validateStoreEntries(entries: unknown): ReadonlyArray<BounceBankStoreEntry>;
-}>;

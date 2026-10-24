@@ -2,6 +2,7 @@
 
 #include <array>
 #include <cstdint>
+#include "../../kit/native/shared_data/SharedInputBlock.h"
 
 namespace cosimo::three_osc::bridge
 {
@@ -67,6 +68,9 @@ constexpr std::int32_t noteBatchDrainRemainingOffset
     = unisonStackModeOffset + voiceOscillatorCount;
 constexpr std::int32_t packedIntCount
     = noteBatchDrainRemainingOffset + noteBatchCount;
+constexpr std::int32_t sharedTableGenerationOffset = packedIntCount;
+constexpr std::int32_t sharedTableIndexOffset = sharedTableGenerationOffset + 3;
+constexpr std::int32_t sharedPackedIntCount = sharedTableIndexOffset + 3;
 
 constexpr std::int32_t samplesPerPackedFrameSet = 12811;
 constexpr std::int32_t maximumFrameCount = 256;
@@ -77,6 +81,44 @@ constexpr std::int32_t tableChunkSampleCount
     = (tableSlotSampleCount + tableChunkCountPerSlot - 1) / tableChunkCountPerSlot;
 constexpr std::int32_t tablePoolChunkCount = 4 * tableChunkCountPerSlot;
 using TableChunkSlices = std::array<Slice<std::int32_t>, tablePoolChunkCount>;
+
+// The host owns these immutable bytes for the entire render block. The renderer
+// reads the exact allocation prepared by JavaScript, without retaining it.
+using SharedDataView = builder_kit::shared_data::View;
+using SharedDataReader = builder_kit::shared_data::Reader;
+// Borrowed only for one host render scope. Refresh before rendering a new scope;
+// sample rendering never calls back into shared-storage lookup or validation.
+class SharedTableBlock
+{
+public:
+    void refresh (SharedDataReader) noexcept;
+    std::int32_t update (std::int32_t dspSession, Slice<std::int32_t> packedInts) const noexcept;
+    std::int32_t render (Slice<float> packedFloats, Slice<std::int32_t> packedInts) const noexcept;
+
+private:
+    struct Table
+    {
+        const std::int32_t* samples = nullptr;
+        std::int32_t session = 0, generation = 0, index = 0, frames = 0;
+    };
+    builder_kit::shared_data::InputBlock<Table, 3> tables;
+};
+
+class SharedMsegBlock
+{
+public:
+    void refresh (SharedDataReader) noexcept;
+    std::int32_t serial (std::int32_t input, std::int32_t session) const noexcept;
+    float sample (std::int32_t input, std::int32_t session, std::int32_t serial, float position) const noexcept;
+
+private:
+    struct Curve
+    {
+        const std::int32_t* samples = nullptr;
+        std::int32_t session = 0, serial = 0;
+    };
+    builder_kit::shared_data::InputBlock<Curve, 6> curves;
+};
 
 std::int32_t renderAllChunks (Slice<float> packedFloats,
                               Slice<std::int32_t> packedInts,

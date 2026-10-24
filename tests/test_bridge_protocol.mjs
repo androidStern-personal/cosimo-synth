@@ -4,7 +4,8 @@ import path from "node:path";
 
 import fc from "fast-check";
 
-import { loadUIModule } from "./helpers/load_ui_module.mjs";
+import { loadUIModule } from "../kit/tests/helpers/load_ui_module.mjs";
+import { loadChannel, waitForModulation } from "./helpers/modulation_state_fixture.mjs";
 
 if (typeof globalThis.HTMLElement === "undefined") {
     globalThis.HTMLElement = class HTMLElementStub {
@@ -80,11 +81,7 @@ function articulationState(slots = []) {
 }
 
 async function waitForHydration(adapter) {
-    for (let attempt = 0; attempt < 30; attempt += 1) {
-        if (adapter.getSnapshot().connection._tag !== "connecting") return;
-        await Promise.resolve();
-    }
-    assert.fail("adapter did not finish hydration");
+    await waitForModulation(() => adapter.getSnapshot().connection._tag !== "connecting");
 }
 
 async function flushMicrotasks(turns = 16) {
@@ -98,7 +95,7 @@ async function createHarness({ storedState = {}, parameterValues = {} } = {}) {
     const connection = new loaded.mock.MockPatchConnection({
         name: "Cosimo bridge protocol test",
         version: 1,
-    });
+    }, { loadStateChannel: loadChannel });
     for (const [endpointID, value] of Object.entries(parameterValues)) {
         connection.setParameterValue(endpointID, value);
     }
@@ -223,11 +220,12 @@ test("a bound base edit reaches Cmajor without rebuilding articulation snapshots
         layer: { _tag: "patchBase" },
     });
 
+    await waitForModulation(() => harness.connection.getDebugSnapshot().parameterValues.filterQ === resonanceDescriptor.binding.toEngine(0.73));
     const debug = harness.connection.getDebugSnapshot();
-    assert.deepEqual(
-        debug.sentMessages.filter((message) => message.endpointID === "filterQ"),
+    assert.equal(debug.parameterValues.filterQ, resonanceDescriptor.binding.toEngine(0.73), "the native parameter receiver applied the owner publication");
+    assert.deepEqual(debug.sentMessages.filter(message => message.endpointID === "filterQ"),
         [{ endpointID: "filterQ", value: resonanceDescriptor.binding.toEngine(0.73) }],
-    );
+        "the native parameter receiver applied exactly one owner publication");
     assert.deepEqual(
         debug.sentMessages.filter((message) => message.endpointID === "articulationSnapshot"),
         [],
@@ -251,7 +249,7 @@ test("mapping commands project product source ids and target-unit amount scaling
     const harness = await createHarness();
     t.after(() => harness.adapter.dispose());
 
-    const cutoffMappingId = expectOk(harness.adapter.commands.addMapping({
+    const cutoffMappingId = expectOk(await harness.adapter.commands.addMapping({
         targetId: "voice-filter.cutoff",
         sourceId: "envelope-1",
     }), "add cutoff mapping");
@@ -266,14 +264,16 @@ test("mapping commands project product source ids and target-unit amount scaling
     );
 
     harness.adapter.commands.setMappingAmount(cutoffMappingId, 3, { _tag: "patchBase" });
+    await new Promise(resolve => setImmediate(resolve));
     route = storedModulationState(harness).routes.find((candidate) => candidate.id === cutoffMappingId);
     assert.equal(route.amount, 3);
 
-    const percentMappingId = expectOk(harness.adapter.commands.addMapping({
+    const percentMappingId = expectOk(await harness.adapter.commands.addMapping({
         targetId: "oscA.warpAmount",
         sourceId: "velocity",
     }), "add percent mapping");
     harness.adapter.commands.setMappingAmount(percentMappingId, 50, { _tag: "patchBase" });
+    await new Promise(resolve => setImmediate(resolve));
     route = storedModulationState(harness).routes.find((candidate) => candidate.id === percentMappingId);
     assert.equal(route.amount, 0.5, "percent target amount must divide by 100");
 });
@@ -285,7 +285,7 @@ test("mapping amount conversion roundtrips for every modulatable target", async 
         .filter((descriptor) => descriptor.modulationTargetKind !== null);
 
     for (const descriptor of descriptors) {
-        const mappingId = expectOk(harness.adapter.commands.addMapping({
+        const mappingId = expectOk(await harness.adapter.commands.addMapping({
             targetId: descriptor.targetId,
             sourceId: "velocity",
         }), `add ${descriptor.targetId} mapping`);
@@ -297,6 +297,7 @@ test("mapping amount conversion roundtrips for every modulatable target", async 
             descriptor.modAmount.min,
             { _tag: "patchBase" },
         );
+        await new Promise(resolve => setImmediate(resolve));
         let storedRoute = storedModulationState(harness).routes
             .find((route) => route.id === mappingId);
         assert.equal(
@@ -309,6 +310,7 @@ test("mapping amount conversion roundtrips for every modulatable target", async 
             descriptor.modAmount.max,
             { _tag: "patchBase" },
         );
+        await new Promise(resolve => setImmediate(resolve));
         storedRoute = storedModulationState(harness).routes
             .find((route) => route.id === mappingId);
         assert.equal(
@@ -316,15 +318,15 @@ test("mapping amount conversion roundtrips for every modulatable target", async 
             routeBounds.max,
             `${descriptor.targetId}: positive spec edge must reach the positive route edge`,
         );
-        fc.assert(
-            fc.property(
+        await fc.assert(
+            fc.asyncProperty(
                 fc.double({
                     min: descriptor.modAmount.min,
                     max: descriptor.modAmount.max,
                     noNaN: true,
                     noDefaultInfinity: true,
                 }),
-                (amount) => {
+                async (amount) => {
                     harness.adapter.commands.setMappingAmount(mappingId, amount, { _tag: "patchBase" });
                     const projected = harness.adapter.getSnapshot().patch.mappings
                         .find((mapping) => mapping.id === mappingId);
@@ -333,11 +335,12 @@ test("mapping amount conversion roundtrips for every modulatable target", async 
                         Math.abs(projected.amount - amount) <= 1e-9,
                         `${descriptor.targetId}: ${amount} roundtripped as ${projected.amount}`,
                     );
+                    await new Promise(resolve => setImmediate(resolve));
                 },
             ),
             { numRuns: 50 },
         );
-        harness.adapter.commands.removeMapping(mappingId);
+        await harness.adapter.commands.removeMapping(mappingId);
     }
 });
 
@@ -347,81 +350,51 @@ test("macro value events and macro-name persistence use their engine protocols",
     harness.connection.clearDebugLog();
 
     harness.adapter.commands.setMacroValue("macro-1", 0.31);
-    assert.deepEqual(
-        harness.connection.getDebugSnapshot().sentMessages,
-        [{ endpointID: "macro1", value: 0.31 }],
-    );
+    await waitForModulation(() => harness.connection.getDebugSnapshot().parameterValues.macro1 === 0.31);
+    assert.equal(harness.connection.getDebugSnapshot().parameterValues.macro1, 0.31);
+    assert.deepEqual(harness.connection.getDebugSnapshot().sentMessages.filter(message => message.endpointID === "macro1"),
+        [{ endpointID: "macro1", value: 0.31 }]);
 
     harness.adapter.commands.renameMacro("macro-1", "Shimmer");
+    await new Promise(resolve => setImmediate(resolve));
     assert.equal(storedModulationState(harness).macroNames[0], "Shimmer");
 });
 
 test("articulation add, override, and clear persist v4 for sole-owner worker publication", async (t) => {
     const harness = await createHarness();
     t.after(() => harness.adapter.dispose());
+    const uploads = () => harness.connection.getDebugSnapshot().sentMessages.filter(message => message.endpointID === "articulationSnapshot");
+    const settled = () => waitForModulation(() => uploads().length > 0);
     harness.connection.clearDebugLog();
-
     const articulationId = expectOk(harness.adapter.commands.addArticulation(), "add articulation");
+    assert.deepEqual(uploads(), [], "the GUI does not upload a runtime image");
+    await settled();
     let stored = parseStoredArticulations(harness);
-    let slot = stored.slots.find((candidate) => candidate.id === articulationId);
+    let slot = stored.slots.find(candidate => candidate.id === articulationId);
     assert.notEqual(slot, undefined);
     const selector = slot.runtimeSlot;
-    assert.deepEqual(
-        harness.connection.getDebugSnapshot().sentMessages
-            .filter((message) => message.endpointID === "articulationSnapshot"),
-        [],
-        "the adapter only persists the declarative change",
-    );
-    await flushMicrotasks();
-    assert.deepEqual(
-        harness.connection.getDebugSnapshot().sentMessages
-            .filter((message) => message.endpointID === "articulationSnapshot")
-            .map((message) => message.value.selectorA),
-        [selector],
-    );
+    assert.deepEqual(uploads().map(message => message.value.selectorA), [selector]);
 
     harness.connection.clearDebugLog();
     const resonanceDescriptor = harness.descriptors.getTargetDescriptor(
-        expectOk(harness.descriptors.parseTargetId("voice-filter.resonance"), "parse resonance target"),
-    );
-    harness.adapter.commands.setParameter({
-        targetId: "voice-filter.resonance",
-        value: 0.42,
-        layer: { _tag: "articulationOverride", articulationId },
-    });
+        expectOk(harness.descriptors.parseTargetId("voice-filter.resonance"), "parse resonance target"));
+    harness.adapter.commands.setParameter({ targetId: "voice-filter.resonance", value: 0.42,
+        layer: { _tag: "articulationOverride", articulationId } });
+    assert.deepEqual(uploads(), []);
+    await settled();
     stored = parseStoredArticulations(harness);
-    slot = stored.slots.find((candidate) => candidate.id === articulationId);
+    slot = stored.slots.find(candidate => candidate.id === articulationId);
     assert.equal(slot.overrides.filterQ, resonanceDescriptor.binding.toEngine(0.42));
-    assert.deepEqual(
-        harness.connection.getDebugSnapshot().sentMessages
-            .filter((message) => message.endpointID === "articulationSnapshot"),
-        [],
-    );
-    await flushMicrotasks();
-    assert.deepEqual(
-        harness.connection.getDebugSnapshot().sentMessages
-            .filter((message) => message.endpointID === "articulationSnapshot")
-            .map((message) => message.value.selectorA),
-        [selector],
-    );
+    assert.deepEqual(uploads().map(message => message.value.selectorA), [selector]);
 
     harness.connection.clearDebugLog();
     harness.adapter.commands.clearArticulationBaseOverride("voice-filter.resonance", articulationId);
+    assert.deepEqual(uploads(), []);
+    await settled();
     stored = parseStoredArticulations(harness);
-    slot = stored.slots.find((candidate) => candidate.id === articulationId);
+    slot = stored.slots.find(candidate => candidate.id === articulationId);
     assert.equal(Object.hasOwn(slot.overrides, "filterQ"), false);
-    assert.deepEqual(
-        harness.connection.getDebugSnapshot().sentMessages
-            .filter((message) => message.endpointID === "articulationSnapshot"),
-        [],
-    );
-    await flushMicrotasks();
-    assert.deepEqual(
-        harness.connection.getDebugSnapshot().sentMessages
-            .filter((message) => message.endpointID === "articulationSnapshot")
-            .map((message) => message.value.selectorA),
-        [selector],
-    );
+    assert.deepEqual(uploads().map(message => message.value.selectorA), [selector]);
 });
 
 test("audition begin and end send paired MIDI note-on/note-off events", async (t) => {
@@ -482,13 +455,17 @@ test("full state roundtrip: a second bridge over the first one's stored state is
         targetId: "voice-filter.resonance", value: 0.61,
         layer: { _tag: "articulationOverride", articulationId: a1.value },
     });
-    const m = first.adapter.commands.addMapping({ targetId: "voice-filter.cutoff", sourceId: "envelope-1" });
+    const m = await first.adapter.commands.addMapping({ targetId: "voice-filter.cutoff", sourceId: "envelope-1" });
     assert.equal(m._tag, "ok");
     first.adapter.commands.setMappingAmount(m.value, 3, { _tag: "patchBase" });
-    const rack = first.adapter.commands.addMapping({ targetId: "phaser.phaserDepth", sourceId: "macro-1" });
+    const rack = await first.adapter.commands.addMapping({ targetId: "phaser.phaserDepth", sourceId: "macro-1" });
     assert.equal(rack._tag, "ok");
     first.adapter.commands.setEffectEnabled("delay", false);
     first.adapter.commands.renameMacro("macro-1", "Shimmer");
+
+    // Void live editors expose their immediate projection. Native saved state
+    // is read only after the real service's queued publications have run.
+    await new Promise(resolve => setImmediate(resolve));
 
     const firstDebug = first.connection.getDebugSnapshot();
     const storedState = { ...firstDebug.storedState };

@@ -5,15 +5,9 @@ import cssText from "./styles.css?inline";
 import { DesktopPatchView } from "./DesktopPatchView";
 import { DesktopCurveLabStandaloneView } from "./desktop-curve-lab";
 import type { PatchConnectionLike } from "../shared/cmajor-react";
-import {
-    createDesktopResourceClient,
-    type ResourceClient,
-} from "../shared/resource-client";
+import type { ResourceClient } from "../../kit/ui/resource-client";
 import type { SynthKeyboardInputMode } from "../shared/synth-input-router";
-import {
-    acquireModulationRuntimeBridge,
-    releaseModulationRuntimeBridge,
-} from "../shared/modulation";
+import { acquireSynthViewState } from "../shared/synth-state-client";
 
 // Dev-only inspector; it fetches external fonts and phones home, so automated
 // browsers (navigator.webdriver) skip it to keep test pages hermetic.
@@ -88,33 +82,26 @@ class DesktopPatchErrorBoundary extends Component<
 
 class CosimoDesktopReactViewElement extends HTMLElement {
     private patchConnection: PatchConnectionLike | null = null;
-    private resourceClient: ResourceClient | null = null;
+    private resourceClient: ResourceClient | undefined;
     private keyboardInputMode: SynthKeyboardInputMode = "hosted";
     private root: Root | null = null;
     private mountPoint: HTMLDivElement | null = null;
-    private modulationRuntimePatchConnection: PatchConnectionLike | null = null;
+    private stateLease: { readonly connection: PatchConnectionLike; release(): void } | null = null;
 
     setPatchConnection(
         patchConnection: PatchConnectionLike,
         resourceClient?: ResourceClient,
         keyboardInputMode: SynthKeyboardInputMode = "hosted",
     ) {
-        if (this.modulationRuntimePatchConnection && this.modulationRuntimePatchConnection !== patchConnection) {
-            releaseModulationRuntimeBridge(this.modulationRuntimePatchConnection);
-            this.modulationRuntimePatchConnection = null;
-        }
-
         this.patchConnection = patchConnection;
-        this.resourceClient = resourceClient ?? null;
+        this.resourceClient = resourceClient;
         this.keyboardInputMode = keyboardInputMode;
-        if (!this.modulationRuntimePatchConnection) {
-            acquireModulationRuntimeBridge(patchConnection);
-            this.modulationRuntimePatchConnection = patchConnection;
-        }
+        this.holdSynthState();
         this.renderApp();
     }
 
     connectedCallback() {
+        this.holdSynthState();
         if (import.meta.env.DEV) {
             this.ensureLightDomStyles();
 
@@ -153,11 +140,18 @@ class CosimoDesktopReactViewElement extends HTMLElement {
     disconnectedCallback() {
         this.root?.unmount();
         this.root = null;
+        this.stateLease?.release();
+        this.stateLease = null;
+    }
 
-        if (this.modulationRuntimePatchConnection) {
-            releaseModulationRuntimeBridge(this.modulationRuntimePatchConnection);
-            this.modulationRuntimePatchConnection = null;
+    /** One synth state client lives as long as this element shows its connection, even if the React tree remounts. */
+    private holdSynthState() {
+        if (!this.patchConnection || this.stateLease?.connection === this.patchConnection) {
+            return;
         }
+        this.stateLease?.release();
+        const { release } = acquireSynthViewState(this.patchConnection);
+        this.stateLease = { connection: this.patchConnection, release };
     }
 
     private ensureLightDomStyles() {
@@ -182,7 +176,7 @@ class CosimoDesktopReactViewElement extends HTMLElement {
             <DesktopPatchErrorBoundary>
                 <DesktopPatchView
                     patchConnection={this.patchConnection}
-                    resourceClient={this.resourceClient ?? createDesktopResourceClient(this.patchConnection)}
+                    resourceClient={this.resourceClient}
                     keyboardInputMode={this.keyboardInputMode}
                 />
             </DesktopPatchErrorBoundary>

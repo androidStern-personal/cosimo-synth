@@ -17,6 +17,10 @@
 .speedrun-scripted-phone > .cosimo-surface {
     height: 100%;
     width: 100%;
+    /* The capture rasterizer draws only the first of several background
+       layers, and the shell's colour is its second; captures draw that
+       gradient alone, without the faint highlight layered over its top. */
+    background: linear-gradient(180deg, var(--cosimo-raised), var(--cosimo-surface));
 }
 
 .speedrun-scripted-frame [data-capture-shadow-clone] {
@@ -34,21 +38,16 @@
     content-visibility: visible !important;
 }
 
-/* The product's viewport-anchored overlays are position:fixed ("fixed to the
-   visual viewport" — on a phone the viewport IS the phone). Under the capture
-   stage's transform their geometry stays correct (the transformed stage
-   becomes their containing block), but the web-renderer fallback rasterizer
-   does not paint fixed elements under a transform — verified 2026-08-24 with
-   an isolated probe (the rail layer was dropped entirely). Each overlay below
-   has the shell root or a full-shell inset:0 layer as its nearest positioned
-   ancestor, so absolute positioning reproduces the identical phone-anchored
-   geometry on the rasterizer's supported path. */
 /* The capture rasterizer has no backdrop-filter; use the product's own
    no-backdrop design (see the @supports fallback in mobile-mod-rail.css). */
 .speedrun-scripted-phone .mobile-global-mod-rail-glass {
     display: none;
 }
 
+/* The product's viewport-anchored overlays are position:fixed; on a phone the
+   viewport is the phone. The capture rasterizer does not paint fixed elements
+   under the capture stage's transform, so captures position them absolutely
+   against the phone shell, which reproduces the same geometry. */
 .speedrun-scripted-phone .mobile-global-mod-rail-layer,
 .speedrun-scripted-phone .rack-parameter-menu-layer,
 .speedrun-scripted-phone .rack-value-sheet-layer,
@@ -57,4 +56,12 @@
 .speedrun-scripted-phone .synth-modal-backdrop,
 .speedrun-scripted-phone [data-role="contextual-floating-toolbar"] {
     position: absolute !important;
+}
+
+/* The floating Mod rail's layer sits inside the bottom dock and its portal,
+   both positioned; neither may become the layer's containing block, or the
+   rail would be placed within the dock's 40px row instead of the shell. */
+.speedrun-scripted-phone .mobile-bottom-dock:not([data-mod-bar-placement="parked"]),
+.speedrun-scripted-phone .mobile-bottom-dock:not([data-mod-bar-placement="parked"]) .mobile-global-mod-rail-portal {
+    position: static;
 }

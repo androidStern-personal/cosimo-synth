@@ -61,14 +61,15 @@ Apple notarization tickets are intentionally time-varying. Signed releases are
 proved through identities, notarization, stapling, Gatekeeper, and checksums
 instead.
 
-Run the signed release build only with the signing identities and notary
-profile supplied by the environment, e.g.:
+The kit has no release build command of its own. Have yours read the signing
+identities and notary profile from the environment, never from source, for
+example:
 
 ```bash
-COSIMO_DEVELOPER_ID_APPLICATION="Developer ID Application: <name> (<team-id>)" \
-COSIMO_DEVELOPER_ID_INSTALLER="Developer ID Installer: <name> (<team-id>)" \
-COSIMO_NOTARY_PROFILE="<notary-profile>" \
-<release build command> -- --release
+DEVELOPER_ID_APPLICATION="Developer ID Application: <name> (<team-id>)" \
+DEVELOPER_ID_INSTALLER="Developer ID Installer: <name> (<team-id>)" \
+NOTARY_PROFILE="<notary-profile>" \
+<your release build command>
 ```
 
 ## Package And Zip Verification

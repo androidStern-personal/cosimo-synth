@@ -1,5 +1,6 @@
 import { after, before } from "node:test";
 import assert from "node:assert/strict";
+import path from "node:path";
 import { chromium } from "playwright";
 import {
     normalizeArticulationEditorState,
@@ -9,7 +10,7 @@ import {
     ARTICULATIONS_V4_STATE_KEY,
     parseArticulationsV4,
 } from "../../patch_gui/articulation-image.js";
-import { deserializeMsegShape, renderMsegShape } from "../../patch_gui/mseg.js";
+import { deserializeMsegShape } from "../../patch_gui/mseg.js";
 import {
     MODULATION_SOURCE_OPTIONS,
     MODULATION_STATE_KEY,
@@ -22,10 +23,7 @@ import {
     getModulationArticulationCellIndex,
     getModulationRuntimeCell,
 } from "../../patch_gui/modulation-runtime-program.js";
-import {
-    EFFECT_ID_TO_LANE_TYPE,
-    RACK_EFFECT_ORDER,
-} from "../../patch_gui/lane-state.js";
+import { EFFECT_ID_TO_LANE_TYPE } from "../../patch_gui/lane-state.js";
 import {
     createFullDefaultLaneStateV2,
     serializeLaneStateV2,
@@ -45,6 +43,10 @@ import {
     startDesktopHarnessServer,
     waitForHarnessReady,
 } from "./desktop_harness_browser.mjs";
+import { loadUIModule } from "../../kit/tests/helpers/load_ui_module.mjs";
+import { createSynthParameterFixture, synthParameterEndpoints } from "./synth_parameter_fixture.mjs";
+
+const { renderMsegShape } = await loadUIModule(path.resolve(import.meta.dirname, "../.."), "kit/ui/mseg.ts");
 
 let server;
 
@@ -56,13 +58,7 @@ export const TEST_SAMPLES_PER_FRAME = 2048;
 
 export const MSEG_PREVIEW_HORIZONTAL_PADDING_PX = 24;
 
-export const EFFECT_PRESETS_V2_STATE_KEY = "effects.presets.v2";
-
-export const SYNTH_PRESET_EFFECT_ID = "cosimo-synth";
-
 export const ARTICULATION_STATE_KEY = ARTICULATIONS_V4_STATE_KEY;
-
-export const RETIRED_SYNTH_LOCAL_DIRTY_STATE_KEY = ["synth", "preset" + "Baseline" + "Snapshot", "v1"].join(".");
 
 export function expectedMsegPreviewProgressClipWidth(previewState, progress) {
     const plotWidth = Math.max(1, previewState.width - (MSEG_PREVIEW_HORIZONTAL_PADDING_PX * 2));
@@ -217,12 +213,11 @@ export function editorBankToStoredArticulations(bankValue) {
     };
 }
 
-export function readEffectPresetState(snapshot) {
-    return JSON.parse(String(snapshot.storedState[EFFECT_PRESETS_V2_STATE_KEY]));
-}
-
-export function containsRetiredSynthPresetBaselineKey(snapshot) {
-    return Object.prototype.hasOwnProperty.call(snapshot.storedState, RETIRED_SYNTH_LOCAL_DIRTY_STATE_KEY);
+/** The project's active preset as the state framework saved it, or null. */
+export function readActivePreset(snapshot) {
+    const raw = snapshot.storedState.activePreset;
+    if (raw === undefined || raw === null) return null;
+    return typeof raw === "string" ? JSON.parse(raw) : raw;
 }
 
 export function readStoredMsegShape(snapshot, slotIndex = 0) {
@@ -578,6 +573,7 @@ export async function dispatchRackKnobPointerEvents(locator, events) {
                 bubbles: true,
                 pointerId: pointerEvent.pointerId,
                 pointerType: "mouse",
+                isPrimary: true,
                 button: 0,
                 buttons: pointerEvent.buttons,
                 clientX: centerX + (pointerEvent.deltaX ?? 0),
@@ -588,7 +584,7 @@ export async function dispatchRackKnobPointerEvents(locator, events) {
 }
 
 export async function clickFilterGraphAt(page, normalizedX, normalizedY) {
-    const graph = page.locator('[data-role="filter-response-graph"]');
+    const graph = page.locator('[data-role="filter-range-editor-surface"]');
     await graph.scrollIntoViewIfNeeded();
     const box = await graph.boundingBox();
 
@@ -603,7 +599,7 @@ export async function clickFilterGraphAt(page, normalizedX, normalizedY) {
 }
 
 export async function dragFilterHandleBy(page, deltaX, deltaY) {
-    const handle = page.locator('[data-role="filter-response-handle-hit-target"]');
+    const handle = page.locator('[data-role="filter-range-value-hit-target"]');
     await handle.scrollIntoViewIfNeeded();
     const box = await handle.boundingBox();
 
@@ -686,6 +682,13 @@ export async function waitForHarnessSnapshot(page, description, predicate, {
     })}`);
 }
 
+/** The opening lane document has reached the engine, so later topology sends are edits. */
+export async function waitForOpeningLaneDelivery(page) {
+    return waitForHarnessSnapshot(page, "opening lane delivery", (snapshot) => (
+        snapshot.parameterValues.laneTopology !== undefined
+    ));
+}
+
 export async function waitForPageValue(page, description, readValue, predicate, {
     attempts = 80,
     delayMs = 50,
@@ -701,6 +704,18 @@ export async function waitForPageValue(page, description, readValue, predicate, 
     }
 
     throw new Error(`Timed out waiting for ${description}. Last value: ${JSON.stringify(lastValue)}`);
+}
+
+/**
+ * Wait until the element's finite transitions and animations (and with
+ * subtree, its descendants') have run to their end. Endless ones are ignored.
+ */
+export async function waitForAnimationsToFinish(locator, { subtree = false } = {}) {
+    await locator.evaluate((element, includeSubtree) => Promise.all(
+        element.getAnimations({ subtree: includeSubtree })
+            .filter((animation) => animation.effect?.getComputedTiming().endTime !== Infinity)
+            .map((animation) => animation.finished.catch(() => undefined)),
+    ), subtree);
 }
 
 export async function waitForReactFrames(page, frameCount = 2) {
@@ -727,70 +742,50 @@ export async function readVisibleHarnessParameterEndpointIDs(page) {
     });
 }
 
-export async function clickPresetBarAction(page, action) {
-    await page.waitForFunction((nextAction) => {
-        const button = document
-            .querySelector("cosimo-preset-bar")
-            ?.shadowRoot
-            ?.querySelector(`[data-action="${nextAction}"]`);
-        return button instanceof HTMLButtonElement && !button.disabled;
-    }, action);
+/** The kit preset bar inside the synth's row; on the phone shell it sits in the Sound actions menu. */
+export async function openSynthPresetBar(page) {
+    const bar = page.locator('[data-role="synth-preset-bar"]');
+    await bar.waitFor();
+    if (await bar.getAttribute("data-compact") !== null) {
+        const toggle = bar.locator('[data-action="toggle-sound-actions"]');
+        if (await toggle.getAttribute("aria-expanded") !== "true") await toggle.click();
+    }
+    return bar.locator(".bk-preset-bar");
+}
 
-    await page.evaluate((nextAction) => {
-        const button = document
-            .querySelector("cosimo-preset-bar")
-            ?.shadowRoot
-            ?.querySelector(`[data-action="${nextAction}"]`);
+/**
+ * Open Developer settings from the Sound actions menu. The clicks are
+ * programmatic so no pointer gesture reaches the surfaces under test.
+ */
+export async function openDeveloperSettingsFromPresetBar(page) {
+    const toggle = page.locator('[data-role="synth-preset-bar"] [data-action="toggle-sound-actions"]');
+    if (await toggle.getAttribute("aria-expanded") !== "true") await toggle.evaluate((button) => button.click());
+    await page.locator('[data-role="sound-actions"] [data-action="perf-tuning"]').evaluate((button) => button.click());
+}
 
-        if (!(button instanceof HTMLButtonElement)) {
-            throw new Error(`Missing preset bar action ${nextAction}.`);
-        }
-
-        button.click();
-    }, action);
+/** Recall a factory or user preset by name through the preset selector. */
+export async function recallSynthPreset(page, name) {
+    const presets = await openSynthPresetBar(page);
+    await presets.getByLabel("Preset", { exact: true }).selectOption({ label: name });
 }
 
 export async function saveSynthPresetAs(page, label) {
-    await clickPresetBarAction(page, "save-as");
-    await page.waitForFunction(() => {
-        const overlay = document
-            .querySelector("cosimo-preset-bar")
-            ?.shadowRoot
-            ?.querySelector('[data-el="dialog-overlay"]');
-        return overlay instanceof HTMLElement && overlay.classList.contains("open");
-    });
-
-    await page.evaluate((nextLabel) => {
-        const shadowRoot = document.querySelector("cosimo-preset-bar")?.shadowRoot;
-        const input = shadowRoot?.querySelector('[data-el="dialog-input"]');
-        const confirm = shadowRoot?.querySelector('[data-action="dialog-confirm"]');
-
-        if (!(input instanceof HTMLInputElement) || !(confirm instanceof HTMLButtonElement)) {
-            throw new Error("Preset save dialog controls are missing.");
-        }
-
-        const valueSetter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set;
-
-        if (!valueSetter) {
-            throw new Error("Expected HTMLInputElement.prototype.value setter.");
-        }
-
-        valueSetter.call(input, nextLabel);
-        input.dispatchEvent(new Event("input", { bubbles: true }));
-        confirm.click();
-    }, label);
+    const presets = await openSynthPresetBar(page);
+    await presets.getByRole("button", { name: "Save as new", exact: true }).click();
+    await presets.getByLabel("Preset name", { exact: true }).fill(label);
+    await presets.getByRole("button", { name: "Save", exact: true }).click();
+    await presets.getByLabel("Preset", { exact: true }).waitFor();
 }
 
+export async function revertSynthPreset(page) {
+    const presets = await openSynthPresetBar(page);
+    await presets.getByRole("button", { name: "Revert", exact: true }).click();
+}
+
+/** Wait until the bar shows (or stops showing) that the sound differs from the active preset. */
 export async function waitForPresetBarDirtyState(page, dirty) {
-    await page.waitForFunction((expectedDirty) => {
-        const shadowRoot = document.querySelector("cosimo-preset-bar")?.shadowRoot;
-        const dirtyDot = shadowRoot?.querySelector('[data-el="dirty-dot"]');
-        const revertButton = shadowRoot?.querySelector('[data-action="revert"]');
-        return dirtyDot instanceof HTMLElement
-            && revertButton instanceof HTMLButtonElement
-            && dirtyDot.classList.contains("visible") === expectedDirty
-            && revertButton.disabled !== expectedDirty;
-    }, dirty);
+    const modified = page.locator('[data-role="synth-preset-bar"] :is(.bk-preset-bar-dirty, [data-role="preset-modified"])');
+    await modified.first().waitFor({ state: dirty ? "visible" : "detached" });
 }
 
 export async function dragArticulationCardToLane(page, articulationId, lane, targetPosition, {
@@ -868,10 +863,10 @@ export async function openHarnessPage({
         if (message.type() === "error") diagnostics.push(`console: ${message.text()}`);
     });
 
-    // The fresh default became the STARTER TRIO (T7), while these suites were
-    // written against the resident eight: the harness opens on a seeded
-    // legacy stored document by default. Pass laneDoc: "fresh" to exercise
-    // the true fresh-instrument default, or a serialized doc to seed it.
+    // A fresh instrument starts with the starter trio, while most scenarios
+    // need all eight resident effects: the harness opens on a seeded
+    // eight-effect document by default. Pass laneDoc: "fresh" to exercise
+    // the fresh-instrument default, or a serialized doc to seed it.
     if (laneDoc !== "fresh") {
         const serialized = laneDoc === "legacy" ? legacyEightLaneDocJson() : laneDoc;
         await page.addInitScript((value) => {
@@ -907,6 +902,20 @@ export async function showVoiceControls(page) {
     await page.locator('[aria-label="Glide"]').waitFor({ state: "visible" });
 }
 
+/**
+ * Every parameter the synth's state definition opens, with ranges and defaults
+ * read from the DSP source. The loaded wavetable position, table, and Glide
+ * differ from their authored defaults so reset paths have something to restore.
+ */
+function desktopFixtureHostParameters() {
+    const { readParameter } = createSynthParameterFixture({
+        oscAWavetablePosition: 0.28,
+        oscAWavetableSelect: 0,
+        glideTime: 0.15,
+    });
+    return synthParameterEndpoints.map(readParameter);
+}
+
 export async function openBuiltDesktopBundlePage({
     beforeGoto = null,
     compiledModuleUrl = "/patch_gui/desktop/index.js",
@@ -927,7 +936,7 @@ export async function openBuiltDesktopBundlePage({
         </html>
     `);
 
-    await page.evaluate(async (entryModuleUrl) => {
+    await page.evaluate(async ({ entryModuleUrl, hostParameters }) => {
         class TestPianoKeyboard extends HTMLElement {
             notes = [];
             naturalWidth = 22;
@@ -969,18 +978,9 @@ export async function openBuiltDesktopBundlePage({
             failurePhase: 0,
             failureReasonCode: 0,
         };
-        const parameterValues = new Map([
-            ["oscAWavetablePosition", 0.28],
-            ["oscAWavetableSelect", 0],
-            ["playMode", 0],
-            ["glideTime", 0.15],
-            ["oscAVolumeDb", 0],
-            ["oscBVolumeDb", 0],
-            ["oscCVolumeDb", 0],
-            ["oscAMute", 0],
-            ["oscBMute", 1],
-            ["oscCMute", 1],
-        ]);
+        const parameterValues = new Map(hostParameters.map(({ endpoint, value }) => [endpoint, value]));
+        const parameterMetadata = new Map(hostParameters.map(({ endpoint, min, max, step, defaultValue }) => (
+            [endpoint, { min, max, step, init: defaultValue }])));
         const resourceReads = [];
         const sentMessages = [];
         const parameterListeners = new Map();
@@ -1021,6 +1021,7 @@ export async function openBuiltDesktopBundlePage({
                 sentMessages.push({ endpointID, value });
                 parameterValues.set(endpointID, value);
                 parameterListeners.get(endpointID)?.forEach((listener) => listener(value));
+                stateHost.observeParameter(endpointID);
 
                 if (endpointID === "runtimeSyncRequest") {
                     emitEndpoint("runtimeState", runtimeState);
@@ -1042,7 +1043,7 @@ export async function openBuiltDesktopBundlePage({
             },
             requestStatusUpdate() {
                 queueMicrotask(() => {
-                    statusListeners.forEach((listener) => listener({ details: { inputs: [] } }));
+                    statusListeners.forEach((listener) => listener({ details: { inputs: [...parameterMetadata].map(([endpointID, annotation]) => ({ endpointID, purpose: "parameter", annotation })) } }));
                 });
             },
             addStoredStateValueListener(listener) {
@@ -1052,7 +1053,7 @@ export async function openBuiltDesktopBundlePage({
                 storedStateListeners.delete(listener);
             },
             requestFullStoredState(callback) {
-                queueMicrotask(() => callback({}));
+                queueMicrotask(() => callback({ parameters: [], values: {} }));
             },
             requestStoredStateValue(key) {
                 queueMicrotask(() => {
@@ -1061,27 +1062,30 @@ export async function openBuiltDesktopBundlePage({
             },
         };
 
-        const createPatchView = (await import(entryModuleUrl)).default;
-        const {
-            createStoredStateRuntimeMirror,
-        } = await import("/patch_gui/stored-state-runtime-mirror.js");
-        const {
-            MODULATION_STATE_KEY,
-            buildModulationRuntimeEvents,
-            deserializeModulationState,
-        } = await import("/patch_gui/modulation.js");
-        const modulationRuntimeMirror = createStoredStateRuntimeMirror(patchConnection, {
-            stateKey: MODULATION_STATE_KEY,
-            runtimeEndpointDependencies: [{
-                endpointID: "runtimeState",
-                required: true,
-                mapValue: (value) => Number(value?.dspSessionId) || 0,
-            }],
-            applyDefaultRuntimeStateWhenMissing: true,
-            deserializeStoredState: deserializeModulationState,
-            buildRuntimeEvents: ({ state }) => buildModulationRuntimeEvents(state),
+        const { createMockPluginStateHost } = await import("/ui/shared/mock-plugin-state-host.ts");
+        const stateHost = createMockPluginStateHost({
+            readParameter: async endpoint => {
+                const annotation = parameterMetadata.get(endpoint);
+                if (!annotation) throw new Error(`Missing fixture parameter ${endpoint}`);
+                return { endpoint, value: parameterValues.get(endpoint), min: annotation.min,
+                    max: annotation.max, step: annotation.step, defaultValue: annotation.init };
+            },
+            writeParameter: (endpoint, value) => patchConnection.sendEventOrValue(endpoint, value),
+            beginGesture: endpoint => patchConnection.sendParameterGestureStart(endpoint),
+            endGesture: endpoint => patchConnection.sendParameterGestureEnd(endpoint),
+            onDefect: error => { throw error; },
         });
-        modulationRuntimeMirror.start();
+        Object.assign(patchConnection, {
+            addEventListener: stateHost.addEventListener,
+            removeEventListener: stateHost.removeEventListener,
+            sendMessageToServer: stateHost.sendMessageToServer,
+        });
+        await stateHost.ready;
+        window.addEventListener("pagehide", () => { void stateHost.stop(); }, { once: true });
+
+        const createPatchView = (await import(entryModuleUrl)).default;
+        // This connection records GUI traffic. Modulation installation belongs
+        // to the patch worker and must not be started on this view's port.
         const patchView = await createPatchView(patchConnection);
         const mountPoint = document.getElementById("mount");
 
@@ -1090,6 +1094,9 @@ export async function openBuiltDesktopBundlePage({
         }
 
         window.__COSIMO_BUILT_DESKTOP_DEBUG__ = {
+            writeParameter(endpointID, value) {
+                patchConnection.sendEventOrValue(endpointID, value);
+            },
             getSnapshot() {
                 return {
                     sentMessages: sentMessages.map(({ endpointID, value }) => ({ endpointID, value })),
@@ -1100,7 +1107,7 @@ export async function openBuiltDesktopBundlePage({
         };
 
         mountPoint.replaceChildren(patchView);
-    }, compiledModuleUrl);
+    }, { entryModuleUrl: compiledModuleUrl, hostParameters: desktopFixtureHostParameters() });
 
     return page;
 }
@@ -1118,7 +1125,7 @@ export async function openDesktopEntryPageWithInjectedResourceClient() {
         </html>
     `);
 
-    await page.evaluate(async (samplesPerFrame) => {
+    await page.evaluate(async ({ samplesPerFrame, hostParameters }) => {
         class TestPianoKeyboard extends HTMLElement {
             handleExternalMIDI() {}
             handleKey() {}
@@ -1135,18 +1142,9 @@ export async function openDesktopEntryPageWithInjectedResourceClient() {
             resourceSamples[index] = Math.sin((index / resourceSamples.length) * Math.PI * 2);
         }
 
-        const parameterValues = new Map([
-            ["oscAWavetablePosition", 0.28],
-            ["oscAWavetableSelect", 0],
-            ["playMode", 0],
-            ["glideTime", 0.15],
-            ["oscAVolumeDb", 0],
-            ["oscBVolumeDb", 0],
-            ["oscCVolumeDb", 0],
-            ["oscAMute", 0],
-            ["oscBMute", 1],
-            ["oscCMute", 1],
-        ]);
+        const parameterValues = new Map(hostParameters.map(({ endpoint, value }) => [endpoint, value]));
+        const parameterMetadata = new Map(hostParameters.map(({ endpoint, min, max, step, defaultValue }) => (
+            [endpoint, { min, max, step, init: defaultValue }])));
         const resourceReads = [];
         const sentMessages = [];
         const parameterListeners = new Map();
@@ -1203,6 +1201,7 @@ export async function openDesktopEntryPageWithInjectedResourceClient() {
                 sentMessages.push({ endpointID, value });
                 parameterValues.set(endpointID, value);
                 parameterListeners.get(endpointID)?.forEach((listener) => listener(value));
+                stateHost.observeParameter(endpointID);
 
                 if (endpointID === "runtimeSyncRequest") {
                     emitEndpoint("runtimeState", runtimeState);
@@ -1224,7 +1223,7 @@ export async function openDesktopEntryPageWithInjectedResourceClient() {
             },
             requestStatusUpdate() {
                 queueMicrotask(() => {
-                    statusListeners.forEach((listener) => listener({ details: { inputs: [] } }));
+                    statusListeners.forEach((listener) => listener({ details: { inputs: [...parameterMetadata].map(([endpointID, annotation]) => ({ endpointID, purpose: "parameter", annotation })) } }));
                 });
             },
             addStoredStateValueListener(listener) {
@@ -1234,7 +1233,7 @@ export async function openDesktopEntryPageWithInjectedResourceClient() {
                 storedStateListeners.delete(listener);
             },
             requestFullStoredState(callback) {
-                queueMicrotask(() => callback({}));
+                queueMicrotask(() => callback({ parameters: [], values: {} }));
             },
             requestStoredStateValue(key) {
                 queueMicrotask(() => {
@@ -1287,6 +1286,27 @@ export async function openDesktopEntryPageWithInjectedResourceClient() {
             },
         };
 
+        const { createMockPluginStateHost } = await import("/ui/shared/mock-plugin-state-host.ts");
+        const stateHost = createMockPluginStateHost({
+            readParameter: async endpoint => {
+                const annotation = parameterMetadata.get(endpoint);
+                if (!annotation) throw new Error(`Missing fixture parameter ${endpoint}`);
+                return { endpoint, value: parameterValues.get(endpoint), min: annotation.min,
+                    max: annotation.max, step: annotation.step, defaultValue: annotation.init };
+            },
+            writeParameter: (endpoint, value) => patchConnection.sendEventOrValue(endpoint, value),
+            beginGesture: endpoint => patchConnection.sendParameterGestureStart(endpoint),
+            endGesture: endpoint => patchConnection.sendParameterGestureEnd(endpoint),
+            onDefect: error => { throw error; },
+        });
+        Object.assign(patchConnection, {
+            addEventListener: stateHost.addEventListener,
+            removeEventListener: stateHost.removeEventListener,
+            sendMessageToServer: stateHost.sendMessageToServer,
+        });
+        await stateHost.ready;
+        window.addEventListener("pagehide", () => { void stateHost.stop(); }, { once: true });
+
         const { createDesktopPatchView } = await import("/ui/desktop/patch-view-entry.tsx");
         const mountPoint = document.getElementById("mount");
 
@@ -1304,14 +1324,14 @@ export async function openDesktopEntryPageWithInjectedResourceClient() {
         };
 
         mountPoint.replaceChildren(createDesktopPatchView(patchConnection, { resourceClient }));
-    }, TEST_SAMPLES_PER_FRAME);
+    }, { samplesPerFrame: TEST_SAMPLES_PER_FRAME, hostParameters: desktopFixtureHostParameters() });
 
     return page;
 }
 
 before(async () => {
     server = await startDesktopHarnessServer();
-    builtBundleServer = await startStaticRepoServer();
+    builtBundleServer = await startStaticRepoServer({ bundleTypeScript: true });
     browser = await chromium.launch({
         headless: true,
     });
@@ -1326,69 +1346,67 @@ after(async () => {
 export function assertLatestMsegBufferMatchesStoredShape(snapshot) {
     const storedShape = readStoredMsegShape(snapshot);
     const expectedBuffer = Array.from(renderMsegShape(storedShape));
-    const lastBufferMessage = [...snapshot.sentMessages]
-        .reverse()
-        .find(({ endpointID, value }) => (
-            endpointID === "modulationMsegBuffer"
-            && Number(value?.slot) === 1
-            && Number(value?.shapeIndex ?? 0) === 0
-        ));
-
-    assert.ok(lastBufferMessage, "Expected a modulationMsegBuffer upload for slot 1.");
-    assert.deepEqual({
-        slot: lastBufferMessage.value.slot,
-        shapeIndex: lastBufferMessage.value.shapeIndex,
-        buffer: lastBufferMessage.value.buffer,
-    }, {
-        slot: 1,
-        shapeIndex: 0,
-        buffer: expectedBuffer,
-    });
-    assert.equal(lastBufferMessage.value.dspSessionId, snapshot.runtimeState.dspSessionId);
-    assert.equal(Number.isSafeInteger(lastBufferMessage.value.deliverySerial), true);
-    assert.equal(lastBufferMessage.value.deliverySerial > 0, true);
+    const installed = [...snapshot.installedMsegData].reverse().find(record => record.input === 3);
+    assert.ok(installed, "Expected actual shared-data installation for slot 1 shape A.");
+    assert.deepEqual(installed.samples, expectedBuffer);
+    assert.equal(installed.dspSessionId, snapshot.runtimeState.dspSessionId);
+    assert.equal(Number.isSafeInteger(installed.deliverySerial) && installed.deliverySerial > 0, true);
 }
 
+/**
+ * Run real input while the view's UI timers wait, so no press hold, long-press
+ * menu or HUD linger can elapse part-way through it however long the input
+ * takes to arrive. Waiting timers resume with their remaining time.
+ */
+export async function withUiTimersPaused(page, action) {
+    await page.evaluate(() => window.__COSIMO_DESKTOP_HARNESS__.pauseUiTimers());
+    try {
+        return await action();
+    } finally {
+        await page.evaluate(() => window.__COSIMO_DESKTOP_HARNESS__.resumeUiTimers());
+    }
+}
+
+/** Let exactly this much paused UI time pass, firing the timers it covers. */
+export async function advanceUiTimers(page, milliseconds) {
+    await page.evaluate((elapsed) => window.__COSIMO_DESKTOP_HARNESS__.advanceUiTimers(elapsed), milliseconds);
+}
+
+/** A station lifts for reordering after this hold; its long-press menu waits 550 ms. */
+const STATION_REORDER_HOLD_MS = 180;
+/** Beyond the station's 3 px reorder movement threshold. */
+const STATION_LIFT_MOVE_PX = 4;
+
+/** With UI timers paused, let a pressed station's reorder hold pass and no more. */
+export async function elapseStationReorderHold(page) {
+    await advanceUiTimers(page, STATION_REORDER_HOLD_MS);
+}
+
+/**
+ * Press a station with the real mouse and lift it for reordering: exactly the
+ * reorder hold elapses before the lifting move, so the long-press menu never
+ * opens first. Resolves once the lifted pill is shown.
+ */
+export async function pressAndLiftStation(page, point) {
+    await withUiTimersPaused(page, async () => {
+        await page.mouse.move(point.x, point.y);
+        await page.mouse.down();
+        await elapseStationReorderHold(page);
+        await page.mouse.move(point.x, point.y + STATION_LIFT_MOVE_PX);
+        await page.locator('[data-role="rack-reorder-lifted-pill"]').waitFor();
+    });
+}
+
+/**
+ * Lift the reverb station with a synthetic pointer while the rack list refuses
+ * pointer capture, then preview over an optional target. Exactly the reorder
+ * hold elapses between the press and the lifting move.
+ */
 export async function beginRackReorderWithoutPointerCapture(page, {
     pointerId,
     targetEffectID = null,
 }) {
-    await page.evaluate(({ pointerId: browserPointerId }) => {
-        const list = document.querySelector('[data-role="rack-module-list"]');
-        const station = document.querySelector('[data-role="rack-station-reverb"]');
-        if (!(list instanceof HTMLElement) || !(station instanceof HTMLElement)) {
-            throw new Error("Expected rack reorder elements.");
-        }
-
-        Object.defineProperty(list, "setPointerCapture", {
-            configurable: true,
-            value() {
-                throw new DOMException("Pointer capture is unavailable.", "NotFoundError");
-            },
-        });
-        // The station arms the reorder once a move crosses the lift
-        // threshold; a second move on the list drives the preview.
-        const stationBounds = station.getBoundingClientRect();
-        const stationCenterX = stationBounds.left + (stationBounds.width / 2);
-        const stationCenterY = stationBounds.top + (stationBounds.height / 2);
-        station.dispatchEvent(new PointerEvent("pointerdown", {
-            bubbles: true,
-            pointerId: browserPointerId,
-            pointerType: "mouse",
-            isPrimary: true,
-            button: 0,
-            buttons: 1,
-            clientX: stationCenterX,
-            clientY: stationCenterY,
-        }));
-    }, { pointerId });
-
-    // Reorder is deliberately distinct from scrolling: the hold must win
-    // before movement crosses the lift threshold, including on the fallback
-    // path used when pointer capture is unavailable.
-    await page.waitForTimeout(210);
-
-    await page.evaluate(({ pointerId: browserPointerId, targetEffectID: browserTargetEffectID }) => {
+    await page.evaluate(({ pointerId: browserPointerId, targetEffectID: browserTargetEffectID, holdMs, liftPx }) => {
         const list = document.querySelector('[data-role="rack-module-list"]');
         const station = document.querySelector('[data-role="rack-station-reverb"]');
         const target = browserTargetEffectID === null
@@ -1401,33 +1419,46 @@ export async function beginRackReorderWithoutPointerCapture(page, {
             throw new Error(`Expected ${browserTargetEffectID} rack target.`);
         }
 
-        const stationBounds = station.getBoundingClientRect();
-        const stationCenterX = stationBounds.left + (stationBounds.width / 2);
-        const stationCenterY = stationBounds.top + (stationBounds.height / 2);
-        station.dispatchEvent(new PointerEvent("pointermove", {
+        Object.defineProperty(list, "setPointerCapture", {
+            configurable: true,
+            value() {
+                throw new DOMException("Pointer capture is unavailable.", "NotFoundError");
+            },
+        });
+        const pointerAt = (type, clientX, clientY) => new PointerEvent(type, {
             bubbles: true,
             pointerId: browserPointerId,
             pointerType: "mouse",
             isPrimary: true,
             button: 0,
             buttons: 1,
-            clientX: stationCenterX,
-            clientY: stationCenterY + 12,
-        }));
-        if (target instanceof HTMLElement) {
-            const targetBounds = target.getBoundingClientRect();
-            list.dispatchEvent(new PointerEvent("pointermove", {
-                bubbles: true,
-                pointerId: browserPointerId,
-                pointerType: "mouse",
-                isPrimary: true,
-                button: 0,
-                buttons: 1,
-                clientX: targetBounds.left + (targetBounds.width / 2),
-                clientY: targetBounds.top + (targetBounds.height / 2),
-            }));
+            clientX,
+            clientY,
+        });
+        const stationBounds = station.getBoundingClientRect();
+        const stationCenterX = stationBounds.left + (stationBounds.width / 2);
+        const stationCenterY = stationBounds.top + (stationBounds.height / 2);
+        const harness = window.__COSIMO_DESKTOP_HARNESS__;
+        harness.pauseUiTimers();
+        try {
+            station.dispatchEvent(pointerAt("pointerdown", stationCenterX, stationCenterY));
+            // Reorder is deliberately distinct from scrolling: the hold must
+            // elapse before movement crosses the lift threshold, including on
+            // the fallback path used when pointer capture is unavailable.
+            harness.advanceUiTimers(holdMs);
+            station.dispatchEvent(pointerAt("pointermove", stationCenterX, stationCenterY + liftPx));
+            if (target instanceof HTMLElement) {
+                const targetBounds = target.getBoundingClientRect();
+                list.dispatchEvent(pointerAt(
+                    "pointermove",
+                    targetBounds.left + (targetBounds.width / 2),
+                    targetBounds.top + (targetBounds.height / 2),
+                ));
+            }
+        } finally {
+            harness.resumeUiTimers();
         }
-    }, { pointerId, targetEffectID });
+    }, { pointerId, targetEffectID, holdMs: STATION_REORDER_HOLD_MS, liftPx: STATION_LIFT_MOVE_PX });
 }
 
 export async function endRackReorderWithoutPointerCapture(page, pointerId) {
@@ -1516,9 +1547,9 @@ export {
 };
 
 /**
- * The wire location of one effect parameter since the B3 parameter cut:
- * knob edits ride laneSlotParamValue {slotId, paramIndex, ...} instead of a
- * per-parameter host endpoint.
+ * The wire location of one effect parameter: knob edits ride
+ * laneSlotParamValue {slotId, paramIndex, ...}, not a per-parameter host
+ * endpoint.
  */
 export function laneParamWireLocation(endpointID, ordinal = 0) {
     const descriptor = getRackParameterDescriptor(endpointID);
@@ -1546,4 +1577,3 @@ export function isLaneParamSend(message, endpointID, expectedValue, tolerance = 
         || Math.abs(Number(message.value?.value) - expectedValue) <= tolerance;
 }
 
-void RACK_EFFECT_ORDER;

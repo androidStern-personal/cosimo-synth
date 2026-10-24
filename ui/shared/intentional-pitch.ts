@@ -1,8 +1,8 @@
 /**
- * The remembered intentional pitch (T10B/T12): the most recent note the user
+ * The remembered intentional pitch: the most recent note the user
  * deliberately played on the on-screen or a connected MIDI keyboard. The Note
  * key and Auto-preview play this pitch when nothing is held. Before any
- * intentional note has been played, it is middle C (locked 2026-08-19).
+ * intentional note has been played, it is middle C.
  * DAW/transport playback must never feed this memory — that gating happens at
  * the call sites, which only forward user-originated note-ons.
  */

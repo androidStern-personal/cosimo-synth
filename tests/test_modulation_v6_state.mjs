@@ -2,7 +2,8 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import path from "node:path";
 
-import { loadUIModule } from "./helpers/load_ui_module.mjs";
+import { loadUIModule } from "../kit/tests/helpers/load_ui_module.mjs";
+import { createModulationFixture } from "./helpers/modulation_state_fixture.mjs";
 
 const repoRoot = path.resolve(import.meta.dirname, "..");
 const modulationModulePromise = loadUIModule(repoRoot, "ui/shared/modulation.ts");
@@ -103,23 +104,21 @@ test("modulation.v6 accepts only the exact current envelope", async () => {
     }
 });
 
-test("legacy modulation state is ignored on cold boot and never rewritten", async () => {
+test("legacy modulation state is ignored on cold boot and never rewritten", async (t) => {
     const modulation = await modulationModulePromise;
     const legacy = { ...withOneRoute(modulation), version: 2 };
     const connection = new FakePatchConnection({
         "modulation.v2": JSON.stringify(legacy),
     });
-    const bridge = new modulation.ModulationRuntimeBridge(connection);
+    const { bridge, restore, client } = await createModulationFixture(t, connection);
 
-    bridge.attach();
-    bridge.requestBootState();
 
     assert.deepEqual(bridge.getState(), modulation.createDefaultModulationState());
     assert.deepEqual(connection.storedWrites, []);
     assert.equal(Object.hasOwn(connection.storedState, "modulation.v6"), false);
 });
 
-test("cold invalid v6 uses defaults without installing replacement state", async () => {
+test("cold invalid v6 uses defaults without installing replacement state", async (t) => {
     const modulation = await modulationModulePromise;
     const connection = new FakePatchConnection({
         [modulation.MODULATION_STATE_KEY]: JSON.stringify({
@@ -127,44 +126,46 @@ test("cold invalid v6 uses defaults without installing replacement state", async
             routes: [{ ...withOneRoute(modulation).routes[0], amount: 4 }],
         }),
     });
-    const bridge = new modulation.ModulationRuntimeBridge(connection);
+    const { bridge, restore, client } = await createModulationFixture(t, connection);
 
-    bridge.attach();
-    bridge.requestBootState();
 
     assert.deepEqual(bridge.getState(), modulation.createDefaultModulationState());
+    assert.equal(bridge.isReady(), false);
+    assert.deepEqual(client.getSnapshot().state.fields[modulation.MODULATION_STATE_KEY].readiness, { kind: "failed", reason: "invalid-state" });
+    assert.equal(Object.hasOwn(client.getSnapshot().state.fields[modulation.MODULATION_STATE_KEY], "value"), false);
+    assert.equal((await bridge.setMsegSlotShape(0, 0, modulation.createDefaultModulationState().msegSlots[0].shapeA)).kind, "rejected", "a displayed default cannot silently overwrite the invalid saved bank");
     assert.deepEqual(connection.storedWrites, []);
 });
 
-test("live invalid v6 retains the last valid state without a repair write", async () => {
+test("live invalid v6 retains the last valid state without a repair write", async (t) => {
     const modulation = await modulationModulePromise;
     const valid = withOneRoute(modulation);
     const connection = new FakePatchConnection({
         [modulation.MODULATION_STATE_KEY]: modulation.serializeModulationState(valid),
     });
-    const bridge = new modulation.ModulationRuntimeBridge(connection);
+    const { bridge, restore, client } = await createModulationFixture(t, connection);
 
-    bridge.attach();
-    bridge.requestBootState();
     const invalid = { ...valid, routes: [{ ...valid.routes[0], targetKind: "pan" }] };
-    connection.emitStoredStateValue(modulation.MODULATION_STATE_KEY, JSON.stringify(invalid));
+    await restore(modulation.MODULATION_STATE_KEY, JSON.stringify(invalid));
 
     assert.deepEqual(bridge.getState(), valid);
     assert.deepEqual(connection.storedWrites, []);
-    assert.equal(bridge.setState(invalid), false);
+    assert.equal((await bridge.setState(invalid)).kind, "rejected");
     assert.deepEqual(bridge.getState(), valid);
     assert.deepEqual(connection.storedWrites, []);
 });
 
-test("fallback boot requests only the current key", async () => {
+test("owner boot reads the current modulation document and the other declared synth documents", async (t) => {
     const modulation = await modulationModulePromise;
     const connection = new FakePatchConnection();
     connection.requestFullStoredState = undefined;
-    const bridge = new modulation.ModulationRuntimeBridge(connection);
+    const { bridge, restore, client } = await createModulationFixture(t, connection);
 
-    bridge.attach();
-    bridge.requestBootState();
-
-    assert.deepEqual(connection.requestedKeys, ["modulation.v6"]);
+    assert.deepEqual(connection.requestedKeys, [
+        "modulation.v6", "lane.v1", "articulations.v4", "bounce.v1",
+        "activePreset", "snapshotSlots", "activeSnapshot",
+    ]);
+    assert.deepEqual(connection.requestedKeys.filter(key => key.startsWith("modulation.")), [modulation.MODULATION_STATE_KEY],
+        "legacy modulation documents must never be requested");
     assert.deepEqual(connection.storedWrites, []);
 });

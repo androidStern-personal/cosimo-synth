@@ -1,0 +1,23 @@
+.filter-example { width: 100%; }
+.filter-dark .filter-range-editor {
+    --editor-surface-bg: #111619;
+    --editor-surface-ink: #d6e7e8;
+    --editor-surface-ink-muted: #97aaad;
+    --editor-zone-fill: transparent;
+    --editor-zone-stroke: transparent;
+    --editor-grid-stroke: #263134;
+    --editor-axis-stroke: #45585b;
+    --editor-curve-stroke: #83d5ce;
+    --editor-curve-preview-stroke: #e2c177;
+    --editor-handle-fill: #83d5ce;
+    --editor-handle-stroke: #e5f4f3;
+    --editor-handle-halo-fill: #83d5ce25;
+    --editor-handle-halo-stroke: #83d5ce60;
+    --filter-spectrum-rgb: 131 213 206;
+    border-radius: 10px;
+}
+.filter-custom .filter-range-editor { --editor-curve-stroke: #eba676; --editor-curve-stroke-width: 3.5; --editor-handle-fill: #eba676; --editor-handle-halo-stroke: #eba676; --filter-spectrum-rgb: 235 166 118; }
+.filter-toolbar { display: flex; gap: 18px; align-items: center; flex-wrap: wrap; padding: 18px 0 0; font-size: 13px; color: #b6bcc3; }
+.filter-toolbar label { display: flex; gap: 8px; align-items: center; }
+.filter-toolbar select, .filter-toolbar button { background: #27282c; color: #eee; border: 1px solid #44464c; border-radius: 6px; padding: 6px 8px; font: inherit; }
+.filter-log { display: block; color: #97aaad; font: 11px monospace; padding-top: 12px; overflow-wrap: anywhere; }

@@ -1,0 +1,34 @@
+{
+  "before": {
+    "dsp": {
+      "minimumPages": 1320,
+      "minimumBytes": 86507520,
+      "shared": true,
+      "maximumPages": 32768
+    },
+    "dspAndRenderer": {
+      "minimumBytes": 87563872
+    },
+    "manifestSharedInputs": 3,
+    "manifestRetainedBudgetBytes": 52473984,
+    "manifestConfiguredOfflineBytes": 140050432,
+    "benchmarkRetainedBudgetBytes": 52572624,
+    "benchmarkOfflineAllocatedBytes": 140181504
+  },
+  "after": {
+    "dsp": {
+      "minimumPages": 1308,
+      "minimumBytes": 85721088,
+      "shared": true,
+      "maximumPages": 32768
+    },
+    "dspAndRenderer": {
+      "minimumBytes": 86777504
+    },
+    "manifestSharedInputs": 9,
+    "manifestRetainedBudgetBytes": 52572624,
+    "manifestConfiguredOfflineBytes": 139395072,
+    "benchmarkRetainedBudgetBytes": 52572624,
+    "benchmarkOfflineAllocatedBytes": 139395072
+  }
+}

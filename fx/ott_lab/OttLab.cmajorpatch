@@ -12,7 +12,7 @@
   },
   "view": {
     "src": "view/index.js",
-    "devModule": "/fx/ott_lab/view/source.js",
+    "devModule": "/fx/ott_lab/view/source.ts",
     "width": 920,
     "height": 720,
     "resizable": true

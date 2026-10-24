@@ -1,3 +1,4 @@
+import type { SharedDataConnection } from "../../../kit/ui/plugin-state-direct-data";
 import type { PatchConnectionLike } from "../../shared/cmajor-react";
 import { ARTICULATIONS_V4_STATE_KEY } from "../../shared/articulation-image";
 import { LANE_STATE_KEY } from "../../shared/lane-state";
@@ -14,7 +15,6 @@ type OutputEvent = {
 };
 
 export type OfflinePerformer = {
-    initialise(sessionID: number, sampleRate: number): Promise<void> | void;
     advance(frameCount: number): void;
     getInputEndpoints(): ReadonlyArray<EndpointDescription>;
     getOutputEndpoints(): ReadonlyArray<EndpointDescription>;
@@ -22,7 +22,17 @@ export type OfflinePerformer = {
     [method: string]: unknown;
 };
 
-export type OfflinePerformerClass = new () => OfflinePerformer;
+/** One initialised offline engine and the shared storage its wavetables and MSEG curves are prepared in. */
+export type OfflineEngineRuntime = {
+    readonly performer: OfflinePerformer;
+    readonly sharedData: NonNullable<SharedDataConnection["sharedData"]>;
+    dispose(): void;
+};
+
+/** The synth's generated offline engine module, whose factory owns the shared memory the engine reads. */
+export type OfflineEngineClass = {
+    createOfflinePerformer(sessionID: number, sampleRate: number): Promise<OfflineEngineRuntime>;
+};
 
 export type OfflineEngineStoredState = {
     readonly modulation: unknown;
@@ -66,34 +76,36 @@ function cloneStoredState(state: OfflineEngineStoredState) {
 }
 
 /**
- * PatchConnectionLike over a generated class-only performer.
+ * PatchConnectionLike over the synth's offline engine.
  *
- * Runtime services use their production connection contract while `pump()`
- * advances the engine in the same <=128-frame slices as Bounce.
+ * Runtime services use their production connection contract, including
+ * direct shared-data preparation, while `pump()` advances the engine in the
+ * same <=128-frame slices as Bounce.
  */
-export class OfflineEngineHost implements PatchConnectionLike {
+export class OfflineEngineHost implements PatchConnectionLike, SharedDataConnection {
     readonly performer: OfflinePerformer;
+    readonly sharedData: OfflineEngineRuntime["sharedData"];
+    readonly #runtime: OfflineEngineRuntime;
     readonly #inputEndpoints: ReadonlyMap<string, EndpointDescription>;
     readonly #outputEndpoints: ReadonlyMap<string, EndpointDescription>;
     readonly #endpointListeners = new Map<string, Set<(value: unknown) => void>>();
     readonly #parameterListeners = new Map<string, Set<(value: unknown) => void>>();
     readonly #parameterValues = new Map<string, number>();
     readonly #runtimeStates = new Map<number, Record<string, unknown>>();
-    readonly #inputEventCounts = new Map<string, number>();
-    readonly #outputEventCounts = new Map<string, number>();
     readonly #storedState: OfflineEngineStoredState;
     readonly #resourceBaseURL: URL;
     #latestRuntimeInstallAck: Record<string, unknown> | null = null;
     #latestEffectiveRackState: Record<string, unknown> | null = null;
     #articulationTriggerConfig: string | null = null;
-    #advancedFrames = 0;
 
     constructor(
-        PerformerClass: OfflinePerformerClass,
+        runtime: OfflineEngineRuntime,
         storedState: OfflineEngineStoredState,
         resourceBaseURL: string | URL,
     ) {
-        this.performer = new PerformerClass();
+        this.#runtime = runtime;
+        this.performer = runtime.performer;
+        this.sharedData = runtime.sharedData;
         this.#storedState = storedState;
         this.#resourceBaseURL = new URL("./", resourceBaseURL);
         this.#inputEndpoints = new Map(
@@ -104,8 +116,9 @@ export class OfflineEngineHost implements PatchConnectionLike {
         );
     }
 
-    async initialise(sessionID: number, sampleRate: number) {
-        await this.performer.initialise(sessionID, sampleRate);
+    /** Release the engine and its shared memory. */
+    dispose() {
+        this.#runtime.dispose();
     }
 
     setInitialParameters(parameters: Readonly<Record<string, number>>) {
@@ -119,7 +132,6 @@ export class OfflineEngineHost implements PatchConnectionLike {
         if (!endpoint) throw new Error(`Offline performer has no input endpoint ${endpointID}.`);
         if (endpoint.endpointType === "event") {
             endpointMethod<[unknown], void>(this.performer, "sendInputEvent", endpointID)(value);
-            this.#inputEventCounts.set(endpointID, (this.#inputEventCounts.get(endpointID) ?? 0) + 1);
             return;
         }
         if (endpoint.endpointType === "value") {
@@ -180,9 +192,6 @@ export class OfflineEngineHost implements PatchConnectionLike {
             runtimeInstallAck: this.#latestRuntimeInstallAck,
             effectiveRackState: this.#latestEffectiveRackState,
             articulationTriggerConfig: this.#articulationTriggerConfig,
-            inputEventCounts: new Map(this.#inputEventCounts),
-            outputEventCounts: new Map(this.#outputEventCounts),
-            advancedFrames: this.#advancedFrames,
         };
     }
 
@@ -227,7 +236,6 @@ export class OfflineEngineHost implements PatchConnectionLike {
             throw new Error("OfflineEngineHost advances must contain 1 to 128 frames.");
         }
         this.performer.advance(frameCount);
-        this.#advancedFrames += frameCount;
         this.drainOutputEvents();
     }
 
@@ -259,10 +267,6 @@ export class OfflineEngineHost implements PatchConnectionLike {
                 endpointID,
             )();
             for (const value of values) {
-                this.#outputEventCounts.set(
-                    endpointID,
-                    (this.#outputEventCounts.get(endpointID) ?? 0) + 1,
-                );
                 this.recordDiagnostic(endpointID, value);
                 for (const listener of this.#endpointListeners.get(endpointID) ?? []) listener(value);
             }

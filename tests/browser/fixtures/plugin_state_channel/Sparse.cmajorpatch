@@ -1,0 +1,9 @@
+{
+  "CmajorVersion": 1,
+  "ID": "dev.cmajor.test.sparse-state",
+  "version": "1.0",
+  "name": "Sparse state probe",
+  "source": [
+    "Sparse.cmajor"
+  ]
+}

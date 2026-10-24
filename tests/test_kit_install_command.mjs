@@ -11,7 +11,7 @@ import { renderBootstrap, renderInstallation, installationRuntimes, publicInstal
 import { prepareInstallation } from "../scripts/prepare_builder_kit_install.mjs";
 import { createBareMirror } from "../scripts/release_builder_kit.mjs";
 import { completeInstallation } from "../kit/scripts/complete_install.mjs";
-import { redact, reveal } from "../kit/scripts/redacted.mjs";
+import { redact, reveal } from "../scripts/redacted.mjs";
 import { juceNoticeLines } from "../kit/scripts/toolchain.mjs";
 
 const sourceRoot = path.resolve(import.meta.dirname, "..");
@@ -239,7 +239,7 @@ async function fixture() {
     git(lineage, "tag", "v1.0.0");
     const manifest = manifestFor(git(lineage, "rev-parse", "HEAD"));
     manifest.tools = { cmaj: { sha256: sha256(cmaj) }, cmajPlugin: { sha256: sha256(plugin) } };
-    createBareMirror(lineage, path.join(feed, "kit.git"));
+    createBareMirror(lineage, path.join(feed, "kit.git"), { commit: git(lineage, "rev-parse", "HEAD"), includeReleaseTags: true });
     const bootstrap = await renderBootstrap({ manifest, feedOrigin: origin, runtimes });
     assert.equal(bootstrap.ok, true);
     manifest.installation = { artifact: bootstrap.value.artifact, sha256: bootstrap.value.sha256 };
@@ -279,7 +279,7 @@ async function fixture() {
 }
 
 test("exact emitted line owns download failure, occupied-folder refusal, fresh install and safe resumable setup", {
-    skip: process.platform !== "darwin" || process.arch !== "arm64" ? "macOS arm64 installer seam; cold OS/runtime qualification is separate" : false,
+    skip: process.platform !== "darwin" || process.arch !== "arm64" ? "The installer unpacks and runs the macOS arm64 Node runtime, so this flow runs only on Apple silicon Macs." : false,
 }, async (t) => {
     const f = await fixture();
     try {
@@ -564,12 +564,25 @@ test("exact emitted line owns download failure, occupied-folder refusal, fresh i
             assert.equal(existsSync(path.join(root, ".git/FETCH_HEAD")), false);
         });
         await t.test("final doctor failure returns a safe actionable status, never ready", async () => {
+            // A plugin config whose name matches no patch is a doctor problem the
+            // installer's own stages cannot notice; only the final doctor reports it.
+            const orphanDirectory = path.join(project, "fx/orphan_config");
+            await fs.mkdir(orphanDirectory, { recursive: true });
+            await fs.writeFile(path.join(orphanDirectory, "Orphan.plugin.json"), '{ "schemaVersion": 1 }\n');
+            try {
+                const result = await f.run(line);
+                assert.notEqual(result.status, 0, result.output);
+                assert.match(result.output, /Orphan\.plugin\.json matches no \.cmajorpatch/u);
+                assert.doesNotMatch(result.output, /is ready/u);
+            } finally { await fs.rm(orphanDirectory, { recursive: true, force: true }); }
+        });
+        await t.test("an unreachable kit feed after a complete install is a warning, and the project is ready", async () => {
             f.faults.denyPath = "/kit.git/HEAD";
             try {
                 const result = await f.run(line);
-                assert.notEqual(result.status, 0);
-                assert.match(result.output, /kit feed returned HTTP 503/u);
-                assert.doesNotMatch(result.output, /is ready/u);
+                assert.equal(result.status, 0, result.output);
+                assert.match(result.output, /The kit feed is not reachable: HTTP 503/u);
+                assert.match(result.output, /is ready/u);
             } finally { f.faults.denyPath = ""; }
         });
         await t.test("linked installer state never writes outside the project", async () => {

@@ -1,5 +1,5 @@
 /**
- * Application-level on-screen keyboard geometry preferences (T79).
+ * Application-level on-screen keyboard geometry preferences.
  *
  * These values are UI presentation only. They deliberately live outside the
  * patch, preset, host, Init, URL-sharing, automation, and modulation models.

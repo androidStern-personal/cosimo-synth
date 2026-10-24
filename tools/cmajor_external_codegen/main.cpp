@@ -36,6 +36,7 @@ int main (int argc, char** argv)
     std::filesystem::path metadataPath;
     auto maxFramesPerBlock = 512;
     auto target = std::string { "cpp" };
+    int sharedMaximumPages = 0;
     for (auto index = 4; index < argc; ++index)
     {
         const auto option = std::string_view (argv[index]);
@@ -45,6 +46,8 @@ int main (int argc, char** argv)
             metadataPath = argv[++index];
         else if (option == "--max-frames-per-block")
             maxFramesPerBlock = std::stoi (argv[++index]);
+        else if (option == "--shared-memory-maximum-pages")
+            sharedMaximumPages = std::stoi (argv[++index]);
         else if (option == "--target")
             target = argv[++index];
         else
@@ -83,9 +86,15 @@ int main (int argc, char** argv)
             const char* functionName,
             choc::span<choc::value::Type> parameterTypes) -> void*
         {
-            require (cosimo::three_osc::bridge::matchesExternalFunction (
+            const auto name = functionName != nullptr ? std::string_view (functionName) : std::string_view {};
+            const auto allInt32 = std::all_of (parameterTypes.begin(), parameterTypes.end(),
+                                               [] (const auto& type) { return type.isInt32(); });
+            const auto sharedDataFunction = allInt32
+                && ((name == "cmaj::data::size" && parameterTypes.size() == 1)
+                    || ((name == "cmaj::data::read" || name == "cmaj::data::readInt32") && parameterTypes.size() == 2));
+            require (sharedDataFunction || cosimo::three_osc::bridge::matchesExternalFunction (
                          functionName, parameterTypes),
-                     "external renderer name or signature mismatch");
+                     "external function name or signature mismatch");
 
             // Code generation needs the external declaration resolved but does not call this
             // sentinel. The generated C++ deliberately retains a link-time renderer symbol.
@@ -133,7 +142,14 @@ int main (int argc, char** argv)
         if (target == "cpp")
             options.addMember ("classname", std::string (argv[3]));
         else
+        {
             options.addMember ("SIMD", "simd-only");
+            if (sharedMaximumPages != 0)
+            {
+                require (sharedMaximumPages > 0 && sharedMaximumPages <= 65536, "Invalid shared memory maximum pages");
+                options.addMember ("sharedMemory", choc::value::createObject ("", "maximumPages", sharedMaximumPages));
+            }
+        }
         const auto generated = engine.generateCode (
             target, choc::json::toString (options, false).c_str());
         require (! generated.messages.hasErrors(), generated.messages.toString());

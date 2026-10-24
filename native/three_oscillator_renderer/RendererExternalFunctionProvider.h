@@ -1,6 +1,7 @@
 #pragma once
 
 #include "RendererBridge.h"
+#include "RendererSharedDataProvider.h"
 
 #include "cmajor/API/cmaj_Engine.h"
 
@@ -16,13 +17,26 @@ inline bool matchesExternalFunction (
     const char* functionName,
     choc::span<choc::value::Type> parameterTypes) noexcept
 {
-    if (functionName == nullptr
-        || std::string_view (functionName) != externalFunctionName
-        || parameterTypes.size() != externalFunctionParameterCount)
-        return false;
+    if (functionName == nullptr) return false;
 
     try
     {
+        const auto name = std::string_view (functionName);
+        if (name == "CosimoThreeOscillatorRenderer::sharedMsegSerial")
+            return parameterTypes.size() == 2 && parameterTypes[0].isInt32() && parameterTypes[1].isInt32();
+        if (name == "CosimoThreeOscillatorRenderer::sampleSharedMseg")
+            return parameterTypes.size() == 4 && parameterTypes[0].isInt32() && parameterTypes[1].isInt32()
+                && parameterTypes[2].isInt32() && parameterTypes[3].isFloat32();
+        if (parameterTypes.size() == 2)
+        {
+            const auto& first = parameterTypes[0];
+            const auto& second = parameterTypes[1];
+            if (!second.isArray() || !second.getElementType().isInt32()) return false;
+            if (name == "CosimoThreeOscillatorRenderer::renderShared")
+                return first.isArray() && first.getElementType().isFloat32();
+            if (name == "CosimoThreeOscillatorRenderer::updateSharedTables") return first.isInt32();
+        }
+        if (name != externalFunctionName || parameterTypes.size() != externalFunctionParameterCount) return false;
         for (std::size_t index = 0; index < parameterTypes.size(); ++index)
         {
             const auto& parameter = parameterTypes[index];
@@ -47,9 +61,25 @@ inline cmaj::Engine::ExternalFunctionProviderFn createExternalFunctionProvider()
     return [] (const char* functionName,
                choc::span<choc::value::Type> parameterTypes) -> void*
     {
-        if (! matchesExternalFunction (functionName, parameterTypes))
-            return nullptr;
-
+        if (! matchesExternalFunction (functionName, parameterTypes)) return nullptr;
+        if (std::string_view (functionName) == "CosimoThreeOscillatorRenderer::sharedMsegSerial")
+            return reinterpret_cast<void*> (&sharedMsegSerialNative);
+        if (std::string_view (functionName) == "CosimoThreeOscillatorRenderer::sampleSharedMseg")
+            return reinterpret_cast<void*> (&sampleSharedMsegNative);
+        if (functionName != nullptr && parameterTypes.size() == 2)
+        {
+            const auto name = std::string_view (functionName);
+            const auto& first = parameterTypes[0];
+            const auto& second = parameterTypes[1];
+            if (second.isArray() && second.getElementType().isInt32())
+            {
+                if (name == "CosimoThreeOscillatorRenderer::renderShared"
+                    && first.isArray() && first.getElementType().isFloat32())
+                    return reinterpret_cast<void*> (&renderSharedNative);
+                if (name == "CosimoThreeOscillatorRenderer::updateSharedTables" && first.isInt32())
+                    return reinterpret_cast<void*> (&updateSharedTablesNative);
+            }
+        }
         return reinterpret_cast<void*> (&renderAll);
     };
 }

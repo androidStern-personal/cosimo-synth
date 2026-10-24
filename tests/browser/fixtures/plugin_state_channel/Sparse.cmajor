@@ -1,0 +1,9 @@
+processor Sparse
+{
+    input value float gain [[ name: "Gain", min: -2, max: 2 ]];
+    input event float curveBuffer;
+    output stream float out;
+    float curve = 0;
+    event curveBuffer (float value) { curve = value; }
+    void main() { loop { out <- gain + curve; advance(); } }
+}

@@ -14,7 +14,6 @@ import type {
     IntegratedVideoBounceSession,
     VideoBounceAudioArtifact,
     VideoBounceContainer,
-    VideoBounceQuality,
     VideoBounceVideoArtifact,
 } from "../speedrun/integrated-contract";
 
@@ -36,13 +35,6 @@ const CONTAINER_OPTIONS: ReadonlyArray<SelectOption<VideoBounceContainer>> = [
     { value: "auto", label: "Auto" },
     { value: "mp4", label: "MP4" },
     { value: "webm", label: "WebM" },
-];
-
-const QUALITY_OPTIONS: ReadonlyArray<SelectOption<VideoBounceQuality>> = [
-    { value: "high", label: "High" },
-    { value: "medium", label: "Medium" },
-    { value: "low", label: "Low" },
-    { value: "very-low", label: "Very Low" },
 ];
 
 function moduleURL() {
@@ -153,7 +145,6 @@ export function VideoBounceFlow({
     const [progress, setProgress] = useState(0);
     const [error, setError] = useState<string | null>(null);
     const [container, setContainer] = useState<VideoBounceContainer>("auto");
-    const [quality, setQuality] = useState<VideoBounceQuality>("high");
 
     useEffect(() => {
         let live = true;
@@ -207,7 +198,6 @@ export function VideoBounceFlow({
         try {
             const nextVideo = await session.renderVideo({
                 container,
-                quality,
                 onProgress: setProgress,
             });
             setVideo(nextVideo);
@@ -217,7 +207,7 @@ export function VideoBounceFlow({
         } finally {
             setStage("ready");
         }
-    }, [audio, container, quality, session]);
+    }, [audio, container, session]);
 
     const busy = stage === "loading" || stage === "audio" || stage === "video";
     const status = stage === "loading"
@@ -332,7 +322,6 @@ export function VideoBounceFlow({
                 <div className="flex shrink-0 flex-col gap-2 sm:flex-row sm:items-end">
                     <div className="flex min-w-0 flex-1 gap-2">
                         <SelectChip label="Format" value={container} options={CONTAINER_OPTIONS} onChange={setContainer} disabled={busy} />
-                        <SelectChip label="Quality" value={quality} options={QUALITY_OPTIONS} onChange={setQuality} disabled={busy} />
                     </div>
                     <div className="flex shrink-0 gap-2 sm:justify-end">
                         {stage === "audio" || stage === "video" ? (

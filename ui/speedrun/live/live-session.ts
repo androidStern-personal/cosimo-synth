@@ -1,4 +1,5 @@
 import React from "react";
+import { flushSync } from "react-dom";
 import { createRoot } from "react-dom/client";
 
 import type { SpeedrunTelemetryTrack } from "../audio/telemetry";
@@ -7,6 +8,7 @@ import type { CumulativePatchState } from "../partial-states";
 import type { SpeedrunRecipe } from "../recipe";
 import type { SpeedrunTimeline } from "../timeline";
 import type { NotePerformance } from "../midi/performance-events";
+import { writeFrameDocument } from "../frame-document";
 import { LiveStage } from "./live-stage";
 import { acquireLiveStageRecorder } from "./live-recorder";
 import type {
@@ -70,43 +72,29 @@ const RUNTIME_TIMEOUT_MILLISECONDS = 30_000;
 /** Real settle after the final frame before the recording stops. */
 const RECORDING_TAIL_MILLISECONDS = 400;
 
-function createPhoneIframe(moduleURL: string): HTMLIFrameElement {
+function createPhoneIframe(): HTMLIFrameElement {
     const iframe = document.createElement("iframe");
     iframe.title = "Cosimo live performance";
     iframe.width = "393";
     iframe.height = "852";
+    return iframe;
+}
+
+/** Boot the performance bundle in the phone iframe once the stage holds it. */
+async function bootPhone(phone: HTMLIFrameElement, moduleURL: string) {
+    while (!phone.isConnected) await new Promise((resolve) => requestAnimationFrame(resolve));
     const bundledStyle = /\/index\.js(?:[?#]|$)/u.test(moduleURL)
         ? `<link rel="stylesheet" href=${JSON.stringify(new URL("./style.css", moduleURL).href)}>`
         : "";
-    iframe.srcdoc = `<!doctype html>
-<html><head><meta charset="utf-8">${bundledStyle}
-<style>html,body{margin:0;width:393px;height:852px;overflow:hidden;background:#0d0e10}</style></head>
-<body><script type="module">
-// A same-origin srcdoc iframe shares the parent's web storage. Shadow both
-// stores with in-memory stubs BEFORE product code loads, so a stale shell or
-// rail-dock state cannot leak into the performance and the scripted
-// navigation cannot pollute the user's real session.
-for (const storageName of ["sessionStorage", "localStorage"]) {
-    const entries = new Map();
-    Object.defineProperty(window, storageName, {
-        configurable: true,
-        value: {
-            get length() { return entries.size; },
-            key: (index) => [...entries.keys()][index] ?? null,
-            getItem: (key) => (entries.has(String(key)) ? entries.get(String(key)) : null),
-            setItem: (key, value) => { entries.set(String(key), String(value)); },
-            removeItem: (key) => { entries.delete(String(key)); },
-            clear: () => { entries.clear(); },
-        },
-    });
-}
-import(${JSON.stringify(moduleURL)}).then((module) => {
+    writeFrameDocument(phone, {
+        head: `${bundledStyle}
+<style>html,body{margin:0;width:393px;height:852px;overflow:hidden;background:#0d0e10}</style>`,
+        moduleScript: `import(${JSON.stringify(moduleURL)}).then((module) => {
     window.__COSIMO_LIVE_IFRAME__ = { run: module.runLivePerformanceInCurrentDocument };
 }).catch((error) => {
     window.__COSIMO_LIVE_IFRAME_ERROR__ = error?.stack || error?.message || String(error);
-});
-</script></body></html>`;
-    return iframe;
+});`,
+    });
 }
 
 async function waitForLiveRuntime(iframe: HTMLIFrameElement, signal?: AbortSignal): Promise<LiveIframeRuntime> {
@@ -163,7 +151,7 @@ export async function runLiveVideoSession(
     const stageHost = document.createElement("div");
     document.body.append(stageHost);
     const stageRoot = createRoot(stageHost);
-    const phone = createPhoneIframe(moduleURL);
+    const phone = createPhoneIframe();
 
     let frame = 0;
     const renderStage = () => {
@@ -174,7 +162,9 @@ export async function runLiveVideoSession(
             phone,
         }));
     };
-    renderStage();
+    // Commit the stage now: the capture below must target it while the user's
+    // click activation is still fresh, and a scheduled render can miss a frame.
+    flushSync(renderStage);
 
     const audio = request.masterAudioUrl !== null ? createAudioClock(request.masterAudioUrl) : null;
     const wall = audio === null ? createWallClock(request.startAtSeconds ?? 0) : null;
@@ -201,7 +191,6 @@ export async function runLiveVideoSession(
         // Capture acquisition must run while the user's click activation is
         // fresh — before the seconds-long iframe boot consumes it.
         if (request.record) {
-            await new Promise((resolve) => requestAnimationFrame(() => resolve(null)));
             const stageElement = stageHost.querySelector<HTMLElement>('[data-role="live-stage"]');
             if (!stageElement) throw new Error("The live stage did not mount.");
             recorder = await acquireLiveStageRecorder({
@@ -209,6 +198,7 @@ export async function runLiveVideoSession(
                 preferredContainer: request.preferredContainer,
             });
         }
+        await bootPhone(phone, moduleURL);
         const runtime = await waitForLiveRuntime(phone, request.signal);
         // Completion crosses the realm boundary through parent callbacks that
         // settle THIS realm's promises: an iframe-realm promise dies unsettled

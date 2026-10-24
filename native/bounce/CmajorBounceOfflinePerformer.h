@@ -78,6 +78,7 @@ public:
     void noteOn (std::int32_t note, std::uint8_t velocity) override;
     void noteOff (std::int32_t note) override;
     void process (float* left, float* right, std::uint32_t frameCount) override;
+    std::uint32_t outputLatencyFrames() const override;
     std::size_t residentBytes() const noexcept override;
 
     std::chrono::nanoseconds lastInitialiseDuration() const noexcept;

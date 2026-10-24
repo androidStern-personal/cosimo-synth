@@ -2,7 +2,7 @@
  * fast-check arbitraries for articulation-image domain values.
  *
  * Each factory takes the fast-check module as an argument because the test
- * loader (tests/helpers/load_ui_module.mjs) bundles this file into a data-URL
+ * loader (kit/tests/helpers/load_ui_module.mjs) bundles this file into a data-URL
  * module — importing fast-check here would inline a second copy whose
  * Arbitrary instances the test runner's copy may not accept.
  */

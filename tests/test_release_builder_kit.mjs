@@ -4,7 +4,9 @@ import fs from "node:fs/promises";
 import { existsSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { execFileSync } from "node:child_process";
+import { execFile, execFileSync } from "node:child_process";
+import http from "node:http";
+import { promisify } from "node:util";
 
 import {
     assertFeedMatchesPrefix,
@@ -21,17 +23,19 @@ import {
     pushReleaseAtomically,
     readCapabilityFromKeychain,
     readDestinationConfig,
-    readCmajorPin,
+    releaseDestination,
     renderManifest,
     sha256File,
     renderToolchain,
     repoRoot,
     resolveRelativeGitUrl,
     runRelease,
+    stampChangelog,
     runCommand,
     verifyRelativeChocSubmodule,
 } from "../scripts/release_builder_kit.mjs";
-import { redact } from "../kit/scripts/redacted.mjs";
+import { readCmajorPin } from "../scripts/export_kit.mjs";
+import { redact, reveal } from "../scripts/redacted.mjs";
 
 // Commits in test repos need an identity even on machines without a global one.
 Object.assign(process.env, {
@@ -52,7 +56,7 @@ function testDestination(capability = "cohort-test") {
     }, redact(capability));
 }
 
-const cleanSourceState = () => ({ sha: sourceSha, status: "" });
+const cleanSourceState = () => ({ sha: sourceSha, status: "", date: "2026-10-04" });
 
 function dryArgs(version, staging, extra = []) {
     return [
@@ -117,11 +121,12 @@ function fakeExportKit(files = {}, {
         }
         await fs.writeFile(path.join(outputDir, "kit/toolchain.json"), `${JSON.stringify(toolchain, null, 2)}\n`);
         await fs.writeFile(path.join(outputDir, "kit/kit.json"), `${JSON.stringify({ version })}\n`);
+        await fs.writeFile(path.join(outputDir, "kit/CHANGELOG.md"), `# Builder Kit changelog\n\n## ${version} — Fixture release\n\n- Fixture.\n`);
         await fs.writeFile(
-            path.join(outputDir, "kit/cmake/CosimoDependencies.cmake"),
-            `include("\${CMAKE_CURRENT_LIST_DIR}/dependency-sources.cmake")\nfunction(x)\n    CPMAddPackage(\n        NAME cosimo_cmajor\n        GIT_REPOSITORY "\${COSIMO_CMAJOR_GIT_URL}"\n        GIT_TAG "${cmajorCommit}"\n    )\nendfunction()\n`,
+            path.join(outputDir, "kit/cmake/dependencies.cmake"),
+            `include("\${CMAKE_CURRENT_LIST_DIR}/dependency-sources.cmake")\nfunction(x)\n    CPMAddPackage(\n        NAME builder_kit_cmajor\n        GIT_REPOSITORY "\${BUILDER_KIT_CMAJOR_GIT_URL}"\n        GIT_TAG "${cmajorCommit}"\n    )\nendfunction()\n`,
         );
-        await fs.writeFile(path.join(outputDir, "kit/cmake/dependency-sources.cmake"), `set(COSIMO_CMAJOR_GIT_URL "${cmajorUrl}")\n`);
+        await fs.writeFile(path.join(outputDir, "kit/cmake/dependency-sources.cmake"), `set(BUILDER_KIT_CMAJOR_GIT_URL "${cmajorUrl}")\n`);
         await fs.writeFile(path.join(outputDir, "package.json"), '{ "name": "starter" }\n');
         await fs.writeFile(path.join(outputDir, "EXPORT_MANIFEST.json"), `{ "feedUrlSeen": ${JSON.stringify(feedUrl ?? null)} }\n`);
         for (const [relative, content] of Object.entries(files)) {
@@ -131,6 +136,21 @@ function fakeExportKit(files = {}, {
         return { outputRoot: outputDir, fileCount: 6 + Object.keys(files).length, sourceCommit: exportedSourceCommit };
     };
 }
+
+test("a release needs its changelog section and dates it from the source commit", () => {
+    const changelog = "# Builder Kit changelog\n\n## 1.2.3 — Plugin state\n\nText.\n\n## 1.2.0\n";
+    assert.equal(
+        stampChangelog(changelog, "1.2.3", "2026-10-04"),
+        "# Builder Kit changelog\n\n## 1.2.3 (2026-10-04) — Plugin state\n\nText.\n\n## 1.2.0\n",
+    );
+    assert.equal(stampChangelog("## 1.2.3-beta.1\n", "1.2.3-beta.1", "2026-10-04"), "## 1.2.3-beta.1 (2026-10-04)\n");
+    assert.throws(() => stampChangelog("## 1.2.2 — Earlier\n", "1.2.3", "2026-10-04"),
+        /^Error: kit\/CHANGELOG\.md has no "## 1\.2\.3" section, so 1\.2\.3 cannot be released\. Add a "## 1\.2\.3 — <title>" section/u);
+    assert.doesNotMatch((() => { try { stampChangelog("## 1.2.2\n", "1.2.3", "x"); } catch (error) { return error.message; } })(), /Unreleased/u,
+        "the message names what is missing, not a heading that may not exist");
+    assert.throws(() => stampChangelog("## 1.2.30\n", "1.2.3", "2026-10-04"), /has no "## 1\.2\.3" section/u);
+    assert.throws(() => stampChangelog("## 1.2.3\n## 1.2.3\n", "1.2.3", "2026-10-04"), /has 2 "## 1\.2\.3" sections\. Merge them into one/u);
+});
 
 test("parse_args_validates_the_release_contract", () => {
     const full = parseArgs([
@@ -174,6 +194,27 @@ test("canonical kit CI runs doctor, setup, updater, and release contracts", asyn
     assert.match(workflow, /run: npm run test:kit:release-contracts/u);
 });
 
+test("a dry run stamps a stand-in cohort and never reads the Keychain; a real release reads it", async () => {
+    const configRoot = await makeScratch("kit-release-dry-destination-");
+    try {
+        const configPath = path.join(configRoot, "destination.json");
+        await fs.writeFile(configPath, JSON.stringify({ feedOrigin: "https://feed.example.invalid", rcloneRoot: "r2:bucket/feed" }));
+        const config = await readDestinationConfig(configPath);
+        const refuse = () => { throw new Error("The Keychain was read."); };
+        const dry = releaseDestination({ dryRun: true }, config, { readCapability: refuse });
+        assert.equal(reveal(dry.feedUrl), "https://feed.example.invalid/dry-run");
+        assert.equal(reveal(dry.r2Target), "r2:bucket/feed/dry-run");
+        const reads = [];
+        const real = releaseDestination({ dryRun: false }, config, {
+            readCapability: ({ service }) => { reads.push(service); return redact("cohort-xyz"); },
+        });
+        assert.deepEqual(reads, ["builder-kit-feed-cohort"]);
+        assert.equal(reveal(real.feedUrl), "https://feed.example.invalid/cohort-xyz");
+    } finally {
+        await fs.rm(configRoot, { recursive: true, force: true });
+    }
+});
+
 test("release capability stays out of argv, JSON, logs, and subprocess failures", async () => {
     const sentinel = "SENTINEL-CAPABILITY-RELEASE-DO-NOT-LOG";
     const capability = readCapabilityFromKeychain({ execute: () => `${sentinel}\n` });
@@ -201,7 +242,7 @@ test("release capability stays out of argv, JSON, logs, and subprocess failures"
         const feed = path.join(publishFixture, "feed");
         await initRepo(source, { "fixture.txt": "fixture" });
         await fs.mkdir(feed);
-        createBareMirror(source, path.join(feed, "kit.git"));
+        createBareMirror(source, path.join(feed, "kit.git"), { commit: git(source, "rev-parse", "HEAD"), includeReleaseTags: true });
         await fs.writeFile(path.join(feed, "manifest.json"), "{}");
         await publishReleaseObjects(feed, destination, {
             run: (command, args, options) => { calls.push({ command, args, env: options.env }); return ""; },
@@ -251,7 +292,19 @@ test("relative_git_urls_and_gitmodules_resolve_like_git", () => {
 test("cmajor_pin_matches_the_toolchain_contract", async () => {
     const pin = await readCmajorPin();
     const toolchain = JSON.parse(await fs.readFile(path.join(repoRoot, "kit/toolchain.json"), "utf8"));
-    assert.equal(pin.commit, toolchain.cmaj.forkCommit);
+    assert.equal(Object.hasOwn(toolchain.cmaj, "forkCommit"), false, "source template must not maintain a duplicate build pin");
+    const scratch = await fs.mkdtemp(path.join(os.tmpdir(), "kit-pin-contract-"));
+    try {
+        const { exportKit } = await import("../scripts/export_kit.mjs");
+        const outputRoot = path.join(scratch, "customer");
+        await exportKit(outputRoot);
+        const exportedPin = await readCmajorPin(path.join(outputRoot, "kit"));
+        const exportedToolchain = JSON.parse(await fs.readFile(path.join(outputRoot, "kit/toolchain.json"), "utf8"));
+        assert.equal(exportedToolchain.cmaj.forkCommit, exportedPin.commit);
+        assert.equal(exportedPin.commit, pin.commit);
+    } finally {
+        await fs.rm(scratch, { recursive: true, force: true });
+    }
     assert.match(pin.url, /^https:\/\/.+cmajor\.git$/);
 });
 
@@ -266,6 +319,7 @@ test("tool artifact paths are scoped to the exact kit release version", async ()
 
 test("toolchain_and_manifest_render_release_hashes", async () => {
     const toolchain = JSON.parse(await fs.readFile(path.join(repoRoot, "kit/toolchain.json"), "utf8"));
+    toolchain.cmaj.forkCommit = (await readCmajorPin()).commit;
     const hashes = {
         cmaj: { file: "/x/cmaj-macos-arm64.tar.gz", sha256: "1".repeat(64), bytes: 10 },
         cmajPlugin: { file: "/x/CmajPlugin-macos-arm64.zip", sha256: "2".repeat(64), bytes: 20 },
@@ -336,7 +390,7 @@ test("choc_submodule_url_must_be_relative", async () => {
     try {
         const relative = await makeForkPair(path.join(scratch, "relative"));
         const relativeMirror = path.join(scratch, "relative-mirror.git");
-        createBareMirror(relative.cmajorDir, relativeMirror);
+        createBareMirror(relative.cmajorDir, relativeMirror, { commit: relative.cmajorCommit });
         assert.equal(existsSync(path.join(relativeMirror, "info/refs")), true);
         assert.equal(existsSync(path.join(relativeMirror, "objects/info/packs")), true);
         const submodule = verifyRelativeChocSubmodule(relativeMirror, relative.cmajorCommit);
@@ -344,7 +398,7 @@ test("choc_submodule_url_must_be_relative", async () => {
 
         const absolute = await makeForkPair(path.join(scratch, "absolute"), "https://github.com/Tracktion/choc.git");
         const absoluteMirror = path.join(scratch, "absolute-mirror.git");
-        createBareMirror(absolute.cmajorDir, absoluteMirror);
+        createBareMirror(absolute.cmajorDir, absoluteMirror, { commit: absolute.cmajorCommit });
         assert.throws(() => verifyRelativeChocSubmodule(absoluteMirror, absolute.cmajorCommit), /must be relative/);
     } finally {
         await fs.rm(scratch, { recursive: true, force: true });
@@ -355,7 +409,7 @@ test("commit_release_replaces_the_lineage_tree_and_tags_it", async () => {
     const scratch = await makeScratch("kit-release-lineage-");
     try {
         const lineage = path.join(scratch, "lineage");
-        await initRepo(lineage, { "kit/old.txt": "old\n", "fx/customer/plugin.txt": "never in a kit commit\n" });
+        const previousCommit = await initRepo(lineage, { "kit/old.txt": "old\n", "fx/customer/plugin.txt": "never in a kit commit\n" });
         const exportRoot = path.join(scratch, "export");
         await fs.mkdir(path.join(exportRoot, "kit"), { recursive: true });
         await fs.writeFile(path.join(exportRoot, "kit/new.txt"), "new\n");
@@ -365,6 +419,13 @@ test("commit_release_replaces_the_lineage_tree_and_tags_it", async () => {
         assert.equal(result.tag, "v2.0.0");
         assert.equal(result.branch, "main");
         assert.equal(git(lineage, "log", "-1", "--format=%s"), "Builder Kit 2.0.0");
+        assert.equal(git(lineage, "log", "-1", "--format=%an <%ae>%n%cn <%ce>"),
+            "Builder Kit Release <release@builder-kit.invalid>\nBuilder Kit Release <release@builder-kit.invalid>",
+            "release authors must not inherit the maintainer's shell identity");
+        assert.equal(git(lineage, "for-each-ref", "--format=%(taggername) %(taggeremail)", "refs/tags/v2.0.0"),
+            "Builder Kit Release <release@builder-kit.invalid>");
+        assert.equal(git(lineage, "rev-parse", "HEAD^"), previousCommit,
+            "neutral release metadata must preserve the ancestry used by customer updates");
         assert.deepEqual(git(lineage, "ls-tree", "-r", "--name-only", "HEAD").split("\n").sort(), ["kit/new.txt", "link.txt"]);
         assert.equal(git(lineage, "status", "--porcelain"), "");
         assert.equal(await fs.readlink(path.join(lineage, "link.txt")), "../kit/new.txt");
@@ -574,15 +635,17 @@ test("dry_run_stages_the_full_feed_layout_without_network", async () => {
             platform: "linux",
             log: (line) => lines.push(line),
             exportKit: fakeExportKit({ "kit/AGENTS.md": "# kit\n" }, { cmajorCommit: forks.cmajorCommit, cmajorUrl: forks.cmajorDir }),
-            proveExport: async (root) => { proved = root; },
+            proveExport: async (root, { proofRoot }) => { proved = { root, proofRoot }; },
             destination: testDestination("cohort-abc"),
             getSourceState: cleanSourceState,
         });
 
         assert.equal(result.stagingRoot, staging);
-        assert.equal(proved, path.join(staging, "proof"));
+        assert.deepEqual(proved, { root: path.join(staging, "export"), proofRoot: path.join(staging, "proof") },
+            "the proof runs on a copy of the staged export");
         const feed = JSON.parse(await fs.readFile(path.join(staging, "export/kit/feed.json"), "utf8"));
         assert.equal(feed.baseUrl, feedUrl);
+        assert.match(await fs.readFile(path.join(staging, "export/kit/CHANGELOG.md"), "utf8"), /^## 1\.2\.3 \(2026-10-04\) — Fixture release$/mu);
         const exportManifest = JSON.parse(await fs.readFile(path.join(staging, "export/EXPORT_MANIFEST.json"), "utf8"));
         assert.equal(exportManifest.feedUrlSeen, feedUrl, "exportKit receives the feed URL as an option");
 
@@ -669,6 +732,67 @@ test("dry_run_fails_on_pin_and_submodule_problems", async () => {
             /same cohort path/,
         );
     } finally {
+        await fs.rm(scratch, { recursive: true, force: true });
+    }
+});
+
+
+test("selected mirrors exclude unrelated history while cold dumb-HTTP clients fetch release tags and relative CHOC", async () => {
+    const scratch = await makeScratch("kit-selected-mirrors-");
+    let server;
+    const gitAsync = async (cwd, ...args) => (await promisify(execFile)("git", args, { cwd })).stdout.trim();
+    try {
+        const forks = await makeForkPair(path.join(scratch, "source"));
+        git(forks.cmajorDir, "tag", "-a", "v0.1.0", "HEAD^", "-m", "older release");
+        git(forks.cmajorDir, "tag", "-a", "v0.2.0", "-m", "selected release");
+        const excluded = [];
+        for (const source of [forks.cmajorDir, forks.chocDir]) {
+            git(source, "switch", "--quiet", "--orphan", "unrelated-development");
+            await fs.writeFile(path.join(source, "unreleased.txt"), "UNRELEASED-DEVELOPMENT-CONTENT");
+            git(source, "add", "unreleased.txt");
+            git(source, "commit", "--quiet", "-m", "unrelated work");
+            git(source, "tag", "v99.0.0");
+            excluded.push(git(source, "rev-parse", "HEAD"), git(source, "rev-parse", "HEAD:unreleased.txt"));
+        }
+        const feed = path.join(scratch, "feed");
+        await fs.mkdir(feed);
+        createBareMirror(forks.cmajorDir, path.join(feed, "kit.git"), { commit: forks.cmajorCommit, includeReleaseTags: true });
+        createBareMirror(forks.cmajorDir, path.join(feed, "cmajor.git"), { commit: forks.cmajorCommit });
+        createBareMirror(forks.chocDir, path.join(feed, "choc.git"), { commit: forks.chocCommit });
+        for (const name of ["kit.git", "cmajor.git", "choc.git"]) {
+            const mirror = path.join(feed, name);
+            const refs = git(mirror, "for-each-ref", "--format=%(refname)").split("\n");
+            assert.deepEqual(refs, name === "kit.git"
+                ? ["refs/heads/main", "refs/tags/v0.1.0", "refs/tags/v0.2.0"] : ["refs/heads/main"]);
+            for (const object of excluded)
+                assert.throws(() => git(mirror, "cat-file", "-e", object), "unrelated commits and blobs must be absent, not merely unadvertised");
+            assert.equal(existsSync(path.join(mirror, "shallow")), false);
+            assert.equal(existsSync(path.join(mirror, "FETCH_HEAD")), false);
+        }
+        server = http.createServer(async (request, response) => {
+            try {
+                const file = path.resolve(feed, `.${new URL(request.url, "http://localhost").pathname}`);
+                if (!file.startsWith(`${feed}${path.sep}`)) throw new Error("outside fixture");
+                response.end(await fs.readFile(file));
+            } catch { response.statusCode = 404; response.end(); }
+        });
+        await new Promise(resolve => server.listen(0, "127.0.0.1", resolve));
+        const origin = `http://127.0.0.1:${server.address().port}`;
+        const client = path.join(scratch, "cold-source-client");
+        await gitAsync(scratch, "-c", "http.proxy=", "clone", "--quiet", `${origin}/cmajor.git`, client);
+        assert.equal(git(client, "rev-parse", "HEAD"), forks.cmajorCommit);
+        assert.equal(git(client, "rev-list", "--count", "HEAD"), "2");
+        await gitAsync(client, "-c", "http.proxy=", "submodule", "update", "--init", "include/choc");
+        assert.equal(git(path.join(client, "include/choc"), "rev-parse", "HEAD"), forks.chocCommit);
+        assert.equal(await fs.readFile(path.join(client, "include/choc/choc/text/UTF8.h"), "utf8"), "// choc\n");
+        const kitClient = path.join(scratch, "cold-kit-client");
+        await fs.mkdir(kitClient);
+        git(kitClient, "init", "--quiet");
+        await gitAsync(kitClient, "-c", "http.proxy=", "fetch", "--quiet", "--no-tags", `${origin}/kit.git`, "+refs/tags/v*:refs/kit/releases/v*");
+        assert.equal(git(kitClient, "rev-parse", "refs/kit/releases/v0.2.0^{}"), forks.cmajorCommit);
+        assert.equal(git(kitClient, "rev-parse", "refs/kit/releases/v0.1.0^{}"), git(client, "rev-parse", "HEAD^"));
+    } finally {
+        if (server) await new Promise(resolve => server.close(resolve));
         await fs.rm(scratch, { recursive: true, force: true });
     }
 });

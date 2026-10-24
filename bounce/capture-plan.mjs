@@ -14,6 +14,12 @@ export const BOUNCE_SILENCE_THRESHOLD_LINEAR = 10 ** (BOUNCE_SILENCE_THRESHOLD_D
 export const BOUNCE_SILENCE_WINDOW_SECONDS = 0.05;
 export const BOUNCE_TAIL_PADDING_SECONDS = 0.10;
 export const BOUNCE_OFFLINE_BLOCK_FRAMES = 128;
+/**
+ * The synth's output passes its fixed Polish bus, which delays every sound by
+ * this many frames (cmajor/Polish.cmajor declares it as the patch latency). A
+ * capture skips them so each recording starts where its sound starts.
+ */
+export const BOUNCE_OUTPUT_LATENCY_FRAMES = 156;
 
 function invariant(condition, message) {
     if (!condition) throw new Error(message);
@@ -102,6 +108,11 @@ function normalizeSetupEvents(events, {
             advanceFrames,
             sessionScoped,
         };
+        if (entry.preparation !== undefined) {
+            invariant(entry.preparation === "mseg" && entry.endpointID === "modulationMsegBuffer",
+                `${fieldName}[${index}] has unsupported preparation`);
+            normalized.preparation = "mseg";
+        }
         if (!rootScoped) return normalized;
         invariant(typeof entry?.rootNoteField === "string"
             && /^[A-Za-z_][A-Za-z0-9_]*$/.test(entry.rootNoteField),
@@ -109,6 +120,25 @@ function normalizeSetupEvents(events, {
         invariant(isPlainObject(normalized.value),
             `${fieldName}[${index}].value must be an object`);
         return { ...normalized, rootNoteField: entry.rootNoteField };
+    });
+}
+
+function normalizeWavetableSources(sources) {
+    invariant(Array.isArray(sources) && sources.length <= 3, "Invalid wavetable source list");
+    const seen = new Set(), clones = new WeakMap();
+    return sources.map(source => {
+        invariant(Number.isInteger(source.input) && source.input >= 0 && source.input < 3 && !seen.has(source.input), "Invalid wavetable source input");
+        seen.add(source.input);
+        invariant(Number.isInteger(source.tableIndex) && source.tableIndex >= 0
+            && Number.isInteger(source.generation) && source.generation > 0, "Invalid wavetable source identity");
+        invariant(Array.isArray(source.frames) && source.frames.length >= 1 && source.frames.length <= 256, "Invalid wavetable source frames");
+        const frames = source.frames.map(frame => {
+            invariant(frame instanceof Float32Array && frame.length === 2048 && frame.every(Number.isFinite), "Invalid wavetable source frame");
+            let clone = clones.get(frame);
+            if (!clone) { clone = frame.slice(); clones.set(frame, clone); }
+            return clone;
+        });
+        return Object.freeze({input:source.input,tableIndex:source.tableIndex,generation:source.generation,frames:Object.freeze(frames)});
     });
 }
 
@@ -122,6 +152,7 @@ export function createBounceCaptureSnapshot({
     tempoBpm = 120,
     parameters = {},
     setupEvents = [],
+    wavetableSources = [],
     rootSetupEvents = [],
     settleFrames = BOUNCE_OFFLINE_BLOCK_FRAMES,
     sourceGeneration = 0,
@@ -145,6 +176,7 @@ export function createBounceCaptureSnapshot({
         tempoBpm,
         parameters: Object.freeze(normalizeParameters(parameters).map(Object.freeze)),
         setupEvents: Object.freeze(normalizeSetupEvents(setupEvents).map(Object.freeze)),
+        wavetableSources: Object.freeze(normalizeWavetableSources(wavetableSources)),
         // Root-scoped events receive the worker job's note immediately before
         // MIDI note-on. They remain part of the immutable press-time recipe.
         rootSetupEvents: Object.freeze(normalizeSetupEvents(rootSetupEvents, {
@@ -224,6 +256,7 @@ export function createBounceCapturePlan(snapshotInput, {
         silenceWindowFrames,
         tailPaddingFrames,
         blockFrames,
+        outputLatencyFrames: BOUNCE_OUTPUT_LATENCY_FRAMES,
         jobs: Object.freeze(jobs),
     });
 }

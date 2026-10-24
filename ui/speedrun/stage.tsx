@@ -1,4 +1,3 @@
-import React from "react";
 import { interpolate } from "remotion";
 
 import "./stage.css";

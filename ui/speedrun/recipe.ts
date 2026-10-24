@@ -4,16 +4,12 @@ import {
 } from "../shared/lane-modulation-targets";
 import type { EffectModuleId } from "../shared/target-descriptor";
 import {
-    deserializeLaneStateV2,
     laneDefaultParamsForType,
     parseLaneInstanceId,
-    serializeLaneStateV2,
     type LaneChainNodeV2,
     type LaneStateV2,
 } from "../shared/lane-state-v2";
 import {
-    deserializeModulationState,
-    serializeModulationState,
     type ModulationMsegSlot,
     type ModulationRoute,
     type ModulationState,
@@ -425,7 +421,6 @@ function compileOscillatorSection(
     oscillator: PatchAnalysis["oscillators"][number],
     first: boolean,
     analysis: PatchAnalysis,
-    document: PatchDocument,
     defaults: DefaultsSnapshot,
     catalog: WavetableCatalog,
 ): SpeedrunSection {
@@ -538,7 +533,7 @@ export function compileRecipe(
         .filter((source) => source.hasConfiguration)
         .map((source) => compileSourceSection(source, document, defaults));
     const oscillatorSections = analysis.oscillators.map((oscillator, index) => (
-        compileOscillatorSection(oscillator, index === 0, analysis, document, defaults, catalog)
+        compileOscillatorSection(oscillator, index === 0, analysis, defaults, catalog)
     ));
     const filterSections = analysis.voiceFilter ? [compileFilterSection(analysis.voiceFilter, defaults)] : [];
     const effectSections = analysis.effects.map((effect) => compileEffectSection(effect, defaults));

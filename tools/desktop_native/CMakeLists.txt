@@ -6,8 +6,8 @@ project(
     LANGUAGES CXX C)
 
 get_filename_component(COSIMO_REPO_ROOT "${CMAKE_CURRENT_LIST_DIR}/../.." ABSOLUTE)
-include("${COSIMO_REPO_ROOT}/kit/cmake/CosimoDependencies.cmake")
-cosimo_add_production_dependencies()
+include("${COSIMO_REPO_ROOT}/kit/cmake/dependencies.cmake")
+builder_kit_dependencies()
 
 if (NOT DEFINED COSIMO_PATCH_PATH OR COSIMO_PATCH_PATH STREQUAL "")
     message(FATAL_ERROR "COSIMO_PATCH_PATH must point to WavetableSynth.cmajorpatch")
@@ -29,7 +29,7 @@ endif()
 set(CMAJ_VERSION ${PROJECT_VERSION})
 set(JUCE_ENABLE_MODULE_SOURCE_GROUPS ON)
 
-add_subdirectory("${COSIMO_JUCE_SOURCE_DIR}" juce)
+add_subdirectory("${BUILDER_KIT_JUCE_SOURCE_DIR}" juce)
 
 juce_add_plugin(CosimoDesktopNative
     PRODUCT_NAME "CosimoDesktopNative"
@@ -63,6 +63,7 @@ target_compile_definitions(CosimoDesktopNative PRIVATE
     $<$<CONFIG:Debug>:DEBUG=1>
     $<$<CONFIG:Debug>:CMAJ_ENABLE_ALLOCATION_CHECKER=1>
     CMAJOR_DLL=1
+    CMAJ_USE_QUICKJS_WORKER=1
     CMAJ_ENABLE_WEBVIEW_DEV_TOOLS=1
     COSIMO_ENABLE_WEBVIEW_DEV_SERVER=1
     COSIMO_DESKTOP_UI_SOURCE_MODE="${COSIMO_DESKTOP_UI_SOURCE_MODE}"
@@ -75,8 +76,8 @@ target_compile_definitions(CosimoDesktopNative PRIVATE
 )
 
 target_include_directories(CosimoDesktopNative PRIVATE
-    "${COSIMO_CMAJOR_SOURCE_DIR}/include"
-    "${COSIMO_CHOC_SOURCE_DIR}"
+    "${BUILDER_KIT_CMAJOR_SOURCE_DIR}/include"
+    "${BUILDER_KIT_CHOC_SOURCE_DIR}"
     "${CMAKE_CURRENT_LIST_DIR}/../../native/three_oscillator_renderer"
     "${CMAKE_CURRENT_LIST_DIR}/../../native/bounce"
     "${CMAKE_CURRENT_LIST_DIR}/../../native/three_oscillator_renderer/third_party/xsimd/include"
@@ -107,3 +108,17 @@ target_include_directories(cosimo_t78_vst3_automation_probe PRIVATE
 target_link_libraries(cosimo_t78_vst3_automation_probe PRIVATE
     juce::juce_audio_processors
 )
+
+# Uses the production processor constructor and processBlock without installing
+# a plug-in. Including its implementation keeps the probe out of the public API.
+add_executable(cosimo_plugin_state_desktop_wrapper_probe EXCLUDE_FROM_ALL
+    "${COSIMO_REPO_ROOT}/tests/native/PluginStateDesktopWrapperProbe.cpp"
+)
+target_compile_features(cosimo_plugin_state_desktop_wrapper_probe PRIVATE cxx_std_17)
+target_compile_definitions(cosimo_plugin_state_desktop_wrapper_probe PRIVATE
+    $<TARGET_PROPERTY:CosimoDesktopNative,COMPILE_DEFINITIONS>
+)
+target_include_directories(cosimo_plugin_state_desktop_wrapper_probe PRIVATE
+    $<TARGET_PROPERTY:CosimoDesktopNative,INCLUDE_DIRECTORIES>
+)
+target_link_libraries(cosimo_plugin_state_desktop_wrapper_probe PRIVATE CosimoDesktopNative)

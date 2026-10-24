@@ -85,13 +85,17 @@ RootCapture renderRoot (const CapturePlan& plan,
                         const std::atomic<bool>& cancelRequested)
 {
     checkCancellation (cancelRequested);
-    const auto totalFrames64 = static_cast<std::uint64_t> (plan.holdFrames)
+    // The note sounds once the output latency has passed; the recording starts
+    // there, which puts its note-off exactly at holdFrames.
+    const auto latencyFrames = performer.outputLatencyFrames();
+    const auto totalFrames64 = static_cast<std::uint64_t> (latencyFrames)
+                             + plan.holdFrames
                              + plan.tailCapFrames;
     require (totalFrames64 <= std::numeric_limits<std::uint32_t>::max(),
              "Bounce render length exceeds the native frame range");
     const auto totalFrames = static_cast<std::uint32_t> (totalFrames64);
 
-    std::vector<float> rendered (static_cast<std::size_t> (totalFrames) * 2);
+    std::vector<float> rendered (static_cast<std::size_t> (totalFrames - latencyFrames) * 2);
     std::vector<float> left (plan.blockFrames);
     std::vector<float> right (plan.blockFrames);
     const auto startedAt = std::chrono::steady_clock::now();
@@ -111,7 +115,9 @@ RootCapture renderRoot (const CapturePlan& plan,
         performer.process (left.data(), right.data(), count);
         for (auto frame = std::uint32_t { 0 }; frame < count; ++frame)
         {
-            const auto target = static_cast<std::size_t> (frameOffset + frame) * 2;
+            if (frameOffset + frame < latencyFrames)
+                continue;
+            const auto target = static_cast<std::size_t> (frameOffset + frame - latencyFrames) * 2;
             rendered[target] = left[frame];
             rendered[target + 1] = right[frame];
         }

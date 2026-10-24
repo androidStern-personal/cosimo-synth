@@ -11,16 +11,16 @@ release a product.
 
 - What it is: the C++ framework the dedicated plugin build (`fx:prod:build`)
   links into every native plugin bundle. The pinned commit is fetched by CPM
-  from the official repository (`kit/cmake/CosimoDependencies.cmake`).
+  from the official repository (`kit/cmake/dependencies.cmake`).
 - License: dual-licensed by the JUCE team — AGPLv3 (open source) or a
   commercial JUCE license. Terms: https://juce.com/legal/juce-9-licence/
 - What this means for you: a closed-source plugin built with JUCE needs a JUCE
   license held by you (the person or company releasing the plugin). Each
   customer of the Builder Kit who ships closed-source JUCE plugins needs their
-  own JUCE license; the kit purchase does not include one, and Cosimo cannot
-  grant one. Releasing under the AGPLv3 instead is the open-source route.
-  Which JUCE plan applies, and its cost, is decided by the JUCE team's terms
-  at the link above, not by this file.
+  own JUCE license; the kit purchase does not include one, and the kit's
+  seller cannot grant one. Releasing under the AGPLv3 instead is the
+  open-source route. Which JUCE plan applies, and its cost, is decided by the
+  JUCE team's terms at the link above, not by this file.
 - `npm run kit:setup` shows this notice and records your acknowledgment once
   under `build/kit-tools/`; `npm run kit:doctor` reports it.
 
@@ -30,7 +30,7 @@ release a product.
   `kit:setup` from the pinned toolchain) generates C++ from your patch for the
   dedicated plugin build; the generic `CmajPlugin.vst3` loader is the JIT
   development host used by `fx:jit:install`. The Cmajor source commit pinned
-  in `kit/cmake/CosimoDependencies.cmake` is fetched by CPM.
+  in `kit/cmake/dependencies.cmake` is fetched by CPM.
 - License: Cmajor is published by Cmajor Software Ltd under a dual GPLv3 (or
   later) / commercial license, with an end-user license agreement for the
   tools. Terms: https://cmajor.dev/docs/Licence (see also `LICENSE.md` and
@@ -63,7 +63,27 @@ release a product.
 
 ## npm packages
 
-Build-time tooling (TypeScript, Vite, React, Playwright, esbuild, and their
-dependencies) is installed by `npm install` under the licenses declared in
-each package's `package.json`. React is bundled into plugin UIs and is MIT
-licensed; the rest is development tooling that does not ship in a plugin.
+`npm ci` installs every package below from `package-lock.json`, each under the
+license declared in its own `package.json` and `LICENSE` file.
+
+These packages are bundled into the JavaScript of every plugin UI that uses
+the kit's controls or examples, so they ship inside your plugins:
+
+- `react` and `react-dom`: MIT. Copyright (c) Meta Platforms, Inc. and
+  affiliates.
+- `jotai`: MIT. Copyright (c) 2020 Poimandres.
+- `@radix-ui/react-slot`: MIT. Copyright (c) 2022 WorkOS.
+- `@radix-ui/react-context-menu`: MIT. Copyright (c) 2022 WorkOS.
+
+The packages they depend on and that a bundle can include (`scheduler`, the
+other `@radix-ui/*` primitives, `@floating-ui/*`, `react-remove-scroll`,
+`aria-hidden` and similar) are MIT licensed too, except `tslib` (0BSD).
+
+- What this means for you: MIT asks you to keep each copyright and permission
+  notice with copies you distribute, for example in your plugin's About text or
+  documentation. Each package's full notice is in
+  `node_modules/<package>/LICENSE`.
+
+The remaining packages are build tooling that never ships in a plugin:
+`typescript`, `vite`, `@vitejs/plugin-react`, `esbuild`, `playwright`,
+`@types/react` and `@types/react-dom`, with their own dependencies.

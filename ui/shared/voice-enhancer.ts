@@ -1,5 +1,5 @@
 /**
- * T62's one-band per-voice Enhancer contract.
+ * The one-band per-voice Enhancer contract.
  *
  * This is the shared authority for host IDs, base ranges, display scales, and
  * modulation identities. The DSP owns one instance per allocated voice; the

@@ -1,7 +1,8 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { execFile } from "node:child_process";
-import { chmod, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { constants } from "node:fs";
+import { access, chmod, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { promisify } from "node:util";
@@ -9,6 +10,22 @@ import { promisify } from "node:util";
 const execFileAsync = promisify(execFile);
 const repoRoot = path.resolve(import.meta.dirname, "..");
 const hookPath = path.join(repoRoot, ".claude", "hooks", "session-start.sh");
+
+/** The hook installs the wasm32-wasi packages only where this toolchain is missing. */
+async function wasiToolchainPresent() {
+    try {
+        await access("/usr/lib/wasm32-wasi/crt1-reactor.o", constants.R_OK);
+        await access("/usr/lib/llvm-18/bin/wasm-ld", constants.X_OK);
+        return true;
+    } catch {
+        return false;
+    }
+}
+
+/** The machine's environment without the Git rewrites a session already carries. */
+function environmentWithoutGitConfig() {
+    return Object.fromEntries(Object.entries(process.env).filter(([name]) => !name.startsWith("GIT_CONFIG_")));
+}
 
 async function writeExecutable(filePath, source) {
     await writeFile(filePath, source, "utf8");
@@ -46,7 +63,7 @@ exit 0
         const { stdout, stderr } = await execFileAsync(hookPath, [], {
             cwd: fixtureRoot,
             env: {
-                ...process.env,
+                ...environmentWithoutGitConfig(),
                 CLAUDE_CODE_REMOTE: "true",
                 CLAUDE_ENV_FILE: environmentPath,
                 CLAUDE_PROJECT_DIR: fixtureRoot,
@@ -62,7 +79,12 @@ exit 0
             readFile(hookPath, "utf8"),
         ]);
         assert.match(commands, /^npm ci --no-audit --no-fund$/mu);
-        assert.match(commands, /^apt-get install -y -qq wasi-libc libc\+\+-18-dev-wasm32 libclang-rt-18-dev-wasm32 lld-18$/mu);
+        if (await wasiToolchainPresent()) {
+            assert.doesNotMatch(commands, /^apt-get/mu);
+            assert.match(stdout, /wasm32-wasi toolchain already present/u);
+        } else {
+            assert.match(commands, /^apt-get install -y -qq wasi-libc libc\+\+-18-dev-wasm32 libclang-rt-18-dev-wasm32 lld-18$/mu);
+        }
         assert.match(commands, /git ls-remote .*count=2/u);
         assert.match(commands, /value0=git@github\.com:/u);
         assert.match(commands, /value1=ssh:\/\/git@github\.com\//u);

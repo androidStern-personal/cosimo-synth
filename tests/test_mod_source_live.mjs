@@ -3,7 +3,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import test from "node:test";
 
-import { loadUIModule } from "./helpers/load_ui_module.mjs";
+import { loadUIModule } from "../kit/tests/helpers/load_ui_module.mjs";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const liveModulePromise = loadUIModule(repoRoot, "ui/shared/mod-source-live.ts");
@@ -337,4 +337,40 @@ test("driver places knob-arc lights on the artwork sweep", async () => {
     assert.ok(Math.abs(Number.parseFloat(element.attributes.get("cy")) - 8) < 0.5,
         `cy=${element.attributes.get("cy")}`);
     driver.detach();
+});
+
+
+test("public LiveValue adapter shares the engine subscription, projects canonical units and releases ownership", async () => {
+    const { createModSourceValue, acquireModSourceLiveDriver, releaseModSourceLiveDriver } = await liveModulePromise;
+    const connection = createConnectionStub();
+    const legacy = acquireModSourceLiveDriver(connection);
+    const cutoff = createModSourceValue(connection, { sourceKind: 'mseg', sourceSlot: 1 }, value => 100 * 2 ** (value * 4));
+    const macro = createModSourceValue(connection, { sourceKind: 'macro', sourceSlot: 1 }, value => value * 100);
+    const observed = [];
+    const offCutoff = cutoff.subscribe(() => observed.push(cutoff.getSnapshot()));
+    const offMacro = macro.subscribe(() => {});
+    assert.equal(connection.listenerCount('effectiveModSourceState'), 1);
+    assert.equal(cutoff.getSnapshot(), null);
+    connection.emitEndpoint('effectiveModSourceState', { voiceGeneration: 7, hasActive: 1, values: [.5,0,0,0,0,0,0,0,0,0] });
+    assert.equal(cutoff.getSnapshot(), 400);
+    assert.equal(legacy.getObservedState().voiceGeneration, 7);
+    connection.emitEndpoint('effectiveModSourceState', { voiceGeneration: 6, hasActive: 1, values: [1,0,0,0,0,0,0,0,0,0] });
+    assert.deepEqual(observed, [400]);
+    connection.emitEndpoint('effectiveModSourceState', { voiceGeneration: 8, hasActive: 0, values: [0,0,0,0,0,0,0,0,0,0] });
+    assert.equal(cutoff.getSnapshot(), null);
+    connection.emitParameter('macro1', .75);
+    assert.equal(macro.getSnapshot(), 75, 'global macro remains observable without a voice');
+    offCutoff(); offMacro();
+    assert.equal(connection.listenerCount('effectiveModSourceState'), 1, 'legacy consumer still owns the driver');
+    // A consumer that resubscribes in the same commit keeps the newest generation.
+    releaseModSourceLiveDriver(connection);
+    const offAgain = cutoff.subscribe(() => {});
+    await Promise.resolve();
+    assert.equal(acquireModSourceLiveDriver(connection), legacy);
+    releaseModSourceLiveDriver(connection);
+    connection.emitEndpoint('effectiveModSourceState', { voiceGeneration: 7, hasActive: 1, values: [.5,0,0,0,0,0,0,0,0,0] });
+    assert.equal(cutoff.getSnapshot(), null, 'a stale voice report cannot reactivate after a resubscription');
+    offAgain();
+    await Promise.resolve();
+    assert.equal(connection.listenerCount('effectiveModSourceState'), 0, 'the last release detaches once the commit settles');
 });

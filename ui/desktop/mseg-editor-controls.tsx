@@ -1,7 +1,7 @@
 import { useCallback, useMemo, type CSSProperties } from "react";
 
 import { hexToRgbTriplet } from "../shared/parameter-hud";
-import { useParameterGesture } from "../shared/parameter-gesture";
+import { useParameterGesture } from "../../kit/ui/parameter-gesture";
 import {
     ParameterReadoutStrip,
     type ReadoutCellSpec,

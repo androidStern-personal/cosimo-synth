@@ -91,14 +91,22 @@ function neutralizeModulation(value) {
     return preserveStoredEncoding(value, { ...document, routes: [] });
 }
 
+function bypassLaneNode(node) {
+    return Array.isArray(node.branches)
+        ? { ...node, enabled: false, branches: node.branches.map((branch) => branch.map(bypassLaneNode)) }
+        : { ...node, enabled: false };
+}
+
+/** Bypass every device and group in the chain; the chain and every device record survive. */
 function neutralizeLane(value) {
     const document = parseJsonDocument(value, LANE_STATE_KEY);
     invariant(isRecord(document) && document.format === "cosimo.lane"
-        && document.version === 1 && isRecord(document.enabled),
+        && document.version === 2 && Array.isArray(document.chain)
+        && document.chain.every(isRecord),
     `${LANE_STATE_KEY} is not a current Effects Lane document`);
     return preserveStoredEncoding(value, {
         ...document,
-        enabled: Object.fromEntries(Object.keys(document.enabled).sort().map((key) => [key, false])),
+        chain: document.chain.map(bypassLaneNode),
     });
 }
 

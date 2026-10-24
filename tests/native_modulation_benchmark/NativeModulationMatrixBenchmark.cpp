@@ -435,7 +435,7 @@ void initialiseVoiceFloorPerformer (WavetableSynth& performer)
 {
     performer.initialise (dspSessionID, sampleRate);
     loadSineWavetable (performer);
-    // T62 acceptance measures the retained-voice floor with the nonlinear
+    // Per-voice Enhancer acceptance measures the retained-voice floor with the nonlinear
     // per-note processor engaged, not its exact-zero compatibility path.
     setParameter (performer, "voiceEnhancerAmount", voiceEnhancerBenchmarkAmount);
     // Generated host inputs begin at zero. Sustain the independent final Amp

@@ -14,10 +14,11 @@
  * octave application, `rack-route-presentation.ts`) differ.
  */
 
-import { useCallback, useEffect, useRef } from "react";
+import { useCallback, useEffect, useMemo, useRef } from "react";
 
 import { useOptionalPatchConnection, type PatchConnectionLike } from "./cmajor-react";
-import { knobArcPoint } from "./parameter-knob-artwork";
+import type { LiveValue } from "../../kit/index";
+import { knobArcPoint } from "../../kit/ui/knob-geometry";
 import type { ModulationSourceKind } from "./modulation-targets";
 import {
     hasUiMediaClock,
@@ -176,6 +177,7 @@ export class ModSourceLiveDriver {
     private readonly cancelFrame: (handle: number) => void;
 
     private readonly entries = new Set<LightEntry>();
+    private readonly sourceListeners = new Set<() => void>();
     private observed: EffectiveModSourceState | null = null;
     private readonly voiceTargets = new Float32Array(VOICE_MOD_SOURCE_VALUE_COUNT);
     private readonly voiceDisplays = new Float32Array(VOICE_MOD_SOURCE_VALUE_COUNT);
@@ -197,6 +199,7 @@ export class ModSourceLiveDriver {
         for (let index = 0; index < VOICE_MOD_SOURCE_VALUE_COUNT; index += 1) {
             this.voiceTargets[index] = next.values[index];
         }
+        for (const listener of this.sourceListeners) listener();
         this.ensureLoop();
     };
 
@@ -220,6 +223,7 @@ export class ModSourceLiveDriver {
         for (let macroIndex = 0; macroIndex < MACRO_SOURCE_COUNT; macroIndex += 1) {
             const listener = (value: unknown) => {
                 this.macroTargets[macroIndex] = clamp01(Number(value) || 0);
+                for (const listener of this.sourceListeners) listener();
                 this.ensureLoop();
             };
             this.macroListeners.push(listener);
@@ -244,6 +248,22 @@ export class ModSourceLiveDriver {
         this.macroListeners.length = 0;
         this.stopLoop();
         this.entries.clear();
+        this.sourceListeners.clear();
+    }
+
+    /** Raw retained telemetry for value consumers; those consumers own presentation smoothing. */
+    readSource(source: ModSourceIdentity): number | null {
+        if (source.sourceKind === "macro") {
+            const slot = source.sourceSlot;
+            return slot !== null && slot >= 1 && slot <= MACRO_SOURCE_COUNT ? this.macroTargets[slot - 1] : null;
+        }
+        const index = voiceModSourceValueIndex(source);
+        return index !== null && this.hasActiveVoice ? this.voiceTargets[index] : null;
+    }
+
+    subscribeSource(listener: () => void): () => void {
+        this.sourceListeners.add(listener);
+        return () => { this.sourceListeners.delete(listener); };
     }
 
     register(element: Element, spec: ModSourceLightSpec): () => void {
@@ -410,10 +430,18 @@ export function releaseModSourceLiveDriver(connection: PatchConnectionLike): voi
         return;
     }
     entry.refCount -= 1;
-    if (entry.refCount <= 0) {
+    if (entry.refCount > 0) {
+        return;
+    }
+    // A consumer that resubscribes in the same commit keeps the driver, and with
+    // it the newest voice generation, so a stale report cannot reactivate a light.
+    queueMicrotask(() => {
+        if (entry.refCount > 0 || sharedDrivers.get(connection) !== entry) {
+            return;
+        }
         entry.driver.detach();
         sharedDrivers.delete(connection);
-    }
+    });
 }
 
 /**
@@ -471,4 +499,35 @@ export function useModSourceLight(spec: ModSourceLightSpec): (element: Element |
     }, []);
 
     return attach;
+}
+
+/** Adapt the existing engine monitor to the kit's read-only value contract.
+ * Projection returns the parameter's canonical units, never SVG coordinates.
+ * The same driver serves the traveling lights and these subscribers, so there is one
+ * upstream monitor subscription per patch connection.
+ */
+export function createModSourceValue(connection: PatchConnectionLike, source: ModSourceIdentity,
+    project: (sourceValue: number) => number): LiveValue<number | null> {
+    return {
+        getSnapshot: () => {
+            const value = sharedDrivers.get(connection)?.driver.readSource(source) ?? null;
+            return value === null ? null : project(value);
+        },
+        subscribe: listener => {
+            const driver = acquireModSourceLiveDriver(connection);
+            const unsubscribe = driver.subscribeSource(listener);
+            return () => { unsubscribe(); releaseModSourceLiveDriver(connection); };
+        },
+    };
+}
+
+/** Product-owned connection and routing adapter; the kit receives only values. */
+export function useModSourceValue(source: ModSourceIdentity | null,
+    project: (sourceValue: number) => number): LiveValue<number | null> | null {
+    const connection = useOptionalPatchConnection();
+    const sourceKind = source?.sourceKind;
+    const sourceSlot = source?.sourceSlot;
+    return useMemo(() => connection !== null && sourceKind !== undefined && sourceSlot !== undefined
+        ? createModSourceValue(connection, { sourceKind, sourceSlot }, project) : null,
+    [connection, sourceKind, sourceSlot, project]);
 }

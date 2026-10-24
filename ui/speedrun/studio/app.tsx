@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 import type { NotePerformance } from "../audio/checkpoint-renderer";
 import { DEFAULT_SPEEDRUN_PERFORMANCE } from "../midi/default-performance";

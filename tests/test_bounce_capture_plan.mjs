@@ -4,6 +4,7 @@ import test from "node:test";
 
 import {
     BOUNCE_DEFAULT_ROOTS,
+    BOUNCE_OUTPUT_LATENCY_FRAMES,
     createBounceCapturePlan,
     createBounceCaptureSnapshot,
 } from "../bounce/capture-plan.mjs";
@@ -11,7 +12,8 @@ import {
     bounceOfflineRenderInternals,
     renderBounceRoot,
 } from "../bounce/offline-render-core.mjs";
-import { loadUIModule } from "./helpers/load_ui_module.mjs";
+import { loadUIModule } from "../kit/tests/helpers/load_ui_module.mjs";
+import { outputLatencyFrames } from "./helpers/bounce_offline_engine.mjs";
 
 const repoRoot = path.resolve(import.meta.dirname, "..");
 
@@ -55,6 +57,9 @@ test("capture snapshot clones the button-press state and planner pins V1 default
     assert.equal(plan.holdFrames, 144_000);
     assert.equal(plan.tailCapFrames, 288_000);
     assert.equal(plan.captureVelocity, 100);
+    assert.equal(plan.outputLatencyFrames, BOUNCE_OUTPUT_LATENCY_FRAMES);
+    assert.equal(BOUNCE_OUTPUT_LATENCY_FRAMES, outputLatencyFrames,
+        "a capture skips exactly the latency the synth's Polish bus declares");
     assert.equal(plan.jobs[0].sessionID + 18, plan.jobs[18].sessionID);
 });
 
@@ -176,4 +181,31 @@ test("the product recipe articulates velocity-100 roots only in Vel mode", async
         key: unassigned,
         velocity,
     }), []);
+});
+
+test("the product recipe replays the synth's saved lane through the live rack's event endpoints", async () => {
+    const [{ bounceCaptureRecipeInternals }, synthState] = await Promise.all([
+        loadUIModule(repoRoot, "ui/shared/bounce-capture-recipe.ts"),
+        loadUIModule(repoRoot, "ui/shared/synth-plugin-state.ts"),
+    ]);
+    const saved = (key) => {
+        const field = synthState.synthPluginState[key];
+        return field.codec.encode(field.initial.value);
+    };
+    const { events } = bounceCaptureRecipeInternals.structuredRuntimeSetupEvents({
+        parameters: {},
+        storedState: {
+            "modulation.v6": saved("modulation.v6"),
+            "articulations.v4": saved("articulations.v4"),
+            "lane.v1": saved("lane.v1"),
+        },
+    });
+    const laneEndpoints = events.map(({ endpointID }) => endpointID)
+        .filter((endpointID) => endpointID.startsWith("lane"));
+    assert.equal(laneEndpoints[0], "laneOutputControl");
+    assert.equal(laneEndpoints.at(-1), "laneTopology");
+    assert.ok(laneEndpoints.includes("laneSlotParams"));
+    assert.deepEqual(new Set(laneEndpoints), new Set(["laneOutputControl", "laneSlotParams", "laneTopology"]),
+        "Output Trim arrives as host parameters, not as lane events");
+    assert.equal(events.find(({ endpointID }) => endpointID === "laneTopology").advanceFrames, 1_024);
 });

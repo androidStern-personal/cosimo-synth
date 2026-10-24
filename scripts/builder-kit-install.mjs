@@ -2,7 +2,7 @@
 // payload; they never need this module, Keychain, or a source checkout.
 import { createHash } from "node:crypto";
 import { readFile } from "node:fs/promises";
-import { ensureRedacted, redact, reveal } from "../kit/scripts/redacted.mjs";
+import { ensureRedacted, redact, reveal } from "./redacted.mjs";
 import { juceNoticeLines } from "../kit/scripts/toolchain.mjs";
 
 // Verified against the publishers' SHA-256 lists, 2026-09-04. Updating these is

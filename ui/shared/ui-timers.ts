@@ -1,9 +1,11 @@
 /**
- * Decorative UI timeout seam.
+ * Timeout seam for the view's own UI timers: press holds, long-press menus,
+ * HUD lingers and short presentation settles.
  *
  * Product callers retain native browser timing. The scripted video iframe
- * installs a media-time driver for only these UI callbacks; global timers used
- * by Remotion, WebCodecs, and the encoder are never virtualized.
+ * installs a media-time driver, and the desktop test harness a clock its tests
+ * can pause, for only these UI callbacks; global timers used by Remotion,
+ * WebCodecs, and the encoder are never virtualized.
  */
 
 export type UiTimeoutDriver = {

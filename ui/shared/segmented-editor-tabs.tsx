@@ -2,11 +2,10 @@
  * THE segmented selector, and its fixed-bar/directional-panel transition.
  * Voice A/B/C, the Mod page's SOURCE/MAPPINGS, the Voice/FX/Mod workspace
  * bar, the iOS oscillator bar and the articulation mode bar are all this
- * component with different labels (T14: never a second tab dialect).
+ * component with different labels, so the app has one tab dialect.
  *
  * It renders the neutral `.cosimo-tabs` / `.cosimo-tab` classes from the
- * design system. It previously hardcoded `mobile-voice-tab*`, which is why
- * every other bar in the app was rewritten by hand instead of reusing it.
+ * design system.
  *
  * Transition semantics (MOBILE_VOICE_FOCUSED_OSCILLATOR_SPEC "Tabs"):
  * the bar stays stationary; selecting a later tab slides the outgoing panel
@@ -283,20 +282,23 @@ export function useDirectionalPanelTransition({
 
         panel.style.transition = "none";
         panel.style.transform = `translateX(${forward ? "100%" : "-100%"})`;
-        // Two frames: apply the start positions, then animate both to rest.
-        requestAnimationFrame(() => {
-            requestAnimationFrame(() => {
+        // Two frames: apply the start positions, then animate both to rest. The
+        // ghost leaves a slide's length after the slide starts, so slow frames
+        // cannot remove it before it has moved.
+        let timer: number | null = null;
+        let frame = requestAnimationFrame(() => {
+            frame = requestAnimationFrame(() => {
                 ghost.style.transform = `translateX(${forward ? "-100%" : "100%"})`;
                 panel.style.transition = `transform ${SEGMENTED_PANEL_SLIDE_MS}ms ease-out`;
                 panel.style.transform = "translateX(0)";
+                timer = uiTimeout(() => {
+                    cleanupRef.current?.();
+                }, SEGMENTED_PANEL_SLIDE_MS + 80);
             });
         });
-
-        const timer = uiTimeout(() => {
-            cleanupRef.current?.();
-        }, SEGMENTED_PANEL_SLIDE_MS + 80);
         cleanupRef.current = () => {
-            clearUiTimeout(timer);
+            cancelAnimationFrame(frame);
+            if (timer !== null) clearUiTimeout(timer);
             ghost.remove();
             panel.style.transition = "";
             panel.style.transform = "";

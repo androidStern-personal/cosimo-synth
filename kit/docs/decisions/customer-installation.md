@@ -21,7 +21,7 @@ machine-wide convenience for project isolation. Existing old exports without
 that instruction cannot pass the new entry flow. The official checksum lists
 are [Node 22.23.2](https://nodejs.org/dist/v22.23.2/SHASUMS256.txt) and
 [CMake 4.3.4](https://github.com/Kitware/CMake/releases/download/v4.3.4/cmake-4.3.4-SHA-256.txt).
-Updating runtime pins requires maintainer review and fresh-runtime proof.
+These pins change only in a kit release, after a fresh-runtime check.
 
 Reruns recognize one small installer receipt, not an ownership registry. Only
 the original empty/unborn acquisition may create the customer branch; existing
@@ -48,3 +48,10 @@ official runtimes. That separate gate uses a committed composed customer
 export in a disposable supported environment, with its own real downloads and
 fresh cache. An unpublished loopback candidate remains unpublished; neither
 qualification proves DAW discovery, UI, audio or licensing eligibility.
+
+The `cmaj` and `CmajPlugin.vst3` that `kit:setup` downloads are pinned by
+SHA-256 in `kit/toolchain.json` and ad-hoc signed, not notarized. They are
+development tools that only ever run on the customer's own Mac and arrive
+without a quarantine flag (setup downloads them itself, not a browser), so
+notarization is deferred until the kit ships a binary that customers open from
+a browser download or pass on to their own users.

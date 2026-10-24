@@ -4,7 +4,7 @@ import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { loadUIModule } from "./helpers/load_ui_module.mjs";
+import { loadUIModule } from "../kit/tests/helpers/load_ui_module.mjs";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const definitionsModule = await loadUIModule(repoRoot, "fx/seqfx/view/seqfx-effect-definitions.ts");
@@ -30,7 +30,7 @@ test("the canonical registry owns honest units and primary versus advanced hiera
     }));
 
     assert.deepEqual(defaultReadouts, {
-        filter: ["Low Pass", "2 kHz", "500 Hz", "Q 0.707", "1\u00d7"],
+        filter: ["Low Pass", "2 kHz", "500 Hz", "Q 0.707"],
         crush: ["8 bits", "Full", "0 dB", "Classic", "0%", "0%", "0%"],
         tapeStop: ["1 Cell", "0", "Crossfade to Live", "1/16", "0%", "Sync", "500 ms", "125 ms"],
         stutter: ["8", "1\u00d7", "0.44", "68%"],

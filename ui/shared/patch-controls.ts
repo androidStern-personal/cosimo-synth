@@ -2,14 +2,11 @@ import { useCallback, useMemo } from "react";
 
 import {
     usePatchConnection,
-    usePatchParameter,
     type PatchParameterHostBaseline,
     type PatchParameterPresentationPriority,
 } from "./cmajor-react";
-
-function serializeIdentity<TValue>(value: TValue) {
-    return value;
-}
+import { synthParameterByEndpoint } from "./synth-plugin-state";
+import { useOptionalSynthPluginParameterBinding } from "./synth-plugin-state-react";
 
 export type PatchControlBinding<TValue> = {
     endpointID: string;
@@ -30,58 +27,44 @@ type PatchParameterBindingOptions<TValue> = {
     endpointID: string;
     initialValue: TValue;
     coerce: (rawValue: unknown) => TValue;
-    serialize?: (value: TValue) => unknown;
     active?: boolean;
     presentationPriority?: PatchParameterPresentationPriority;
 };
 
-export function usePatchParameterBinding<TValue>({
+function ignore() {}
+
+/**
+ * Binds a control to one synth host parameter. Every edit goes through the synth's plugin
+ * state, so it is saved, undoable and shared with every other view. An active binding needs
+ * the endpoint declared in synthParameterByEndpoint and a SynthStateProvider above it, and
+ * throws at render without either. An inactive binding reads and writes nothing, so a caller
+ * that keeps its hooks unconditional may give it a placeholder endpoint.
+ */
+export function usePatchParameterBinding<TValue extends number>({
     endpointID,
     initialValue,
     coerce,
-    serialize = serializeIdentity,
     active = true,
     presentationPriority = "immediate",
-}: PatchParameterBindingOptions<TValue>): PatchControlBinding<TValue> {
-    const parameter = usePatchParameter(endpointID, serialize(initialValue), active, presentationPriority);
-    const value = useMemo(() => coerce(parameter.value), [coerce, parameter.value]);
-    const hostBaseline = useMemo<PatchParameterHostBaseline<TValue>>(() => (
-        parameter.hostBaseline._tag === "host-confirmed"
-            ? { _tag: "host-confirmed", value: coerce(parameter.hostBaseline.value) }
-            : { _tag: "pending" }
-    ), [coerce, parameter.hostBaseline]);
-
-    const setValue = useCallback((nextValue: TValue) => {
-        parameter.setValue(serialize(nextValue));
-    }, [parameter.setValue, serialize]);
-
-    const commitValue = useCallback((nextValue: TValue) => {
-        parameter.beginGesture();
-        parameter.setValue(serialize(nextValue));
-        parameter.endGesture();
-    }, [parameter.beginGesture, parameter.endGesture, parameter.setValue, serialize]);
-
-    return useMemo(() => ({
+}: PatchParameterBindingOptions<TValue>): PatchControlBinding<number> {
+    if (active && !Object.hasOwn(synthParameterByEndpoint, endpointID)) {
+        throw new Error(`The "${endpointID}" control is not a synth parameter: declare it in synthParameterByEndpoint.`);
+    }
+    const parameter = useOptionalSynthPluginParameterBinding(endpointID, { initialValue, coerce, active, presentationPriority });
+    const inactive = useMemo((): PatchControlBinding<number> => ({
         endpointID,
-        value,
-        isReady: parameter.isReady,
-        hostBaseline,
+        value: initialValue,
+        isReady: false,
+        hostBaseline: { _tag: "pending" },
         initialValue,
-        setValue,
-        commitValue,
-        beginGesture: parameter.beginGesture,
-        endGesture: parameter.endGesture,
-    }), [
-        endpointID,
-        initialValue,
-        parameter.beginGesture,
-        parameter.endGesture,
-        parameter.isReady,
-        hostBaseline,
-        value,
-        setValue,
-        commitValue,
-    ]);
+        setValue: ignore,
+        commitValue: ignore,
+        beginGesture: ignore,
+        endGesture: ignore,
+    }), [endpointID, initialValue]);
+    if (parameter !== null) return parameter;
+    if (active) throw new Error(`The "${endpointID}" control must render inside SynthStateProvider.`);
+    return inactive;
 }
 
 export function usePatchEventTrigger<TValue = unknown>(endpointID: string) {

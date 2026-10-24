@@ -20,14 +20,15 @@
  *   tapering width; only the nearest few layers carry fills.
  */
 
-import { type FilterEnergyPlotRect } from "./filter-energy-field";
+import type { FilterEnergyPlotRect } from "./filter-energy-field";
 import {
     FILTER_MODE_LOWPASS,
+    clampFilterCutoffHz,
     createFilterResponseModel,
-    magnitudeAtFrequency,
     normalizedToFilterCutoffHz,
-} from "./filter-response";
-import { type FilterSpectrumRenderGeometry } from "./filter-spectrum";
+    type FilterResponseModel,
+} from "../../kit/ui/filter-response";
+import type { FilterSpectrumRenderGeometry } from "../../kit/ui/filter-spectrum";
 
 const RESPONSE_DB_MIN = -24;
 const RESPONSE_DB_MAX = 18;
@@ -67,6 +68,33 @@ function energyAlpha(value: number): number {
 function dbToNormalizedY(db: number): number {
     return 1 - (clamp(db, RESPONSE_DB_MIN, RESPONSE_DB_MAX) - RESPONSE_DB_MIN)
         / (RESPONSE_DB_MAX - RESPONSE_DB_MIN);
+}
+
+export function magnitudeAtFrequency(model: FilterResponseModel, targetHz: number) {
+    const frequencies = model.frequenciesHz;
+    const magnitudes = model.magnitudesDb;
+    const clampedTarget = clampFilterCutoffHz(targetHz);
+
+    if (clampedTarget <= frequencies[0]) {
+        return magnitudes[0];
+    }
+
+    if (clampedTarget >= frequencies[frequencies.length - 1]) {
+        return magnitudes[magnitudes.length - 1];
+    }
+
+    for (let index = 1; index < frequencies.length; index += 1) {
+        if (frequencies[index] < clampedTarget) {
+            continue;
+        }
+
+        const leftHz = frequencies[index - 1];
+        const rightHz = frequencies[index];
+        const t = (clampedTarget - leftHz) / Math.max(1e-9, rightHz - leftHz);
+        return magnitudes[index - 1] + ((magnitudes[index] - magnitudes[index - 1]) * t);
+    }
+
+    return magnitudes[magnitudes.length - 1];
 }
 
 /**

@@ -1,6 +1,6 @@
-# T27 Polish Comp/Clip Reference Lab
+# Polish Comp/Clip Reference Lab
 
-This directory is the offline evidence and comparison half of T27. The separate
+This directory is the offline evidence and comparison half of the Polish comp/clip reference. The separate
 `fx/polish_lab/` package turns the same documented reset state into an
 independently named, tunable VST3 design studio; neither half has a production
 import or signal-path connection. The upstream product name appears only where
@@ -12,9 +12,9 @@ pinned third-party artifact.
 | Layer | Retained here | Claim boundary |
 |---|---|---|
 | Closed-source original | The public fact that the product exists and Polarity's description of its broad behavior | No original binary, code, UI, audio capture, or proprietary behavior is copied or measured here |
-| Polarity's recreation | His [published near-null report](https://polarity.me/posts/polarity-music/2024-08-12-sausage-fattener-in-bitwig/) and the pinned public Bitwig preset at commit `3852ef80ec3f97d93c6a7880c167b64a454ae961` | T27 did not independently run his preset against the original, so the reported null remains his claim |
+| Polarity's recreation | His [published near-null report](https://polarity.me/posts/polarity-music/2024-08-12-sausage-fattener-in-bitwig/) and the pinned public Bitwig preset at commit `3852ef80ec3f97d93c6a7880c167b64a454ae961` | This lab did not independently run his preset against the original, so the reported null remains his claim |
 | Decoded preset facts | Source SHA-256, byte offsets, exact big-endian IEEE-754 payloads, target paths, compressor records, gain records, transfer knots, and macro records | These fixtures establish what the preset stores, not the hidden DSP law used by Bitwig or the original |
-| Cosimo reference inference | A conventional stereo-linked feed-forward peak compressor and a documented monotonic interpolation through the decoded curve | The renderer is deterministic and useful for T28 tuning; it is not described as a clone or a null-equivalent implementation |
+| Cosimo reference inference | A conventional stereo-linked feed-forward peak compressor and a documented monotonic interpolation through the decoded curve | The renderer is deterministic and useful for tuning the Polish chain; it is not described as a clone or a null-equivalent implementation |
 
 The third-party `.bwpreset` and its embedded low-cut impulse response are not
 redistributed. `fixtures/source-artifact.json` pins the source, and
@@ -71,7 +71,7 @@ The renderer in `lib/reference-dsp.mjs` uses:
 Bitwig's detector ballistics, ratio normalization, transfer interpolation,
 oversampling, channel-link details, and embedded low-cut convolution are not
 publicly established by the preset. The low-cut IR and Color EQ are deliberately
-outside these renders so T28 can compare the comp/clip character without
+outside these renders so the Polish chain can compare the comp/clip character without
 confounding its separately owned Safe Bass and Enhancer stages.
 
 ## Retained comparison bundle
@@ -106,8 +106,8 @@ the checked-in corpus and render bundle after changing the transparent model:
 npm run reference:polish:update
 ```
 
-T28 should audition the level-matched files and use the measurements as one
-comparison target. It should not import this renderer, inherit its name, or
+Tune the Polish chain by auditioning the level-matched files and using the measurements as one
+comparison target. The Polish chain should not import this renderer, inherit its name, or
 treat its inferential compressor/curve choices as production requirements.
 
 For live tuning, build and associate `fx/polish_lab/` with

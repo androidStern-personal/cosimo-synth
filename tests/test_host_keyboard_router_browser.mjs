@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import path from "node:path";
 import test, { after, before } from "node:test";
 
 import { chromium } from "playwright";
@@ -6,23 +7,20 @@ import { chromium } from "playwright";
 import { buildPlugin } from "../kit/fx/build-effect.mjs";
 import { startStaticRepoServer } from "../kit/tests/helpers/static_web_server.mjs";
 import { readChocHostKeyboardRouter } from "./helpers/choc_host_keyboard_router.mjs";
+import { cmajorSourceDirectory } from "./helpers/cmajor_source.mjs";
 
-const chocSourceRoot = process.env.COSIMO_CHOC_SOURCE_ROOT;
-const shouldRun = typeof chocSourceRoot === "string" && chocSourceRoot.length > 0;
+// The CHOC checkout under qualification, by default the one inside the pinned Cmajor checkout.
+const chocSourceRoot = process.env.COSIMO_CHOC_SOURCE_ROOT || path.join(cmajorSourceDirectory(), "include/choc");
 
 let browser;
 let router;
 let server;
 
 before(async () => {
-    if (!shouldRun) {
-        return;
-    }
-
     ({ router } = await readChocHostKeyboardRouter(chocSourceRoot));
     await buildPlugin("enhancer-lite");
     await buildPlugin("seqfx");
-    server = await startStaticRepoServer();
+    server = await startStaticRepoServer({ bundleTypeScript: true });
     browser = await chromium.launch({ headless: true });
 });
 
@@ -106,6 +104,31 @@ function patchConnectionSource() {
     `;
 }
 
+/**
+ * The kit's browser state owner stands in for the plugin worker. Each parameter
+ * is [endpoint, value, min, max, step]; the mock connection stores what it writes.
+ */
+async function withStateOwner(patchConnection, parameters) {
+    const { createBrowserPreviewState } = await import("/kit/ui/preview/state.ts");
+    const values = new Map(parameters.map(([endpoint, value]) => [endpoint, value]));
+    const stored = new Map();
+    const stateHost = createBrowserPreviewState({
+        snapshot: () => ({
+            values: Object.fromEntries(stored),
+            parameters: parameters.map(([endpoint, defaultValue, min, max, step]) => ({
+                endpoint, value: values.get(endpoint), min, max, step, defaultValue,
+            })),
+        }),
+        parameter(endpoint, value) {
+            values.set(endpoint, value);
+            patchConnection.sendEventOrValue(endpoint, value);
+        },
+        stored: (key, value) => stored.set(key, value),
+        gesture() {},
+    });
+    return Object.assign(patchConnection, stateHost.host);
+}
+
 async function addRouterInitScript(page) {
     await page.addInitScript({
         content: `
@@ -131,14 +154,21 @@ async function openPackagedSeqFx() {
     const page = await browser.newPage({ viewport: { width: 1280, height: 820 } });
     await addRouterInitScript(page);
     await page.goto(new URL("kit/tests/helpers/module_test_shell.html", server.baseUrl).toString());
-    await page.evaluate(async (connectionClassSource) => {
+    await page.evaluate(async ({ connectionClassSource, stateOwnerSource }) => {
         // eslint-disable-next-line no-new-func
         const defineConnection = new Function(`${connectionClassSource}; return HostKeyboardSeqFxPatchConnection;`);
         const Connection = defineConnection();
+        // eslint-disable-next-line no-new-func
+        const withStateOwner = new Function(`return (${stateOwnerSource})`)();
+        const connection = await withStateOwner(new Connection(), [
+            ["enabled", 1, 0, 1, 1], ["globalMix", 1, 0, 1, 0], ["patternSelect", 0, 0, 11, 1],
+            ["clockMode", 0, 0, 2, 1], ["manualBpm", 120, 20, 300, 0], ["rate", 1, 0, 2, 1],
+            ["swing", 0, 0, 0.45, 0], ["loopStart", 0, 0, 31, 1], ["loopLength", 32, 1, 32, 1],
+        ]);
         const module = await import("/build/fx/seqfx_runtime/view/app.js");
-        const view = await module.default(new Connection());
+        const view = await module.default(connection);
         document.querySelector("#mount").replaceChildren(view);
-    }, patchConnectionSource());
+    }, { connectionClassSource: patchConnectionSource(), stateOwnerSource: withStateOwner.toString() });
     await page.locator('[data-role="seqfx-root"]').waitFor();
     await page.waitForFunction(() => (
         window.__CHOC_HOST_KEYBOARD_MESSAGES__?.some(({ action }) => action === "installed")
@@ -150,7 +180,7 @@ async function openPackagedEnhancerLite() {
     const page = await browser.newPage({ viewport: { width: 900, height: 620 } });
     await addRouterInitScript(page);
     await page.goto(new URL("kit/tests/helpers/module_test_shell.html", server.baseUrl).toString());
-    await page.evaluate(async () => {
+    await page.evaluate(async ({ stateOwnerSource }) => {
         const parameterValues = new Map(Object.entries({
             freqHzIn: 130,
             qIn: 0.71,
@@ -203,7 +233,7 @@ async function openPackagedEnhancerLite() {
             },
             addStoredStateValueListener(listener) { storedStateListeners.add(listener); },
             removeStoredStateValueListener(listener) { storedStateListeners.delete(listener); },
-            requestFullStoredState(callback) { callback(Object.fromEntries(storedState)); },
+            requestFullStoredState(callback) { callback({ parameters: [], values: Object.fromEntries(storedState) }); },
             requestStoredStateValue(key) {
                 for (const listener of storedStateListeners) listener({ key, value: storedState.get(key) });
             },
@@ -212,10 +242,17 @@ async function openPackagedEnhancerLite() {
                 for (const listener of storedStateListeners) listener({ key, value });
             },
         };
+        // eslint-disable-next-line no-new-func
+        const withStateOwner = new Function(`return (${stateOwnerSource})`)();
+        await withStateOwner(patchConnection, [
+            ["freqHzIn", 130, 20, 20000, 0], ["qIn", 0.71, 0.1, 10, 0], ["modeIn", 0, 0, 1, 1],
+            ["midAmountIn", 0, 0, 1, 0], ["sideAmountIn", 0, 0, 1, 0], ["curveIn", 1, 0, 1, 1],
+            ["saturationModeIn", 0, 0, 1, 1], ["shapeIn", 1, 0, 2, 1], ["analyzerEnabledIn", 0, 0, 1, 1],
+        ]);
         const module = await import("/build/fx/enhancer_lite_runtime/view/app.js");
         document.querySelector("#mount").replaceChildren(await module.default(patchConnection));
-    });
-    await page.locator("cosimo-enhancer-lite-view").waitFor();
+    }, { stateOwnerSource: withStateOwner.toString() });
+    await page.getByRole("slider", { name: "Frequency", exact: true }).waitFor();
     await page.waitForFunction(() => (
         window.__CHOC_HOST_KEYBOARD_MESSAGES__?.some(({ action }) => action === "installed")
     ));
@@ -247,6 +284,8 @@ async function pressFocusedAndRead(page, key = "Space") {
     await page.keyboard.press(key);
     return readRouterMessages(page);
 }
+
+const presetBar = (page) => page.getByRole("group", { name: "Presets", exact: true });
 
 function keyboardMessages(messages) {
     return messages.filter(({ action }) => (
@@ -297,20 +336,17 @@ function assertDiscardedPair(messages, key, reason) {
     );
 }
 
-test("the exact CHOC router reaches the native seam from the packaged Enhancer Lite target", {
-    skip: shouldRun ? false : "Set COSIMO_CHOC_SOURCE_ROOT to the exact CHOC checkout under qualification.",
-}, async (t) => {
+test("the exact CHOC router reaches the native seam from the packaged Enhancer Lite target", async (t) => {
     const page = await openPackagedEnhancerLite();
 
     try {
-        const frequency = page.locator('[data-readout-control="frequency"]');
+        const frequency = page.getByRole("slider", { name: "Frequency", exact: true });
         await t.test("non-text slider role forwards Space down and matching up", async () => {
             assertForwardedPair(await pressAndRead(page, frequency), " ", "spacebar-transport");
         });
 
-        const saveAs = page.locator('cosimo-effect-header [data-action="save-as"]');
-        await saveAs.click();
-        const presetName = page.locator('cosimo-effect-header [data-el="dialog-input"]');
+        await page.getByRole("button", { name: "Save as new", exact: true }).click();
+        const presetName = page.getByRole("textbox", { name: "Preset name" });
         await presetName.waitFor();
         await t.test("real preset-name text entry discards Space inside the plugin", async () => {
             await page.waitForTimeout(50);
@@ -324,9 +360,7 @@ test("the exact CHOC router reaches the native seam from the packaged Enhancer L
     }
 });
 
-test("the exact CHOC router reaches the native forward/discard seam from packaged SeqFX controls", {
-    skip: shouldRun ? false : "Set COSIMO_CHOC_SOURCE_ROOT to the exact CHOC checkout under qualification.",
-}, async (t) => {
+test("the exact CHOC router reaches the native forward/discard seam from packaged SeqFX controls", async (t) => {
     const page = await openPackagedSeqFx();
 
     try {
@@ -537,7 +571,15 @@ test("the exact CHOC router reaches the native forward/discard seam from package
 
         const clockMode = page.locator('[data-role="seqfx-clock-mode"]');
         await t.test("a focused select menu keeps Space inside the plugin", async () => {
-            assertDiscardedPair(await pressAndRead(page, clockMode), " ", "text-entry-active");
+            // Chromium opens a focused select's popup on Space and the popup takes the
+            // keyup, so the page never sees it; WKWebView, which this router serves,
+            // delivers both. The router's contract is that event pair, so drive it here.
+            await clockMode.focus();
+            await clearRouterMessages(page);
+            for (const type of ["keydown", "keyup"]) {
+                await clockMode.dispatchEvent(type, { key: " ", code: "Space", bubbles: true, composed: true, cancelable: true });
+            }
+            assertDiscardedPair(await readRouterMessages(page), " ", "text-entry-active");
         });
 
         await t.test("pointer-used select menu releases focus before the next Space pair", async () => {
@@ -545,7 +587,7 @@ test("the exact CHOC router reaches the native forward/discard seam from package
             await clockMode.dispatchEvent("pointerdown");
             await clockMode.selectOption("0");
             await page.waitForFunction(() => (
-                document.querySelector("cosimo-seqfx-react-view")?.shadowRoot?.activeElement === null
+                document.querySelector("builder-kit-state-view")?.shadowRoot?.activeElement === null
             ));
             await clearRouterMessages(page);
             await page.keyboard.press("Space");
@@ -587,9 +629,9 @@ test("the exact CHOC router reaches the native forward/discard seam from package
                 }],
             );
 
-            const saveAs = page.locator('cosimo-effect-header [data-action="save-as"]');
+            const saveAs = presetBar(page).getByRole("button", { name: "Save as new", exact: true });
             await saveAs.click();
-            const input = page.locator('cosimo-effect-header [data-el="dialog-input"]');
+            const input = presetBar(page).getByRole("textbox", { name: "Preset name", exact: true });
             await input.waitFor();
             await input.focus();
             await input.evaluate((element) => {
@@ -615,7 +657,7 @@ test("the exact CHOC router reaches the native forward/discard seam from package
                     structuredClone(window.__CHOC_HOST_KEYBOARD_MESSAGES__)
                 ))).length, 1);
             } finally {
-                await page.locator('cosimo-effect-header [data-action="dialog-cancel"]').click();
+                await presetBar(page).getByRole("button", { name: "Cancel", exact: true }).click();
             }
         });
 
@@ -634,9 +676,9 @@ test("the exact CHOC router reaches the native forward/discard seam from package
                 }],
             );
 
-            const saveAs = page.locator('cosimo-effect-header [data-action="save-as"]');
+            const saveAs = presetBar(page).getByRole("button", { name: "Save as new", exact: true });
             await saveAs.click();
-            const input = page.locator('cosimo-effect-header [data-el="dialog-input"]');
+            const input = presetBar(page).getByRole("textbox", { name: "Preset name", exact: true });
             await input.waitFor();
             await input.focus();
             await input.evaluate((element) => {
@@ -662,31 +704,42 @@ test("the exact CHOC router reaches the native forward/discard seam from package
                     structuredClone(window.__CHOC_HOST_KEYBOARD_MESSAGES__)
                 ))).length, 1);
             } finally {
-                await page.locator('cosimo-effect-header [data-action="dialog-cancel"]').click();
+                await presetBar(page).getByRole("button", { name: "Cancel", exact: true }).click();
             }
         });
 
-        const saveAs = page.locator('cosimo-effect-header [data-action="save-as"]');
+        const shadowDepth = (locator) => locator.evaluate((element) => {
+            let depth = 0;
+            for (let root = element.getRootNode(); root instanceof ShadowRoot; root = root.host.getRootNode()) depth += 1;
+            return depth;
+        });
+
+        const saveAs = presetBar(page).getByRole("button", { name: "Save as new", exact: true });
         await saveAs.click();
-        const presetName = page.locator('cosimo-effect-header [data-el="dialog-input"]');
+        const presetName = presetBar(page).getByRole("textbox", { name: "Preset name", exact: true });
         await presetName.waitFor();
-        await t.test("genuine nested-shadow text entry keeps typed Space inside the plugin", async () => {
-            const shadowDepth = await presetName.evaluate((element) => {
-                let depth = 0;
-                let current = element;
-                while (current) {
-                    const root = current.getRootNode();
-                    if (!(root instanceof ShadowRoot)) break;
-                    depth += 1;
-                    current = root.host;
-                }
-                return depth;
-            });
-            assert.equal(shadowDepth >= 2, true);
+        await t.test("preset-name text entry inside the plugin's shadow root keeps typed Space inside the plugin", async () => {
+            assert.equal(await shadowDepth(presetName), 1);
             await presetName.fill("My");
             await presetName.evaluate((input) => input.setSelectionRange(input.value.length, input.value.length));
             assertDiscardedPair(await pressFocusedAndRead(page), " ", "text-entry-active");
             assert.equal(await presetName.inputValue(), "My ");
+        });
+
+        await t.test("text entry two shadow roots deep keeps typed Space inside the plugin", async () => {
+            // The plugin view owns one shadow root; an embedded web component inside it adds a second.
+            await page.evaluate(() => {
+                const viewRoot = document.querySelector("builder-kit-state-view").shadowRoot;
+                const nested = document.createElement("div");
+                nested.attachShadow({ mode: "open" }).innerHTML = '<input aria-label="Nested name">';
+                viewRoot.append(nested);
+            });
+            const nestedName = page.getByRole("textbox", { name: "Nested name", exact: true });
+            assert.equal(await shadowDepth(nestedName), 2);
+            await nestedName.fill("My");
+            await nestedName.focus();
+            assertDiscardedPair(await pressFocusedAndRead(page), " ", "text-entry-active");
+            assert.equal(await nestedName.inputValue(), "My ");
         });
     } finally {
         await page.close();

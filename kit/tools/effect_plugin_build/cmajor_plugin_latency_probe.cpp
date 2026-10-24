@@ -24,14 +24,14 @@ bool parseExpectedLatency (const char* text, int& result)
 int main (int argc, char** argv)
 {
     if (argc != 2)
-        return fail ("Usage: cosimo_generated_latency_probe <expected-samples>");
+        return fail ("Usage: builder_kit_generated_latency_probe <expected-samples>");
 
     int expectedLatency = 0;
 
     if (! parseExpectedLatency (argv[1], expectedLatency))
         return fail ("Expected latency must be a non-negative integer");
 
-    using GeneratedPlugin = cmaj::plugin::GeneratedPlugin<::COSIMO_GENERATED_INFO_CLASS>;
+    using GeneratedPlugin = cmaj::plugin::GeneratedPlugin<::BUILDER_KIT_GENERATED_INFO_CLASS>;
 
     juce::ScopedJuceInitialiser_GUI juceInitialiser;
     std::unique_ptr<juce::AudioProcessor> processor (createPluginFilter());
